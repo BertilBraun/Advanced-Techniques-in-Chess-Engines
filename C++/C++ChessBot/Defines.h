@@ -5,6 +5,25 @@
 
 static const int MAX_DEPTH = 3;
 
+static const std::map<char, wchar_t > PIECE_SYMBOLS = {
+	{'P', L'♟'},
+	{'R', L'♜'},
+	{'N', L'♞'},
+	{'B', L'♝'},
+	{'Q', L'♛'},
+	{'K', L'♚'},
+	
+	{'p', L'♙'},
+	{'r', L'♖'},
+	{'n', L'♘'},
+	{'b', L'♗'},
+	{'q', L'♕'},
+	{'k', L'♔'},
+    }
+	
+	//PIECE_SYMBOLS = {'P': '♟', 'B': '♝', 'N': '♞', 'R': '♜', 'Q': '♛', 'K': '♚', 'p': '♙', 'b': '♗', 'n': '♘', 'r': '♖', 'q': '♕', 'k': '♔'}
+};
+
 static const std::map<char, std::vector<std::vector<float>> > pieceValueArrayDict = {
     {'P', {
         {0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0},
