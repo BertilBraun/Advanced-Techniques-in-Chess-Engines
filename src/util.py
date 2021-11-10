@@ -34,7 +34,7 @@ def board_to_nums(board: chess.Board) -> np.ndarray:
     return bitfields_to_nums(board_to_bitfields(board))
 
 
-def pager(in_file: TextIO, lines_per_page=10):
+def pager(in_file: TextIO, lines_per_page=20):
     assert lines_per_page > 1 and lines_per_page == int(lines_per_page)
 
     lin_ctr = 0
