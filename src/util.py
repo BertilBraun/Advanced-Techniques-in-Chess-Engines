@@ -45,4 +45,5 @@ def pager(in_file: TextIO, lines_per_page=20):
         if lin_ctr % lines_per_page == 0:
             yield current
             current = ""
-            print("Next:" + str(lin_ctr // lines_per_page))
+            if lin_ctr % (lines_per_page * 5000) == 0:
+                print("Next:" + str(lin_ctr // lines_per_page))
