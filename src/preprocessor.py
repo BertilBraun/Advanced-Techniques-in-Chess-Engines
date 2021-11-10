@@ -6,6 +6,7 @@ import chess.pgn
 from util import board_to_bitfields, pager
 
 from multiprocessing import Lock, Pool
+from zipfile import ZipFile
 
 mutex = Lock()
 
@@ -34,16 +35,18 @@ def process_game(lines: str, out: TextIO) -> None:
         create_dataset(game, out)
 
 
-def preprocess(in_path: str, out_path: str) -> None:
-    pgn = open(in_path, "r")
+def preprocess(in_path: str, file_name: str, out_path: str) -> None:
     out = open(out_path, "w")
 
-    with Pool(processes=cpu_count()) as pool:
-        for count, page in enumerate(pager(pgn)):
-            print("Processing game:", count)
-            pool.apply_async(process_game, (page, out,))
+    with ZipFile(in_path) as myzip:
+        with myzip.open(file_name) as pgn:
+            with Pool(processes=cpu_count()) as pool:
+                for count, page in enumerate(pager(pgn)):
+                    print("Processing game:", count)
+                    pool.apply_async(process_game, (page, out,))
 
 
 if __name__ == "__main__":
-    preprocess("../dataset/lichess_db_standard_rated_2021-10 small.pgn",
-               "../dataset/nm_games small.csv")
+    preprocess("../dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
+               "lichess_db_standard_rated_2021-10.pgn",
+               "../dataset/nm_games.csv")
