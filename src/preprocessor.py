@@ -47,5 +47,9 @@ def preprocess(in_path: str, out_path: str) -> None:
 
 
 if __name__ == "__main__":
-    preprocess("../dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
-               "../dataset/nm_games.csv")
+    try:
+        preprocess("../dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
+                   "../dataset/nm_games.csv")
+    except KeyboardInterrupt:
+        for out_file in out_files.values():
+            out_file.close()
