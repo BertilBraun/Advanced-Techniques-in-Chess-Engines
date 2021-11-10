@@ -19,7 +19,7 @@ def create_dataset(game: chess.pgn.Game) -> None:
 
         if evaluation is not None:
             evaluation = evaluation.relative.score(mate_score=10) / 100
-            out_files[multiprocessing.current_process()].write(
+            out_files[multiprocessing.current_process().pid].write(
                 ','.join(map(str, nums)) + ',' + str(evaluation) + '\n')
 
         state = state.parent
@@ -31,8 +31,9 @@ def process_game(lines: str, out_path: str) -> None:
         return
 
     cp = multiprocessing.current_process()
-    if not out_files[cp]:
-        out_files[cp] = open(out_path[:-4] + "." + cp.pid + out_path[-4:], 'w')
+    if cp.pid not in out_files:
+        out_files[cp.pid] = open(
+            out_path[:-4] + "." + cp.pid + out_path[-4:], 'w')
 
     if int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
         create_dataset(game)
