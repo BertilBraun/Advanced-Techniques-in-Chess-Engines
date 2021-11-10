@@ -41,7 +41,7 @@ def pager(in_file: TextIO, lines_per_page=20):
     current = ""
     for lin in in_file:
         lin_ctr += 1
-        current += lin + "\n"
+        current += lin.decode("utf-8") + "\n"
         if lin_ctr >= lines_per_page:
             yield current
             current = ""
