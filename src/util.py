@@ -1,3 +1,4 @@
+from typing import TextIO
 import chess
 import numpy as np
 
@@ -31,3 +32,17 @@ def bitfields_to_nums(bitfields: np.ndarray) -> np.ndarray:
 def board_to_nums(board: chess.Board) -> np.ndarray:
 
     return bitfields_to_nums(board_to_bitfields(board))
+
+
+def pager(in_file: TextIO, lines_per_page=10):
+    assert lines_per_page > 1 and lines_per_page == int(lines_per_page)
+
+    lin_ctr = 0
+    current = ""
+    for lin in in_file:
+        lin_ctr += 1
+        current += lin + "\n"
+        if lin_ctr >= lines_per_page:
+            yield current
+            current = ""
+            lin_ctr = 0
