@@ -33,7 +33,7 @@ def process_game(lines: str, out_path: str) -> None:
     cp = multiprocessing.current_process()
     if cp.pid not in out_files:
         out_files[cp.pid] = open(
-            out_path[:-4] + "." + cp.pid + out_path[-4:], 'w')
+            f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w')
 
     if int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
         create_dataset(game)
@@ -42,7 +42,7 @@ def process_game(lines: str, out_path: str) -> None:
 def preprocess(in_path: str, out_path: str) -> None:
 
     with BZ2File(in_path, "rb") as in_file:
-        with multiprocessing.Pool(cpu_count()) as pool:
+        with multiprocessing.Pool(cpu_count()-1) as pool:
             for lines in pager(in_file):
                 pool.apply_async(process_game, args=(lines, out_path))
 
