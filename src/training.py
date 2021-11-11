@@ -1,13 +1,9 @@
 import numpy as np
-from preprocessor import preprocess
-from keras.layers import Dense
-from keras.models import Sequential
-from keras.callbacks import ModelCheckpoint
-from keras.layers.convolutional import Conv2D
-from keras.layers.normalization import BatchNormalization
-
-from keras.layers.core import Dropout, Flatten, Reshape
 import pandas as pd
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape
 
 from util import bitfield_to_nums
 
