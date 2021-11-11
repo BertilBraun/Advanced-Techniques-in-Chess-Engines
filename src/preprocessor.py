@@ -11,7 +11,7 @@ from bz2 import BZ2File
 out_files = {}
 
 
-def create_dataset(game: chess.pgn.Game) -> None:
+def create_dataset(game: chess.pgn.Game, out: TextIO) -> None:
     state = game.end()
     while state:
         nums = board_to_bitfields(state.board())
@@ -19,8 +19,7 @@ def create_dataset(game: chess.pgn.Game) -> None:
 
         if evaluation is not None:
             evaluation = evaluation.relative.score(mate_score=10) / 100
-            out_files[multiprocessing.current_process().pid].write(
-                ','.join(map(str, nums)) + ',' + str(evaluation) + '\n')
+            out.write(','.join(map(str, nums)) + ',' + str(evaluation) + '\n')
 
         state = state.parent
 
@@ -35,8 +34,9 @@ def process_game(lines: str, out_path: str) -> None:
         out_files[cp.pid] = open(
             f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w')
 
-    if int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
-        create_dataset(game)
+    if "WhiteElo" in game.headers and "BlackElo" in game.headers and \
+            int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
+        create_dataset(game, out_files[cp.pid])
 
 
 def preprocess(in_path: str, out_path: str) -> None:
@@ -50,7 +50,7 @@ def preprocess(in_path: str, out_path: str) -> None:
 if __name__ == "__main__":
     try:
         preprocess("../dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
-                   "../dataset/nm_games.csv")
+                   "../dataset/processed_games/nm_games.csv")
     except KeyboardInterrupt:
         for out_file in out_files.values():
             out_file.close()
