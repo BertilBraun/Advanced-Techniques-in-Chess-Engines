@@ -34,9 +34,9 @@ def process_game(lines: str, out_path: str) -> None:
         out_files[cp.pid] = open(
             f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w')
 
-    if "WhiteElo" in game.headers and "BlackElo" in game.headers and \
-            int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
-        create_dataset(game, out_files[cp.pid])
+    # if "WhiteElo" in game.headers and "BlackElo" in game.headers and \
+    #         int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
+    create_dataset(game, out_files[cp.pid])
 
 
 def preprocess(in_path: str, out_path: str) -> None:
