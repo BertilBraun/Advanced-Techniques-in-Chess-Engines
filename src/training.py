@@ -63,9 +63,6 @@ def train_on_chunk(model, dataset):
 
 if __name__ == '__main__':
 
-    preprocess("../dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
-               "../dataset/nm_games.csv")
-
     model = gen_model()
     model.summary()
 
