@@ -62,7 +62,7 @@ if __name__ == '__main__':
     model = gen_model()
     model.summary()
 
-    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=1000000):
+    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000):
         train_on_chunk(gen_model(), chunk)
 
     model.save("../dataset/model.h5")
