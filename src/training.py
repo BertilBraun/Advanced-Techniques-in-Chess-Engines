@@ -46,16 +46,16 @@ def train_on_chunk(model, dataset):
     X = X.apply(transform, axis=1, result_type='expand')
 
     # move into range of 0 - 1
-    y = y.apply(lambda v: v / 200. + 0.5)
+    y = np.vectorize(lambda v: v / 200. + 0.5)(y)
 
     model.fit(
         X,
         y,
-        epochs=50,
-        batch_size=8,
+        epochs=10,
+        batch_size=4,
         callbacks=[
             ModelCheckpoint('../training/weights{epoch:08d}.h5',
-                            save_weights_only=True, period=1)
+                            save_weights_only=True, save_freq=1)
         ]
     )
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     model = gen_model()
     model.summary()
 
-    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000):
+    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=10000):
         train_on_chunk(gen_model(), chunk)
 
     model.save("../dataset/model.h5")
