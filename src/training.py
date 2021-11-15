@@ -46,7 +46,8 @@ def train_on_chunk(model, dataset):
     X = X.apply(transform, axis=1, result_type='expand')
 
     # move into range of 0 - 1
-    y = np.vectorize(lambda v: v / 200. + 0.5)(y)
+    y = np.vectorize(lambda v: v / 250. + 0.5)(y)
+    print(min(y), max(y))
 
     model.fit(
         X,
