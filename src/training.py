@@ -32,7 +32,7 @@ def gen_model():
     model.add(Flatten())
     model.add(Dense(units=128, activation='relu'))
     model.add(Dense(units=64, activation='relu'))
-    model.add(Dense(units=1, activation='sigmoid'))
+    model.add(Dense(units=1, activation='softmax'))
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
     return model
 
@@ -45,14 +45,17 @@ def train_on_chunk(model, dataset):
         return list(np.concatenate([bitfield_to_nums(e) for e in row]))
     X = X.apply(transform, axis=1, result_type='expand')
 
+    # move into range of 0 - 1
+    y = y.apply(lambda v: v / 200. + 0.5)
+
     model.fit(
         X,
         y,
-        epochs=1000,
-        batch_size=64,
+        epochs=50,
+        batch_size=8,
         callbacks=[
             ModelCheckpoint('../training/weights{epoch:08d}.h5',
-                            save_weights_only=True, period=25)
+                            save_weights_only=True, period=1)
         ]
     )
 
