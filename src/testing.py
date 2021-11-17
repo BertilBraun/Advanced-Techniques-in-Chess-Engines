@@ -1,9 +1,6 @@
 import os
-import numpy as np
-
 import pandas as pd
-from training import gen_model
-from util import bitfield_to_nums
+from training import create_training_data, gen_model
 
 if __name__ == "__main__":
     model = gen_model()
@@ -17,16 +14,12 @@ if __name__ == "__main__":
     # test the model
 
     for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=1000):
-
-        y = chunk[12].values
-        X = chunk.drop(12, axis=1)
-
-        def transform(row):
-            return list(np.concatenate([bitfield_to_nums(e) for e in row]))
-        X = X.apply(transform, axis=1, result_type='expand')
+        X, y = create_training_data(chunk)
 
         predictions = model.predict_on_batch(X)
 
         # print the results and evaluate the error
         for i, p in enumerate(predictions):
             print(f"{y[i]} {p} - {abs(y[i] - p)}")
+
+        break

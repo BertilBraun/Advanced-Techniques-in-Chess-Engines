@@ -1,4 +1,4 @@
-from typing import TextIO
+from typing import TextIO, Tuple
 import chess
 import numpy as np
 
@@ -47,3 +47,18 @@ def pager(in_file: TextIO, lines_per_page=20):
             current = ""
             if lin_ctr % (lines_per_page * 5000) == 0:
                 print("Next:" + str(lin_ctr // lines_per_page))
+
+
+def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
+    y = dataset[12].values
+    X = dataset.drop(12, axis=1)
+
+    def transform(row):
+        return list(np.concatenate([bitfield_to_nums(e) for e in row]))
+    X = X.apply(transform, axis=1, result_type='expand')
+
+    # move into range of 0 - 1
+    y = np.vectorize(lambda v: v / 250)(y)
+    print(min(y), max(y))
+
+    return X, y
