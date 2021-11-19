@@ -1,6 +1,8 @@
 from typing import List, TextIO, Tuple
 import chess
 import numpy as np
+from random import random
+from pandas.core.frame import DataFrame
 from tensorflow.python.keras.callbacks import History
 
 
@@ -50,7 +52,14 @@ def pager(in_file: TextIO, lines_per_page=20):
                 print("Next:" + str(lin_ctr // lines_per_page))
 
 
-def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
+def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+
+    # drop rows with 95% probability if y value is too close to 0, -1 or 1
+    dataset.drop(dataset[(abs(np.tanh(dataset[12])) > 0.99)
+                 & (random() < 0.95)].index, inplace=True)
+    dataset.drop(dataset[(abs(np.tanh(dataset[12])) < 0.01)
+                 & (random() < 0.95)].index, inplace=True)
+
     y = dataset[12].values
     X = dataset.drop(12, axis=1)
 
@@ -58,8 +67,8 @@ def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
         return list(np.concatenate([bitfield_to_nums(e) for e in row]))
     X = X.apply(transform, axis=1, result_type='expand')
 
-    # move into range of 0 - 1
-    y = np.vectorize(lambda v: v / 250)(y)
+    # move into range of -1 to 1
+    y = np.tanh(y)
     print(min(y), max(y))
 
     return X, y

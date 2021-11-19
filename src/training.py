@@ -48,7 +48,7 @@ def gen_model():
     model.add(Flatten())
     model.add(Dense(units=64, activation='relu'))
     model.add(Dense(units=1, activation='tanh'))
-    model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mean_squared_error', optimizer='adam')
     return model
 
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     model = gen_model()
     model.summary()
 
-    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000)):
+    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=200000)):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y, i)
 
