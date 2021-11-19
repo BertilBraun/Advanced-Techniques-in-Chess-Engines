@@ -35,12 +35,13 @@ def gen_model():
     return model
 
 
-def train(model, X, y):
+def train(model: Sequential, X, y):
     model.fit(
         X,
         y,
-        epochs=20,
+        epochs=100,
         batch_size=32,
+        validation_split=0.3,
         callbacks=[
             ModelCheckpoint('../training/weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch')
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     model = gen_model()
     model.summary()
 
-    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=10000):
+    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=500000):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y)
 
