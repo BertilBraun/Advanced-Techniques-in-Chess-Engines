@@ -31,10 +31,9 @@ def gen_model():
     model.add(Conv2D(256, (3, 3), activation='relu',
                      padding='same', input_shape=(12, 64, 1)))
 
-    """ for _ in range(12):
-        model.add(Conv2D(256, (3, 3), activation='relu',
-                         padding='same'))
-        model.add(BatchNormalization()) """
+    for _ in range(3):
+        model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+        model.add(BatchNormalization())
 
     model.add(Conv2D(256, (3, 3), activation='relu'))
     model.add(BatchNormalization())
@@ -61,7 +60,7 @@ def train(model: Sequential, X, y, index: int):
         batch_size=32,
         validation_split=0.3,
         callbacks=[
-            ModelCheckpoint('../training/weights{epoch:08d}.h5',
+            ModelCheckpoint('../training/{index:03d}weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
             Plotter(batches=200)
         ]
