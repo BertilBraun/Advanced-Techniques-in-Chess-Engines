@@ -40,7 +40,7 @@ def train(model: Sequential, X, y, index: int):
     history: History = model.fit(
         X,
         y,
-        epochs=50,
+        epochs=20,
         batch_size=32,
         validation_split=0.3,
         callbacks=[
