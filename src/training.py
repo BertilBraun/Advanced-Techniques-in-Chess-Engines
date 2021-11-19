@@ -60,7 +60,7 @@ def train(model: Sequential, X, y, index: int):
         batch_size=32,
         validation_split=0.3,
         callbacks=[
-            ModelCheckpoint('../training/{index:03d}weights{epoch:08d}.h5',
+            ModelCheckpoint('../training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
             Plotter(batches=200)
         ]
