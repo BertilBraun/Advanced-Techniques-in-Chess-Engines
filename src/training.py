@@ -3,9 +3,31 @@ import pandas as pd
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape
-from tensorflow.python.keras.callbacks import History
+from tensorflow.python.keras.callbacks import History, Callback
 
-from util import create_training_data, plot_history
+from util import create_training_data, plot, plot_history
+
+
+class Plotter(Callback):
+    batch_accuracy = []  # accuracy at given batch
+    batch_loss = []  # loss at given batch
+
+    def __init__(self, batches):
+        super(Plotter, self).__init__()
+        self.batches = batches
+        self.current_batch = 0
+
+    def on_train_batch_end(self, batch, logs=None):
+        self.current_batch += 1
+
+        Plotter.batch_accuracy.append(logs.get('accuracy'))
+        Plotter.batch_loss.append(logs.get('loss'))
+
+        if self.current_batch % self.batches == 0:
+            plot(Plotter.batch_accuracy, Plotter.batch_accuracy,
+                 'accuracy', self.current_batch)
+            plot(Plotter.batch_loss, Plotter.batch_loss,
+                 'loss', self.current_batch)
 
 
 def gen_model():
@@ -32,7 +54,7 @@ def gen_model():
     model.add(Flatten())
     model.add(Dense(units=64, activation='relu'))
     model.add(Dense(units=1, activation='tanh'))
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='mse', optimizer='adam')
     return model
 
 
@@ -45,7 +67,8 @@ def train(model: Sequential, X, y, index: int):
         validation_split=0.3,
         callbacks=[
             ModelCheckpoint('../training/weights{epoch:08d}.h5',
-                            save_weights_only=True, save_freq='epoch')
+                            save_weights_only=True, save_freq='epoch'),
+            Plotter(batches=200)
         ]
     )
 

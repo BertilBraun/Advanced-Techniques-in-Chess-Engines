@@ -1,4 +1,4 @@
-from typing import TextIO, Tuple
+from typing import List, TextIO, Tuple
 import chess
 import numpy as np
 from tensorflow.python.keras.callbacks import History
@@ -66,22 +66,20 @@ def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def plot_history(history: History, index: int):
+    plot(history.history['loss'], history.history['val_loss'], 'loss', index)
+    plot(history.history['accuracy'],
+         history.history['val_accuracy'], 'accuracy', index)
+
+
+def plot(data: List, val_data: List, type: str, index: int):
     import matplotlib.pyplot as plt
 
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('model loss')
-    plt.ylabel('loss')
+    plt.plot(data)
+    plt.plot(val_data)
+    plt.title(f'model {type}')
+    plt.ylabel(type)
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'../training/loss{index:04d}.png')
+    plt.savefig(f'../training/{type}{index:04d}.png')
 
     plt.clf()
-
-    plt.plot(history.history['accuracy'])
-    plt.plot(history.history['val_accuracy'])
-    plt.title('model accuracy')
-    plt.ylabel('accuracy')
-    plt.xlabel('epoch')
-    plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'../training/accuracy{index:04d}.png')
