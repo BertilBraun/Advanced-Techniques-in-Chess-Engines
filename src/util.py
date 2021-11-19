@@ -76,8 +76,10 @@ def plot_history(history: History, index: int):
     plt.legend(['train', 'test'], loc='upper left')
     plt.savefig(f'loss{index:04d}.png')
 
-    plt.plot(history.history['acc'])
-    plt.plot(history.history['val_acc'])
+    plt.clf()
+
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
     plt.title('model accuracy')
     plt.ylabel('accuracy')
     plt.xlabel('epoch')

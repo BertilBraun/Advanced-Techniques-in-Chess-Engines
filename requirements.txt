@@ -2,4 +2,5 @@ keras
 pandas
 numpy
 chess
-IPython
+matplotlib
+tensorflow
