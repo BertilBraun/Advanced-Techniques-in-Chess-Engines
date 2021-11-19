@@ -16,7 +16,7 @@ if __name__ == "__main__":
     for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=1000):
         X, y = create_training_data(chunk)
 
-        predictions = model.predict_on_batch(X)
+        predictions = model.predict(X)
 
         # print the results and evaluate the error
         for i, p in enumerate(predictions):
