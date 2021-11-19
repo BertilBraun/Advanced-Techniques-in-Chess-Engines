@@ -1,6 +1,7 @@
 from typing import TextIO, Tuple
 import chess
 import numpy as np
+from tensorflow.python.keras.callbacks import History
 
 
 def board_to_bitfields(board: chess.Board) -> np.ndarray:
@@ -62,3 +63,23 @@ def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
     print(min(y), max(y))
 
     return X, y
+
+
+def plot_history(history: History, index: int):
+    import matplotlib.pyplot as plt
+
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig(f'loss{index:04d}.png')
+
+    plt.plot(history.history['acc'])
+    plt.plot(history.history['val_acc'])
+    plt.title('model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(['train', 'test'], loc='upper left')
+    plt.savefig(f'accuracy{index:04d}.png')

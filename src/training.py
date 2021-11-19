@@ -3,8 +3,9 @@ import pandas as pd
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape
+from tensorflow.python.keras.callbacks import History
 
-from util import create_training_data
+from util import create_training_data, plot_history
 
 
 def gen_model():
@@ -35,8 +36,8 @@ def gen_model():
     return model
 
 
-def train(model: Sequential, X, y):
-    model.fit(
+def train(model: Sequential, X, y, index: int):
+    history: History = model.fit(
         X,
         y,
         epochs=50,
@@ -48,14 +49,16 @@ def train(model: Sequential, X, y):
         ]
     )
 
+    plot_history(history, index)
+
 
 if __name__ == '__main__':
 
     model = gen_model()
     model.summary()
 
-    for chunk in pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000):
+    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000)):
         X, y = create_training_data(chunk)
-        train(gen_model(), X, y)
+        train(gen_model(), X, y, i)
 
     model.save("../dataset/model.h5")
