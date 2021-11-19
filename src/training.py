@@ -9,7 +9,6 @@ from util import create_training_data, plot, plot_history
 
 
 class Plotter(Callback):
-    batch_accuracy = []  # accuracy at given batch
     batch_loss = []  # loss at given batch
 
     def __init__(self, batches):
@@ -20,14 +19,10 @@ class Plotter(Callback):
     def on_train_batch_end(self, batch, logs=None):
         self.current_batch += 1
 
-        Plotter.batch_accuracy.append(logs.get('accuracy'))
         Plotter.batch_loss.append(logs.get('loss'))
 
         if self.current_batch % self.batches == 0:
-            plot(Plotter.batch_accuracy, Plotter.batch_accuracy,
-                 'accuracy', self.current_batch)
-            plot(Plotter.batch_loss, Plotter.batch_loss,
-                 'loss', self.current_batch)
+            plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '')
 
 
 def gen_model():

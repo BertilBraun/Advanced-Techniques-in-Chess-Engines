@@ -65,13 +65,13 @@ def create_training_data(dataset) -> Tuple[np.ndarray, np.ndarray]:
     return X, y
 
 
-def plot_history(history: History, index: int):
+def plot_history(history: History, index):
     plot(history.history['loss'], history.history['val_loss'], 'loss', index)
     plot(history.history['accuracy'],
          history.history['val_accuracy'], 'accuracy', index)
 
 
-def plot(data: List, val_data: List, type: str, index: int):
+def plot(data: List, val_data: List, type: str, index):
     import matplotlib.pyplot as plt
 
     plt.plot(data)
@@ -80,6 +80,6 @@ def plot(data: List, val_data: List, type: str, index: int):
     plt.ylabel(type)
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'../training/{type}{index:04d}.png')
+    plt.savefig(f'../training/{type}{index}.png')
 
     plt.clf()
