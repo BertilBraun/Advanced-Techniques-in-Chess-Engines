@@ -74,7 +74,7 @@ def plot_history(history: History, index: int):
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'loss{index:04d}.png')
+    plt.savefig(f'../training/loss{index:04d}.png')
 
     plt.clf()
 
@@ -84,4 +84,4 @@ def plot_history(history: History, index: int):
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'accuracy{index:04d}.png')
+    plt.savefig(f'../training/accuracy{index:04d}.png')
