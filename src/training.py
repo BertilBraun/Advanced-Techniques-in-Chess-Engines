@@ -1,9 +1,11 @@
 import pandas as pd
 
+from time import time
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape
-from tensorflow.python.keras.callbacks import History, Callback
+from tensorflow.python.keras.callbacks import History, Callback, TensorBoard
 
 from util import create_training_data, plot, plot_history
 
@@ -62,7 +64,9 @@ def train(model: Sequential, X, y, index: int):
         callbacks=[
             ModelCheckpoint('../training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
-            Plotter(batches=200)
+            Plotter(batches=200),
+            # access via tensorboard --logdir ../training/logs
+            TensorBoard(log_dir=f'../training/logs/{time()}.log')
         ]
     )
 
