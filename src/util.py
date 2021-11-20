@@ -66,8 +66,10 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     def transform(row):
         return list(np.concatenate([bitfield_to_nums(e) for e in row]))
     X = X.apply(transform, axis=1, result_type='expand')
+    X = X.astype(np.float32)
 
     # move into range of -1 to 1
+    y = y.astype(np.float32)
     y = np.tanh(y / 10.)
     print(min(y), max(y))
 

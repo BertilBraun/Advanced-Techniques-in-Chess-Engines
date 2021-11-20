@@ -33,7 +33,7 @@ def gen_model():
     model.add(Conv2D(256, (3, 3), activation='relu',
                      padding='same', input_shape=(12, 64, 1)))
 
-    for _ in range(3):
+    for _ in range(5):
         model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
         model.add(BatchNormalization())
 
@@ -51,7 +51,11 @@ def gen_model():
     model.add(Dense(units=64, activation='relu'))
     model.add(Rescaling(scale=1 / 10., offset=0))
     model.add(Dense(units=1, activation='tanh'))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    model.compile(
+        loss='mean_squared_error',
+        optimizer='adam',
+        # metrics=['accuracy', 'mse']
+    )
     return model
 
 
