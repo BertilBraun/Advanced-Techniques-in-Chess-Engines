@@ -4,7 +4,7 @@ from time import time
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
-from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape
+from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape, Rescaling
 from tensorflow.python.keras.callbacks import History, Callback, TensorBoard
 
 from util import create_training_data, plot, plot_history
@@ -49,6 +49,7 @@ def gen_model():
     model.add(BatchNormalization())
     model.add(Flatten())
     model.add(Dense(units=64, activation='relu'))
+    model.add(Rescaling(scale=1 / 10., offset=0))
     model.add(Dense(units=1, activation='tanh'))
     model.compile(loss='mean_squared_error', optimizer='adam')
     return model
