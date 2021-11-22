@@ -56,9 +56,9 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
 
     # drop rows with 95% probability if y value is too close to 0, -1 or 1
     dataset.drop(dataset[(abs(np.tanh(dataset[12] / 10.)) > 0.99)
-                 & (random() < 0.95)].index, inplace=True)
+                         & (random() < 0.95)].index, inplace=True)
     dataset.drop(dataset[(abs(np.tanh(dataset[12] / 10.)) < 0.01)
-                 & (random() < 0.95)].index, inplace=True)
+                         & (random() < 0.95)].index, inplace=True)
 
     y = dataset[12].values
     X = dataset.drop(12, axis=1)
@@ -78,8 +78,7 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
 
 def plot_history(history: History, index):
     plot(history.history['loss'], history.history['val_loss'], 'loss', index)
-    plot(history.history['accuracy'],
-         history.history['val_accuracy'], 'accuracy', index)
+    # plot(history.history['accuracy'], history.history['val_accuracy'], 'accuracy', index)
 
 
 def plot(data: List, val_data: List, type: str, index):
