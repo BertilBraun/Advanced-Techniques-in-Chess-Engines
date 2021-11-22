@@ -53,12 +53,16 @@ def pager(in_file: TextIO, lines_per_page=20):
 
 
 def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    def drop(indices, fract=0.80):
+        drop_index = np.random.choice(
+            indices,
+            size=int(len(indices) * fract),
+            replace=False)
+        dataset.drop(drop_index, inplace=True)
 
-    # drop rows with 95% probability if y value is too close to 0, -1 or 1
-    dataset.drop(dataset[(abs(np.tanh(dataset[12] / 10.)) > 0.99)
-                         & (random() < 0.95)].index, inplace=True)
-    dataset.drop(dataset[(abs(np.tanh(dataset[12] / 10.)) < 0.01)
-                         & (random() < 0.95)].index, inplace=True)
+    drop(dataset[abs(np.tanh(dataset[12] / 10.)) > 0.99].index)
+    drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.05].index, fract=0.90)
+    drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.10].index, fract=0.10)
 
     y = dataset[12].values
     X = dataset.drop(12, axis=1)

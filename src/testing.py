@@ -47,5 +47,5 @@ def plot_data():
 
 
 if __name__ == "__main__":
-    test_model()
-    # plot_data()
+    # test_model()
+    plot_data()

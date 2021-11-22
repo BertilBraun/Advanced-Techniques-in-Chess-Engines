@@ -63,13 +63,13 @@ def train(model: Sequential, X, y, index: int):
     history: History = model.fit(
         X,
         y,
-        epochs=20,
+        epochs=5,
         batch_size=32,
         validation_split=0.3,
         callbacks=[
             ModelCheckpoint('../training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
-            Plotter(batches=200),
+            Plotter(batches=100),
             # access via tensorboard --logdir ../training/logs
             TensorBoard(log_dir=f'../training/logs/{time()}.log')
         ]
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     model = gen_model()
     model.summary()
 
-    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=200000)):
+    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=5000)):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y, i)
 
