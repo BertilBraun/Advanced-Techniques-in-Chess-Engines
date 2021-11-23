@@ -9,7 +9,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.python.keras import backend
 from tensorflow.python.keras.callbacks import History, Callback, TensorBoard
 
-from util import create_training_data, get_last_training_weights_file, plot, plot_history
+from util import create_training_data, load_last_training_weights_file, plot, plot_history
 
 
 class Plotter(Callback):
@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     model = gen_model()
     model.summary()
-    model.load_weights(get_last_training_weights_file())
+    load_last_training_weights_file(model)
 
     for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=500000)):
         X, y = create_training_data(chunk)

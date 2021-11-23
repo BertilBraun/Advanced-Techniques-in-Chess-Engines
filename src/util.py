@@ -2,8 +2,8 @@ import os
 from typing import List, TextIO, Tuple
 import chess
 import numpy as np
-from random import random
 from pandas.core.frame import DataFrame
+from tensorflow.keras.models import Sequential
 from tensorflow.python.keras.callbacks import History
 
 
@@ -100,11 +100,12 @@ def plot(data: List, val_data: List, type: str, index):
     plt.clf()
 
 
-def get_last_training_weights_file() -> str:
+def load_last_training_weights_file(model: Sequential) -> None:
 
     # get the last filename in the sorted directory "../training"
-    last_file = sorted([
+    last_files = sorted([
         f for f in os.listdir("../training") if f.endswith('.h5')
-    ])[-1]
+    ])
 
-    return "../training/" + last_file
+    if len(last_files) > 0:
+        model.load_weights(f"../training/{last_files[-1]}")

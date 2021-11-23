@@ -2,14 +2,14 @@ import os
 import numpy as np
 import pandas as pd
 
-from util import get_last_training_weights_file
+from util import load_last_training_weights_file
 
 
 def test_model():
     from training import create_training_data, gen_model
 
     model = gen_model()
-    model.load_weights(get_last_training_weights_file())
+    load_last_training_weights_file(model)
 
     # test the model
 
