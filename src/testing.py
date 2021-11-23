@@ -2,19 +2,14 @@ import os
 import numpy as np
 import pandas as pd
 
+from util import get_last_training_weights_file
+
 
 def test_model():
     from training import create_training_data, gen_model
 
     model = gen_model()
-
-    # get the last filename in the sorted directory "../training"
-    last_file = sorted([
-        f for f in os.listdir("../training") if f.endswith('.h5')
-    ])[-1]
-    print("Loading weights from: ../training/" + last_file)
-
-    model.load_weights("../training/" + last_file)
+    model.load_weights(get_last_training_weights_file())
 
     # test the model
 
@@ -47,5 +42,5 @@ def plot_data():
 
 
 if __name__ == "__main__":
-    # test_model()
-    plot_data()
+    test_model()
+    # plot_data()

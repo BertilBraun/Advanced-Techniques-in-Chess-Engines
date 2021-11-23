@@ -1,3 +1,4 @@
+import os
 from typing import List, TextIO, Tuple
 import chess
 import numpy as np
@@ -97,3 +98,13 @@ def plot(data: List, val_data: List, type: str, index):
     plt.savefig(f'../training/{type}{index}.png')
 
     plt.clf()
+
+
+def get_last_training_weights_file() -> str:
+
+    # get the last filename in the sorted directory "../training"
+    last_file = sorted([
+        f for f in os.listdir("../training") if f.endswith('.h5')
+    ])[-1]
+
+    return "../training/" + last_file
