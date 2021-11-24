@@ -75,7 +75,7 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     X = dataset.drop(12, axis=1)
 
     def transform(row):
-        return list(np.concatenate([bitfield_to_nums(e) for e in row]))
+        return list(np.concatenate([bitfield_to_nums(e, i < 8) for i, e in enumerate(row)]))
     X = X.apply(transform, axis=1, result_type='expand')
     X = X.astype(np.float32)
 

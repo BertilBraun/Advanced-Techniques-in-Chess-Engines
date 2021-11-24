@@ -29,7 +29,15 @@ class Plotter(Callback):
             plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '')
 
 
-def gen_model():
+def gen_model() -> Sequential:
+    model = Sequential()
+    model.add(Dense(2048, input_shape=(784,), activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(1, activation='tanh'))
+
+    return model
+
     model = Sequential()
     model.add(Reshape((12, 8, 8, 1), input_shape=(12 * 64,)))
     model.add(Conv2D(256, (3, 3), activation='relu',
