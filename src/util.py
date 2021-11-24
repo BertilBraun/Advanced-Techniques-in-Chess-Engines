@@ -17,12 +17,13 @@ def board_to_bitfields(board: chess.Board) -> np.ndarray:
     return np.array(pieces_array).astype(np.int64)
 
 
-def bitfield_to_nums(bitfield: np.int64) -> np.ndarray:
+def bitfield_to_nums(bitfield: np.int64, white: bool) -> np.ndarray:
 
     board_array = np.zeros(64)
 
     for i in range(64):
-        board_array[i] = 1 if bitfield & (1 << i) != 0 else 0
+        board_array[i] = (1 if white else -
+                          1) if bitfield & (1 << i) != 0 else 0
 
     return board_array.astype(np.float32)
 
@@ -30,7 +31,12 @@ def bitfield_to_nums(bitfield: np.int64) -> np.ndarray:
 def bitfields_to_nums(bitfields: np.ndarray) -> np.ndarray:
     bitfields = bitfields.astype(np.int64)
 
-    return np.array(bitfields.map(bitfield_to_nums))
+    boards = []
+
+    for i, bitfield in enumerate(bitfields):
+        boards.append(bitfield_to_nums(bitfield, i < 8))
+
+    return np.array(boards)
 
 
 def board_to_nums(board: chess.Board) -> np.ndarray:
@@ -54,14 +60,14 @@ def pager(in_file: TextIO, lines_per_page=20):
 
 
 def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    def drop(indices, fract=0.80):
+    def drop(indices, fract):
         drop_index = np.random.choice(
             indices,
             size=int(len(indices) * fract),
             replace=False)
         dataset.drop(drop_index, inplace=True)
 
-    drop(dataset[abs(np.tanh(dataset[12] / 10.)) > 0.99].index)
+    drop(dataset[abs(np.tanh(dataset[12] / 10.)) > 0.99].index, fract=0.80)
     drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.05].index, fract=0.90)
     drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.10].index, fract=0.10)
 

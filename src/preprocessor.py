@@ -14,11 +14,12 @@ out_files = {}
 def create_dataset(game: chess.pgn.Game, out: TextIO) -> None:
     state = game.end()
     while state:
-        nums = board_to_bitfields(state.board())
         evaluation = state.eval()
 
         if evaluation is not None:
+            nums = board_to_bitfields(state.board())
             evaluation = evaluation.relative.score(mate_score=10) / 100
+
             out.write(','.join(map(str, nums)) + ',' + str(evaluation) + '\n')
 
         state = state.parent
