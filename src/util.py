@@ -59,6 +59,10 @@ def pager(in_file: TextIO, lines_per_page=20):
                 print("Next:" + str(lin_ctr // lines_per_page))
 
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
 def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     def drop(indices, fract):
         drop_index = np.random.choice(
@@ -67,9 +71,9 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
             replace=False)
         dataset.drop(drop_index, inplace=True)
 
-    drop(dataset[abs(np.tanh(dataset[12] / 10.)) > 0.99].index, fract=0.80)
-    drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.05].index, fract=0.90)
-    drop(dataset[abs(np.tanh(dataset[12] / 10.)) < 0.10].index, fract=0.10)
+    # drop(dataset[abs(dataset[12] / 10.) > 15].index, fract=0.80)
+    drop(dataset[abs(dataset[12] / 10.) < 0.1].index, fract=0.90)
+    drop(dataset[abs(dataset[12] / 10.) < 0.15].index, fract=0.10)
 
     y = dataset[12].values
     X = dataset.drop(12, axis=1)
@@ -79,9 +83,9 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     X = X.apply(transform, axis=1, result_type='expand')
     X = X.astype(np.float32)
 
-    # move into range of -1 to 1
+    # move into range of 0 to 1
     y = y.astype(np.float32)
-    y = np.tanh(y / 10.)
+    y = sigmoid(y / 10.)
     print(min(y), max(y))
 
     return X, y

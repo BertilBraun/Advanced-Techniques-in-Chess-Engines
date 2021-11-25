@@ -6,7 +6,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, Reshape, Rescaling
 from tensorflow.keras.optimizers import Adam
-from tensorflow.python.keras import backend
 from tensorflow.python.keras.callbacks import History, Callback, TensorBoard
 
 from util import create_training_data, load_last_training_weights_file, plot, plot_history
@@ -31,10 +30,15 @@ class Plotter(Callback):
 
 def gen_model() -> Sequential:
     model = Sequential()
-    model.add(Dense(2048, input_shape=(784,), activation='relu'))
+    model.add(Dense(2048, input_shape=(12 * 8 * 8,), activation='relu'))
     model.add(Dense(2048, activation='relu'))
     model.add(Dense(2048, activation='relu'))
-    model.add(Dense(1, activation='tanh'))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(
+        loss='mean_squared_error',
+        optimizer=Adam(learning_rate=0.001),
+        # metrics=['accuracy', 'mse']
+    )
 
     return model
 
@@ -70,14 +74,14 @@ def gen_model() -> Sequential:
 
 
 def train(model: Sequential, X, y, index: int):
-    backend.set_value(model.optimizer.learning_rate, 0.01 / (index + 1))
+    model.optimizer.learning_rate = 0.001 / (index + 1)
 
     history: History = model.fit(
         X,
         y,
         epochs=5,
-        batch_size=64,
-        validation_split=0.15,
+        batch_size=256,
+        validation_split=0.1,
         callbacks=[
             ModelCheckpoint('../training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
@@ -96,7 +100,7 @@ if __name__ == '__main__':
     model.summary()
     load_last_training_weights_file(model)
 
-    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=500000)):
+    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=50000)):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y, i)
 
