@@ -102,7 +102,7 @@ Run `pip install -r requirements.txt` to install the dependencies of the project
 
 The file `preprocessor.py` is used to extract the moves from the lichess database and write them in proper format to a `.csv` file.
 
-The file `training.py` is used to start the training of the NN.
+The file `training.py` is used to start the training of the NN. Change `GAME_FILE` to "../dataset/nm_games small.csv" if you have not previously extracted the moves from the lichess database.
 
 The file `testing.py` is used to test the current state of the NN on some parts of the dataset.
 

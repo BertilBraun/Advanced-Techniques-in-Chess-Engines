@@ -10,6 +10,8 @@ from tensorflow.python.keras.callbacks import History, Callback, TensorBoard
 
 from util import create_training_data, load_last_training_weights_file, plot, plot_history
 
+GAME_FILE = "../dataset/nm_games.csv"
+
 
 class Plotter(Callback):
     batch_loss = []  # loss at given batch
@@ -100,7 +102,7 @@ if __name__ == '__main__':
     model.summary()
     # load_last_training_weights_file(model)
 
-    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000)):
+    for i, chunk in enumerate(pd.read_csv(GAME_FILE, header=None, chunksize=100000)):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y, i)
 
