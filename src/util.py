@@ -19,13 +19,13 @@ def board_to_bitfields(board: chess.Board) -> np.ndarray:
 
 def bitfield_to_nums(bitfield: np.int64, white: bool) -> np.ndarray:
 
-    board_array = np.zeros(64)
+    board_array = np.zeros(64).astype(np.float32)
 
-    for i in range(64):
-        board_array[i] = (1 if white else -
-                          1) if bitfield & (1 << i) != 0 else 0
+    for i in np.arange(64).astype(np.int64):
+        if bitfield & (1 << i):
+            board_array[i] = 1. if white else -1.
 
-    return board_array.astype(np.float32)
+    return board_array
 
 
 def bitfields_to_nums(bitfields: np.ndarray) -> np.ndarray:
@@ -34,9 +34,9 @@ def bitfields_to_nums(bitfields: np.ndarray) -> np.ndarray:
     boards = []
 
     for i, bitfield in enumerate(bitfields):
-        boards.append(bitfield_to_nums(bitfield, i < 8))
+        boards.append(bitfield_to_nums(bitfield, i < 6))
 
-    return np.array(boards)
+    return np.array(boards).astype(np.float32)
 
 
 def board_to_nums(board: chess.Board) -> np.ndarray:
@@ -71,21 +71,26 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
             replace=False)
         dataset.drop(drop_index, inplace=True)
 
-    # drop(dataset[abs(dataset[12] / 10.) > 15].index, fract=0.80)
+    drop(dataset[abs(dataset[12] / 10.) > 30].index, fract=0.80)
     drop(dataset[abs(dataset[12] / 10.) < 0.1].index, fract=0.90)
     drop(dataset[abs(dataset[12] / 10.) < 0.15].index, fract=0.10)
 
     y = dataset[12].values
     X = dataset.drop(12, axis=1)
 
-    def transform(row):
-        return list(np.concatenate([bitfield_to_nums(e, i < 8) for i, e in enumerate(row)]))
-    X = X.apply(transform, axis=1, result_type='expand')
-    X = X.astype(np.float32)
+    for i in range(2):
+        print("----------------------------------------")
+        for j in range(12):
+            print(np.matrix(bitfield_to_nums(X[j][i], j < 6)).reshape((8, 8)))
 
-    # move into range of 0 to 1
+    def transform(row):
+        return list(np.concatenate(bitfields_to_nums(row)))
+    X = X.apply(transform, axis=1, result_type='expand')
+
+    # move into range of -1 to 1
     y = y.astype(np.float32)
-    y = sigmoid(y / 10.)
+    y = np.tanh(y / 10.)
+    # y = sigmoid(y / 10.)
     print(min(y), max(y))
 
     return X, y

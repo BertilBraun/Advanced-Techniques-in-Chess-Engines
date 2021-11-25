@@ -33,7 +33,7 @@ def gen_model() -> Sequential:
     model.add(Dense(2048, input_shape=(12 * 8 * 8,), activation='relu'))
     model.add(Dense(2048, activation='relu'))
     model.add(Dense(2048, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
+    model.add(Dense(1, activation='tanh'))
     model.compile(
         loss='mean_squared_error',
         optimizer=Adam(learning_rate=0.001),
@@ -79,8 +79,8 @@ def train(model: Sequential, X, y, index: int):
     history: History = model.fit(
         X,
         y,
-        epochs=5,
-        batch_size=256,
+        epochs=10,
+        batch_size=64,
         validation_split=0.1,
         callbacks=[
             ModelCheckpoint('../training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
@@ -98,9 +98,9 @@ if __name__ == '__main__':
 
     model = gen_model()
     model.summary()
-    load_last_training_weights_file(model)
+    # load_last_training_weights_file(model)
 
-    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=50000)):
+    for i, chunk in enumerate(pd.read_csv("../dataset/nm_games.csv", header=None, chunksize=100000)):
         X, y = create_training_data(chunk)
         train(gen_model(), X, y, i)
 

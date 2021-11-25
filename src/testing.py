@@ -31,16 +31,16 @@ def plot_data():
 
     for chunk in pd.read_csv("../dataset/nm_games small.csv", header=None, chunksize=100000):
         _, y = create_training_data(chunk)
-        x = np.arange(0, 1.01, 0.01)
+        x = np.arange(-1, 1.01, 0.01)
         ys = [0] * len(x)
 
         for v in y:
-            ys[int(v * 100)] += 1
+            ys[int(v * 100) + 100] += 1
 
         plt.plot(x, ys)
         plt.show()
 
 
 if __name__ == "__main__":
-    test_model()
-    # plot_data()
+    # test_model()
+    plot_data()
