@@ -16,7 +16,7 @@ Since many evaluations are very close to 0 and -1/1, a percentage of these are d
 ## Data representation
 
 Each move is a datapoint to train the network on.
-The input for the NN are 12 arrays of size 8x8 (so called (Bitboards)[https://en.wikipedia.org/wiki/Bitboard]), one for each of the 6x2 different pieces and colors.
+The input for the NN are 12 arrays of size 8x8 (so called [Bitboards](https://en.wikipedia.org/wiki/Bitboard)), one for each of the 6x2 different pieces and colors.
 The output of the NN is a single scalar value between -1 and 1, representing the evaluation of the board state. -1 meaning the board is heavily favored for the black player, 1 meaning the board is heavily favored for the white player.
 
 ## The neural network
