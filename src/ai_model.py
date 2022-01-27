@@ -66,7 +66,7 @@ def UCT(rootstate: chess.Board, itermax: int, depthmax: int) -> chess.Move:
 
         # Backpropagate
         while node != None:  # backpropagate from the expanded node and work back to the root node
-            result = evaluate_position(state)
+            result = evaluate_position(state, state.turn)
 
             # state is terminal. Update node with result from POV of node.playerJustMoved
             node.Update(result)
@@ -75,6 +75,6 @@ def UCT(rootstate: chess.Board, itermax: int, depthmax: int) -> chess.Move:
     return sorted(rootnode.children, key=lambda c: c.visits)[-1].move
 
 
-def evaluate_position(board: chess.Board) -> float:
-    board_array = board_to_nums(board)
+def evaluate_position(board: chess.Board, turn: chess.Color) -> float:
+    board_array = board_to_nums(board, turn)
     return model.predict(np.asarray([board_array]))

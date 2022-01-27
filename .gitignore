@@ -357,3 +357,6 @@ build/
 
 training/
 dataset/
+
+Pipfile
+Pipfile.lock
