@@ -95,12 +95,13 @@ def create_training_data(dataset: DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     return X, y
 
 
-def plot_history(history: History, index):
-    plot(history.history['loss'], history.history['val_loss'], 'loss', index)
+def plot_history(history: History, index, folder: str):
+    plot(history.history['loss'],
+         history.history['val_loss'], 'loss', index, folder)
     # plot(history.history['accuracy'], history.history['val_accuracy'], 'accuracy', index)
 
 
-def plot(data: List, val_data: List, type: str, index):
+def plot(data: List, val_data: List, type: str, index, folder: str):
     import matplotlib.pyplot as plt
 
     plt.plot(data)
@@ -109,20 +110,20 @@ def plot(data: List, val_data: List, type: str, index):
     plt.ylabel(type)
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.savefig(f'training/{type}{index}.png')
+    plt.savefig(f'{folder}{type}{index}.png')
 
     plt.clf()
 
 
-def load_last_training_weights_file(model: Sequential) -> None:
+def load_last_training_weights_file(model: Sequential, folder: str) -> None:
 
     # get the last filename in the sorted directory "training"
     last_files = sorted([
-        f for f in os.listdir("training") if f.endswith('.h5')
+        f for f in os.listdir(folder) if f.endswith('.h5')
     ])
 
     if len(last_files) > 0:
-        model.load_weights(f"training/{last_files[-1]}")
+        model.load_weights(f"{folder}{last_files[-1]}")
 
 
 class Plotter(Callback):

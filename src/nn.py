@@ -13,7 +13,7 @@ from tensorflow.keras.layers import (BatchNormalization, Conv2D, Conv3D, Dense,
                                      Flatten, Reshape)
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from tensorflow.python.keras.callbacks import Callback, History, TensorBoard
+from tensorflow.python.keras.callbacks import History, TensorBoard
 
 from util import *
 
@@ -129,24 +129,24 @@ def train(model: Sequential, X, y, index: int):
         batch_size=64,
         validation_split=0.1,
         callbacks=[
-            ModelCheckpoint('training/' + f'{index:03d}' + 'weights{epoch:08d}.h5',
+            ModelCheckpoint(TRAINING + '{index:03d}weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
             Plotter(batches=100),
             # access via tensorboard --logdir training/logs
-            TensorBoard(log_dir=f'training/logs/{time()}.log')
+            TensorBoard(log_dir=TRAINING + f'logs/{time()}.log')
         ]
     )
 
-    plot_history(history, index)
+    plot_history(history, index, TRAINING)
 
 
-def test_model():
+def test_model(dataset: str) -> None:
     model = gen_model()
-    load_last_training_weights_file(model)
+    load_last_training_weights_file(model, TRAINING)
 
     # test the model
 
-    for chunk in pd.read_csv("dataset/nm_games.csv", header=None, chunksize=200):
+    for chunk in pd.read_csv(dataset, header=None, chunksize=200):
         X, y = create_training_data(chunk)
 
         predictions = model.predict(X)
@@ -158,24 +158,29 @@ def test_model():
         break
 
 
-def learn():
+def learn(dataset: str) -> None:
     model = gen_model()
     model.summary()
-    # load_last_training_weights_file(model)
+    # load_last_training_weights_file(model, TRAINING)
 
-    for i, chunk in enumerate(pd.read_csv("dataset/nm_games.csv", header=None, chunksize=50000)):
+    for i, chunk in enumerate(pd.read_csv(dataset, header=None, chunksize=50000)):
         X, y = create_training_data(chunk)
         train(model, X, y, i)
 
-        model.save(f'training/model{i:03d}.h5')
+        model.save(TRAINING + f'model{i:03d}.h5')
+
+
+DATASET = "../dataset/"
+TRAINING = "../training/"
+GAMES = DATASET + "nm_games.csv"
 
 
 def main():
-    preprocess("dataset/lichess_db_standard_rated_2021-10.pgn.bz2",
-               "dataset/processed_games/nm_games.csv")
-    unite("dataset/processed_games", "dataset/nm_games.csv")
-    learn()
-    test_model()
+    preprocess(DATASET + "lichess_db_standard_rated_2021-10.pgn.bz2",
+               DATASET + "processed_games/nm_games.csv")
+    unite(DATASET + "processed_games", GAMES)
+    learn(GAMES)
+    test_model(GAMES)
 
 
 if __name__ == "__main__":
