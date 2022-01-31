@@ -129,7 +129,7 @@ def train(model: Sequential, X, y, index: int):
         batch_size=64,
         validation_split=0.1,
         callbacks=[
-            ModelCheckpoint(TRAINING + '{index:03d}weights{epoch:08d}.h5',
+            ModelCheckpoint(f'{TRAINING}{index:03d}' + 'weights{epoch:08d}.h5',
                             save_weights_only=True, save_freq='epoch'),
             Plotter(batches=100, folder=TRAINING),
             # access via tensorboard --logdir training/logs
