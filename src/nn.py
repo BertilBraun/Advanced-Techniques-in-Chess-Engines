@@ -58,6 +58,9 @@ def preprocess(in_path: str, out_path: str) -> None:
             with multiprocessing.Pool(os.cpu_count()-1) as pool:
                 for i, lines in enumerate(pager(in_file)):
                     pool.apply_async(process_game, args=(str(lines), out_path))
+
+                    if i > 2_500_000:
+                        break
     except KeyboardInterrupt:
         pass
     finally:
@@ -71,13 +74,20 @@ def unite(dir: str, out: str) -> None:
     """
     with open(out, 'w') as outfile:
         for filename in os.listdir(dir):
-            with open(os.path.join(dir, filename)) as inFile:
-                outfile.write(inFile.read())
+            if filename.endswith('.csv'):
+                with open(os.path.join(dir, filename)) as inFile:
+                    outfile.write(inFile.read())
 
 
 def gen_model() -> Sequential:
-    """ model = Sequential()
+    model = Sequential()
     model.add(Dense(2048, input_shape=(12 * 8 * 8,), activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, activation='relu'))
     model.add(Dense(2048, activation='relu'))
     model.add(Dense(2048, activation='relu'))
     model.add(Dense(1, activation='tanh'))
@@ -87,7 +97,7 @@ def gen_model() -> Sequential:
         # metrics=['accuracy', 'mse']
     )
 
-    return model """
+    return model
 
     model = Sequential()
     model.add(Reshape((12, 8, 8, 1), input_shape=(12 * 64,)))
@@ -125,15 +135,15 @@ def train(model: Sequential, X, y, index: int):
     history: History = model.fit(
         X,
         y,
-        epochs=25,
+        epochs=50,
         batch_size=64,
         validation_split=0.1,
         callbacks=[
-            ModelCheckpoint(f'{TRAINING}{index:03d}' + 'weights{epoch:08d}.h5',
-                            save_weights_only=True, save_freq='epoch'),
-            Plotter(batches=100, folder=TRAINING),
+            # ModelCheckpoint(f'{TRAINING}{index:03d}' + 'weights{epoch:08d}.h5',
+            #                 save_weights_only=True, save_freq='epoch'),
+            # Plotter(batches=100, folder=TRAINING),
             # access via tensorboard --logdir training/logs
-            TensorBoard(log_dir=TRAINING + f'logs/{time()}.log')
+            # TensorBoard(log_dir=TRAINING + f'logs/{time()}.log')
         ]
     )
 
@@ -160,30 +170,41 @@ def test_model(dataset: str) -> None:
         break
 
 
-def learn(dataset: str) -> None:
+def learn(dataset: str, iter: int = 0) -> None:
     model = gen_model()
     model.summary()
-    # load_last_training_weights_file(model, TRAINING)
+    load_last_training_weights_file(model, TRAINING)
 
     for i, chunk in enumerate(pd.read_csv(dataset, header=None, chunksize=50000)):
         X, y = create_training_data(chunk)
         train(model, X, y, i)
 
-        model.save(TRAINING + f'model{i:03d}.h5')
+        model.save(TRAINING + f'{iter:03d}model{i:03d}.h5')
 
 
 DATASET = "../dataset/"
+PROCESSED_GAMES = DATASET + "processed_games/"
 TRAINING = "../training/"
 GAMES = DATASET + "nm_games.csv"
 
 
 def main():
-    preprocess(DATASET + "lichess_db_standard_rated_2021-10.pgn.bz2",
-               DATASET + "processed_games/nm_games.csv")
-    unite(DATASET + "processed_games", GAMES)
-    learn(GAMES)
-    test_model(GAMES)
+    genFolder(DATASET)
+    genFolder(PROCESSED_GAMES)
+    genFolder(TRAINING)
+
+    for i in range(1, 12):
+        file = f"lichess_db_standard_rated_2021-{i}.pgn.bz2"
+        getFile("https://database.lichess.org/standard/" + file, DATASET + file)
+
+        delFolder(PROCESSED_GAMES)
+        genFolder(PROCESSED_GAMES)
+
+        preprocess(DATASET + file, PROCESSED_GAMES + "nm_games.csv")
+        unite(PROCESSED_GAMES, GAMES)
+        delFile(DATASET + file)
+        learn(GAMES, i)
+        test_model(GAMES)
 
 
-if __name__ == "__main__":
-    main()
+main()

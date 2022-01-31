@@ -4,6 +4,7 @@ from typing import List, TextIO, Tuple
 import chess
 import chess.pgn
 import numpy as np
+import requests
 from pandas.core.frame import DataFrame
 from tensorflow.keras.models import Sequential
 from tensorflow.python.keras.callbacks import Callback, History
@@ -142,3 +143,26 @@ class Plotter(Callback):
 
         if self.current_batch % self.batches == 0:
             plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '', self.folder)
+
+
+def getFile(url: str, path: str) -> None:
+    r = requests.get(url, stream=True)
+
+    with open(path, "wb") as file:
+        for i, block in enumerate(r.iter_content(chunk_size=1024 * 1024)):
+            if block:
+                file.write(block)
+            if i > 6 * 1024:  # Limit to 6GB
+                break
+
+
+def genFolder(folder: str) -> None:
+    os.system(f"mkdir {folder}")
+
+
+def delFolder(folder: str) -> None:
+    os.system(f"rm -rf {folder}")
+
+
+def delFile(file: str) -> None:
+    os.system(f"rm -rf {file}")
