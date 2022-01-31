@@ -129,9 +129,10 @@ def load_last_training_weights_file(model: Sequential, folder: str) -> None:
 class Plotter(Callback):
     batch_loss = []  # loss at given batch
 
-    def __init__(self, batches):
+    def __init__(self, batches, folder):
         super(Plotter, self).__init__()
         self.batches = batches
+        self.folder = folder
         self.current_batch = 0
 
     def on_train_batch_end(self, batch, logs=None):
@@ -140,4 +141,4 @@ class Plotter(Callback):
         Plotter.batch_loss.append(logs.get('loss'))
 
         if self.current_batch % self.batches == 0:
-            plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '')
+            plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '', self.folder)
