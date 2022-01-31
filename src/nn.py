@@ -2,12 +2,12 @@ import multiprocessing
 import os
 from bz2 import BZ2File
 from io import StringIO
-from time import time
 from typing import TextIO
 
 import chess
 import chess.pgn
 import pandas as pd
+import tqdm
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Conv3D, Dense,
                                      Flatten, Reshape)
@@ -53,10 +53,12 @@ def process_game(lines: str, out_path: str) -> None:
 
 def preprocess(in_path: str, out_path: str) -> None:
 
+    print(f'Preprocessing {in_path}')
+
     try:
         with BZ2File(in_path, 'rb') as in_file:
             with multiprocessing.Pool(os.cpu_count()-1) as pool:
-                for i, lines in enumerate(pager(in_file)):
+                for i, lines in tqdm.tqdm(enumerate(pager(in_file)), total=2_500_000):
                     pool.apply_async(process_game, args=(str(lines), out_path))
 
                     if i > 2_500_000:
@@ -72,6 +74,9 @@ def unite(dir: str, out: str, ext: str) -> None:
     """
     Unites all files in a directory into a single file.
     """
+
+    print(f'Uniting {dir}')
+
     with open(out, 'w') as outfile:
         for filename in os.listdir(dir):
             if filename.endswith(ext):

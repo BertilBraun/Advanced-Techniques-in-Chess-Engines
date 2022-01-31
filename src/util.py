@@ -5,6 +5,7 @@ import chess
 import chess.pgn
 import numpy as np
 import requests
+import tqdm
 from pandas.core.frame import DataFrame
 from tensorflow.keras.models import Sequential
 from tensorflow.python.keras.callbacks import Callback, History
@@ -59,8 +60,6 @@ def pager(in_file: TextIO, lines_per_page=20):
         if lin_ctr % lines_per_page == 0:
             yield current
             current = ''
-            if lin_ctr % (lines_per_page * 5000) == 0:
-                print('Next:' + str(lin_ctr // lines_per_page))
 
 
 def sigmoid(x):
@@ -145,14 +144,17 @@ class Plotter(Callback):
             plot(Plotter.batch_loss, Plotter.batch_loss, 'loss', '', self.folder)
 
 
-def getFile(url: str, path: str) -> None:
+def getFile(url: str, path: str, limit: int = 1024) -> None:
+    # Limit in MB
     r = requests.get(url, stream=True)
 
+    print(f'Downloading {url}')
+
     with open(path, 'wb') as file:
-        for i, block in enumerate(r.iter_content(chunk_size=1024 * 1024)):
+        for i, block in tqdm.tqdm(enumerate(r.iter_content(chunk_size=1024 * 1024)), total=limit):
             if block:
                 file.write(block)
-            if i > 6 * 1024:  # Limit to 6GB
+            if i > limit:
                 break
 
 

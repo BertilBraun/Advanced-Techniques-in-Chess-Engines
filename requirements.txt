@@ -5,3 +5,4 @@ chess
 matplotlib
 tensorflow
 requests
+tqdm
