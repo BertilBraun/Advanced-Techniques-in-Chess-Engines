@@ -151,7 +151,7 @@ def getFile(url: str, path: str, limit: int = 1024) -> None:
     print(f'Downloading {url}')
 
     with open(path, 'wb') as file:
-        for i, block in tqdm.tqdm(enumerate(r.iter_content(chunk_size=1024 * 1024)), total=limit):
+        for i, block in tqdm.tqdm(enumerate(r.iter_content(chunk_size=1024 * 1024)), total=limit, unit='MB'):
             if block:
                 file.write(block)
             if i > limit:

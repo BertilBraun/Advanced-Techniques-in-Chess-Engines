@@ -58,7 +58,7 @@ def preprocess(in_path: str, out_path: str) -> None:
     try:
         with BZ2File(in_path, 'rb') as in_file:
             with multiprocessing.Pool(os.cpu_count()-1) as pool:
-                for i, lines in tqdm.tqdm(enumerate(pager(in_file)), total=2_500_000):
+                for i, lines in tqdm.tqdm(enumerate(pager(in_file)), total=2_500_000, unit='games'):
                     pool.apply_async(process_game, args=(str(lines), out_path))
 
                     if i > 2_500_000:
