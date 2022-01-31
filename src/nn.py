@@ -155,6 +155,8 @@ def test_model(dataset: str) -> None:
         for v, p in zip(y, predictions):
             print(f"actual: {v} prediction: {p} - loss: {abs(v - p)}")
 
+        total_loss = sum(abs(v - p) for v, p in zip(y, predictions))
+        print(f"total loss: {total_loss} average loss: {total_loss / len(y)}")
         break
 
 
