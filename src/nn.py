@@ -44,7 +44,7 @@ def process_game(lines: str, out_path: str) -> None:
     cp = multiprocessing.current_process()
     if cp.pid not in out_files:
         out_files[cp.pid] = open(
-            f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w', buffering=1024*1024)
+            f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w', buffering=1024)
 
     # if 'WhiteElo' in game.headers and 'BlackElo' in game.headers and \
     #         int(game.headers['WhiteElo']) > 2200 and int(game.headers['BlackElo']) > 2200:
@@ -52,19 +52,19 @@ def process_game(lines: str, out_path: str) -> None:
     create_dataset(game, out_files[cp.pid])
 
 
-def preprocess(in_path: str, out_path: str) -> None:
+def preprocess(in_path: str, out_path: str, max: int) -> None:
 
     print(f'Preprocessing {in_path}')
 
     try:
         with BZ2File(in_path, 'rb') as in_file:
             with multiprocessing.Pool(os.cpu_count()-1) as pool:
-                for i, lines in tqdm.tqdm(enumerate(pager(in_file)), total=2_500_000, unit='games'):
+                for i, lines in tqdm.tqdm(enumerate(pager(in_file)), total=max, unit='games'):
                     pool.apply_async(process_game, args=(str(lines), out_path))
 
-                    if i > 2_500_000:
+                    if i > max:
                         break
-    except KeyboardInterrupt:
+    except:
         pass
 
     for out_file in out_files.values():
@@ -159,14 +159,15 @@ def train(model: Sequential, X, y, index: int):
 
 def test_model(model: str = None) -> None:
     if not os.path.exists(TEST_GAMES):
-        file = f'lichess_db_standard_rated_2020-12.pgn.bz2'
+        file = f'lichess_db_standard_rated_2021-12.pgn.bz2'
         getFile('https://database.lichess.org/standard/' +
-                file, DATASET + file, 4)
+                file, DATASET + file, 256)
 
         delFolder(PROCESSED_TEST_GAMES)
         genFolder(PROCESSED_TEST_GAMES)
 
-        preprocess(DATASET + file, PROCESSED_TEST_GAMES + 'nm_games.csv')
+        preprocess(DATASET + file, PROCESSED_TEST_GAMES +
+                   'nm_games.csv', 200_000)
         unite(PROCESSED_TEST_GAMES, TEST_GAMES, '.csv')
         delFile(DATASET + file)
 
@@ -202,10 +203,12 @@ def learn(dataset: str, iter: int = 0) -> None:
         train(model, X, y, i)
 
         model.save(TRAINING + f'{iter:03d}model{i:03d}.h5')
+        model.save_weights(TRAINING + f'{iter:03d}weights{i:03d}.h5')
 
         try:
             from google.colab import files
             files.download(TRAINING + f'{iter:03d}model{i:03d}.h5')
+            files.download(TRAINING + f'{iter:03d}weights{i:03d}.h5')
         except:
             pass
 
@@ -224,13 +227,13 @@ genFolder(PROCESSED_GAMES)
 genFolder(PROCESSED_TEST_GAMES)
 
 for i in range(1, 12):
-    file = f'lichess_db_standard_rated_2021-{i}.pgn.bz2'
+    file = f'lichess_db_standard_rated_2021-{i:02d}.pgn.bz2'
     getFile('https://database.lichess.org/standard/' + file, DATASET + file)
 
     delFolder(PROCESSED_GAMES)
     genFolder(PROCESSED_GAMES)
 
-    preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv')
+    preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv', 2_500_000)
     unite(PROCESSED_GAMES, GAMES, '.csv')
     delFile(DATASET + file)
     learn(GAMES, i)

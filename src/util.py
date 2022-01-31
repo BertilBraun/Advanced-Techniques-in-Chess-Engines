@@ -5,6 +5,7 @@ import chess
 import chess.pgn
 import numpy as np
 import requests
+import tensorflow.keras as keras
 import tqdm
 from pandas.core.frame import DataFrame
 from tensorflow.keras.models import Sequential
@@ -115,7 +116,7 @@ def plot(data: List, val_data: List, type: str, index, folder: str):
     plt.clf()
 
 
-def load_last_training_weights_file(model: Sequential, folder: str) -> None:
+def load_last_training_weights_file(model: Sequential, folder: str) -> Sequential:
 
     # get the last filename in the sorted directory 'training'
     last_files = sorted([
@@ -123,7 +124,11 @@ def load_last_training_weights_file(model: Sequential, folder: str) -> None:
     ])
 
     if len(last_files) > 0:
-        model.load_weights(f'{folder}{last_files[-1]}')
+        if 'weights' in last_files[-1]:
+            model.load_weights(f'{folder}{last_files[-1]}')
+            return model
+        elif 'model' in last_files[-1]:
+            return keras.model.load_model(f'{folder}{last_files[-1]}')
 
 
 class Plotter(Callback):
@@ -159,12 +164,18 @@ def getFile(url: str, path: str, limit: int = 1024) -> None:
 
 
 def genFolder(folder: str) -> None:
-    os.system(f'mkdir {folder}')
+    try:
+        os.mkdir(folder)
+    except:
+        pass
 
 
 def delFolder(folder: str) -> None:
-    os.system(f'rm -rf {folder}')
+    os.system(f'rmdir -rf {folder}')
 
 
 def delFile(file: str) -> None:
-    os.system(f'rm -rf {file}')
+    try:
+        os.remove(file)
+    except:
+        pass
