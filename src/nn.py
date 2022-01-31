@@ -65,9 +65,10 @@ def preprocess(in_path: str, out_path: str) -> None:
                         break
     except KeyboardInterrupt:
         pass
-    finally:
-        for out_file in out_files.values():
-            out_file.close()
+
+    for out_file in out_files.values():
+        out_file.close()
+    out_file = {}
 
 
 def unite(dir: str, out: str, ext: str) -> None:
