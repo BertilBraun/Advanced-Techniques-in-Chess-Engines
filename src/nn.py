@@ -7,6 +7,7 @@ from typing import TextIO
 import chess
 import chess.pgn
 import pandas as pd
+import tensorflow.keras as keras
 import tqdm
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import (BatchNormalization, Conv2D, Conv3D, Dense,
@@ -156,13 +157,28 @@ def train(model: Sequential, X, y, index: int):
     plot_history(history, index, TRAINING)
 
 
-def test_model(dataset: str) -> None:
-    model = gen_model()
-    load_last_training_weights_file(model, TRAINING)
+def test_model(model: str = None) -> None:
+    if not os.path.exists(TEST_GAMES):
+        file = f'lichess_db_standard_rated_2020-12.pgn.bz2'
+        getFile('https://database.lichess.org/standard/' +
+                file, DATASET + file, 4)
+
+        delFolder(PROCESSED_TEST_GAMES)
+        genFolder(PROCESSED_TEST_GAMES)
+
+        preprocess(DATASET + file, PROCESSED_TEST_GAMES + 'nm_games.csv')
+        unite(PROCESSED_TEST_GAMES, TEST_GAMES, '.csv')
+        delFile(DATASET + file)
+
+    if model is None:
+        model = gen_model()
+        load_last_training_weights_file(model, TRAINING)
+    else:
+        model = keras.models.load_model(model)
 
     # test the model
 
-    for chunk in pd.read_csv(dataset, header=None, chunksize=200):
+    for chunk in pd.read_csv(TEST_GAMES, header=None, chunksize=200):
         X, y = create_training_data(chunk)
 
         predictions = model.predict(X)
@@ -187,30 +203,35 @@ def learn(dataset: str, iter: int = 0) -> None:
 
         model.save(TRAINING + f'{iter:03d}model{i:03d}.h5')
 
+        try:
+            from google.colab import files
+            files.download(TRAINING + f'{iter:03d}model{i:03d}.h5')
+        except:
+            pass
+
 
 DATASET = '../dataset/'
 PROCESSED_GAMES = DATASET + 'processed_games/'
+PROCESSED_TEST_GAMES = DATASET + 'processed_games_test/'
 TRAINING = '../training/'
 GAMES = DATASET + 'nm_games.csv'
+TEST_GAMES = DATASET + 'nm_games_test.csv'
 
 
-def main():
-    genFolder(DATASET)
+genFolder(TRAINING)
+genFolder(DATASET)
+genFolder(PROCESSED_GAMES)
+genFolder(PROCESSED_TEST_GAMES)
+
+for i in range(1, 12):
+    file = f'lichess_db_standard_rated_2021-{i}.pgn.bz2'
+    getFile('https://database.lichess.org/standard/' + file, DATASET + file)
+
+    delFolder(PROCESSED_GAMES)
     genFolder(PROCESSED_GAMES)
-    genFolder(TRAINING)
 
-    for i in range(1, 12):
-        file = f'lichess_db_standard_rated_2021-{i}.pgn.bz2'
-        getFile('https://database.lichess.org/standard/' + file, DATASET + file)
-
-        delFolder(PROCESSED_GAMES)
-        genFolder(PROCESSED_GAMES)
-
-        preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv')
-        unite(PROCESSED_GAMES, GAMES, '.csv')
-        delFile(DATASET + file)
-        learn(GAMES, i)
-        test_model(GAMES)
-
-
-main()
+    preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv')
+    unite(PROCESSED_GAMES, GAMES, '.csv')
+    delFile(DATASET + file)
+    learn(GAMES, i)
+    test_model()
