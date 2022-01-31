@@ -45,8 +45,8 @@ def process_game(lines: str, out_path: str) -> None:
         out_files[cp.pid] = open(
             f'{out_path[:-4]}.{cp.pid}{out_path[-4:]}', 'w', buffering=1024*1024)
 
-    # if "WhiteElo" in game.headers and "BlackElo" in game.headers and \
-    #         int(game.headers["WhiteElo"]) > 2200 and int(game.headers["BlackElo"]) > 2200:
+    # if 'WhiteElo' in game.headers and 'BlackElo' in game.headers and \
+    #         int(game.headers['WhiteElo']) > 2200 and int(game.headers['BlackElo']) > 2200:
     #     create_dataset(game, out_files[cp.pid])
     create_dataset(game, out_files[cp.pid])
 
@@ -54,7 +54,7 @@ def process_game(lines: str, out_path: str) -> None:
 def preprocess(in_path: str, out_path: str) -> None:
 
     try:
-        with BZ2File(in_path, "rb") as in_file:
+        with BZ2File(in_path, 'rb') as in_file:
             with multiprocessing.Pool(os.cpu_count()-1) as pool:
                 for i, lines in enumerate(pager(in_file)):
                     pool.apply_async(process_game, args=(str(lines), out_path))
@@ -68,13 +68,13 @@ def preprocess(in_path: str, out_path: str) -> None:
             out_file.close()
 
 
-def unite(dir: str, out: str) -> None:
+def unite(dir: str, out: str, ext: str) -> None:
     """
     Unites all files in a directory into a single file.
     """
     with open(out, 'w') as outfile:
         for filename in os.listdir(dir):
-            if filename.endswith('.csv'):
+            if filename.endswith(ext):
                 with open(os.path.join(dir, filename)) as inFile:
                     outfile.write(inFile.read())
 
@@ -163,10 +163,10 @@ def test_model(dataset: str) -> None:
 
         # print the results and evaluate the error
         for v, p in zip(y, predictions):
-            print(f"actual: {v} prediction: {p} - loss: {abs(v - p)}")
+            print(f'actual: {v} prediction: {p} - loss: {abs(v - p)}')
 
         total_loss = sum(abs(v - p) for v, p in zip(y, predictions))
-        print(f"total loss: {total_loss} average loss: {total_loss / len(y)}")
+        print(f'total loss: {total_loss} average loss: {total_loss / len(y)}')
         break
 
 
@@ -182,10 +182,10 @@ def learn(dataset: str, iter: int = 0) -> None:
         model.save(TRAINING + f'{iter:03d}model{i:03d}.h5')
 
 
-DATASET = "../dataset/"
-PROCESSED_GAMES = DATASET + "processed_games/"
-TRAINING = "../training/"
-GAMES = DATASET + "nm_games.csv"
+DATASET = '../dataset/'
+PROCESSED_GAMES = DATASET + 'processed_games/'
+TRAINING = '../training/'
+GAMES = DATASET + 'nm_games.csv'
 
 
 def main():
@@ -194,14 +194,14 @@ def main():
     genFolder(TRAINING)
 
     for i in range(1, 12):
-        file = f"lichess_db_standard_rated_2021-{i}.pgn.bz2"
-        getFile("https://database.lichess.org/standard/" + file, DATASET + file)
+        file = f'lichess_db_standard_rated_2021-{i}.pgn.bz2'
+        getFile('https://database.lichess.org/standard/' + file, DATASET + file)
 
         delFolder(PROCESSED_GAMES)
         genFolder(PROCESSED_GAMES)
 
-        preprocess(DATASET + file, PROCESSED_GAMES + "nm_games.csv")
-        unite(PROCESSED_GAMES, GAMES)
+        preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv')
+        unite(PROCESSED_GAMES, GAMES, '.csv')
         delFile(DATASET + file)
         learn(GAMES, i)
         test_model(GAMES)

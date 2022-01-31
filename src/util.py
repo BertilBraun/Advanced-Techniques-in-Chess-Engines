@@ -52,15 +52,15 @@ def pager(in_file: TextIO, lines_per_page=20):
     assert lines_per_page > 1 and lines_per_page == int(lines_per_page)
 
     lin_ctr = 0
-    current = ""
+    current = ''
     for lin in in_file:
         lin_ctr += 1
-        current += lin.decode("utf-8") + "\n"
+        current += lin.decode('utf-8') + '\n'
         if lin_ctr % lines_per_page == 0:
             yield current
-            current = ""
+            current = ''
             if lin_ctr % (lines_per_page * 5000) == 0:
-                print("Next:" + str(lin_ctr // lines_per_page))
+                print('Next:' + str(lin_ctr // lines_per_page))
 
 
 def sigmoid(x):
@@ -118,13 +118,13 @@ def plot(data: List, val_data: List, type: str, index, folder: str):
 
 def load_last_training_weights_file(model: Sequential, folder: str) -> None:
 
-    # get the last filename in the sorted directory "training"
+    # get the last filename in the sorted directory 'training'
     last_files = sorted([
         f for f in os.listdir(folder) if f.endswith('.h5')
     ])
 
     if len(last_files) > 0:
-        model.load_weights(f"{folder}{last_files[-1]}")
+        model.load_weights(f'{folder}{last_files[-1]}')
 
 
 class Plotter(Callback):
@@ -148,7 +148,7 @@ class Plotter(Callback):
 def getFile(url: str, path: str) -> None:
     r = requests.get(url, stream=True)
 
-    with open(path, "wb") as file:
+    with open(path, 'wb') as file:
         for i, block in enumerate(r.iter_content(chunk_size=1024 * 1024)):
             if block:
                 file.write(block)
@@ -157,12 +157,12 @@ def getFile(url: str, path: str) -> None:
 
 
 def genFolder(folder: str) -> None:
-    os.system(f"mkdir {folder}")
+    os.system(f'mkdir {folder}')
 
 
 def delFolder(folder: str) -> None:
-    os.system(f"rm -rf {folder}")
+    os.system(f'rm -rf {folder}')
 
 
 def delFile(file: str) -> None:
-    os.system(f"rm -rf {file}")
+    os.system(f'rm -rf {file}')
