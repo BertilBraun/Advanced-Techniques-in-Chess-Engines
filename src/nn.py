@@ -223,8 +223,6 @@ TEST_GAMES = DATASET + 'nm_games_test.csv'
 
 genFolder(TRAINING)
 genFolder(DATASET)
-genFolder(PROCESSED_GAMES)
-genFolder(PROCESSED_TEST_GAMES)
 
 for i in range(1, 12):
     file = f'lichess_db_standard_rated_2021-{i:02d}.pgn.bz2'
@@ -233,7 +231,7 @@ for i in range(1, 12):
     delFolder(PROCESSED_GAMES)
     genFolder(PROCESSED_GAMES)
 
-    preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv', 2_500_000)
+    preprocess(DATASET + file, PROCESSED_GAMES + 'nm_games.csv', 2_200_000)
     unite(PROCESSED_GAMES, GAMES, '.csv')
     delFile(DATASET + file)
     learn(GAMES, i)

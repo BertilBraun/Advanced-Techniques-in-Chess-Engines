@@ -128,7 +128,7 @@ def load_last_training_weights_file(model: Sequential, folder: str) -> Sequentia
             model.load_weights(f'{folder}{last_files[-1]}')
             return model
         elif 'model' in last_files[-1]:
-            return keras.model.load_model(f'{folder}{last_files[-1]}')
+            return keras.models.load_model(f'{folder}{last_files[-1]}')
 
 
 class Plotter(Callback):
