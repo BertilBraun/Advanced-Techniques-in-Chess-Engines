@@ -360,3 +360,5 @@ dataset/
 
 Pipfile
 Pipfile.lock
+
+*.svg
