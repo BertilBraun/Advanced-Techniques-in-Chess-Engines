@@ -362,3 +362,5 @@ Pipfile
 Pipfile.lock
 
 *.svg
+*.profile
+*.h5
