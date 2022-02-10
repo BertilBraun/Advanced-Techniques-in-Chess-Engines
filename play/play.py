@@ -35,8 +35,8 @@ play_game(
     mcts_player_with_stats(
         evaluate_position_with_NN,
         print_and_reset_stats,
-        50,
-        5
+        80,
+        35
     ),
     human_player
 )

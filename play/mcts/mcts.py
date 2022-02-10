@@ -15,17 +15,14 @@ EvaluationFunction = Callable[['MCTSState', List[MoveType]], List[float]]
 
 
 class MCTSNode(Generic[MoveType]):
-    def __init__(self, state: MCTSState, evaluation: EvaluationFunction, move_to_get_here: MoveType, remaining_depth: int, parent: MCTSNode = None):
+    def __init__(self, state: MCTSState, evaluation: EvaluationFunction, move_to_get_here: MoveType, parent: MCTSNode = None):
         self.state = state
         self.parent = parent
         self.evaluation = evaluation
         self.children = []
         self.move_to_get_here = move_to_get_here
-        self.remaining_depth = remaining_depth
         self._number_of_visits = 0
-        self._results = defaultdict(int)
-        self._results[1] = 0
-        self._results[-1] = 0
+        self._result = 0
         self._untried_actions = None
         self._untried_actions = self.untried_actions
 
@@ -36,9 +33,7 @@ class MCTSNode(Generic[MoveType]):
 
     @property
     def q(self) -> float:
-        wins = self._results[1]
-        loses = self._results[-1]
-        return wins - loses
+        return self._result
 
     @property
     def n(self) -> int:
@@ -59,7 +54,6 @@ class MCTSNode(Generic[MoveType]):
             next_state,
             parent=self,
             move_to_get_here=action,
-            remaining_depth=self.remaining_depth - 1,
             evaluation=self.evaluation
         )
 
@@ -68,21 +62,24 @@ class MCTSNode(Generic[MoveType]):
 
     def rollout(self) -> int:
         current_rollout_state = self.state
+        last_state = None
 
-        while not current_rollout_state.is_game_over():
+        while not current_rollout_state.is_game_over() and current_rollout_state.remaining_depth > 0:
 
             possible_moves = current_rollout_state.get_legal_actions()
             evaluations = self.evaluation(
                 current_rollout_state, possible_moves
             )
             action = possible_moves[np.argmax(evaluations)]
+            last_state = current_rollout_state
             current_rollout_state = current_rollout_state.move(action)
 
-        return current_rollout_state.game_result()
+        result = current_rollout_state.game_result()
+        return result if result != None else self.evaluation(last_state, [action])[0]
 
-    def backpropagate(self, result: int) -> None:
+    def backpropagate(self, result: float) -> None:
         self._number_of_visits += 1.
-        self._results[result] += 1.
+        self._result += result
         if self.parent:
             self.parent.backpropagate(result)
 
@@ -96,14 +93,11 @@ class MCTSNode(Generic[MoveType]):
     def _tree_policy(self) -> MCTSNode:
         current_node = self
 
-        while not current_node.is_terminal_node and current_node.remaining_depth > 0:
+        while not current_node.is_terminal_node:
             if not current_node.is_fully_expanded:
                 return current_node.expand()
             else:
                 current_node = current_node.best_child()
-
-        if current_node.remaining_depth <= 0:
-            print("Warning: reached maximum depth")
 
         return current_node
 
@@ -117,6 +111,9 @@ class MCTSNode(Generic[MoveType]):
 
 
 class MCTSState:
+    def __init__(self, remaining_depth: int):
+        self.remaining_depth = remaining_depth
+
     @abstractmethod
     def get_legal_actions(self) -> List:
         '''
@@ -167,7 +164,8 @@ class MCTSState:
 
 class ChessState(MCTSState):
 
-    def __init__(self, state: chess.Board, turn: chess.Color):
+    def __init__(self, state: chess.Board, turn: chess.Color, remaining_depth: int):
+        super().__init__(remaining_depth)
         self.state = state
         self.turn = turn
 
@@ -183,13 +181,15 @@ class ChessState(MCTSState):
             return 1
         elif result == '0-1':
             return -1
-        else:
+        elif result == '1/2-1/2':
             return 0
+
+        return None
 
     def move(self, action: chess.Move) -> MCTSState:
         new_state = self.state.copy(stack=False)
         new_state.push(action)
-        return ChessState(new_state, not self.state.turn)
+        return ChessState(new_state, not self.state.turn, self.remaining_depth - 1)
 
 
 def mcts_player(board: chess.Board, evaluation: EvaluationFunction, iterations: int, maxdepth: int) -> chess.Move:
@@ -201,10 +201,9 @@ def mcts_player(board: chess.Board, evaluation: EvaluationFunction, iterations: 
             return move_choice
 
     root = MCTSNode(
-        ChessState(board, board.turn),
+        ChessState(board, board.turn, maxdepth),
         evaluation,
         move_to_get_here=None,
-        remaining_depth=maxdepth
     )
     move = root.best_action(iterations)
     # move = UCT(board, itermax, depthmax, evaluation)
@@ -216,7 +215,8 @@ def mcts_player_with_stats(evaluation: EvaluationFunction, printAndResetStats: C
     def inner(board: chess.Board):
         start = time.time()
         print("MCTS Player:", mcts_player(
-            board, evaluation, iterations, maxdepth))
+            board, evaluation, iterations, maxdepth
+        ))
         print("Time:", time.time() - start)
         printAndResetStats()
 
