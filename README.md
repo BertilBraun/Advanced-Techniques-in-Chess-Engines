@@ -3,9 +3,9 @@
 The idea of this project is to create a chess AI that can play chess against a human player.
 This will be done by using a neural network to learn how to evaluate the current board state and genereate the next move using [Monte Carlo tree search](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search).
 
-# Implementation
+## Implementation
 
-## Dataset
+### Dataset
 
 The dataset is a collection of chess games. The games are fetched from the official [lichess](https://database.lichess.org/) database.
 Only games which have a evaluation score, which the NN is supposed to learn, are included.
@@ -13,17 +13,17 @@ This reduces the size of the dataset to about 11% of the original.
 The dataset is normalized to the range [-1, 1] using a scaled `tanh` function.
 Since many evaluations are very close to 0 and -1/1, a percentage of these are dropped aswell, to reduce the variation in the dataset.
 
-## Data representation
+### Data representation
 
 Each move is a datapoint to train the network on.
 The input for the NN are 12 arrays of size 8x8 (so called [Bitboards](https://en.wikipedia.org/wiki/Bitboard)), one for each of the 6x2 different pieces and colors.
 The output of the NN is a single scalar value between -1 and 1, representing the evaluation of the board state. -1 meaning the board is heavily favored for the black player, 1 meaning the board is heavily favored for the white player.
 
-## The neural network
+### The neural network
 
 The neural network is implemented using [Keras](https://keras.io/).
 
-- ### First iteration
+- #### First iteration
 
     The network consists of a convolutional neural network (CNN).
     The CNN is used to extract features from the board, then passed to a dense network to reduce to an evaluation.
@@ -55,7 +55,7 @@ The neural network is implemented using [Keras](https://keras.io/).
     )
     ```
 
-- ### Second iteration
+- #### Second iteration
 
     Since the CNN did not seem to converge, I replaced it with a pure dense network.
 
@@ -74,7 +74,7 @@ The neural network is implemented using [Keras](https://keras.io/).
     )
     ```
 
-## Training
+### Training
 
 The training is done using [Keras](https://keras.io/).
 Multiple sets of 50k-500k moves are used to train the network.
@@ -84,19 +84,27 @@ Afterwards the learning rate is adjusted by `0.001 / (index + 1)`.
 
 A [checkpoint](https://keras.io/callbacks/#checkpoint-callback) is used to save the model after each epoch, allowing manual testing of the model.
 
-## Evaluation
+### Evaluation
 
   To be determined, once the network is trained.
 
-## Play
+### Play
 
-The searchspace of the possible moves for the computer is explored using [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search). The NN is thereby fed the current board state and depending on the evaluation provided by the NN, the next move is chosen.
+The search space of the possible moves for the computer is explored using [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search). The NN is thereby fed the current board state and depending on the evaluation provided by the NN, the next move is chosen.
 
-# Issues
+## Issues
 
 The NN currently does not learn anything. It converges within a few epochs to a average evaluation of the dataset and does not predict anything depending on the board state.
 
-# Installation
+## Ideas
+
+- The NN is way too large. It should be reduced to a much smaller size, since evaluation must be very fast and the evaluation of the board state is not that complex.
+- Output of the NN should be a linear layer, since the evaluation in the dataset is (probably) linear.
+- Only implementing a NN to evaluate the board state, would not lead to a very good chess AI.
+  - The move search would either be done with an algorithm like [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) or MinMax with [Alpha-Beta pruning](https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning) ([ref](https://www.youtube.com/watch?v=ffzvhe97J4Q)).
+  - Alternatively the move search could be done with a NN, which would be trained to predict the next move, given the current board state. This would be similar to [AlphaZero](https://en.wikipedia.org/wiki/AlphaZero). This would require a totally different approach and a lot more data and a stronger model. Also the training would be much more complex and time intensive.
+
+## Installation
 
 Run `pip install -r requirements.txt` to install the dependencies of the project.
 
@@ -108,8 +116,7 @@ The file `testing.py` is used to test the current state of the NN on some parts 
 
 The file `play.py` will at some point in the future hopefully allow you to play against the NN.
 
-
-# References
+## References
 
 - https://github.com/ryanp73/ChessAI
 
