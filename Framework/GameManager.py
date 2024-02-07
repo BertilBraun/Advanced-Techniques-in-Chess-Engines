@@ -31,11 +31,10 @@ class GameManager:
         while not self.board.is_game_over():
             current_player = self.white if self.board.turn == WHITE else self.black
             
-            start_time = time.time()
+            current_player.restart_clock()
             move = current_player.think(self.board)
-            end_time = time.time()
             
-            self.thinking_time.update(self.board.turn, end_time - start_time)
+            self.thinking_time.update(self.board.turn, current_player.time_elapsed)
             
             self.board.push(move)
         
