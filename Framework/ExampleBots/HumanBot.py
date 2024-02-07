@@ -2,7 +2,7 @@ import pygame
 
 from typing import Optional
 
-from Framework import ChessBot, Board, Move, Square
+from Framework import ChessBot, Board, Move, Square, Piece
 from Framework.ChessGUI import ChessGUI
 
 class HumanBot(ChessBot):
@@ -24,13 +24,18 @@ class HumanBot(ChessBot):
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if selected_square is None:
                         selected_square = self.gui.get_square_from_click()
-                        self.highlight_selected_piece(board, selected_square)
+                        selected_piece = board.piece_at(selected_square)
+                        if not selected_piece or selected_piece.color != board.turn:
+                            selected_square = None
+                        else:
+                            self.highlight_selected_piece(board, selected_square)
                     else:
                         target_square = self.gui.get_square_from_click()
                         move = self.create_move(board, selected_square, target_square)
                         if move:
                             return move
                         selected_square = None  # Reset if move not valid
+                        self.gui.draw_board(board) # Redraw board if move not valid to clear highlights
 
     def create_move(self, board: Board, from_square: Square, to_square: Square) -> Optional[Move]:
         """Attempt to create a move based on selected squares, simplified for clarity."""
@@ -44,9 +49,7 @@ class HumanBot(ChessBot):
         return None
     
     def highlight_selected_piece(self, board: Board, selected_square: Square) -> None:
-        selected_piece = board.piece_at(selected_square)
-        if selected_piece and selected_piece.color == board.turn:
-            self.gui.highlight_square(selected_square, "green")
+        self.gui.highlight_square(selected_square, "green")
             
         for move in board.legal_moves:
             if move.from_square == selected_square:

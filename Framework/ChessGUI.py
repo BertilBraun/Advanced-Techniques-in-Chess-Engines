@@ -5,12 +5,33 @@ from Framework import Board, SQUARES, square, Square
 SCREEN_SIZE = 480
 SQUARE_SIZE = SCREEN_SIZE // 8
 
+RESOURCE_FOLDER = "Framework/Resources/"
+
 class ChessGUI:
     def __init__(self) -> None:
         pygame.init()
         pygame.display.set_caption("Chess")
+        pygame.display.set_icon(_load_resource("Icon.png"))
         self.screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
         self.colors = [pygame.Color("white"), pygame.Color("gray")]
+        
+        self.piece_images = {
+            "P": _load_resource("WPawn.png"),
+            "N": _load_resource("WKnight.png"),
+            "B": _load_resource("WBishop.png"),
+            "R": _load_resource("WRook.png"),
+            "Q": _load_resource("WQueen.png"),
+            "K": _load_resource("WKing.png"),
+            "p": _load_resource("BPawn.png"),
+            "n": _load_resource("BKnight.png"),
+            "b": _load_resource("BBishop.png"),
+            "r": _load_resource("BRook.png"),
+            "q": _load_resource("BQueen.png"),
+            "k": _load_resource("BKing.png"),
+        }
+        # Scale the piece images to the correct size (0.08)
+        for piece, img in self.piece_images.items():
+            self.piece_images[piece] = pygame.transform.scale(img, (SQUARE_SIZE, SQUARE_SIZE))
 
     def draw_board(self, board: Board) -> None:
         """Draws the chessboard and pieces."""
@@ -23,8 +44,7 @@ class ChessGUI:
         for sq in SQUARES:
             piece = board.piece_at(sq)
             if piece:
-                font = pygame.font.SysFont(pygame.font.get_default_font(), SQUARE_SIZE)
-                img = font.render(piece.symbol(), True, pygame.Color("Black")) # TODO - Use images for pieces
+                img = self.piece_images[piece.symbol()]
                 self.screen.blit(img, ((sq % 8) * SQUARE_SIZE, (7 - sq // 8) * SQUARE_SIZE))
 
         pygame.display.flip()
@@ -46,3 +66,7 @@ class ChessGUI:
         
         pygame.display.flip()
         
+def _load_resource(path: str) -> pygame.Surface:
+    """Loads a resource from the resource folder."""
+    return pygame.image.load(RESOURCE_FOLDER + path)
+    
