@@ -1,4 +1,4 @@
-# Chess Engine Projects Repository README
+# Chess Engine Projects Repository
 
 ## Overview
 
@@ -42,20 +42,12 @@ Inspired by AlphaZero, this ambitious project seeks to implement a chess engine 
 ChessBot/
 │
 ├── HandcraftedChessBot/
-│   ├── src/
-│   ├── tests/
 │   └── README.md
 │
 ├── NeuralNetChessBot/
-│   ├── src/
-│   ├── data/
-│   ├── models/
 │   └── README.md
 │
 └── AI-ZeroChessBot/
-    ├── src/
-    ├── training/
-    ├── models/
     └── README.md
 ```
 
