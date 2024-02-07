@@ -6,6 +6,10 @@ This repository hosts a collection of three distinct chess bot projects, each ex
 
 ## Projects
 
+### 0. Framework (Subfolder: `Framework`)
+
+A basic framework to evaluate and play chess games, providing a foundation for the subsequent chess bot projects. This framework includes a abstract `ChessBot` class which can be extended to implement different chess bots, as well as a `GameManager` class to manage game state and interactions between bots. It also includes a GUI based `HumanPlayer` class to allow human players to play against the chess bot. The framework also provides a `Tournament` class to run a all vs all tournament between different chess bots.
+
 ### 1. HandcraftedChessBot (Subfolder: `HandcraftedChessBot`)
 
 A traditional chess bot that relies on handcrafted evaluation functions, search algorithms, and optimization techniques without the use of machine learning. This project focuses on the fundamentals of chess bot design, including move generation, board evaluation, and search strategies like alpha-beta pruning and iterative deepening.
@@ -39,6 +43,9 @@ Inspired by AlphaZero, this ambitious project seeks to implement a chess bot tha
 ```text
 ChessBot/
 │
+├── Framework/
+│   └── README.md
+│
 ├── HandcraftedChessBot/
 │   └── README.md
 │
@@ -56,3 +63,4 @@ To get started with any of the projects:
 1. Clone this repository to your local machine.
 2. Navigate to the project subfolder of interest (`HandcraftedChessBot`, `NeuralNetChessBot`, or `AI-ZeroChessBot`).
 3. Follow the instructions in the project-specific README.md for setup and running the bot.
+4. To explore the basic chess bot framework, refer to the `Framework` subfolder and try it out via `python -m Framework`.

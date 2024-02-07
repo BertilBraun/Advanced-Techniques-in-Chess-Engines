@@ -5,7 +5,7 @@ from typing import Optional
 from Framework import ChessBot, Board, Move, Square, Piece
 from Framework.ChessGUI import ChessGUI
 
-class HumanBot(ChessBot):
+class HumanPlayer(ChessBot):
     def __init__(self) -> None:
         """Initializes the human player."""
         super().__init__("Human")

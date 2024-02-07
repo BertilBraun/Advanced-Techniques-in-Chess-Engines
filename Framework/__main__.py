@@ -2,7 +2,7 @@
 from Framework.GameManager import GameManager
 from Framework.Tournament import Tournament
 
-from Framework.ExampleBots.HumanBot import HumanBot
+from Framework.ExampleBots.HumanPlayer import HumanPlayer
 from Framework.ExampleBots.RandomBot import RandomBot
 
 
@@ -10,7 +10,7 @@ def example_tournament() -> None:
     print("Example of a chess tournament")
     
     # List of Competitors
-    human = HumanBot()
+    human = HumanPlayer()
     random = RandomBot()
     
     competitors = [human, random]
@@ -49,7 +49,7 @@ def example_match() -> None:
     print("Example of a chess match")
     
     # Initialize competitors
-    human = HumanBot()
+    human = HumanPlayer()
     random = RandomBot()
     
     print("Initialized competitors")
