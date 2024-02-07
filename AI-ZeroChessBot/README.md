@@ -2,14 +2,14 @@
 
 ## Overview
 
-AI-Zero Chess Bot is an ambitious project aiming to replicate and explore the AlphaZero approach to computer chess. The project focuses on developing a chess engine that uses a combination of deep neural networks and Monte Carlo Tree Search (MCTS) to evaluate positions and select moves without reliance on traditional chess engines' databases and heuristics. By learning from self-play, the AI-Zero Chess Bot aspires to discover and refine its understanding of chess strategy, tactics, and endgames, pushing the boundaries of artificial chess intelligence.
+AI-Zero Chess Bot is an ambitious project aiming to replicate and explore the AlphaZero approach to computer chess. The project focuses on developing a chess bot that uses a combination of deep neural networks and Monte Carlo Tree Search (MCTS) to evaluate positions and select moves without reliance on traditional chess bots' databases and heuristics. By learning from self-play, the AI-Zero Chess Bot aspires to discover and refine its understanding of chess strategy, tactics, and endgames, pushing the boundaries of artificial chess intelligence.
 
 ## Goals
 
 - To implement a neural network that can evaluate chess positions (value) and suggest move probabilities (policy) based on the current board state.
 - To integrate the neural network with Monte Carlo Tree Search (MCTS) for effective move selection and game exploration.
 - To train the neural network using self-play, allowing the system to learn and improve its chess-playing capabilities iteratively.
-- To assess the performance of the AI-Zero Chess Bot against various benchmarks, including traditional engines and human players.
+- To assess the performance of the AI-Zero Chess Bot against various benchmarks, including traditional bots and human players.
 
 ## Architecture
 
@@ -40,7 +40,7 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
    - Implement training routines for the neural network using self-play data.
 4. **Evaluation and Testing**
    - Develop benchmarks and testing protocols to evaluate the performance of ChessAI-Zero.
-   - Compare performance against other engines and track improvement over time.
+   - Compare performance against other bots and track improvement over time.
 
 ## Technologies
 
@@ -50,4 +50,4 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 
 ## Getting Started
 
-- Setup instructions, training procedures, and how to run the engine will be detailed in the project documentation.
+- Setup instructions, training procedures, and how to run the bot will be detailed in the project documentation.

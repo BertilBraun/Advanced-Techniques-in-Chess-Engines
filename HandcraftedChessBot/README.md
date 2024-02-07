@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This project aims to develop a competitive chess bot in Python, utilizing the python-chess library. Designed to operate in a single-threaded environment without the use of machine learning or extensive databases, this bot focuses on strategic move generation and board evaluation through a variety of advanced algorithms and techniques. The goal is to create a chess engine that can provide a challenging experience for players, incorporating both classical chess strategies and innovative computational methods.
+This project aims to develop a competitive chess bot in Python, utilizing the python-chess library. Designed to operate in a single-threaded environment without the use of machine learning or extensive databases, this bot focuses on strategic move generation and board evaluation through a variety of advanced algorithms and techniques. The goal is to create a chess bot that can provide a challenging experience for players, incorporating both classical chess strategies and innovative computational methods.
 
 ## Core Features and Improvements
 
@@ -14,7 +14,7 @@ Below is an ordered list of features and improvements that will be implemented i
 
 3. **Transposition Table**: Utilize a transposition table to store and recall evaluations of previously encountered positions, reducing computation time and improving search efficiency.
 
-4. **Quiescence Search**: Incorporate quiescence search to extend the search at positions with pending tactical sequences, ensuring the engine evaluates only positions that are relatively stable.
+4. **Quiescence Search**: Incorporate quiescence search to extend the search at positions with pending tactical sequences, ensuring the bot evaluates only positions that are relatively stable.
 
 5. **Move Ordering**: Implement move ordering to prioritize moves that are likely to be stronger (e.g., captures, promotions, checks) to enhance the efficiency of the alpha-beta pruning.
 
@@ -38,4 +38,4 @@ This project will be developed incrementally, with each component being carefull
 
 ## Getting Started
 
-- Setup instructions, training procedures, and how to run the engine will be detailed in the project documentation.
+- Setup instructions, training procedures, and how to run the bot will be detailed in the project documentation.

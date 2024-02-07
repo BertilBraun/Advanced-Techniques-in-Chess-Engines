@@ -1,14 +1,14 @@
-# Chess Engine Projects Repository
+# Chess Bot Projects Repository
 
 ## Overview
 
-This repository hosts a collection of three distinct chess engine projects, each exploring different approaches to chess AI development. From handcrafted algorithms to cutting-edge machine learning techniques, these projects aim to cover a broad spectrum of AI strategies in the realm of chess. Each project is contained within its own subfolder, allowing for focused development and exploration.
+This repository hosts a collection of three distinct chess bot projects, each exploring different approaches to chess AI development. From handcrafted algorithms to cutting-edge machine learning techniques, these projects aim to cover a broad spectrum of AI strategies in the realm of chess. Each project is contained within its own subfolder, allowing for focused development and exploration.
 
 ## Projects
 
 ### 1. HandcraftedChessBot (Subfolder: `HandcraftedChessBot`)
 
-A traditional chess engine that relies on handcrafted evaluation functions, search algorithms, and optimization techniques without the use of machine learning. This project focuses on the fundamentals of chess engine design, including move generation, board evaluation, and search strategies like alpha-beta pruning and iterative deepening.
+A traditional chess bot that relies on handcrafted evaluation functions, search algorithms, and optimization techniques without the use of machine learning. This project focuses on the fundamentals of chess bot design, including move generation, board evaluation, and search strategies like alpha-beta pruning and iterative deepening.
 
 **Key Features**:
 
@@ -17,7 +17,7 @@ A traditional chess engine that relies on handcrafted evaluation functions, sear
 
 ### 2. NeuralNetChessBot (Subfolder: `NeuralNetChessBot`)
 
-This project introduces a neural network-based evaluator within a basic chess engine framework. It aims to explore the impact of replacing traditional, handcrafted evaluation methods with a machine learning model trained to understand and assess chess positions.
+This project introduces a neural network-based evaluator within a basic chess bot framework. It aims to explore the impact of replacing traditional, handcrafted evaluation methods with a machine learning model trained to understand and assess chess positions.
 
 **Key Features**:
 
@@ -26,7 +26,7 @@ This project introduces a neural network-based evaluator within a basic chess en
 
 ### 3. AI-ZeroChessBot (Subfolder: `AI-ZeroChessBot`)
 
-Inspired by AlphaZero, this ambitious project seeks to implement a chess engine that combines deep neural networks with Monte Carlo Tree Search (MCTS) to guide move selection and position evaluation. It focuses on learning from self-play without relying on pre-existing game databases or handcrafted evaluation heuristics.
+Inspired by AlphaZero, this ambitious project seeks to implement a chess bot that combines deep neural networks with Monte Carlo Tree Search (MCTS) to guide move selection and position evaluation. It focuses on learning from self-play without relying on pre-existing game databases or handcrafted evaluation heuristics.
 
 **Key Features**:
 
@@ -55,4 +55,4 @@ To get started with any of the projects:
 
 1. Clone this repository to your local machine.
 2. Navigate to the project subfolder of interest (`HandcraftedChessBot`, `NeuralNetChessBot`, or `AI-ZeroChessBot`).
-3. Follow the instructions in the project-specific README.md for setup and running the engine.
+3. Follow the instructions in the project-specific README.md for setup and running the bot.
