@@ -29,13 +29,21 @@ def example_tournament() -> None:
     results = tournament.run()
     
     print("Tournament complete")
+    print(results)
     
     # investigate the results
-    human_wins = results[human].wins
-    human_losses = results[human].losses
+    human_wins = results.total_results[human].wins
+    human_losses = results.total_results[human].losses
     
     print(f"Human wins: {human_wins}, Human losses: {human_losses}")
     
+    human_vs_random = results.competition_results[(0, 1)]
+    
+    human_vs_random_wins = human_vs_random[human].wins
+    human_vs_random_losses = human_vs_random[human].losses
+    
+    print(f"Human vs Random wins: {human_vs_random_wins}, Human vs Random losses: {human_vs_random_losses}")
+        
     
 def example_match() -> None:
     print("Example of a chess match")
