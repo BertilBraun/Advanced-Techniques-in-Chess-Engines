@@ -16,13 +16,12 @@ def example_tournament() -> None:
     competitors = [human, random]
     
     print("Initialized competitors")
-    print(f"Competitors: {[bot.name for bot in competitors]}")
     
-    rounds = 10
-    
-    print(f"Creating a tournament with {rounds} rounds")
     # Create a tournament
-    tournament = Tournament(competitors, rounds)
+    tournament = Tournament(competitors, rounds=10)
+    
+    print("Initialized tournament")
+    print(tournament)
     
     print("Running the tournament")
     

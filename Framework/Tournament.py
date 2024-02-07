@@ -109,4 +109,9 @@ class Tournament:
             total_results._merge_into_this(result)
             
         return total_results
+    
+    def __repr__(self) -> str:
+        out = f"Tournament with {self.rounds} rounds\n"
+        out += f"Participants: {[bot.name for bot in self.participants]}\n"
+        return out
         
