@@ -14,7 +14,8 @@ class Statistics:
     thinking_time: float = 0.0
     
     def repr(self, total_rounds: int) -> str:
-        return f"Wins: {self.wins}, Losses: {self.losses}, Draws: {self.draws}, Avg. Thinking Time: {self.thinking_time / total_rounds:.2f}s"
+        length_num_rounds = len(str(total_rounds))
+        return f"Wins: {self.wins:>{length_num_rounds}}, Losses: {self.losses:>{length_num_rounds}}, Draws: {self.draws:>{length_num_rounds}}, Avg. Thinking Time: {self.thinking_time / total_rounds:.2f}s"
 
 
 class CompetitionStatistics(dict[ChessBot, Statistics]):
@@ -45,8 +46,9 @@ class CompetitionStatistics(dict[ChessBot, Statistics]):
             
     def __repr__(self) -> str:
         out = f"Total Rounds: {self.total_rounds}\n"
+        longest_bot_name = max(len(bot.name) for bot in self.keys())
         for bot, stats in self.items():
-            out += f"{bot.name}: {stats.repr(self.total_rounds)}\n"
+            out += f"{bot.name:<{longest_bot_name}} : {stats.repr(self.total_rounds)}\n"
         return out
            
     def __getitem__(self, key: ChessBot) -> Statistics:
