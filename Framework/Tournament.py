@@ -85,9 +85,6 @@ class Tournament:
 
         total_results = self._aggregate_results(competition_results)
         
-        for (i, j), value in competition_results.items():
-            competition_results[(j, i)] = value
-        
         return TournamentResults(total_results, competition_results)
 
     def _run_competition(self, bot1: ChessBot, bot2: ChessBot) -> CompetitionStatistics:

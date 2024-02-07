@@ -15,7 +15,7 @@ if __name__ == "__main__":
     ]
     
     print("Initialized competitors")
-    tournament = Tournament(competitors, rounds=10)
+    tournament = Tournament(competitors, rounds=5)
     
     print("Initialized tournament")
     print(tournament)
