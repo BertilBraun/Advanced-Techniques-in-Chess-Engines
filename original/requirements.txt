@@ -1,8 +1,0 @@
-keras
-pandas
-numpy
-chess
-matplotlib
-tensorflow
-requests
-tqdm
