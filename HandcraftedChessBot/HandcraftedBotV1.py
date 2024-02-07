@@ -1,4 +1,3 @@
-import time
 from Framework import *
 
 
@@ -27,7 +26,6 @@ class HandcraftedBotV1(ChessBot):
         :param board: The current board state.
         :return: The best move as determined by the engine.
         """
-        self.start_time = time.time()
         self.best_move = Move.null()
 
         self.negamax(board, 3, -float('inf'), float('inf'), board.turn)

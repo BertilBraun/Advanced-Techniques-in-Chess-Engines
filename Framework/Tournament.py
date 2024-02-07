@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from typing import Sequence
 from dataclasses import dataclass
 
@@ -78,7 +79,7 @@ class Tournament:
     def run(self) -> TournamentResults:
         competition_results: dict[tuple[int, int], CompetitionStatistics] = {}
         
-        for i, first_bot in enumerate(self.participants):
+        for i, first_bot in tqdm(enumerate(self.participants), desc="Running tournament"):
             for j, second_bot in enumerate(self.participants[i + 1:]):
                 competition_results[(i, j)] = self._run_competition(first_bot, second_bot)
 

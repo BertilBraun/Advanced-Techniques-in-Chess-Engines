@@ -4,6 +4,7 @@ import time
 from abc import ABC, abstractmethod
 from chess import Board, Move
 
+TIME_TO_THINK = 0.5 # seconds
 class ChessBot(ABC):
     def __init__(self, name: str) -> None:
         """Initializes the bot with a name."""
@@ -20,15 +21,21 @@ class ChessBot(ABC):
         """Returns the time elapsed since the bot started thinking."""
         return time.time() - self.start_time
     
-    def restart_clock(self) -> None:
-        """Restarts the clock for the bot."""
-        self.start_time = time.time()
-    
+    @property
     def time_remaining(self) -> float:
         """
         Determines the time remaining for the bot to think.
         
         :return: The time remaining in seconds.
         """
-        TIME_TO_THINK = 5 # seconds
         return TIME_TO_THINK - self.time_elapsed
+    
+    @property
+    def time_is_up(self) -> bool:
+        """Determines if the bot has run out of time to think."""
+        return self.time_remaining <= 0
+    
+    def restart_clock(self) -> None:
+        """Restarts the clock for the bot."""
+        self.start_time = time.time()
+    

@@ -1,7 +1,8 @@
 
 from Framework.Tournament import Tournament
-from HandcraftedChessBot.HandcraftedBotV1 import HandcraftedBotV1
 from Framework.ExampleBots.RandomBot import RandomBot
+from HandcraftedChessBot.HandcraftedBotV1 import HandcraftedBotV1
+from HandcraftedChessBot.HandcraftedBotV2 import HandcraftedBotV2
 
 
 if __name__ == "__main__":
@@ -9,11 +10,12 @@ if __name__ == "__main__":
         
     competitors = [
         RandomBot(), 
-        HandcraftedBotV1()
+        HandcraftedBotV1(), 
+        HandcraftedBotV2(),
     ]
     
     print("Initialized competitors")
-    tournament = Tournament(competitors, rounds=100)
+    tournament = Tournament(competitors, rounds=10)
     
     print("Initialized tournament")
     print(tournament)
