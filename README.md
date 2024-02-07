@@ -12,7 +12,6 @@ A traditional chess engine that relies on handcrafted evaluation functions, sear
 
 **Key Features**:
 
-- Efficient move generation and legal move checking.
 - Alpha-beta pruning and iterative deepening for search optimization.
 - Handcrafted evaluation functions including material count, piece-square tables, and pawn structure analysis.
 
@@ -22,7 +21,6 @@ This project introduces a neural network-based evaluator within a basic chess en
 
 **Key Features**:
 
-- Basic chess engine capabilities with move generation and game state management.
 - Integration of a neural network for dynamic position evaluation.
 - Training and implementation of the neural network using chess game datasets.
 

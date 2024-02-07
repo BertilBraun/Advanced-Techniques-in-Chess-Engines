@@ -17,7 +17,6 @@ The project architecture is divided into the Chess Engine Framework and the Neur
 ### Chess Engine Framework
 
 - **Advanced Features**:
-  - **Move Generation**: Efficient generation of legal moves, including special moves (castling, en passant).
   - **Move Ordering**: Prioritization of moves to improve search efficiency, initially guided by simple heuristics and enhanced by NN insights.
   - **Quiescence Search**: Extends search at quiet positions to avoid the horizon effect.
   - **Iterative Deepening**: Dynamic adjustment of search depth for optimal time management.
@@ -43,7 +42,7 @@ The project architecture is divided into the Chess Engine Framework and the Neur
 
 ## Development Plan
 
-1. **Framework Implementation**: Develop the advanced features of the chess engine framework.
+1. **Framework Implementation**: Use the groundwork layed out by the handcrafted chess bot.
 2. **Neural Network Design and Training**:
    - Design the NN architecture suitable for chess position evaluation.
    - Train the NN using a dataset of high-quality games, focusing on learning a broad understanding of various positions.
