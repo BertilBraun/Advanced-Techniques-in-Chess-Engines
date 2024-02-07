@@ -1,9 +1,7 @@
-import chess
-
 from typing import List
 from dataclasses import dataclass
 
-from Framework.ChessBot import ChessBot
+from Framework import ChessBot, WHITE
 from Framework.GameManager import GameManager, ThinkingTime
 from Framework.GameResult import GameResult
 
@@ -45,7 +43,7 @@ class Tournament:
         if result.winner is None: # draw
             self.results[white].draws += 1
             self.results[black].draws += 1
-        elif result.winner == chess.WHITE:
+        elif result.winner == WHITE:
             self.results[white].wins += 1
             self.results[black].losses += 1
         else:

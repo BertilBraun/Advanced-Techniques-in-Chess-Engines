@@ -1,7 +1,6 @@
 import random
-from chess import Board, Move
 
-from Framework.ChessBot import ChessBot
+from Framework.ChessBot import ChessBot, Board, Move
 
 class RandomBot(ChessBot):
     def __init__(self) -> None:

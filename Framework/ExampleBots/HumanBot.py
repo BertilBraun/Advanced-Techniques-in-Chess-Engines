@@ -1,9 +1,8 @@
 import pygame
 
 from typing import Optional
-from chess import Board, Move, Square
 
-from Framework.ChessBot import ChessBot
+from Framework import ChessBot, Board, Move, Square
 from Framework.ChessGUI import ChessGUI
 
 class HumanBot(ChessBot):

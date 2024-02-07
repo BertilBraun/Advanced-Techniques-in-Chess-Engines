@@ -1,5 +1,6 @@
 import pygame
-import chess
+
+from Framework import Board, SQUARES, square, Square
 
 SCREEN_SIZE = 480
 SQUARE_SIZE = SCREEN_SIZE // 8
@@ -11,7 +12,7 @@ class ChessGUI:
         self.screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
         self.colors = [pygame.Color("white"), pygame.Color("gray")]
 
-    def draw_board(self, board: chess.Board) -> None:
+    def draw_board(self, board: Board) -> None:
         """Draws the chessboard and pieces."""
         for r in range(8):
             for c in range(8):
@@ -19,7 +20,7 @@ class ChessGUI:
                 pygame.draw.rect(self.screen, color, pygame.Rect(c * SQUARE_SIZE, r * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
         # Draw the pieces
-        for sq in chess.SQUARES:
+        for sq in SQUARES:
             piece = board.piece_at(sq)
             if piece:
                 font = pygame.font.SysFont(pygame.font.get_default_font(), SQUARE_SIZE)
@@ -28,14 +29,14 @@ class ChessGUI:
 
         pygame.display.flip()
 
-    def get_square_from_click(self) -> chess.Square:
+    def get_square_from_click(self) -> Square:
         """Translates a mouse click position to a chess square."""
         pos = pygame.mouse.get_pos()
         col = pos[0] // SQUARE_SIZE
         row = pos[1] // SQUARE_SIZE
-        return chess.square(col, 7 - row)  # Convert to chess square index
+        return square(col, 7 - row)  # Convert to chess square index
 
-    def highlight_square(self, square: chess.Square, color: str) -> None:
+    def highlight_square(self, square: Square, color: str) -> None:
         """Highlights a square on the board."""
         img = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE))
         img.set_alpha(100)

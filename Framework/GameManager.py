@@ -1,8 +1,7 @@
 import time
-import chess
 from dataclasses import dataclass
 
-from Framework.ChessBot import ChessBot
+from Framework import ChessBot, Color, Board, WHITE
 from Framework.GameResult import GameResult
 
 
@@ -11,8 +10,8 @@ class ThinkingTime:
     white: float = 0.0
     black: float = 0.0
     
-    def update(self, color: chess.Color, time: float) -> None:
-        if color == chess.WHITE:
+    def update(self, color: Color, time: float) -> None:
+        if color == WHITE:
             self.white += time
         else:
             self.black += time
@@ -21,7 +20,7 @@ class ThinkingTime:
 class GameManager:
     def __init__(self, white: ChessBot, black: ChessBot) -> None:
         """Initializes the game manager with two players."""
-        self.board = chess.Board()
+        self.board = Board()
         self.white = white
         self.black = black
         self.thinking_time = ThinkingTime()
@@ -30,7 +29,7 @@ class GameManager:
     def play_game(self) -> tuple[GameResult, ThinkingTime]:
         """Manages the gameplay loop until the game is over or a player quits."""
         while not self.board.is_game_over():
-            current_player = self.white if self.board.turn == chess.WHITE else self.black
+            current_player = self.white if self.board.turn == WHITE else self.black
             
             start_time = time.time()
             move = current_player.think(self.board)
