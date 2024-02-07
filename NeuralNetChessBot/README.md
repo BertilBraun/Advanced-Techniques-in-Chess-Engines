@@ -1,8 +1,8 @@
-# Project: AdvNNChessEngine
+# Project: AINeural Net Chess Bot
 
 ## Overview
 
-AdvNNChessEngine is a sophisticated chess engine project that aims to implement a blend of advanced chess programming techniques with the power of neural network-based evaluation. This project builds on the foundation of a basic chess engine by incorporating neural network (NN) evaluators to replace and enhance traditional evaluation methods where possible. The goal is to leverage the depth of machine learning to understand and evaluate chess positions dynamically, improving the engine's strategic and tactical decision-making capabilities.
+AINeural Net Chess Bot  is a sophisticated chess engine project that aims to implement a blend of advanced chess programming techniques with the power of neural network-based evaluation. This project builds on the foundation of a basic chess engine by incorporating neural network (NN) evaluators to replace and enhance traditional evaluation methods where possible. The goal is to leverage the depth of machine learning to understand and evaluate chess positions dynamically, improving the engine's strategic and tactical decision-making capabilities.
 
 ## Goals
 

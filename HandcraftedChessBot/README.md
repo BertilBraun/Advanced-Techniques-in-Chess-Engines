@@ -1,4 +1,4 @@
-# Handcrafted Chess Bot Project
+# Project: Handcrafted Chess Bot
 
 ## Introduction
 
