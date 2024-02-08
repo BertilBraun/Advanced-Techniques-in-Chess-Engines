@@ -7,7 +7,7 @@ PIECE_VALUES = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 5, QUEEN: 9, KING: 0}
 class HandcraftedBotV2(ChessBot):
     def __init__(self) -> None:
         super().__init__('HandcraftedBotV2')
-        self.transposition_table = [0.0] * 2**16
+        self.transposition_table: list[float | None] = [None] * 2**16
 
     def think(self, board: Board) -> Move:
         """
@@ -36,9 +36,9 @@ class HandcraftedBotV2(ChessBot):
         :param color: The color of the current player.
         :return: The best evaluation score for the current player.
         """
-        # Check if the position is in the transposition table
-        key = hash(board._transposition_key()) % len(self.transposition_table)
+        key = self.get_board_hash(board) % len(self.transposition_table)
 
+        # Check if the position is in the transposition table
         tt_entry = self.transposition_table[key]
         if tt_entry is not None:
             return tt_entry
@@ -88,3 +88,12 @@ class HandcraftedBotV2(ChessBot):
             return PIECE_VALUES[piece.piece_type]
         else:
             return -PIECE_VALUES[piece.piece_type]
+
+    def get_board_hash(self, board: Board) -> int:
+        """
+        Returns a hash of the given board state.
+
+        :param board: The board state to hash.
+        :return: The hash of the board state.
+        """
+        return hash(board._transposition_key())
