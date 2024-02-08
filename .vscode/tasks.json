@@ -1,0 +1,25 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Play",
+            "type": "shell",
+            "command": "python -m HandcraftedChessBot --play",
+            "problemMatcher": []
+        },
+        {
+            "label": "Compete two most recent Bots",
+            "type": "shell",
+            "command": "python -m HandcraftedChessBot --compete",
+            "problemMatcher": []
+        },
+        {
+            "label": "Complete Tournament",
+            "type": "shell",
+            "command": "python -m HandcraftedChessBot --complete",
+            "problemMatcher": []
+        }
+    ]
+}
