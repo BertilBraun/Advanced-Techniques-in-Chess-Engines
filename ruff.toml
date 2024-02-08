@@ -6,4 +6,4 @@ indent-style = "space"
 docstring-code-format = true
 
 [lint]
-ignore = "F405,F403"
+ignore = ["F405","F403"]
