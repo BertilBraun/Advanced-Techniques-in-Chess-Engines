@@ -1,9 +1,13 @@
-import pygame
+from os import environ
 
-from typing import Optional
+environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
-from Framework import ChessBot, Board, Move, Square, Piece
-from Framework.ChessGUI import ChessGUI
+import pygame  # noqa: E402
+
+from typing import Optional  # noqa: E402
+
+from Framework import ChessBot, Board, Move, Square  # noqa: E402
+from Framework.ChessGUI import ChessGUI  # noqa: E402
 
 
 class HumanPlayer(ChessBot):

@@ -1,6 +1,10 @@
-import pygame
+from os import environ
 
-from Framework import Board, SQUARES, square, Square
+environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+
+import pygame  # noqa: E402
+
+from Framework import Board, SQUARES, square, Square, square_file, square_rank  # noqa: E402
 
 SCREEN_SIZE = 480
 SQUARE_SIZE = SCREEN_SIZE // 8
@@ -48,7 +52,7 @@ class ChessGUI:
             piece = board.piece_at(sq)
             if piece:
                 img = self.piece_images[piece.symbol()]
-                self.screen.blit(img, ((sq % 8) * SQUARE_SIZE, (7 - sq // 8) * SQUARE_SIZE))
+                self._blit_image(img, sq)
 
         pygame.display.flip()
 
@@ -57,7 +61,7 @@ class ChessGUI:
         pos = pygame.mouse.get_pos()
         col = pos[0] // SQUARE_SIZE
         row = pos[1] // SQUARE_SIZE
-        return square(col, 7 - row)  # Convert to chess square index
+        return square(col, row)  # Convert to chess square index
 
     def highlight_square(self, square: Square, color: str) -> None:
         """Highlights a square on the board."""
@@ -65,9 +69,14 @@ class ChessGUI:
         img.set_alpha(100)
         img.fill(pygame.Color(color))
 
-        self.screen.blit(img, ((square % 8) * SQUARE_SIZE, (7 - square // 8) * SQUARE_SIZE))
+        self._blit_image(img, square)
 
         pygame.display.flip()
+
+    def _blit_image(self, img: pygame.Surface, square: Square) -> None:
+        """Blits an image to the screen."""
+        x, y = square_file(square) * SQUARE_SIZE, square_rank(square) * SQUARE_SIZE
+        self.screen.blit(img, (x, y))
 
 
 def _load_resource(path: str) -> pygame.Surface:

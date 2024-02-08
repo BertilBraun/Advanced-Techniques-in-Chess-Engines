@@ -14,6 +14,9 @@ from chess import (
     BLACK,
     SQUARES,
     square,
+    square_mirror,
+    square_file,
+    square_rank,
     Piece,
 )
 
