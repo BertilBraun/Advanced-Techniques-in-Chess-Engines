@@ -1,0 +1,9 @@
+line-length = 120
+
+[format]
+quote-style = "single"
+indent-style = "space"
+docstring-code-format = true
+
+[lint]
+ignore = "F405,F403"

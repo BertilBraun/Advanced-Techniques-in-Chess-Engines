@@ -5,12 +5,13 @@ from typing import Optional
 from Framework import ChessBot, Board, Move, Square, Piece
 from Framework.ChessGUI import ChessGUI
 
+
 class HumanPlayer(ChessBot):
     def __init__(self) -> None:
         """Initializes the human player."""
-        super().__init__("Human")
+        super().__init__('Human')
         self.gui = ChessGUI()
-    
+
     def think(self, board: Board) -> Move:
         """Allows a human player to input a move using the GUI."""
         self.gui.draw_board(board)
@@ -35,7 +36,7 @@ class HumanPlayer(ChessBot):
                         if move:
                             return move
                         selected_square = None  # Reset if move not valid
-                        self.gui.draw_board(board) # Redraw board if move not valid to clear highlights
+                        self.gui.draw_board(board)  # Redraw board if move not valid to clear highlights
 
     def create_move(self, board: Board, from_square: Square, to_square: Square) -> Optional[Move]:
         """Attempt to create a move based on selected squares, simplified for clarity."""
@@ -45,13 +46,12 @@ class HumanPlayer(ChessBot):
                 return move
         except ValueError:
             pass  # Handle invalid moves
-        print("Invalid move. Please try again.")
+        print('Invalid move. Please try again.')
         return None
-    
+
     def highlight_selected_piece(self, board: Board, selected_square: Square) -> None:
-        self.gui.highlight_square(selected_square, "green")
-            
+        self.gui.highlight_square(selected_square, 'green')
+
         for move in board.legal_moves:
             if move.from_square == selected_square:
-                self.gui.highlight_square(move.to_square, "yellow")
-        
+                self.gui.highlight_square(move.to_square, 'yellow')

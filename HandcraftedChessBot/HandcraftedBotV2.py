@@ -1,17 +1,12 @@
 from Framework import *
 
-PIECE_VALUES = {
-    PAWN: 1,
-    KNIGHT: 3,
-    BISHOP: 3,
-    ROOK: 5,
-    QUEEN: 9,
-    KING: 0
-}
+
+PIECE_VALUES = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 5, QUEEN: 9, KING: 0}
+
 
 class HandcraftedBotV2(ChessBot):
     def __init__(self) -> None:
-        super().__init__("HandcraftedBotV2")
+        super().__init__('HandcraftedBotV2')
         self.transposition_table = [0.0] * 2**16
 
     def think(self, board: Board) -> Move:
@@ -33,7 +28,7 @@ class HandcraftedBotV2(ChessBot):
     def negamax(self, board: Board, depth: int, alpha: float, beta: float, color: Color) -> float:
         """
         The core search function using alpha-beta pruning within the Negamax framework.
-        
+
         :param board: The current board state.
         :param depth: The current depth of the search.
         :param alpha: The alpha value for alpha-beta pruning.
@@ -43,7 +38,7 @@ class HandcraftedBotV2(ChessBot):
         """
         # Check if the position is in the transposition table
         key = hash(board._transposition_key()) % len(self.transposition_table)
-        
+
         tt_entry = self.transposition_table[key]
         if tt_entry is not None:
             return tt_entry
@@ -69,22 +64,22 @@ class HandcraftedBotV2(ChessBot):
     def evaluate_board(self, board: Board, color: Color) -> float:
         """
         Evaluates the given board state and returns a score from the perspective of the current player.
-        
+
         :param board: The board state to evaluate.
         :param color: The color of the current player.
         :return: The evaluation score.
         """
         score = 0
-        
+
         for piece in board.piece_map().values():
             score += self.piece_value(piece, color)
-            
+
         return score
 
     def piece_value(self, piece: Piece, color: Color) -> float:
         """
         Determines the value of the given piece from the perspective of the current player.
-        
+
         :param piece: The piece to evaluate.
         :param color: The color of the current player.
         :return: The value of the piece.
