@@ -1,23 +1,9 @@
-from chess import (
-    Board,
-    Move,
-    Square,
-    Color,
-    Piece,
-    QUEEN,
-    PAWN,
-    BISHOP,
-    KNIGHT,
-    ROOK,
-    KING,
-    WHITE,
-    BLACK,
-    SQUARES,
-    square,
-    square_mirror,
-    square_file,
-    square_rank,
-    Piece,
-)
+from chess import *
 
+from Framework.BitboardHelper import *
 from Framework.ChessBot import ChessBot
+from Framework.ExtendedMove import ExtendedMove, get_legal_moves
+
+
+def get_board_hash(board: Board) -> int:
+    return hash(board._transposition_key())

@@ -3,11 +3,15 @@ from Framework.Tournament import Tournament
 from Framework.ExampleBots.RandomBot import RandomBot
 from HandcraftedChessBot.HandcraftedBotV1 import HandcraftedBotV1
 from HandcraftedChessBot.HandcraftedBotV2 import HandcraftedBotV2
+from HandcraftedChessBot.HandcraftedBotV3 import HandcraftedBotV3
+from HandcraftedChessBot.HandcraftedBotV4 import HandcraftedBotV4
 
 ALL_COMPETITORS = [
     RandomBot(),
     HandcraftedBotV1(),
     HandcraftedBotV2(),
+    HandcraftedBotV3(),
+    HandcraftedBotV4(),
 ]
 
 

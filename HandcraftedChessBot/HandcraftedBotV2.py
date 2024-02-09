@@ -36,7 +36,7 @@ class HandcraftedBotV2(ChessBot):
         :param color: The color of the current player.
         :return: The best evaluation score for the current player.
         """
-        key = self.get_board_hash(board) % len(self.transposition_table)
+        key = get_board_hash(board) % len(self.transposition_table)
 
         # Check if the position is in the transposition table
         tt_entry = self.transposition_table[key]
@@ -88,12 +88,3 @@ class HandcraftedBotV2(ChessBot):
             return PIECE_VALUES[piece.piece_type]
         else:
             return -PIECE_VALUES[piece.piece_type]
-
-    def get_board_hash(self, board: Board) -> int:
-        """
-        Returns a hash of the given board state.
-
-        :param board: The board state to hash.
-        :return: The hash of the board state.
-        """
-        return hash(board._transposition_key())

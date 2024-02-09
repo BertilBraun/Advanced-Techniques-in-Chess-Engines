@@ -3,7 +3,8 @@ import time
 from abc import ABC, abstractmethod
 from chess import Board, Move
 
-TIME_TO_THINK = 0.05  # seconds
+
+TIME_TO_THINK = 0.5  # seconds
 
 
 class ChessBot(ABC):

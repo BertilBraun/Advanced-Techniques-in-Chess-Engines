@@ -168,7 +168,7 @@ class HandcraftedBotV1(ChessBot):
         value = PIECE_VALUES[piece.piece_type]
 
         # Apply piece-square table adjustments
-        piece_square_table_square = square if piece.color == color else square_mirror(square)
+        piece_square_table_square = square if piece.color == WHITE else square_mirror(square)
         piece_square_table_x = square_file(piece_square_table_square)
         piece_square_table_y = square_rank(piece_square_table_square)
 
