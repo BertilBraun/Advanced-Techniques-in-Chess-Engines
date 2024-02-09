@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from chess import KING, Board, Move, PieceType
@@ -52,7 +54,7 @@ class ExtendedMove:
         return False
 
     @classmethod
-    def null(cls) -> 'ExtendedMove':
+    def null(cls) -> ExtendedMove:
         return cls(Move.null(), Board(), 0)
 
 
