@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 from Framework import *
 
-GAME_PHASE_WEIGHTS = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 2, QUEEN: 4, KING: 0}
+GAME_PHASE_WEIGHTS = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 4, QUEEN: 5, KING: 0}
 
-MID_GAME_PIECE_SCORES = {PAWN: 100, KNIGHT: 320, BISHOP: 330, ROOK: 500, QUEEN: 900, KING: 20000}
-END_GAME_PIECE_SCORES = {PAWN: 200, KNIGHT: 280, BISHOP: 320, ROOK: 600, QUEEN: 900, KING: 20000}
+MID_GAME_PIECE_SCORES = {PAWN: 100, KNIGHT: 320, BISHOP: 330, ROOK: 500, QUEEN: 900, KING: 0}
+END_GAME_PIECE_SCORES = {PAWN: 200, KNIGHT: 280, BISHOP: 320, ROOK: 600, QUEEN: 900, KING: 0}
 
 MID_GAME_PIECE_SQUARE_TABLES = {
     PAWN: [
@@ -148,7 +148,7 @@ class TranspositionFlag(Enum):
 class TranspositionEntry:
     hash: int = 0  # Hash of the board position
     move: Move = Move.null()  # Best move found from this position
-    score: float = 0  # Evaluation score of the position
+    score: int = 0  # Evaluation score of the position
     depth: int = 0  # Depth at which this entry was generated
     flag: TranspositionFlag = TranspositionFlag.EXACT  # Flag indicating the type of score
 
@@ -157,7 +157,7 @@ class HandcraftedBotV4(ChessBot):
     def __init__(self) -> None:
         super().__init__('HandcraftedBotV4')
 
-        self.transposition_table = [TranspositionEntry()] * 2**16
+        self.transposition_table = [TranspositionEntry()] * 0x10_0000  # 0x80_0000 in the original bot
         self.best_root_move = Move.null()
 
     def think(self, board: Board) -> Move:
@@ -175,18 +175,19 @@ class HandcraftedBotV4(ChessBot):
         depth = 1
         while not self.time_is_up and depth < 64:
             score = self.negamax(board, depth, alpha, beta, 0, False)
+            if score == alpha and score == beta:
+                depth += 1
             alpha, beta = self.adjust_search_window(alpha, beta, score)
-            depth += 1
 
-    def adjust_search_window(self, alpha: float, beta: float, score: float) -> tuple[float, float]:
+    def adjust_search_window(self, alpha: int, beta: int, score: int) -> tuple[int, int]:
         new_alpha = min(alpha, score) - 20
         new_beta = max(beta, score) + 20
         return new_alpha, new_beta
 
     def negamax(
-        self, board: Board, depth: int, alpha: float, beta: float, half_move_count: int, allow_null_move_pruning: bool
-    ) -> float:
-        # Half move count is the number of plays (either by white or black) since the last capture or pawn move
+        self, board: Board, depth: int, alpha: int, beta: int, half_move_count: int, allow_null_move_pruning: bool
+    ) -> int:
+        # Half move count is the number of plays (either by white or black)
         if board.is_repetition(2):
             return 0
 
@@ -198,14 +199,16 @@ class HandcraftedBotV4(ChessBot):
         if board.is_check():
             depth += 1
 
+        best_score = -32000
         # Quiescence search is a special kind of search that only considers captures and checks
         in_quiescence_search = depth <= 0
 
-        best_score = baseline_evaluation_score
-        alpha = max(alpha, baseline_evaluation_score)
+        if in_quiescence_search:
+            best_score = baseline_evaluation_score
+            alpha = max(alpha, best_score)
 
-        if in_quiescence_search and alpha >= beta:
-            return baseline_evaluation_score
+            if alpha >= beta:
+                return baseline_evaluation_score
 
         if self.should_use_tt_entry_score_as_search_result(depth, alpha, beta, tt_index, tt_entry):
             return tt_entry.score
@@ -286,14 +289,14 @@ class HandcraftedBotV4(ChessBot):
         self,
         board: Board,
         depth: int,
-        alpha: float,
-        beta: float,
+        alpha: int,
+        beta: int,
         move_index: int,
         move: ExtendedMove,
         is_move_uninteresting: bool,
         half_move_count: int,
-    ) -> float:
-        def search(minus_new_alpha: float, reduction: int, allow_null_move_pruning: bool) -> float:
+    ) -> int:
+        def search(minus_new_alpha: int, reduction: int, allow_null_move_pruning: bool) -> int:
             return -self.negamax(
                 board,
                 depth - reduction,
@@ -321,7 +324,7 @@ class HandcraftedBotV4(ChessBot):
         return played_move_score
 
     def save_to_transposition_table(
-        self, depth: int, alpha: float, beta: float, tt_index: int, best_score: float, best_move: Move
+        self, depth: int, alpha: int, beta: int, tt_index: int, best_score: int, best_move: Move
     ) -> None:
         self.transposition_table[tt_index] = TranspositionEntry(
             hash=tt_index,
@@ -332,7 +335,7 @@ class HandcraftedBotV4(ChessBot):
         )
 
     def calculate_reduction_value(
-        self, depth: int, alpha: float, beta: float, move_index: int, is_move_uninteresting: bool
+        self, depth: int, alpha: int, beta: int, move_index: int, is_move_uninteresting: bool
     ) -> int:
         if move_index < (4 - self.is_non_principal_variation_node(alpha, beta)) or depth <= 3 or is_move_uninteresting:
             return 1
@@ -347,10 +350,10 @@ class HandcraftedBotV4(ChessBot):
         self,
         board: Board,
         depth: int,
-        alpha: float,
-        beta: float,
-        baseline_evaluation_score: float,
-        best_score: float,
+        alpha: int,
+        beta: int,
+        baseline_evaluation_score: int,
+        best_score: int,
         move_index: int,
         is_move_uninteresting: bool,
     ) -> bool:
@@ -365,11 +368,11 @@ class HandcraftedBotV4(ChessBot):
             )
         )
 
-    def is_allowed_pruning(self, board: Board, alpha: float, beta: float) -> bool:
+    def is_allowed_pruning(self, board: Board, alpha: int, beta: int) -> bool:
         return self.is_non_principal_variation_node(alpha, beta) and not board.is_check()
 
     def should_use_tt_entry_score_as_search_result(
-        self, depth: int, alpha: float, beta: float, tt_index: int, tt_entry: TranspositionEntry
+        self, depth: int, alpha: int, beta: int, tt_index: int, tt_entry: TranspositionEntry
     ) -> bool:
         if (
             tt_entry.depth < depth
@@ -383,7 +386,7 @@ class HandcraftedBotV4(ChessBot):
 
         return tt_entry.flag != TranspositionFlag.EXACT
 
-    def is_non_principal_variation_node(self, alpha: float, beta: float) -> bool:
+    def is_non_principal_variation_node(self, alpha: int, beta: int) -> bool:
         # Principal variation is the sequence of moves that the engine considers the best, a non principal variation node is a node that is not one of the best moves
         return alpha + 1 >= beta
 
@@ -392,12 +395,12 @@ class HandcraftedBotV4(ChessBot):
 
     def calculate_move_scores(
         self, turn: Color, half_move_count: int, tt_entry: TranspositionEntry, legal_moves: list[ExtendedMove]
-    ) -> list[float]:
+    ) -> list[int]:
         return [self.calculate_move_score(turn, half_move_count, tt_entry, move) for move in legal_moves]
 
     def calculate_move_score(
         self, turn: Color, half_move_count: int, tt_entry: TranspositionEntry, move: ExtendedMove
-    ) -> float:
+    ) -> int:
         if move == tt_entry.move:
             return 2_000_000_000
         elif move.is_capture:
@@ -417,13 +420,13 @@ class HandcraftedBotV4(ChessBot):
         for move, move_score in zip(legal_moves, move_scores):
             move.score = move_score
 
-        return sorted(legal_moves, key=lambda x: x.score, reverse=True)
+        return list(sorted(legal_moves, key=lambda x: x.score, reverse=True))
 
-    def calculate_baseline_evaluation_score(self, board: Board, tt_entry: TranspositionEntry, tt_index: int) -> float:
+    def calculate_baseline_evaluation_score(self, board: Board, tt_entry: TranspositionEntry, tt_index: int) -> int:
         if self.trust_tt_entry(tt_entry, tt_index):
             return tt_entry.score
 
-        game_phase = 0  # opening, midgame, endgame (0-24)
+        game_phase = 0  # opening, midgame, endgame (0-32)
         mid_game_score = 7
         end_game_score = 7
 
@@ -442,7 +445,7 @@ class HandcraftedBotV4(ChessBot):
             mid_game_score = num_doubled_pawns * 9 - mid_game_score
             end_game_score = num_doubled_pawns * 32 - end_game_score
 
-        baseline_evaluation_score = (mid_game_score * game_phase + end_game_score * (24 - game_phase)) // 24
+        baseline_evaluation_score = (mid_game_score * game_phase + end_game_score * (32 - game_phase)) // 32
         return baseline_evaluation_score
 
     def calculate_piece_scores(self, board: Board, color: Color) -> tuple[int, int, int, int]:
@@ -450,8 +453,6 @@ class HandcraftedBotV4(ChessBot):
 
         for piece in PIECE_TYPES:
             for square in board.pieces(piece, color):
-                game_phase_increment += GAME_PHASE_WEIGHTS[piece]
-
                 # Apply piece-square table adjustments
                 piece_square_table_square = square if color == BLACK else square_mirror(square)
                 piece_square_table_x = square_file(piece_square_table_square)
@@ -460,8 +461,10 @@ class HandcraftedBotV4(ChessBot):
                 mid_game_increment += MID_GAME_PIECE_SQUARE_TABLES[piece][piece_square_table_y][piece_square_table_x]
                 end_game_increment += END_GAME_PIECE_SQUARE_TABLES[piece][piece_square_table_y][piece_square_table_x]
 
-                mid_game_increment += (34 << piece) + MID_GAME_PIECE_SCORES[piece]
-                end_game_increment += (55 << piece) + END_GAME_PIECE_SCORES[piece]
+                mid_game_increment += MID_GAME_PIECE_SCORES[piece]
+                end_game_increment += END_GAME_PIECE_SCORES[piece]
+
+                game_phase_increment += GAME_PHASE_WEIGHTS[piece]
 
         pawns = board.pieces_mask(PAWN, color)
         num_doubled_pawns = get_number_of_set_bits(pawns & pawns << 8)
@@ -477,7 +480,7 @@ class HandcraftedBotV4(ChessBot):
     def trust_tt_entry(self, tt_entry: TranspositionEntry, tt_index: int) -> bool:
         return tt_entry.hash == tt_index
 
-    def determine_flag_for_tt_entry(self, best_score: float, alpha: float, beta: float) -> TranspositionFlag:
+    def determine_flag_for_tt_entry(self, best_score: int, alpha: int, beta: int) -> TranspositionFlag:
         # Determine the flag for the transposition table entry based on the search results.
         if best_score <= alpha:
             return TranspositionFlag.UPPER_BOUND
