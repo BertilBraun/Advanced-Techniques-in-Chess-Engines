@@ -98,8 +98,7 @@ class Tournament:
         for round in range(self.rounds):
             white, black = (bot1, bot2) if round % 2 == 0 else (bot2, bot1)
 
-            game_manager = GameManager(white, black)
-            result, thinking_time = game_manager.play_game()
+            result, thinking_time = GameManager(white, black).play_game(verify_moves=False)
             current_competitor_results._update_statistics(white, black, result, thinking_time)
 
         return current_competitor_results

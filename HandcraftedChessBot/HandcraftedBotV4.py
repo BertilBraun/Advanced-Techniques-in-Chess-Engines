@@ -185,7 +185,7 @@ class HandcraftedBotV4(ChessBot):
         self, board: Board, depth: int, alpha: float, beta: float, half_move_count: int, allow_null_move_pruning: bool
     ) -> float:
         # Half move count is the number of plays (either by white or black) since the last capture or pawn move
-        if board.is_repetition(1):
+        if board.is_repetition(2):
             return 0
 
         tt_index = self.get_transposition_table_index(board)
@@ -272,7 +272,7 @@ class HandcraftedBotV4(ChessBot):
                 self.killers[half_move_count + 1] = self.killers[half_move_count]
                 self.killers[half_move_count] = move
 
-            self.history[board.turn][move.move_piece_type][move.to_square] += 1 << depth
+            self.history[board.turn][move.move_piece_type][move.to_square] += 2**depth
 
             break
 

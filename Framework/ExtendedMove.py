@@ -26,11 +26,11 @@ class ExtendedMove:
 
     @property
     def is_capture(self) -> bool:
-        return self.capture_piece_type != 0
+        return self.capture_piece_type is not None
 
     @property
     def is_castling(self) -> bool:
-        return self.move_piece_type == KING and abs(self.from_square - self.to_square) == 2
+        return self.move_piece_type == KING and abs(self.from_square - self.to_square) >= 2
 
     @property
     def is_promotion(self) -> bool:
