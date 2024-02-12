@@ -71,17 +71,9 @@ class MCTSNode:
         self.parent = parent
         self.children: list[MCTSNode] = []
         self.move_to_get_here = move_to_get_here
-        self._number_of_visits = 0
-        self._result = 0
+        self.number_of_visits = 0
+        self.result_score = 0.0
         self.untried_moves = self.state.get_legal_actions()
-
-    @property
-    def q(self) -> float:
-        return self._result
-
-    @property
-    def n(self) -> float:
-        return self._number_of_visits
 
     @property
     def is_terminal_node(self) -> bool:
@@ -90,6 +82,13 @@ class MCTSNode:
     @property
     def is_fully_expanded(self) -> bool:
         return len(self.untried_moves) == 0
+
+    def ucb(self, c_param: float = 0.1) -> float:
+        assert self.number_of_visits > 0, 'Node must have been visited at least once'
+        assert self.parent, 'Node must have a parent'
+        return self.result_score / self.number_of_visits + c_param * sqrt(
+            (2 * log(self.parent.number_of_visits) / self.number_of_visits)
+        )
 
     def expand(self) -> MCTSNode:
         move = self.untried_moves.pop()
@@ -107,22 +106,18 @@ class MCTSNode:
             move, state_score = evaluation(current_rollout_state.board)
             current_rollout_state = current_rollout_state.create_next_state(move)
 
-        result = current_rollout_state.game_result()
-        return result if result is not None else state_score
+        return current_rollout_state.game_result() or state_score
 
     def back_propagate(self, result: float) -> None:
-        self._number_of_visits += 1.0
-        self._result += result
+        self.number_of_visits += 1
+        self.result_score += result
         if self.parent:
             self.parent.back_propagate(result)
 
     def best_child(self, c_param: float = 0.1) -> MCTSNode:
-        def weighted_score(node: MCTSNode) -> float:
-            return node.q / node.n + c_param * sqrt((2 * log(self.n) / node.n))
+        return max(self.children, key=lambda node: node.ucb(c_param))
 
-        return max(self.children, key=weighted_score)
-
-    def _tree_policy(self) -> MCTSNode:
+    def tree_policy(self) -> MCTSNode:
         current_node = self
 
         while not current_node.is_terminal_node:
@@ -136,8 +131,9 @@ class MCTSNode:
 
 def UCT(root_state: MCTSState, max_iter: int) -> Move:
     root = MCTSNode(root_state, Move.null(), None)
+
     for _ in tqdm(range(max_iter), desc='MCTS Iterations'):
-        v = root._tree_policy()
+        v = root.tree_policy()
         reward = v.rollout()
         v.back_propagate(reward)
 
