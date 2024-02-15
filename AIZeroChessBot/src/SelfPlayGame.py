@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
-from AIZeroChessBot.AlphaMCTSNode import AlphaMCTSNode
+from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
 
 from Framework import *
-from AIZeroChessBot.BoardEncoding import board_result_to_score
+from AIZeroChessBot.src.BoardEncoding import board_result_to_score
 
 
 @dataclass

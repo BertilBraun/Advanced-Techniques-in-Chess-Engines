@@ -1,9 +1,9 @@
 import torch
 
-from AIZeroChessBot.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroChessBot.BoardEncoding import encode_boards
-from AIZeroChessBot.MoveEncoding import filter_policy_then_get_moves_and_probabilities
-from AIZeroChessBot.Network import Network
+from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
+from AIZeroChessBot.src.BoardEncoding import encode_boards
+from AIZeroChessBot.src.MoveEncoding import filter_policy_then_get_moves_and_probabilities
+from AIZeroChessBot.src.Network import Network
 
 from Framework import *
 

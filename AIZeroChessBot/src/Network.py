@@ -5,8 +5,8 @@ import torch.nn.functional as F
 from numpy.typing import NDArray
 from torch import nn, Tensor, softmax
 
-from AIZeroChessBot.MoveEncoding import ACTION_SIZE
-from AIZeroChessBot.BoardEncoding import ENCODING_CHANNELS
+from AIZeroChessBot.src.MoveEncoding import ACTION_SIZE
+from AIZeroChessBot.src.BoardEncoding import ENCODING_CHANNELS
 
 
 ROW_COUNT = 8

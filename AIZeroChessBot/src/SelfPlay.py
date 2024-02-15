@@ -4,21 +4,21 @@ import torch
 import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
-from AIZeroChessBot.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroChessBot.Network import Network
-from AIZeroChessBot.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
-from AIZeroChessBot.TrainingArgs import TrainingArgs
-from AIZeroChessBot.util import lerp
+from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
+from AIZeroChessBot.src.Network import Network
+from AIZeroChessBot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
+from AIZeroChessBot.src.TrainingArgs import TrainingArgs
+from AIZeroChessBot.src.util import lerp
 
 from Framework import *
-from AIZeroChessBot.MoveEncoding import (
+from AIZeroChessBot.src.MoveEncoding import (
     ACTION_SIZE,
     decode_move,
     encode_move,
     filter_policy_then_get_moves_and_probabilities,
 )
 
-from AIZeroChessBot.BoardEncoding import encode_boards, encode_board, board_result_to_score
+from AIZeroChessBot.src.BoardEncoding import encode_boards, encode_board, board_result_to_score
 
 
 @dataclass

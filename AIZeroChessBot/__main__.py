@@ -1,13 +1,13 @@
-import torch
+from torch.optim import Adam
 
-from AIZeroChessBot.AlphaZero import AlphaZero
-from AIZeroChessBot.Network import Network
-from AIZeroChessBot.TrainingArgs import TrainingArgs
+from AIZeroChessBot.src.AlphaZero import AlphaZero
+from AIZeroChessBot.src.Network import Network
+from AIZeroChessBot.src.TrainingArgs import TrainingArgs
 
 
 if __name__ == '__main__':
     model = Network()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
+    optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
     args = TrainingArgs(
         num_iterations=500,

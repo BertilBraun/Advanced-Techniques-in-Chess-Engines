@@ -8,10 +8,10 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from AIZeroChessBot.Network import Network
-from AIZeroChessBot.SelfPlay import SelfPlay, SelfPlayMemory
-from AIZeroChessBot.TrainingArgs import TrainingArgs
-from AIZeroChessBot.TrainingStats import LearningStats, TrainingStats
+from AIZeroChessBot.src.Network import Network
+from AIZeroChessBot.src.SelfPlay import SelfPlay, SelfPlayMemory
+from AIZeroChessBot.src.TrainingArgs import TrainingArgs
+from AIZeroChessBot.src.TrainingStats import LearningStats, TrainingStats
 
 
 class AlphaZero:
