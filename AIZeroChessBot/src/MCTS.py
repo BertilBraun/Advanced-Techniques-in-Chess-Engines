@@ -6,27 +6,10 @@ from tqdm import tqdm
 from Framework import *
 
 
-# TODO exploration vs exploitation - how does that work here? How do we balance the two?
-# TODO how to do the self-play part of the training?
-# TODO why is there a State and a Node class? What is the difference between the two?
-# TODO base the architecture on the AlphaZero paper but with less layers
-
-"""
-https://en.wikipedia.org/wiki/AlphaZero
-
-AlphaZero only searches ~80.000 positions per second, while Stockfish searches ~70.000.000 positions per second.
-
-Training
-AlphaZero was trained solely via self-play, using 5,000 first-generation TPUs to generate the games and 64 second-generation TPUs to train the neural networks. In parallel, the in-training AlphaZero was periodically matched against its benchmark (Stockfish, Elmo, or AlphaGo Zero) in brief one-second-per-move games to determine how well the training was progressing. DeepMind judged that AlphaZero's performance exceeded the benchmark after around four hours of training for Stockfish, two hours for Elmo, and eight hours for AlphaGo Zero.
-"""
-
-
 def evaluation(board: Board) -> tuple[Move, float]:
     possible_moves = list(board.legal_moves)
 
-    # TODO eval board state here to get evaluation over all possible moves and evaluation of the board state
-    # TODO get the best move from the evaluation that is also a legal move
-    # TODO the evaluation should be a float between -1 and 1, where -1 is a loss, 0 is a draw, and 1 is a win
+    # Some sort of evaluation function here
 
     return possible_moves[0], 0.0
 
