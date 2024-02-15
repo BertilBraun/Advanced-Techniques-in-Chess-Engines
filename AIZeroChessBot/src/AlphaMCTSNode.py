@@ -1,5 +1,6 @@
 from __future__ import annotations
-from math import sqrt
+
+import numpy as np
 
 from Framework import *
 
@@ -29,9 +30,10 @@ class AlphaMCTSNode:
         return len(self.children) > 0
 
     def ucb(self, c_param: float = 0.1) -> float:
-        assert self.parent, 'Node must have a parent'
+        # Note: This is called very frequently, so we want to keep it as fast as possible
+        # assert self.parent, 'Node must have a parent'
 
-        ucb_score = self.policy * c_param * sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
+        ucb_score = self.policy * c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)  # type: ignore assuming self.parent is not None
 
         if self.number_of_visits > 0:
             # Q(s, a) - the average reward of the node's children from the perspective of the node's parent

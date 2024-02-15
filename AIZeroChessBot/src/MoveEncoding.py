@@ -198,11 +198,14 @@ def __map_policy_to_moves(policy: NDArray[np.float32]) -> list[tuple[Move, float
     :param policy: The policy to map.
     :return: The list of moves with their corresponding probabilities.
     """
+    # Find indices where probability > 0
+    nonzero_indices = np.nonzero(policy > 0)[0]
     moves_with_probabilities = []
 
-    for move_index, probability in enumerate(policy):
-        if probability > 0:
-            move = decode_move(move_index)
-            moves_with_probabilities.append((move, probability))
+    # Assuming decode_move can only process one index at a time
+    for move_index in nonzero_indices:
+        move = decode_move(move_index)
+        probability = policy[move_index]
+        moves_with_probabilities.append((move, probability))
 
     return moves_with_probabilities
