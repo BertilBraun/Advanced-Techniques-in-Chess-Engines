@@ -10,10 +10,10 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
     args = TrainingArgs(
-        num_iterations=500,
-        num_self_play_iterations=32,
-        num_parallel_games=32,
-        num_iterations_per_turn=50,
+        num_iterations=200,
+        num_self_play_iterations=32000,
+        num_parallel_games=64,
+        num_iterations_per_turn=200,
         num_epochs=20,
         batch_size=64,
         temperature=1.0,

@@ -117,6 +117,7 @@ class SelfPlay:
         return action_probabilities
 
     def _sample_move(self, action_probabilities: NDArray[np.float32]) -> Move:
+        # TODO only use temperature for the first 30 moves, then simply use the action probabilities as they are
         temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
         # Divide temperature_action_probabilities with its sum in case of an error
         action = np.random.choice(ACTION_SIZE, p=temperature_action_probabilities)
