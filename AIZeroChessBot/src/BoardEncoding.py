@@ -50,6 +50,8 @@ def encode_board(board: Board) -> NDArray[np.float32]:
             color_offset = 0 if piece.color == board.turn else 6
             layer_index = piece_to_index[piece.piece_type] + color_offset
 
+            square = square if board.turn == WHITE else square_mirror(square)
+
             row, col = square_file(square), square_rank(square)
 
             encoded_board[layer_index, row, col] = 1
