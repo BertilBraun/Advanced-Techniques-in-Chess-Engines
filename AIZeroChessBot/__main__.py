@@ -11,10 +11,10 @@ if __name__ == '__main__':
 
     args = TrainingArgs(
         num_iterations=500,
-        num_self_play_iterations=50,
-        num_parallel_games=50,
+        num_self_play_iterations=32,
+        num_parallel_games=32,
         num_searches=50,
-        num_epochs=10,
+        num_epochs=20,
         batch_size=64,
         temperature=1.0,
         dirichlet_epsilon=0.25,
