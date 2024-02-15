@@ -16,6 +16,18 @@ NUM_HIDDEN = 256
 
 
 class Network(nn.Module):
+    """
+    The neural network model for the AlphaZero bot.
+
+    The architecture is based on the AlphaZero paper, but with less layers.
+
+    We use a residual neural network with 8 residual blocks.
+    The input to the network is a 12x8x8 tensor representing the board state with 6 channels for the pieces of the current player and 6 channels for the pieces of the opponent.
+    The output of the network is a policy over all possible moves and a value for the current board state.
+
+    The amount of parameters in the network is ~13.5 million (13.591.258).
+    """
+
     def __init__(self) -> None:
         super().__init__()
 
