@@ -59,6 +59,8 @@ class SelfPlay:
                         return_memory.append(
                             SelfPlayMemory(encode_board(mem.board), mem.action_probabilities, hist_outcome)
                         )
+                        # TODO ensure that this encoding is correct and that the boards are not flipped and matching the correct turn
+                        # TODO possibly enhance the dataset by flipping the board and the outcome i.e. use symmetries
 
                     del self_play_games[i]
 
@@ -74,7 +76,7 @@ class SelfPlay:
             spg.root = AlphaMCTSNode(spg.board)
             spg.root.expand(moves)
 
-        for _ in range(self.args.num_searches):
+        for _ in range(self.args.num_iterations_per_turn):
             for spg in self_play_games:
                 spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 

@@ -32,11 +32,12 @@ class AlphaZero:
             self._load_latest_model()
 
     def learn(self) -> None:
-        memory: list[SelfPlayMemory] = []
+        old_memory: list[SelfPlayMemory] = []
         learning_stats = LearningStats()
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
             train_stats = TrainingStats()
+            memory: list[SelfPlayMemory] = []
 
             self.model.eval()
             for _ in tqdm(range(self.args.num_self_play_iterations // self.args.num_parallel_games), desc='Self Play'):
@@ -44,10 +45,11 @@ class AlphaZero:
 
             total_games = len(memory)
             print(f'Collected {total_games} self-play memories')
+            # TODO save memories to disk with the iteration number
 
             self.model.train()
             for _ in tqdm(range(self.args.num_epochs), desc='Training'):
-                train_stats += self._train(memory)
+                train_stats += self._train(memory + old_memory)
 
             print(f'Iteration {iteration + 1}: {train_stats}')
             self._save(iteration)
@@ -55,7 +57,7 @@ class AlphaZero:
 
             # drop 75% of the memory
             # retain 25% of the memory for the next iteration to train on and not overfit to the current iteration
-            memory = random.sample(memory, int(total_games * 0.25))
+            old_memory = random.sample(memory, int(total_games * 0.25))
 
         print(learning_stats)
 

@@ -12,7 +12,7 @@ class TrainingArgs:
     num_parallel_games: int
     """This is the number of games to run in parallel for self-play."""
 
-    num_searches: int
+    num_iterations_per_turn: int
     """This is the maximum number of searches to run the MCTS algorithm in self-play. 
     I.e. the number of times that a node is expanded and evaluated in the MCTS algorithm to get the next move to play.
     I.e. we continue to play the game util one of the players wins or the game is a draw. At each move we run the MCTS algorithm to get the next move to play for the current player. Here we run the MCTS algorithm num_searches times to get the next move to play.
