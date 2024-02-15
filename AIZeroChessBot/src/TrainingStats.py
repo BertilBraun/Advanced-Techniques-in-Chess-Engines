@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -32,7 +32,7 @@ class TrainingStats:
 class LearningStats:
     total_num_games: int = 0
     total_iterations: int = 0
-    training_stats: list[TrainingStats] = []
+    training_stats: list[TrainingStats] = field(default_factory=lambda: [])
 
     def update(self, num_games: int, training_stats: TrainingStats) -> None:
         self.total_num_games += num_games
