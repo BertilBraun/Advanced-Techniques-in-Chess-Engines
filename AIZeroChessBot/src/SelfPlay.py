@@ -73,7 +73,8 @@ class SelfPlay:
         for spg, spg_policy in zip(self_play_games, policy):
             moves = filter_policy_then_get_moves_and_probabilities(spg_policy, spg.board)
 
-            spg.root = AlphaMCTSNode(spg.board)
+            spg.root = AlphaMCTSNode()
+            spg.root.board = spg.board
             spg.root.expand(moves)
 
         for _ in range(self.args.num_iterations_per_turn):

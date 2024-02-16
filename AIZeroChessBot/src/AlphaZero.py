@@ -43,7 +43,7 @@ class AlphaZero:
             self.model.eval()
             for _ in tqdm(
                 range(self.args.num_self_play_iterations // self.args.num_parallel_games),
-                desc=f'Self Play for {self.args.num_parallel_games} in parallel',
+                desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
             ):
                 memory += self.self_play.self_play()
 
