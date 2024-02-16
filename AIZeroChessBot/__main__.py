@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     args = TrainingArgs(
         num_iterations=200,
-        num_self_play_iterations=500,
+        num_self_play_iterations=512,
         num_parallel_games=64,
         num_iterations_per_turn=200,
         num_epochs=20,

@@ -179,7 +179,9 @@ class AlphaZero:
                 break
 
             print(f'Waiting for {self.args.num_separate_nodes_on_cluster - written_files} nodes')
-            time.sleep(1)
+            time.sleep(5)
+
+        time.sleep(10)
 
         # remove the memory saved files
         for f in self.communication_dir.iterdir():
@@ -217,10 +219,6 @@ class AlphaZero:
 
         print('All nodes initialized')
 
-        # remove the initialization files
-        for f in self.communication_dir.iterdir():
-            f.unlink()
-
         # root is the node with the lowest id
         if self.my_id == min(int(f.stem) for f in self.communication_dir.iterdir()):
             print('I am the root node')
@@ -228,3 +226,9 @@ class AlphaZero:
         else:
             print('I am not the root node')
             self.is_root_node = False
+
+        time.sleep(5)
+
+        # remove the initialization files
+        for f in self.communication_dir.iterdir():
+            f.unlink()
