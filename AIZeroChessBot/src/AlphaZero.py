@@ -60,6 +60,8 @@ class AlphaZero:
             if self.is_root_node:
                 memory = self._load_all_memories(iteration)
 
+                print(f'Training with {len(memory)} self-play memories')
+
                 self.model.train()
                 for _ in tqdm(range(self.args.num_epochs), desc='Training'):
                     train_stats += self._train(memory + old_memory)
@@ -178,7 +180,7 @@ class AlphaZero:
             if written_files == self.args.num_separate_nodes_on_cluster:
                 break
 
-            print(f'Waiting for {self.args.num_separate_nodes_on_cluster - written_files} nodes')
+            # print(f'Waiting for {self.args.num_separate_nodes_on_cluster - written_files} nodes')
             time.sleep(5)
 
         time.sleep(10)
