@@ -37,24 +37,17 @@ def encode_board(board: Board) -> NDArray[np.float32]:
 
     # TODO ensure, that this is turn agnostic, I.e. that the board is encoded in such a way that the first 6 layers contain the pieces of the current player and the second 6 layers contain the pieces of the other player
 
-    # Initialize a 12x8x8 array filled with zeros
     encoded_board = np.zeros((12, 8, 8), dtype=np.float32)
+    pieces = [board.pieces(piece_type, color) for color in COLORS for piece_type in PIECE_TYPES]
 
-    # Map each piece type to an index
-    piece_to_index = {PAWN: 0, KNIGHT: 1, BISHOP: 2, ROOK: 3, QUEEN: 4, KING: 5}
+    for index, bitboard in enumerate(pieces):
+        squares = np.array(list(bitboard))
+        rows, cols = np.divmod(squares, 8)
+        encoded_board[index, rows, cols] = 1
 
-    # Iterate over all squares on the board
-    for square in SQUARES:
-        piece = board.piece_at(square)
-        if piece:
-            color_offset = 0 if piece.color == board.turn else 6
-            layer_index = piece_to_index[piece.piece_type] + color_offset
-
-            square = square if board.turn == WHITE else square_mirror(square)
-
-            row, col = square_file(square), square_rank(square)
-
-            encoded_board[layer_index, row, col] = 1
+    # If board.turn is BLACK, mirror the encoding
+    if board.turn == BLACK:
+        encoded_board = np.flip(encoded_board, axis=2)  # Flip columns for mirror
 
     return encoded_board
 
