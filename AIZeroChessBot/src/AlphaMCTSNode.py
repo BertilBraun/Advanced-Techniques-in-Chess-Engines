@@ -37,6 +37,17 @@ class AlphaMCTSNode:
     def is_fully_expanded(self) -> bool:
         return len(self.children) > 0
 
+    def ucb(self, c_param: float = 0.1) -> float:
+        assert self.parent, 'Node must have a parent'
+
+        ucb_score = self.policy * c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
+
+        if self.number_of_visits > 0:
+            # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
+            ucb_score += 1 - ((self.result_score / self.number_of_visits) + 1) / 2
+
+        return ucb_score
+
     def expand(self, moves_with_scores: list[tuple[Move, float]]) -> None:
         for move, score in moves_with_scores:
             child_node = AlphaMCTSNode(score, move, parent=self)
@@ -49,35 +60,27 @@ class AlphaMCTSNode:
             self.parent.back_propagate(result)
 
     def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
-        # Prepare arrays for vectorized calculations
-        number_of_visits = np.array([child.number_of_visits for child in self.children])
-        result_scores = np.array([child.result_score for child in self.children])
-        policies = np.array([child.policy for child in self.children])
-        parent_number_of_visits = self.number_of_visits  # Assuming this is the total visits of the parent node
+        """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
 
-        # Vectorized UCB calculations
-        with np.errstate(divide='ignore', invalid='ignore'):  # Handle division by zero
-            q_score = 1 - ((result_scores / number_of_visits) + 1) / 2
-            q_score[np.isnan(q_score)] = 0  # Handle NaN resulting from 0/0
+        parent_number_of_visits = self.number_of_visits  # Assuming this is non-zero
 
-            ucb_scores = q_score + c_param * policies * np.sqrt(parent_number_of_visits) / (1 + number_of_visits)
+        # Convert to NumPy arrays
+        number_of_visits = np.array([child.number_of_visits for child in self.children], dtype=np.float32)
+        result_scores = np.array([child.result_score for child in self.children], dtype=np.float32)
+        policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
-        # Find the index of the child with the highest UCB score
-        best_child_index = np.argmax(ucb_scores)
-        self.children[best_child_index].init()
-        return self.children[best_child_index]
+        # Compute Q scores, avoiding division by zero
+        valid_mask = number_of_visits > 0
+        q_score = np.zeros_like(result_scores)  # Initialize Q scores to zero
+        q_score[valid_mask] = 1 - ((result_scores[valid_mask] / number_of_visits[valid_mask]) + 1) / 2
 
-    def ucb(self, c_param: float = 0.1) -> float:
-        # Note: This is called very frequently, so we want to keep it as fast as possible
-        # assert self.parent, 'Node must have a parent'
+        # Compute UCB scores, using in-place operations
+        ucb_scores = q_score + c_param * policies * np.sqrt(parent_number_of_visits) / (1 + number_of_visits)
 
-        ucb_score = self.policy * c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)  # type: ignore assuming self.parent is not None
-
-        if self.number_of_visits > 0:
-            # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
-            ucb_score += 1 - ((self.result_score / self.number_of_visits) + 1) / 2
-
-        return ucb_score
+        # Select the best child
+        best_child = self.children[np.argmax(ucb_scores)]
+        best_child.init()
+        return best_child
 
     def __repr__(self) -> str:
         return f"""AlphaMCTSNode(
