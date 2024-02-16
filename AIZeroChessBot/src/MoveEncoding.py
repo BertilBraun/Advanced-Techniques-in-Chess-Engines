@@ -47,6 +47,17 @@ def decode_move(move_index: int) -> Move:
     return Move(from_square, to_square, promotion=promotion_type)
 
 
+def decode_moves(move_indices: NDArray[np.int32]) -> list[Move]:
+    """
+    Decodes an array of move indices into a list of chess moves.
+
+    :param move_indices: The array of move indices to decode.
+    :return: The list of decoded chess moves.
+    """
+    moves = [__REVERSE_MOVE_MAPPINGS[index] for index in move_indices]
+    return [Move(from_square, to_square, promotion=promotion_type) for from_square, to_square, promotion_type in moves]
+
+
 def print_move_mappings(move_mappings: list[list[dict[PieceType | None, int]]]) -> None:
     """
     Prints the move mappings to the console.
@@ -191,12 +202,11 @@ def __map_policy_to_moves(policy: NDArray[np.float32]) -> list[tuple[Move, float
     """
     # Find indices where probability > 0
     nonzero_indices = np.nonzero(policy > 0)[0]
-    moves_with_probabilities = []
 
-    # Assuming decode_move can only process one index at a time
-    for move_index in nonzero_indices:
-        move = decode_move(move_index)
-        probability = policy[move_index]
-        moves_with_probabilities.append((move, probability))
+    # Decode all moves at once
+    moves = decode_moves(nonzero_indices)
+
+    # Pair up moves with their probabilities
+    moves_with_probabilities = list(zip(moves, policy[nonzero_indices]))
 
     return moves_with_probabilities
