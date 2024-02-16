@@ -1,13 +1,14 @@
 # This bot is heavily based on the Alpha Zero From Scratch Project by foersterrober (https://github.com/foersterrobert/AlphaZeroFromScratch/blob/main/9.AlphaParallel.ipynb)
 
-from pathlib import Path
-import random
 import time
 import torch
+import random
 import numpy as np
 import torch.nn.functional as F
 
 from tqdm import tqdm
+from pathlib import Path
+
 from AIZeroChessBot.eval.EvaluateAlphaVsStockfish import evaluate_alpha_vs_stockfish
 
 from AIZeroChessBot.src.Network import Network
@@ -176,22 +177,20 @@ class AlphaZero:
         return memory
 
     def barrier(self, name: str) -> None:
-        open(self.communication_dir / f'{self.my_id}{"_" + name if name else ""}.txt', 'w').close()
+        log_file = self.communication_dir / f'{self.my_id}{"_" + name if name else ""}.txt'
 
         print(f'Node {self.my_id} reached the barrier {name}')
         while True:
+            open(log_file, 'w').close()
+
             written_files = len(list(self.communication_dir.iterdir()))
             if written_files == self.args.num_separate_nodes_on_cluster:
                 break
 
-            # print(f'Waiting for {self.args.num_separate_nodes_on_cluster - written_files} nodes')
-            time.sleep(5)
+            time.sleep(3)
 
-        time.sleep(10)
-
-        # remove the memory saved files
-        for f in self.communication_dir.iterdir():
-            f.unlink()
+        # remove the memory saved file
+        log_file.unlink(missing_ok=True)
 
         print(f'All nodes have reached the barrier {name}')
 
@@ -200,21 +199,17 @@ class AlphaZero:
         self.my_id = random.randint(0, 1000000000)
 
         self.communication_dir = Path('communication')
-        # delete the communication directory if it exists
-        if self.communication_dir.exists():
-            for f in self.communication_dir.iterdir():
-                f.unlink()
-            self.communication_dir.rmdir()
+        self.communication_dir.mkdir(exist_ok=True)
+        # delete everything in the communication directory
+        for f in self.communication_dir.iterdir():
+            f.unlink(missing_ok=True)
 
         print(f'Node {self.my_id} initialized')
 
+        log_file = self.communication_dir / f'{self.my_id}.txt'
+
         while True:
-            self.communication_dir.mkdir(exist_ok=True)
-            try:
-                open(self.communication_dir / f'{self.my_id}.txt', 'w').close()
-            except:  # noqa: E722
-                print(f'Node {self.my_id} failed to write to the communication directory')
-                pass
+            open(log_file, 'w').close()
 
             initialized_nodes = len(list(self.communication_dir.iterdir()))
             if initialized_nodes == self.args.num_separate_nodes_on_cluster:
@@ -235,6 +230,5 @@ class AlphaZero:
 
         time.sleep(5)
 
-        # remove the initialization files
-        for f in self.communication_dir.iterdir():
-            f.unlink()
+        # remove the initialization file
+        log_file.unlink(missing_ok=True)
