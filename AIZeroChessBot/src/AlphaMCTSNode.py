@@ -67,7 +67,7 @@ class AlphaMCTSNode:
         self.result_score += result
         if self.parent:
             child_index = self.parent.children.index(self)
-            self.parent.children_number_of_visits[child_index] += 1
+            self.parent.children_number_of_visits[child_index] += 1.0
             self.parent.children_result_scores[child_index] += result
             self.parent.back_propagate(result)
 

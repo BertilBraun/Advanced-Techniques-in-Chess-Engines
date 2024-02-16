@@ -25,7 +25,7 @@ class SelfPlayGame:
             node = node.best_child(c_param)
 
         if node.is_terminal_node:
-            node.back_propagate(get_board_result_score(node.board, self.root.board.turn))
+            node.back_propagate(get_board_result_score(node.board))
             return None
 
         return node

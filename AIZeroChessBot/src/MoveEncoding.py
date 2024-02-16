@@ -16,11 +16,11 @@ def filter_policy_then_get_moves_and_probabilities(
     :return: The list of moves with their corresponding probabilities.
     """
     filtered_policy = __filter_policy_with_legal_moves(policy, board)
-    moves_with_probabilities = __map_policy_to_moves(filtered_policy, board.turn)
+    moves_with_probabilities = __map_policy_to_moves(filtered_policy)
     return moves_with_probabilities
 
 
-def encode_move(move: Move, current_player: Color) -> int:
+def encode_move(move: Move) -> int:
     """
     Encodes a chess move into a move index.
 
@@ -28,42 +28,31 @@ def encode_move(move: Move, current_player: Color) -> int:
     :param current_player: The current player to encode the move for.
     :return: The encoded move index.
     """
-    if current_player == BLACK:
-        from_square, to_square, promotion_type = (
-            square_mirror(move.from_square),
-            square_mirror(move.to_square),
-            move.promotion,
-        )
-    else:
-        from_square, to_square, promotion_type = move.from_square, move.to_square, move.promotion
-
-    if promotion_type not in __MOVE_MAPPINGS[from_square][to_square]:
+    if move.promotion not in __MOVE_MAPPINGS[move.from_square][move.to_square]:
         raise ValueError(f'Error: move.promotion not in MOVE_MAPPINGS[move.from_square][move.to_square]: {move}')
 
-    return __MOVE_MAPPINGS[from_square][to_square][promotion_type]
+    return __MOVE_MAPPINGS[move.from_square][move.to_square][move.promotion]
 
 
-def decode_move(move_index: int, current_player: Color) -> Move:
+def decode_move(move_index: int) -> Move:
     """
     Decodes a move index into a chess move.
 
     :param move_index: The index of the move to decode.
-    :param current_player: The current player to decode the moves for.
     :return: The decoded chess move.
     """
-    from_square, to_square, promotion_type = __REVERSE_MOVE_MAPPINGS[current_player][move_index]
+    from_square, to_square, promotion_type = __REVERSE_MOVE_MAPPINGS[move_index]
     return Move(from_square, to_square, promotion=promotion_type)
 
 
-def decode_moves(move_indices: NDArray[np.int32], current_player: Color) -> list[Move]:
+def decode_moves(move_indices: NDArray[np.int32]) -> list[Move]:
     """
     Decodes an array of move indices into a list of chess moves.
 
     :param move_indices: The array of move indices to decode.
-    :param current_player: The current player to decode the moves for.
     :return: The list of decoded chess moves.
     """
-    moves = [__REVERSE_MOVE_MAPPINGS[current_player][index] for index in move_indices]
+    moves = [__REVERSE_MOVE_MAPPINGS[index] for index in move_indices]
     return [Move(from_square, to_square, promotion=promotion_type) for from_square, to_square, promotion_type in moves]
 
 
@@ -141,24 +130,15 @@ def __precalculate_move_mappings() -> tuple[list[list[dict[PieceType | None, int
 
 def __precalculate_reverse_move_mappings(
     move_mappings: list[list[dict[PieceType | None, int]]],
-) -> dict[Color, list[tuple[Square, Square, PieceType | None]]]:
-    reverse_move_mappings_white: list[tuple[Square, Square, PieceType | None]] = [None] * ACTION_SIZE  # type: ignore
-    reverse_move_mappings_black: list[tuple[Square, Square, PieceType | None]] = [None] * ACTION_SIZE  # type: ignore
+) -> list[tuple[Square, Square, PieceType | None]]:
+    reverse_move_mappings: list[tuple[Square, Square, PieceType | None]] = [None] * ACTION_SIZE  # type: ignore
 
     for from_square, moves in enumerate(move_mappings):
         for to_square, promotional_mapping in enumerate(moves):
             for promotion_type, index in promotional_mapping.items():
-                reverse_move_mappings_white[index] = (from_square, to_square, promotion_type)
-                reverse_move_mappings_black[index] = (
-                    square_mirror(from_square),
-                    square_mirror(to_square),
-                    promotion_type,
-                )
+                reverse_move_mappings[index] = (from_square, to_square, promotion_type)
 
-    return {
-        WHITE: reverse_move_mappings_white,
-        BLACK: reverse_move_mappings_black,
-    }
+    return reverse_move_mappings
 
 
 __MOVE_MAPPINGS, ACTION_SIZE = __precalculate_move_mappings()
@@ -183,7 +163,7 @@ def __encode_legal_moves(board: Board) -> NDArray[np.int8]:
 
     # Iterate over all legal moves available in the position
     for move in board.legal_moves:
-        legal_moves_encoded[encode_move(move, board.turn)] = 1
+        legal_moves_encoded[encode_move(move)] = 1
 
     return legal_moves_encoded
 
@@ -207,7 +187,7 @@ def __filter_policy_with_legal_moves(policy: NDArray[np.float32], board: Board) 
     return policy
 
 
-def __map_policy_to_moves(policy: NDArray[np.float32], current_player: Color) -> list[tuple[Move, float]]:
+def __map_policy_to_moves(policy: NDArray[np.float32]) -> list[tuple[Move, float]]:
     """
     Maps a filtered policy to a list of moves with their corresponding probabilities.
 
@@ -216,38 +196,15 @@ def __map_policy_to_moves(policy: NDArray[np.float32], current_player: Color) ->
     a move and its corresponding probability.
 
     :param policy: The policy to map.
-    :param current_player: The current player to map the moves for.
     :return: The list of moves with their corresponding probabilities.
     """
     # Find indices where probability > 0
     nonzero_indices = np.nonzero(policy > 0)[0]
 
     # Decode all moves at once
-    moves = decode_moves(nonzero_indices, current_player)
+    moves = decode_moves(nonzero_indices)
 
     # Pair up moves with their probabilities
     moves_with_probabilities = list(zip(moves, policy[nonzero_indices]))
 
     return moves_with_probabilities
-
-
-if __name__ == '__main__':
-    for color in COLORS:
-        for move in __REVERSE_MOVE_MAPPINGS[color]:
-            move = Move(move[0], move[1], promotion=move[2])
-            assert encode_move(decode_move(encode_move(move, color), color), color) == encode_move(move, color)
-            assert decode_move(encode_move(move, color), color) == move
-
-    assert encode_move(Move.from_uci('e2e4'), WHITE) == encode_move(Move.from_uci('e2e4'), WHITE)
-    assert encode_move(Move.from_uci('e2e4'), WHITE) == encode_move(Move.from_uci('e7e5'), BLACK)
-
-    assert decode_move(encode_move(Move.from_uci('e2e4'), WHITE), WHITE) == Move.from_uci('e2e4')
-    assert decode_move(encode_move(Move.from_uci('e2e4'), WHITE), BLACK) == Move.from_uci('e7e5')
-
-    assert encode_move(Move.from_uci('e7e8q'), WHITE) == encode_move(Move.from_uci('e7e8q'), WHITE)
-    assert encode_move(Move.from_uci('e7e8q'), WHITE) == encode_move(Move.from_uci('e2e1q'), BLACK)
-
-    assert decode_move(encode_move(Move.from_uci('e7e8q'), WHITE), WHITE) == Move.from_uci('e7e8q')
-    assert decode_move(encode_move(Move.from_uci('e7e8q'), WHITE), BLACK) == Move.from_uci('e2e1q')
-
-    print('All tests passed!')

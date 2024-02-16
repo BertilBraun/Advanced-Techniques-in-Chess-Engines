@@ -51,14 +51,13 @@ class SelfPlay:
                 spg.board.push(move)
 
                 if spg.board.is_game_over():
-                    value = get_board_result_score(spg.board, current_player_turn)
+                    result = get_board_result_score(spg.board)
 
                     for mem in spg.memory:
-                        hist_outcome = value if mem.turn == current_player_turn else -value
                         encoded_board = encode_board(mem.board)
 
                         # TODO possibly enhance the dataset by flipping the board and the outcome i.e. use symmetries
-                        self_play_memory.append(SelfPlayMemory(encoded_board, mem.action_probabilities, hist_outcome))
+                        self_play_memory.append(SelfPlayMemory(encoded_board, mem.action_probabilities, result))
 
                     del self_play_games[i]
 
@@ -109,7 +108,7 @@ class SelfPlay:
         action_probabilities = np.zeros(ACTION_SIZE, dtype=np.float32)
 
         for child in root_node.children:
-            action_probabilities[encode_move(child.move_to_get_here, root_node.board.turn)] = child.number_of_visits
+            action_probabilities[encode_move(child.move_to_get_here)] = child.number_of_visits
         action_probabilities /= np.sum(action_probabilities)
 
         return action_probabilities
@@ -123,4 +122,4 @@ class SelfPlay:
         # Divide temperature_action_probabilities with its sum in case of an error
         action = np.random.choice(ACTION_SIZE, p=temperature_action_probabilities)
 
-        return decode_move(action, root_node.board.turn)
+        return decode_move(action)
