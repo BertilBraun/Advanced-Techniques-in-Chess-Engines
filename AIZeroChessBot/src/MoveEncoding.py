@@ -30,12 +30,6 @@ def encode_move(move: Move) -> int:
     :param move: The move to encode.
     :return: The encoded move index.
     """
-    if move.from_square not in __MOVE_MAPPINGS:
-        raise ValueError(f'Error: move.from_square not in MOVE_MAPPINGS: {move}')
-
-    if move.to_square not in __MOVE_MAPPINGS[move.from_square]:
-        raise ValueError(f'Error: move.to_square not in MOVE_MAPPINGS[move.from_square]: {move}')
-
     if move.promotion not in __MOVE_MAPPINGS[move.from_square][move.to_square]:
         raise ValueError(f'Error: move.promotion not in MOVE_MAPPINGS[move.from_square][move.to_square]: {move}')
 
@@ -53,22 +47,33 @@ def decode_move(move_index: int) -> Move:
     return Move(from_square, to_square, promotion=promotion_type)
 
 
-def __precalculate_move_mappings() -> tuple[dict[Square, dict[Square, dict[PieceType | None, int]]], int]:
+def print_move_mappings(move_mappings: list[list[dict[PieceType | None, int]]]) -> None:
+    """
+    Prints the move mappings to the console.
+
+    :param move_mappings: The move mappings to print.
+    """
+    total_moves = 0
+
+    for from_square, moves in enumerate(move_mappings):
+        for to_square, promotional_mapping in enumerate(moves):
+            for promotion_type, index in promotional_mapping.items():
+                print(f'{square_name(from_square)} -> {square_name(to_square)}: {promotion_type} -> {index}')
+                total_moves += 1
+
+    print(f'Total moves: {total_moves}')
+
+
+def __precalculate_move_mappings() -> tuple[list[list[dict[PieceType | None, int]]], int]:
     KNIGHT_MOVES = [(-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1)]
     ROOK_MOVES = [(0, 1), (0, -1), (1, 0), (-1, 0)]
     BISHOP_MOVES = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
-    move_mappings: dict[Square, dict[Square, dict[PieceType | None, int]]] = {}
+    move_mappings: list[list[dict[PieceType | None, int]]] = [[{} for _ in range(64)] for _ in range(64)]
     index = 0
 
     def add_move(from_square: Square, to_square: Square, promotion_type: PieceType | None) -> None:
         nonlocal index
-
-        if from_square not in move_mappings:
-            move_mappings[from_square] = {}
-        if to_square not in move_mappings[from_square]:
-            move_mappings[from_square][to_square] = {}
-
         move_mappings[from_square][to_square][promotion_type] = index
         index += 1
 
@@ -114,27 +119,13 @@ def __precalculate_move_mappings() -> tuple[dict[Square, dict[Square, dict[Piece
     return move_mappings, index
 
 
-def print_move_mappings(move_mappings: dict[Square, dict[Square, dict[PieceType | None, int]]]) -> None:
-    """
-    Prints the move mappings to the console.
-
-    :param move_mappings: The move mappings to print.
-    """
-    for from_square, moves in move_mappings.items():
-        for to_square, promotional_mapping in moves.items():
-            for promotion_type, index in promotional_mapping.items():
-                print(f'{square_name(from_square)} -> {square_name(to_square)}: {promotion_type} -> {index}')
-
-    print(f'Total moves: {sum(len(moves) for moves in move_mappings.values())}')
-
-
 def __precalculate_reverse_move_mappings(
-    move_mappings: dict[Square, dict[Square, dict[PieceType | None, int]]],
-) -> dict[int, tuple[Square, Square, PieceType | None]]:
-    reverse_move_mappings: dict[int, tuple[Square, Square, PieceType | None]] = {}
+    move_mappings: list[list[dict[PieceType | None, int]]],
+) -> list[tuple[Square, Square, PieceType | None]]:
+    reverse_move_mappings: list[tuple[Square, Square, PieceType | None]] = [None] * ACTION_SIZE  # type: ignore
 
-    for from_square, moves in move_mappings.items():
-        for to_square, promotional_mapping in moves.items():
+    for from_square, moves in enumerate(move_mappings):
+        for to_square, promotional_mapping in enumerate(moves):
             for promotion_type, index in promotional_mapping.items():
                 reverse_move_mappings[index] = (from_square, to_square, promotion_type)
 
