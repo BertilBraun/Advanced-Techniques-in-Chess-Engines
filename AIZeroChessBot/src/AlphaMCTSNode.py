@@ -16,7 +16,7 @@ class AlphaMCTSNode:
         self.parent = parent
         self.children: list[AlphaMCTSNode] = []
         self.move_to_get_here = move_to_get_here
-        self.number_of_visits = 1 if parent is None else 0
+        self.number_of_visits = 1.0 if parent is None else 0.001
         self.result_score = 0.0
         self.policy = policy
 
@@ -49,33 +49,29 @@ class AlphaMCTSNode:
         return ucb_score
 
     def expand(self, moves_with_scores: list[tuple[Move, float]]) -> None:
-        for move, score in moves_with_scores:
-            child_node = AlphaMCTSNode(score, move, parent=self)
-            self.children.append(child_node)
+        self.children = [AlphaMCTSNode(score, move, parent=self) for move, score in moves_with_scores]
+
+        # Convert to NumPy arrays
+        self.children_number_of_visits = np.array([child.number_of_visits for child in self.children], dtype=np.float32)
+        self.children_result_scores = np.array([child.result_score for child in self.children], dtype=np.float32)
+        self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
     def back_propagate(self, result: float) -> None:
-        self.number_of_visits += 1
+        self.number_of_visits += 1.0
         self.result_score += result
         if self.parent:
+            child_index = self.parent.children.index(self)
+            self.parent.children_number_of_visits[child_index] += 1
+            self.parent.children_result_scores[child_index] += result
             self.parent.back_propagate(result)
 
     def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
 
-        parent_number_of_visits = self.number_of_visits  # Assuming this is non-zero
+        q_score = 1 - ((self.children_result_scores / self.children_number_of_visits) + 1) / 2
+        policy_score = c_param * np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 
-        # Convert to NumPy arrays
-        number_of_visits = np.array([child.number_of_visits for child in self.children], dtype=np.float32)
-        result_scores = np.array([child.result_score for child in self.children], dtype=np.float32)
-        policies = np.array([child.policy for child in self.children], dtype=np.float32)
-
-        # Compute Q scores, avoiding division by zero
-        valid_mask = number_of_visits > 0
-        q_score = np.zeros_like(result_scores)  # Initialize Q scores to zero
-        q_score[valid_mask] = 1 - ((result_scores[valid_mask] / number_of_visits[valid_mask]) + 1) / 2
-
-        # Compute UCB scores, using in-place operations
-        ucb_scores = q_score + c_param * policies * np.sqrt(parent_number_of_visits) / (1 + number_of_visits)
+        ucb_scores = q_score + self.children_policies * policy_score
 
         # Select the best child
         best_child = self.children[np.argmax(ucb_scores)]
