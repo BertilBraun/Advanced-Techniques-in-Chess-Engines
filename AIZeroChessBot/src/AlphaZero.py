@@ -70,15 +70,15 @@ class AlphaZero:
                 model_path, _, _ = self._save_latest_model(iteration)
                 learning_stats.update(total_games, train_stats)
 
+                # drop 75% of the memory
+                # retain 25% of the memory for the next iteration to train on and not overfit to the current iteration
+                old_memory = random.sample(memory, int(total_games * 0.25))
+
+                evaluate_alpha_vs_stockfish(model_path)
+
             self.barrier('training_done')
 
             self._load_latest_model()
-
-            # drop 75% of the memory
-            # retain 25% of the memory for the next iteration to train on and not overfit to the current iteration
-            old_memory = random.sample(memory, int(total_games * 0.25))
-
-            evaluate_alpha_vs_stockfish(model_path)
 
         print(learning_stats)
 
@@ -172,9 +172,10 @@ class AlphaZero:
                 memory += torch.load(f)
         return memory
 
-    def barrier(self, name: str = '') -> None:
+    def barrier(self, name: str) -> None:
         open(self.communication_dir / f'{self.my_id}{"_" + name if name else ""}.txt', 'w').close()
 
+        print(f'Node {self.my_id} reached the barrier {name}')
         while True:
             written_files = len(list(self.communication_dir.iterdir()))
             if written_files == self.args.num_separate_nodes_on_cluster:
@@ -189,7 +190,7 @@ class AlphaZero:
         for f in self.communication_dir.iterdir():
             f.unlink()
 
-        print('All nodes have reached the barrier')
+        print(f'All nodes have reached the barrier {name}')
 
     def _initialize_cluster(self) -> None:
         """Initialize the cluster for parallel self-play."""
