@@ -57,3 +57,23 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 - The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
 ![MCTS Performance](/AIZeroChessBot/documentation/performance_analysis.png)
 Only the small pink section in the performance analysis graph is the time taken to evaluate the board state using the neural network. The rest of the time is spent on the other steps of the MCTS algorithm.
+
+### Reimplementation Plan
+
+**C++ Implementation**: Reimplement the MCTS algorithm in C++ to improve performance.
+
+**What does a Board need to provide FAST:**
+
+- Copy the entire board state
+- Generate Legal Moves
+- Push a Move (Make a move)
+- Get the current player
+- Check if the game is over
+- Get the game result
+- Piece At / Get Representation of all pieces on the Board
+  
+For a chess framework, take a look at [Stockfish](https://github.com/official-stockfish/Stockfish) and [Chess-Coding-Adventure](https://github.com/SebLague/Chess-Coding-Adventure/tree/Chess-V2-UCI) for inspiration.
+
+**Machine Learning Frameworks:**
+
+Everything around Machine Learning and Neural Networks can be done in C++ using PyTorch C++ API (LibTorch) or TensorFlow C++ API.
