@@ -57,6 +57,17 @@ class AlphaMCTSNode:
             self.parent.back_propagate(result)
 
     def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
+        best = self.children[0]
+        best_score = best.ucb(c_param)
+
+        for child in self.children[1:]:
+            score = child.ucb(c_param)
+            if score > best_score:
+                best = child
+                best_score = score
+
+        return best
+
         return max(self.children, key=lambda node: node.ucb(c_param))
 
     def __repr__(self) -> str:

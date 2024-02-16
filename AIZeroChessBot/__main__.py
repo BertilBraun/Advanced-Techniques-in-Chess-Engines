@@ -35,6 +35,7 @@ if __name__ == '__main__':
         c_param=2.0,
     )
 
-    # TODO profiler to see if the bottleneck is python or the model
+    # TODO profiler to see if the bottleneck is python or the model on the cluster
+    # TODO use multiple nodes on the cluster to parallelize the self-play
 
     AlphaZero(model, optimizer, args).learn()
