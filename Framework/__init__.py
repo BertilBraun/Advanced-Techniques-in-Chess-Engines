@@ -1,4 +1,9 @@
+import numpy as np  # noqa: F401
+
 from chess import *
+
+from numpy.typing import NDArray  # noqa: F401
+from dataclasses import dataclass  # noqa: F401
 
 from Framework.BitboardHelper import *
 from Framework.ChessBot import ChessBot  # noqa: F401

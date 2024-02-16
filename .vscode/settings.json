@@ -6,6 +6,7 @@
         "lerp",
         "optim",
         "overfit",
+        "seventyfive",
         "softmax",
         "Stockfish",
         "TPUs"

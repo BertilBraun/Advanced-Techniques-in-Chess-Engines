@@ -1,10 +1,7 @@
-from dataclasses import dataclass
-import numpy as np
-from numpy.typing import NDArray
-from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
-
 from Framework import *
-from AIZeroChessBot.src.BoardEncoding import board_result_to_score
+
+from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
+from AIZeroChessBot.src.BoardEncoding import get_board_result_score
 
 
 @dataclass
@@ -28,7 +25,7 @@ class SelfPlayGame:
             node = node.best_child(c_param)
 
         if node.is_terminal_node:
-            node.back_propagate(-board_result_to_score(node.board))
+            node.back_propagate(get_board_result_score(node.board, self.root.board.turn))
             return None
 
         return node

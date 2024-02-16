@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import numpy as np
-
 from Framework import *
 
 
 class AlphaMCTSNode:
-    def __init__(
-        self,
-        policy: float = 1.0,
-        move_to_get_here: Move = Move.null(),
-        parent: AlphaMCTSNode | None = None,
-    ) -> None:
+    @classmethod
+    def root(cls, board: Board) -> AlphaMCTSNode:
+        instance = cls(policy=1.0, move_to_get_here=Move.null(), parent=None)
+        instance.board = board
+        instance.number_of_visits = 1.0
+        return instance
+
+    def __init__(self, policy: float, move_to_get_here: Move, parent: AlphaMCTSNode | None) -> None:
         self.board: Board = None  # type: ignore
         self.parent = parent
         self.children: list[AlphaMCTSNode] = []
         self.move_to_get_here = move_to_get_here
-        self.number_of_visits = 1.0 if parent is None else 0.001
+        self.number_of_visits = 0.0001  # Prevent division by zero
         self.result_score = 0.0
         self.policy = policy
 

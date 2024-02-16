@@ -49,14 +49,14 @@ class AlphaZero:
 
             total_games = len(memory)
             print(f'Collected {total_games} self-play memories')
-            # TODO save memories to disk with the iteration number
+            self._save_memory(memory, iteration)
 
             self.model.train()
             for _ in tqdm(range(self.args.num_epochs), desc='Training'):
                 train_stats += self._train(memory + old_memory)
 
             print(f'Iteration {iteration + 1}: {train_stats}')
-            model_path, _, _ = self._save(iteration)
+            model_path, _, _ = self._save_latest_model(iteration)
             learning_stats.update(total_games, train_stats)
 
             # drop 75% of the memory
@@ -120,7 +120,7 @@ class AlphaZero:
         except FileNotFoundError:
             print('No model and optimizer found, starting from scratch')
 
-    def _save(self, iteration: int) -> tuple[Path, Path, Path]:
+    def _save_latest_model(self, iteration: int) -> tuple[Path, Path, Path]:
         """Save the model and optimizer to the current directory with the current iteration number. Also save the current training configuration to last_training_config.pt."""
 
         save_dir = Path(self.args.save_path)
@@ -141,3 +141,9 @@ class AlphaZero:
         print(f'Model and optimizer saved at iteration {iteration}')
 
         return model_path, optimizer_path, last_training_config_path
+
+    def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
+        save_dir = Path(self.args.save_path)
+        memory_path = save_dir / f'memory_{iteration}.pt'
+        torch.save(memory, memory_path)
+        print(f'Memory saved at iteration {iteration}')
