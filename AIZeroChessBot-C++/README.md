@@ -1,0 +1,118 @@
+# Project: AI-ZeroChessBot-C++
+
+## Overview
+
+AI-Zero Chess Bot is an ambitious project aiming to replicate and explore the AlphaZero approach to computer chess. The project focuses on developing a chess bot that uses a combination of deep neural networks and Monte Carlo Tree Search (MCTS) to evaluate positions and select moves without reliance on traditional chess bots' databases and heuristics. By learning from self-play, the AI-Zero Chess Bot aspires to discover and refine its understanding of chess strategy, tactics, and endgames, pushing the boundaries of artificial chess intelligence.
+
+## Goals
+
+- To implement a neural network that can evaluate chess positions (value) and suggest move probabilities (policy) based on the current board state.
+- To integrate the neural network with Monte Carlo Tree Search (MCTS) for effective move selection and game exploration.
+- To train the neural network using self-play, allowing the system to learn and improve its chess-playing capabilities iteratively.
+- To assess the performance of the AI-Zero Chess Bot against various benchmarks, including traditional bots and human players.
+
+## Architecture
+
+AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the Monte Carlo Tree Search (MCTS).
+
+### Neural Network
+
+- **Input Layer**: Encodes the board state, including piece positions, player to move, castling rights, and en passant possibilities.
+- **Processing Layers**: Multiple layers (convolutional neural networks or other suitable architectures) extract features and learn game patterns.
+- **Output Layers**:
+  - **Policy Head**: Outputs a probability distribution over all legal moves from the current position (64x73 possible moves).
+  - **Value Head**: Outputs a single value estimating the likelihood of winning from the current position.
+
+### Monte Carlo Tree Search (MCTS)
+
+- Utilizes the policy head to guide exploration of the game tree.
+- Employs the value head to evaluate board positions, aiding in the selection and backpropagation phases.
+
+## Development Plan
+
+1. **Neural Network Implementation**
+   - Design and implement the neural network architecture with policy and value heads.
+   - Develop a method for encoding chess board states as network inputs.
+2. **MCTS Integration**
+   - Implement the MCTS algorithm, integrating NN outputs to guide the search.
+3. **Self-Play Training System**
+   - Create a self-play mechanism to generate training data.
+   - Implement training routines for the neural network using self-play data.
+4. **Evaluation and Testing**
+   - Develop benchmarks and testing protocols to evaluate the performance of ChessAI-Zero.
+   - Compare performance against other bots and track improvement over time.
+
+## Technologies
+
+- **Programming Language**: Python 3.x.
+- **Machine Learning Frameworks**: TensorFlow or PyTorch.
+- **Chess Library**: python-chess.
+
+## Getting Started
+
+To run your `AIZeroChessBot` project after setting it up with CMake and compiling it with Visual Studio Code (VSCode) on Windows, follow these steps. This guide assumes you've already configured your `CMakeLists.txt` and have the necessary build scripts in place.
+
+### Step 1: Build the Project
+
+1. **Open VSCode** and navigate to your project folder (`AIZeroChessBot`).
+
+2. **Run the Setup Script** (if you haven't already) to download LibTorch and generate the CMake build system. In the VSCode terminal, navigate to your project's root directory and run:
+
+    ```cmd
+    .\setup_build.bat
+    ```
+
+   This script prepares the build environment, including downloading LibTorch if necessary and generating build files.
+
+3. **Build the Project** using CMake. If you're using the CMake Tools extension in VSCode, you can build the project directly from the VSCode command palette (`Ctrl+Shift+P`) by typing "CMake: Build" and selecting the build target. Alternatively, you can build from the terminal in the `build` directory:
+
+    ```cmd
+    cd build
+    cmake --build . --config Release
+    ```
+
+### Step 2: Running the Executable
+
+After building the project, an executable file named `AIZeroChessBot` (or `AIZeroChessBot.exe` on Windows) will be created in the `build` directory, inside a `Release` or `Debug` subdirectory, depending on your build configuration.
+
+To run your project:
+
+1. **Navigate to the Executable Directory** in the terminal using `cd`:
+
+    ```cmd
+    cd Release  # or Debug, depending on your build config
+    ```
+
+2. **Run the Executable** by typing its name in the terminal:
+
+    ```cmd
+    .\AIZeroChessBot.exe
+    ```
+
+   This command executes your program. Any command-line arguments required by your application should follow the executable name.
+
+## Performance Problems
+
+- The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
+![MCTS Performance](/AIZeroChessBot/documentation/performance_analysis.png)
+Only the small pink section in the performance analysis graph is the time taken to evaluate the board state using the neural network. The rest of the time is spent on the other steps of the MCTS algorithm.
+
+### Reimplementation Plan
+
+**C++ Implementation**: Reimplement the MCTS algorithm in C++ to improve performance.
+
+**What does a Board need to provide FAST:**
+
+- Copy the entire board state
+- Generate Legal Moves
+- Push a Move (Make a move)
+- Get the current player
+- Check if the game is over
+- Get the game result
+- Piece At / Get Representation of all pieces on the Board
+  
+For a chess framework, take a look at [Stockfish](https://github.com/official-stockfish/Stockfish) and [Chess-Coding-Adventure](https://github.com/SebLague/Chess-Coding-Adventure/tree/Chess-V2-UCI) for inspiration.
+
+**Machine Learning Frameworks:**
+
+Everything around Machine Learning and Neural Networks can be done in C++ using PyTorch C++ API (LibTorch) or TensorFlow C++ API.

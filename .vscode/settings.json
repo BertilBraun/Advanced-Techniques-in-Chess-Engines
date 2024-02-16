@@ -10,5 +10,7 @@
         "softmax",
         "Stockfish",
         "TPUs"
-    ]
+    ],
+    "cmake.configureOnOpen": true,
+    "C_Cpp.default.compilerPath": "cl.exe"
 }
