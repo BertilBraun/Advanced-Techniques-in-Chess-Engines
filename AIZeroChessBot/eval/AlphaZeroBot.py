@@ -22,11 +22,11 @@ class AlphaZeroBot(ChessBot):
 
         best_child = root.best_child(c_param=0.0)
 
-        print('-' * 50)
+        print('---------------------- Alpha Zero Best Move ----------------------')
         print(f'Best child has {best_child.number_of_visits:.4f} visits')
         print(f'Best child has {best_child.result_score:.4f} result_score')
         print(f'Best child has {best_child.policy:.4f} policy')
-        print('-' * 50)
+        print('------------------------------------------------------------------')
 
         return best_child.move_to_get_here
 
