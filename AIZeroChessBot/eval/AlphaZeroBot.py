@@ -8,11 +8,11 @@ from AIZeroChessBot.src.Network import Network
 from Framework import *
 
 
-class AlphaMCTSBot(ChessBot):
-    def __init__(self, network_model_file: str) -> None:
+class AlphaZeroBot(ChessBot):
+    def __init__(self, network_model_file_path) -> None:
         super().__init__('Alpha MCTS Bot')
         self.model = Network()
-        self.model.load_state_dict(torch.load(network_model_file))
+        self.model.load_state_dict(torch.load(network_model_file_path))
 
     def think(self, board: Board) -> Move:
         root = AlphaMCTSNode(board, 0.0, Move.null(), None)

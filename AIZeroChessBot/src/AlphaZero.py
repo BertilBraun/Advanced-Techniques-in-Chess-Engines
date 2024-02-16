@@ -7,6 +7,7 @@ import numpy as np
 import torch.nn.functional as F
 
 from tqdm import tqdm
+from AIZeroChessBot.eval.EvaluateAlphaVsStockfish import evaluate_alpha_vs_stockfish
 
 from AIZeroChessBot.src.Network import Network
 from AIZeroChessBot.src.SelfPlay import SelfPlay, SelfPlayMemory
@@ -52,12 +53,14 @@ class AlphaZero:
                 train_stats += self._train(memory + old_memory)
 
             print(f'Iteration {iteration + 1}: {train_stats}')
-            self._save(iteration)
+            model_path, _, _ = self._save(iteration)
             learning_stats.update(total_games, train_stats)
 
             # drop 75% of the memory
             # retain 25% of the memory for the next iteration to train on and not overfit to the current iteration
             old_memory = random.sample(memory, int(total_games * 0.25))
+
+            evaluate_alpha_vs_stockfish(model_path)
 
         print(learning_stats)
 
@@ -114,7 +117,7 @@ class AlphaZero:
         except FileNotFoundError:
             print('No model and optimizer found, starting from scratch')
 
-    def _save(self, iteration: int) -> None:
+    def _save(self, iteration: int) -> tuple[Path, Path, Path]:
         """Save the model and optimizer to the current directory with the current iteration number. Also save the current training configuration to last_training_config.pt."""
 
         save_dir = Path(self.args.save_path)
@@ -126,10 +129,12 @@ class AlphaZero:
         torch.save(self.optimizer.state_dict(), optimizer_path)
         torch.save(
             {
-                'model': f'model_{iteration}.pt',
-                'optimizer': f'optimizer_{iteration}.pt',
+                'model': model_path,
+                'optimizer': optimizer_path,
                 'iteration': iteration,
             },
             last_training_config_path,
         )
         print(f'Model and optimizer saved at iteration {iteration}')
+
+        return model_path, optimizer_path, last_training_config_path
