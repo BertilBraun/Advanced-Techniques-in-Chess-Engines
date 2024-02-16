@@ -17,7 +17,7 @@ class AlphaMCTSNode:
         self.children: list[AlphaMCTSNode] = []
         self.move_to_get_here = move_to_get_here
         self.number_of_visits = 0.0001  # Prevent division by zero
-        self.result_score = 0.0
+        self.result_score = -1.0
         self.policy = policy
 
     def init(self) -> None:

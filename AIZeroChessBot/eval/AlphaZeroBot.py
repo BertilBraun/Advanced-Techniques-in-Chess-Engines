@@ -15,12 +15,20 @@ class AlphaZeroBot(ChessBot):
         self.model.load_state_dict(torch.load(network_model_file_path))
 
     def think(self, board: Board) -> Move:
-        root = AlphaMCTSNode(board, 0.0, Move.null(), None)
+        root = AlphaMCTSNode.root(board)
 
         while not self.time_is_up:
             self.iterate(root)
 
-        return root.best_child(c_param=0.0).move_to_get_here
+        best_child = root.best_child(c_param=0.0)
+
+        print('-' * 50)
+        print(f'Best child has {best_child.number_of_visits:.4f} visits')
+        print(f'Best child has {best_child.result_score:.4f} result_score')
+        print(f'Best child has {best_child.policy:.4f} policy')
+        print('-' * 50)
+
+        return best_child.move_to_get_here
 
     def iterate(self, root: AlphaMCTSNode) -> None:
         current_node = root
