@@ -30,6 +30,9 @@ class AlphaZero:
         self.starting_iteration = 0
         self.self_play = SelfPlay(model, args)
 
+        self.save_path = Path(self.args.save_path)
+        self.save_path.mkdir(exist_ok=True)
+
         if load_latest_model:
             self._load_latest_model()
 
@@ -138,7 +141,7 @@ class AlphaZero:
     def _save_latest_model(self, iteration: int) -> tuple[Path, Path, Path]:
         """Save the model and optimizer to the current directory with the current iteration number. Also save the current training configuration to last_training_config.pt."""
 
-        save_dir = Path(self.args.save_path)
+        save_dir = Path(self.save_path)
         model_path = save_dir / f'model_{iteration}.pt'
         optimizer_path = save_dir / f'optimizer_{iteration}.pt'
         last_training_config_path = save_dir / 'last_training_config.pt'
@@ -158,7 +161,7 @@ class AlphaZero:
         return model_path, optimizer_path, last_training_config_path
 
     def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
-        save_dir = Path(self.args.save_path)
+        save_dir = Path(self.save_path)
         memory_path = save_dir / f'memory_{iteration}_{self.my_id}.pt'
         torch.save(memory, memory_path)
         print(f'Memory saved at iteration {iteration}')
@@ -167,7 +170,7 @@ class AlphaZero:
 
     def _load_all_memories(self, iteration: int) -> list[SelfPlayMemory]:
         memory = []
-        for f in Path(self.args.save_path).iterdir():
+        for f in Path(self.save_path).iterdir():
             if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
                 memory += torch.load(f)
         return memory

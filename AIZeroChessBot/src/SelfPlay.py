@@ -9,12 +9,21 @@ from AIZeroChessBot.src.Network import Network
 from AIZeroChessBot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 from AIZeroChessBot.src.TrainingArgs import TrainingArgs
 from AIZeroChessBot.src.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroChessBot.src.BoardEncoding import encode_boards, encode_board, get_board_result_score
+from AIZeroChessBot.src.BoardEncoding import (
+    encode_boards,
+    encode_board,
+    flip_board_horizontal,
+    flip_board_vertical,
+    get_board_result_score,
+)
 from AIZeroChessBot.src.MoveEncoding import (
     ACTION_SIZE,
     decode_move,
     encode_move,
     filter_policy_then_get_moves_and_probabilities,
+    flip_action_probabilities,
+    flip_move_index_horizontal,
+    flip_move_index_vertical,
 )
 
 
@@ -51,17 +60,46 @@ class SelfPlay:
                 spg.board.push(move)
 
                 if spg.board.is_game_over():
-                    result = get_board_result_score(spg.board)
-
-                    for mem in spg.memory:
-                        encoded_board = encode_board(mem.board)
-
-                        # TODO possibly enhance the dataset by flipping the board and the outcome i.e. use symmetries
-                        self_play_memory.append(SelfPlayMemory(encoded_board, mem.action_probabilities, result))
-
+                    self_play_memory.extend(self._get_training_data(spg))
                     del self_play_games[i]
 
         return self_play_memory
+
+    def _get_training_data(self, spg: SelfPlayGame) -> list[SelfPlayMemory]:
+        self_play_memory = []
+
+        result = get_board_result_score(spg.board)
+
+        for mem in spg.memory:
+            encoded_board = encode_board(mem.board)
+
+            for board, probabilities in self._symmetric_variations(encoded_board, mem.action_probabilities):
+                self_play_memory.append(SelfPlayMemory(board, probabilities, result))
+
+        return self_play_memory
+
+    def _symmetric_variations(self, board: NDArray[np.float32], action_probabilities: NDArray[np.float32]):
+        # Original
+        yield board, action_probabilities
+
+        # Horizontal flip
+        yield (
+            flip_board_horizontal(board),
+            flip_action_probabilities(action_probabilities, flip_move_index_horizontal),
+        )
+
+        # Vertical flip
+        yield (
+            flip_board_vertical(board),
+            flip_action_probabilities(action_probabilities, flip_move_index_vertical),
+        )
+
+        # Combine flips for a 180-degree rotation
+        board_flipped_180 = flip_board_vertical(flip_board_horizontal(board))
+        action_probabilities_flipped_180 = flip_action_probabilities(
+            action_probabilities, lambda idx: flip_move_index_vertical(flip_move_index_horizontal(idx))
+        )
+        yield board_flipped_180, action_probabilities_flipped_180
 
     @torch.no_grad()
     def _expand_self_play_games(self, self_play_games: list[SelfPlayGame]) -> None:

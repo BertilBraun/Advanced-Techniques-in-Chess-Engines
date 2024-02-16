@@ -73,6 +73,41 @@ def print_move_mappings(move_mappings: list[list[dict[PieceType | None, int]]]) 
     print(f'Total moves: {total_moves}')
 
 
+def flip_action_probabilities(
+    action_probabilities: NDArray[np.float32], flip_move_index: Callable[[int | None], int | None]
+) -> NDArray[np.float32]:
+    flipped_probabilities = np.zeros_like(action_probabilities)
+
+    for idx, prob in enumerate(action_probabilities):
+        flipped_idx = flip_move_index(idx)
+        if flipped_idx is not None:  # Ensure the move is valid after flipping
+            flipped_probabilities[flipped_idx] = prob
+
+    return flipped_probabilities
+
+
+def flip_move_index_horizontal(move_index: int | None) -> int | None:
+    return __FLIPPED_INDICES_HORIZONTAL[move_index] if move_index is not None else None
+
+
+def flip_move_index_vertical(move_index: int | None) -> int | None:
+    return __FLIPPED_INDICES_VERTICAL[move_index] if move_index is not None else None
+
+
+def flip_square_horizontal(square: Square) -> Square:
+    # Flip the file of the square, keeping the rank constant
+    rank, file = divmod(square, 8)
+    flipped_file = 7 - file  # 0 becomes 7, 1 becomes 6, ..., 7 becomes 0
+    return rank * 8 + flipped_file
+
+
+def flip_square_vertical(square: Square) -> Square:
+    # Flip the rank of the square, keeping the file constant
+    rank, file = divmod(square, 8)
+    flipped_rank = 7 - rank  # 0 becomes 7, 1 becomes 6, ..., 7 becomes 0
+    return flipped_rank * 8 + file
+
+
 def __precalculate_move_mappings() -> tuple[list[list[dict[PieceType | None, int]]], int]:
     KNIGHT_MOVES = [(-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1)]
     ROOK_MOVES = [(0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -141,8 +176,35 @@ def __precalculate_reverse_move_mappings(
     return reverse_move_mappings
 
 
+def __precalculate_flipped_indices(
+    move_mappings: list[list[dict[PieceType | None, int]]],
+) -> tuple[list[int | None], list[int | None]]:
+    flipped_indices_horizontal: list[int | None] = [None] * ACTION_SIZE
+    flipped_indices_vertical: list[int | None] = [None] * ACTION_SIZE
+
+    for from_square in range(64):
+        for to_square in range(64):
+            for promotion, index in move_mappings[from_square][to_square].items():
+                # Calculate the flipped squares
+                flipped_from_horizontal = flip_square_horizontal(from_square)
+                flipped_to_horizontal = flip_square_horizontal(to_square)
+                flipped_from_vertical = flip_square_vertical(from_square)
+                flipped_to_vertical = flip_square_vertical(to_square)
+
+                # Get the corresponding flipped indices
+                flipped_index_horizontal = move_mappings[flipped_from_horizontal][flipped_to_horizontal].get(promotion)
+                flipped_index_vertical = move_mappings[flipped_from_vertical][flipped_to_vertical].get(promotion)
+
+                # Store in the precalculated lists
+                flipped_indices_horizontal[index] = flipped_index_horizontal
+                flipped_indices_vertical[index] = flipped_index_vertical
+
+    return flipped_indices_horizontal, flipped_indices_vertical
+
+
 __MOVE_MAPPINGS, ACTION_SIZE = __precalculate_move_mappings()
 __REVERSE_MOVE_MAPPINGS = __precalculate_reverse_move_mappings(__MOVE_MAPPINGS)
+__FLIPPED_INDICES_HORIZONTAL, __FLIPPED_INDICES_VERTICAL = __precalculate_flipped_indices(__MOVE_MAPPINGS)
 
 
 def __encode_legal_moves(board: Board) -> NDArray[np.int8]:

@@ -56,6 +56,16 @@ def encode_boards(boards: list[Board]) -> NDArray[np.float32]:
     return np.stack([encode_board(board) for board in boards])
 
 
+def flip_board_horizontal(encoded_board: NDArray[np.float32]) -> NDArray[np.float32]:
+    # Flip along the 2nd axis (columns of the 8x8 grid for each piece type)
+    return np.flip(encoded_board, axis=2)
+
+
+def flip_board_vertical(encoded_board: NDArray[np.float32]) -> NDArray[np.float32]:
+    # Flip along the 1st axis (rows of the 8x8 grid for each piece type)
+    return np.flip(encoded_board, axis=1)
+
+
 def get_board_result_score(board: Board) -> float:
     """
     Returns the result score for the given board.
