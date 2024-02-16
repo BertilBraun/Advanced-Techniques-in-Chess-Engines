@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import random
+import time
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -32,6 +33,8 @@ class AlphaZero:
         if load_latest_model:
             self._load_latest_model()
 
+        self._initialize_cluster()
+
     def learn(self) -> None:
         old_memory: list[SelfPlayMemory] = []
         learning_stats = LearningStats()
@@ -40,10 +43,13 @@ class AlphaZero:
             train_stats = TrainingStats()
             memory: list[SelfPlayMemory] = []
 
+            self_play_games_in_parallel = self.args.num_parallel_games * self.args.num_separate_nodes_on_cluster
+            self_play_iterations = self.args.num_self_play_iterations // (self_play_games_in_parallel)
+
             self.model.eval()
             for _ in tqdm(
-                range(self.args.num_self_play_iterations // self.args.num_parallel_games),
-                desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
+                range(self_play_iterations),
+                desc=f'Self Play for {self_play_games_in_parallel} games in parallel',
             ):
                 memory += self.self_play.self_play()
 
@@ -51,13 +57,20 @@ class AlphaZero:
             print(f'Collected {total_games} self-play memories')
             self._save_memory(memory, iteration)
 
-            self.model.train()
-            for _ in tqdm(range(self.args.num_epochs), desc='Training'):
-                train_stats += self._train(memory + old_memory)
+            if self.is_root_node:
+                memory = self._load_all_memories(iteration)
 
-            print(f'Iteration {iteration + 1}: {train_stats}')
-            model_path, _, _ = self._save_latest_model(iteration)
-            learning_stats.update(total_games, train_stats)
+                self.model.train()
+                for _ in tqdm(range(self.args.num_epochs), desc='Training'):
+                    train_stats += self._train(memory + old_memory)
+
+                print(f'Iteration {iteration + 1}: {train_stats}')
+                model_path, _, _ = self._save_latest_model(iteration)
+                learning_stats.update(total_games, train_stats)
+
+            self.barrier('training_done')
+
+            self._load_latest_model()
 
             # drop 75% of the memory
             # retain 25% of the memory for the next iteration to train on and not overfit to the current iteration
@@ -144,6 +157,74 @@ class AlphaZero:
 
     def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
         save_dir = Path(self.args.save_path)
-        memory_path = save_dir / f'memory_{iteration}.pt'
+        memory_path = save_dir / f'memory_{iteration}_{self.my_id}.pt'
         torch.save(memory, memory_path)
         print(f'Memory saved at iteration {iteration}')
+
+        self.barrier('memory_saved')
+
+    def _load_all_memories(self, iteration: int) -> list[SelfPlayMemory]:
+        memory = []
+        for f in Path(self.args.save_path).iterdir():
+            if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
+                memory += torch.load(f)
+        return memory
+
+    def barrier(self, name: str = '') -> None:
+        open(self.communication_dir / f'{self.my_id}{"_" + name if name else ""}.txt', 'w').close()
+
+        while True:
+            written_files = len(list(self.communication_dir.iterdir()))
+            if written_files == self.args.num_separate_nodes_on_cluster:
+                break
+
+            print(f'Waiting for {self.args.num_separate_nodes_on_cluster - written_files} nodes')
+            time.sleep(1)
+
+        # remove the memory saved files
+        for f in self.communication_dir.iterdir():
+            f.unlink()
+
+        print('All nodes have reached the barrier')
+
+    def _initialize_cluster(self) -> None:
+        """Initialize the cluster for parallel self-play."""
+        self.my_id = random.randint(0, 1000000000)
+
+        self.communication_dir = Path('communication')
+        # delete the communication directory if it exists
+        if self.communication_dir.exists():
+            for f in self.communication_dir.iterdir():
+                f.unlink()
+            self.communication_dir.rmdir()
+
+        print(f'Node {self.my_id} initialized')
+
+        while True:
+            self.communication_dir.mkdir(exist_ok=True)
+            try:
+                open(self.communication_dir / f'{self.my_id}.txt', 'w').close()
+            except:  # noqa: E722
+                print(f'Node {self.my_id} failed to write to the communication directory')
+                pass
+
+            initialized_nodes = len(list(self.communication_dir.iterdir()))
+            if initialized_nodes == self.args.num_separate_nodes_on_cluster:
+                break
+
+            print(f'Waiting for {self.args.num_separate_nodes_on_cluster - initialized_nodes} nodes to initialize')
+            time.sleep(1)
+
+        print('All nodes initialized')
+
+        # remove the initialization files
+        for f in self.communication_dir.iterdir():
+            f.unlink()
+
+        # root is the node with the lowest id
+        if self.my_id == min(int(f.stem) for f in self.communication_dir.iterdir()):
+            print('I am the root node')
+            self.is_root_node = True
+        else:
+            print('I am not the root node')
+            self.is_root_node = False

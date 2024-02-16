@@ -38,3 +38,6 @@ class TrainingArgs:
 
     save_path: str = ''
     """This is the path to save the model to after each iteration"""
+
+    num_separate_nodes_on_cluster: int = 1
+    """This is the number of separate nodes on the cluster to use to parallelize the self-play"""
