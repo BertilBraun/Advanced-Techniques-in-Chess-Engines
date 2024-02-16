@@ -51,3 +51,8 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 ## Getting Started
 
 - Setup instructions, training procedures, and how to run the bot will be detailed in the project documentation.
+
+## Performance Problems
+
+- The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
+![MCTS Performance](/documentation/performance_analysis.png)
