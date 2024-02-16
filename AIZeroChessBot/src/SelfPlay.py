@@ -45,7 +45,7 @@ class SelfPlay:
                 action_probabilities = self._get_action_probabilities(spg.root)
                 spg.memory.append(SelfPlayGameMemory(spg.root.board, action_probabilities, current_player_turn))
 
-                move = self._sample_move(action_probabilities, current_player_turn)
+                move = self._sample_move(action_probabilities, spg.root)
 
                 spg.board = spg.root.board.copy(stack=False)
                 spg.board.push(move)
@@ -114,10 +114,13 @@ class SelfPlay:
 
         return action_probabilities
 
-    def _sample_move(self, action_probabilities: NDArray[np.float32], current_player: Color) -> Move:
-        # TODO only use temperature for the first 30 moves, then simply use the action probabilities as they are
-        temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
+    def _sample_move(self, action_probabilities: NDArray[np.float32], root_node: AlphaMCTSNode) -> Move:
+        # only use temperature for the first 30 moves, then simply use the action probabilities as they are
+        if root_node.num_played_moves < 30:
+            temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
+        else:
+            temperature_action_probabilities = action_probabilities
         # Divide temperature_action_probabilities with its sum in case of an error
         action = np.random.choice(ACTION_SIZE, p=temperature_action_probabilities)
 
-        return decode_move(action, current_player)
+        return decode_move(action, root_node.board.turn)

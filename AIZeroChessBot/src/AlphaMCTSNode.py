@@ -6,16 +6,19 @@ from Framework import *
 class AlphaMCTSNode:
     @classmethod
     def root(cls, board: Board) -> AlphaMCTSNode:
-        instance = cls(policy=1.0, move_to_get_here=Move.null(), parent=None)
+        instance = cls(policy=1.0, move_to_get_here=Move.null(), parent=None, num_played_moves=0)
         instance.board = board
         instance.number_of_visits = 1.0
         return instance
 
-    def __init__(self, policy: float, move_to_get_here: Move, parent: AlphaMCTSNode | None) -> None:
+    def __init__(
+        self, policy: float, move_to_get_here: Move, parent: AlphaMCTSNode | None, num_played_moves: int
+    ) -> None:
         self.board: Board = None  # type: ignore
         self.parent = parent
         self.children: list[AlphaMCTSNode] = []
         self.move_to_get_here = move_to_get_here
+        self.num_played_moves = num_played_moves  # This is the number of moves played to get to this node
         self.number_of_visits = 0.0001  # Prevent division by zero
         self.result_score = -1.0
         self.policy = policy
@@ -49,7 +52,10 @@ class AlphaMCTSNode:
         return ucb_score
 
     def expand(self, moves_with_scores: list[tuple[Move, float]]) -> None:
-        self.children = [AlphaMCTSNode(score, move, parent=self) for move, score in moves_with_scores]
+        self.children = [
+            AlphaMCTSNode(score, move, parent=self, num_played_moves=self.num_played_moves + 1)
+            for move, score in moves_with_scores
+        ]
 
         # Convert to NumPy arrays
         self.children_number_of_visits = np.array([child.number_of_visits for child in self.children], dtype=np.float32)
@@ -82,6 +88,7 @@ class AlphaMCTSNode:
         return f"""AlphaMCTSNode(
 {self.board}
 visits: {self.number_of_visits}
+depth: {self.num_played_moves}
 score: {self.result_score:.2f}
 policy: {self.policy:.2f}
 move: {self.move_to_get_here}
