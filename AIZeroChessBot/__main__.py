@@ -7,7 +7,7 @@ from AIZeroChessBot.src.TrainingArgs import TrainingArgs
 
 if __name__ == '__main__':
     model = Network()
-    optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
+    optimizer = Adam(model.parameters(), lr=0.02, weight_decay=1e-4)
 
     ALPHA_ZERO_TRAINING_ARGS = TrainingArgs(
         num_iterations=200,
