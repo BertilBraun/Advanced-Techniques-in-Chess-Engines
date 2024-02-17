@@ -13,7 +13,7 @@ if not exist libtorch\%LIBTORCH_ZIP% (
     echo Downloading LibTorch...
     powershell -Command "Invoke-WebRequest -Uri %LIBTORCH_URL% -OutFile libtorch\%LIBTORCH_ZIP%"
     echo Extracting LibTorch...
-    powershell -Command "Expand-Archive -Path libtorch\%LIBTORCH_ZIP% -DestinationPath libtorch -Force"
+    powershell -Command "Expand-Archive -Path libtorch\%LIBTORCH_ZIP% -DestinationPath . -Force"
 )
 
 rem Create a build directory
@@ -21,7 +21,7 @@ if not exist build mkdir build
 cd build
 
 rem Run CMake to configure the project. Adjust the path to your LibTorch cmake folder
-cmake -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=../libtorch/libtorch/share/cmake/Torch ..
+cmake -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=../libtorch/share/cmake/Torch ..
 
 cd ..
 

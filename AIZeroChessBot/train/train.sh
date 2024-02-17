@@ -15,3 +15,4 @@
 cd ../../
 
 python -m AIZeroChessBot
+

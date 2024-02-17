@@ -1,0 +1,31 @@
+# Set the C++ standard and enable formatting
+Language: Cpp
+
+# Use spaces instead of tabs
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 100
+
+# Configure brace wrapping for functions
+BraceWrapping:
+  AfterFunction: true
+
+# Configure spacing
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: true
+SpacesInParentheses: false
+SpacesInCStyleCastParentheses: false
+
+# Configure alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+
+# Indentation options
+AccessModifierOffset: -4
+IndentCaseLabels: false
+
+# Ordering of includes
+SortIncludes: true
+# This is just a subset of available options. Customize further as needed.

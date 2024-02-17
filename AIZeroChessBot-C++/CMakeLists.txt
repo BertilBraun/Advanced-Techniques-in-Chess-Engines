@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 cmake_policy(SET CMP0054 NEW)
 
 # LibTorch configuration
-set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch/libtorch/share/cmake/Torch")
+set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
 
 # Automatically include all source files from the src directory
