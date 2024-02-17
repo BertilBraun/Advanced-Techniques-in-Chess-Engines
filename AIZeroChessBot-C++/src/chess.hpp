@@ -1793,7 +1793,6 @@ private:
 
         // Generate piece moves for non-pawn pieces
         Bitboard non_pawns = our_pieces & ~m_pawns & from_mask;
-        std::cout << "Non Pawns: " << SquareSet(non_pawns).toString() << std::endl;
 
         for (Square from_square : scanReversed(non_pawns)) {
             Bitboard move_targets = _attacksMask(from_square) & ~our_pieces & to_mask;
