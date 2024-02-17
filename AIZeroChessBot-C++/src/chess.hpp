@@ -195,7 +195,7 @@ constexpr std::array<Bitboard, 64> BB_SQUARES = [] {
 }();
 
 // clang-format off
-enum BB_SQUARE {
+enum BB_SQUARE : Bitboard {
     BB_A1 = BB_SQUARES[A1], BB_B1 = BB_SQUARES[B1], BB_C1 = BB_SQUARES[C1], BB_D1 = BB_SQUARES[D1], BB_E1 = BB_SQUARES[E1], BB_F1 = BB_SQUARES[F1], BB_G1 = BB_SQUARES[G1], BB_H1 = BB_SQUARES[H1],
     BB_A2 = BB_SQUARES[A2], BB_B2 = BB_SQUARES[B2], BB_C2 = BB_SQUARES[C2], BB_D2 = BB_SQUARES[D2], BB_E2 = BB_SQUARES[E2], BB_F2 = BB_SQUARES[F2], BB_G2 = BB_SQUARES[G2], BB_H2 = BB_SQUARES[H2],
     BB_A3 = BB_SQUARES[A3], BB_B3 = BB_SQUARES[B3], BB_C3 = BB_SQUARES[C3], BB_D3 = BB_SQUARES[D3], BB_E3 = BB_SQUARES[E3], BB_F3 = BB_SQUARES[F3], BB_G3 = BB_SQUARES[G3], BB_H3 = BB_SQUARES[H3],
@@ -222,7 +222,7 @@ constexpr std::array<Bitboard, 8> BB_FILES = [] {
 }();
 
 // clang-format off
-enum BB_FILE {
+enum BB_FILE : Bitboard {
     BB_FILE_A = BB_FILES[0],
     BB_FILE_B = BB_FILES[1],
     BB_FILE_C = BB_FILES[2],
@@ -237,13 +237,13 @@ enum BB_FILE {
 constexpr std::array<Bitboard, 8> BB_RANKS = [] {
     std::array<Bitboard, 8> ranks;
     for (int i = 0; i < 8; ++i) {
-        ranks[i] = 0xFFULL << (8 * i);
+        ranks[i] = 0xFFull << (8 * i);
     }
     return ranks;
 }();
 
 // clang-format off
-enum BB_RANK {
+enum BB_RANK : Bitboard {
     BB_RANK_1 = BB_RANKS[0],
     BB_RANK_2 = BB_RANKS[1],
     BB_RANK_3 = BB_RANKS[2],
@@ -756,18 +756,18 @@ public:
     int halfmove_clock;
     // The number of half-moves since the last capture or pawn move.
 private:
-    std::array<Bitboard, 2> occupied_co; // Bitboards for white and black pieces
-    Bitboard pawns, knights, bishops, rooks, queens, kings, promoted, occupied;
+    std::array<Bitboard, 2> m_occupied_color; // Bitboards for white and black pieces
+    Bitboard m_pawns, m_knights, m_bishops, m_rooks, m_queens, m_kings, m_promoted, m_occupied;
 
-    std::optional<std::vector<Move>> cachedLegalMoves = std::nullopt;
-    std::optional<std::vector<Move>> cachedPseudoLegalMoves = std::nullopt;
-    std::optional<std::vector<Move>> cachedLegalEPMoves = std::nullopt;
-    std::optional<std::vector<Move>> cachedPseudoLegalEPMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedLegalMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedPseudoLegalMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedLegalEPMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedPseudoLegalEPMoves = std::nullopt;
 
 public:
     Board(bool starting_position = true)
         : ep_square(std::nullopt), fullmove_number(1), halfmove_clock(0), turn(WHITE),
-          castling_rights(BB_CORNERS), promoted(BB_EMPTY) {
+          castling_rights(BB_CORNERS) {
         if (starting_position) {
             resetBoard();
         } else {
@@ -792,53 +792,54 @@ public:
     void resetBoard() {
         // Resets pieces to the starting position.
 
-        pawns = BB_RANK_2 | BB_RANK_7;
-        knights = BB_B1 | BB_G1 | BB_B8 | BB_G8;
-        bishops = BB_C1 | BB_F1 | BB_C8 | BB_F8;
-        rooks = BB_CORNERS;
-        queens = BB_D1 | BB_D8;
-        kings = BB_E1 | BB_E8;
+        m_pawns = BB_RANK_2 | BB_RANK_7;
+        m_knights = BB_B1 | BB_G1 | BB_B8 | BB_G8;
+        m_bishops = BB_C1 | BB_F1 | BB_C8 | BB_F8;
+        m_rooks = BB_CORNERS;
+        m_queens = BB_D1 | BB_D8;
+        m_kings = BB_E1 | BB_E8;
 
-        promoted = BB_EMPTY;
+        m_promoted = BB_EMPTY;
 
-        occupied_co[Color::WHITE] = BB_RANK_1 | BB_RANK_2;
-        occupied_co[Color::BLACK] = BB_RANK_7 | BB_RANK_8;
-        occupied = occupied_co[Color::WHITE] | occupied_co[Color::BLACK];
+        m_occupied_color[Color::WHITE] = BB_RANK_1 | BB_RANK_2;
+        m_occupied_color[Color::BLACK] = BB_RANK_7 | BB_RANK_8;
+        m_occupied = m_occupied_color[Color::WHITE] | m_occupied_color[Color::BLACK];
     }
 
     void clearBoard() {
         // Clears the board to a blank board with no pieces.
 
-        pawns = knights = bishops = rooks = queens = kings = promoted = occupied = BB_EMPTY;
-        occupied_co = {BB_EMPTY, BB_EMPTY};
+        m_pawns = m_knights = m_bishops = m_rooks = m_queens = m_kings = m_promoted = m_occupied =
+            BB_EMPTY;
+        m_occupied_color = {BB_EMPTY, BB_EMPTY};
     }
 
     Bitboard piecesMask(PieceType piece_type, Color color) const {
         Bitboard bb;
         switch (piece_type) {
         case PieceType::PAWN:
-            bb = pawns;
+            bb = m_pawns;
             break;
         case PieceType::KNIGHT:
-            bb = knights;
+            bb = m_knights;
             break;
         case PieceType::BISHOP:
-            bb = bishops;
+            bb = m_bishops;
             break;
         case PieceType::ROOK:
-            bb = rooks;
+            bb = m_rooks;
             break;
         case PieceType::QUEEN:
-            bb = queens;
+            bb = m_queens;
             break;
         case PieceType::KING:
-            bb = kings;
+            bb = m_kings;
             break;
         default:
             assert(false && "Unknown piece type");
             return BB_EMPTY;
         }
-        return bb & occupied_co[color];
+        return bb & m_occupied_color[color];
     }
 
     SquareSet pieces(PieceType piece_type, Color color) const {
@@ -855,7 +856,7 @@ public:
         auto piece_type = pieceTypeAt(square);
         if (piece_type.has_value()) {
             Bitboard mask = BB_SQUARES[square];
-            Color color = (occupied_co[WHITE] & mask) ? WHITE : BLACK;
+            Color color = (m_occupied_color[WHITE] & mask) ? WHITE : BLACK;
             return Piece(piece_type.value(), color);
         }
         return std::nullopt;
@@ -866,17 +867,17 @@ public:
 
         Bitboard mask = BB_SQUARES[square];
 
-        if (!(occupied & mask)) {
+        if (!(m_occupied & mask)) {
             return std::nullopt;
-        } else if (pawns & mask) {
+        } else if (m_pawns & mask) {
             return PieceType::PAWN;
-        } else if (knights & mask) {
+        } else if (m_knights & mask) {
             return PieceType::KNIGHT;
-        } else if (bishops & mask) {
+        } else if (m_bishops & mask) {
             return PieceType::BISHOP;
-        } else if (rooks & mask) {
+        } else if (m_rooks & mask) {
             return PieceType::ROOK;
-        } else if (queens & mask) {
+        } else if (m_queens & mask) {
             return PieceType::QUEEN;
         } else {
             return PieceType::KING;
@@ -887,9 +888,9 @@ public:
         // Gets the color of the piece at the given square.
 
         Bitboard mask = BB_SQUARES[square];
-        if (occupied_co[WHITE] & mask) {
+        if (m_occupied_color[WHITE] & mask) {
             return WHITE;
-        } else if (occupied_co[BLACK] & mask) {
+        } else if (m_occupied_color[BLACK] & mask) {
             return BLACK;
         } else {
             return std::nullopt;
@@ -903,7 +904,7 @@ public:
         // In variants with king promotions, only non-promoted kings are
         // considered.
 
-        Bitboard king_bb = kings & occupied_co[color] & ~promoted;
+        Bitboard king_bb = m_kings & m_occupied_color[color] & ~m_promoted;
         if (king_bb) {
             return (Square) msb(king_bb);
         }
@@ -973,7 +974,7 @@ public:
     }
 
     std::optional<Piece> removePieceAt(Square square) {
-        auto color = (occupied_co[WHITE] & BB_SQUARES[square]) ? WHITE : BLACK;
+        auto color = (m_occupied_color[WHITE] & BB_SQUARES[square]) ? WHITE : BLACK;
         auto piece_type = _removePieceAt(square);
         return piece_type.has_value() ? std::optional<Piece>(Piece(piece_type.value(), color))
                                       : std::nullopt;
@@ -1022,7 +1023,7 @@ public:
         std::unordered_map<Square, Piece> result;
         for (Square square : SQUARES) {
             Bitboard squareBitboard = 1ULL << square;
-            if (occupied & mask & squareBitboard) {
+            if (m_occupied & mask & squareBitboard) {
                 auto piece = pieceAt(square);
                 if (piece) {
                     result[square] = piece.value();
@@ -1120,7 +1121,7 @@ public:
         Bitboard from_mask = BB_SQUARES[move.fromSquare()];
         Bitboard to_mask = BB_SQUARES[move.toSquare()];
 
-        if (!(occupied_co[turn] & from_mask))
+        if (!(m_occupied_color[turn] & from_mask))
             return false; // Check turn
 
         if (move.promotion()) {
@@ -1138,7 +1139,7 @@ public:
                    castlingMoves.end();
         }
 
-        if (occupied_co[turn] & to_mask)
+        if (m_occupied_color[turn] & to_mask)
             return false; // Destination square cannot be occupied by our piece
 
         if (piece == PieceType::PAWN) {
@@ -1204,19 +1205,19 @@ public:
     }
 
     bool hasInsufficientMaterial(Color color) const {
-        Bitboard our_pieces = occupied_co[color];
-        if (our_pieces & (pawns | rooks | queens))
+        Bitboard our_pieces = m_occupied_color[color];
+        if (our_pieces & (m_pawns | m_rooks | m_queens))
             return false;
 
         // Knights or bishops only
-        if (our_pieces & knights) {
-            return popcount(our_pieces) <= 2 && !(occupied_co[!color] & ~(kings | queens));
+        if (our_pieces & m_knights) {
+            return popcount(our_pieces) <= 2 && !(m_occupied_color[!color] & ~(m_kings | m_queens));
         }
 
-        if (our_pieces & bishops) {
+        if (our_pieces & m_bishops) {
             bool same_color_bishops =
-                !((bishops & BB_DARK_SQUARES) && (bishops & BB_LIGHT_SQUARES));
-            return same_color_bishops && !pawns && !knights;
+                !((m_bishops & BB_DARK_SQUARES) && (m_bishops & BB_LIGHT_SQUARES));
+            return same_color_bishops && !m_pawns && !m_knights;
         }
 
         return true;
@@ -1227,10 +1228,10 @@ public:
     bool isFiftyMoves() { return _isHalfMoves(100); }
 
     void resetStoredMoves() {
-        cachedLegalMoves = std::nullopt;
-        cachedPseudoLegalMoves = std::nullopt;
-        cachedLegalEPMoves = std::nullopt;
-        cachedPseudoLegalEPMoves = std::nullopt;
+        m_cachedLegalMoves = std::nullopt;
+        m_cachedPseudoLegalMoves = std::nullopt;
+        m_cachedLegalEPMoves = std::nullopt;
+        m_cachedPseudoLegalEPMoves = std::nullopt;
     }
 
     void push(const Move &move) {
@@ -1262,7 +1263,7 @@ public:
         Bitboard fromBB = BB_SQUARES[move.fromSquare()];
         Bitboard toBB = BB_SQUARES[move.toSquare()];
 
-        bool promoted = (this->promoted & fromBB) != 0;
+        bool promoted = (this->m_promoted & fromBB) != 0;
         auto piece = removePieceAt(move.fromSquare());
         assert(piece.has_value()); // Move must be at least pseudo-legal
         auto pieceType = piece.value().pieceType();
@@ -1278,7 +1279,7 @@ public:
             } else {
                 castling_rights &= ~BB_RANK_8;
             }
-        } else if (capturedPieceType == PieceType::KING && !(this->promoted & toBB)) {
+        } else if (capturedPieceType == PieceType::KING && !(this->m_promoted & toBB)) {
             if (turn == WHITE && squareRank(captureSquare) == 7) {
                 castling_rights &= ~BB_RANK_8;
             } else if (turn == BLACK && squareRank(captureSquare) == 0) {
@@ -1310,7 +1311,7 @@ public:
         }
 
         // Handle castling moves
-        if (pieceType == PieceType::KING && occupied_co[turn] & toBB) {
+        if (pieceType == PieceType::KING && m_occupied_color[turn] & toBB) {
             // Is a castling move
 
             bool aSide = squareFile(move.toSquare()) < squareFile(move.fromSquare());
@@ -1352,18 +1353,18 @@ public:
     bool isEnPassant(const Move &move) const {
         int distance = std::abs(move.toSquare() - move.fromSquare());
         return ep_square.has_value() && move.toSquare() == ep_square.value() &&
-               (pawns & BB_SQUARES[move.fromSquare()]) && (distance == 7 || distance == 9) &&
-               !(occupied & BB_SQUARES[move.toSquare()]);
+               (m_pawns & BB_SQUARES[move.fromSquare()]) && (distance == 7 || distance == 9) &&
+               !(m_occupied & BB_SQUARES[move.toSquare()]);
     }
 
     bool isCapture(const Move &move) const {
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
-        return (touched & occupied_co[!turn]) || isEnPassant(move);
+        return (touched & m_occupied_color[!turn]) || isEnPassant(move);
     }
 
     bool isZeroing(const Move &move) const {
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
-        return (touched & pawns) || (touched & occupied_co[!turn]) ||
+        return (touched & m_pawns) || (touched & m_occupied_color[!turn]) ||
                (move.promotion().has_value() && move.promotion() == PieceType::PAWN);
     }
 
@@ -1371,14 +1372,15 @@ public:
         Bitboard cr = _cleanCastlingRights();
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
         return (touched & cr) ||
-               (cr & BB_RANK_1 && touched & kings & occupied_co[WHITE] & ~promoted) ||
-               (cr & BB_RANK_8 && touched & kings & occupied_co[BLACK] & ~promoted);
+               (cr & BB_RANK_1 && touched & m_kings & m_occupied_color[WHITE] & ~m_promoted) ||
+               (cr & BB_RANK_8 && touched & m_kings & m_occupied_color[BLACK] & ~m_promoted);
     }
 
     bool isCastling(const Move &move) const {
-        if (kings & BB_SQUARES[move.fromSquare()]) {
+        if (m_kings & BB_SQUARES[move.fromSquare()]) {
             int diff = squareFile(move.fromSquare()) - squareFile(move.toSquare());
-            return std::abs(diff) > 1 || (rooks & occupied_co[turn] & BB_SQUARES[move.toSquare()]);
+            return std::abs(diff) > 1 ||
+                   (m_rooks & m_occupied_color[turn] & BB_SQUARES[move.toSquare()]);
         }
         return false;
     }
@@ -1398,7 +1400,7 @@ public:
 
     bool hasKingsideCastlingRights(Color color) const {
         Bitboard back_rank = (color == WHITE) ? BB_RANK_1 : BB_RANK_8;
-        Bitboard kingMask = kings & occupied_co[color] & back_rank & ~promoted;
+        Bitboard kingMask = m_kings & m_occupied_color[color] & back_rank & ~m_promoted;
         if (kingMask == BB_EMPTY) {
             return false;
         }
@@ -1422,7 +1424,7 @@ public:
 
     bool hasQueensideCastlingRights(Color color) const {
         Bitboard back_rank = (color == WHITE) ? BB_RANK_1 : BB_RANK_8;
-        Bitboard kingMask = kings & occupied_co[color] & back_rank & ~promoted;
+        Bitboard kingMask = m_kings & m_occupied_color[color] & back_rank & ~m_promoted;
         if (kingMask == BB_EMPTY) {
             return false;
         }
@@ -1447,37 +1449,37 @@ public:
     Status status() const {
         Status errors = Status::VALID;
 
-        if (!occupied) {
+        if (!m_occupied) {
             errors |= Status::EMPTY;
         }
 
         // Kings
-        if (!(occupied_co[WHITE] & kings)) {
+        if (!(m_occupied_color[WHITE] & m_kings)) {
             errors |= Status::NO_WHITE_KING;
         }
-        if (!(occupied_co[BLACK] & kings)) {
+        if (!(m_occupied_color[BLACK] & m_kings)) {
             errors |= Status::NO_BLACK_KING;
         }
-        if (popcount(occupied & kings) > 2) {
+        if (popcount(m_occupied & m_kings) > 2) {
             errors |= Status::TOO_MANY_KINGS;
         }
 
         // Piece counts
-        if (popcount(occupied_co[WHITE]) > 16) {
+        if (popcount(m_occupied_color[WHITE]) > 16) {
             errors |= Status::TOO_MANY_WHITE_PIECES;
         }
-        if (popcount(occupied_co[BLACK]) > 16) {
+        if (popcount(m_occupied_color[BLACK]) > 16) {
             errors |= Status::TOO_MANY_BLACK_PIECES;
         }
 
         // Pawn counts and positions
-        if (popcount(occupied_co[WHITE] & pawns) > 8) {
+        if (popcount(m_occupied_color[WHITE] & m_pawns) > 8) {
             errors |= Status::TOO_MANY_WHITE_PAWNS;
         }
-        if (popcount(occupied_co[BLACK] & pawns) > 8) {
+        if (popcount(m_occupied_color[BLACK] & m_pawns) > 8) {
             errors |= Status::TOO_MANY_BLACK_PAWNS;
         }
-        if (pawns & BB_BACK_RANKS) {
+        if (m_pawns & BB_BACK_RANKS) {
             errors |= Status::PAWNS_ON_BACK_RANK;
         }
 
@@ -1503,12 +1505,12 @@ public:
         }
 
         // Impossible check
-        Bitboard our_kings = kings & occupied_co[turn] & ~promoted;
+        Bitboard our_kings = m_kings & m_occupied_color[turn] & ~m_promoted;
         if (checkers && valid_ep_square != std::nullopt) {
             Bitboard pushed_to = valid_ep_square.value() ^ (turn == WHITE ? A2 : A7);
             Bitboard pushed_from = valid_ep_square.value() ^ (turn == WHITE ? A4 : A5);
             Bitboard occupied_before =
-                (occupied & ~BB_SQUARES[pushed_to]) | BB_SQUARES[pushed_from];
+                (m_occupied & ~BB_SQUARES[pushed_to]) | BB_SQUARES[pushed_from];
             if (popcount(checkers) > 1 ||
                 (msb(checkers) != pushed_to && _attackedForKing(our_kings, occupied_before))) {
                 errors |= Status::IMPOSSIBLE_CHECK;
@@ -1535,11 +1537,11 @@ public:
 
         if (squareRank(ep_square.value()) != ep_rank)
             return std::nullopt;
-        if (!(pawns & occupied_co[!turn] & pawn_mask))
+        if (!(m_pawns & m_occupied_color[!turn] & pawn_mask))
             return std::nullopt;
-        if (occupied & BB_SQUARES[ep_square.value()])
+        if (m_occupied & BB_SQUARES[ep_square.value()])
             return std::nullopt;
-        if (occupied & seventh_rank_mask)
+        if (m_occupied & seventh_rank_mask)
             return std::nullopt;
 
         return ep_square;
@@ -1551,15 +1553,15 @@ public:
         assert(ep_square.has_value());
 
         Square last_double = ep_square.value() + ((turn == WHITE) ? -8 : 8);
-        Bitboard occupancy = occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer] |
+        Bitboard occupancy = m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer] |
                              BB_SQUARES[ep_square.value()];
 
-        Bitboard horizontal_attackers = occupied_co[!turn] & (rooks | queens);
+        Bitboard horizontal_attackers = m_occupied_color[!turn] & (m_rooks | m_queens);
         if (BB_RANK_ATTACKS[king][BB_RANK_MASKS[king] & occupancy] & horizontal_attackers) {
             return true;
         }
 
-        Bitboard diagonal_attackers = occupied_co[!turn] & (bishops | queens);
+        Bitboard diagonal_attackers = m_occupied_color[!turn] & (m_bishops | m_queens);
         if (BB_DIAG_ATTACKS[king][BB_DIAG_MASKS[king] & occupancy] & diagonal_attackers) {
             return true;
         }
@@ -1568,23 +1570,23 @@ public:
     }
 
     Bitboard sliderBlockers(Square king) const {
-        Bitboard rooks_and_queens = rooks | queens;
-        Bitboard bishops_and_queens = bishops | queens;
+        Bitboard rooks_and_queens = m_rooks | m_queens;
+        Bitboard bishops_and_queens = m_bishops | m_queens;
 
         Bitboard snipers = ((BB_RANK_ATTACKS[king][0] & rooks_and_queens) |
                             (BB_FILE_ATTACKS[king][0] & rooks_and_queens) |
                             (BB_DIAG_ATTACKS[king][0] & bishops_and_queens)) &
-                           occupied_co[!turn];
+                           m_occupied_color[!turn];
 
         Bitboard blockers = BB_EMPTY;
         for (Square sniper : scanReversed(snipers)) {
-            Bitboard b = between(king, sniper) & occupied;
+            Bitboard b = between(king, sniper) & m_occupied;
             if (b && popcount(b) == 1) {
                 blockers |= b;
             }
         }
 
-        return blockers & occupied_co[turn];
+        return blockers & m_occupied_color[turn];
     }
 
     bool isSafe(Square king, Bitboard blockers, const Move &move) const {
@@ -1605,10 +1607,11 @@ public:
 
     bool operator==(Board &other) {
         return halfmove_clock == other.halfmove_clock && fullmove_number == other.fullmove_number &&
-               pawns == other.pawns && knights == other.knights && bishops == other.bishops &&
-               rooks == other.rooks && queens == other.queens && kings == other.kings &&
-               occupied == other.occupied && occupied_co == other.occupied_co &&
-               promoted == other.promoted && _transpositionKey() == other._transpositionKey();
+               m_pawns == other.m_pawns && m_knights == other.m_knights &&
+               m_bishops == other.m_bishops && m_rooks == other.m_rooks &&
+               m_queens == other.m_queens && m_kings == other.m_kings &&
+               m_occupied == other.m_occupied && m_occupied_color == other.m_occupied_color &&
+               m_promoted == other.m_promoted && _transpositionKey() == other._transpositionKey();
     }
 
     Board copy() const {
@@ -1621,15 +1624,15 @@ public:
         board.fullmove_number = fullmove_number;
         board.turn = turn;
 
-        board.pawns = pawns;
-        board.knights = knights;
-        board.bishops = bishops;
-        board.rooks = rooks;
-        board.queens = queens;
-        board.kings = kings;
-        board.occupied = occupied;
-        board.occupied_co = occupied_co;
-        board.promoted = promoted;
+        board.m_pawns = m_pawns;
+        board.m_knights = m_knights;
+        board.m_bishops = m_bishops;
+        board.m_rooks = m_rooks;
+        board.m_queens = m_queens;
+        board.m_kings = m_kings;
+        board.m_occupied = m_occupied;
+        board.m_occupied_color = m_occupied_color;
+        board.m_promoted = m_promoted;
 
         return board;
     }
@@ -1638,44 +1641,44 @@ private:
     Bitboard _attacksMask(Square square) const {
         Bitboard bb_square = BB_SQUARES[square];
 
-        if (pawns & bb_square) {
-            Color color = (occupied_co[WHITE] & bb_square) ? WHITE : BLACK;
+        if (m_pawns & bb_square) {
+            Color color = (m_occupied_color[WHITE] & bb_square) ? WHITE : BLACK;
             return BB_PAWN_ATTACKS[color][square];
         }
-        if (knights & bb_square) {
+        if (m_knights & bb_square) {
             return BB_KNIGHT_ATTACKS[square];
         }
-        if (kings & bb_square) {
+        if (m_kings & bb_square) {
             return BB_KING_ATTACKS[square];
         }
 
         Bitboard attacks = 0;
-        if (bishops & bb_square || queens & bb_square) {
-            attacks = BB_DIAG_ATTACKS[square][BB_DIAG_MASKS[square] & occupied];
+        if (m_bishops & bb_square || m_queens & bb_square) {
+            attacks = BB_DIAG_ATTACKS[square][BB_DIAG_MASKS[square] & m_occupied];
         }
-        if (rooks & bb_square || queens & bb_square) {
-            attacks |= (BB_RANK_ATTACKS[square][BB_RANK_MASKS[square] & occupied] |
-                        BB_FILE_ATTACKS[square][BB_FILE_MASKS[square] & occupied]);
+        if (m_rooks & bb_square || m_queens & bb_square) {
+            attacks |= (BB_RANK_ATTACKS[square][BB_RANK_MASKS[square] & m_occupied] |
+                        BB_FILE_ATTACKS[square][BB_FILE_MASKS[square] & m_occupied]);
         }
         return attacks;
     }
 
     Bitboard _attackersMask(Color color, Square square) const {
-        Bitboard rank_pieces = BB_RANK_MASKS[square] & occupied;
-        Bitboard file_pieces = BB_FILE_MASKS[square] & occupied;
-        Bitboard diag_pieces = BB_DIAG_MASKS[square] & occupied;
+        Bitboard rank_pieces = BB_RANK_MASKS[square] & m_occupied;
+        Bitboard file_pieces = BB_FILE_MASKS[square] & m_occupied;
+        Bitboard diag_pieces = BB_DIAG_MASKS[square] & m_occupied;
 
-        Bitboard queens_and_rooks = queens | rooks;
-        Bitboard queens_and_bishops = queens | bishops;
+        Bitboard queens_and_rooks = m_queens | m_rooks;
+        Bitboard queens_and_bishops = m_queens | m_bishops;
 
         Bitboard attackers =
-            ((BB_KING_ATTACKS[square] & kings) | (BB_KNIGHT_ATTACKS[square] & knights) |
+            ((BB_KING_ATTACKS[square] & m_kings) | (BB_KNIGHT_ATTACKS[square] & m_knights) |
              (BB_RANK_ATTACKS[square][rank_pieces] & queens_and_rooks) |
              (BB_FILE_ATTACKS[square][file_pieces] & queens_and_rooks) |
              (BB_DIAG_ATTACKS[square][diag_pieces] & queens_and_bishops) |
-             (BB_PAWN_ATTACKS[!color][square] & pawns));
+             (BB_PAWN_ATTACKS[!color][square] & m_pawns));
 
-        return attackers & occupied_co[color];
+        return attackers & m_occupied_color[color];
     }
 
     Bitboard _pinMask(Color color, Square square) const {
@@ -1688,16 +1691,16 @@ private:
         Bitboard pinMask = BB_ALL;
 
         std::array<std::pair<std::array<std::unordered_map<Bitboard, Bitboard>, 64> &, Bitboard>, 3>
-            attacks_and_sliders = {{{BB_FILE_ATTACKS, rooks | queens},
-                                    {BB_RANK_ATTACKS, rooks | queens},
-                                    {BB_DIAG_ATTACKS, bishops | queens}}};
+            attacks_and_sliders = {{{BB_FILE_ATTACKS, m_rooks | m_queens},
+                                    {BB_RANK_ATTACKS, m_rooks | m_queens},
+                                    {BB_DIAG_ATTACKS, m_bishops | m_queens}}};
 
         for (auto &[attacks, sliders] : attacks_and_sliders) {
             Bitboard rays = attacks[king.value()][0];
             if (rays & square_mask) {
-                Bitboard snipers = rays & sliders & occupied_co[!color];
+                Bitboard snipers = rays & sliders & m_occupied_color[!color];
                 for (auto sniper : scanReversed(snipers)) {
-                    if (between(sniper, king.value()) & (occupied | square_mask) == square_mask) {
+                    if (between(sniper, king.value()) & (m_occupied | square_mask) == square_mask) {
                         pinMask = ray(king.value(), sniper);
                         break;
                     }
@@ -1715,31 +1718,31 @@ private:
         if (piece_type.has_value()) {
             switch (piece_type.value()) {
             case PieceType::PAWN:
-                pawns ^= mask;
+                m_pawns ^= mask;
                 break;
             case PieceType::KNIGHT:
-                knights ^= mask;
+                m_knights ^= mask;
                 break;
             case PieceType::BISHOP:
-                bishops ^= mask;
+                m_bishops ^= mask;
                 break;
             case PieceType::ROOK:
-                rooks ^= mask;
+                m_rooks ^= mask;
                 break;
             case PieceType::QUEEN:
-                queens ^= mask;
+                m_queens ^= mask;
                 break;
             case PieceType::KING:
-                kings ^= mask;
+                m_kings ^= mask;
                 break;
             default:
                 return std::nullopt;
             }
 
-            occupied ^= mask;
-            occupied_co[WHITE] &= ~mask;
-            occupied_co[BLACK] &= ~mask;
-            promoted &= ~mask;
+            m_occupied ^= mask;
+            m_occupied_color[WHITE] &= ~mask;
+            m_occupied_color[BLACK] &= ~mask;
+            m_promoted &= ~mask;
         }
 
         return piece_type;
@@ -1752,44 +1755,46 @@ private:
 
         switch (piece_type) {
         case PieceType::PAWN:
-            pawns |= mask;
+            m_pawns |= mask;
             break;
         case PieceType::KNIGHT:
-            knights |= mask;
+            m_knights |= mask;
             break;
         case PieceType::BISHOP:
-            bishops |= mask;
+            m_bishops |= mask;
             break;
         case PieceType::ROOK:
-            rooks |= mask;
+            m_rooks |= mask;
             break;
         case PieceType::QUEEN:
-            queens |= mask;
+            m_queens |= mask;
             break;
         case PieceType::KING:
-            kings |= mask;
+            m_kings |= mask;
             break;
         }
 
-        occupied |= mask;
-        occupied_co[color] |= mask;
+        m_occupied |= mask;
+        m_occupied_color[color] |= mask;
 
         if (promoted) {
-            this->promoted |= mask;
+            this->m_promoted |= mask;
         }
     }
 
     std::vector<Move> _generatePseudoLegalMoves(Bitboard from_mask = BB_ALL,
                                                 Bitboard to_mask = BB_ALL) {
-        if (cachedPseudoLegalMoves.has_value()) {
-            return cachedPseudoLegalMoves.value();
+        if (m_cachedPseudoLegalMoves.has_value()) {
+            return m_cachedPseudoLegalMoves.value();
         }
 
         std::vector<Move> moves;
-        Bitboard our_pieces = occupied_co[turn];
+        Bitboard our_pieces = m_occupied_color[turn];
 
         // Generate piece moves for non-pawn pieces
-        Bitboard non_pawns = our_pieces & ~pawns & from_mask;
+        Bitboard non_pawns = our_pieces & ~m_pawns & from_mask;
+        std::cout << "Non Pawns: " << SquareSet(non_pawns).toString() << std::endl;
+
         for (Square from_square : scanReversed(non_pawns)) {
             Bitboard move_targets = _attacksMask(from_square) & ~our_pieces & to_mask;
             for (int to_square : scanReversed(move_targets)) {
@@ -1798,17 +1803,17 @@ private:
         }
 
         // Generate castling moves
-
-        if (from_mask & kings) {
+        if (from_mask & m_kings) {
             auto castlingMoves = _generateCastlingMoves(from_mask, to_mask);
             moves.insert(moves.end(), castlingMoves.begin(), castlingMoves.end());
         }
 
         // Generate pawn moves
-        Bitboard pawns = this->pawns & occupied_co[turn] & from_mask;
+        Bitboard pawns = this->m_pawns & m_occupied_color[turn] & from_mask;
         // Generate pawn captures
         for (int from_square : scanReversed(pawns)) {
-            Bitboard targets = BB_PAWN_ATTACKS[turn][from_square] & occupied_co[!turn] & to_mask;
+            Bitboard targets =
+                BB_PAWN_ATTACKS[turn][from_square] & m_occupied_color[!turn] & to_mask;
             for (Square to_square : scanReversed(targets)) {
                 if (squareRank(to_square) == 0 || squareRank(to_square) == 7) { // Handle promotions
                     moves.push_back(Move(from_square, to_square, PieceType::QUEEN));
@@ -1824,11 +1829,11 @@ private:
         // Generate single and double pawn advances
         Bitboard single_moves, double_moves;
         if (turn == WHITE) {
-            single_moves = shiftUp(pawns) & ~occupied;
-            double_moves = shiftUp(single_moves) & ~occupied & (BB_RANK_3 | BB_RANK_4);
+            single_moves = shiftUp(pawns) & ~m_occupied;
+            double_moves = shiftUp(single_moves) & ~m_occupied & (BB_RANK_3 | BB_RANK_4);
         } else {
-            single_moves = shiftDown(pawns) & ~occupied;
-            double_moves = shiftDown(single_moves) & ~occupied & (BB_RANK_6 | BB_RANK_5);
+            single_moves = shiftDown(pawns) & ~m_occupied;
+            double_moves = shiftDown(single_moves) & ~m_occupied & (BB_RANK_6 | BB_RANK_5);
         }
 
         single_moves &= to_mask;
@@ -1857,29 +1862,32 @@ private:
             moves.insert(moves.end(), epMoves.begin(), epMoves.end());
         }
 
-        this->cachedPseudoLegalMoves = moves;
+        if (moves.empty())
+            std::cout << "No moves found" << std::endl;
+
+        this->m_cachedPseudoLegalMoves = moves;
         return moves;
     }
 
     std::vector<Move> _generatePseudoLegalEP(Bitboard from_mask = BB_ALL,
                                              Bitboard to_mask = BB_ALL) {
-        if (cachedPseudoLegalEPMoves.has_value()) {
-            return cachedPseudoLegalEPMoves.value();
+        if (m_cachedPseudoLegalEPMoves.has_value()) {
+            return m_cachedPseudoLegalEPMoves.value();
         }
 
         std::vector<Move> moves;
         if (!ep_square.has_value() || !(BB_SQUARES[ep_square.value()] & to_mask) ||
-            (BB_SQUARES[ep_square.value()] & occupied)) {
+            (BB_SQUARES[ep_square.value()] & m_occupied)) {
             return moves;
         }
 
-        Bitboard capturers = pawns & occupied_co[turn] & from_mask &
+        Bitboard capturers = m_pawns & m_occupied_color[turn] & from_mask &
                              BB_PAWN_ATTACKS[!turn][ep_square.value()] & BB_RANKS[turn ? 4 : 3];
         for (int capturer : scanReversed(capturers)) {
             moves.emplace_back(capturer, ep_square.value());
         }
 
-        this->cachedPseudoLegalEPMoves = moves;
+        this->m_cachedPseudoLegalEPMoves = moves;
         return moves;
     }
 
@@ -1898,16 +1906,16 @@ private:
     }
 
     Bitboard _cleanCastlingRights() const {
-        Bitboard castling = castling_rights & rooks;
-        Bitboard white_castling = castling & BB_RANK_1 & occupied_co[WHITE];
-        Bitboard black_castling = castling & BB_RANK_8 & occupied_co[BLACK];
+        Bitboard castling = castling_rights & m_rooks;
+        Bitboard white_castling = castling & BB_RANK_1 & m_occupied_color[WHITE];
+        Bitboard black_castling = castling & BB_RANK_8 & m_occupied_color[BLACK];
 
         white_castling &= BB_A1 | BB_H1;
         black_castling &= BB_A8 | BB_H8;
 
-        if (!(occupied_co[WHITE] & kings & ~promoted & BB_E1))
+        if (!(m_occupied_color[WHITE] & m_kings & ~m_promoted & BB_E1))
             white_castling = BB_EMPTY;
-        if (!(occupied_co[BLACK] & kings & ~promoted & BB_E8))
+        if (!(m_occupied_color[BLACK] & m_kings & ~m_promoted & BB_E8))
             black_castling = BB_EMPTY;
 
         return white_castling | black_castling;
@@ -1917,7 +1925,7 @@ private:
 
     Move _findMove(int from_square, int to_square,
                    std::optional<PieceType> promotion = std::nullopt) {
-        if (!promotion.has_value() && (pawns & BB_SQUARES[from_square]) &&
+        if (!promotion.has_value() && (m_pawns & BB_SQUARES[from_square]) &&
             (BB_SQUARES[to_square] & BB_BACK_RANKS)) {
             promotion = PieceType::QUEEN;
         }
@@ -1933,7 +1941,7 @@ private:
     std::vector<Move> _generateEvasions(Square king, Bitboard checkers, Bitboard from_mask = BB_ALL,
                                         Bitboard to_mask = BB_ALL) {
         std::vector<Move> evasions;
-        Bitboard sliders = checkers & (bishops | rooks | queens);
+        Bitboard sliders = checkers & (m_bishops | m_rooks | m_queens);
 
         Bitboard attacked = 0;
         for (int checker : scanReversed(sliders)) {
@@ -1941,8 +1949,8 @@ private:
         }
 
         if (BB_SQUARES[king] & from_mask) {
-            for (int to_square :
-                 scanReversed(BB_KING_ATTACKS[king] & ~occupied_co[turn] & ~attacked & to_mask)) {
+            for (int to_square : scanReversed(BB_KING_ATTACKS[king] & ~m_occupied_color[turn] &
+                                              ~attacked & to_mask)) {
                 evasions.emplace_back(king, to_square);
             }
         }
@@ -1951,7 +1959,7 @@ private:
         if (BB_SQUARES[checker] == checkers) {
             // Capture or block a single checker.
             Bitboard target = between(king, checker) | checkers;
-            auto directEvasions = _generatePseudoLegalMoves(~kings & from_mask, target & to_mask);
+            auto directEvasions = _generatePseudoLegalMoves(~m_kings & from_mask, target & to_mask);
             evasions.insert(evasions.end(), directEvasions.begin(), directEvasions.end());
 
             // Capture the checking pawn en passant (avoiding duplicates).
@@ -1968,12 +1976,12 @@ private:
     }
 
     std::vector<Move> _generateLegalMoves(Bitboard from_mask = BB_ALL, Bitboard to_mask = BB_ALL) {
-        if (cachedLegalMoves.has_value()) {
-            return cachedLegalMoves.value();
+        if (m_cachedLegalMoves.has_value()) {
+            return m_cachedLegalMoves.value();
         }
 
         std::vector<Move> legalMoves;
-        Bitboard king_mask = kings & occupied_co[turn];
+        Bitboard king_mask = m_kings & m_occupied_color[turn];
         if (king_mask) {
             Square king = (Square) msb(king_mask);
             Bitboard blockers = sliderBlockers(king);
@@ -1999,13 +2007,13 @@ private:
                       std::back_inserter(legalMoves));
         }
 
-        this->cachedLegalMoves = legalMoves;
+        this->m_cachedLegalMoves = legalMoves;
         return legalMoves;
     }
 
     std::vector<Move> _generateLegalEP(Bitboard from_mask = BB_ALL, Bitboard to_mask = BB_ALL) {
-        if (cachedLegalEPMoves.has_value()) {
-            return cachedLegalEPMoves.value();
+        if (m_cachedLegalEPMoves.has_value()) {
+            return m_cachedLegalEPMoves.value();
         }
 
         std::vector<Move> legalEP;
@@ -2016,7 +2024,7 @@ private:
             }
         }
 
-        this->cachedLegalEPMoves = legalEP;
+        this->m_cachedLegalEPMoves = legalEP;
         return legalEP;
     }
 
@@ -2035,7 +2043,7 @@ private:
         std::vector<Move> moves;
 
         Bitboard back_rank = (turn == WHITE) ? BB_RANK_1 : BB_RANK_8;
-        Bitboard king = occupied_co[turn] & kings & ~promoted & back_rank & from_mask;
+        Bitboard king = m_occupied_color[turn] & m_kings & ~m_promoted & back_rank & from_mask;
         if (!king) {
             return moves;
         }
@@ -2057,9 +2065,9 @@ private:
             Bitboard king_path = between(msb(king), msb(king_to));
             Bitboard rook_path = between(candidate, msb(rook_to));
 
-            if (!((occupied ^ king ^ rook) & (king_path | rook_path | king_to | rook_to)) &&
-                !_attackedForKing(king_path | king, occupied ^ king) &&
-                !_attackedForKing(king_to, occupied ^ king ^ rook ^ rook_to)) {
+            if (!((m_occupied ^ king ^ rook) & (king_path | rook_path | king_to | rook_to)) &&
+                !_attackedForKing(king_path | king, m_occupied ^ king) &&
+                !_attackedForKing(king_to, m_occupied ^ king ^ rook ^ rook_to)) {
                 moves.emplace_back(candidate, msb(king_to));
             }
             clean_rights &= clean_rights - 1; // Clear the scanned bit
@@ -2071,14 +2079,14 @@ private:
                                         Bitboard, Bitboard, Color, Bitboard, std::optional<Square>>;
 
     TranspositionKey _transpositionKey() {
-        return {pawns,
-                knights,
-                bishops,
-                rooks,
-                queens,
-                kings,
-                occupied_co[WHITE],
-                occupied_co[BLACK],
+        return {m_pawns,
+                m_knights,
+                m_bishops,
+                m_rooks,
+                m_queens,
+                m_kings,
+                m_occupied_color[WHITE],
+                m_occupied_color[BLACK],
                 turn,
                 _cleanCastlingRights(),
                 hasLegalEnPassant() ? ep_square : std::optional<Square>{}};
