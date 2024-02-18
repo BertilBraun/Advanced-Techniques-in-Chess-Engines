@@ -12,11 +12,12 @@
 #SBATCH --error=setup_%j.txt
 
 
-module load devel/cuda/12.0
+module load devel/cuda/11.8
+source ~/miniconda3/bin/activate chess
 
 
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cu121/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcu121.zip"
+LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcu118.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
@@ -35,7 +36,7 @@ mkdir -p build
 cd build
 
 # Find out where Conda installed CUDA
-CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/base
+CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/chess
 
 # Configure the project with CMake
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DCUDA_TOOLKIT_ROOT_DIR=$CONDA_CUDA_TOOLKIT_DIR -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
