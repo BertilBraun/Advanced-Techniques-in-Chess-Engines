@@ -12,6 +12,9 @@
 #SBATCH --error=setup_%j.txt
 
 
+module load devel/cuda/11.8
+
+
 # Set LibTorch download URL
 LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-shared-with-deps-2.2.0%2Bcu118.zip"
 LIBTORCH_ZIP="libtorch.zip"
