@@ -131,10 +131,13 @@ class AlphaZero:
     def _load_latest_model(self) -> None:
         """Load the latest model and optimizer from the last_training_config.pt file if it exists, otherwise start from scratch."""
         try:
-            last_training_config = torch.load('last_training_config.pt')
+            with open('last_training_config.pt', 'r') as f:
+                last_training_config = {line.split('=')[0]: line.split('=')[1] for line in f.readlines()}
+
             self.model.load_state_dict(torch.load(last_training_config['model']))
             self.optimizer.load_state_dict(torch.load(last_training_config['optimizer']))
-            self.starting_iteration = last_training_config['iteration']
+            self.starting_iteration = int(last_training_config['iteration'])
+
             print(f'Model and optimizer loaded from iteration {self.starting_iteration}')
         except FileNotFoundError:
             print('No model and optimizer found, starting from scratch')
@@ -149,14 +152,11 @@ class AlphaZero:
 
         torch.save(self.model.state_dict(), model_path)
         torch.save(self.optimizer.state_dict(), optimizer_path)
-        torch.save(
-            {
-                'model': model_path,
-                'optimizer': optimizer_path,
-                'iteration': iteration,
-            },
-            last_training_config_path,
-        )
+        with open(last_training_config_path, 'w') as f:
+            f.write(f'model={model_path}\n')
+            f.write(f'optimizer={optimizer_path}\n')
+            f.write(f'iteration={iteration}\n')
+
         print(f'Model and optimizer saved at iteration {iteration}')
 
         return model_path, optimizer_path, last_training_config_path
@@ -178,16 +178,16 @@ class AlphaZero:
 
     def barrier(self, name: str) -> None:
         log_file = self.communication_dir / f'{self.my_id}{"_" + name if name else ""}.txt'
+        open(log_file, 'w').close()
 
         print(f'Node {self.my_id} reached the barrier {name}')
         while True:
-            open(log_file, 'w').close()
-
-            written_files = len(list(self.communication_dir.iterdir()))
-            if written_files == self.args.num_separate_nodes_on_cluster:
-                break
+            written_files = len([f for f in self.communication_dir.iterdir() if f.stem.endswith(name)])
 
             time.sleep(3)
+
+            if written_files == self.args.num_separate_nodes_on_cluster:
+                break
 
         # remove the memory saved file
         log_file.unlink(missing_ok=True)
@@ -228,7 +228,7 @@ class AlphaZero:
             print('I am not the root node')
             self.is_root_node = False
 
-        time.sleep(5)
+        time.sleep(10)
 
         # remove the initialization file
         log_file.unlink(missing_ok=True)
