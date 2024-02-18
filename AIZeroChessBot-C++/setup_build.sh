@@ -35,7 +35,7 @@ mkdir -p build
 cd build
 
 # Find out where Conda installed CUDA
-CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/myenv
+CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/base
 
 # Configure the project with CMake
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DCUDA_TOOLKIT_ROOT_DIR=$CONDA_CUDA_TOOLKIT_DIR -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
