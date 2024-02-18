@@ -8,6 +8,12 @@
             "type": "shell",
             "command": "cd build && cmake --build . --config Release && cd Release && AIZeroChessBot.exe",
             "problemMatcher": []
+        },
+        {
+            "label": "Build and Debug",
+            "type": "shell",
+            "command": "cd build && cmake --build . --config Debug && cd Debug && AIZeroChessBot.exe",
+            "problemMatcher": []
         }
     ]
 }

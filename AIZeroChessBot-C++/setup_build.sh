@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-1.8.1%2Bcpu.zip"
+LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-shared-with-deps-2.2.0%2Bcu118.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
@@ -12,7 +12,7 @@ if [ ! -f "libtorch/$LIBTORCH_ZIP" ]; then
     echo "Downloading LibTorch..."
     wget -O "libtorch/$LIBTORCH_ZIP" "$LIBTORCH_URL"
     echo "Extracting LibTorch..."
-    unzip -o "libtorch/$LIBTORCH_ZIP" -d libtorch
+    unzip -o "libtorch/$LIBTORCH_ZIP" -d .
 fi
 
 # Create a build directory

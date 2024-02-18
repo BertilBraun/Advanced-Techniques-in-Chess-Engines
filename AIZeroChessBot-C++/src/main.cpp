@@ -1,23 +1,64 @@
-#include "chess.hpp"
-#include <iostream>
+#pragma once
 
+#include "common.hpp"
 
-using namespace chess;
+#include "AlphaZero.hpp"
+#include "Network.hpp"
+#include "TrainingArgs.hpp"
 
 int main() {
 
-    std::cout << "Hello, World!" << std::endl;
+    Network model;
+    auto optimizer =
+        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(0.02).weight_decay(1e-4));
 
-    Board board;
-    std::cout << board.boardFen() << std::endl;
-    board.push(Move::fromUci("e2e4"));
-    std::cout << board.boardFen() << std::endl;
+    /*
+    args = TrainingArgs(
+        num_iterations=200,
+        num_self_play_iterations=32000,
+        num_parallel_games=64,
+        num_iterations_per_turn=200,
+        num_epochs=20,
+        num_separate_nodes_on_cluster=2,
+        batch_size=64,
+        temperature=1.0,
+        dirichlet_epsilon=0.25,
+        dirichlet_alpha=0.03,
+        c_param=2.0,
+    )
 
-    for (auto move : board.legalMoves()) {
-        std::cout << move.uci() << std::endl;
-    }
+    args = TrainingArgs(
+        num_iterations=200,
+        num_self_play_iterations=512,
+        num_parallel_games=64,
+        num_iterations_per_turn=200,
+        num_epochs=20,
+        num_separate_nodes_on_cluster=2,
+        batch_size=64,
+        temperature=1.0,
+        dirichlet_epsilon=0.25,
+        dirichlet_alpha=0.03,
+        c_param=2.0,
+    )
+    */
 
-    board.push(board.legalMoves()[0]);
+    TrainingArgs args{
+        200,     // numIterations
+        4,       // numSelfPlayIterations
+        2,       // numParallelGames            // TODO test with 2
+        5,       // numIterationsPerTurn
+        2,       // numEpochs
+        1,       // numSeparateNodesOnCluster   // TODO test with 2
+        64,      // batchSize
+        1.0f,    // temperature
+        0.25f,   // dirichletEpsilon
+        0.03f,   // dirichletAlpha
+        2.0f,    // cParam
+        "models" // savePath
+    };
+
+    AlphaZero alphaZero(model, optimizer, args);
+    alphaZero.learn();
 
     return 0;
 }

@@ -16,31 +16,42 @@
 
 namespace chess {
 enum Color : bool { WHITE, BLACK };
-constexpr Color operator!(Color color) {
+inline constexpr Color operator!(Color color) {
     return color == Color::WHITE ? Color::BLACK : Color::WHITE;
 }
 
-constexpr std::array<Color, 2> COLORS = {Color::WHITE, Color::BLACK};
-const std::array<std::string, 2> COLOR_NAMES = {"black", "white"};
+inline constexpr std::array<Color, 2> COLORS = {Color::WHITE, Color::BLACK};
+inline const std::array<std::string, 2> COLOR_NAMES = {"black", "white"};
 
-enum class PieceType { NONE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
-constexpr std::array<PieceType, 7> PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
-                                                  PieceType::BISHOP, PieceType::ROOK,
-                                                  PieceType::QUEEN,  PieceType::KING};
-const std::array<std::string, 7> PIECE_SYMBOLS = {" ", "p", "n", "b", "r", "q", "k"};
-const std::array<std::string, 7> PIECE_NAMES = {"none", "pawn",  "knight", "bishop",
-                                                "rook", "queen", "king"};
-std::string pieceSymbol(PieceType piece_type) {
+enum PieceType { NONE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NUM_PIECE_TYPES };
+inline constexpr std::array<PieceType, 7> PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
+                                                         PieceType::BISHOP, PieceType::ROOK,
+                                                         PieceType::QUEEN,  PieceType::KING};
+
+inline constexpr int operator+(int a, PieceType b) { return a + static_cast<int>(b); }
+
+inline const std::array<std::pair<int, int>, 8> KNIGHT_MOVES = {
+    {{-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}}};
+inline const std::array<std::pair<int, int>, 4> ROOK_MOVES = {{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}};
+inline const std::array<std::pair<int, int>, 4> BISHOP_MOVES = {
+    {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}};
+
+inline const std::array<std::string, 7> PIECE_SYMBOLS = {" ", "p", "n", "b", "r", "q", "k"};
+inline const std::array<std::string, 7> PIECE_NAMES = {"none", "pawn",  "knight", "bishop",
+                                                       "rook", "queen", "king"};
+inline std::string pieceSymbol(PieceType piece_type) {
     return PIECE_SYMBOLS[static_cast<int>(piece_type)];
 }
 
-std::string pieceName(PieceType piece_type) { return PIECE_NAMES[static_cast<int>(piece_type)]; }
-const std::unordered_map<char, std::string> UNICODE_PIECE_SYMBOLS = {
+inline std::string pieceName(PieceType piece_type) {
+    return PIECE_NAMES[static_cast<int>(piece_type)];
+}
+inline const std::unordered_map<char, std::string> UNICODE_PIECE_SYMBOLS = {
     {'R', "♖"}, {'r', "♜"}, {'N', "♘"}, {'n', "♞"}, {'B', "♗"}, {'b', "♝"},
     {'Q', "♕"}, {'q', "♛"}, {'K', "♔"}, {'k', "♚"}, {'P', "♙"}, {'p', "♟"},
 };
-const std::array<std::string, 8> FILE_NAMES = {"a", "b", "c", "d", "e", "f", "g", "h"};
-const std::array<std::string, 8> RANK_NAMES = {"1", "2", "3", "4", "5", "6", "7", "8"};
+inline const std::array<std::string, 8> FILE_NAMES = {"a", "b", "c", "d", "e", "f", "g", "h"};
+inline const std::array<std::string, 8> RANK_NAMES = {"1", "2", "3", "4", "5", "6", "7", "8"};
 
 enum class Status : int {
     VALID = 0,
@@ -63,17 +74,17 @@ enum class Status : int {
     IMPOSSIBLE_CHECK = 1 << 16,
 };
 
-constexpr Status operator|(Status a, Status b) {
+inline constexpr Status operator|(Status a, Status b) {
     return (Status) (static_cast<int>(a) | static_cast<int>(b));
 }
-constexpr Status operator|=(Status &a, Status b) {
+inline constexpr Status operator|=(Status &a, Status b) {
     a = a | b;
     return a;
 }
-constexpr Status operator&(Status a, Status b) {
+inline constexpr Status operator&(Status a, Status b) {
     return (Status) (static_cast<int>(a) & static_cast<int>(b));
 }
-constexpr Status operator&=(Status &a, Status b) {
+inline constexpr Status operator&=(Status &a, Status b) {
     a = a & b;
     return a;
 }
@@ -121,14 +132,14 @@ enum Square : int {
     A8, B8, C8, D8, E8, F8, G8, H8,
 };
 
-constexpr int operator+(Square square) { return static_cast<int>(square); }
-constexpr int operator-(Square square) { return -static_cast<int>(square); }
-constexpr Square operator+(Square square, int n) { return static_cast<Square>(static_cast<int>(square) + n); }
-constexpr Square operator-(Square square, int n) { return static_cast<Square>(static_cast<int>(square) - n); }
-constexpr Square &operator+=(Square &square, int n) { return square = square + n; }
-constexpr Square &operator-=(Square &square, int n) { return square = square - n; }
+inline constexpr int operator+(Square square) { return static_cast<int>(square); }
+inline constexpr int operator-(Square square) { return -static_cast<int>(square); }
+inline constexpr Square operator+(Square square, int n) { return static_cast<Square>(static_cast<int>(square) + n); }
+inline constexpr Square operator-(Square square, int n) { return static_cast<Square>(static_cast<int>(square) - n); }
+inline constexpr Square &operator+=(Square &square, int n) { return square = square + n; }
+inline constexpr Square &operator-=(Square &square, int n) { return square = square - n; }
 
-constexpr std::array<Square, 64> SQUARES = {
+inline constexpr std::array<Square, 64> SQUARES = {
     A1, B1, C1, D1, E1, F1, G1, H1,
     A2, B2, C2, D2, E2, F2, G2, H2,
     A3, B3, C3, D3, E3, F3, G3, H3,
@@ -139,7 +150,7 @@ constexpr std::array<Square, 64> SQUARES = {
     A8, B8, C8, D8, E8, F8, G8, H8,
 };
 
-const std::array<std::string, 64> SQUARE_NAMES = {
+inline const std::array<std::string, 64> SQUARE_NAMES = {
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
     "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
     "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
@@ -151,30 +162,32 @@ const std::array<std::string, 64> SQUARE_NAMES = {
 };
 // clang-format on
 
-int parseSquare(const std::string &name) {
+inline int parseSquare(const std::string &name) {
     auto it = std::find(SQUARE_NAMES.begin(), SQUARE_NAMES.end(), name);
     if (it == SQUARE_NAMES.end()) {
         throw std::invalid_argument("Invalid square name");
     }
-    return std::distance(SQUARE_NAMES.begin(), it);
+    return (int) std::distance(SQUARE_NAMES.begin(), it);
 }
 
-std::string squareName(Square square) {
+inline std::string squareName(Square square) {
     if (square < 0 || square >= 64) {
         throw std::invalid_argument("Square index out of bounds");
     }
     return SQUARE_NAMES[square];
 }
 
-Square square(int file_index, int rank_index) { return (Square) (rank_index * 8 + file_index); }
+inline constexpr Square square(int file_index, int rank_index) {
+    return (Square) (rank_index * 8 + file_index);
+}
 
-Square squareFile(Square square) { return (Square) (square & 7); }
+inline constexpr Square squareFile(Square square) { return (Square) (square & 7); }
 
-Square squareRank(Square square) { return (Square) (square >> 3); }
+inline constexpr Square squareRank(Square square) { return (Square) (square >> 3); }
 
-constexpr Square squareMirror(Square square) { return (Square) (square ^ 0x38); }
+inline constexpr Square squareMirror(Square square) { return (Square) (square ^ 0x38); }
 
-constexpr std::array<Square, 64> SQUARES_180 = [] {
+inline constexpr std::array<Square, 64> SQUARES_180 = [] {
     std::array<Square, 64> squares_180;
     for (size_t i = 0; i < SQUARES.size(); ++i) {
         squares_180[i] = squareMirror(SQUARES[i]);
@@ -183,10 +196,10 @@ constexpr std::array<Square, 64> SQUARES_180 = [] {
 }();
 
 using Bitboard = unsigned long long;
-constexpr Bitboard BB_EMPTY = 0;
-constexpr Bitboard BB_ALL = 0xFFFF'FFFF'FFFF'FFFF;
+inline constexpr Bitboard BB_EMPTY = 0;
+inline constexpr Bitboard BB_ALL = 0xFFFF'FFFF'FFFF'FFFF;
 
-constexpr std::array<Bitboard, 64> BB_SQUARES = [] {
+inline constexpr std::array<Bitboard, 64> BB_SQUARES = [] {
     std::array<Bitboard, 64> squares;
     for (int i = 0; i < 64; ++i) {
         squares[i] = 1ULL << i;
@@ -207,13 +220,13 @@ enum BB_SQUARE : Bitboard {
 };
 // clang-format on
 
-constexpr Bitboard BB_CORNERS = BB_A1 | BB_H1 | BB_A8 | BB_H8;
-constexpr Bitboard BB_CENTER = BB_D4 | BB_E4 | BB_D5 | BB_E5;
+inline constexpr Bitboard BB_CORNERS = BB_A1 | BB_H1 | BB_A8 | BB_H8;
+inline constexpr Bitboard BB_CENTER = BB_D4 | BB_E4 | BB_D5 | BB_E5;
 
-constexpr Bitboard BB_LIGHT_SQUARES = 0x55AA'55AA'55AA'55AA;
-constexpr Bitboard BB_DARK_SQUARES = 0xAA55'AA55'AA55'AA55;
+inline constexpr Bitboard BB_LIGHT_SQUARES = 0x55AA'55AA'55AA'55AA;
+inline constexpr Bitboard BB_DARK_SQUARES = 0xAA55'AA55'AA55'AA55;
 
-constexpr std::array<Bitboard, 8> BB_FILES = [] {
+inline constexpr std::array<Bitboard, 8> BB_FILES = [] {
     std::array<Bitboard, 8> files;
     for (int i = 0; i < 8; ++i) {
         files[i] = 0x0101'0101'0101'0101ULL << i;
@@ -234,7 +247,7 @@ enum BB_FILE : Bitboard {
 };
 // clang-format on
 
-constexpr std::array<Bitboard, 8> BB_RANKS = [] {
+inline constexpr std::array<Bitboard, 8> BB_RANKS = [] {
     std::array<Bitboard, 8> ranks;
     for (int i = 0; i < 8; ++i) {
         ranks[i] = 0xFFull << (8 * i);
@@ -255,18 +268,18 @@ enum BB_RANK : Bitboard {
 };
 // clang-format on
 
-constexpr Bitboard BB_BACK_RANKS = BB_RANK_1 | BB_RANK_8;
+inline constexpr Bitboard BB_BACK_RANKS = BB_RANK_1 | BB_RANK_8;
 
-int squareDistance(Square a, Square b) {
+inline int squareDistance(Square a, Square b) {
     return std::max(std::abs(squareFile(a) - squareFile(b)),
                     std::abs(squareRank(a) - squareRank(b)));
 }
 
-int squareManhattanDistance(Square a, Square b) {
+inline int squareManhattanDistance(Square a, Square b) {
     return std::abs(squareFile(a) - squareFile(b)) + std::abs(squareRank(a) - squareRank(b));
 }
 
-int squareKnightDistance(Square a, Square b) {
+inline int squareKnightDistance(Square a, Square b) {
     int dx = std::abs(squareFile(a) - squareFile(b));
     int dy = std::abs(squareRank(a) - squareRank(b));
 
@@ -280,17 +293,17 @@ int squareKnightDistance(Square a, Square b) {
             return 4;
     }
 
-    int m = std::ceil(std::max({dx / 2.0, dy / 2.0, (dx + dy) / 3.0}));
+    int m = (int) std::ceil(std::max({dx / 2.0, dy / 2.0, (dx + dy) / 3.0}));
     return m + ((m + dx + dy) % 2);
 }
 
-int lsb(Bitboard bb) {
+inline int lsb(Bitboard bb) {
     if (bb == 0)
         return -1;
     return std::countr_zero(bb);
 }
 
-std::vector<int> scanForward(Bitboard bb) {
+inline std::vector<int> scanForward(Bitboard bb) {
     std::vector<int> squares;
     while (bb) {
         int sq = lsb(bb);
@@ -300,13 +313,13 @@ std::vector<int> scanForward(Bitboard bb) {
     return squares;
 }
 
-int msb(Bitboard bb) {
+inline int msb(Bitboard bb) {
     if (bb == 0)
         return -1;
     return 63 - std::countl_zero(bb);
 }
 
-std::vector<Square> scanReversed(Bitboard bb) {
+inline std::vector<Square> scanReversed(Bitboard bb) {
     std::vector<Square> squares;
     while (bb) {
         int sq = msb(bb);
@@ -316,23 +329,23 @@ std::vector<Square> scanReversed(Bitboard bb) {
     return squares;
 }
 
-int popcount(Bitboard bb) { return std::popcount(bb); }
+inline int popcount(Bitboard bb) { return std::popcount(bb); }
 
-Bitboard flipVertical(Bitboard bb) {
+inline constexpr Bitboard flipVertical(Bitboard bb) {
     bb = ((bb >> 8) & 0x00FF'00FF'00FF'00FF) | ((bb & 0x00FF'00FF'00FF'00FF) << 8);
     bb = ((bb >> 16) & 0x0000'FFFF'0000'FFFF) | ((bb & 0x0000'FFFF'0000'FFFF) << 16);
     bb = (bb >> 32) | ((bb & 0x0000'0000'FFFF'FFFF) << 32);
     return bb;
 }
 
-Bitboard flipHorizontal(Bitboard bb) {
+inline constexpr Bitboard flipHorizontal(Bitboard bb) {
     bb = ((bb >> 1) & 0x5555'5555'5555'5555) | ((bb & 0x5555'5555'5555'5555) << 1);
     bb = ((bb >> 2) & 0x3333'3333'3333'3333) | ((bb & 0x3333'3333'3333'3333) << 2);
     bb = ((bb >> 4) & 0x0F0F'0F0F'0F0F'0F0F) | ((bb & 0x0F0F'0F0F'0F0F'0F0F) << 4);
     return bb;
 }
 
-Bitboard flipDiagonal(Bitboard bb) {
+inline constexpr Bitboard flipDiagonal(Bitboard bb) {
     Bitboard t;
     t = (bb ^ (bb << 28)) & 0x0F0F'0F0F'0000'0000ULL;
     bb = bb ^ t ^ (t >> 28);
@@ -343,7 +356,7 @@ Bitboard flipDiagonal(Bitboard bb) {
     return bb;
 }
 
-Bitboard flipAntiDiagonal(Bitboard bb) {
+inline constexpr Bitboard flipAntiDiagonal(Bitboard bb) {
     Bitboard t;
     t = bb ^ (bb << 36);
     bb = bb ^ ((t ^ (bb >> 36)) & 0xF0F0'F0F0'0F0F'0F0FULL);
@@ -354,11 +367,11 @@ Bitboard flipAntiDiagonal(Bitboard bb) {
     return bb;
 }
 
-Bitboard shiftDown(Bitboard b) { return b >> 8; }
+inline constexpr Bitboard shiftDown(Bitboard b) { return b >> 8; }
 
-Bitboard shiftUp(Bitboard b) { return (b << 8) & BB_ALL; }
+inline constexpr Bitboard shiftUp(Bitboard b) { return (b << 8) & BB_ALL; }
 
-Bitboard _slidingAttacks(Square square, Bitboard occupied, const std::vector<int> &deltas) {
+inline Bitboard _slidingAttacks(Square square, Bitboard occupied, const std::vector<int> &deltas) {
     Bitboard attacks = BB_EMPTY;
 
     for (auto delta : deltas) {
@@ -381,7 +394,7 @@ Bitboard _slidingAttacks(Square square, Bitboard occupied, const std::vector<int
     return attacks;
 }
 
-std::array<Bitboard, 64> BB_KNIGHT_ATTACKS = [] {
+inline std::array<Bitboard, 64> BB_KNIGHT_ATTACKS = [] {
     std::array<Bitboard, 64> attacks;
     for (Square sq : SQUARES) {
         attacks[sq] = _slidingAttacks(sq, BB_ALL, {17, 15, 10, 6, -17, -15, -10, -6});
@@ -389,7 +402,7 @@ std::array<Bitboard, 64> BB_KNIGHT_ATTACKS = [] {
     return attacks;
 }();
 
-std::array<Bitboard, 64> BB_KING_ATTACKS = [] {
+inline std::array<Bitboard, 64> BB_KING_ATTACKS = [] {
     std::array<Bitboard, 64> attacks;
     for (Square sq : SQUARES) {
         attacks[sq] = _slidingAttacks(sq, BB_ALL, {9, 8, 7, 1, -9, -8, -7, -1});
@@ -397,7 +410,7 @@ std::array<Bitboard, 64> BB_KING_ATTACKS = [] {
     return attacks;
 }();
 
-std::array<std::array<Bitboard, 64>, 2> BB_PAWN_ATTACKS = [] {
+inline std::array<std::array<Bitboard, 64>, 2> BB_PAWN_ATTACKS = [] {
     std::array<std::array<Bitboard, 64>, 2> attacks;
     for (int color = 0; color < 2; ++color) {
         for (Square sq : SQUARES) {
@@ -408,12 +421,12 @@ std::array<std::array<Bitboard, 64>, 2> BB_PAWN_ATTACKS = [] {
     return attacks;
 }();
 
-Bitboard _edges(Square square) {
+inline constexpr Bitboard _edges(Square square) {
     return (((BB_RANKS[0] | BB_RANKS[7]) & ~BB_RANKS[squareRank(square)]) |
             ((BB_FILES[0] | BB_FILES[7]) & ~BB_FILES[squareFile(square)]));
 }
 
-std::vector<Bitboard> _carryRippler(Bitboard mask) {
+inline std::vector<Bitboard> _carryRippler(Bitboard mask) {
     std::vector<Bitboard> subsets;
     Bitboard subset = BB_EMPTY;
     do {
@@ -423,31 +436,37 @@ std::vector<Bitboard> _carryRippler(Bitboard mask) {
     return subsets;
 }
 
-std::pair<std::array<Bitboard, 64>, std::array<std::unordered_map<Bitboard, Bitboard>, 64>>
-_attack_table(const std::vector<int> &deltas) {
+inline std::array<Bitboard, 64> _mask_table(const std::vector<int> &deltas) {
     std::array<Bitboard, 64> mask_table;
-    std::array<std::unordered_map<Bitboard, Bitboard>, 64> attack_table;
+    for (Square square : SQUARES) {
+        mask_table[square] = _slidingAttacks(square, 0, deltas) & ~_edges(square);
+    }
+    return mask_table;
+}
 
+inline std::array<std::unordered_map<Bitboard, Bitboard>, 64>
+_attack_table(const std::vector<int> &deltas) {
+    std::array<std::unordered_map<Bitboard, Bitboard>, 64> attack_table;
     for (Square square : SQUARES) {
         std::unordered_map<Bitboard, Bitboard> attacks;
-
         Bitboard mask = _slidingAttacks(square, 0, deltas) & ~_edges(square);
         for (auto subset : _carryRippler(mask)) {
             attacks[subset] = _slidingAttacks(square, subset, deltas);
         }
-
         attack_table[square] = attacks;
-        mask_table[square] = mask;
     }
-
-    return {mask_table, attack_table};
+    return attack_table;
 }
 
-auto [BB_DIAG_MASKS, BB_DIAG_ATTACKS] = _attack_table({-9, -7, 7, 9});
-auto [BB_FILE_MASKS, BB_FILE_ATTACKS] = _attack_table({-8, 8});
-auto [BB_RANK_MASKS, BB_RANK_ATTACKS] = _attack_table({-1, 1});
+inline auto BB_DIAG_MASKS = _mask_table({-9, -7, 7, 9});
+inline auto BB_FILE_MASKS = _mask_table({-8, 8});
+inline auto BB_RANK_MASKS = _mask_table({-1, 1});
 
-std::array<std::array<Bitboard, 64>, 64> BB_RAYS = [] {
+inline auto BB_DIAG_ATTACKS = _attack_table({-9, -7, 7, 9});
+inline auto BB_FILE_ATTACKS = _attack_table({-8, 8});
+inline auto BB_RANK_ATTACKS = _attack_table({-1, 1});
+
+inline std::array<std::array<Bitboard, 64>, 64> BB_RAYS = [] {
     std::array<std::array<Bitboard, 64>, 64> rays;
     for (Square a : SQUARES) {
         for (Square b : SQUARES) {
@@ -466,9 +485,9 @@ std::array<std::array<Bitboard, 64>, 64> BB_RAYS = [] {
     return rays;
 }();
 
-Bitboard ray(int a, int b) { return BB_RAYS[a][b]; }
+inline Bitboard ray(int a, int b) { return BB_RAYS[a][b]; }
 
-Bitboard between(int a, int b) {
+inline Bitboard between(int a, int b) {
     Bitboard bb = BB_RAYS[a][b] & ((BB_ALL << a) ^ (BB_ALL << b));
     return bb & (bb - 1);
 }
@@ -514,7 +533,7 @@ public:
             PIECE_SYMBOLS.begin(), PIECE_SYMBOLS.end(),
             [symbol](const std::string &s) { return tolower(s[0]) == tolower(symbol); });
         if (it != PIECE_SYMBOLS.end()) {
-            int index = std::distance(PIECE_SYMBOLS.begin(), it);
+            int index = (int) std::distance(PIECE_SYMBOLS.begin(), it);
             return Piece(static_cast<PieceType>(index),
                          isupper(symbol) ? Color::WHITE : Color::BLACK);
         }
@@ -530,7 +549,7 @@ class Move {
 public:
     Move() : value(0) {}
 
-    Move(int from_square, int to_square, std::optional<PieceType> promotion = std::nullopt)
+    Move(int from_square, int to_square, PieceType promotion = PieceType::NONE)
         : value(getValue(from_square, to_square, promotion)) {}
 
     Move operator=(const Move &other) {
@@ -541,12 +560,8 @@ public:
 
     Square toSquare() const { return (Square) ((value & TO_SQUARE_MASK) >> TO_SQUARE_SHIFT); }
 
-    std::optional<PieceType> promotion() const {
-        PieceType type = static_cast<PieceType>((value & PROMOTION_MASK) >> PROMOTION_SHIFT);
-        if (type != PieceType::NONE) {
-            return type;
-        }
-        return std::nullopt;
+    PieceType promotion() const {
+        return static_cast<PieceType>((value & PROMOTION_MASK) >> PROMOTION_SHIFT);
     }
 
     std::string uci() const {
@@ -555,8 +570,8 @@ public:
 
         std::string uci = SQUARE_NAMES[fromSquare()] + SQUARE_NAMES[toSquare()];
         auto promo = promotion();
-        if (promo) {
-            uci += pieceSymbol(promo.value());
+        if (promo != PieceType::NONE) {
+            uci += pieceSymbol(promo);
         }
         return uci;
     }
@@ -576,7 +591,7 @@ public:
         }
         int from = parseSquare(uci.substr(0, 2));
         int to = parseSquare(uci.substr(2, 2));
-        std::optional<PieceType> promotion = std::nullopt;
+        PieceType promotion = PieceType::NONE;
         if (uci.size() == 5) {
             promotion = Piece::from_symbol(uci[4]).pieceType();
         }
@@ -596,14 +611,11 @@ private:
     static constexpr unsigned short PROMOTION_MASK = 0x000F;
     static constexpr int PROMOTION_SHIFT = 0;
 
-    int getValue(int from_square, int to_square,
-                 std::optional<PieceType> promotion = std::nullopt) {
+    int getValue(int from_square, int to_square, PieceType promotion) {
         int value = 0;
         value |= (from_square << FROM_SQUARE_SHIFT);
         value |= (to_square << TO_SQUARE_SHIFT);
-        if (promotion) {
-            value |= (static_cast<unsigned short>(promotion.value()) << PROMOTION_SHIFT);
-        }
+        value |= (static_cast<unsigned short>(promotion) << PROMOTION_SHIFT);
         return value;
     }
 
@@ -628,7 +640,7 @@ public:
     void discard(Square square) { mask &= ~BB_SQUARES[square]; }
 
     // Returns the number of squares in the set
-    std::size_t size() const { return popcount(mask); }
+    size_t size() const { return popcount(mask); }
 
     // Checks if the set is empty
     bool empty() const { return mask == 0; }
@@ -836,7 +848,7 @@ public:
             bb = m_kings;
             break;
         default:
-            assert(false && "Unknown piece type");
+            // assert(false && "Unknown piece type");
             return BB_EMPTY;
         }
         return bb & m_occupied_color[color];
@@ -1227,17 +1239,10 @@ public:
 
     bool isFiftyMoves() { return _isHalfMoves(100); }
 
-    void resetStoredMoves() {
-        m_cachedLegalMoves = std::nullopt;
-        m_cachedPseudoLegalMoves = std::nullopt;
-        m_cachedLegalEPMoves = std::nullopt;
-        m_cachedPseudoLegalEPMoves = std::nullopt;
-    }
-
     void push(const Move &move) {
         // Updates the position with the given move
         // Reset the generated moves
-        resetStoredMoves();
+        _resetStoredMoves();
 
         // Reset en passant square
         auto epSquare = ep_square;
@@ -1250,7 +1255,7 @@ public:
         }
 
         // Handle null moves
-        if (!move) {
+        if (!move || !pieceTypeAt(move.fromSquare()).has_value()) {
             turn = !turn;
             return;
         }
@@ -1273,7 +1278,7 @@ public:
 
         // Update castling rights
         castling_rights &= ~fromBB & ~toBB;
-        if (piece.value().pieceType() == PieceType::KING && !promoted) {
+        if (pieceType == PieceType::KING && !promoted) {
             if (turn == WHITE) {
                 castling_rights &= ~BB_RANK_1;
             } else {
@@ -1305,9 +1310,9 @@ public:
         }
 
         // Handle promotions
-        if (move.promotion().has_value()) {
+        if (move.promotion() != PieceType::NONE) {
             promoted = true;
-            pieceType = move.promotion().value();
+            pieceType = move.promotion();
         }
 
         // Handle castling moves
@@ -1365,7 +1370,7 @@ public:
     bool isZeroing(const Move &move) const {
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
         return (touched & m_pawns) || (touched & m_occupied_color[!turn]) ||
-               (move.promotion().has_value() && move.promotion() == PieceType::PAWN);
+               (move.promotion() == PieceType::PAWN);
     }
 
     bool reducesCastlingRights(const Move &move) const {
@@ -1408,7 +1413,7 @@ public:
         Bitboard castlingRights = _cleanCastlingRights() & back_rank;
         while (castlingRights) {
             // Isolate the least-significant bit (rightmost rook)
-            Bitboard rook = castlingRights & -castlingRights;
+            Bitboard rook = lsb(castlingRights);
 
             // Kingside rook is to the right of the king
             if (rook > kingMask) {
@@ -1432,7 +1437,7 @@ public:
         Bitboard castlingRights = _cleanCastlingRights() & back_rank;
         while (castlingRights) {
             // Isolate the least-significant bit (leftmost rook)
-            Bitboard rook = castlingRights & -castlingRights;
+            Bitboard rook = lsb(castlingRights);
 
             // Queenside rook is to the left of the king
             if (rook < kingMask) {
@@ -1638,6 +1643,13 @@ public:
     }
 
 private:
+    void _resetStoredMoves() {
+        m_cachedLegalMoves = std::nullopt;
+        m_cachedPseudoLegalMoves = std::nullopt;
+        m_cachedLegalEPMoves = std::nullopt;
+        m_cachedPseudoLegalEPMoves = std::nullopt;
+    }
+
     Bitboard _attacksMask(Square square) const {
         Bitboard bb_square = BB_SQUARES[square];
 
@@ -1700,7 +1712,8 @@ private:
             if (rays & square_mask) {
                 Bitboard snipers = rays & sliders & m_occupied_color[!color];
                 for (auto sniper : scanReversed(snipers)) {
-                    if (between(sniper, king.value()) & (m_occupied | square_mask) == square_mask) {
+                    if ((between(sniper, king.value()) & (m_occupied | square_mask)) ==
+                        square_mask) {
                         pinMask = ray(king.value(), sniper);
                         break;
                     }
@@ -1861,9 +1874,6 @@ private:
             moves.insert(moves.end(), epMoves.begin(), epMoves.end());
         }
 
-        if (moves.empty())
-            std::cout << "No moves found" << std::endl;
-
         this->m_cachedPseudoLegalMoves = moves;
         return moves;
     }
@@ -1922,9 +1932,8 @@ private:
 
     bool _isHalfMoves(int n) { return halfmove_clock >= n && !_generateLegalMoves().empty(); }
 
-    Move _findMove(int from_square, int to_square,
-                   std::optional<PieceType> promotion = std::nullopt) {
-        if (!promotion.has_value() && (m_pawns & BB_SQUARES[from_square]) &&
+    Move _findMove(int from_square, int to_square, PieceType promotion) {
+        if (promotion == PieceType::NONE && (m_pawns & BB_SQUARES[from_square]) &&
             (BB_SQUARES[to_square] & BB_BACK_RANKS)) {
             promotion = PieceType::QUEEN;
         }
@@ -2053,7 +2062,8 @@ private:
         Bitboard bb_g = BB_FILE_G & back_rank;
 
         Bitboard clean_rights = _cleanCastlingRights();
-        for (int candidate = msb(clean_rights & back_rank & to_mask); clean_rights;
+        for (int candidate = msb(clean_rights & back_rank & to_mask);
+             clean_rights && candidate >= 0;
              candidate = msb(clean_rights)) {
             Bitboard rook = BB_SQUARES[candidate];
 
