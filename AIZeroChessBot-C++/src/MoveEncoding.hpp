@@ -2,25 +2,25 @@
 
 #include "common.hpp"
 
-std::vector<std::pair<Move, float>>
+inline std::vector<std::pair<Move, float>>
 filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy, Board &board);
 
-int encodeMove(const Move &move);
+inline int encodeMove(const Move &move);
 
-Move decodeMove(int moveIndex);
+inline Move decodeMove(int moveIndex);
 
-std::vector<Move> decodeMoves(const std::vector<int> &moveIndices);
+inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices);
 
-Square flipSquareHorizontal(const Square &square);
+inline Square flipSquareHorizontal(const Square &square);
 
-Square flipSquareVertical(const Square &square);
+inline Square flipSquareVertical(const Square &square);
 
-torch::Tensor flipActionProbabilities(const torch::Tensor &actionProbabilities,
-                                      const std::function<int(int)> &flipMoveIndex);
+inline torch::Tensor flipActionProbabilities(const torch::Tensor &actionProbabilities,
+                                             const std::function<int(int)> &flipMoveIndex);
 
-int flipMoveIndexHorizontal(int moveIndex);
+inline int flipMoveIndexHorizontal(int moveIndex);
 
-int flipMoveIndexVertical(int moveIndex);
+inline int flipMoveIndexVertical(int moveIndex);
 
 using MoveMapping = std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, 64>, 64>;
 
