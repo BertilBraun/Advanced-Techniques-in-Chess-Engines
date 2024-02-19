@@ -21,10 +21,12 @@ cd ../build
 
 cmake --build . --config Release
 
-# Start training via ./AIZeroChessBot, timeout after 12 hours, then requeue the job
-
-timeout 12h ./AIZeroChessBot
+cp AIZeroChessBot ../train/AIZeroChessBot
 
 cd ../train
+
+# Start training via ./AIZeroChessBot, timeout after 12 hours, then requeue the job
+timeout 12h ./AIZeroChessBot
+
 sbatch train.sh
 
