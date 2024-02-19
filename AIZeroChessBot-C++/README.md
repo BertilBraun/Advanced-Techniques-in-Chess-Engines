@@ -1,5 +1,17 @@
 # Project: AI-ZeroChessBot-C++
 
+## Current State
+
+The current state of the project is that everything is reimplemented in C++ including the base Chess Framework, the MCTS algorithm, and the Neural Network. The translation of the Chess Framework lead to 50-100x speedup. The project is currently deployed on the cluster and should be training there using 1 Tesla H100 for now.
+
+### Upcoming To Dos
+
+- Profile the performance of the C++ implementation of the MCTS algorithm and the Neural Network compared to the Python implementation. Is the C++ implementation more than 10% in the neural network evaluation step?
+- Create a interactive Notebook to evaluate the performance of the bot on the cluster with access to the cluster's GPU.
+  - Evaluate the performance of the bot after the first 12 hours of training.
+  - Evaluate the performance of the bot against a baseline chess bot (continuously).
+- Continue training the bot on the cluster with multiple GPUs and multiple nodes (as already implemented) for multiple days if the performance after 12 hours is promising.
+
 ## Overview
 
 AI-Zero Chess Bot is an ambitious project aiming to replicate and explore the AlphaZero approach to computer chess. The project focuses on developing a chess bot that uses a combination of deep neural networks and Monte Carlo Tree Search (MCTS) to evaluate positions and select moves without reliance on traditional chess bots' databases and heuristics. By learning from self-play, the AI-Zero Chess Bot aspires to discover and refine its understanding of chess strategy, tactics, and endgames, pushing the boundaries of artificial chess intelligence.
