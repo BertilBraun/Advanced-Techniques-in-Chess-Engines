@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=setup                   # job name
 #SBATCH --partition=dev_gpu_4              # mby GPU queue for the resource allocation.
-#SBATCH --time=00:30:00                    # wall-clock time limit
+#SBATCH --time=00:10:00                    # wall-clock time limit
 #SBATCH --mem=100000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
 #SBATCH --cpus-per-task=1                  # number of CPUs required per MPI task
@@ -12,7 +12,7 @@
 #SBATCH --error=setup_%j.txt
 
 
-module load devel/cuda/10.2
+module load devel/cuda/11.6
 
 export PATH=~/miniconda3/bin:$PATH
 
@@ -22,7 +22,8 @@ if ! conda env list | grep -q chess; then
     conda create -n chess python=3.8
     source ~/miniconda3/bin/activate chess
     
-    conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch
+    # From https://pytorch.org/get-started/previous-versions/#v1121
+    conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
     conda install -c anaconda cudnn
 else
     echo "Conda environment 'chess' already exists."
@@ -30,7 +31,7 @@ else
 fi
 
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cu102/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu102.zip"
+LIBTORCH_URL="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
@@ -60,3 +61,6 @@ cd ..
 cp build/compile_commands.json .
 
 echo "Setup completed."
+
+cd train
+source train.sh
