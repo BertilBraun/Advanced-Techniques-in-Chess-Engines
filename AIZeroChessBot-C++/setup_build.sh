@@ -57,6 +57,7 @@ CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/chess
 # Configure the project with CMake
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DCUDA_TOOLKIT_ROOT_DIR=$CONDA_CUDA_TOOLKIT_DIR -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
 
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
 cd ..
 
 # Copy compile_commands.json for IntelliSense (optional)

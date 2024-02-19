@@ -1,5 +1,3 @@
-#pragma once
-
 #include "MoveEncoding.hpp"
 
 #include "common.hpp"

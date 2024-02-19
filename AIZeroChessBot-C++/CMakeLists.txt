@@ -20,6 +20,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
+target_link_libraries(${PROJECT_NAME} stdc++fs)
 
 # Optional: Specify include directories if you have header files in different locations
 include_directories(src)
