@@ -12,7 +12,7 @@
 #SBATCH --output=train_zero_%j.txt
 #SBATCH --error=train_zero_%j.txt
 
-module load devel/cuda/11.8
+module load devel/cuda/11.6
 
 export PATH=~/miniconda3/bin:$PATH
 
