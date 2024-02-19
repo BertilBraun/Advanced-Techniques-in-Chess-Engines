@@ -15,8 +15,9 @@
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
 
-export PATH=~/miniconda3/bin:$PATH
-
+export PATH=/usr/bin:$PATH
+export PATH=$PATH:~/miniconda3/bin
+export PATH=$PATH:~/miniconda3/envs/chess/bin
 
 # if conda doesnt have the chess environment, create it
 if ! conda env list | grep -q chess; then
