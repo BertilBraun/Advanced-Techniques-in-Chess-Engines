@@ -178,13 +178,11 @@ private:
     }
 
     Move sampleMove(const torch::Tensor &actionProbabilities, const AlphaMCTSNode &rootNode) const {
-        // Only use temperature for the first 30 moves, then simply use the action probabilities as
-        // they are
-        torch::Tensor temperatureActionProbabilities;
+        torch::Tensor temperatureActionProbabilities = actionProbabilities;
         if (rootNode.num_played_moves < 30) {
+            // Only use temperature for the first 30 moves, then simply use the action probabilities
+            // as they are
             temperatureActionProbabilities = actionProbabilities.pow(1 / m_args.temperature);
-        } else {
-            temperatureActionProbabilities = actionProbabilities;
         }
 
         int action = torch::multinomial(temperatureActionProbabilities, 1).item<int>();

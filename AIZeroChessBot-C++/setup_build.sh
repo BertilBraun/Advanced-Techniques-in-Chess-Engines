@@ -15,10 +15,6 @@
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
 
-export PATH=/usr/bin:$PATH
-# export PATH=$PATH:~/miniconda3/bin
-# export PATH=$PATH:~/miniconda3/envs/chess/bin
-
 # if conda doesnt have the chess environment, create it
 # if ! conda env list | grep -q chess; then
 #     conda create -n chess python=3.8
@@ -27,10 +23,10 @@ export PATH=/usr/bin:$PATH
 #     # From https://pytorch.org/get-started/previous-versions/#v1121
 #     conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
 #     conda install -c anaconda cudnn
-# else
-#     echo "Conda environment 'chess' already exists."
-source ~/miniconda3/bin/activate chess
 # fi
+
+source ~/miniconda3/bin/activate chess
+
 
 # Set LibTorch download URL
 LIBTORCH_URL="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip"
@@ -51,12 +47,7 @@ fi
 mkdir -p build
 cd build
 
-# Find out where Conda installed CUDA
-CONDA_CUDA_TOOLKIT_DIR=$(conda info --base)/envs/chess
-
 # Configure the project with CMake
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DCUDA_TOOLKIT_ROOT_DIR=$CONDA_CUDA_TOOLKIT_DIR -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
-
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
 cd ..
 

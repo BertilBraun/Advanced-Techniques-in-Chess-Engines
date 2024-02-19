@@ -172,7 +172,7 @@ torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &boa
 std::vector<std::pair<Move, float>> mapPolicyToMoves(const torch::Tensor &policy) {
     std::vector<std::pair<Move, float>> movesWithProbabilities;
 
-    torch::Tensor nonzeroIndices = torch::nonzero(policy > 0).squeeze();
+    torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
     for (int i = 0; i < (int) nonzeroIndices.size(0); ++i) {
         int index = nonzeroIndices[i].item<int>();
         float probability = policy[index].item<float>();
