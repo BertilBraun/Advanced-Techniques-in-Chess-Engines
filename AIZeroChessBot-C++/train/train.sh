@@ -16,8 +16,7 @@ module load devel/cuda/11.6
 
 export PATH=~/miniconda3/bin:$PATH
 
-conda activate chess
-
+source ~/miniconda3/bin/activate chess
 
 cd ../build
 
