@@ -30,9 +30,9 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 ### Neural Network
 
 - **Input Layer**: Encodes the board state, including piece positions, player to move, castling rights, and en passant possibilities.
-- **Processing Layers**: Multiple layers (convolutional neural networks or other suitable architectures) extract features and learn game patterns.
+- **Processing Layers**: Multiple ResNet layers extract features and learn game patterns.
 - **Output Layers**:
-  - **Policy Head**: Outputs a probability distribution over all legal moves from the current position (64x73 possible moves).
+  - **Policy Head**: Outputs a probability distribution over all legal moves from the current position (1968 possible moves).
   - **Value Head**: Outputs a single value estimating the likelihood of winning from the current position.
 
 ### Monte Carlo Tree Search (MCTS)
@@ -56,9 +56,9 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 
 ## Technologies
 
-- **Programming Language**: Python 3.x.
-- **Machine Learning Frameworks**: TensorFlow or PyTorch.
-- **Chess Library**: python-chess.
+- **Programming Language**: C++17
+- **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
+- **Chess Library**: Python-Chess (self ported to C++)
 
 ## Getting Started
 
@@ -107,6 +107,7 @@ To run your project:
 
 - The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
 ![MCTS Performance](/AIZeroChessBot/documentation/performance_analysis.png)
+
 Only the small pink section in the performance analysis graph is the time taken to evaluate the board state using the neural network. The rest of the time is spent on the other steps of the MCTS algorithm.
 
 ### Reimplementation Plan
