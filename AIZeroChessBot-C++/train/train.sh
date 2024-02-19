@@ -19,7 +19,7 @@ source ~/miniconda3/bin/activate chess
 
 cd ../build
 
-cmake --build .
+cmake --build . --config Release
 
 # Start training via ./AIZeroChessBot, timeout after 12 hours, then requeue the job
 

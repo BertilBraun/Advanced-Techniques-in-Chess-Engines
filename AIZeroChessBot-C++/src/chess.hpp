@@ -850,8 +850,8 @@ private:
 
 public:
     Board(bool starting_position = true)
-        : ep_square(std::nullopt), fullmove_number(1), halfmove_clock(0), turn(WHITE),
-          castling_rights(BB_CORNERS) {
+        : turn(WHITE), castling_rights(BB_CORNERS), ep_square(std::nullopt), fullmove_number(1),
+          halfmove_clock(0) {
         if (starting_position) {
             resetBoard();
         } else {
