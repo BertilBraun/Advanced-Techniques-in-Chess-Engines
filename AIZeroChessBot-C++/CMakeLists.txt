@@ -1,11 +1,23 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
-project(AIZeroChessBot LANGUAGES CXX CUDA)
+project(AIZeroChessBot LANGUAGES CXX)
+
+# Determine if CUDA is available and set languages accordingly
+include(CheckLanguage)
+check_language(CUDA)
+
+if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+    add_definitions(-DUSE_CUDA)
+endif()
 
 # Specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
+
+if(CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
+endif()
 
 set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch")
 
@@ -16,26 +28,47 @@ find_package(Torch REQUIRED)
 # Automatically include all source files from the src directory
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+# General flags for both debug and release
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+
+# Release-specific flags
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG -flto")
+if(CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG --use_fast_math" CACHE STRING "Flags used by the CUDA compiler during release builds." FORCE)
+endif()
+
+if(NOT MSVC)
+    # Additional non-MSVC specific flags
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fno-omit-frame-pointer")
+else()
+    # MSVC specific release flags
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2 /GL")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
+endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
+target_compile_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:RELEASE>:${CMAKE_CXX_FLAGS_RELEASE}>")
+if(CMAKE_CUDA_COMPILER)
+    target_compile_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:RELEASE>:${CMAKE_CUDA_FLAGS_RELEASE}>")
+endif()
+
 target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
-target_link_libraries(${PROJECT_NAME} stdc++fs)
+
+# Conditional linking against stdc++fs if not on MSVC and less than GCC 9
+if(NOT MSVC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(${PROJECT_NAME} stdc++fs)
+endif()
 
 # Optional: Specify include directories if you have header files in different locations
 include_directories(src)
 include_directories(libtorch/include)
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
-
-# The following code block is suggested to be used on Windows.
-# According to https://github.com/pytorch/pytorch/issues/25457,
-# the DLLs need to be copied to avoid memory errors.
-if (MSVC)
-  file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
-  add_custom_command(TARGET AIZeroChessBot
-                     POST_BUILD
-                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                     ${TORCH_DLLS}
-                     $<TARGET_FILE_DIR:AIZeroChessBot>)
-endif (MSVC)
+# Copy DLLs on Windows
+if(MSVC)
+    file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
+    add_custom_command(TARGET ${PROJECT_NAME}
+                       POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       ${TORCH_DLLS}
+                       $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+endif(MSVC)
