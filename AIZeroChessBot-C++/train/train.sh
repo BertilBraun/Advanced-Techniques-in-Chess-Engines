@@ -13,7 +13,12 @@
 #SBATCH --error=train_zero_%j.txt
 
 module load devel/cuda/11.8
-source ~/miniconda3/bin/activate chess
+module load devel/miniconda/4.9.2
+module load mpi/openmpi/default
+module load devel/cmake/3.23.3
+
+conda activate chess
+
 
 cd ../build
 
