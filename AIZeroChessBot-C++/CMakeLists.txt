@@ -34,10 +34,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 # Release-specific flags
 if(NOT MSVC)
     # GCC, Clang, and other UNIX-like compilers
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O=fast -march=native -DNDEBUG")
     if(CMAKE_CUDA_COMPILER)
         # Setting CUDA flags using string APPEND to avoid overriding existing flags
-        string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -O3 -DNDEBUG --use_fast_math")
+        string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -O=fast -DNDEBUG --use_fast_math")
     endif()
 else()
     # MSVC specific flags
