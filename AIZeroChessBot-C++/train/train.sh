@@ -15,10 +15,12 @@
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
 
-export PATH=~/miniconda3/bin:$PATH
-export LD_LIBRARY_PATH=~/miniconda3/lib:$LD_LIBRARY_PATH
-export PATH=~/miniconda3/envs/chess/bin:$PATH
-export LD_LIBRARY_PATH=~/miniconda3/envs/chess/lib:$LD_LIBRARY_PATH
+export PATH=/usr/bin:$PATH  # Adjust to the directory where the desired cmake is located
+export PATH=$PATH:~/miniconda3/bin
+export PATH=$PATH:~/miniconda3/envs/chess/bin
+
+#export LD_LIBRARY_PATH=~/miniconda3/lib:$LD_LIBRARY_PATH
+#export LD_LIBRARY_PATH=~/miniconda3/envs/chess/lib:$LD_LIBRARY_PATH
 
 source ~/miniconda3/bin/activate chess
 
