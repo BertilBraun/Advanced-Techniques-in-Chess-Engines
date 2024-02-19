@@ -15,9 +15,6 @@
 module load devel/cuda/11.8
 source ~/miniconda3/bin/activate chess
 
-conda install -y pytorch torchvision torchaudio cudatoolkit=11.8 -c pytorch
-
-
 # Set LibTorch download URL
 LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcu118.zip"
 LIBTORCH_ZIP="libtorch.zip"
