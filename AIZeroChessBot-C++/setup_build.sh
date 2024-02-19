@@ -13,7 +13,6 @@
 
 
 module load devel/cuda/10.2
-module load devel/cmake/3.23.3
 
 export PATH=~/miniconda3/bin:$PATH
 
