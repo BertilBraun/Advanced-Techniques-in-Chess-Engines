@@ -24,7 +24,7 @@ static inline constexpr int NUM_HIDDEN = 256;
 // 6 types for each color
 static inline constexpr int ENCODING_CHANNELS = 6 + 6;
 
-// Calculated as output of precalculateMoveMappings() but defined here to be able to use it as a
+// Calculated as output of __precalculateMoveMappings() but defined here to be able to use it as a
 // constexpr variable
 static inline constexpr int ACTION_SIZE = 1968;
 

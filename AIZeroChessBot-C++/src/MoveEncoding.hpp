@@ -24,7 +24,7 @@ inline int flipMoveIndexVertical(int moveIndex);
 
 using MoveMapping = std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, 64>, 64>;
 
-inline std::pair<MoveMapping, int> precalculateMoveMappings() {
+inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
     MoveMapping moveMappings{};
     // fill with -1
     for (auto &fromSquare : moveMappings) {
@@ -97,7 +97,7 @@ inline std::pair<MoveMapping, int> precalculateMoveMappings() {
 }
 
 inline std::array<std::tuple<int, int, PieceType>, ACTION_SIZE>
-precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
+__precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 
     std::array<std::tuple<int, int, PieceType>, ACTION_SIZE> reverseMoveMappings;
 
@@ -116,7 +116,7 @@ precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 }
 
 inline std::pair<std::vector<int>, std::vector<int>>
-precalculateFlippedIndices(const MoveMapping &moveMappings) {
+__precalculateFlippedIndices(const MoveMapping &moveMappings) {
 
     std::vector<int> flippedIndicesHorizontal(ACTION_SIZE, -1);
     std::vector<int> flippedIndicesVertical(ACTION_SIZE, -1);
@@ -146,12 +146,13 @@ precalculateFlippedIndices(const MoveMapping &moveMappings) {
     return {flippedIndicesHorizontal, flippedIndicesVertical};
 }
 
-inline const auto __MOVE_MAPPINGS = precalculateMoveMappings().first;
-inline const auto __REVERSE_MOVE_MAPPINGS = precalculateReverseMoveMappings(__MOVE_MAPPINGS);
-inline const auto __FLIPPED_INDICES_HORIZONTAL = precalculateFlippedIndices(__MOVE_MAPPINGS).first;
-inline const auto __FLIPPED_INDICES_VERTICAL = precalculateFlippedIndices(__MOVE_MAPPINGS).second;
+inline const auto __MOVE_MAPPINGS = __precalculateMoveMappings().first;
+inline const auto __REVERSE_MOVE_MAPPINGS = __precalculateReverseMoveMappings(__MOVE_MAPPINGS);
+inline const auto __FLIPPED_INDICES_HORIZONTAL =
+    __precalculateFlippedIndices(__MOVE_MAPPINGS).first;
+inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
-inline torch::Tensor encodeLegalMoves(Board &board) {
+inline torch::Tensor __encodeLegalMoves(Board &board) {
     // Encodes the legal moves of a chess board into a 1D tensor.
     //
     // Each entry in the array represents a possible move on the board. If the
@@ -171,7 +172,7 @@ inline torch::Tensor encodeLegalMoves(Board &board) {
     return legalMovesEncoded;
 }
 
-inline torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
+inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
     // Filters a policy with the legal moves of a chess board.
     //
     // The policy is a 1D tensor representing the probabilities of each move
@@ -183,13 +184,13 @@ inline torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, Boa
     // :param board: The chess board to filter the policy with.
     // :return: The filtered policy.
 
-    torch::Tensor legalMovesEncoded = encodeLegalMoves(board);
+    torch::Tensor legalMovesEncoded = __encodeLegalMoves(board);
     torch::Tensor filteredPolicy = policy * legalMovesEncoded;
     filteredPolicy /= filteredPolicy.sum();
     return filteredPolicy;
 }
 
-inline std::vector<std::pair<Move, float>> mapPolicyToMoves(const torch::Tensor &policy) {
+inline std::vector<std::pair<Move, float>> __mapPolicyToMoves(const torch::Tensor &policy) {
     std::vector<std::pair<Move, float>> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
@@ -215,8 +216,8 @@ filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy, Board &boa
     // :param board: The chess board to filter the policy with.
     // :return: The list of moves with their corresponding probabilities.
 
-    auto filteredPolicy = filterPolicyWithLegalMoves(policy, board);
-    auto movesWithProbabilities = mapPolicyToMoves(filteredPolicy);
+    auto filteredPolicy = __filterPolicyWithLegalMoves(policy, board);
+    auto movesWithProbabilities = __mapPolicyToMoves(filteredPolicy);
     return movesWithProbabilities;
 }
 
