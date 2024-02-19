@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=setup                   # job name
 #SBATCH --partition=dev_gpu_4              # mby GPU queue for the resource allocation.
-#SBATCH --time=00:10:00                    # wall-clock time limit
+#SBATCH --time=00:05:00                    # wall-clock time limit
 #SBATCH --mem=100000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
 #SBATCH --cpus-per-task=1                  # number of CPUs required per MPI task
