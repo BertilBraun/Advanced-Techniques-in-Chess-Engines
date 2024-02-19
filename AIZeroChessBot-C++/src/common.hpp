@@ -62,5 +62,38 @@ inline bool tqdm(int current, int total, std::string desc = "", int width = 50) 
         std::cout << std::endl;
     }
     std::cout.flush();
-    return true;
+    return current < total;
+}
+
+inline std::map<std::string, unsigned long long> __timeit_results;
+
+// Time a function and add the result to the timeit results
+// Should be callable like this:
+// timeit([&] { return someFunction(); }, "someFunction");
+template <typename Func> auto timeit(Func func, const std::string &funcName) -> decltype(func()) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Execute the function and store its return value
+    auto result = func();
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    __timeit_results[funcName] = duration;
+
+    return result;
+}
+
+inline std::string get_timeit_results() {
+    std::string result;
+    for (auto &pair : __timeit_results) {
+        result += pair.first + ": " + std::to_string(pair.second) + "ms\n";
+    }
+    return result;
+}
+
+inline std::string get_timeit_results_and_reset() {
+    std::string result = get_timeit_results();
+    __timeit_results.clear();
+    return result;
 }

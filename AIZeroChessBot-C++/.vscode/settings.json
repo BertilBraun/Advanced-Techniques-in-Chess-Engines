@@ -13,6 +13,7 @@
         "seventyfive",
         "softmax",
         "Stockfish",
+        "timeit",
         "TPUs",
         "Zobrist"
     ],

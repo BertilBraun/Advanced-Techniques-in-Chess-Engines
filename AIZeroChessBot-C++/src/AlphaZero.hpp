@@ -32,47 +32,39 @@ public:
     }
 
     void learn() {
-        std::vector<SelfPlayMemory> oldMemory;
         LearningStats learningStats;
-
         for (int iteration = m_startingIteration; iteration < args.numIterations; ++iteration) {
             TrainingStats trainStats;
-            std::vector<SelfPlayMemory> memory;
 
             int selfPlayGamesInParallel = args.numParallelGames * args.numSeparateNodesOnCluster;
             int selfPlayIterations = args.numSelfPlayIterations / selfPlayGamesInParallel;
 
             m_model->eval(); // Set model to evaluation mode
-            for (int i = 0; tqdm(i, selfPlayIterations, "Self-play") && i < selfPlayIterations;
-                 ++i) {
+            for (int i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
                 // Collect new memories from self-play
-                auto newMemories = m_selfPlay.selfPlay();
-                extend(memory, newMemories);
+                timeit([&] { m_selfPlay.selfPlay(); }, "selfPlay");
             }
 
-            std::cout << "Collected " << memory.size() << " self-play memories\n";
-            saveMemory(memory, iteration);
+            // Output timeit stats
+            std::cout << "Timeit stats:" << std::endl
+                      << get_timeit_results_and_reset() << std::endl;
 
             if (m_isRootNode) {
-                std::cout << "Loading all memories for training" << std::endl;
-                memory = loadAllMemories(iteration);
+                auto totalDatasetSize = getTotalDatasetSize();
+                std::cout << "Training with " << totalDatasetSize << " memories\n";
 
-                std::cout << "Training with " << memory.size() << " self-play memories\n";
                 m_model->train(); // Set model to training mode
-                for (int i = 0; tqdm(i, args.numEpochs, "Training") && i < args.numEpochs; ++i) {
-                    trainStats += train(memory); // Accumulate training stats
+                for (int i = 0; tqdm(i, args.numEpochs, "Training"); ++i) {
+                    trainStats += train(); // Accumulate training stats
                 }
 
                 std::cout << "Iteration " << (iteration + 1) << ": " << trainStats.toString()
                           << std::endl;
                 auto modelPath = saveLatestModel(iteration);
-                learningStats.update((int) memory.size(), trainStats);
+                learningStats.update(totalDatasetSize, trainStats);
 
                 // Retain 25% of the memory for the next iteration
-                std::random_device rd;
-                std::mt19937 g(rd());
-                std::shuffle(memory.begin(), memory.end(), g);
-                oldMemory.assign(memory.begin(), memory.begin() + memory.size() / 4);
+                deleteOldMemories();
 
                 // evaluateAlphaVsStockfish(modelPath);
             }
@@ -95,33 +87,22 @@ private:
     unsigned int m_id;
     bool m_isRootNode;
 
-    TrainingStats train(std::vector<SelfPlayMemory> &memory) {
+    TrainingStats train() {
+        auto memoryPaths = getMemoryPaths();
         std::random_device rd;
         std::mt19937 g(rd());
-        std::shuffle(memory.begin(), memory.end(), g);
+        std::shuffle(memoryPaths.begin(), memoryPaths.end(), g);
 
         TrainingStats trainStats;
 
         int batchSize = args.batchSize;
-        for (size_t batchIdx = 0; batchIdx < memory.size(); batchIdx += batchSize) {
-            size_t endIdx = std::min(batchIdx + batchSize, memory.size());
+        for (auto memoryPath : memoryPaths) {
+            auto [states, policyTargets, valueTargets] = loadMemory(memoryPath);
 
-            std::vector<torch::Tensor> states, policyTargets, valueTargets;
+            auto [policy, value] = m_model->forward(states);
 
-            for (size_t i = batchIdx; i < endIdx; ++i) {
-                states.push_back(memory[i].state);
-                policyTargets.push_back(memory[i].policyTargets);
-                valueTargets.push_back(memory[i].valueTargets);
-            }
-
-            auto stateTensor = torch::stack(states).to(m_model->device);
-            auto policyTargetTensor = torch::stack(policyTargets).to(m_model->device);
-            auto valueTargetTensor = torch::stack(valueTargets).to(m_model->device);
-
-            auto [policy, value] = m_model->forward(stateTensor);
-
-            auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargetTensor);
-            auto valueLoss = torch::mse_loss(value, valueTargetTensor);
+            auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
+            auto valueLoss = torch::mse_loss(value, valueTargets);
             auto loss = policyLoss + valueLoss;
 
             m_optimizer.zero_grad();
@@ -244,86 +225,66 @@ private:
         return true;
     }
 
-    void saveMemory(const std::vector<SelfPlayMemory> &memory, int iteration) const {
-        std::filesystem::path memoryPath =
-            m_savePath / MEMORY_DIR_NAME / (std::to_string(iteration) + "_" + std::to_string(m_id));
-
-        // Ensure the directory exists
-        std::filesystem::create_directories(memoryPath);
-
-        // Serialize components to individual tensors
-        for (size_t i = 0; i < memory.size(); ++i) {
-            const auto &mem = memory[i];
-            torch::save(mem.state, (memoryPath / ("state_" + std::to_string(i) + ".pt")).string());
-            torch::save(mem.policyTargets,
-                        (memoryPath / ("policyTargets_" + std::to_string(i) + ".pt")).string());
-            torch::save(mem.valueTargets,
-                        (memoryPath / ("valueTargets_" + std::to_string(i) + ".pt")).string());
-        }
-
-        std::cout << "Memory saved at iteration " << iteration << std::endl;
-
-        barrier("memory_saved");
-    }
-
-    std::vector<SelfPlayMemory> loadMemory(const std::filesystem::path &memoryPath) const {
-        std::vector<SelfPlayMemory> memory;
-
-        size_t i = 0;
-        while (true) {
-            auto statePath = memoryPath / ("state_" + std::to_string(i) + ".pt");
-            auto policyTargetsPath = memoryPath / ("policyTargets_" + std::to_string(i) + ".pt");
-            auto valueTargetsPath = memoryPath / ("valueTargets_" + std::to_string(i) + ".pt");
-
-            if (!std::filesystem::exists(statePath) ||
-                !std::filesystem::exists(policyTargetsPath) ||
-                !std::filesystem::exists(valueTargetsPath)) {
-                break; // No more files to load
-            }
-
-            torch::Tensor state, policyTargets, valueTargetTensor;
-            torch::load(state, statePath.string());
-            torch::load(policyTargets, policyTargetsPath.string());
-            torch::load(valueTargetTensor, valueTargetsPath.string());
-            float valueTargets = valueTargetTensor.item<float>();
-
-            memory.emplace_back(std::move(state), std::move(policyTargets), valueTargets);
-            ++i;
-        }
-
-        return memory;
-    }
-
-    std::vector<SelfPlayMemory> loadAllMemories(int iteration) const {
-        std::vector<SelfPlayMemory> allMemory;
-
+    int getTotalDatasetSize() const {
+        int totalDatasetSize = 0;
         for (const auto &entry :
              std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
-            // Load all memories for the current iteration
-            // That means call LoadMemory for all folders that have the current iteration in the
-            // first part of their name
-
-            bool isDir = entry.is_directory();
-            bool startsWithIteration =
-                entry.path().stem().string().find(std::to_string(iteration)) == 0;
-
-            if (isDir && startsWithIteration) {
-                std::vector<SelfPlayMemory> memoryPart = loadMemory(entry.path());
-                extend(allMemory, memoryPart);
-
-                // Remove the entry after loading the memory
-                std::filesystem::remove_all(entry.path());
+            if (entry.is_directory()) {
+                // if all files are present, increment the totalDatasetSize
+                if (std::filesystem::exists(entry.path() / "states.pt") &&
+                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
+                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
+                    totalDatasetSize++;
+                }
             }
         }
+        return totalDatasetSize;
+    }
 
-        return allMemory;
+    void deleteOldMemories(int retentionFactor = 25) const {
+        for (const auto &entry :
+             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
+            if (entry.is_directory()) {
+                if (std::filesystem::exists(entry.path() / "states.pt") &&
+                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
+                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
+                    if (rand() % 100 > retentionFactor) {
+                        // delete the entries in the folder as well as the folder itself
+                        std::filesystem::remove_all(entry.path());
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<std::filesystem::path> getMemoryPaths() const {
+        std::vector<std::filesystem::path> memoryPaths;
+        for (const auto &entry :
+             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
+            if (entry.is_directory()) {
+                if (std::filesystem::exists(entry.path() / "states.pt") &&
+                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
+                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
+                    memoryPaths.push_back(entry.path());
+                }
+            }
+        }
+        return memoryPaths;
+    }
+
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+    loadMemory(const std::filesystem::path &memoryPath) const {
+        torch::Tensor states, policyTargets, valueTargets;
+
+        torch::load(states, (memoryPath / "states.pt").string(), m_model->device);
+        torch::load(policyTargets, (memoryPath / "policyTargets.pt").string(), m_model->device);
+        torch::load(valueTargets, (memoryPath / "valueTargets.pt").string(), m_model->device);
+
+        return std::make_tuple(states, policyTargets, valueTargets);
     }
 
     void initializeCluster() {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<unsigned int> dis(0, 1000000000);
-        m_id = dis(gen);
+        m_id = rand();
 
         std::filesystem::create_directories(COMMUNICATION_DIR);
         // Delete everything in the communication directory

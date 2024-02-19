@@ -67,7 +67,7 @@ struct NetworkImpl : torch::nn::Module {
         this->to(device);
     }
 
-    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
+    std::pair<torch::Tensor, torch::Tensor> __forward(torch::Tensor x) {
         x = startBlock->forward(x);
         for (const auto &block : *backBone) {
             x = block->as<ResBlock>()->forward(x);
@@ -75,6 +75,10 @@ struct NetworkImpl : torch::nn::Module {
         auto policy = policyHead->forward(x);
         auto value = valueHead->forward(x);
         return {policy, value};
+    }
+
+    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
+        return timeit([&] { return this->__forward(x); }, "Network forward");
     }
 
     std::pair<torch::Tensor, torch::Tensor> inference(torch::Tensor x) {
