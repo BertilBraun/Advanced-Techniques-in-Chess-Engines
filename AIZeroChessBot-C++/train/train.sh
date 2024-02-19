@@ -12,6 +12,13 @@
 #SBATCH --output=train_zero_%j.txt
 #SBATCH --error=train_zero_%j.txt
 
-cd ../build/Release
+module load devel/cuda/11.8
+source ~/miniconda3/bin/activate chess
+
+cd ../build
+
+cmake --build . --config Release
+
+cd Release
 
 ./AIZeroChessBot
