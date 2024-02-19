@@ -21,12 +21,13 @@ export PATH=~/miniconda3/bin:$PATH
 # if conda doesnt have the chess environment, create it
 if ! conda env list | grep -q chess; then
     conda create -n chess python=3.8
-    conda activate chess
+    source ~/miniconda3/bin/activate chess
     
     conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch
+    conda install -c anaconda cudnn
 else
     echo "Conda environment 'chess' already exists."
-    conda activate chess
+    source ~/miniconda3/bin/activate chess
 fi
 
 # Set LibTorch download URL
