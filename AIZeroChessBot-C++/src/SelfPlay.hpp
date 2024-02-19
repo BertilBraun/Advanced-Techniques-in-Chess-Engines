@@ -29,7 +29,7 @@ public:
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());
 
         while (!selfPlayGames.empty()) {
-            timeit([&] { expandSelfPlayGames(selfPlayGames); }, "expandSelfPlayGames");
+            expandSelfPlayGames(selfPlayGames);
 
             Color currentPlayerTurn = selfPlayGames[0].root->board.turn;
 

@@ -42,7 +42,12 @@ public:
             m_model->eval(); // Set model to evaluation mode
             for (int i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
                 // Collect new memories from self-play
-                timeit([&] { m_selfPlay.selfPlay(); }, "selfPlay");
+                timeit(
+                    [&] {
+                        m_selfPlay.selfPlay();
+                        return 0; // Necessary to return something other than void
+                    },
+                    "selfPlay");
             }
 
             // Output timeit stats
