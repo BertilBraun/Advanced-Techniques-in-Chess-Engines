@@ -43,7 +43,7 @@ public:
             int selfPlayIterations = args.numSelfPlayIterations / selfPlayGamesInParallel;
 
             m_model->eval(); // Set model to evaluation mode
-            for (int i = 0; i < selfPlayIterations && tqdm(i, selfPlayIterations, "Self-play");
+            for (int i = 0; tqdm(i, selfPlayIterations, "Self-play") && i < selfPlayIterations;
                  ++i) {
                 // Collect new memories from self-play
                 auto newMemories = m_selfPlay.selfPlay();
@@ -59,7 +59,7 @@ public:
 
                 std::cout << "Training with " << memory.size() << " self-play memories\n";
                 m_model->train(); // Set model to training mode
-                for (int i = 0; i < args.numEpochs && tqdm(i, args.numEpochs, "Training"); ++i) {
+                for (int i = 0; tqdm(i, args.numEpochs, "Training") && i < args.numEpochs; ++i) {
                     trainStats += train(memory); // Accumulate training stats
                 }
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <bit>
 #include <cassert>
 #include <cmath>
 #include <functional>
@@ -104,6 +103,9 @@ public:
     Termination termination;
     std::optional<Color> winner;
 
+    Outcome(Termination termination, std::optional<Color> winner = std::nullopt)
+        : termination(termination), winner(winner) {}
+
     std::string result() const {
         if (!winner.has_value()) {
             return "1/2-1/2";
@@ -187,25 +189,29 @@ inline constexpr Square squareRank(Square square) { return (Square) (square >> 3
 
 inline constexpr Square squareMirror(Square square) { return (Square) (square ^ 0x38); }
 
-inline constexpr std::array<Square, 64> SQUARES_180 = [] {
-    std::array<Square, 64> squares_180;
+inline constexpr std::array<Square, 64> __createSquares180() {
+    std::array<Square, 64> squares_180{};
     for (size_t i = 0; i < SQUARES.size(); ++i) {
         squares_180[i] = squareMirror(SQUARES[i]);
     }
     return squares_180;
-}();
+}
+
+inline constexpr std::array<Square, 64> SQUARES_180 = __createSquares180();
 
 using Bitboard = unsigned long long;
 inline constexpr Bitboard BB_EMPTY = 0;
 inline constexpr Bitboard BB_ALL = 0xFFFF'FFFF'FFFF'FFFF;
 
-inline constexpr std::array<Bitboard, 64> BB_SQUARES = [] {
-    std::array<Bitboard, 64> squares;
+inline constexpr std::array<Bitboard, 64> __createBBSquares() {
+    std::array<Bitboard, 64> squares{};
     for (int i = 0; i < 64; ++i) {
         squares[i] = 1ULL << i;
     }
     return squares;
-}();
+}
+
+inline constexpr std::array<Bitboard, 64> BB_SQUARES = __createBBSquares();
 
 // clang-format off
 enum BB_SQUARE : Bitboard {
@@ -226,13 +232,15 @@ inline constexpr Bitboard BB_CENTER = BB_D4 | BB_E4 | BB_D5 | BB_E5;
 inline constexpr Bitboard BB_LIGHT_SQUARES = 0x55AA'55AA'55AA'55AA;
 inline constexpr Bitboard BB_DARK_SQUARES = 0xAA55'AA55'AA55'AA55;
 
-inline constexpr std::array<Bitboard, 8> BB_FILES = [] {
-    std::array<Bitboard, 8> files;
+inline constexpr std::array<Bitboard, 8> __createBBFiles() {
+    std::array<Bitboard, 8> files{};
     for (int i = 0; i < 8; ++i) {
         files[i] = 0x0101'0101'0101'0101ULL << i;
     }
     return files;
-}();
+}
+
+inline constexpr std::array<Bitboard, 8> BB_FILES = __createBBFiles();
 
 // clang-format off
 enum BB_FILE : Bitboard {
@@ -247,13 +255,15 @@ enum BB_FILE : Bitboard {
 };
 // clang-format on
 
-inline constexpr std::array<Bitboard, 8> BB_RANKS = [] {
-    std::array<Bitboard, 8> ranks;
+inline constexpr std::array<Bitboard, 8> __createBBRanks() {
+    std::array<Bitboard, 8> ranks{};
     for (int i = 0; i < 8; ++i) {
         ranks[i] = 0xFFull << (8 * i);
     }
     return ranks;
-}();
+}
+
+inline constexpr std::array<Bitboard, 8> BB_RANKS = __createBBRanks();
 
 // clang-format off
 enum BB_RANK : Bitboard {
@@ -297,10 +307,34 @@ inline int squareKnightDistance(Square a, Square b) {
     return m + ((m + dx + dy) % 2);
 }
 
-inline int lsb(Bitboard bb) {
+inline constexpr int lsb(Bitboard bb) {
     if (bb == 0)
         return -1;
-    return std::countr_zero(bb);
+    int n = 0;
+    if (!(bb & 0xFFFFFFFF)) {
+        bb >>= 32;
+        n += 32;
+    }
+    if (!(bb & 0xFFFF)) {
+        bb >>= 16;
+        n += 16;
+    }
+    if (!(bb & 0xFF)) {
+        bb >>= 8;
+        n += 8;
+    }
+    if (!(bb & 0xF)) {
+        bb >>= 4;
+        n += 4;
+    }
+    if (!(bb & 0x3)) {
+        bb >>= 2;
+        n += 2;
+    }
+    if (!(bb & 0x1)) {
+        n += 1;
+    }
+    return n;
 }
 
 inline std::vector<int> scanForward(Bitboard bb) {
@@ -313,10 +347,34 @@ inline std::vector<int> scanForward(Bitboard bb) {
     return squares;
 }
 
-inline int msb(Bitboard bb) {
+inline constexpr int msb(Bitboard bb) {
     if (bb == 0)
         return -1;
-    return 63 - std::countl_zero(bb);
+    int n = 0;
+    if (bb & 0xFFFFFFFF00000000) {
+        bb >>= 32;
+        n += 32;
+    }
+    if (bb & 0xFFFF0000) {
+        bb >>= 16;
+        n += 16;
+    }
+    if (bb & 0xFF00) {
+        bb >>= 8;
+        n += 8;
+    }
+    if (bb & 0xF0) {
+        bb >>= 4;
+        n += 4;
+    }
+    if (bb & 0xC) {
+        bb >>= 2;
+        n += 2;
+    }
+    if (bb & 0x2) {
+        n += 1;
+    }
+    return n;
 }
 
 inline std::vector<Square> scanReversed(Bitboard bb) {
@@ -329,7 +387,27 @@ inline std::vector<Square> scanReversed(Bitboard bb) {
     return squares;
 }
 
-inline int popcount(Bitboard bb) { return std::popcount(bb); }
+inline constexpr int popcount(Bitboard bb) {
+    int count = 0;
+    while (bb != 0) {
+        count += bb & 1; // Increment count if the current LSB is 1.
+        bb >>= 1;        // Shift right to check the next bit in the next iteration.
+    }
+    return count;
+    const uint64_t m1 = 0x5555555555555555;  // binary: 0101...
+    const uint64_t m2 = 0x3333333333333333;  // binary: 00110011..
+    const uint64_t m4 = 0x0f0f0f0f0f0f0f0f;  // binary:  4 zeros,  4 ones ...
+    const uint64_t m8 = 0x00ff00ff00ff00ff;  // binary:  8 zeros,  8 ones ...
+    const uint64_t m16 = 0x0000ffff0000ffff; // binary: 16 zeros, 16 ones ...
+    const uint64_t m32 = 0x00000000ffffffff; // binary: 32 zeros, 32 ones
+    const uint64_t hff = 0xffffffffffffffff; // binary: all ones
+    const uint64_t h01 = 0x0101010101010101; // the sum of 256 to the power of 0,1,2,3...
+
+    bb -= (bb >> 1) & m1;              // put count of each 2 bits into those 2 bits
+    bb = (bb & m2) + ((bb >> 2) & m2); // put count of each 4 bits into those 4 bits
+    bb = (bb + (bb >> 4)) & m4;        // put count of each 8 bits into those 8 bits
+    return (bb * h01) >> 56; // returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ...
+}
 
 inline constexpr Bitboard flipVertical(Bitboard bb) {
     bb = ((bb >> 8) & 0x00FF'00FF'00FF'00FF) | ((bb & 0x00FF'00FF'00FF'00FF) << 8);
@@ -346,7 +424,7 @@ inline constexpr Bitboard flipHorizontal(Bitboard bb) {
 }
 
 inline constexpr Bitboard flipDiagonal(Bitboard bb) {
-    Bitboard t;
+    Bitboard t = 0;
     t = (bb ^ (bb << 28)) & 0x0F0F'0F0F'0000'0000ULL;
     bb = bb ^ t ^ (t >> 28);
     t = (bb ^ (bb << 14)) & 0x3333'0000'3333'0000ULL;
@@ -357,7 +435,7 @@ inline constexpr Bitboard flipDiagonal(Bitboard bb) {
 }
 
 inline constexpr Bitboard flipAntiDiagonal(Bitboard bb) {
-    Bitboard t;
+    Bitboard t = 0;
     t = bb ^ (bb << 36);
     bb = bb ^ ((t ^ (bb >> 36)) & 0xF0F0'F0F0'0F0F'0F0FULL);
     t = (bb ^ (bb << 18)) & 0xCCCC'0000'CCCC'0000ULL;
@@ -2063,8 +2141,7 @@ private:
 
         Bitboard clean_rights = _cleanCastlingRights();
         for (int candidate = msb(clean_rights & back_rank & to_mask);
-             clean_rights && candidate >= 0;
-             candidate = msb(clean_rights)) {
+             clean_rights && candidate >= 0; candidate = msb(clean_rights)) {
             Bitboard rook = BB_SQUARES[candidate];
 
             bool a_side = rook < king;
@@ -2102,3 +2179,91 @@ private:
     }
 };
 } // namespace chess
+
+/* The following code is a small test suite for the bitboard functions.
+
+#include <array>
+#include <cstdint>
+#include <iostream>
+
+void testLsbMsb() {
+    struct Test {
+        uint64_t input;
+        int expectedLsb;
+        int expectedMsb;
+    };
+
+    std::array<Test, 8> tests = {{
+        {0b1, 0, 0},
+        {0b10, 1, 1},
+        {0b100, 2, 2},
+        {0b1000, 3, 3},
+        {0b10000, 4, 4},
+        {0xFFFFFFFFFFFFFFFF, 0, 63},
+        {0x8000000000000000, 63, 63},
+        {0, -1, -1} // Edge case: no bits set
+    }};
+
+    bool passed = true;
+    for (const auto &test : tests) {
+        int lsbResult = lsb(test.input);
+        int msbResult = msb(test.input);
+        if (lsbResult != test.expectedLsb || msbResult != test.expectedMsb) {
+            std::cerr << "Test failed for input: " << test.input << "\n"
+                      << "  Expected LSB: " << test.expectedLsb << ", got: " << lsbResult << "\n"
+                      << "  Expected MSB: " << test.expectedMsb << ", got: " << msbResult << "\n";
+            passed = false;
+        }
+    }
+
+    if (passed) {
+        std::cout << "All tests passed!\n";
+    } else {
+        std::cerr << "Some tests failed.\n";
+    }
+}
+
+void testPopcount() {
+    struct Test {
+        uint64_t input;
+        int expected;
+    };
+
+    std::vector<Test> tests = {
+        {0x0, 0},                 // No bits set
+        {0x1, 1},                 // LSB set
+        {0x8000000000000000, 1},  // MSB set
+        {0xFFFFFFFFFFFFFFFF, 64}, // All bits set
+        {0xAAAAAAAAAAAAAAAA, 32}, // Alternate bits set
+        {0x5555555555555555, 32}, // Alternate bits set, starting with LSB
+        {0x0F0F0F0F0F0F0F0F, 32}, // Nibble patterns
+        {0x3333333333333333, 32}, // Pair patterns
+        {0x0101010101010101, 8},  // Every 8th bit set
+        {0x1249249249249249, 21}, // Sparse bits set
+    };
+
+    bool allTestsPassed = true;
+
+    for (const auto &test : tests) {
+        int result = popcount(test.input);
+        if (result != test.expected) {
+            std::cerr << "Test failed for input: " << test.input << "\n"
+                      << "  Expected: " << test.expected << ", got: " << result << "\n";
+            allTestsPassed = false;
+        }
+    }
+
+    if (allTestsPassed) {
+        std::cout << "All tests passed!\n";
+    } else {
+        std::cerr << "Some tests failed.\n";
+    }
+}
+
+int main() {
+    testLsbMsb();
+    testPopcount();
+    return 0;
+}
+
+*/

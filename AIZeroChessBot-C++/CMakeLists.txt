@@ -2,31 +2,9 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(AIZeroChessBot)
 
 # Specify the C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CUDA_STANDARD 20)
-
-if(NOT DEFINED CMAKE_CUDA20_STANDARD_COMPILE_OPTION)
-  set(CMAKE_CUDA20_STANDARD_COMPILE_OPTION "")
-  set(CMAKE_CUDA20_EXTENSION_COMPILE_OPTION "")
-endif()
-
-set(CMAKE_CUDA_FLAGS "-std=c++20")
-
-
-# if not MSVC then set the Cuda standard
-# if(NOT MSVC)
-#   set(CMAKE_CUDA_STANDARD 20)
-#   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-# endif(NOT MSVC)
-
-# if(NOT CMAKE_BUILD_TYPE)
-#   set(CMAKE_BUILD_TYPE Release)
-# endif()
-# 
-# set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-# set(CMAKE_CXX_FLAGS_DEBUG "-g")
-# set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CUDA_STANDARD 17)
 
 cmake_policy(SET CMP0054 NEW)
 

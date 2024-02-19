@@ -6,15 +6,15 @@ set LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-w
 set LIBTORCH_ZIP=libtorch.zip
 
 rem Create a directory for LibTorch if it doesn't exist
-rem if not exist libtorch mkdir libtorch
+if not exist libtorch mkdir libtorch
 
 rem Download LibTorch only if it hasn't been downloaded yet
-rem if not exist libtorch\%LIBTORCH_ZIP% (
-rem    echo Downloading LibTorch...
-rem    powershell -Command "Invoke-WebRequest -Uri %LIBTORCH_URL% -OutFile libtorch\%LIBTORCH_ZIP%"
-rem    echo Extracting LibTorch...
-rem    powershell -Command "Expand-Archive -Path libtorch\%LIBTORCH_ZIP% -DestinationPath . -Force"
-rem)
+if not exist libtorch\%LIBTORCH_ZIP% (
+    echo Downloading LibTorch...
+    powershell -Command "Invoke-WebRequest -Uri %LIBTORCH_URL% -OutFile libtorch\%LIBTORCH_ZIP%"
+    echo Extracting LibTorch...
+    powershell -Command "Expand-Archive -Path libtorch\%LIBTORCH_ZIP% -DestinationPath . -Force"
+)
 
 rem Create a build directory
 if not exist build mkdir build
