@@ -15,6 +15,9 @@
 module load devel/cuda/11.6
 
 export PATH=~/miniconda3/bin:$PATH
+export LD_LIBRARY_PATH=~/miniconda3/lib:$LD_LIBRARY_PATH
+export PATH=~/miniconda3/envs/chess/bin:$PATH
+export LD_LIBRARY_PATH=~/miniconda3/envs/chess/lib:$LD_LIBRARY_PATH
 
 source ~/miniconda3/bin/activate chess
 
