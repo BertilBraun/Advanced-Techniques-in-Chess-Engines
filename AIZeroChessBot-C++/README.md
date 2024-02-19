@@ -105,7 +105,8 @@ To run your project:
 
 ## Performance Problems
 
-- The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
+The Python implementation of the MCTS algorithm is slow and inefficient, especially when combined with a neural network evaluation function which should be taking longer to evaluate the board state than the expansion and simulation steps of the MCTS algorithm. This is a performance bottleneck that needs to be addressed.
+
 ![MCTS Performance](/AIZeroChessBot/documentation/performance_analysis.png)
 
 Only the small pink section in the performance analysis graph is the time taken to evaluate the board state using the neural network. The rest of the time is spent on the other steps of the MCTS algorithm.
@@ -123,8 +124,10 @@ Only the small pink section in the performance analysis graph is the time taken 
 - Check if the game is over
 - Get the game result
 - Piece At / Get Representation of all pieces on the Board
+
+Nothing else is needed for the MCTS algorithm to work.
   
-For a chess framework, take a look at [Stockfish](https://github.com/official-stockfish/Stockfish) and [Chess-Coding-Adventure](https://github.com/SebLague/Chess-Coding-Adventure/tree/Chess-V2-UCI) for inspiration.
+For a chess framework, take a look at [Stockfish](https://github.com/official-stockfish/Stockfish) and [Chess-Coding-Adventure](https://github.com/SebLague/Chess-Coding-Adventure/tree/Chess-V2-UCI) for inspiration. For simplicity, the Python-Chess library was ported to C++ and stripped down to the bare minimum needed for the MCTS algorithm to work.
 
 **Machine Learning Frameworks:**
 
