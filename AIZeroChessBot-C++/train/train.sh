@@ -13,6 +13,7 @@
 #SBATCH --error=train_zero_%j.txt
 
 module load devel/cuda/11.6
+module load devel/cmake/3.23.3
 
 export PATH=~/miniconda3/bin:$PATH
 export LD_LIBRARY_PATH=~/miniconda3/lib:$LD_LIBRARY_PATH
