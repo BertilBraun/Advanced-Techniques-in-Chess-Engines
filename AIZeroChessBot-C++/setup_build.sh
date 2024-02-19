@@ -12,21 +12,25 @@
 #SBATCH --error=setup_%j.txt
 
 
-module load devel/cuda/11.8
+module load devel/cuda/10.2
 module load devel/cmake/3.23.3
 
+export PATH=~/miniconda3/bin:$PATH
+
+
 # if conda doesnt have the chess environment, create it
-if ! source ~/miniconda3/bin/conda-env list | grep -q chess; then
-    source ~/miniconda3/bin/conda create -n chess python=3.8
+if ! conda env list | grep -q chess; then
+    conda create -n chess python=3.8
+    conda activate chess
+    
+    conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch
+else
+    echo "Conda environment 'chess' already exists."
+    conda activate chess
 fi
 
-source ~/miniconda3/bin/activate chess
-
-pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
-
-
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcu118.zip"
+LIBTORCH_URL="https://download.pytorch.org/libtorch/cu102/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu102.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist

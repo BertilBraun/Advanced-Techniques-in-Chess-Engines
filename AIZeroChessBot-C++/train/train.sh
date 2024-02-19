@@ -15,7 +15,9 @@
 module load devel/cuda/11.8
 module load devel/cmake/3.23.3
 
-source ~/miniconda3/bin/activate chess
+export PATH=~/miniconda3/bin:$PATH
+
+conda activate chess
 
 
 cd ../build
