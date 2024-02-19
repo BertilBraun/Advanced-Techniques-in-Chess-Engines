@@ -13,14 +13,17 @@
 
 
 module load devel/cuda/11.8
-module load devel/miniconda/4.9.2
-module load mpi/openmpi/default
 module load devel/cmake/3.23.3
 
-conda create -n chess python=3.8
-conda activate chess
+# if conda doesnt have the chess environment, create it
+if ! source ~/miniconda3/bin/conda-env list | grep -q chess; then
+    source ~/miniconda3/bin/conda create -n chess python=3.8
+fi
 
-conda install pytorch torchvision torchaudio cudatoolkit=11.8 -c pytorch -c conda-forge
+source ~/miniconda3/bin/activate chess
+
+pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
+
 
 # Set LibTorch download URL
 LIBTORCH_URL="https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcu118.zip"
