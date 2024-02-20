@@ -10,4 +10,6 @@
 #SBATCH --output=multinode_test.txt
 #SBATCH --error=multinode_test.txt
 
+module load mpi/openmpi/4.1
+
 srun python multinode_test.py

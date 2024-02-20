@@ -14,6 +14,8 @@
 
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
+module load mpi/openmpi/4.1
+
 
 source ~/miniconda3/bin/activate chess
 
