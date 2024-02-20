@@ -1,10 +1,25 @@
 #include "common.hpp"
 
-#include "AlphaZero.hpp"
+#include "AlphaZeroSelfPlayer.hpp"
+#include "AlphaZeroTrainer.hpp"
 #include "Network.hpp"
 #include "TrainingArgs.hpp"
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    // zeroth argument should be the name of the program
+    // first argument should be either "root" or "worker"
+    // second argument should be the rank of the process
+    // third argument should be the number of processes
+
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " [root|worker] <rank> <numProcesses>" << std::endl;
+        return 1;
+    }
+
+    bool isRoot = std::string(argv[1]) == "root";
+    size_t rank = std::stoul(argv[2]);
+    size_t numProcesses = std::stoul(argv[3]);
 
     Network model;
     auto optimizer =
@@ -27,23 +42,30 @@ int main() {
     */
 
     TrainingArgs args{
-        200,      // numIterations
-        256,      // numSelfPlayIterations
-        32,       // numParallelGames
-        200,      // numIterationsPerTurn
-        20,       // numEpochs
-        1,        // numSeparateNodesOnCluster
-        64,       // batchSize
-        1.0f,     // temperature
-        0.25f,    // dirichletEpsilon
-        0.03f,    // dirichletAlpha
-        2.0f,     // cParam
-        "models", // savePath
-        50        // retentionRate
+        200,          // numIterations
+        256,          // numSelfPlayIterations
+        32,           // numParallelGames
+        200,          // numIterationsPerTurn
+        20,           // numEpochs
+        numProcesses, // numSeparateNodesOnCluster
+        64,           // batchSize
+        1.0f,         // temperature
+        0.25f,        // dirichletEpsilon
+        0.03f,        // dirichletAlpha
+        2.0f,         // cParam
+        "models",     // savePath
+        50            // retentionRate (in percent)
     };
 
-    AlphaZero alphaZero(model, optimizer, args);
-    alphaZero.learn();
+    if (isRoot) {
+        std::cout << "Trainer process started" << std::endl;
+        AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
+        alphaZeroTrainer.run();
+    } else {
+        std::cout << "Worker process " << rank << " of " << numProcesses << " started" << std::endl;
+        AlphaZeroSelfPlayer alphaZeroSelfPlayer(rank, model, args);
+        alphaZeroSelfPlayer.run();
+    }
 
     return 0;
 }

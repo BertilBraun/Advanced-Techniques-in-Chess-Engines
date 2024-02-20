@@ -1,6 +1,3 @@
-// This bot is heavily based on the Alpha Zero From Scratch Project by foersterrober
-// (https://github.com/foersterrobert/AlphaZeroFromScratch/blob/main/9.AlphaParallel.ipynb)
-
 #pragma once
 
 #include "common.hpp"
@@ -26,7 +23,6 @@ public:
     SelfPlay(Network &model, const TrainingArgs &args) : m_model(model), m_args(args) {}
 
     SelfPlayStats selfPlay() {
-        std::vector<SelfPlayMemory> selfPlayMemoryBatch;
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());
         SelfPlayStats selfPlayStats;
 
@@ -36,7 +32,8 @@ public:
             Color currentPlayerTurn = selfPlayGames[0].root->board.turn;
 
             size_t numRemainingGames = selfPlayGames.size();
-            for (int i = ((int) selfPlayGames.size()) - 1; i >= 0; --i) { // must be signed
+
+            for (size_t i = 0; i < selfPlayGames.size(); ++i) {
                 auto &game = selfPlayGames[i];
 
                 torch::Tensor actionProbabilities = getActionProbabilities(*game.root);
@@ -48,17 +45,17 @@ public:
 
                 if (game.board.isGameOver()) {
                     // If the game is over, add the training data to the self play memory
-                    extend(selfPlayMemoryBatch, getTrainingData(game));
+                    extend(m_selfPlayMemoryBatch, getTrainingData(game));
 
                     // Remove the game from the list of self play games
-                    selfPlayGames[i] = selfPlayGames[--numRemainingGames];
+                    selfPlayGames[i--] = selfPlayGames.back();
+                    selfPlayGames.pop_back();
 
                     selfPlayStats.update(game.root->num_played_moves,
                                          getBoardResultScore(game.board));
                 }
             }
-            selfPlayGames.resize(numRemainingGames);
-            saveTrainingDataBatches(selfPlayMemoryBatch);
+            saveTrainingDataBatches();
         }
 
         return selfPlayStats;
@@ -67,6 +64,7 @@ public:
 private:
     Network &m_model;
     const TrainingArgs &m_args;
+    std::vector<SelfPlayMemory> m_selfPlayMemoryBatch;
 
     void expandSelfPlayGames(std::vector<SelfPlayGame> &selfPlayGames) {
         torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
@@ -194,12 +192,12 @@ private:
         return decodeMove(action);
     }
 
-    void saveTrainingDataBatches(std::vector<SelfPlayMemory> &selfPlayMemoryBatch) {
-        while (selfPlayMemoryBatch.size() >= m_args.batchSize) {
-            std::vector<SelfPlayMemory> batch(selfPlayMemoryBatch.begin(),
-                                              selfPlayMemoryBatch.begin() + m_args.batchSize);
-            selfPlayMemoryBatch.erase(selfPlayMemoryBatch.begin(),
-                                      selfPlayMemoryBatch.begin() + m_args.batchSize);
+    void saveTrainingDataBatches() {
+        while (m_selfPlayMemoryBatch.size() >= m_args.batchSize) {
+            std::vector<SelfPlayMemory> batch(m_selfPlayMemoryBatch.begin(),
+                                              m_selfPlayMemoryBatch.begin() + m_args.batchSize);
+            m_selfPlayMemoryBatch.erase(m_selfPlayMemoryBatch.begin(),
+                                        m_selfPlayMemoryBatch.begin() + m_args.batchSize);
 
             saveTrainingDataBatch(batch);
         }

@@ -59,14 +59,76 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
 - **Programming Language**: C++17
 - **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
 - **Chess Library**: Python-Chess (self ported to C++)
+- **Parallel Computing**: MPI (mpi4py)
+
+## Parallel Computing
+
+The project is currently deployed on the cluster and should have access to multiple GPUs and multiple nodes. The project is implemented using MPI for parallel computing. The training data is generated using self-play and is distributed across the nodes. We have one master node and multiple worker nodes. The master node is responsible for training the neural network and the worker nodes are responsible for generating the training data.
+
+### Training Time Estimation Formula
+
+To achieve a balance where $T_{gen} = T_{train}$, we'll need to determine the number of workers required for sample generation and training processes so that their times are equal. This balance ensures that the time spent generating samples through self-play is equal to the time spent training on those samples, optimizing resource utilization.
+
+Given:
+
+- $T_{gen}$ is the time to generate one sample.
+- $W_{gen}$ is the number of workers dedicated to sample generation.
+- $T_{batch}$ is the time to process one training batch.
+- $E$ is the number of epochs.
+- $D$ is the desired dataset size.
+- $B$ is the batch size.
+
+### Definitions for Parallel Processing
+
+For parallel processing, the effective time to generate the dataset and the time to train on it are influenced by the number of workers in each process:
+
+1. **Effective Time for Sample Generation with $W_{gen}$ Workers**:
+
+    The total time to generate $D$ samples with $W_{gen}$ workers is:
+    $$T_{total\_gen} = \frac{D \times T_{gen}}{W_{gen}}$$
+
+2. **Time for Training**:
+
+    $$T_{total\_train} = E \times \frac{D}{B} \times T_{batch}$$
+
+### Balancing $T_{gen}$ and $T_{train}$
+
+To balance $T_{gen}$ and $T_{train}$, we set $T_{total\_gen} = T_{total\_train}$ and solve for $W_{gen}$, the number of workers needed for sample generation:
+
+$$\frac{D \times T_{gen}}{W_{gen}} = E \times \frac{D}{B} \times T_{batch}$$
+
+Solving for $W_{gen}$:
+
+$$W_{gen} = \frac{D \times T_{gen}}{E \times \frac{D}{B} \times T_{batch}} = \frac{T_{gen} \times B}{E \times T_{batch}}$$
+
+This formula gives you the number of workers for sample generation needed to match the training time, assuming optimal parallelization and no significant overhead for increasing workers.
+
+### Considerations
+
+- **Parallelization Efficiency**: In practice, the efficiency of adding more workers may decrease due to overhead and communication costs. The actual number of workers needed could differ.
+
+### Example Calculation
+
+Assuming:
+
+- $T_{gen} = 0.5$ seconds (TODO - measure this)
+- $T_{batch} = 1$ second (TODO - measure this)
+- $E = 20$ epochs
+- $B = 64$ batch size
+
+Find $W_{gen}$: (TODO - update this with actual values)
+
+$$W_{gen} = \frac{0.5 \times 64}{20 \times 1} = \frac{32}{20} = 1.6$$
+
+Rounding up, you would need at least 2 workers dedicated to sample generation to balance the generation and training times under these conditions.
 
 ## Getting Started
 
-To run your `AIZeroChessBot` project after setting it up with CMake and compiling it with Visual Studio Code (VSCode) on Windows, follow these steps. This guide assumes you've already configured your `CMakeLists.txt` and have the necessary build scripts in place.
+To run your `AIZeroChessBot-C++` project after setting it up with CMake and compiling it with Visual Studio Code (VSCode) on Windows, follow these steps. This guide assumes you've already configured your `CMakeLists.txt` and have the necessary build scripts in place.
 
 ### Step 1: Build the Project
 
-1. **Open VSCode** and navigate to your project folder (`AIZeroChessBot`).
+1. **Open VSCode** and navigate to your project folder (`AIZeroChessBot-C++`).
 
 2. **Run the Setup Script** (if you haven't already) to download LibTorch and generate the CMake build system. In the VSCode terminal, navigate to your project's root directory and run:
 
@@ -85,7 +147,7 @@ To run your `AIZeroChessBot` project after setting it up with CMake and compilin
 
 ### Step 2: Running the Executable
 
-After building the project, an executable file named `AIZeroChessBot` (or `AIZeroChessBot.exe` on Windows) will be created in the `build` directory, inside a `Release` or `Debug` subdirectory, depending on your build configuration.
+After building the project, an executable file named `AIZeroChessBot-C++` (or `AIZeroChessBot.exe` on Windows) will be created in the `build` directory, inside a `Release` or `Debug` subdirectory, depending on your build configuration.
 
 To run your project:
 

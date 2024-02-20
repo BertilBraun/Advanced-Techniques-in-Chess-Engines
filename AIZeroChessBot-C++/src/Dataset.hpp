@@ -39,15 +39,15 @@ public:
         return result;
     }
 
-    int size() const { return m_memoryPaths.size(); }
+    size_t size() const { return m_memoryPaths.size(); }
 
     void deleteOldMemories(int retentionFactor) const {
-        for (const auto &entry :
-             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
-            if (entry.is_directory() && isMemoryValid(entry.path())) {
+        for (const auto &path : m_memoryPaths) {
+            if (std::filesystem::exists(path) && std::filesystem::is_directory(path) &&
+                isMemoryValid(path)) {
                 if (rand() % 100 > retentionFactor) {
                     // delete the entries in the folder as well as the folder itself
-                    std::filesystem::remove_all(entry.path());
+                    std::filesystem::remove_all(path);
                 }
             }
         }
