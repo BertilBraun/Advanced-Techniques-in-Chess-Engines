@@ -36,8 +36,8 @@ public:
     void learn() {
         LearningStats learningStats;
         for (int iteration = m_startingIteration; iteration < m_args.numIterations; ++iteration) {
-            TrainingStats trainStats;
 
+            SelfPlayStats selfPlayStats;
             int selfPlayGamesInParallel =
                 m_args.numParallelGames * m_args.numSeparateNodesOnCluster;
             int selfPlayIterations = m_args.numSelfPlayIterations / selfPlayGamesInParallel;
@@ -45,30 +45,27 @@ public:
             m_model->eval(); // Set model to evaluation mode
             for (int i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
                 // Collect new memories from self-play
-                timeit(
-                    [&] {
-                        m_selfPlay.selfPlay();
-                        return 0; // Necessary to return something other than void
-                    },
-                    "selfPlay");
+                selfPlayStats += timeit([&] { return m_selfPlay.selfPlay(); }, "selfPlay");
             }
 
-            // Output timeit stats
-            std::cout << "Timeit stats:" << std::endl
-                      << get_timeit_results_and_reset() << std::endl;
+            // Output stats
+            std::cout << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
+            std::cout << "Iteration " << (iteration + 1) << " Self Play Stats:" << std::endl
+                      << selfPlayStats.toString() << std::endl;
 
             if (m_isRootNode) {
+                TrainingStats trainStats;
                 Dataset dataset(m_savePath, m_model->device, 10);
 
                 std::cout << "Training with " << dataset.size() * m_args.batchSize << " memories\n";
 
                 m_model->train(); // Set model to training mode
                 for (int i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
-                    trainStats += train(dataset); // Accumulate training stats
+                    trainStats += timeit([&] { return train(dataset); }, "train");
                 }
 
-                std::cout << "Iteration " << (iteration + 1) << ": " << trainStats.toString()
-                          << std::endl;
+                std::cout << "Iteration " << (iteration + 1) << " Train Stats:" << std::endl
+                          << trainStats.toString() << std::endl;
                 auto modelPath = saveLatestModel(iteration);
                 learningStats.update(dataset.size() * m_args.batchSize, trainStats);
 
@@ -76,6 +73,7 @@ public:
                 dataset.deleteOldMemories(m_args.retentionRate);
 
                 // evaluateAlphaVsStockfish(modelPath);
+                std::cout << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
             }
 
             barrier("training_done");

@@ -65,6 +65,21 @@ torch::Tensor flipBoardVertical(const torch::Tensor &encodedBoard) {
     return encodedBoard.flip(1); // Flip along the height (rows)
 }
 
+std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
+    0.0f, // None
+    1.0f, // Pawn
+    3.0f, // Knight
+    3.0f, // Bishop
+    5.0f, // Rook
+    9.0f, // Queen
+    0.0f  // King
+};
+
+float __MAX_MATERIAL_SCORE =
+    __PIECE_VALUES[PieceType::QUEEN] + 2 * __PIECE_VALUES[PieceType::ROOK] +
+    2 * __PIECE_VALUES[PieceType::BISHOP] + 2 * __PIECE_VALUES[PieceType::KNIGHT] +
+    8 * __PIECE_VALUES[PieceType::PAWN];
+
 float getBoardResultScore(Board &board) {
     // Returns the result score for the given board.
     //
@@ -78,7 +93,17 @@ float getBoardResultScore(Board &board) {
         return board.turn == WHITE ? -1.0f : 1.0f;
     } else if (board.isStalemate() || board.isInsufficientMaterial() ||
                board.isSeventyFiveMoves()) {
-        return 0.0f;
+        // Draw -> Return a score between -0.5 and 0.5 based on the remaining material
+
+        float materialScore = 0.0f;
+        for (PieceType pieceType : PIECE_TYPES) {
+            materialScore += (popcount(board.piecesMask(pieceType, WHITE)) -
+                              popcount(board.piecesMask(pieceType, BLACK))) *
+                             __PIECE_VALUES[pieceType];
+        }
+
+        return materialScore / (__MAX_MATERIAL_SCORE * 2.0f); // Normalize to [-0.5, 0.5]
+        // In theory just return 0.0f;
     } else {
         throw std::runtime_error("Board is not in a terminal state");
     }

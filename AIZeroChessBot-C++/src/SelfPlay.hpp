@@ -9,6 +9,7 @@
 #include "Network.hpp"
 #include "SelfPlayGame.hpp"
 #include "TrainingArgs.hpp"
+#include "TrainingStats.hpp"
 
 struct SelfPlayMemory {
     torch::Tensor state;
@@ -24,9 +25,10 @@ class SelfPlay {
 public:
     SelfPlay(Network &model, const TrainingArgs &args) : m_model(model), m_args(args) {}
 
-    void selfPlay() {
+    SelfPlayStats selfPlay() {
         std::vector<SelfPlayMemory> selfPlayMemoryBatch;
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());
+        SelfPlayStats selfPlayStats;
 
         while (!selfPlayGames.empty()) {
             expandSelfPlayGames(selfPlayGames);
@@ -50,11 +52,16 @@ public:
 
                     // Remove the game from the list of self play games
                     selfPlayGames[i] = selfPlayGames[--numRemainingGames];
+
+                    selfPlayStats.update(game.root->num_played_moves,
+                                         getBoardResultScore(game.board));
                 }
             }
             selfPlayGames.resize(numRemainingGames);
             saveTrainingDataBatches(selfPlayMemoryBatch);
         }
+
+        return selfPlayStats;
     }
 
 private:

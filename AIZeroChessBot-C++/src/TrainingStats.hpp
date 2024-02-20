@@ -57,3 +57,49 @@ public:
         return stream.str();
     }
 };
+
+class SelfPlayStats {
+public:
+    int totalNumGames = 0;
+    int totalNumMoves = 0;
+    int totalDraws = 0;
+    int totalWins = 0;
+    int totalLosses = 0;
+    float totalResult = 0.0f;
+
+    void update(int numMoves, float result) {
+        ++totalNumGames;
+        totalNumMoves += numMoves;
+        totalResult += result;
+        if (result == -1.0f) {
+            ++totalLosses;
+        } else if (result == 1.0f) {
+            ++totalWins;
+        } else {
+            ++totalDraws;
+        }
+    }
+
+    std::string toString() const {
+        std::ostringstream stream;
+        stream << "Total Games: " << totalNumGames << "\n";
+        stream << "Total Moves: " << totalNumMoves << "\n";
+        stream << "Average Moves Per Game: " << (float) totalNumMoves / totalNumGames << "\n";
+        stream << "Average Result: " << totalResult / totalNumGames
+               << " (1.0 = Win, 0.0 = Draw, -1.0 = Loss)\n";
+        stream << "Total Draws: " << totalDraws << "\n";
+        stream << "Total Wins: " << totalWins << "\n";
+        stream << "Total Losses: " << totalLosses << "\n";
+        return stream.str();
+    }
+
+    SelfPlayStats operator+(const SelfPlayStats &other) const {
+        return SelfPlayStats{totalNumGames + other.totalNumGames,
+                             totalNumMoves + other.totalNumMoves, totalDraws + other.totalDraws,
+                             totalWins + other.totalWins, totalLosses + other.totalLosses};
+    }
+    SelfPlayStats &operator+=(const SelfPlayStats &other) {
+        *this = *this + other;
+        return *this;
+    }
+};
