@@ -14,6 +14,7 @@
 
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
+module load compiler/gnu/11.2
 module load mpi/openmpi/4.1
 
 

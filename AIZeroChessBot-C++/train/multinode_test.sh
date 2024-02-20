@@ -13,4 +13,4 @@
 module load compiler/gnu/11.2
 module load mpi/openmpi/4.1
 
-srun python multinode_test.py
+mpirun -np 6 python multinode_test.py
