@@ -122,7 +122,7 @@ private:
 
         if (std::filesystem::exists(lastTrainingConfigPath)) {
             try {
-                int loadedIteration;
+                int loadedIteration = 0;
                 std::string modelPath, optimizerPath;
                 // Load the training configuration
                 if (!loadConfiguration(lastTrainingConfigPath, modelPath, optimizerPath,

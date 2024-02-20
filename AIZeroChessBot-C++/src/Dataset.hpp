@@ -6,7 +6,8 @@
 
 class Dataset {
 public:
-    Dataset(const std::filesystem::path &savePath, torch::Device device, int memoriesToPreload = 10)
+    Dataset(const std::filesystem::path &savePath, torch::Device device,
+            size_t memoriesToPreload = 10)
         : m_savePath(savePath), m_device(device) {
 
         m_memoryPaths = getMemoryPaths();
