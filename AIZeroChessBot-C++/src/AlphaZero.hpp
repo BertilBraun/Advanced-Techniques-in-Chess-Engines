@@ -18,8 +18,8 @@ class AlphaZero {
 public:
     AlphaZero(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args,
               bool doLoadLatestModel = true)
-        : m_model(model), m_optimizer(optimizer), args(args), m_selfPlay(model, args),
-          m_savePath(args.savePath) {
+        : m_model(model), m_optimizer(optimizer), m_args(args), m_selfPlay(model, args),
+          m_savePath(m_args.savePath) {
 
         // create save directory if it does not exist
         if (!std::filesystem::exists(m_savePath)) {
@@ -35,11 +35,12 @@ public:
 
     void learn() {
         LearningStats learningStats;
-        for (int iteration = m_startingIteration; iteration < args.numIterations; ++iteration) {
+        for (int iteration = m_startingIteration; iteration < m_args.numIterations; ++iteration) {
             TrainingStats trainStats;
 
-            int selfPlayGamesInParallel = args.numParallelGames * args.numSeparateNodesOnCluster;
-            int selfPlayIterations = args.numSelfPlayIterations / selfPlayGamesInParallel;
+            int selfPlayGamesInParallel =
+                m_args.numParallelGames * m_args.numSeparateNodesOnCluster;
+            int selfPlayIterations = m_args.numSelfPlayIterations / selfPlayGamesInParallel;
 
             m_model->eval(); // Set model to evaluation mode
             for (int i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
@@ -59,20 +60,20 @@ public:
             if (m_isRootNode) {
                 Dataset dataset(m_savePath, m_model->device, 10);
 
-                std::cout << "Training with " << dataset.size() * args.batchSize << " memories\n";
+                std::cout << "Training with " << dataset.size() * m_args.batchSize << " memories\n";
 
                 m_model->train(); // Set model to training mode
-                for (int i = 0; tqdm(i, args.numEpochs, "Training"); ++i) {
+                for (int i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
                     trainStats += train(dataset); // Accumulate training stats
                 }
 
                 std::cout << "Iteration " << (iteration + 1) << ": " << trainStats.toString()
                           << std::endl;
                 auto modelPath = saveLatestModel(iteration);
-                learningStats.update(dataset.size() * args.batchSize, trainStats);
+                learningStats.update(dataset.size() * m_args.batchSize, trainStats);
 
                 // Retain 25% of the memory for the next iteration
-                dataset.deleteOldMemories(25);
+                dataset.deleteOldMemories(m_args.retentionRate);
 
                 // evaluateAlphaVsStockfish(modelPath);
             }
@@ -88,7 +89,7 @@ public:
 private:
     Network &m_model;
     torch::optim::Optimizer &m_optimizer;
-    TrainingArgs args;
+    TrainingArgs m_args;
     unsigned int m_startingIteration = 0;
     SelfPlay m_selfPlay;
     std::filesystem::path m_savePath;
@@ -246,11 +247,11 @@ private:
             size_t initializedNodes =
                 std::distance(std::filesystem::directory_iterator(COMMUNICATION_DIR),
                               std::filesystem::directory_iterator{});
-            if (initializedNodes == args.numSeparateNodesOnCluster) {
+            if (initializedNodes == m_args.numSeparateNodesOnCluster) {
                 break;
             }
 
-            std::cout << "Waiting for " << args.numSeparateNodesOnCluster - initializedNodes
+            std::cout << "Waiting for " << m_args.numSeparateNodesOnCluster - initializedNodes
                       << " nodes to initialize\n";
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
@@ -295,7 +296,7 @@ private:
 
             std::this_thread::sleep_for(std::chrono::seconds(5));
 
-            if (writtenFiles == args.numSeparateNodesOnCluster) {
+            if (writtenFiles == m_args.numSeparateNodesOnCluster) {
                 break;
             }
         }

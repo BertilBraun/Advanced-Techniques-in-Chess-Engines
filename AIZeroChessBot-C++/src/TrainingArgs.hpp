@@ -39,14 +39,19 @@ struct TrainingArgs {
     // Path to save the model to after each iteration
     std::string savePath;
 
+    // The percentage of games to retain for training for the next iteration
+    int retentionRate;
+
     // Constructor with default values
     TrainingArgs(int numIterations = 0, int numSelfPlayIterations = 0, int numParallelGames = 0,
                  int numIterationsPerTurn = 0, int numEpochs = 0, int numSeparateNodesOnCluster = 0,
                  int batchSize = 0, float temperature = 0.0f, float dirichletEpsilon = 0.0f,
-                 float dirichletAlpha = 0.0f, float cParam = 0.0f, std::string savePath = "")
+                 float dirichletAlpha = 0.0f, float cParam = 0.0f, std::string savePath = "",
+                 int retentionRate = 0)
         : numIterations(numIterations), numSelfPlayIterations(numSelfPlayIterations),
           numParallelGames(numParallelGames), numIterationsPerTurn(numIterationsPerTurn),
-          numEpochs(numEpochs), batchSize(batchSize), temperature(temperature),
-          dirichletEpsilon(dirichletEpsilon), dirichletAlpha(dirichletAlpha), cParam(cParam),
-          savePath(std::move(savePath)), numSeparateNodesOnCluster(numSeparateNodesOnCluster) {}
+          numEpochs(numEpochs), numSeparateNodesOnCluster(numSeparateNodesOnCluster),
+          batchSize(batchSize), temperature(temperature), dirichletEpsilon(dirichletEpsilon),
+          dirichletAlpha(dirichletAlpha), cParam(cParam), savePath(std::move(savePath)),
+          retentionRate(retentionRate) {}
 };

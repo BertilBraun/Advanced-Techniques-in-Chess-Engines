@@ -27,18 +27,19 @@ int main() {
     */
 
     TrainingArgs args{
-        200,     // numIterations
-        512,     // numSelfPlayIterations
-        32,      // numParallelGames
-        200,     // numIterationsPerTurn
-        20,      // numEpochs
-        1,       // numSeparateNodesOnCluster
-        64,      // batchSize
-        1.0f,    // temperature
-        0.25f,   // dirichletEpsilon
-        0.03f,   // dirichletAlpha
-        2.0f,    // cParam
-        "models" // savePath
+        200,      // numIterations
+        256,      // numSelfPlayIterations
+        32,       // numParallelGames
+        200,      // numIterationsPerTurn
+        20,       // numEpochs
+        1,        // numSeparateNodesOnCluster
+        64,       // batchSize
+        1.0f,     // temperature
+        0.25f,    // dirichletEpsilon
+        0.03f,    // dirichletAlpha
+        2.0f,     // cParam
+        "models", // savePath
+        50        // retentionRate
     };
 
     AlphaZero alphaZero(model, optimizer, args);
