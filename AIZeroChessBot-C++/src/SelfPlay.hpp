@@ -42,8 +42,7 @@ public:
 
                 Move move = sampleMove(actionProbabilities, *game.root);
 
-                game.board = game.root->board.copy();
-                game.board.push(move);
+                game.push(move);
 
                 if (game.board.isGameOver()) {
                     // If the game is over, add the training data to the self play memory
@@ -62,48 +61,6 @@ private:
     Network &m_model;
     const TrainingArgs &m_args;
 
-    void saveTrainingDataBatches(std::vector<SelfPlayMemory> &selfPlayMemoryBatch) {
-        while (selfPlayMemoryBatch.size() >= m_args.batchSize) {
-            std::vector<SelfPlayMemory> batch(selfPlayMemoryBatch.begin(),
-                                              selfPlayMemoryBatch.begin() + m_args.batchSize);
-            selfPlayMemoryBatch.erase(selfPlayMemoryBatch.begin(),
-                                      selfPlayMemoryBatch.begin() + m_args.batchSize);
-
-            saveTrainingDataBatch(batch);
-        }
-    }
-
-    void saveTrainingDataBatch(const std::vector<SelfPlayMemory> &memory) const {
-        std::filesystem::path memoryPath =
-            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
-
-        while (std::filesystem::exists(memoryPath)) {
-            memoryPath =
-                std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
-        }
-
-        // Ensure the directory exists
-        std::filesystem::create_directories(memoryPath);
-
-        std::vector<torch::Tensor> states;
-        std::vector<torch::Tensor> policyTargets;
-        std::vector<torch::Tensor> valueTargets;
-
-        for (const auto &mem : memory) {
-            states.push_back(mem.state);
-            policyTargets.push_back(mem.policyTargets);
-            valueTargets.push_back(mem.valueTargets);
-        }
-
-        torch::Tensor statesTensor = torch::stack(states);
-        torch::Tensor policyTargetsTensor = torch::stack(policyTargets);
-        torch::Tensor valueTargetsTensor = torch::stack(valueTargets);
-
-        torch::save(statesTensor, (memoryPath / "states.pt").string());
-        torch::save(policyTargetsTensor, (memoryPath / "policyTargets.pt").string());
-        torch::save(valueTargetsTensor, (memoryPath / "valueTargets.pt").string());
-    }
-
     void expandSelfPlayGames(std::vector<SelfPlayGame> &selfPlayGames) {
         torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
 
@@ -113,8 +70,7 @@ private:
             auto &game = selfPlayGames[i];
             auto moves = filterPolicyThenGetMovesAndProbabilities(policy[i], game.board);
 
-            game.root = AlphaMCTSNode::root(game.board);
-            game.root->expand(moves);
+            game.init(moves);
         }
 
         for (int _ = 0; _ < m_args.numIterationsPerTurn; ++_) {
@@ -229,5 +185,47 @@ private:
         int action = torch::multinomial(temperatureActionProbabilities, 1).item<int>();
 
         return decodeMove(action);
+    }
+
+    void saveTrainingDataBatches(std::vector<SelfPlayMemory> &selfPlayMemoryBatch) {
+        while (selfPlayMemoryBatch.size() >= m_args.batchSize) {
+            std::vector<SelfPlayMemory> batch(selfPlayMemoryBatch.begin(),
+                                              selfPlayMemoryBatch.begin() + m_args.batchSize);
+            selfPlayMemoryBatch.erase(selfPlayMemoryBatch.begin(),
+                                      selfPlayMemoryBatch.begin() + m_args.batchSize);
+
+            saveTrainingDataBatch(batch);
+        }
+    }
+
+    void saveTrainingDataBatch(const std::vector<SelfPlayMemory> &memory) const {
+        std::filesystem::path memoryPath =
+            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
+
+        while (std::filesystem::exists(memoryPath)) {
+            memoryPath =
+                std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
+        }
+
+        // Ensure the directory exists
+        std::filesystem::create_directories(memoryPath);
+
+        std::vector<torch::Tensor> states;
+        std::vector<torch::Tensor> policyTargets;
+        std::vector<torch::Tensor> valueTargets;
+
+        for (const auto &mem : memory) {
+            states.push_back(mem.state);
+            policyTargets.push_back(mem.policyTargets);
+            valueTargets.push_back(mem.valueTargets);
+        }
+
+        torch::Tensor statesTensor = torch::stack(states);
+        torch::Tensor policyTargetsTensor = torch::stack(policyTargets);
+        torch::Tensor valueTargetsTensor = torch::stack(valueTargets);
+
+        torch::save(statesTensor, (memoryPath / "states.pt").string());
+        torch::save(policyTargetsTensor, (memoryPath / "policyTargets.pt").string());
+        torch::save(valueTargetsTensor, (memoryPath / "valueTargets.pt").string());
     }
 };

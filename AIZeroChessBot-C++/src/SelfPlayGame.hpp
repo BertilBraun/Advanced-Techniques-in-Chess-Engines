@@ -33,6 +33,16 @@ public:
         return currentNode;
     }
 
+    void init(const std::vector<std::pair<Move, float>> &moves) {
+        root = AlphaMCTSNode::root(board);
+        root->expand(moves);
+    }
+
+    void push(Move move) {
+        board.push(move);
+        delete root;
+    }
+
     Board board;
     std::vector<SelfPlayGameMemory> memory;
     AlphaMCTSNode *root;

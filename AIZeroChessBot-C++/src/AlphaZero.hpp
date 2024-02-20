@@ -12,6 +12,8 @@
 #include "TrainingArgs.hpp"
 #include "TrainingStats.hpp"
 
+#include "Dataset.hpp"
+
 class AlphaZero {
 public:
     AlphaZero(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args,
@@ -55,21 +57,22 @@ public:
                       << get_timeit_results_and_reset() << std::endl;
 
             if (m_isRootNode) {
-                auto totalDatasetSize = getTotalDatasetSize();
-                std::cout << "Training with " << totalDatasetSize << " memories\n";
+                Dataset dataset(m_savePath, m_model->device, 10);
+
+                std::cout << "Training with " << dataset.size() * args.batchSize << " memories\n";
 
                 m_model->train(); // Set model to training mode
                 for (int i = 0; tqdm(i, args.numEpochs, "Training"); ++i) {
-                    trainStats += train(); // Accumulate training stats
+                    trainStats += train(dataset); // Accumulate training stats
                 }
 
                 std::cout << "Iteration " << (iteration + 1) << ": " << trainStats.toString()
                           << std::endl;
                 auto modelPath = saveLatestModel(iteration);
-                learningStats.update(totalDatasetSize, trainStats);
+                learningStats.update(dataset.size() * args.batchSize, trainStats);
 
                 // Retain 25% of the memory for the next iteration
-                deleteOldMemories();
+                dataset.deleteOldMemories(25);
 
                 // evaluateAlphaVsStockfish(modelPath);
             }
@@ -92,18 +95,11 @@ private:
     unsigned int m_id;
     bool m_isRootNode;
 
-    TrainingStats train() {
-        auto memoryPaths = getMemoryPaths();
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::shuffle(memoryPaths.begin(), memoryPaths.end(), g);
-
+    TrainingStats train(Dataset &dataset) {
         TrainingStats trainStats;
 
-        int batchSize = args.batchSize;
-        for (auto memoryPath : memoryPaths) {
-            auto [states, policyTargets, valueTargets] = loadMemory(memoryPath);
-
+        while (dataset.hasNext()) {
+            auto [states, policyTargets, valueTargets] = dataset.next();
             auto [policy, value] = m_model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
@@ -228,64 +224,6 @@ private:
 
         configFile.close();
         return true;
-    }
-
-    int getTotalDatasetSize() const {
-        int totalDatasetSize = 0;
-        for (const auto &entry :
-             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
-            if (entry.is_directory()) {
-                // if all files are present, increment the totalDatasetSize
-                if (std::filesystem::exists(entry.path() / "states.pt") &&
-                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
-                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
-                    totalDatasetSize++;
-                }
-            }
-        }
-        return totalDatasetSize;
-    }
-
-    void deleteOldMemories(int retentionFactor = 25) const {
-        for (const auto &entry :
-             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
-            if (entry.is_directory()) {
-                if (std::filesystem::exists(entry.path() / "states.pt") &&
-                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
-                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
-                    if (rand() % 100 > retentionFactor) {
-                        // delete the entries in the folder as well as the folder itself
-                        std::filesystem::remove_all(entry.path());
-                    }
-                }
-            }
-        }
-    }
-
-    std::vector<std::filesystem::path> getMemoryPaths() const {
-        std::vector<std::filesystem::path> memoryPaths;
-        for (const auto &entry :
-             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
-            if (entry.is_directory()) {
-                if (std::filesystem::exists(entry.path() / "states.pt") &&
-                    std::filesystem::exists(entry.path() / "policyTargets.pt") &&
-                    std::filesystem::exists(entry.path() / "valueTargets.pt")) {
-                    memoryPaths.push_back(entry.path());
-                }
-            }
-        }
-        return memoryPaths;
-    }
-
-    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-    loadMemory(const std::filesystem::path &memoryPath) const {
-        torch::Tensor states, policyTargets, valueTargets;
-
-        torch::load(states, (memoryPath / "states.pt").string(), m_model->device);
-        torch::load(policyTargets, (memoryPath / "policyTargets.pt").string(), m_model->device);
-        torch::load(valueTargets, (memoryPath / "valueTargets.pt").string(), m_model->device);
-
-        return std::make_tuple(states, policyTargets, valueTargets);
     }
 
     void initializeCluster() {
