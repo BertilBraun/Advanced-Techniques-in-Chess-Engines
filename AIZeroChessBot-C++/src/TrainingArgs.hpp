@@ -4,25 +4,25 @@
 
 struct TrainingArgs {
     // Number of iterations to run first self-play then train
-    int numIterations;
+    size_t numIterations;
 
     // Number of self-play iterations to run per iteration
-    int numSelfPlayIterations;
+    size_t numSelfPlayIterations;
 
     // Number of games to run in parallel for self-play
-    int numParallelGames;
+    size_t numParallelGames;
 
     // Maximum number of searches in the MCTS algorithm per turn in self-play
-    int numIterationsPerTurn;
+    size_t numIterationsPerTurn;
 
     // Number of epochs to train with one batch of self-play data
-    int numEpochs;
+    size_t numEpochs;
 
     // Number of separate nodes on the cluster for parallelizing self-play
-    int numSeparateNodesOnCluster;
+    size_t numSeparateNodesOnCluster;
 
     // Size of the batch to train with
-    int batchSize;
+    size_t batchSize;
 
     // Sampling temperature for the MCTS algorithm in self-play
     float temperature;

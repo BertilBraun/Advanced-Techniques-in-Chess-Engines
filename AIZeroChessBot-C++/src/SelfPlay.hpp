@@ -36,7 +36,7 @@ public:
             Color currentPlayerTurn = selfPlayGames[0].root->board.turn;
 
             size_t numRemainingGames = selfPlayGames.size();
-            for (int i = ((int) selfPlayGames.size()) - 1; i >= 0; --i) {
+            for (int i = ((int) selfPlayGames.size()) - 1; i >= 0; --i) { // must be signed
                 auto &game = selfPlayGames[i];
 
                 torch::Tensor actionProbabilities = getActionProbabilities(*game.root);

@@ -1626,7 +1626,7 @@ public:
         assert(ep_square.has_value());
 
         Square last_double = ep_square.value() + ((turn == WHITE) ? -8 : 8);
-        Bitboard occupancy = m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer] |
+        Bitboard occupancy = (m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer]) |
                              BB_SQUARES[ep_square.value()];
 
         Bitboard horizontal_attackers = m_occupied_color[!turn] & (m_rooks | m_queens);
@@ -1853,6 +1853,8 @@ private:
         case PieceType::KING:
             m_kings |= mask;
             break;
+        default:
+            return;
         }
 
         m_occupied |= mask;

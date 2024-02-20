@@ -3,8 +3,10 @@
 #include "common.hpp"
 
 struct ResBlockImpl : torch::nn::Module {
-    torch::nn::Conv2d conv1, conv2;
-    torch::nn::BatchNorm2d bn1, bn2;
+    torch::nn::Conv2d conv1;
+    torch::nn::BatchNorm2d bn1;
+    torch::nn::Conv2d conv2;
+    torch::nn::BatchNorm2d bn2;
 
     ResBlockImpl(int num_hidden)
         : conv1(torch::nn::Conv2dOptions(num_hidden, num_hidden, 3).padding(1)), bn1(num_hidden),

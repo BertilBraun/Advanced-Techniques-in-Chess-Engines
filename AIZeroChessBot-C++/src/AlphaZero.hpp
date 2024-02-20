@@ -35,15 +35,16 @@ public:
 
     void learn() {
         LearningStats learningStats;
-        for (int iteration = m_startingIteration; iteration < m_args.numIterations; ++iteration) {
+        for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
+             ++iteration) {
 
             SelfPlayStats selfPlayStats;
-            int selfPlayGamesInParallel =
+            size_t selfPlayGamesInParallel =
                 m_args.numParallelGames * m_args.numSeparateNodesOnCluster;
-            int selfPlayIterations = m_args.numSelfPlayIterations / selfPlayGamesInParallel;
+            size_t selfPlayIterations = m_args.numSelfPlayIterations / selfPlayGamesInParallel;
 
             m_model->eval(); // Set model to evaluation mode
-            for (int i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
+            for (size_t i = 0; tqdm(i, selfPlayIterations, "Self-play"); ++i) {
                 // Collect new memories from self-play
                 selfPlayStats += timeit([&] { return m_selfPlay.selfPlay(); }, "selfPlay");
             }
@@ -60,7 +61,7 @@ public:
                 std::cout << "Training with " << dataset.size() * m_args.batchSize << " memories\n";
 
                 m_model->train(); // Set model to training mode
-                for (int i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
+                for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
                     trainStats += timeit([&] { return train(dataset); }, "train");
                 }
 
@@ -88,7 +89,7 @@ private:
     Network &m_model;
     torch::optim::Optimizer &m_optimizer;
     TrainingArgs m_args;
-    unsigned int m_startingIteration = 0;
+    size_t m_startingIteration = 0;
     SelfPlay m_selfPlay;
     std::filesystem::path m_savePath;
     unsigned int m_id;
@@ -121,7 +122,7 @@ private:
 
         if (std::filesystem::exists(lastTrainingConfigPath)) {
             try {
-                int loadedIteration = 0;
+                size_t loadedIteration = 0;
                 std::string modelPath, optimizerPath;
                 // Load the training configuration
                 if (!loadConfiguration(lastTrainingConfigPath, modelPath, optimizerPath,
@@ -197,7 +198,7 @@ private:
     }
 
     bool loadConfiguration(const std::filesystem::path &path, std::string &modelPath,
-                           std::string &optimizerPath, int &iteration) const {
+                           std::string &optimizerPath, size_t &iteration) const {
         std::ifstream configFile(path);
         if (!configFile.is_open()) {
             std::cerr << "Failed to open config file for reading: " << path << std::endl;

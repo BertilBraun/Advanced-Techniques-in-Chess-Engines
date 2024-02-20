@@ -44,7 +44,7 @@ template <typename T> inline void extend(std::vector<T> &vec, const std::vector<
     vec.insert(vec.end(), other.begin(), other.end());
 }
 
-inline bool tqdm(int current, int total, std::string desc = "", int width = 50) {
+inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
     float progress = std::min((float) current / total, 1.0f);
     int pos = (int) (width * progress);
 
