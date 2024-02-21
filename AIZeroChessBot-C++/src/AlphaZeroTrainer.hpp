@@ -22,6 +22,12 @@ public:
             TrainingStats trainStats;
             Dataset dataset(m_savePath, m_model->device, 10);
 
+            while (dataset.size() < 500) {
+                std::cout << "Waiting for more training data\n";
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+                dataset = Dataset(m_savePath, m_model->device, 10);
+            }
+
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
             std::cout << "Training with " << numTrainingSamples << " memories\n";
 
