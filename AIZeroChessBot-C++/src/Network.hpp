@@ -71,7 +71,7 @@ struct NetworkImpl : torch::nn::Module {
         this->to(device);
     }
 
-    PolicyValue __forward(torch::Tensor x) {
+    PolicyValue forward(torch::Tensor x) {
         x = startBlock->forward(x);
         for (const auto &block : *backBone) {
             x = block->as<ResBlock>()->forward(x);
@@ -79,18 +79,6 @@ struct NetworkImpl : torch::nn::Module {
         auto policy = policyHead->forward(x);
         auto value = valueHead->forward(x);
         return {policy, value};
-    }
-
-    PolicyValue forward(torch::Tensor x) {
-        return timeit(
-            [&] {
-                auto [policy, value] = this->__forward(x);
-
-                // This is to synchronize the timing of the forward pass to time it correctly
-                return std::make_pair(policy.to(torch::kCPU).to(this->device),
-                                      value.to(torch::kCPU).to(this->device));
-            },
-            "Network forward");
     }
 
     PolicyValue inference(torch::Tensor x) {
