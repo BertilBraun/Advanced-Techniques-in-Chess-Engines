@@ -13,7 +13,7 @@ public:
     AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
         : AlphaZeroBase(model, args, &optimizer) {}
 
-    void run() override {
+    void run() {
         LearningStats learningStats;
         m_model->train(); // Set model to training mode
 

@@ -43,9 +43,10 @@ struct TrainingArgs {
     int retentionRate;
 
     // Constructor with default values
-    TrainingArgs(int numIterations = 0, int numSelfPlayIterations = 0, int numParallelGames = 0,
-                 int numIterationsPerTurn = 0, int numEpochs = 0, int numSeparateNodesOnCluster = 0,
-                 int batchSize = 0, float temperature = 0.0f, float dirichletEpsilon = 0.0f,
+    TrainingArgs(size_t numIterations = 0, size_t numSelfPlayIterations = 0,
+                 size_t numParallelGames = 0, int numIterationsPerTurn = 0, size_t numEpochs = 0,
+                 size_t numSeparateNodesOnCluster = 0, size_t batchSize = 0,
+                 float temperature = 0.0f, float dirichletEpsilon = 0.0f,
                  float dirichletAlpha = 0.0f, float cParam = 0.0f, std::string savePath = "",
                  int retentionRate = 0)
         : numIterations(numIterations), numSelfPlayIterations(numSelfPlayIterations),

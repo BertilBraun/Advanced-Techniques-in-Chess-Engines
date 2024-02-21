@@ -31,8 +31,6 @@ public:
 
             Color currentPlayerTurn = selfPlayGames[0].root->board.turn;
 
-            size_t numRemainingGames = selfPlayGames.size();
-
             for (size_t i = 0; i < selfPlayGames.size(); ++i) {
                 auto &game = selfPlayGames[i];
 
@@ -69,16 +67,16 @@ private:
     void expandSelfPlayGames(std::vector<SelfPlayGame> &selfPlayGames) {
         torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
 
-        torch::Tensor policy = getPolicyWithNoise(selfPlayGames);
+        torch::Tensor noisePolicy = getPolicyWithNoise(selfPlayGames);
 
         for (size_t i = 0; i < selfPlayGames.size(); ++i) {
             auto &game = selfPlayGames[i];
-            auto moves = filterPolicyThenGetMovesAndProbabilities(policy[i], game.board);
+            auto moves = filterPolicyThenGetMovesAndProbabilities(noisePolicy[i], game.board);
 
             game.init(moves);
         }
 
-        for (int _ = 0; _ < m_args.numIterationsPerTurn; ++_) {
+        for (size_t _ = 0; _ < m_args.numIterationsPerTurn; ++_) {
             for (auto &game : selfPlayGames) {
                 game.node = game.getBestChildOrBackPropagate(m_args.cParam);
             }

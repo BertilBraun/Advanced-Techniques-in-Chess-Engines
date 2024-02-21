@@ -19,9 +19,6 @@ protected:
         loadLatestModel();
     }
 
-public:
-    virtual void run();
-
 protected:
     Network &m_model;
     torch::optim::Optimizer *m_optimizer;
@@ -71,7 +68,7 @@ protected:
         }
     }
 
-    void saveLatestModel(int iteration) const {
+    void saveLatestModel(size_t iteration) const {
         std::filesystem::path modelPath =
             m_savePath / ("model_" + std::to_string(iteration) + ".pt");
         std::filesystem::path optimizerPath =

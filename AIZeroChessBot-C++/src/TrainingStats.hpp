@@ -37,11 +37,11 @@ public:
 
 class LearningStats {
 public:
-    int totalNumGames = 0;
-    int totalIterations = 0;
+    size_t totalNumGames = 0;
+    size_t totalIterations = 0;
     std::vector<TrainingStats> trainingStats;
 
-    void update(int numGames, const TrainingStats &stats) {
+    void update(size_t numGames, const TrainingStats &stats) {
         totalNumGames += numGames;
         trainingStats.push_back(stats);
         ++totalIterations;
@@ -84,8 +84,9 @@ public:
         std::ostringstream stream;
         stream << "Total Games: " << totalNumGames << "\n";
         stream << "Total Moves: " << totalNumMoves << "\n";
-        stream << "Average Moves Per Game: " << (float) totalNumMoves / totalNumGames << "\n";
-        stream << "Average Result: " << totalResult / totalNumGames
+        stream << "Average Moves Per Game: " << (float) totalNumMoves / (float) totalNumGames
+               << "\n";
+        stream << "Average Result: " << totalResult / (float) totalNumGames
                << " (1.0 = Win, 0.0 = Draw, -1.0 = Loss)\n";
         stream << "Total Draws: " << totalDraws << "\n";
         stream << "Total Wins: " << totalWins << "\n";
