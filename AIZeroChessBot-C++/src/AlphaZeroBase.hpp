@@ -21,10 +21,10 @@ protected:
 
 protected:
     Network &m_model;
-    torch::optim::Optimizer *m_optimizer;
     TrainingArgs m_args;
-    size_t m_startingIteration = 0;
     std::filesystem::path m_savePath;
+    torch::optim::Optimizer *m_optimizer;
+    size_t m_startingIteration = 0;
 
     void loadLatestModel() {
         std::filesystem::path lastTrainingConfigPath = m_savePath / CONFIG_FILE_NAME;
