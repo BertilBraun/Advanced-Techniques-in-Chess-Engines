@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
     TrainingArgs args{
         200,      // numIterations
-        32,       // numParallelGames
+        4,        // numParallelGames
         200,      // numIterationsPerTurn
         30,       // numEpochs
         64,       // batchSize
