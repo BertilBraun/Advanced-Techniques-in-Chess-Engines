@@ -6,7 +6,7 @@
 #SBATCH --mem=200000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
 #SBATCH --cpus-per-task=1                  # number of CPUs required per MPI task
-#SBATCH --ntasks-per-node=6                # maximum count of tasks per node
+#SBATCH --ntasks-per-node=8                # maximum count of tasks per node
 #SBATCH --mail-type=ALL                    # Notify user by email when certain event types occur.
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_zero_%j.txt
@@ -33,9 +33,8 @@ cd ../train
 # The timeout command is used to kill the communicator.py process after 6 hours.
 # This is done to be able to requeue the job on the cluster to continue the training process.
 
-timeout 6h mpirun -np 6 python communicator.py
+timeout 6h mpirun -np 8 python communicator.py
 exit_status=$?
-exit_status=1 # TODO: Remove this line after testing
 
 # Check if the process was successful (exit status 0)
 if [ $exit_status -eq 0 ]; then

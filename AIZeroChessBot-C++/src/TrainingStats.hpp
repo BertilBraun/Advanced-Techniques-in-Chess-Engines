@@ -37,19 +37,19 @@ public:
 
 class LearningStats {
 public:
-    size_t totalNumGames = 0;
+    size_t totalNumMoves = 0;
     size_t totalIterations = 0;
     std::vector<TrainingStats> trainingStats;
 
-    void update(size_t numGames, const TrainingStats &stats) {
-        totalNumGames += numGames;
+    void update(size_t numMoves, const TrainingStats &stats) {
+        totalNumMoves += numMoves;
         trainingStats.push_back(stats);
         ++totalIterations;
     }
 
     std::string toString() const {
         std::ostringstream stream;
-        stream << "Total Games: " << totalNumGames << "\n";
+        stream << "Total Moves: " << totalNumMoves << "\n";
         stream << "Total Iterations: " << totalIterations << "\n";
         for (size_t i = 0; i < trainingStats.size(); ++i) {
             stream << "Iteration " << i + 1 << ": " << trainingStats[i].toString() << "\n";
@@ -68,6 +68,10 @@ public:
     float totalDrawResult = 0.0f;
 
     void update(int numMoves, float result) {
+        if (numMoves == 0) {
+            std::cout << "Warning: Self play game with 0 moves\n";
+        }
+
         ++totalNumGames;
         totalNumMoves += numMoves;
         if (result == -1.0f) {

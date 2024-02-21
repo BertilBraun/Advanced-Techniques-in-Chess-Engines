@@ -29,13 +29,11 @@ public:
         while (!selfPlayGames.empty()) {
             expandSelfPlayGames(selfPlayGames);
 
-            Color currentPlayerTurn = selfPlayGames[0].root->board.turn;
-
             for (size_t i = 0; i < selfPlayGames.size(); ++i) {
                 auto &game = selfPlayGames[i];
 
                 torch::Tensor actionProbabilities = getActionProbabilities(*game.root);
-                game.memory.emplace_back(game.board, actionProbabilities, currentPlayerTurn);
+                game.memory.emplace_back(game.board, actionProbabilities);
 
                 Move move = sampleMove(actionProbabilities, *game.root);
 

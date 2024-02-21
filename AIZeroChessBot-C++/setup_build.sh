@@ -19,15 +19,10 @@ module load mpi/openmpi/4.1
 module save chess
 
 # if conda doesnt have the chess environment, create it
-# if ! conda env list | grep -q chess; then
-#     conda create -n chess python=3.8
-#     source ~/miniconda3/bin/activate chess
-#     TODO create the environment based on the environment.yaml file     
-#
-#     # From https://pytorch.org/get-started/previous-versions/#v1121
-#     conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
-#     conda install -c anaconda cudnn
-# fi
+if [ ! -d ~/miniconda3/envs/chess ]; then
+    echo "Creating conda environment..."
+    conda env create -f environment.yaml
+fi
 
 source ~/miniconda3/bin/activate chess
 
