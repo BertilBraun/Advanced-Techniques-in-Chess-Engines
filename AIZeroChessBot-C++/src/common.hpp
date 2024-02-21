@@ -74,20 +74,12 @@ inline std::map<std::string, unsigned long long> __timeit_results;
 // timeit([&] { return someFunction(); }, "someFunction");
 template <typename Func> auto timeit(Func func, const std::string &funcName) {
     using ReturnType = decltype(func()); // Deduce the return type of the function
-#ifdef TIME_CUDA_KERNELS
-    auto stream = at::cuda::getStreamFromPool(true, 0);
-    at::cuda::CUDAStreamGuard streamGuard(stream);
-#endif
 
     if constexpr (std::is_same_v<ReturnType, void>) {
         auto start = std::chrono::high_resolution_clock::now();
 
         // If the function returns void
         func(); // Just call the function
-
-#ifdef TIME_CUDA_KERNELS
-        cudaStreamSynchronize(stream.stream());
-#endif
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -98,10 +90,6 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
 
         // If the function returns a value
         auto result = func(); // Call the function and store its result
-
-#ifdef TIME_CUDA_KERNELS
-        cudaStreamSynchronize(stream.stream());
-#endif
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
