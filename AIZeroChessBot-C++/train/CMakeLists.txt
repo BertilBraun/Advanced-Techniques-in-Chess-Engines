@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
-project(AIZeroChessBot LANGUAGES CXX)
+project(EvalAIZeroChessBot LANGUAGES CXX)
 
 # Determine if CUDA is available and set languages accordingly
 include(CheckLanguage)
@@ -19,14 +19,14 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 endif()
 
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch")
+set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../libtorch")
 
 # LibTorch configuration
-set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch/share/cmake/Torch")
+set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
 
 # Automatically include all source files from the src directory
-file(GLOB_RECURSE SOURCES "src/main.cpp")
+file(GLOB_RECURSE SOURCES "../src/eval.cpp")
 
 # General flags for both debug and release
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")

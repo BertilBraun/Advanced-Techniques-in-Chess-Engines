@@ -38,6 +38,10 @@ inline const std::array<std::pair<int, int>, 4> BISHOP_MOVES = {
 inline const std::array<std::string, 7> PIECE_SYMBOLS = {" ", "p", "n", "b", "r", "q", "k"};
 inline const std::array<std::string, 7> PIECE_NAMES = {"none", "pawn",  "knight", "bishop",
                                                        "rook", "queen", "king"};
+inline constexpr bool isValidPieceSymbol(char c) {
+    return c == 'p' || c == 'n' || c == 'b' || c == 'r' || c == 'q' || c == 'k' || c == 'P' ||
+           c == 'N' || c == 'B' || c == 'R' || c == 'Q' || c == 'K';
+}
 inline std::string pieceSymbol(PieceType piece_type) {
     return PIECE_SYMBOLS[static_cast<int>(piece_type)];
 }
@@ -845,6 +849,81 @@ private:
     std::optional<std::vector<Move>> m_cachedPseudoLegalEPMoves = std::nullopt;
 
 public:
+    static Board fromFEN(const std::string &fen) {
+        if (fen.find(" ") != std::string::npos) {
+            throw std::invalid_argument("expected position part of fen, got multiple parts: " +
+                                        fen);
+        }
+
+        std::vector<std::string> rows;
+        size_t start = 0;
+        size_t end = fen.find("/");
+        while (end != std::string::npos) {
+            rows.push_back(fen.substr(start, end - start));
+            start = end + 1;
+            end = fen.find("/", start);
+        }
+        rows.push_back(fen.substr(start, end));
+
+        if (rows.size() != 8) {
+            throw std::invalid_argument("expected 8 rows in position part of fen: " + fen);
+        }
+
+        for (const auto &row : rows) {
+            int field_sum = 0;
+            bool previous_was_digit = false;
+            bool previous_was_piece = false;
+
+            for (char c : row) {
+                if (isdigit(c)) {
+                    if (previous_was_digit) {
+                        throw std::invalid_argument(
+                            "two subsequent digits in position part of fen: " + fen);
+                    }
+                    field_sum += c - '0';
+                    previous_was_digit = true;
+                    previous_was_piece = false;
+                } else if (c == '~') {
+                    if (!previous_was_piece) {
+                        throw std::invalid_argument(
+                            "'~' not after piece in position part of fen: " + fen);
+                    }
+                    previous_was_digit = false;
+                    previous_was_piece = false;
+                } else if (isValidPieceSymbol(c)) {
+                    field_sum += 1;
+                    previous_was_digit = false;
+                    previous_was_piece = true;
+                } else {
+                    throw std::invalid_argument("invalid character in position part of fen: " +
+                                                fen);
+                }
+            }
+
+            if (field_sum != 8) {
+                throw std::invalid_argument("expected 8 columns per row in position part of fen: " +
+                                            fen);
+            }
+        }
+
+        Board board(false); // Create an empty board
+
+        int squareIndex = 0;
+        for (char c : fen) {
+            if (isdigit(c)) {
+                squareIndex += c - '0';
+            } else if (isValidPieceSymbol(c)) {
+                Piece piece = Piece::from_symbol(c);
+                board._setPieceAt(SQUARES_180[squareIndex], piece.pieceType(), piece.color());
+                squareIndex += 1;
+            } else if (c == '~') {
+                board.m_promoted |= BB_SQUARES[SQUARES_180[squareIndex - 1]];
+            }
+        }
+
+        return board;
+    }
+
     Board(bool starting_position = true)
         : turn(WHITE), castling_rights(BB_CORNERS), ep_square(std::nullopt), fullmove_number(1),
           halfmove_clock(0) {

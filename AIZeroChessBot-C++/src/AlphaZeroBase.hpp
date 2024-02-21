@@ -6,7 +6,7 @@
 #include "TrainingArgs.hpp"
 
 class AlphaZeroBase {
-protected:
+public:
     AlphaZeroBase(Network &model, const TrainingArgs &args,
                   torch::optim::Optimizer *optimizer = nullptr)
         : m_model(model), m_args(args), m_savePath(m_args.savePath), m_optimizer(optimizer) {
@@ -19,7 +19,6 @@ protected:
         loadLatestModel();
     }
 
-protected:
     Network &m_model;
     TrainingArgs m_args;
     std::filesystem::path m_savePath;
