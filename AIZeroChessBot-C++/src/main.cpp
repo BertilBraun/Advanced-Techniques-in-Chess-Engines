@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
         256,          // numSelfPlayIterations
         32,           // numParallelGames
         200,          // numIterationsPerTurn
-        20,           // numEpochs
+        30,           // numEpochs
         numProcesses, // numSeparateNodesOnCluster
         64,           // batchSize
         1.0f,         // temperature
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
         0.03f,        // dirichletAlpha
         2.0f,         // cParam
         "models",     // savePath
-        50            // retentionRate (in percent)
+        75            // retentionRate (in percent)
     };
 
     if (isRoot) {

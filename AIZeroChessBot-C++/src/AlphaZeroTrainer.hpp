@@ -22,9 +22,9 @@ public:
             TrainingStats trainStats;
             Dataset dataset(m_savePath, m_model->device, 10);
 
-            while (dataset.size() < 500) {
+            while (dataset.size() < 10000) {
                 std::cout << "Waiting for more training data\n";
-                std::this_thread::sleep_for(std::chrono::seconds(10));
+                std::this_thread::sleep_for(std::chrono::minutes(2));
                 dataset = Dataset(m_savePath, m_model->device, 10);
             }
 
