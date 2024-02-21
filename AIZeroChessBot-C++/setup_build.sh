@@ -11,9 +11,12 @@
 #SBATCH --output=setup_%j.txt
 #SBATCH --error=setup_%j.txt
 
-
+module purge
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
+module load compiler/gnu/11.2
+module load mpi/openmpi/4.1
+module save chess
 
 # if conda doesnt have the chess environment, create it
 # if ! conda env list | grep -q chess; then
