@@ -23,9 +23,9 @@ public:
             TrainingStats trainStats;
             Dataset dataset(m_savePath, m_model->device, 10);
 
-            while (dataset.size() < 10000) {
+            while (dataset.size() < 300000) {
                 std::cout << "Waiting for more training data. Current size: " << dataset.size()
-                          << "/10000\r" << std::flush;
+                          << "/300000\r" << std::flush;
                 std::this_thread::sleep_for(std::chrono::minutes(5));
                 dataset = Dataset(m_savePath, m_model->device, 10);
             }
