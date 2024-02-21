@@ -39,6 +39,7 @@ cd ../train
 
 timeout 6h mpirun -np 6 python communicator.py
 exit_status=$?
+exit_status=1 # TODO: Remove this line after testing
 
 # Check if the process was successful (exit status 0)
 if [ $exit_status -eq 0 ]; then
