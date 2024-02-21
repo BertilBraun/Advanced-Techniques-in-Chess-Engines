@@ -67,7 +67,7 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
 
 inline std::map<std::string, unsigned long long> __timeit_results;
 
-constexpr bool TIME_CUDA_KERNELS = true;
+constexpr bool TIME_CUDA_KERNELS = false;
 
 // Time a function and add the result to the timeit results
 // Should be callable like this:
