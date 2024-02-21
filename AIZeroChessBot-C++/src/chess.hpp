@@ -168,12 +168,12 @@ inline const std::array<std::string, 64> SQUARE_NAMES = {
 };
 // clang-format on
 
-inline int parseSquare(const std::string &name) {
+inline Square parseSquare(const std::string &name) {
     auto it = std::find(SQUARE_NAMES.begin(), SQUARE_NAMES.end(), name);
     if (it == SQUARE_NAMES.end()) {
         throw std::invalid_argument("Invalid square name");
     }
-    return (int) std::distance(SQUARE_NAMES.begin(), it);
+    return (Square) std::distance(SQUARE_NAMES.begin(), it);
 }
 
 inline std::string squareName(Square square) {
@@ -850,23 +850,26 @@ private:
 
 public:
     static Board fromFEN(const std::string &fen) {
-        if (fen.find(" ") != std::string::npos) {
-            throw std::invalid_argument("expected position part of fen, got multiple parts: " +
-                                        fen);
+        auto parts = split(fen, ' ');
+
+        if (parts.size() != 6) {
+            throw std::invalid_argument("expected 6 parts in fen: " + fen);
         }
+
+        std::string board_fen = parts[0];
 
         std::vector<std::string> rows;
         size_t start = 0;
-        size_t end = fen.find("/");
+        size_t end = board_fen.find("/");
         while (end != std::string::npos) {
-            rows.push_back(fen.substr(start, end - start));
+            rows.push_back(board_fen.substr(start, end - start));
             start = end + 1;
-            end = fen.find("/", start);
+            end = board_fen.find("/", start);
         }
-        rows.push_back(fen.substr(start, end));
+        rows.push_back(board_fen.substr(start, end));
 
         if (rows.size() != 8) {
-            throw std::invalid_argument("expected 8 rows in position part of fen: " + fen);
+            throw std::invalid_argument("expected 8 rows in position part of fen: " + board_fen);
         }
 
         for (const auto &row : rows) {
@@ -878,7 +881,7 @@ public:
                 if (isdigit(c)) {
                     if (previous_was_digit) {
                         throw std::invalid_argument(
-                            "two subsequent digits in position part of fen: " + fen);
+                            "two subsequent digits in position part of fen: " + board_fen);
                     }
                     field_sum += c - '0';
                     previous_was_digit = true;
@@ -886,7 +889,7 @@ public:
                 } else if (c == '~') {
                     if (!previous_was_piece) {
                         throw std::invalid_argument(
-                            "'~' not after piece in position part of fen: " + fen);
+                            "'~' not after piece in position part of fen: " + board_fen);
                     }
                     previous_was_digit = false;
                     previous_was_piece = false;
@@ -896,20 +899,20 @@ public:
                     previous_was_piece = true;
                 } else {
                     throw std::invalid_argument("invalid character in position part of fen: " +
-                                                fen);
+                                                board_fen);
                 }
             }
 
             if (field_sum != 8) {
                 throw std::invalid_argument("expected 8 columns per row in position part of fen: " +
-                                            fen);
+                                            board_fen);
             }
         }
 
         Board board(false); // Create an empty board
 
         int squareIndex = 0;
-        for (char c : fen) {
+        for (char c : board_fen) {
             if (isdigit(c)) {
                 squareIndex += c - '0';
             } else if (isValidPieceSymbol(c)) {
@@ -920,6 +923,40 @@ public:
                 board.m_promoted |= BB_SQUARES[SQUARES_180[squareIndex - 1]];
             }
         }
+
+        board.turn = parts[1] == "w" ? WHITE : BLACK;
+
+        board.castling_rights = 0;
+
+        for (char c : parts[2]) {
+            switch (c) {
+            case 'K':
+                board.castling_rights |= chess::BB_H1;
+                break;
+            case 'Q':
+                board.castling_rights |= chess::BB_A1;
+                break;
+            case 'k':
+                board.castling_rights |= chess::BB_H8;
+                break;
+            case 'q':
+                board.castling_rights |= chess::BB_A8;
+                break;
+            case '-':
+                break; // No castling rights
+            default:
+                throw std::invalid_argument("Invalid castling rights in FEN.");
+            }
+        }
+
+        if (parts[3] == "-") {
+            board.ep_square = std::nullopt;
+        } else {
+            board.ep_square = parseSquare(parts[3]);
+        }
+
+        board.halfmove_clock = std::stoi(parts[4]);
+        board.fullmove_number = std::stoi(parts[5]);
 
         return board;
     }

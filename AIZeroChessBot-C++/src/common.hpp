@@ -44,6 +44,16 @@ template <typename T> inline void extend(std::vector<T> &vec, const std::vector<
     vec.insert(vec.end(), other.begin(), other.end());
 }
 
+std::vector<std::string> split(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
     float progress = std::min((float) current / total, 1.0f);
     int pos = (int) (width * progress);
