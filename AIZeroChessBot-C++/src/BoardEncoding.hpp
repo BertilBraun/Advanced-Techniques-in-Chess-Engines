@@ -91,20 +91,17 @@ float getBoardResultScore(Board &board) {
 
     if (board.isCheckmate()) {
         return board.turn == WHITE ? -1.0f : 1.0f;
-    } else if (board.isStalemate() || board.isInsufficientMaterial() ||
-               board.isSeventyFiveMoves()) {
-        // Draw -> Return a score between -0.5 and 0.5 based on the remaining material
-
-        float materialScore = 0.0f;
-        for (PieceType pieceType : PIECE_TYPES) {
-            materialScore += (popcount(board.piecesMask(pieceType, WHITE)) -
-                              popcount(board.piecesMask(pieceType, BLACK))) *
-                             __PIECE_VALUES[pieceType];
-        }
-
-        return materialScore / (__MAX_MATERIAL_SCORE * 2.0f); // Normalize to [-0.5, 0.5]
-        // In theory just return 0.0f;
-    } else {
-        throw std::runtime_error("Board is not in a terminal state");
     }
+
+    // Draw -> Return a score between -0.5 and 0.5 based on the remaining material
+
+    float materialScore = 0.0f;
+    for (PieceType pieceType : PIECE_TYPES) {
+        materialScore += (popcount(board.piecesMask(pieceType, WHITE)) -
+                          popcount(board.piecesMask(pieceType, BLACK))) *
+                         __PIECE_VALUES[pieceType];
+    }
+
+    return materialScore / (__MAX_MATERIAL_SCORE * 2.0f); // Normalize to [-0.5, 0.5]
+    // In theory just return 0.0f;
 }
