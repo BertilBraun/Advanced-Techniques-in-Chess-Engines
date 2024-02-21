@@ -67,17 +67,31 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
 
 inline std::map<std::string, unsigned long long> __timeit_results;
 
+constexpr bool TIME_CUDA_KERNELS = true;
+
 // Time a function and add the result to the timeit results
 // Should be callable like this:
 // timeit([&] { return someFunction(); }, "someFunction");
 template <typename Func> auto timeit(Func func, const std::string &funcName) {
     using ReturnType = decltype(func()); // Deduce the return type of the function
 
+    if constexpr (TIME_CUDA_KERNELS) {
+        if (torch::cuda::is_available()) {
+            torch::cuda::synchronize();
+        }
+    }
+
     if constexpr (std::is_same_v<ReturnType, void>) {
         auto start = std::chrono::high_resolution_clock::now();
 
         // If the function returns void
         func(); // Just call the function
+
+        if constexpr (TIME_CUDA_KERNELS) {
+            if (torch::cuda::is_available()) {
+                torch::cuda::synchronize();
+            }
+        }
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -88,6 +102,12 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
 
         // If the function returns a value
         auto result = func(); // Call the function and store its result
+
+        if constexpr (TIME_CUDA_KERNELS) {
+            if (torch::cuda::is_available()) {
+                torch::cuda::synchronize();
+            }
+        }
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
