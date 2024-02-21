@@ -13,25 +13,14 @@
 #include "MoveEncoding.hpp"
 #include "Network.hpp"
 
+Network loadModel();
+
 void iterate(Network &model, AlphaMCTSNode *node);
 
 std::pair<std::vector<std::pair<Move, float>>, float> inference(Network &model, Board &board);
 
 bool hasTimeElapsed(std::chrono::time_point<std::chrono::high_resolution_clock> startTime,
-                    int timeToThinkMs) {
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() >=
-           timeToThinkMs;
-}
-
-Network loadModel() {
-    Network model;
-    TrainingArgs args;
-    args.savePath = "models";
-    AlphaZeroBase alphaZeroBase(model, args);
-    model->eval();
-    return model;
-}
+                    int timeToThinkMs);
 
 int main(int argc, char *argv[]) {
 
@@ -127,4 +116,20 @@ std::pair<std::vector<std::pair<Move, float>>, float> inference(Network &model, 
     auto moves = filterPolicyThenGetMovesAndProbabilities(policy[0], board);
 
     return std::make_pair(moves, value[0].item<float>());
+}
+
+bool hasTimeElapsed(std::chrono::time_point<std::chrono::high_resolution_clock> startTime,
+                    int timeToThinkMs) {
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() >=
+           timeToThinkMs;
+}
+
+Network loadModel() {
+    Network model;
+    TrainingArgs args;
+    args.savePath = "models";
+    AlphaZeroBase alphaZeroBase(model, args);
+    model->eval();
+    return model;
 }
