@@ -93,15 +93,11 @@ struct NetworkImpl : torch::nn::Module {
             "Network forward");
     }
 
-    PolicyValue __inference(torch::Tensor x) {
+    PolicyValue inference(torch::Tensor x) {
         auto result = this->forward(x);
         auto policy = torch::softmax(result.first, 1).to(torch::kCPU).detach().clone();
         auto value = result.second.squeeze(1).to(torch::kCPU).detach().clone();
         return {policy, value};
-    }
-
-    PolicyValue inference(torch::Tensor x) {
-        return timeit([&] { return this->__inference(x); }, "Network inference");
     }
 };
 TORCH_MODULE(Network);

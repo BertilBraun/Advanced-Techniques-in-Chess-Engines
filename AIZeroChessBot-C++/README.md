@@ -138,16 +138,23 @@ To run your `AIZeroChessBot-C++` project after setting it up with CMake and comp
 
    This script prepares the build environment, including downloading LibTorch if necessary and generating build files.
 
-3. **Build the Project** using CMake. If you're using the CMake Tools extension in VSCode, you can build the project directly from the VSCode command palette (`Ctrl+Shift+P`) by typing "CMake: Build" and selecting the build target. Alternatively, you can build from the terminal in the `build` directory:
+3. **Build the Project** using CMake.
 
     ```cmd
     cd build
     cmake --build . --config Release
     ```
 
+    Or alternatively:
+
+    ```cmd
+    cd build
+    make
+    ```
+
 ### Step 2: Running the Executable
 
-After building the project, an executable file named `AIZeroChessBot-C++` (or `AIZeroChessBot.exe` on Windows) will be created in the `build` directory, inside a `Release` or `Debug` subdirectory, depending on your build configuration.
+After building the project, an executable file named `AIZeroChessBot` (or `AIZeroChessBot.exe` on Windows) will be created in the `build` directory, inside a `Release` or `Debug` subdirectory, depending on your build configuration.
 
 To run your project:
 
@@ -160,10 +167,36 @@ To run your project:
 2. **Run the Executable** by typing its name in the terminal:
 
     ```cmd
-    .\AIZeroChessBot.exe
+    .\AIZeroChessBot.exe <root|worker> <rank> <num_workers>
     ```
 
    This command executes your program. Any command-line arguments required by your application should follow the executable name.
+
+Alternatively, you can run the train setup script to start the training process:
+
+```cmd
+cd ../train
+sbatch train_setup.sh
+```
+
+## Evaluation
+
+For evaluating the performance of the AI-Zero Chess Bot, we have a jupyter notebook that can be used to interactively evaluate the bot's performance against a baseline chess bot and track its improvement over time. The notebook will also provide visualizations and metrics to assess the bot's learning progress. The notebook will be deployed on the cluster and will have access to the cluster's GPU for running the bot evaluations. In the notebook, we will be able to play against the bot and observe its moves and strategies in real-time.
+
+To run the evaluation notebook, follow these steps:
+
+1. **Connect to the Cluster**: Connect to the cluster using SSH and navigate to the project directory.
+2. **Setup the eval Build**: The evaluation notebook requires a new compiled build with the evaluation mode enabled. Run the following commands to set up the evaluation build:
+
+    ```bash
+    cd train
+    ./setup_eval_build.sh
+    ```
+
+    This will create a new build with the evaluation mode enabled.
+3. **Open the Evaluation Notebook**: Open the `eval.ipynb` notebook in Jupyter.
+4. **[Optional] Download Model Weights**: If you want to use pre-trained model weights for the evaluation, download the model weights from [here](TODO: Add link) and place them in the `train` directory.
+5. **Run the Notebook**: Execute the cells in the notebook to start the evaluation process. The notebook will guide you through the evaluation steps and display the bot's performance metrics and visualizations.
 
 ## Performance Problems
 
