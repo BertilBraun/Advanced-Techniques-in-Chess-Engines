@@ -391,6 +391,16 @@ inline std::vector<Square> scanReversed(Bitboard bb) {
     return squares;
 }
 
+inline std::vector<std::string> split(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 inline constexpr int popcount(Bitboard bb) {
     const uint64_t m1 = 0x5555555555555555;  // binary: 0101...
     const uint64_t m2 = 0x3333333333333333;  // binary: 00110011..
