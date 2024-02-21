@@ -10,6 +10,10 @@ public:
             size_t memoriesToPreload = 10)
         : m_savePath(savePath), m_device(device) {
 
+        if (!std::filesystem::exists(m_savePath / MEMORY_DIR_NAME)) {
+            std::filesystem::create_directories(m_savePath / MEMORY_DIR_NAME);
+        }
+
         m_memoryPaths = getMemoryPaths();
 
         std::random_device rd;

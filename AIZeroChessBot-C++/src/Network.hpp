@@ -83,11 +83,15 @@ struct NetworkImpl : torch::nn::Module {
         return timeit([&] { return this->__forward(x); }, "Network forward");
     }
 
-    std::pair<torch::Tensor, torch::Tensor> inference(torch::Tensor x) {
+    std::pair<torch::Tensor, torch::Tensor> __inference(torch::Tensor x) {
         auto result = this->forward(x);
         auto policy = torch::softmax(result.first, 1).to(torch::kCPU).detach().clone();
         auto value = result.second.squeeze(1).to(torch::kCPU).detach().clone();
         return {policy, value};
+    }
+
+    std::pair<torch::Tensor, torch::Tensor> inference(torch::Tensor x) {
+        return timeit([&] { return this->__inference(x); }, "Network inference");
     }
 };
 TORCH_MODULE(Network);
