@@ -10,23 +10,36 @@ class Dataset {
 public:
     Dataset(const std::filesystem::path &savePath, torch::Device device,
             size_t memoriesToPreload = 10)
-        : m_savePath(savePath), m_device(device) {
+        : m_savePath(savePath), m_device(device), m_memoriesToPreload(memoriesToPreload) {
 
         if (!std::filesystem::exists(m_savePath / MEMORY_DIR_NAME)) {
             std::filesystem::create_directories(m_savePath / MEMORY_DIR_NAME);
         }
 
+        restart();
+    }
+
+    void restart() {
         std::cout << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
 
-        m_memoryPaths = getMemoryPaths();
+        auto newMemoryPaths = getMemoryPaths();
+
+        for (const auto &memoryPath : newMemoryPaths) {
+            if (std::find(m_memoryPathsFIFO.begin(), m_memoryPathsFIFO.end(), memoryPath) ==
+                m_memoryPathsFIFO.end()) {
+                m_memoryPathsFIFO.push_back(memoryPath);
+            }
+        }
+
+        m_memoryPaths = m_memoryPathsFIFO; // copy the memory paths to the main list
 
         std::random_device rd;
         std::mt19937 g(rd());
         std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g);
 
-        assert(memoriesToPreload > 0);
+        assert(m_memoriesToPreload > 0);
 
-        for (m_currentMemoryIndex = 0; m_currentMemoryIndex < memoriesToPreload;
+        for (m_currentMemoryIndex = 0; m_currentMemoryIndex < m_memoriesToPreload;
              ++m_currentMemoryIndex) {
             queueNextMemory();
         }
@@ -51,24 +64,26 @@ public:
 
     size_t size() const { return m_memoryPaths.size(); }
 
-    void deleteOldMemories(int retentionFactor) const {
-        for (const auto &path : m_memoryPaths) {
-            if (std::filesystem::exists(path) && std::filesystem::is_directory(path) &&
-                isMemoryValid(path)) {
-                if (rand() % 100 > retentionFactor) {
-                    // delete the entries in the folder as well as the folder itself
-                    std::filesystem::remove_all(path);
-                }
-            }
+    void deleteOldMemories(int retentionFactor) {
+        // delete the oldest retentionFactor% of the memories
+        size_t numMemoriesToDelete = retentionFactor * m_memoryPaths.size() / 100;
+        for (size_t i = 0; i < numMemoriesToDelete; ++i) {
+            std::filesystem::remove_all(m_memoryPathsFIFO[i]);
         }
+
+        // delete the oldest retentionFactor% of the memories
+        m_memoryPathsFIFO.erase(m_memoryPathsFIFO.begin(),
+                                m_memoryPathsFIFO.begin() + numMemoriesToDelete);
     }
 
 private:
     std::deque<std::future<DataSample>> m_memoryFutures;
+    std::vector<std::filesystem::path> m_memoryPathsFIFO;
     std::vector<std::filesystem::path> m_memoryPaths;
     std::filesystem::path m_savePath;
     torch::Device m_device;
     size_t m_currentMemoryIndex = 0;
+    size_t m_memoriesToPreload;
 
     void queueNextMemory() {
         if (m_currentMemoryIndex < m_memoryPaths.size()) {

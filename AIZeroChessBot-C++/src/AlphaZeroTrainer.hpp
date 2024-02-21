@@ -15,19 +15,22 @@ public:
 
     void run() {
         LearningStats learningStats;
+        Dataset dataset(m_savePath, m_model->device, 10);
+
         m_model->train(); // Set model to training mode
 
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
             std::cout << "Training Iteration " << (iteration + 1) << std::endl;
             TrainingStats trainStats;
-            Dataset dataset(m_savePath, m_model->device, 10);
+
+            dataset.restart();
 
             while (dataset.size() < 100000) {
                 std::cout << "Waiting for more training data. Current size: " << dataset.size()
                           << "/100000\r" << std::flush;
                 std::this_thread::sleep_for(std::chrono::minutes(5));
-                dataset = Dataset(m_savePath, m_model->device, 10);
+                dataset.restart();
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
