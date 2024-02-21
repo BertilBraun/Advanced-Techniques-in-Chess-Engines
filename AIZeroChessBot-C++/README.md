@@ -6,11 +6,16 @@ The current state of the project is that everything is reimplemented in C++ incl
 
 ### Upcoming To Dos
 
-- Profile the performance of the C++ implementation of the MCTS algorithm and the Neural Network compared to the Python implementation. Is the C++ implementation more than 10% in the neural network evaluation step?
-- Create a interactive Notebook to evaluate the performance of the bot on the cluster with access to the cluster's GPU.
+- [-] Profile the performance of the C++ implementation of the MCTS algorithm and the Neural Network compared to the Python implementation. Is the C++ implementation more than 10% in the neural network evaluation step?
+- [x] Create a interactive Notebook to evaluate the performance of the bot on the cluster with access to the cluster's GPU.
   - Evaluate the performance of the bot after the first 12 hours of training.
   - Evaluate the performance of the bot against a baseline chess bot (continuously).
-- Continue training the bot on the cluster with multiple GPUs and multiple nodes (as already implemented) for multiple days if the performance after 12 hours is promising.
+- [ ] Continue training the bot on the cluster with multiple GPUs and multiple nodes (as already implemented) for multiple days if the performance after 12 hours is promising.
+
+**Current Model Problems:**
+
+- The model seems to have collapsed on the value head. The value head is always predicting `-0.1435`. This is a problem that needs to be addressed. For now, I restarted training with a new model and a new optimizer and added a way larger search space for the best move in the self-play algorithm.
+- There is little to no coherence between the policy of our model and stockfish's evaluation of the board state. The hope is that this will improve with more training.
 
 ## Overview
 
@@ -111,7 +116,7 @@ This formula gives you the number of workers for sample generation needed to mat
 
 Assuming:
 
-- $T_{gen} = 0.5$ seconds (TODO - measure this)
+- $T_{gen} = 0.5$ seconds (TODO - measure this - I can't get that to work, as the CUDA implementation is working async and for some reason the blocking call is not blocking)
 - $T_{batch} = 1$ second (TODO - measure this)
 - $E = 20$ epochs
 - $B = 64$ batch size
@@ -121,6 +126,8 @@ Find $W_{gen}$: (TODO - update this with actual values)
 $$W_{gen} = \frac{0.5 \times 64}{20 \times 1} = \frac{32}{20} = 1.6$$
 
 Rounding up, you would need at least 2 workers dedicated to sample generation to balance the generation and training times under these conditions.
+
+For us, this seems to be more than 6 workers for self-play, as the time for a sample generation seems to be much longer than the time to train on a batch.
 
 ## Getting Started
 
