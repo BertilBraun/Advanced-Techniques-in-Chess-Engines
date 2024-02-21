@@ -19,21 +19,27 @@ public:
 
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
+            std::cout << "Training Iteration " << (iteration + 1) << std::endl;
             TrainingStats trainStats;
             Dataset dataset(m_savePath, m_model->device, 10);
 
             while (dataset.size() < 10000) {
-                std::cout << "Waiting for more training data\n";
-                std::this_thread::sleep_for(std::chrono::minutes(2));
+                std::cout << "Waiting for more training data. Current size: " << dataset.size()
+                          << "/10000\r" << std::flush;
+                std::this_thread::sleep_for(std::chrono::minutes(5));
                 dataset = Dataset(m_savePath, m_model->device, 10);
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
             std::cout << "Training with " << numTrainingSamples << " memories\n";
 
+            std::cout << "Training started at " << currentDateTime() << "\n";
+
             for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
                 trainStats += timeit([&] { return train(dataset); }, "train");
             }
+
+            std::cout << "Training finished at " << currentDateTime() << "\n";
 
             saveLatestModel(iteration);
             learningStats.update(numTrainingSamples, trainStats);

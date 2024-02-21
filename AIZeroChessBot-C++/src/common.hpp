@@ -105,3 +105,12 @@ inline std::string get_timeit_results() {
     }
     return result;
 }
+
+inline std::string currentDateTime() {
+    // Format: YYYY-MM-DD HH:MM:SS:MS
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
+    return ss.str();
+}

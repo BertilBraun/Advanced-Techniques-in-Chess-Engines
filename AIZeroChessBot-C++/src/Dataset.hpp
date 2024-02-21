@@ -4,6 +4,8 @@
 
 #include <future>
 
+using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
+
 class Dataset {
 public:
     Dataset(const std::filesystem::path &savePath, torch::Device device,
@@ -13,6 +15,8 @@ public:
         if (!std::filesystem::exists(m_savePath / MEMORY_DIR_NAME)) {
             std::filesystem::create_directories(m_savePath / MEMORY_DIR_NAME);
         }
+
+        std::cout << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
 
         m_memoryPaths = getMemoryPaths();
 
@@ -26,11 +30,13 @@ public:
              ++m_currentMemoryIndex) {
             queueNextMemory();
         }
+
+        std::cout << "Loaded " << m_memoryFutures.size() << " memory batches" << std::endl;
     }
 
     bool hasNext() const { return !m_memoryFutures.empty(); }
 
-    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> next() {
+    DataSample next() {
         if (m_memoryFutures.empty()) {
             throw std::runtime_error("No more memories to load");
         }
@@ -58,8 +64,7 @@ public:
     }
 
 private:
-    std::deque<std::future<std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>>>
-        m_memoryFutures;
+    std::deque<std::future<DataSample>> m_memoryFutures;
     std::vector<std::filesystem::path> m_memoryPaths;
     std::filesystem::path m_savePath;
     torch::Device m_device;
@@ -85,8 +90,7 @@ private:
         return memoryPaths;
     }
 
-    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-    loadMemory(const std::filesystem::path &memoryPath) const {
+    DataSample loadMemory(const std::filesystem::path &memoryPath) const {
         torch::Tensor states, policyTargets, valueTargets;
 
         torch::load(states, (memoryPath / "states.pt").string(), m_device);

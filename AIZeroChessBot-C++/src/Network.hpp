@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+using PolicyValue = std::pair<torch::Tensor, torch::Tensor>;
+
 struct ResBlockImpl : torch::nn::Module {
     torch::nn::Conv2d conv1;
     torch::nn::BatchNorm2d bn1;
@@ -69,7 +71,7 @@ struct NetworkImpl : torch::nn::Module {
         this->to(device);
     }
 
-    std::pair<torch::Tensor, torch::Tensor> __forward(torch::Tensor x) {
+    PolicyValue __forward(torch::Tensor x) {
         x = startBlock->forward(x);
         for (const auto &block : *backBone) {
             x = block->as<ResBlock>()->forward(x);
@@ -79,18 +81,18 @@ struct NetworkImpl : torch::nn::Module {
         return {policy, value};
     }
 
-    std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor x) {
+    PolicyValue forward(torch::Tensor x) {
         return timeit([&] { return this->__forward(x); }, "Network forward");
     }
 
-    std::pair<torch::Tensor, torch::Tensor> __inference(torch::Tensor x) {
+    PolicyValue __inference(torch::Tensor x) {
         auto result = this->forward(x);
         auto policy = torch::softmax(result.first, 1).to(torch::kCPU).detach().clone();
         auto value = result.second.squeeze(1).to(torch::kCPU).detach().clone();
         return {policy, value};
     }
 
-    std::pair<torch::Tensor, torch::Tensor> inference(torch::Tensor x) {
+    PolicyValue inference(torch::Tensor x) {
         return timeit([&] { return this->__inference(x); }, "Network inference");
     }
 };

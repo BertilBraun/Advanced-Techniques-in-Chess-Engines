@@ -8,10 +8,9 @@
 struct SelfPlayGameMemory {
     Board board;
     torch::Tensor actionProbabilities;
-    Color turn;
 
-    SelfPlayGameMemory(const Board &board, const torch::Tensor &actionProbabilities, Color turn)
-        : board(board), actionProbabilities(actionProbabilities), turn(turn) {}
+    SelfPlayGameMemory(const Board &board, const torch::Tensor &actionProbabilities)
+        : board(board), actionProbabilities(actionProbabilities) {}
 };
 
 class SelfPlayGame {

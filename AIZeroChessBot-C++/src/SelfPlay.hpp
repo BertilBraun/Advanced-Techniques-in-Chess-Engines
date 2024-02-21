@@ -45,8 +45,7 @@ public:
                     // If the game is over, add the training data to the self play memory
                     extend(m_selfPlayMemoryBatch, getTrainingData(game));
 
-                    selfPlayStats.update(game.root->num_played_moves,
-                                         getBoardResultScore(game.board));
+                    selfPlayStats.update(game.memory.size(), getBoardResultScore(game.board));
 
                     // Remove the game from the list of self play games
                     selfPlayGames[i--] = selfPlayGames.back();

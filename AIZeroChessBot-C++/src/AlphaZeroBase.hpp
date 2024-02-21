@@ -49,8 +49,9 @@ protected:
                 }
 
                 // Load optimizer state
-                if (std::filesystem::exists(optimizerPath) && m_optimizer != nullptr) {
-                    torch::load(*m_optimizer, optimizerPath);
+                if (std::filesystem::exists(optimizerPath)) {
+                    if (m_optimizer != nullptr)
+                        torch::load(*m_optimizer, optimizerPath);
                 } else {
                     std::cerr << "Saved optimizer file not found: " << optimizerPath << std::endl;
                     return;
