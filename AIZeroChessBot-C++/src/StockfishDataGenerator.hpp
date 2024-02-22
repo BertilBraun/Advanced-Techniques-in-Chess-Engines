@@ -126,7 +126,7 @@ private:
     double m_valueSum = 0.0;
 
     void reportProgress(size_t current, size_t total, const std::string &message) {
-        double average = m_written == 0 ? 0 : std::round(m_valueSum / m_written * 100.0) / 100.0;
+        double average = m_written == 0 ? 0 : m_valueSum / m_written;
 
         std::string desc = message + " " + std::to_string(m_written) + " written " +
                            std::to_string(average) + " average value";

@@ -23,7 +23,7 @@ public:
     SelfPlayWriter(const TrainingArgs &args) : m_args(args) {}
 
     void write(const torch::Tensor &board, const torch::Tensor &policy, float resultScore) {
-        auto trainingData = getTrainingData(board, policy, resultScore);
+        auto trainingData = symmetricVariations(board, policy, resultScore);
         extend(m_selfPlayMemoryBatch, trainingData);
         saveTrainingDataBatches();
     }
@@ -32,34 +32,27 @@ private:
     const TrainingArgs &m_args;
     std::vector<SelfPlayMemory> m_selfPlayMemoryBatch;
 
-    std::vector<SelfPlayMemory> getTrainingData(const torch::Tensor &board,
-                                                const torch::Tensor &policy, float result) const {
-        std::vector<SelfPlayMemory> selfPlayMemory;
-        for (const auto &[board, probabilities] : symmetricVariations(board, policy)) {
-            selfPlayMemory.emplace_back(board, probabilities, result);
-        }
-        return selfPlayMemory;
-    }
+    std::vector<SelfPlayMemory> symmetricVariations(const torch::Tensor &board,
+                                                    const torch::Tensor &actionProbabilities,
+                                                    float result) const {
+        std::vector<SelfPlayMemory> variations;
 
-    std::vector<std::pair<torch::Tensor, torch::Tensor>>
-    symmetricVariations(const torch::Tensor &board,
-                        const torch::Tensor &actionProbabilities) const {
-        std::vector<std::pair<torch::Tensor, torch::Tensor>> variations;
-
-        variations.emplace_back(board, actionProbabilities);
+        variations.emplace_back(board, actionProbabilities, result);
 
         variations.emplace_back(
             flipBoardHorizontal(board),
-            flipActionProbabilities(actionProbabilities, flipMoveIndexHorizontal));
+            flipActionProbabilities(actionProbabilities, flipMoveIndexHorizontal), -result);
 
-        // variations.emplace_back(
-        //     flipBoardVertical(board),
-        //     flipActionProbabilities(actionProbabilities, flipMoveIndexVertical));
+        variations.emplace_back(flipBoardVertical(board),
+                                flipActionProbabilities(actionProbabilities, flipMoveIndexVertical),
+                                result);
 
-        // variations.emplace_back(flipBoardVertical(flipBoardHorizontal(board)),
-        //                         flipActionProbabilities(actionProbabilities, [](int idx) {
-        //                             return flipMoveIndexVertical(flipMoveIndexHorizontal(idx));
-        //                         }));
+        variations.emplace_back(
+            flipBoardVertical(flipBoardHorizontal(board)),
+            flipActionProbabilities(
+                actionProbabilities,
+                [](int idx) { return flipMoveIndexVertical(flipMoveIndexHorizontal(idx)); }),
+            -result);
 
         return variations;
     }
