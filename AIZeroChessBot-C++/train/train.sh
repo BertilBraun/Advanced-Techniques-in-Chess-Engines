@@ -41,7 +41,11 @@ fi
 
 # Extract the SLURM job time limit in minutes and convert to seconds for timeout
 # Subtract a buffer time (e.g., 300 seconds) to allow for cleanup and requeueing
-job_time_limit_seconds=$(($SLURM_TIMELIMIT * 60 - 300))
+TIME=$(squeue -j $SLURM_JOB_ID -h --Format TimeLimit)
+# Convert hh:mm:ss to seconds
+job_time_limit_seconds=$(echo $TIME | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }')
+# Subtract buffer time
+job_time_limit_seconds=$(($job_time_limit_seconds - 300))
 
 # The timeout command is used to kill the communicator.py process after job_time_limit_seconds.
 # This is done to be able to requeue the job on the cluster to continue the training process.
