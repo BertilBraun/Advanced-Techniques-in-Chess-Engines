@@ -39,17 +39,6 @@ public:
         return *this;
     }
 
-    std::vector<std::string> readLines() {
-        std::vector<std::string> lines;
-        std::string line;
-        (*this) >> line;
-        while (!line.empty()) {
-            lines.push_back(line);
-            (*this) >> line;
-        }
-        return lines;
-    }
-
 private:
     FILE *pipe = nullptr;
 };

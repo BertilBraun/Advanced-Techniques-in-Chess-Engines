@@ -22,16 +22,16 @@ public:
 
     ~StockfishEvaluator() { stockfish << "quit"; }
 
-    float evaluatePosition(const std::string &fen) {
+    float evaluatePosition(const std::string &fen, int depth = 20) {
         stockfish << "position fen " + fen;
-        stockfish << "go depth 20"; // Adjust depth as needed
+        stockfish << "go depth " + std::to_string(depth);
 
         int boardEvaluation = 0;
 
-        for (auto line : stockfish.readLines()) {
-            if (line.find("bestmove") == std::string::npos)
-                break;
+        std::string line;
+        stockfish >> line;
 
+        while (line.find("bestmove") != std::string::npos) {
             if (line.find("score cp") != std::string::npos) {
                 std::istringstream iss(line);
                 std::string token;
@@ -42,6 +42,21 @@ public:
                     }
                 }
             }
+
+            if (line.find("mate") != std::string::npos) {
+                std::istringstream iss(line);
+                std::string token;
+                while (iss >> token) {
+                    if (token == "mate") {
+                        int mateInMoves;
+                        iss >> mateInMoves;
+                        boardEvaluation = mateInMoves > 0 ? 1000 : -1000;
+                        break;
+                    }
+                }
+            }
+
+            stockfish >> line;
         }
 
         // Normalize and clamp the board evaluation to [-1, 1]

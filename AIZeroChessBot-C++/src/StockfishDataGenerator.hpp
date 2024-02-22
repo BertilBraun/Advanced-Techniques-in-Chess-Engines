@@ -86,7 +86,13 @@ public:
 
             Board board = Board::fromFEN(fen);
 
-            parseLichessEvalPolicy(eval["evals"], board, createLines);
+            auto lines = parseLichessEvalPolicy(eval["evals"], board);
+
+            if (createLines) {
+                for (auto &[moves, value] : lines) {
+                    writeLine(board, moves, value);
+                }
+            }
         }
 
         markGenerated("lichess_evals_generated");
@@ -119,7 +125,8 @@ private:
         file.close();
     }
 
-    void parseLichessEvalPolicy(const json &evals, Board &board, bool createLines) {
+    std::vector<std::pair<std::vector<Move>, float>> parseLichessEvalPolicy(const json &evals,
+                                                                            Board &board) {
         std::vector<float> scores;
         std::vector<std::vector<Move>> moves;
 
@@ -149,11 +156,12 @@ private:
 
         write(board, policy, score);
 
-        if (createLines) {
-            for (size_t i = 0; i < scores.size(); ++i) {
-                writeLine(board, moves[i], scores[i]);
-            }
+        std::vector<std::pair<std::vector<Move>, float>> lines;
+        for (size_t i = 0; i < scores.size(); ++i) {
+            lines.emplace_back(moves[i], scores[i]);
         }
+
+        return lines;
     }
 
     void writeLine(const Board &board, const std::vector<Move> &line, float value) {
@@ -202,9 +210,12 @@ private:
         std::sort(policy.begin(), policy.end(),
                   [](const PolicyMove &a, const PolicyMove &b) { return a.second > b.second; });
 
-        for (size_t i = 0; i < std::min(numMoves, policy.size()); ++i) {
+        // Remove all but the top numMoves moves to reduce the memory footprint
+        policy.resize(std::min(numMoves, policy.size()));
+
+        for (auto &[move, _] : policy) {
             Board copy = board.copy();
-            copy.push(policy[i].first);
+            copy.push(move);
             if (!copy.isGameOver())
                 stockfishSelfPlay(evaluator, copy, numMoves);
         }
