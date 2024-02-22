@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=1                  # number of CPUs required per MPI task
 #SBATCH --ntasks-per-node=4               # maximum count of tasks per node
 #SBATCH --mail-type=ALL                    # Notify user by email when certain event types occur.
-#SBATCH --gres=gpu:0
+#SBATCH --gres=gpu:1
 #SBATCH --output=generator_%j.txt
 #SBATCH --error=generator_%j.txt
 
