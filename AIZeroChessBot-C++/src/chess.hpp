@@ -965,8 +965,13 @@ public:
             board.ep_square = parseSquare(parts[3]);
         }
 
-        board.halfmove_clock = std::stoi(parts[4]);
-        board.fullmove_number = std::stoi(parts[5]);
+        if (parts.size() > 4) {
+            board.halfmove_clock = std::stoi(parts[4]);
+            board.fullmove_number = std::stoi(parts[5]);
+        } else {
+            board.halfmove_clock = 0;
+            board.fullmove_number = 1;
+        }
 
         return board;
     }
@@ -1834,6 +1839,59 @@ public:
         board.m_promoted = m_promoted;
 
         return board;
+    }
+
+    std::string fen() const {
+        // Gets the FEN representation of the board
+        std::stringstream builder;
+        int empty = 0;
+
+        for (int rank = 7; rank >= 0; --rank) {
+            for (int file = 0; file < 8; ++file) {
+                Square sq = square(file, rank);
+                auto piece = pieceAt(sq);
+                if (piece.has_value()) {
+                    if (empty > 0) {
+                        builder << empty;
+                        empty = 0;
+                    }
+                    builder << piece->symbol();
+                } else {
+                    empty++;
+                }
+            }
+            if (empty > 0) {
+                builder << empty;
+                empty = 0;
+            }
+            if (rank > 0) {
+                builder << "/";
+            }
+        }
+
+        builder << " " << (turn == WHITE ? "w" : "b") << " ";
+
+        if (castling_rights == 0) {
+            builder << "-";
+        } else {
+            if (castling_rights & BB_SQUARES[H1]) {
+                builder << "K";
+            }
+            if (castling_rights & BB_SQUARES[A1]) {
+                builder << "Q";
+            }
+            if (castling_rights & BB_SQUARES[H8]) {
+                builder << "k";
+            }
+            if (castling_rights & BB_SQUARES[A8]) {
+                builder << "q";
+            }
+        }
+
+        builder << " " << (ep_square.has_value() ? squareName(ep_square.value()) : "-") << " ";
+        builder << halfmove_clock << " " << fullmove_number;
+
+        return builder.str();
     }
 
 private:

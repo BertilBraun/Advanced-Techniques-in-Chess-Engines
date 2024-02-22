@@ -3,7 +3,10 @@
 #include "AlphaZeroSelfPlayer.hpp"
 #include "AlphaZeroTrainer.hpp"
 #include "Network.hpp"
+#include "StockfishDataGenerator.hpp"
 #include "TrainingArgs.hpp"
+
+std::string SAVE_PATH = "models";
 
 int main(int argc, char *argv[]) {
 
@@ -13,17 +16,51 @@ int main(int argc, char *argv[]) {
     // third argument should be the number of processes
 
     if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " [root|worker] <rank> <numProcesses>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [root|worker|generator] <rank> <numProcesses>"
+                  << std::endl;
         return 1;
     }
 
     bool isRoot = std::string(argv[1]) == "root";
-    size_t rank = std::stoul(argv[2]);
-    size_t numProcesses = std::stoul(argv[3]);
+    bool isWorker = std::string(argv[1]) == "worker";
+    bool isGenerator = std::string(argv[1]) == "generator";
 
-    Network model;
-    auto optimizer =
-        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(0.02).weight_decay(1e-4));
+    if (!isRoot && !isWorker && !isGenerator) {
+        std::cerr << "Invalid argument: " << argv[1] << std::endl;
+        return 1;
+    }
+
+    TrainingArgs args{
+        200,      // numIterations
+        32,       // numParallelGames
+        500,      // numIterationsPerTurn
+        40,       // numEpochs
+        64,       // batchSize
+        1.0f,     // temperature
+        0.25f,    // dirichletEpsilon
+        0.03f,    // dirichletAlpha
+        2.0f,     // cParam
+        "models", // savePath
+        75        // retentionRate (in percent)
+    };
+
+    if (isGenerator) {
+        std::cerr << "Data generator process started" << std::endl;
+
+        // Run the python script in ../src/PreprocessGenerationData.py
+        // to generate the data in the correct format
+
+        Subprocess preprocessData("python3 ../src/PreprocessGenerationData.py", "r+");
+        preprocessData << "data/Lichess Elite Database";
+        preprocessData << "data/lichess_evals.txt";
+        preprocessData << "data/lichess_db_eval.json";
+
+        StockfishDataGenerator stockfishDataGenerator(args);
+        stockfishDataGenerator.generateDataFromLichessEval("data/lichess_evals.txt");
+        stockfishDataGenerator.generateDataFromEliteGames("data/lichess_db_eval.json");
+        stockfishDataGenerator.generateDataThroughStockfishSelfPlay("models/stockfish_8_x64");
+        return 0;
+    }
 
     /*
     args = TrainingArgs(
@@ -41,19 +78,12 @@ int main(int argc, char *argv[]) {
     )
     */
 
-    TrainingArgs args{
-        200,      // numIterations
-        32,       // numParallelGames
-        500,      // numIterationsPerTurn
-        40,       // numEpochs
-        64,       // batchSize
-        1.0f,     // temperature
-        0.25f,    // dirichletEpsilon
-        0.03f,    // dirichletAlpha
-        2.0f,     // cParam
-        "models", // savePath
-        75        // retentionRate (in percent)
-    };
+    size_t rank = std::stoul(argv[2]);
+    size_t numProcesses = std::stoul(argv[3]);
+
+    Network model;
+    auto optimizer =
+        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(0.02).weight_decay(1e-4));
 
     if (isRoot) {
         std::cerr << "Trainer process started" << std::endl;

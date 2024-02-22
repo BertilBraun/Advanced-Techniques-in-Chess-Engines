@@ -2,10 +2,14 @@
 
 #include "common.hpp"
 
-inline std::vector<std::pair<Move, float>>
-filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy, Board &board);
+using PolicyMove = std::pair<Move, float>;
+
+inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+                                                                        Board &board);
 
 inline int encodeMove(const Move &move);
+
+inline torch::Tensor encodeMoves(std::vector<PolicyMove> &movesWithProbabilities);
 
 inline Move decodeMove(int moveIndex);
 
@@ -152,6 +156,27 @@ inline const auto __FLIPPED_INDICES_HORIZONTAL =
     __precalculateFlippedIndices(__MOVE_MAPPINGS).first;
 inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
+inline torch::Tensor encodeMoves(std::vector<PolicyMove> &movesWithProbabilities) {
+    // Encodes a list of moves with their corresponding probabilities into a 1D tensor.
+    //
+    // The list of moves is a list of tuples, where each tuple contains a move and its
+    // corresponding probability. The tensor has a length of TOTAL_MOVES, representing all
+    // possible moves from all squares to all reachable squares. Each entry in the tensor
+    // represents a possible move on the board. If the corresponding move is in the list of
+    // moves, the entry is the probability of the move, and 0 otherwise.
+    //
+    // :param movesWithProbabilities: The list of moves with their corresponding probabilities.
+    // :return: A 1D tensor representing the encoded moves.
+
+    torch::Tensor movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat32);
+
+    for (const auto &[move, probability] : movesWithProbabilities) {
+        movesEncoded[encodeMove(move)] = probability;
+    }
+
+    return movesEncoded;
+}
+
 inline torch::Tensor __encodeLegalMoves(Board &board) {
     // Encodes the legal moves of a chess board into a 1D tensor.
     //
@@ -163,13 +188,12 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     // :param board: The chess board to encode.
     // :return: A 1D tensor representing the encoded legal moves.
 
-    auto legalMovesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat32);
-
+    std::vector<PolicyMove> movesWithProbabilities;
     for (const auto &move : board.legalMoves()) {
-        legalMovesEncoded[encodeMove(move)] = 1.0;
+        movesWithProbabilities.emplace_back(move, 1.0);
     }
 
-    return legalMovesEncoded;
+    return encodeMoves(movesWithProbabilities);
 }
 
 inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
@@ -190,8 +214,8 @@ inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, B
     return filteredPolicy;
 }
 
-inline std::vector<std::pair<Move, float>> __mapPolicyToMoves(const torch::Tensor &policy) {
-    std::vector<std::pair<Move, float>> movesWithProbabilities;
+inline std::vector<PolicyMove> __mapPolicyToMoves(const torch::Tensor &policy) {
+    std::vector<PolicyMove> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
     for (int i = 0; i < (int) nonzeroIndices.size(0); ++i) {
@@ -204,8 +228,8 @@ inline std::vector<std::pair<Move, float>> __mapPolicyToMoves(const torch::Tenso
     return movesWithProbabilities;
 }
 
-inline std::vector<std::pair<Move, float>>
-filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy, Board &board) {
+inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+                                                                        Board &board) {
     // Gets a list of moves with their corresponding probabilities from a policy.
     //
     // The policy is a 1D tensor representing the probabilities of each move

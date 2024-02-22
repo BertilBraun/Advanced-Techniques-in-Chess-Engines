@@ -3,10 +3,12 @@
         "argmax",
         "Bitboards",
         "dtype",
+        "Evals",
         "foersterrober",
         "fullmove",
         "halfmove",
         "lerp",
+        "Lichess",
         "optim",
         "overfit",
         "Queenside",
@@ -111,7 +113,9 @@
         "csignal": "cpp",
         "filesystem": "cpp",
         "coroutine": "cpp",
-        "resumable": "cpp"
+        "resumable": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp"
     },
     "cmake.sourceDirectory": "C:/Projects/ChessBot/AIZeroChessBot-C++"
 }

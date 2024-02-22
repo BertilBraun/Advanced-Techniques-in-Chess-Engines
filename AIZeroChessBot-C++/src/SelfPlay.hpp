@@ -8,19 +8,12 @@
 #include "TrainingArgs.hpp"
 #include "TrainingStats.hpp"
 
-struct SelfPlayMemory {
-    torch::Tensor state;
-    torch::Tensor policyTargets;
-    torch::Tensor valueTargets;
-
-    SelfPlayMemory(torch::Tensor state, torch::Tensor policyTargets, float valueTargets)
-        : state(std::move(state)), policyTargets(std::move(policyTargets)),
-          valueTargets(torch::tensor({valueTargets})) {}
-};
+#include "SelfPlayWriter.hpp"
 
 class SelfPlay {
 public:
-    SelfPlay(Network &model, const TrainingArgs &args) : m_model(model), m_args(args) {}
+    SelfPlay(Network &model, const TrainingArgs &args)
+        : m_model(model), m_args(args), m_selfPlayWriter(args) {}
 
     SelfPlayStats selfPlay() {
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());
@@ -41,7 +34,7 @@ public:
 
                 if (game.board.isGameOver()) {
                     // If the game is over, add the training data to the self play memory
-                    extend(m_selfPlayMemoryBatch, getTrainingData(game));
+                    writeTrainingData(game);
 
                     selfPlayStats.update(game.memory.size(), getBoardResultScore(game.board));
 
@@ -50,7 +43,6 @@ public:
                     selfPlayGames.pop_back();
                 }
             }
-            saveTrainingDataBatches();
         }
 
         return selfPlayStats;
@@ -59,7 +51,7 @@ public:
 private:
     Network &m_model;
     const TrainingArgs &m_args;
-    std::vector<SelfPlayMemory> m_selfPlayMemoryBatch;
+    SelfPlayWriter m_selfPlayWriter;
 
     void expandSelfPlayGames(std::vector<SelfPlayGame> &selfPlayGames) {
         torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
@@ -106,45 +98,6 @@ private:
         }
     }
 
-    std::vector<SelfPlayMemory> getTrainingData(SelfPlayGame &game) const {
-        std::vector<SelfPlayMemory> selfPlayMemory;
-
-        float result = getBoardResultScore(game.board);
-
-        for (const auto &memory : game.memory) {
-            torch::Tensor encodedBoard = encodeBoard(memory.board);
-
-            for (const auto &[board, probabilities] :
-                 symmetricVariations(encodedBoard, memory.actionProbabilities)) {
-                selfPlayMemory.emplace_back(board, probabilities, result);
-            }
-        }
-        return selfPlayMemory;
-    }
-
-    std::vector<std::pair<torch::Tensor, torch::Tensor>>
-    symmetricVariations(const torch::Tensor &board,
-                        const torch::Tensor &actionProbabilities) const {
-        std::vector<std::pair<torch::Tensor, torch::Tensor>> variations;
-
-        variations.emplace_back(board, actionProbabilities);
-
-        variations.emplace_back(
-            flipBoardHorizontal(board),
-            flipActionProbabilities(actionProbabilities, flipMoveIndexHorizontal));
-
-        // variations.emplace_back(
-        //     flipBoardVertical(board),
-        //     flipActionProbabilities(actionProbabilities, flipMoveIndexVertical));
-
-        // variations.emplace_back(flipBoardVertical(flipBoardHorizontal(board)),
-        //                         flipActionProbabilities(actionProbabilities, [](int idx) {
-        //                             return flipMoveIndexVertical(flipMoveIndexHorizontal(idx));
-        //                         }));
-
-        return variations;
-    }
-
     torch::Tensor getPolicyWithNoise(const std::vector<SelfPlayGame> &selfPlayGames) {
         std::vector<Board> encodedBoards;
         for (const auto &game : selfPlayGames) {
@@ -187,45 +140,12 @@ private:
         return decodeMove(action);
     }
 
-    void saveTrainingDataBatches() {
-        while (m_selfPlayMemoryBatch.size() >= m_args.batchSize) {
-            std::vector<SelfPlayMemory> batch(m_selfPlayMemoryBatch.begin(),
-                                              m_selfPlayMemoryBatch.begin() + m_args.batchSize);
-            m_selfPlayMemoryBatch.erase(m_selfPlayMemoryBatch.begin(),
-                                        m_selfPlayMemoryBatch.begin() + m_args.batchSize);
+    void writeTrainingData(SelfPlayGame &game) {
+        float resultScore = getBoardResultScore(game.board);
 
-            saveTrainingDataBatch(batch);
+        for (auto &memory : game.memory) {
+            auto encodedBoard = encodeBoard(memory.board);
+            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, resultScore);
         }
-    }
-
-    void saveTrainingDataBatch(const std::vector<SelfPlayMemory> &memory) const {
-        std::filesystem::path memoryPath =
-            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
-
-        while (std::filesystem::exists(memoryPath)) {
-            memoryPath =
-                std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
-        }
-
-        // Ensure the directory exists
-        std::filesystem::create_directories(memoryPath);
-
-        std::vector<torch::Tensor> states;
-        std::vector<torch::Tensor> policyTargets;
-        std::vector<torch::Tensor> valueTargets;
-
-        for (const auto &mem : memory) {
-            states.push_back(mem.state);
-            policyTargets.push_back(mem.policyTargets);
-            valueTargets.push_back(mem.valueTargets);
-        }
-
-        torch::Tensor statesTensor = torch::stack(states);
-        torch::Tensor policyTargetsTensor = torch::stack(policyTargets);
-        torch::Tensor valueTargetsTensor = torch::stack(valueTargets);
-
-        torch::save(statesTensor, (memoryPath / "states.pt").string());
-        torch::save(policyTargetsTensor, (memoryPath / "policyTargets.pt").string());
-        torch::save(valueTargetsTensor, (memoryPath / "valueTargets.pt").string());
     }
 };
