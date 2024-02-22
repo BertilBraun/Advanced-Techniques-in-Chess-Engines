@@ -48,20 +48,20 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
     float progress = std::min((float) current / total, 1.0f);
     int pos = (int) (width * progress);
 
-    std::cout << "[";
+    std::cerr << "[";
     for (int i = 0; i < width; ++i) {
         if (i < pos)
-            std::cout << "=";
+            std::cerr << "=";
         else if (i == pos)
-            std::cout << ">";
+            std::cerr << ">";
         else
-            std::cout << " ";
+            std::cerr << " ";
     }
-    std::cout << "] " << int(progress * 100.0) << " % " << desc << "\r";
+    std::cerr << "] " << int(progress * 100.0) << " % " << desc << "\r";
     if (current == total) {
-        std::cout << std::endl;
+        std::cerr << std::endl;
     }
-    std::cout.flush();
+    std::cerr.flush();
     return current < total;
 }
 

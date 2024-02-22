@@ -69,7 +69,7 @@ public:
 
     void update(int numMoves, float result) {
         if (numMoves == 0) {
-            std::cout << "Warning: Self play game with 0 moves\n";
+            std::cerr << "Warning: Self play game with 0 moves\n";
         }
 
         ++totalNumGames;

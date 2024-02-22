@@ -20,7 +20,7 @@ public:
     }
 
     void restart() {
-        std::cout << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
+        std::cerr << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
 
         auto newMemoryPaths = getMemoryPaths();
 
@@ -44,7 +44,7 @@ public:
             queueNextMemory();
         }
 
-        std::cout << "Loaded " << newMemoryPaths.size() << " new memory batches "
+        std::cerr << "Loaded " << newMemoryPaths.size() << " new memory batches "
                   << m_memoryPaths.size() << " in total." << std::endl;
     }
 

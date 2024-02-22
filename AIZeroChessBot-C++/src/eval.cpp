@@ -13,6 +13,8 @@
 #include "MoveEncoding.hpp"
 #include "Network.hpp"
 
+void uciMainLoop(Network &model, int timeToThinkMs);
+
 Network loadModel();
 
 void iterate(Network &model, AlphaMCTSNode *node);
@@ -53,45 +55,108 @@ int main(int argc, char *argv[]) {
 
         auto [moves, value] = inference(model, board);
 
-        std::cout << "Position evaluation: " << value << std::endl;
-        std::cout << "Moves:" << std::endl;
+        std::cerr << "Position evaluation: " << value << std::endl;
+        std::cerr << "Moves:" << std::endl;
         for (auto [move, probability] : moves) {
-            std::cout << move.uci() << " " << probability << std::endl;
+            std::cerr << move.uci() << " " << probability << std::endl;
         }
     } else if (mode == "play") {
         // Play a position using the model
         // The position is given as a FEN string
         // The time to think is given in milliseconds
         if (argc < 4) {
-            std::cerr << "Usage: " << argv[0] << " play <position> <time_to_think>" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " play <time_to_think>" << std::endl;
             return 1;
         }
 
-        std::string position = argv[2];
-        int timeToThinkMs = std::stoi(argv[3]);
-
+        int timeToThinkMs = std::stoi(argv[2]);
         Network model = loadModel();
-        Board board = Board::fromFEN(position);
 
-        AlphaMCTSNode *root = AlphaMCTSNode::root(board);
-
-        auto startTime = std::chrono::high_resolution_clock::now();
-
-        while (!hasTimeElapsed(startTime, timeToThinkMs)) {
-            iterate(model, root);
-        }
-
-        auto bestChild = root->bestChild();
-        std::cout << "Best move: " << bestChild.move_to_get_here.uci() << std::endl;
-        std::cout << "Number of visits: " << bestChild.number_of_visits << std::endl;
-        std::cout << "Result Score: " << bestChild.result_score << std::endl;
-        std::cout << "Policy: " << bestChild.policy << std::endl;
+        uciMainLoop(model, timeToThinkMs);
     } else {
         std::cerr << "Invalid mode: " << mode << std::endl;
         return 1;
     }
 
     return 0;
+}
+
+void processPositionCommand(const std::string &commandLine);
+void processGoCommand(Network &model, int timeToThinkMs);
+
+Board board;
+
+void uciMainLoop(Network &model, int timeToThinkMs) {
+    std::string line;
+    std::cout << "id name AIZeroChessBot" << std::endl;
+    std::cout << "id author Bertil" << std::endl;
+    std::cout << "uciok" << std::endl;
+
+    while (std::getline(std::cin, line)) {
+        std::istringstream iss(line);
+        std::string token;
+        iss >> token;
+
+        if (token == "uci") {
+            std::cout << "id name AIZeroChessBot" << std::endl;
+            std::cout << "id author Bertil" << std::endl;
+            std::cout << "uciok" << std::endl;
+        } else if (token == "isready") {
+            std::cout << "readyok" << std::endl;
+        } else if (token == "ucinewgame") {
+            board = Board();
+        } else if (token == "position") {
+            processPositionCommand(line.substr(token.length() + 1));
+        } else if (token == "go") {
+            processGoCommand(model, timeToThinkMs);
+        } else if (token == "quit") {
+            break;
+        }
+        // Implement other commands as needed
+    }
+}
+
+void processPositionCommand(const std::string &commandLine) {
+    std::istringstream iss(commandLine);
+    std::string token;
+    iss >> token; // Reads "position" keyword which we already know
+
+    if (token == "startpos") {
+        board = Board(); // Reset to starting position
+        iss >> token;    // Should be "moves" if there are any moves
+    } else if (token == "fen") {
+        std::string fen;
+        while (iss >> token && token != "moves") {
+            fen += token + " ";
+        }
+        board = Board::fromFEN(fen);
+    }
+
+    // If there are moves to process
+    if (token == "moves") {
+        while (iss >> token) {
+            board.push(Move::fromUci(token));
+        }
+    }
+}
+
+void processGoCommand(Network &model, int timeToThinkMs) {
+
+    AlphaMCTSNode *root = AlphaMCTSNode::root(board);
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    while (!hasTimeElapsed(startTime, timeToThinkMs)) {
+        iterate(model, root);
+    }
+
+    auto bestChild = root->bestChild();
+    std::cerr << "Best move: " << bestChild.move_to_get_here.uci() << std::endl;
+    std::cerr << "Number of visits: " << bestChild.number_of_visits << std::endl;
+    std::cerr << "Result Score: " << bestChild.result_score << std::endl;
+    std::cerr << "Policy: " << bestChild.policy << std::endl;
+
+    std::cout << "bestmove " << bestChild.move_to_get_here.uci() << std::endl;
 }
 
 void iterate(Network &model, AlphaMCTSNode *node) {

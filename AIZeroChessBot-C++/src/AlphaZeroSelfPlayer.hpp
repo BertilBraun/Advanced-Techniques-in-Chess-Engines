@@ -20,14 +20,14 @@ public:
         m_model->eval(); // Set model to evaluation mode
 
         for (size_t iteration = m_startingIteration; true; ++iteration) {
-            std::cout << "Self Play Iteration " << (iteration + 1) << std::endl;
+            std::cerr << "Self Play Iteration " << (iteration + 1) << std::endl;
 
             // Collect new memories from self-play
             selfPlayStats += timeit([&] { return selfPlay.selfPlay(); }, "selfPlay");
 
             // Output stats
-            std::cout << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
-            std::cout << "Self Play Stats:" << std::endl << selfPlayStats.toString() << std::endl;
+            std::cerr << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
+            std::cerr << "Self Play Stats:" << std::endl << selfPlayStats.toString() << std::endl;
 
             loadLatestModel(); // Synchronize model across nodes/instances
         }

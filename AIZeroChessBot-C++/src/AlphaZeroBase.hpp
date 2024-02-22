@@ -58,13 +58,13 @@ public:
 
                 // Assuming you want to continue from the next iteration
                 m_startingIteration = loadedIteration + 1;
-                std::cout << "Model and optimizer loaded from iteration " << loadedIteration
+                std::cerr << "Model and optimizer loaded from iteration " << loadedIteration
                           << std::endl;
             } catch (const torch::Error &e) {
                 std::cerr << "Error loading model and optimizer states: " << e.what() << std::endl;
             }
         } else {
-            std::cout << "No model and optimizer found, starting from scratch" << std::endl;
+            std::cerr << "No model and optimizer found, starting from scratch" << std::endl;
         }
     }
 
@@ -86,7 +86,7 @@ public:
         saveConfiguration(lastTrainingConfigPath, modelPath.string(), optimizerPath.string(),
                           iteration);
 
-        std::cout << "Model and optimizer saved at iteration " << iteration << std::endl;
+        std::cerr << "Model and optimizer saved at iteration " << iteration << std::endl;
     }
 
     void saveConfiguration(const std::filesystem::path &path, const std::string &modelPath,
@@ -102,7 +102,7 @@ public:
         configFile << "iteration=" << iteration << "\n";
         configFile.close();
 
-        std::cout << "Configuration saved to " << path << std::endl;
+        std::cerr << "Configuration saved to " << path << std::endl;
     }
 
     bool loadConfiguration(const std::filesystem::path &path, std::string &modelPath,

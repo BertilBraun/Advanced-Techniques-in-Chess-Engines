@@ -56,11 +56,11 @@ int main(int argc, char *argv[]) {
     };
 
     if (isRoot) {
-        std::cout << "Trainer process started" << std::endl;
+        std::cerr << "Trainer process started" << std::endl;
         AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
         alphaZeroTrainer.run();
     } else {
-        std::cout << "Worker process " << rank << " of " << numProcesses << " started" << std::endl;
+        std::cerr << "Worker process " << rank << " of " << numProcesses << " started" << std::endl;
         AlphaZeroSelfPlayer alphaZeroSelfPlayer(rank, model, args);
         alphaZeroSelfPlayer.run();
     }

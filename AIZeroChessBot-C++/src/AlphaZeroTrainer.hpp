@@ -21,28 +21,28 @@ public:
 
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
-            std::cout << "Training Iteration " << (iteration + 1) << std::endl;
+            std::cerr << "Training Iteration " << (iteration + 1) << std::endl;
             TrainingStats trainStats;
 
             dataset.restart();
 
             while (dataset.size() < 10000) {
-                std::cout << "Waiting for more training data. Current size: " << dataset.size()
+                std::cerr << "Waiting for more training data. Current size: " << dataset.size()
                           << "/10000\r" << std::flush;
                 std::this_thread::sleep_for(std::chrono::minutes(10));
                 dataset.restart();
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
-            std::cout << "Training with " << numTrainingSamples << " memories\n";
+            std::cerr << "Training with " << numTrainingSamples << " memories\n";
 
-            std::cout << "Training started at " << currentDateTime() << "\n";
+            std::cerr << "Training started at " << currentDateTime() << "\n";
 
             for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
                 trainStats += timeit([&] { return train(dataset); }, "train");
             }
 
-            std::cout << "Training finished at " << currentDateTime() << "\n";
+            std::cerr << "Training finished at " << currentDateTime() << "\n";
 
             saveLatestModel(iteration);
             learningStats.update(numTrainingSamples, trainStats);
@@ -52,15 +52,15 @@ public:
 
             // evaluateAlphaVsStockfish(modelPath);
 
-            std::cout << "Iteration " << (iteration + 1) << std::endl;
+            std::cerr << "Iteration " << (iteration + 1) << std::endl;
 
-            std::cout << "Train Stats:" << std::endl << trainStats.toString() << std::endl;
-            std::cout << "Learning stats:" << std::endl << learningStats.toString() << std::endl;
+            std::cerr << "Train Stats:" << std::endl << trainStats.toString() << std::endl;
+            std::cerr << "Learning stats:" << std::endl << learningStats.toString() << std::endl;
 
-            std::cout << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
+            std::cerr << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
         }
 
-        std::cout << "Learning finished\n";
+        std::cerr << "Learning finished\n";
     }
 
 private:
@@ -82,6 +82,8 @@ private:
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
         }
+
+        // TODO potentially add learning rate scheduler here
 
         return trainStats;
     }

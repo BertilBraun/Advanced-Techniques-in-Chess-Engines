@@ -133,14 +133,14 @@ private:
             flipBoardHorizontal(board),
             flipActionProbabilities(actionProbabilities, flipMoveIndexHorizontal));
 
-        variations.emplace_back(
-            flipBoardVertical(board),
-            flipActionProbabilities(actionProbabilities, flipMoveIndexVertical));
+        // variations.emplace_back(
+        //     flipBoardVertical(board),
+        //     flipActionProbabilities(actionProbabilities, flipMoveIndexVertical));
 
-        variations.emplace_back(flipBoardVertical(flipBoardHorizontal(board)),
-                                flipActionProbabilities(actionProbabilities, [](int idx) {
-                                    return flipMoveIndexVertical(flipMoveIndexHorizontal(idx));
-                                }));
+        // variations.emplace_back(flipBoardVertical(flipBoardHorizontal(board)),
+        //                         flipActionProbabilities(actionProbabilities, [](int idx) {
+        //                             return flipMoveIndexVertical(flipMoveIndexHorizontal(idx));
+        //                         }));
 
         return variations;
     }
