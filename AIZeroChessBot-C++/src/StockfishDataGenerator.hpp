@@ -86,7 +86,6 @@ public:
         size_t totalLines = 21158953;
         size_t linesPerProcess = totalLines / numProcesses;
         size_t start = rank * linesPerProcess;
-        size_t end = (rank + 1) * linesPerProcess;
 
         size_t numGames = 0;
 

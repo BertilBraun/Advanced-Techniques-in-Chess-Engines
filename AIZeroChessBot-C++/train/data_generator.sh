@@ -32,4 +32,13 @@ if [ -z "$total_processes" ] || [ $total_processes -eq 0 ]; then
     total_processes=1
 fi
 
-mpirun -np $total_processes python communicator.py generate
+timeout 4h mpirun -np $total_processes python communicator.py generate
+exit_status=$?
+
+# Check if the process was successful (exit status 0)
+if [ $exit_status -eq 0 ]; then
+    echo "Process completed successfully, re-queuing..."
+    sbatch train.sh
+else
+    echo "Process did not complete successfully, not re-queuing."
+fi
