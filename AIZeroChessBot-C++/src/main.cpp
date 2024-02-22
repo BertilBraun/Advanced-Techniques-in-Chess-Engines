@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
         // preprocessData << "data/lichess_db_eval.json";
 
         StockfishDataGenerator stockfishDataGenerator(args);
-        stockfishDataGenerator.generateDataFromLichessEval("data/lichess_evals.txt");
+        stockfishDataGenerator.generateDataFromLichessEval("data/lichess_evals.txt", false);
         stockfishDataGenerator.generateDataFromEliteGames("data/lichess_db_eval.json");
         stockfishDataGenerator.generateDataThroughStockfishSelfPlay("models/stockfish_8_x64");
         return 0;

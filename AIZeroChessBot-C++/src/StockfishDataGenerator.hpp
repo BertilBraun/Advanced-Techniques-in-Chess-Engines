@@ -54,6 +54,7 @@ public:
 
         std::ifstream file(pathToEliteGames);
 
+        size_t numGames = 0;
         std::string line;
         while (std::getline(file, line)) {
             std::vector<std::string> tokens = split(line, ' ');
@@ -64,6 +65,9 @@ public:
                 moves.push_back(Move::fromUci(tokens[i]));
             }
             writeLine(Board(), moves, score);
+
+            numGames++;
+            tqdm(numGames, 1000000, "Elite games " + std::to_string(m_written)); // TODO
         }
 
         markGenerated("elite_games_generated");
@@ -79,6 +83,7 @@ public:
 
         std::ifstream file(pathToLichessEvals);
 
+        size_t numGames = 0;
         std::string line;
         while (std::getline(file, line)) {
             json eval = json::parse(line);
@@ -93,6 +98,9 @@ public:
                     writeLine(board, moves, value);
                 }
             }
+
+            numGames++;
+            tqdm(numGames, 21158953, "Evaluations " + std::to_string(m_written));
         }
 
         markGenerated("lichess_evals_generated");
@@ -114,6 +122,7 @@ public:
 
 private:
     SelfPlayWriter m_selfPlayWriter;
+    size_t m_written = 0;
 
     bool hasGenerated(const std::string &name) {
         std::ifstream file(name);
@@ -201,6 +210,7 @@ private:
         torch::Tensor encodedPolicy = encodeMoves(policy);
 
         m_selfPlayWriter.write(encodedBoard, encodedPolicy, value);
+        m_written++;
     }
 
     void stockfishSelfPlay(StockfishEvaluator &evaluator, Board &board, size_t numMoves = 10) {
