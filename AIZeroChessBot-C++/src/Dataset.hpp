@@ -24,6 +24,8 @@ public:
 
         auto newMemoryPaths = getMemoryPaths();
 
+        size_t oldMemoryPathsSize = m_memoryPaths.size();
+
         for (const auto &memoryPath : newMemoryPaths) {
             if (std::find(m_memoryPathsFIFO.begin(), m_memoryPathsFIFO.end(), memoryPath) ==
                 m_memoryPathsFIFO.end()) {
@@ -44,8 +46,8 @@ public:
             queueNextMemory();
         }
 
-        std::cerr << "Loaded " << newMemoryPaths.size() << " new memory batches "
-                  << m_memoryPaths.size() << " in total." << std::endl;
+        std::cerr << "Loaded " << newMemoryPaths.size() - oldMemoryPathsSize
+                  << " new memory batches " << m_memoryPaths.size() << " in total." << std::endl;
     }
 
     bool hasNext() const { return !m_memoryFutures.empty(); }
@@ -67,7 +69,8 @@ public:
 
     void deleteOldMemories(int retentionFactor) {
         // delete the oldest retentionFactor% of the memories
-        size_t numMemoriesToDelete = retentionFactor * m_memoryPaths.size() / 100;
+        float percentage = (1.0f - ((float) retentionFactor / 100.f));
+        size_t numMemoriesToDelete = percentage * m_memoryPaths.size();
         for (size_t i = 0; i < numMemoriesToDelete; ++i) {
             std::filesystem::remove_all(m_memoryPathsFIFO[i]);
         }
