@@ -44,7 +44,8 @@ public:
             queueNextMemory();
         }
 
-        std::cout << "Loaded " << m_memoryFutures.size() << " memory batches" << std::endl;
+        std::cout << "Loaded " << newMemoryPaths.size() << " new memory batches "
+                  << m_memoryPaths.size() << " in total." << std::endl;
     }
 
     bool hasNext() const { return !m_memoryFutures.empty(); }

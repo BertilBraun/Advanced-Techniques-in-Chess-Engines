@@ -26,10 +26,10 @@ public:
 
             dataset.restart();
 
-            while (dataset.size() < 100000) {
+            while (dataset.size() < 10000) {
                 std::cout << "Waiting for more training data. Current size: " << dataset.size()
-                          << "/100000\r" << std::flush;
-                std::this_thread::sleep_for(std::chrono::minutes(5));
+                          << "/10000\r" << std::flush;
+                std::this_thread::sleep_for(std::chrono::minutes(10));
                 dataset.restart();
             }
 
