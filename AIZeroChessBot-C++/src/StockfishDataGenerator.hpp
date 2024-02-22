@@ -67,7 +67,7 @@ public:
             writeLine(Board(), moves, score);
 
             numGames++;
-            tqdm(numGames, 1000000, "Elite games " + std::to_string(m_written)); // TODO
+            reportProgress(numGames, 1000000, "Elite games"); // TODO
         }
 
         markGenerated("elite_games_generated");
@@ -100,7 +100,7 @@ public:
             }
 
             numGames++;
-            tqdm(numGames, 21158953, "Evaluations " + std::to_string(m_written));
+            reportProgress(numGames, 21158953, "Evaluations");
         }
 
         markGenerated("lichess_evals_generated");
@@ -123,6 +123,15 @@ public:
 private:
     SelfPlayWriter m_selfPlayWriter;
     size_t m_written = 0;
+    double m_valueSum = 0.0;
+
+    void reportProgress(size_t current, size_t total, const std::string &message) {
+        double average = m_written == 0 ? 0 : std::round(m_valueSum / m_written * 100.0) / 100.0;
+
+        std::string desc = message + " " + std::to_string(m_written) + " written " +
+                           std::to_string(average) + " average value";
+        tqdm(current, total, desc);
+    }
 
     bool hasGenerated(const std::string &name) {
         std::ifstream file(name);
@@ -211,6 +220,7 @@ private:
 
         m_selfPlayWriter.write(encodedBoard, encodedPolicy, value);
         m_written++;
+        m_valueSum += (double) value;
     }
 
     void stockfishSelfPlay(StockfishEvaluator &evaluator, Board &board, size_t numMoves = 10) {
