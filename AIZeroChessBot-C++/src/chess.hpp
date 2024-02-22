@@ -1715,8 +1715,8 @@ public:
             Bitboard pushed_from = valid_ep_square.value() ^ (turn == WHITE ? A4 : A5);
             Bitboard occupied_before =
                 (m_occupied & ~BB_SQUARES[pushed_to]) | BB_SQUARES[pushed_from];
-            if (popcount(checkers) > 1 ||
-                (msb(checkers) != pushed_to && _attackedForKing(our_kings, occupied_before))) {
+            if (popcount(checkers) > 1 || ((Bitboard) msb(checkers) != pushed_to &&
+                                           _attackedForKing(our_kings, occupied_before))) {
                 errors |= Status::IMPOSSIBLE_CHECK;
             }
         } else {
