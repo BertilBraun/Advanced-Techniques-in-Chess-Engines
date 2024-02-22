@@ -25,6 +25,9 @@ int main(int argc, char *argv[]) {
     bool isWorker = std::string(argv[1]) == "worker";
     bool isGenerator = std::string(argv[1]) == "generator";
 
+    size_t rank = std::stoul(argv[2]);
+    size_t numProcesses = std::stoul(argv[3]);
+
     if (!isRoot && !isWorker && !isGenerator) {
         std::cerr << "Invalid argument: " << argv[1] << std::endl;
         return 1;
@@ -56,7 +59,8 @@ int main(int argc, char *argv[]) {
         // preprocessData << "data/lichess_db_eval.json";
 
         StockfishDataGenerator stockfishDataGenerator(args);
-        stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json", false);
+        stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json", false, rank,
+                                                           numProcesses);
         stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
         stockfishDataGenerator.generateDataThroughStockfishSelfPlay("models/stockfish_8_x64");
         return 0;
@@ -77,9 +81,6 @@ int main(int argc, char *argv[]) {
         c_param=2.0,
     )
     */
-
-    size_t rank = std::stoul(argv[2]);
-    size_t numProcesses = std::stoul(argv[3]);
 
     Network model;
     auto optimizer =

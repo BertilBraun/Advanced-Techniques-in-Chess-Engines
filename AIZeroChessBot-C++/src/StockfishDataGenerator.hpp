@@ -73,8 +73,8 @@ public:
         markGenerated("elite_games_generated");
     }
 
-    void generateDataFromLichessEval(const std::string &pathToLichessEvals,
-                                     bool createLines = true) {
+    void generateDataFromLichessEval(const std::string &pathToLichessEvals, bool createLines,
+                                     size_t rank, size_t numProcesses) {
         // Generate training data from lichess evals
         // These can be found here: https://database.lichess.org/#evals
 
@@ -83,9 +83,18 @@ public:
 
         std::ifstream file(pathToLichessEvals);
 
+        size_t totalLines = 21158953;
+        size_t linesPerProcess = totalLines / numProcesses;
+        size_t start = rank * linesPerProcess;
+        size_t end = (rank + 1) * linesPerProcess;
+
         size_t numGames = 0;
+
         std::string line;
-        while (std::getline(file, line)) {
+        for (size_t i = 0; i < start; ++i) {
+            std::getline(file, line);
+        }
+        while (std::getline(file, line) && numGames < linesPerProcess) {
             json eval = json::parse(line);
             std::string fen = eval["fen"];
 
@@ -100,7 +109,7 @@ public:
             }
 
             numGames++;
-            reportProgress(numGames, 21158953, "Evaluations");
+            reportProgress(numGames, linesPerProcess, "Evaluations");
         }
 
         markGenerated("lichess_evals_generated");

@@ -25,7 +25,12 @@ cp AIZeroChessBot ../train/AIZeroChessBot
 cd ../train
 
 # Calculate the total number of MPI processes
-total_processes=$((SLURM_NNODES * SLURM_NTASKS_PER_NODE))
+total_processes=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
+
+# if total_processes is 0 or not set, then set it to 1
+if [ -z "$total_processes" ] || [ $total_processes -eq 0 ]; then
+    total_processes=1
+fi
 
 # Explanation:
 # We are running the communicator.py file with total_processes processes.
@@ -42,7 +47,7 @@ job_time_limit_seconds=$(($SLURM_TIMELIMIT * 60 - 300))
 # This is done to be able to requeue the job on the cluster to continue the training process.
 
 # Use the calculated job time limit for timeout
-timeout ${job_time_limit_seconds}s mpirun -np $total_processes python communicator.py
+timeout ${job_time_limit_seconds}s mpirun -np $total_processes python communicator.py train
 exit_status=$?
 
 

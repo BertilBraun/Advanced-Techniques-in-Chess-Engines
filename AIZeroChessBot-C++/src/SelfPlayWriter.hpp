@@ -68,17 +68,27 @@ private:
         }
     }
 
-    void saveTrainingDataBatch(const std::vector<SelfPlayMemory> &memory) const {
-        std::filesystem::path memoryPath =
-            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
+    unsigned long long randomId() const {
+        return ((unsigned long long) rand() << 32) | (unsigned long long) rand();
+    }
 
-        while (std::filesystem::exists(memoryPath)) {
-            memoryPath =
-                std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(rand());
+    std::filesystem::path getNewBatchSavePath() const {
+        std::filesystem::path savePath =
+            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(randomId());
+
+        while (std::filesystem::exists(savePath)) {
+            savePath = std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME /
+                       std::to_string(randomId());
         }
 
         // Ensure the directory exists
-        std::filesystem::create_directories(memoryPath);
+        std::filesystem::create_directories(savePath);
+
+        return savePath;
+    }
+
+    void saveTrainingDataBatch(const std::vector<SelfPlayMemory> &memory) const {
+        std::filesystem::path memoryPath = getNewBatchSavePath();
 
         std::vector<torch::Tensor> states;
         std::vector<torch::Tensor> policyTargets;
