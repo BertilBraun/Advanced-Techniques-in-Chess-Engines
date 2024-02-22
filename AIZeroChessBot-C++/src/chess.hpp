@@ -862,8 +862,8 @@ public:
     static Board fromFEN(const std::string &fen) {
         auto parts = split(fen, ' ');
 
-        if (parts.size() != 6) {
-            throw std::invalid_argument("expected 6 parts in fen: " + fen);
+        if (parts.size() != 6 && parts.size() != 4) {
+            throw std::invalid_argument("expected 6/4 parts in fen: " + fen);
         }
 
         std::string board_fen = parts[0];

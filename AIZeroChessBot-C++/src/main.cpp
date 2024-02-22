@@ -52,12 +52,12 @@ int main(int argc, char *argv[]) {
 
         // Subprocess preprocessData("python3 ../src/PreprocessGenerationData.py", "r+");
         // preprocessData << "data/Lichess Elite Database";
-        // preprocessData << "data/lichess_evals.txt";
+        // preprocessData << "data/lichess_elites.txt";
         // preprocessData << "data/lichess_db_eval.json";
 
         StockfishDataGenerator stockfishDataGenerator(args);
         stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json", false);
-        stockfishDataGenerator.generateDataFromEliteGames("data/lichess_evals.txt");
+        stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
         stockfishDataGenerator.generateDataThroughStockfishSelfPlay("models/stockfish_8_x64");
         return 0;
     }
