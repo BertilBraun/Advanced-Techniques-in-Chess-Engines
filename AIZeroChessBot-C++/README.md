@@ -126,20 +126,23 @@ This formula gives you the number of workers for sample generation needed to mat
 
 ### Example Calculation
 
-Assuming:
+Our current setup has the following parameters:
 
-- $T_{gen} = 0.5$ seconds (TODO - measure this - I can't get that to work, as the CUDA implementation is working async and for some reason the blocking call is not blocking)
-- $T_{batch} = 1$ second (TODO - measure this)
+- `1` Worker with `800` Iterations per Move with `64` Games in parallel and a Batch size of `64` generated `9806 samples` in `80.4` min
+- Training took `13` min for `654912` Samples
+
+With these parameters, we can calculate the number of workers needed for sample generation to balance the generation and training times:
+
+- $T_{gen} = 0.492$ seconds
+- $T_{batch} = 0.0019$ second
 - $E = 20$ epochs
 - $B = 64$ batch size
 
-Find $W_{gen}$: (TODO - update this with actual values)
+Find $W_{gen}$:
 
-$$W_{gen} = \frac{0.5 \times 64}{20 \times 1} = \frac{32}{20} = 1.6$$
+$$W_{gen} = \frac{0.492sec \times 64}{40 \times 0.0019sec} = \frac{31.488}{0.076} = 414.32$$
 
-Rounding up, you would need at least 2 workers dedicated to sample generation to balance the generation and training times under these conditions.
-
-For us, this seems to be more than 6 workers for self-play, as the time for a sample generation seems to be much longer than the time to train on a batch.
+Rounding up, you would need about 415 workers dedicated to sample generation to balance the generation and training times under these conditions.
 
 ## Getting Started
 
