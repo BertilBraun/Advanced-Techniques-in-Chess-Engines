@@ -11,7 +11,7 @@ dependencies:
   - brotli-python=1.0.9=py38h6a678d5_7
   - bzip2=1.0.8=h7b6447c_0
   - ca-certificates=2024.2.2=hbcca054_0
-  - certifi=2024.2.2=pyhd8ed1ab_0
+  - certifi=2024.2.2=py38h06a4308_0
   - charset-normalizer=2.0.4=pyhd3eb1b0_0
   - cuda-version=11.6=hca96458_2
   - cudatoolkit=11.6.2=hfc3e2af_13
@@ -61,6 +61,7 @@ dependencies:
   - openh264=2.1.1=h4ff587b_0
   - openjpeg=2.4.0=h3ad879b_0
   - openssl=3.2.1=hd590300_0
+  - p7zip=16.02=h6a678d5_0
   - pillow=10.2.0=py38h5eee18b_0
   - pysocks=1.7.1=py38h06a4308_0
   - python=3.8.18=h955ad1f_0
@@ -86,4 +87,5 @@ dependencies:
   - pip:
       - chess==1.10.0
       - fsspec==2024.2.0
+      - mpi4py==3.1.5
       - pip==24.0

@@ -49,16 +49,20 @@ if __name__ == "__main__":
 
     if not os.path.exists(database_path):
         print("Downloading the Lichess Elite Database")
-        os.system(f"wget {ELITE_GAMES_DOWNLOAD_LINK} -O data/LichessEliteDatabase.7z")
-        os.system("7z x data/LichessEliteDatabase.7z -o data/")
-        os.system("rm data/LichessEliteDatabase.7z")  
+        os.chdir("data")
+        os.system(f"wget {ELITE_GAMES_DOWNLOAD_LINK} -O LichessEliteDatabase.7z")
+        os.system("7z x LichessEliteDatabase.7z")
+        os.system("rm LichessEliteDatabase.7z")  
+        os.chdir("..")
 
     if not os.path.exists(eval_database_path):
         print("Downloading the Lichess Evaluation Database")
-        os.system(f"wget {EVAL_GAMES_DOWNLOAD_LINK} -O data/LichessEvalDatabase.json.zst")
-        os.system("zstd -d data/LichessEvalDatabase.json.zst -o data/LichessEvalDatabase.json")
-        os.system(f"mv data/LichessEvalDatabase.json {eval_database_path}")
-        os.system("rm data/LichessEvalDatabase.json.zst")
+        os.chdir("data")
+        os.system(f"wget {EVAL_GAMES_DOWNLOAD_LINK} -O LichessEvalDatabase.json.zst")
+        os.system("zstd -d LichessEvalDatabase.json.zst -o LichessEvalDatabase.json")
+        os.system(f"mv LichessEvalDatabase.json {eval_database_path}")
+        os.system("rm LichessEvalDatabase.json.zst")
+        os.chdir("..")
         
     if not os.path.exists(output_file):
         process_pgn_files(database_path, output_file)

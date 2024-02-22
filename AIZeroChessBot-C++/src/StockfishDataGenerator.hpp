@@ -49,6 +49,9 @@ public:
         // These should be preprocessed by PreprocessGenerationData.py
         // The format should then be: "score move1uci move2uci move3uci ..."
 
+        if (hasGenerated("elite_games_generated"))
+            return;
+
         std::ifstream file(pathToEliteGames);
 
         std::string line;
@@ -62,12 +65,18 @@ public:
             }
             writeLine(Board(), moves, score);
         }
+
+        markGenerated("elite_games_generated");
     }
 
     void generateDataFromLichessEval(const std::string &pathToLichessEvals,
                                      bool createLines = true) {
         // Generate training data from lichess evals
         // These can be found here: https://database.lichess.org/#evals
+
+        if (hasGenerated("lichess_evals_generated"))
+            return;
+
         std::ifstream file(pathToLichessEvals);
 
         std::string line;
@@ -79,6 +88,8 @@ public:
 
             parseLichessEvalPolicy(eval["evals"], board, createLines);
         }
+
+        markGenerated("lichess_evals_generated");
     }
 
     void generateDataThroughStockfishSelfPlay(const std::string &pathToStockfish,
@@ -97,6 +108,16 @@ public:
 
 private:
     SelfPlayWriter m_selfPlayWriter;
+
+    bool hasGenerated(const std::string &name) {
+        std::ifstream file(name);
+        return file.good();
+    }
+
+    void markGenerated(const std::string &name) {
+        std::ofstream file(name);
+        file.close();
+    }
 
     void parseLichessEvalPolicy(const json &evals, Board &board, bool createLines) {
         std::vector<float> scores;

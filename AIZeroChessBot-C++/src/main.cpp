@@ -50,10 +50,10 @@ int main(int argc, char *argv[]) {
         // Run the python script in ../src/PreprocessGenerationData.py
         // to generate the data in the correct format
 
-        Subprocess preprocessData("python3 ../src/PreprocessGenerationData.py", "r+");
-        preprocessData << "data/Lichess Elite Database";
-        preprocessData << "data/lichess_evals.txt";
-        preprocessData << "data/lichess_db_eval.json";
+        // Subprocess preprocessData("python3 ../src/PreprocessGenerationData.py", "r+");
+        // preprocessData << "data/Lichess Elite Database";
+        // preprocessData << "data/lichess_evals.txt";
+        // preprocessData << "data/lichess_db_eval.json";
 
         StockfishDataGenerator stockfishDataGenerator(args);
         stockfishDataGenerator.generateDataFromLichessEval("data/lichess_evals.txt");
