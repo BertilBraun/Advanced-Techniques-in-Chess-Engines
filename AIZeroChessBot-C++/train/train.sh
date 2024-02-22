@@ -24,17 +24,27 @@ cp AIZeroChessBot ../train/AIZeroChessBot
 
 cd ../train
 
+# Calculate the total number of MPI processes
+total_processes=$((SLURM_NNODES * SLURM_NTASKS_PER_NODE))
+
 # Explanation:
-# We are running the communicator.py file with 6 processes.
+# We are running the communicator.py file with total_processes processes.
 # The communicator.py file is responsible for the communication between the training and the self-play processes.
 # The root process is responsible for the training process, while the other 5 processes are responsible for the self-play process.
 # Refer to the README.md file for information about the relationship between the number of workers and the training process.
-#
-# The timeout command is used to kill the communicator.py process after 6 hours.
+
+
+# Extract the SLURM job time limit in minutes and convert to seconds for timeout
+# Subtract a buffer time (e.g., 300 seconds) to allow for cleanup and requeueing
+job_time_limit_seconds=$(($SLURM_TIMELIMIT * 60 - 300))
+
+# The timeout command is used to kill the communicator.py process after job_time_limit_seconds.
 # This is done to be able to requeue the job on the cluster to continue the training process.
 
-timeout 6h mpirun -np 8 python communicator.py
+# Use the calculated job time limit for timeout
+timeout ${job_time_limit_seconds}s mpirun -np $total_processes python communicator.py
 exit_status=$?
+
 
 # Check if the process was successful (exit status 0)
 if [ $exit_status -eq 0 ]; then
