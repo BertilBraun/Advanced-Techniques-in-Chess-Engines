@@ -9,7 +9,7 @@ inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const to
 
 inline int encodeMove(const Move &move);
 
-inline torch::Tensor encodeMoves(std::vector<PolicyMove> &movesWithProbabilities);
+inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities);
 
 inline Move decodeMove(int moveIndex);
 
@@ -156,7 +156,7 @@ inline const auto __FLIPPED_INDICES_HORIZONTAL =
     __precalculateFlippedIndices(__MOVE_MAPPINGS).first;
 inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
-inline torch::Tensor encodeMoves(std::vector<PolicyMove> &movesWithProbabilities) {
+inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities) {
     // Encodes a list of moves with their corresponding probabilities into a 1D tensor.
     //
     // The list of moves is a list of tuples, where each tuple contains a move and its
@@ -192,7 +192,6 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     for (const auto &move : board.legalMoves()) {
         movesWithProbabilities.emplace_back(move, 1.0);
     }
-
     return encodeMoves(movesWithProbabilities);
 }
 

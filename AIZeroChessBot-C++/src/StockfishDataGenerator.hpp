@@ -167,7 +167,7 @@ private:
         return moves;
     }
 
-    void write(const Board &board, std::vector<PolicyMove> &policy, float value) {
+    void write(const Board &board, const std::vector<PolicyMove> &policy, float value) {
         torch::Tensor encodedBoard = encodeBoard(board);
         torch::Tensor encodedPolicy = encodeMoves(policy);
 
