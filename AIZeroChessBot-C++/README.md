@@ -6,16 +6,28 @@ The current state of the project is that everything is reimplemented in C++ incl
 
 ### Upcoming To Dos
 
-- [-] Profile the performance of the C++ implementation of the MCTS algorithm and the Neural Network compared to the Python implementation. Is the C++ implementation more than 10% in the neural network evaluation step?
+- [x] Profile the performance of the C++ implementation of the MCTS algorithm and the Neural Network compared to the Python implementation. Is the C++ implementation more than 10% in the neural network evaluation step?
 - [x] Create a interactive Notebook to evaluate the performance of the bot on the cluster with access to the cluster's GPU.
   - Evaluate the performance of the bot after the first 12 hours of training.
   - Evaluate the performance of the bot against a baseline chess bot (continuously).
 - [ ] Continue training the bot on the cluster with multiple GPUs and multiple nodes (as already implemented) for multiple days if the performance after 12 hours is promising.
 
-**Current Model Problems:**
+### **Current Model Problems:**
+
+We currently have a problem, that the self-play games at the beginning are not very good. This is because the model is not trained yet and therefore predicts bad moves as well as bad evaluations. This means, that many of the expanded nodes in the MCTS are evaluated by the model instead of the endgame score. This means, that we are training the model with random data, which is not very useful. AlphaZero solves this problem by simply searching more iterations per move, which more often leads to the endgame score being used. However, this is not viable for us, because we are using way less computational resources than AlphaZero.
+
+My idea to overcome this problem is to use grandmaster games and stockfish evaluations to generate the training data for the first few iterations. This way, we can train the model with good data from the beginning and therefore improve the self-play games. This should lead to a better model and therefore better self-play games. After a few  iterations, the model should be good enough to generate good training data by itself, so that the self improvement loop can start.
+
+- Grandmaster games can be found here: [https://database.nikonoel.fr/](https://database.nikonoel.fr/)
+- Lichess evaluations can be found here: [https://database.lichess.org/#evals](https://database.lichess.org/#evals)
+- Stockfish can be found here: [https://stockfishchess.org/download/](https://stockfishchess.org/download/)
+
+(We are using Stockfish 8 on the cluster, because it is the only version that compiles there)
 
 - The model seems to have collapsed on the value head. The value head is always predicting `-0.1435`. This is a problem that needs to be addressed. For now, I restarted training with a new model and a new optimizer and added a way larger search space for the best move in the self-play algorithm.
 - There is little to no coherence between the policy of our model and stockfish's evaluation of the board state. The hope is that this will improve with more training.
+
+The hope is, that the teacher like initialization for the model, will also counteract the problem of the collapsed value head as the model is initially trained on good data with diverse evaluations.
 
 ## Overview
 
