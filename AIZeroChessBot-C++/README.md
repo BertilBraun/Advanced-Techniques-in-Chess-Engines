@@ -24,6 +24,8 @@ My idea to overcome this problem is to use grandmaster games and stockfish evalu
 
 (We are using Stockfish 8 on the cluster, because it is the only version that compiles there)
 
+We generated about 16mil samples from mainly the lichess evaluations over 4h on 4 nodes of the cluster. The training of the model is currently running and is queued with 4 hours. After that, we will evaluate the performance of the model and the self-play games. How that affects the performance of the model is yet to be seen.
+
 - The model seems to have collapsed on the value head. The value head is always predicting `-0.1435`. This is a problem that needs to be addressed. For now, I restarted training with a new model and a new optimizer and added a way larger search space for the best move in the self-play algorithm.
 - There is little to no coherence between the policy of our model and stockfish's evaluation of the board state. The hope is that this will improve with more training.
 
