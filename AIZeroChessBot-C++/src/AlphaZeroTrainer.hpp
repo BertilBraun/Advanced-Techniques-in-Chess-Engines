@@ -22,7 +22,6 @@ public:
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
             std::cerr << "Training Iteration " << (iteration + 1) << std::endl;
-            TrainingStats trainStats;
 
             dataset.restart();
 
@@ -38,8 +37,14 @@ public:
 
             std::cerr << "Training started at " << currentDateTime() << "\n";
 
+            TrainingStats trainStats;
+            // Accumulate stats for each epoch
+            // This should show the learning progress over the number of epochs
+            //     before the new data is used
+            LearningStats epochStats;
             for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
                 trainStats += timeit([&] { return train(dataset); }, "train");
+                epochStats.update(numTrainingSamples, trainStats);
             }
 
             std::cerr << "Training finished at " << currentDateTime() << "\n";
@@ -55,6 +60,7 @@ public:
             std::cerr << "Iteration " << (iteration + 1) << std::endl;
 
             std::cerr << "Train Stats:" << std::endl << trainStats.toString() << std::endl;
+            std::cerr << "Epoch Stats:" << std::endl << epochStats.toString() << std::endl;
             std::cerr << "Learning stats:" << std::endl << learningStats.toString() << std::endl;
 
             std::cerr << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
