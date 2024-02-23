@@ -128,14 +128,14 @@ This formula gives you the number of workers for sample generation needed to mat
 
 Our current setup has the following parameters:
 
-- `1` Worker with `800` Iterations per Move with `64` Games in parallel and a Batch size of `64` generated `9806 samples` in `80.4` min
-- Training took `13` min for `654912` Samples
+- `1` Worker with `800` Iterations per Move with `64` Games in parallel and a Batch size of `64` generated `9806` samples in `80.4` min
+- Training took `13` min for `654912` samples
 
 With these parameters, we can calculate the number of workers needed for sample generation to balance the generation and training times:
 
 - $T_{gen} = 0.492$ seconds
 - $T_{batch} = 0.0019$ second
-- $E = 20$ epochs
+- $E = 40$ epochs
 - $B = 64$ batch size
 
 Find $W_{gen}$:
