@@ -138,6 +138,12 @@ With these parameters, we can calculate the number of workers needed for sample 
 - $E = 40$ epochs
 - $B = 64$ batch size
 
+This also lets us calculate the amount of iterations we're able to calculate per second per TPU:
+
+$$\frac{Samples \times Iter\_per\_move}{T_{gen}seconds} = \frac{9806 \times 800}{80.4 \times 60} = 1626.2$$
+
+This is about half the amount of iteration that Google achieved with AlphaZero which is still a good result.
+
 Find $W_{gen}$:
 
 $$W_{gen} = \frac{0.492sec \times 64}{40 \times 0.0019sec} = \frac{31.488}{0.076} = 414.32$$
