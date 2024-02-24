@@ -42,6 +42,12 @@ if [ ! -f "libtorch/$LIBTORCH_ZIP" ]; then
     unzip -o "libtorch/$LIBTORCH_ZIP" -d .
 fi
 
+# Download src/json.hpp if it doesn't exist from https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp
+if [ ! -f "src/json.hpp" ]; then
+    echo "Downloading json.hpp..."
+    wget -O "src/json.hpp" "https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp"
+fi
+
 # Create a build directory
 mkdir -p build
 cd build

@@ -2,3 +2,5 @@ build/**
 libtorch/**
 
 **.pt
+
+src/json.hpp

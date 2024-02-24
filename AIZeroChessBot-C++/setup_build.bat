@@ -16,6 +16,12 @@ if not exist libtorch\%LIBTORCH_ZIP% (
     powershell -Command "Expand-Archive -Path libtorch\%LIBTORCH_ZIP% -DestinationPath . -Force"
 )
 
+rem Download src/json.hpp if it doesn't exist from https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp
+if not exist src\json.hpp (
+    echo Downloading json.hpp...
+    powershell -Command "Invoke-WebRequest -Uri https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp -OutFile src\json.hpp"
+)
+
 rem Create a build directory
 if not exist build mkdir build
 cd build
