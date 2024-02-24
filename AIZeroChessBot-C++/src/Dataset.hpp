@@ -60,7 +60,8 @@ public:
         auto result = m_memoryFutures.front().get();
         m_memoryFutures.pop_front();
 
-        while (result == std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor())) {
+        while (std::get<0>(result).numel() == 0 || std::get<1>(result).numel() == 0 ||
+               std::get<2>(result).numel() == 0) {
             std::cerr << "Invalid memory detected. Skipping to the next one." << std::endl;
             queueNextMemory();
 
