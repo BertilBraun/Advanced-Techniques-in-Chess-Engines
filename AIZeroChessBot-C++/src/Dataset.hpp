@@ -60,6 +60,14 @@ public:
         auto result = m_memoryFutures.front().get();
         m_memoryFutures.pop_front();
 
+        while (result == std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor())) {
+            std::cerr << "Invalid memory detected. Skipping to the next one." << std::endl;
+            queueNextMemory();
+
+            result = m_memoryFutures.front().get();
+            m_memoryFutures.pop_front();
+        }
+
         queueNextMemory();
 
         return result;
@@ -112,9 +120,22 @@ private:
     DataSample loadMemory(const std::filesystem::path &memoryPath) const {
         torch::Tensor states, policyTargets, valueTargets;
 
-        torch::load(states, (memoryPath / "states.pt").string(), m_device);
-        torch::load(policyTargets, (memoryPath / "policyTargets.pt").string(), m_device);
-        torch::load(valueTargets, (memoryPath / "valueTargets.pt").string(), m_device);
+        torch::load(states, (memoryPath / "states.pt").string());
+        torch::load(policyTargets, (memoryPath / "policyTargets.pt").string());
+        torch::load(valueTargets, (memoryPath / "valueTargets.pt").string());
+
+        // if valueTargets is not of [batchSize, 1] shape -> error
+        // if policyTargets is not of [batchSize, ACTION_SIZE] shape -> error
+        // if states is not of [batchSize, 12, 8, 8] shape -> error
+        if (states.size(1) != 12 || states.size(2) != 8 || states.size(3) != 8 ||
+            policyTargets.sizes().size() != 2 || policyTargets.size(1) != ACTION_SIZE ||
+            valueTargets.sizes().size() != 2 || valueTargets.size(1) != 1) {
+            return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
+        }
+
+        states = states.to(m_device);
+        policyTargets = policyTargets.to(m_device);
+        valueTargets = valueTargets.to(m_device);
 
         return std::make_tuple(states, policyTargets, valueTargets);
     }
