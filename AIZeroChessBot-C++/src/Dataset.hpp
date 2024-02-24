@@ -8,17 +8,18 @@ using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 
 class Dataset {
 public:
-    Dataset(const std::filesystem::path &savePath, torch::Device device,
+    Dataset(const std::filesystem::path &savePath, torch::Device device, size_t memoryBatchSize,
             size_t memoriesToPreload = 10)
-        : m_savePath(savePath), m_device(device), m_memoriesToPreload(memoriesToPreload) {
+        : m_savePath(savePath / MEMORY_DIR_NAME), m_device(device),
+          m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize((long long) memoryBatchSize) {
 
-        if (!std::filesystem::exists(m_savePath / MEMORY_DIR_NAME)) {
-            std::filesystem::create_directories(m_savePath / MEMORY_DIR_NAME);
+        if (!std::filesystem::exists(m_savePath)) {
+            std::filesystem::create_directories(m_savePath);
         }
     }
 
     void load() {
-        std::cerr << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
+        std::cerr << "Loading memories from " << m_savePath << std::endl;
 
         auto newMemoryPaths = getMemoryPaths();
 
@@ -97,6 +98,7 @@ private:
     torch::Device m_device;
     size_t m_currentMemoryIndex = 0;
     size_t m_memoriesToPreload;
+    long long m_memoryBatchSize;
 
     void queueNextMemory() {
         if (m_currentMemoryIndex < m_memoryPaths.size()) {
@@ -109,8 +111,7 @@ private:
 
     std::vector<std::filesystem::path> getMemoryPaths() const {
         std::vector<std::filesystem::path> memoryPaths;
-        for (const auto &entry :
-             std::filesystem::directory_iterator(m_savePath / MEMORY_DIR_NAME)) {
+        for (const auto &entry : std::filesystem::directory_iterator(m_savePath)) {
             if (entry.is_directory() && isMemoryValid(entry.path())) {
                 memoryPaths.push_back(entry.path());
             }
@@ -128,9 +129,9 @@ private:
         // if valueTargets is not of [batchSize, 1] shape -> error
         // if policyTargets is not of [batchSize, ACTION_SIZE] shape -> error
         // if states is not of [batchSize, 12, 8, 8] shape -> error
-        if (states.size(1) != 12 || states.size(2) != 8 || states.size(3) != 8 ||
-            policyTargets.sizes().size() != 2 || policyTargets.size(1) != ACTION_SIZE ||
-            valueTargets.sizes().size() != 2 || valueTargets.size(1) != 1) {
+        if (states.sizes() != torch::IntArrayRef({m_memoryBatchSize, 12, 8, 8}) ||
+            policyTargets.sizes() != torch::IntArrayRef({m_memoryBatchSize, ACTION_SIZE}) ||
+            valueTargets.sizes() != torch::IntArrayRef({m_memoryBatchSize, 1})) {
             return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
         }
 

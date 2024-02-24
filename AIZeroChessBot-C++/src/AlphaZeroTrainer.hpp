@@ -15,7 +15,7 @@ public:
 
     void run() {
         LearningStats learningStats;
-        Dataset dataset(m_savePath, m_model->device, 10);
+        Dataset dataset(m_savePath, m_model->device, m_args.batchSize, 10);
 
         m_model->train(); // Set model to training mode
 
