@@ -76,7 +76,8 @@ public:
     AlphaMCTSNode &bestChild(float c_param = 0.1) {
         assert(!children.empty() && "Node has no children");
 
-        auto q_scores = 1 - ((children_result_scores / children_number_of_visits) + 1) / 2;
+        auto q_scores =
+            (board.turn == WHITE ? 1 : -1) * children_result_scores / children_number_of_visits;
         auto policy_scores = children_policies * c_param *
                              torch::sqrt(torch::tensor(number_of_visits)) /
                              (1 + children_number_of_visits);
