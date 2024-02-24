@@ -15,20 +15,20 @@ public:
         if (!std::filesystem::exists(m_savePath / MEMORY_DIR_NAME)) {
             std::filesystem::create_directories(m_savePath / MEMORY_DIR_NAME);
         }
-
-        restart();
     }
 
-    void restart() {
+    void load() {
         std::cerr << "Loading memories from " << m_savePath / MEMORY_DIR_NAME << std::endl;
 
         auto newMemoryPaths = getMemoryPaths();
 
-        size_t oldMemoryPathsSize = m_memoryPaths.size();
+        size_t oldMemoryPathsSize = m_memoryPathsFIFO.size();
+
+        std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
+                                                       m_memoryPathsFIFO.end());
 
         for (const auto &memoryPath : newMemoryPaths) {
-            if (std::find(m_memoryPathsFIFO.begin(), m_memoryPathsFIFO.end(), memoryPath) ==
-                m_memoryPathsFIFO.end()) {
+            if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
                 m_memoryPathsFIFO.push_back(memoryPath);
             }
         }

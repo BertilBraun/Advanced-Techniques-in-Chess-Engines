@@ -23,13 +23,13 @@ public:
              ++iteration) {
             std::cerr << "Training Iteration " << (iteration + 1) << std::endl;
 
-            dataset.restart();
+            dataset.load();
 
             while (dataset.size() < 10000) {
                 std::cerr << "Waiting for more training data. Current size: " << dataset.size()
                           << "/10000\r" << std::flush;
                 std::this_thread::sleep_for(std::chrono::minutes(10));
-                dataset.restart();
+                dataset.load();
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
