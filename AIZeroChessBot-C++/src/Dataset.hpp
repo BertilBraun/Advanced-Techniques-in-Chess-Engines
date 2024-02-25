@@ -19,7 +19,7 @@ public:
     }
 
     void load() {
-        std::cerr << "Loading memories from " << m_savePath << std::endl;
+        log("Loading memories from", m_savePath);
 
         auto newMemoryPaths = getMemoryPaths();
 
@@ -47,8 +47,8 @@ public:
             queueNextMemory();
         }
 
-        std::cerr << "Loaded " << newMemoryPaths.size() - oldMemoryPathsSize
-                  << " new memory batches " << m_memoryPaths.size() << " in total." << std::endl;
+        log("Loaded", newMemoryPaths.size() - oldMemoryPathsSize, "new memory batches",
+            m_memoryPaths.size(), "in total.");
     }
 
     bool hasNext() const { return !m_memoryFutures.empty(); }
@@ -63,7 +63,7 @@ public:
 
         while (std::get<0>(result).numel() == 0 || std::get<1>(result).numel() == 0 ||
                std::get<2>(result).numel() == 0) {
-            std::cerr << "Invalid memory detected. Skipping to the next one." << std::endl;
+            log("Invalid memory detected. Skipping to the next one.");
             queueNextMemory();
 
             result = m_memoryFutures.front().get();

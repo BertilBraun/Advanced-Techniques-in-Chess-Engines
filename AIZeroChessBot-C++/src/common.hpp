@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Log.hpp"
 #include "chess.hpp"
 
 #include <algorithm>
@@ -44,27 +45,6 @@ template <typename T> inline void extend(std::vector<T> &vec, const std::vector<
     vec.insert(vec.end(), other.begin(), other.end());
 }
 
-inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
-    float progress = std::min((float) current / total, 1.0f);
-    int pos = (int) (width * progress);
-
-    std::cerr << "[";
-    for (int i = 0; i < width; ++i) {
-        if (i < pos)
-            std::cerr << "=";
-        else if (i == pos)
-            std::cerr << ">";
-        else
-            std::cerr << " ";
-    }
-    std::cerr << "] " << int(progress * 100.0) << " % " << desc << "\r";
-    if (current == total) {
-        std::cerr << std::endl;
-    }
-    std::cerr.flush();
-    return current < total;
-}
-
 inline std::map<std::string, unsigned long long> __timeit_results;
 
 // Time a function and add the result to the timeit results
@@ -98,19 +78,10 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
     }
 }
 
-inline std::string get_timeit_results() {
+inline std::string getTimeitResults() {
     std::string result;
     for (auto &pair : __timeit_results) {
         result += pair.first + ": " + std::to_string(pair.second) + "ms\n";
     }
     return result;
-}
-
-inline std::string currentDateTime() {
-    // Format: YYYY-MM-DD HH:MM:SS:MS
-    auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X");
-    return ss.str();
 }

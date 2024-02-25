@@ -11,7 +11,7 @@ std::string SAVE_PATH = "models";
 int main(int argc, char *argv[]) {
 
     if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " [train|generate] <numProcessors>" << std::endl;
+        log("Usage:", argv[0], "[train|generate] <numProcessors>");
         return 1;
     }
 
@@ -21,12 +21,12 @@ int main(int argc, char *argv[]) {
     size_t numProcessors = std::stoul(argv[2]);
 
     if (!isTrain && !isGenerate) {
-        std::cerr << "Invalid argument: " << argv[1] << std::endl;
+        log("Invalid argument:", argv[1]);
         return 1;
     }
 
     if (numProcessors == 0) {
-        std::cerr << "Invalid argument: " << argv[2] << std::endl;
+        log("Invalid argument:", argv[2]);
         return 1;
     }
 
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     };
 
     if (isGenerate) {
-        std::cerr << "Data generator process started" << std::endl;
+        log("Data generator process started");
 
         // Run the python script in ../src/PreprocessGenerationData.py
         // to generate the data in the correct format
@@ -98,8 +98,7 @@ int main(int argc, char *argv[]) {
             Network model;
             AlphaZeroSelfPlayer alphaZeroSelfPlayer(i, model, args);
 
-            std::cerr << "Worker process " << i << " of " << numProcessors << " started"
-                      << std::endl;
+            log("Worker process", i, "of", numProcessors, "started");
 
             alphaZeroSelfPlayer.run();
         }));
@@ -111,7 +110,7 @@ int main(int argc, char *argv[]) {
 
     AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
 
-    std::cerr << "Trainer process started" << std::endl;
+    log("Trainer process started");
 
     alphaZeroTrainer.run();
 

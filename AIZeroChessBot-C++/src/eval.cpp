@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
     //              best move and print it to the console.
 
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <eval|play> [args...]" << std::endl;
+        log("Usage:", argv[0], "<eval|play> [args...]");
         return 1;
     }
 
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
         // Evaluate a position using the model
         // The position is given as a FEN string
         if (argc < 3) {
-            std::cerr << "Usage: " << argv[0] << " eval <position>" << std::endl;
+            log("Usage:", argv[0], "eval <position>");
             return 1;
         }
 
@@ -55,17 +55,17 @@ int main(int argc, char *argv[]) {
 
         auto [moves, value] = inference(model, board);
 
-        std::cerr << "Position evaluation: " << value << std::endl;
-        std::cerr << "Moves:" << std::endl;
+        log("Position evaluation:", value);
+        log("Moves:");
         for (auto [move, probability] : moves) {
-            std::cerr << move.uci() << " " << probability << std::endl;
+            log(move.uci(), "", probability);
         }
     } else if (mode == "play") {
         // Play a position using the model
         // The position is given as a FEN string
         // The time to think is given in milliseconds
         if (argc < 4) {
-            std::cerr << "Usage: " << argv[0] << " play <time_to_think>" << std::endl;
+            log("Usage:", argv[0], "play <time_to_think>");
             return 1;
         }
 
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 
         uciMainLoop(model, timeToThinkMs);
     } else {
-        std::cerr << "Invalid mode: " << mode << std::endl;
+        log("Invalid mode:", mode);
         return 1;
     }
 

@@ -35,7 +35,7 @@ public:
                 // Load the training configuration
                 if (!loadConfiguration(lastTrainingConfigPath, modelPath, optimizerPath,
                                        loadedIteration)) {
-                    std::cerr << "Failed to load training configuration" << std::endl;
+                    log("Failed to load training configuration");
                     return;
                 }
 
@@ -43,7 +43,7 @@ public:
                 if (std::filesystem::exists(modelPath)) {
                     torch::load(m_model, modelPath);
                 } else {
-                    std::cerr << "Saved model file not found: " << modelPath << std::endl;
+                    log("Saved model file not found:", modelPath);
                     return;
                 }
 
@@ -52,19 +52,18 @@ public:
                     if (m_optimizer != nullptr)
                         torch::load(*m_optimizer, optimizerPath);
                 } else {
-                    std::cerr << "Saved optimizer file not found: " << optimizerPath << std::endl;
+                    log("Saved optimizer file not found:", optimizerPath);
                     return;
                 }
 
                 // Assuming you want to continue from the next iteration
                 m_startingIteration = loadedIteration + 1;
-                std::cerr << "Model and optimizer loaded from iteration " << loadedIteration
-                          << std::endl;
+                log("Model and optimizer loaded from iteration", loadedIteration);
             } catch (const torch::Error &e) {
-                std::cerr << "Error loading model and optimizer states: " << e.what() << std::endl;
+                log("Error loading model and optimizer states:", e.what());
             }
         } else {
-            std::cerr << "No model and optimizer found, starting from scratch" << std::endl;
+            log("No model and optimizer found, starting from scratch");
         }
     }
 
@@ -86,14 +85,14 @@ public:
         saveConfiguration(lastTrainingConfigPath, modelPath.string(), optimizerPath.string(),
                           iteration);
 
-        std::cerr << "Model and optimizer saved at iteration " << iteration << std::endl;
+        log("Model and optimizer saved at iteration", iteration);
     }
 
     void saveConfiguration(const std::filesystem::path &path, const std::string &modelPath,
                            const std::string &optimizerPath, int iteration) const {
         std::ofstream configFile(path);
         if (!configFile.is_open()) {
-            std::cerr << "Failed to open config file for writing: " << path << std::endl;
+            log("Failed to open config file for writing:", path);
             return;
         }
 
@@ -102,14 +101,14 @@ public:
         configFile << "iteration=" << iteration << "\n";
         configFile.close();
 
-        std::cerr << "Configuration saved to " << path << std::endl;
+        log("Configuration saved to", path);
     }
 
     bool loadConfiguration(const std::filesystem::path &path, std::string &modelPath,
                            std::string &optimizerPath, size_t &iteration) const {
         std::ifstream configFile(path);
         if (!configFile.is_open()) {
-            std::cerr << "Failed to open config file for reading: " << path << std::endl;
+            log("Failed to open config file for reading:", path);
             return false;
         }
 

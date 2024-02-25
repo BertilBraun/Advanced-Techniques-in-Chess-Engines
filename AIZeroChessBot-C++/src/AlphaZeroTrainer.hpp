@@ -21,21 +21,21 @@ public:
 
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
-            std::cerr << "Training Iteration " << (iteration + 1) << std::endl;
+            log("Training Iteration", (iteration + 1));
 
             dataset.load();
 
             while (dataset.size() < 10000) {
-                std::cerr << "Waiting for more training data. Current size: " << dataset.size()
-                          << "/10000\r" << std::flush;
+                logNoNewline("Waiting for more training data. Current size:", dataset.size(),
+                             "/10000\r");
                 std::this_thread::sleep_for(std::chrono::minutes(10));
                 dataset.load();
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
-            std::cerr << "Training with " << numTrainingSamples << " memories\n";
+            log("Training with", numTrainingSamples, "memories");
 
-            std::cerr << "Training started at " << currentDateTime() << "\n";
+            log("Training started!");
 
             TrainingStats trainStats;
             // Accumulate stats for each epoch
@@ -47,7 +47,7 @@ public:
                 epochStats.update(numTrainingSamples, trainStats);
             }
 
-            std::cerr << "Training finished at " << currentDateTime() << "\n";
+            log("Training finished!");
 
             saveLatestModel(iteration);
             learningStats.update(numTrainingSamples, trainStats);
@@ -57,16 +57,16 @@ public:
 
             // evaluateAlphaVsStockfish(modelPath);
 
-            std::cerr << "Iteration " << (iteration + 1) << std::endl;
+            log("Iteration", (iteration + 1));
 
-            std::cerr << "Train Stats:" << std::endl << trainStats.toString() << std::endl;
-            std::cerr << "Epoch Stats:" << std::endl << epochStats.toString() << std::endl;
-            std::cerr << "Learning stats:" << std::endl << learningStats.toString() << std::endl;
+            log("Train Stats:\n", trainStats.toString());
+            log("Epoch Stats:\n", epochStats.toString());
+            log("Learning stats:\n", learningStats.toString());
 
-            std::cerr << "Timeit stats:" << std::endl << get_timeit_results() << std::endl;
+            log("Timeit stats:\n", getTimeitResults());
         }
 
-        std::cerr << "Learning finished\n";
+        log("Learning finished");
     }
 
 private:
