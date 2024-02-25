@@ -2,11 +2,9 @@
 
 #include "common.hpp"
 
-#include "TrainingStats.hpp"
-
-#include "Dataset.hpp"
-
 #include "AlphaZeroBase.hpp"
+#include "Dataset.hpp"
+#include "TrainingStats.hpp"
 
 class AlphaZeroTrainer : AlphaZeroBase {
 public:
@@ -43,8 +41,9 @@ public:
             //     before the new data is used
             LearningStats epochStats;
             for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
-                trainStats += timeit([&] { return train(dataset); }, "train");
-                epochStats.update(numTrainingSamples, trainStats);
+                TrainingStats epochTrainStats = timeit([&] { return train(dataset); }, "train");
+                epochStats.update(numTrainingSamples, epochTrainStats);
+                trainStats += epochTrainStats;
             }
 
             log("Training finished!");
