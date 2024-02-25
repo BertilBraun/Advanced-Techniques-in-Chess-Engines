@@ -21,24 +21,29 @@ public:
     void load() {
         log("Loading memories from", m_savePath);
 
-        auto newMemoryPaths = getMemoryPaths();
+        auto newMemoryPaths = timeit([&] { return getMemoryPaths(); }, "getMemoryPaths");
 
         size_t oldMemoryPathsSize = m_memoryPathsFIFO.size();
 
-        std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
-                                                       m_memoryPathsFIFO.end());
+        timeit(
+            [&] {
+                std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
+                                                               m_memoryPathsFIFO.end());
 
-        for (const auto &memoryPath : newMemoryPaths) {
-            if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
-                m_memoryPathsFIFO.push_back(memoryPath);
-            }
-        }
+                for (const auto &memoryPath : newMemoryPaths) {
+                    if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
+                        m_memoryPathsFIFO.push_back(memoryPath);
+                    }
+                }
+            },
+            "updateMemoryPaths");
 
         m_memoryPaths = m_memoryPathsFIFO; // copy the memory paths to the main list
 
         std::random_device rd;
         std::mt19937 g(rd());
-        std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g);
+        timeit([&] { std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g); },
+               "shuffleMemoryPaths");
 
         assert(m_memoriesToPreload > 0);
 
@@ -121,12 +126,14 @@ private:
 
     DataSample loadMemory(const std::filesystem::path &memoryPath) const {
         torch::Tensor states, policyTargets, valueTargets;
+
         try {
             torch::load(states, (memoryPath / "states.pt").string());
             torch::load(policyTargets, (memoryPath / "policyTargets.pt").string());
             torch::load(valueTargets, (memoryPath / "valueTargets.pt").string());
         } catch (const c10::Error &e) {
-            log("Error loading memory:", e.what());
+            log("Error loading memory:", memoryPath);
+            log("Error:", split(e.what(), '\n')[0]);
             return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
         }
 
@@ -147,8 +154,18 @@ private:
     }
 
     bool isMemoryValid(const std::filesystem::path &memoryPath) const {
-        return std::filesystem::exists(memoryPath / "states.pt") &&
-               std::filesystem::exists(memoryPath / "policyTargets.pt") &&
-               std::filesystem::exists(memoryPath / "valueTargets.pt");
+        return true; // Ignore for now, we will catch the error in loadMemory
+
+        std::set<std::string> requiredFiles = {"states.pt", "policyTargets.pt", "valueTargets.pt"};
+        std::set<std::string> foundFiles;
+
+        for (const auto &entry : std::filesystem::directory_iterator(memoryPath)) {
+            if (entry.is_regular_file()) {
+                foundFiles.insert(entry.path().filename().string());
+            }
+        }
+
+        return std::includes(foundFiles.begin(), foundFiles.end(), requiredFiles.begin(),
+                             requiredFiles.end());
     }
 };

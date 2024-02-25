@@ -15,7 +15,7 @@ public:
 
     void run() {
         LearningStats learningStats;
-        Dataset dataset(m_savePath, m_model->device, m_args.batchSize, 10);
+        Dataset dataset(m_savePath, m_model->device, m_args.batchSize, 20);
 
         m_model->train(); // Set model to training mode
 
@@ -74,7 +74,8 @@ private:
         TrainingStats trainStats;
 
         while (dataset.hasNext()) {
-            auto [states, policyTargets, valueTargets] = dataset.next();
+            auto [states, policyTargets, valueTargets] =
+                timeit([&] { return dataset.next(); }, "Dataset Next");
             auto [policy, value] = m_model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);

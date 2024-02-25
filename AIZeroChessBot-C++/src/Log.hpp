@@ -80,14 +80,18 @@ template <bool AddNewline, typename... Args> void logCommon(Args... args) {
         logStream << std::endl;
     }
 
+    std::string logString = logStream.str();
+    if (logString.back() == ' ')
+        logString.pop_back(); // Remove trailing space
+
     if constexpr (TO_FILE) {
         std::string logPath = "log_" + toString(__THREAD_IDS[threadId]) + ".txt";
         std::ofstream logFile(logPath, std::ios::app);
-        logFile << logStream.str();
+        logFile << logString;
         logFile.flush();
     }
     if constexpr (TO_STDERR) {
-        std::cerr << logStream.str();
+        std::cerr << logString;
         std::cerr.flush();
     }
 }
