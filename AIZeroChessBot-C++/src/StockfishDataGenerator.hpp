@@ -226,6 +226,18 @@ private:
         torch::Tensor encodedBoard = encodeBoard(board);
         torch::Tensor encodedPolicy = encodeMoves(policy);
 
+        // if any of the tensors contain NaN, we skip this sample
+        if (torch::isnan(encodedBoard).any().item<bool>() ||
+            torch::isnan(encodedPolicy).any().item<bool>()) {
+            log("Warning: NaN detected in encoded board or policy");
+            return;
+        }
+
+        if (std::isnan(value)) {
+            log("Warning: NaN detected in value");
+            return;
+        }
+
         m_selfPlayWriter.write(encodedBoard, encodedPolicy, value);
         m_written++;
         m_valueSum += (double) value;
