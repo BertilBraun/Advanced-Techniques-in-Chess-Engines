@@ -30,7 +30,7 @@ public:
         std::ostringstream stream;
         stream << "Policy Loss: " << policyLoss / numBatches
                << ", Value Loss: " << valueLoss / numBatches
-               << ", Total Loss: " << totalLoss / numBatches;
+               << ", Total Loss: " << totalLoss / numBatches << ", Batches: " << numBatches;
         return stream.str();
     }
 };
