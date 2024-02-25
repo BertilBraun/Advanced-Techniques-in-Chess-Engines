@@ -14,7 +14,6 @@
 #include <tuple>
 #include <vector>
 
-
 std::string currentTime() {
     // Helper function to get the current time as a string
     // Format: "hh:mm:ss:ms"
@@ -64,17 +63,25 @@ template <typename K, typename V> std::string toString(const std::map<K, V> &map
 constexpr bool TO_FILE = true;
 constexpr bool TO_STDERR = true;
 
-template <typename... Args> void log(Args... args) {
-    // Variadic template log function
-    std::thread::id threadId = std::this_thread::get_id(); // Get current thread ID
+static inline std::map<std::thread::id, size_t> __THREAD_IDS;
+
+template <bool AddNewline, typename... Args> void logCommon(Args... args) {
+    // Common log function that writes to file and/or stderr
+
+    std::thread::id threadId = std::this_thread::get_id();
+    if (__THREAD_IDS.find(threadId) == __THREAD_IDS.end()) {
+        __THREAD_IDS[threadId] = __THREAD_IDS.size() + 1; // Start IDs from 1 for readability
+    }
 
     std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] [ " << threadId << " ] ";
+    logStream << '[' << currentTime() << "] [ " << __THREAD_IDS[threadId] << " ] ";
     (logStream << ... << (toString(args) + " "));
-    logStream << std::endl;
+    if constexpr (AddNewline) {
+        logStream << std::endl;
+    }
 
     if constexpr (TO_FILE) {
-        std::string logPath = "log" + toString(threadId) + ".txt";
+        std::string logPath = "log_" + toString(__THREAD_IDS[threadId]) + ".txt";
         std::ofstream logFile(logPath, std::ios::app);
         logFile << logStream.str();
         logFile.flush();
@@ -85,42 +92,28 @@ template <typename... Args> void log(Args... args) {
     }
 }
 
-template <typename... Args> void logNoNewline(Args... args) {
-    // Variadic template log function without a newline
-    std::thread::id threadId = std::this_thread::get_id(); // Get current thread ID
+// Public log functions that wrap the common function
+template <typename... Args> void log(Args... args) { logCommon<true>(args...); }
 
-    std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] [ " << threadId << " ] ";
-    (logStream << ... << (toString(args) + " "));
-
-    if constexpr (TO_FILE) {
-        std::string logPath = "log" + toString(threadId) + ".txt";
-        std::ofstream logFile(logPath, std::ios::app);
-        logFile << logStream.str();
-        logFile.flush();
-    }
-    if constexpr (TO_STDERR) {
-        std::cerr << logStream.str();
-        std::cerr.flush();
-    }
-}
+template <typename... Args> void logNoNewline(Args... args) { logCommon<false>(args...); }
 
 inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
     float progress = std::min((float) current / total, 1.0f);
     int pos = (int) (width * progress);
 
-    logNoNewline("[");
+    std::ostringstream bar;
+
+    bar << "[";
     for (int i = 0; i < width; ++i) {
         if (i < pos)
-            logNoNewline("=");
+            bar << "=";
         else if (i == pos)
-            logNoNewline(">");
+            bar << ">";
         else
-            logNoNewline(" ");
+            bar << " ";
     }
-    logNoNewline(']', int(progress * 100.0), '%', desc, '\r');
-    if (current == total) {
-        logNoNewline("\n");
-    }
+    bar << "]";
+
+    logNoNewline(bar.str(), int(progress * 100.0), '%', desc, (current == total ? "\n" : "\r"));
     return current < total;
 }
