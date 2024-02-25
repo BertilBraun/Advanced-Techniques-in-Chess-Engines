@@ -155,40 +155,30 @@ private:
 
     std::vector<std::pair<std::vector<Move>, float>> parseLichessEvalPolicy(const json &evals,
                                                                             Board &board) {
-        std::vector<float> scores;
-        std::vector<std::vector<Move>> moves;
+        std::vector<PolicyMove> policy;
+        std::vector<std::pair<std::vector<Move>, float>> lines;
+
+        float boardScore = -1.0f;
 
         for (const auto &eval : evals) {
             for (const auto &pv : eval["pvs"]) {
                 try {
                     float score = parseLichessPvScore(pv);
-                    std::vector<Move> moveList = parseLichessPvMoves(pv);
-                    scores.push_back(score);
-                    moves.push_back(moveList);
+                    std::vector<Move> moves = parseLichessPvMoves(pv);
+
+                    policy.emplace_back(moves[0], score);
+                    lines.emplace_back(moves, score);
+
+                    boardScore = std::max(score, boardScore);
                 } catch (std::runtime_error &e) {
                     continue;
                 }
             }
         }
 
-        float boardScore = -1.0f;
-        for (float score : scores) {
-            boardScore = std::max(score, boardScore);
-        }
-
-        std::vector<PolicyMove> policy;
-        for (size_t i = 0; i < scores.size(); ++i) {
-            policy.emplace_back(moves[i][0], scores[i]);
-        }
-
         normalizePolicy(policy);
 
         write(board, policy, board.turn == Color::WHITE ? boardScore : -boardScore);
-
-        std::vector<std::pair<std::vector<Move>, float>> lines;
-        for (size_t i = 0; i < scores.size(); ++i) {
-            lines.emplace_back(moves[i], scores[i]);
-        }
 
         return lines;
     }
