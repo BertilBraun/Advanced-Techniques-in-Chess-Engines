@@ -67,7 +67,8 @@ public:
             writeLine(Board(), moves, score);
 
             numGames++;
-            reportProgress(numGames, 1000000, "Elite games"); // TODO
+            if (numGames % 1000 == 0)
+                reportProgress(numGames, 1000000, "Elite games"); // TODO
         }
 
         markGenerated("elite_games_generated");
@@ -108,7 +109,8 @@ public:
             }
 
             numGames++;
-            reportProgress(numGames, linesPerProcess, "Evaluations");
+            if (numGames % 1000 == 0)
+                reportProgress(numGames, linesPerProcess, "Evaluations");
         }
 
         markGenerated("lichess_evals_generated");
@@ -122,7 +124,7 @@ public:
         // Do this for numGames games
         StockfishEvaluator evaluator(pathToStockfish);
 
-        for (size_t iteration = 0; iteration < numGames; ++iteration) {
+        for (size_t iteration = 0; tqdm(iteration, numGames, "Stockfish Self Play"); ++iteration) {
             Board board;
             stockfishSelfPlay(evaluator, board, numMoves);
         }
