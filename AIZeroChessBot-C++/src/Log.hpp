@@ -64,13 +64,16 @@ constexpr bool TO_STDERR = true;
 
 template <typename... Args> void log(Args... args) {
     // Variadic template log function
+    std::thread::id threadId = std::this_thread::get_id(); // Get current thread ID
+
     std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] ";
+    logStream << '[' << currentTime() << "] [ " << threadId << " ] ";
     (logStream << ... << (toString(args) + " "));
     logStream << std::endl;
 
     if constexpr (TO_FILE) {
-        std::ofstream logFile("log.txt", std::ios::app);
+        std::string logPath = "log" + toString(threadId) + ".txt";
+        std::ofstream logFile(logPath, std::ios::app);
         logFile << logStream.str();
         logFile.flush();
     }
@@ -82,12 +85,15 @@ template <typename... Args> void log(Args... args) {
 
 template <typename... Args> void logNoNewline(Args... args) {
     // Variadic template log function without a newline
+    std::thread::id threadId = std::this_thread::get_id(); // Get current thread ID
+
     std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] ";
+    logStream << '[' << currentTime() << "] [ " << threadId << " ] ";
     (logStream << ... << (toString(args) + " "));
 
     if constexpr (TO_FILE) {
-        std::ofstream logFile("log.txt", std::ios::app);
+        std::string logPath = "log" + toString(threadId) + ".txt";
+        std::ofstream logFile(logPath, std::ios::app);
         logFile << logStream.str();
         logFile.flush();
     }
