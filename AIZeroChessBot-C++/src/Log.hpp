@@ -1,37 +1,42 @@
+#pragma once
+
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
+#include <random>
 #include <sstream>
+#include <stddef.h>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
 
-// Helper function to get the current time as a string
 std::string currentTime() {
+    // Helper function to get the current time as a string
+    // Format: "hh:mm:ss:ms"
     auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::ctime(&time);
-    auto str = ss.str();
-    str.pop_back(); // Remove newline character
-    return str;
+    ss << std::put_time(std::localtime(&in_time_t), "%X");
+    return ss.str();
 }
 
-// Convert various types to string
 template <typename T> std::string toString(const T &value) {
+    // Convert various types to string
     std::stringstream ss;
     ss << value;
     return ss.str();
 }
 
-// Specialization for pairs
 template <typename T1, typename T2> std::string toString(const std::pair<T1, T2> &pair) {
+    // Specialization for pairs
     return "(" + toString(pair.first) + ", " + toString(pair.second) + ")";
 }
 
-// Specialization for vectors
 template <typename T> std::string toString(const std::vector<T> &vec) {
+    // Specialization for vectors
     std::string result = "[";
     for (size_t i = 0; i < vec.size(); ++i) {
         result += toString(vec[i]);
@@ -42,8 +47,8 @@ template <typename T> std::string toString(const std::vector<T> &vec) {
     return result;
 }
 
-// Specialization for maps
 template <typename K, typename V> std::string toString(const std::map<K, V> &map) {
+    // Specialization for maps
     std::string result = "{";
     for (auto it = map.begin(); it != map.end(); ++it) {
         result += toString(*it);
@@ -55,25 +60,39 @@ template <typename K, typename V> std::string toString(const std::map<K, V> &map
 }
 
 constexpr bool TO_FILE = true;
+constexpr bool TO_STDERR = true;
 
-// Variadic template log function
 template <typename... Args> void log(Args... args) {
-    logNoNewline(args...);
-    logNoNewline("\n");
+    // Variadic template log function
+    std::ostringstream logStream;
+    logStream << '[' << currentTime() << "] ";
+    (logStream << ... << (toString(args) + " "));
+    logStream << std::endl;
+
+    if constexpr (TO_FILE) {
+        std::ofstream logFile("log.txt", std::ios::app);
+        logFile << logStream.str();
+        logFile.flush();
+    }
+    if constexpr (TO_STDERR) {
+        std::cerr << logStream.str();
+        std::cerr.flush();
+    }
 }
 
-// Variadic template log function
 template <typename... Args> void logNoNewline(Args... args) {
+    // Variadic template log function without a newline
     std::ostringstream logStream;
-    logStream << currentTime(), "- ";
+    logStream << '[' << currentTime() << "] ";
     (logStream << ... << (toString(args) + " "));
 
     if constexpr (TO_FILE) {
         std::ofstream logFile("log.txt", std::ios::app);
         logFile << logStream.str();
         logFile.flush();
-    } else {
-        log(logStream.str();
+    }
+    if constexpr (TO_STDERR) {
+        std::cerr << logStream.str();
         std::cerr.flush();
     }
 }
