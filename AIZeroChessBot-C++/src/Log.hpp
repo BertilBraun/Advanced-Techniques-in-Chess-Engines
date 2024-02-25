@@ -63,14 +63,17 @@ template <typename K, typename V> std::string toString(const std::map<K, V> &map
 constexpr bool TO_FILE = true;
 constexpr bool TO_STDERR = true;
 
-static inline std::map<std::thread::id, size_t> __THREAD_IDS;
+static inline std::map<std::thread::id, std::string> __THREAD_IDS;
 
 template <bool AddNewline, typename... Args> void logCommon(Args... args) {
     // Common log function that writes to file and/or stderr
 
     std::thread::id threadId = std::this_thread::get_id();
     if (__THREAD_IDS.find(threadId) == __THREAD_IDS.end()) {
-        __THREAD_IDS[threadId] = __THREAD_IDS.size() + 1; // Start IDs from 1 for readability
+        // Start IDs from 1 for readability
+        __THREAD_IDS[threadId] = toString(__THREAD_IDS.size() + 1);
+        if (__THREAD_IDS[threadId].size() == 1)
+            __THREAD_IDS[threadId] = "0" + __THREAD_IDS[threadId];
     }
 
     std::ostringstream logStream;
