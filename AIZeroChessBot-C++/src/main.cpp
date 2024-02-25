@@ -10,7 +10,7 @@ std::string SAVE_PATH = "models";
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 4) {
+    if (argc != 3) {
         log("Usage:", argv[0], "[train|generate] <numProcessors>");
         return 1;
     }
@@ -26,8 +26,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (numProcessors == 0) {
-        log("Invalid argument:", argv[2]);
-        return 1;
+        log("Warning: numProcessors is 0");
     }
 
     TrainingArgs args{
@@ -96,7 +95,7 @@ int main(int argc, char *argv[]) {
     for (size_t i = 0; i < numProcessors; ++i) {
         threads.emplace_back(std::thread([i, numProcessors, args] {
             Network model;
-            AlphaZeroSelfPlayer alphaZeroSelfPlayer(i, model, args);
+            AlphaZeroSelfPlayer alphaZeroSelfPlayer(i + 1, model, args);
 
             log("Worker process", i, "of", numProcessors, "started");
 
