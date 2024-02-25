@@ -25,7 +25,6 @@ cp AIZeroChessBot ../train/AIZeroChessBot
 cd ../train
 
 
-
 # Extract the SLURM job time limit in minutes and convert to seconds for timeout
 # Subtract a buffer time (e.g., 300 seconds) to allow for cleanup and requeueing
 TIME=$(squeue -j $SLURM_JOB_ID -h --Format TimeLimit)

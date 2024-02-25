@@ -22,10 +22,26 @@ class SelfPlayWriter {
 public:
     SelfPlayWriter(const TrainingArgs &args) : m_args(args) {}
 
-    void write(const torch::Tensor &board, const torch::Tensor &policy, float resultScore) {
+    bool write(const torch::Tensor &board, const torch::Tensor &policy, float resultScore) {
+
+        // if any of the tensors contain NaN, we skip this sample
+        if (torch::isnan(board).any().item<bool>()) {
+            log("Warning: NaN detected in encoded board");
+            return false;
+        }
+        if (torch::isnan(policy).any().item<bool>()) {
+            log("Warning: NaN detected in policy");
+            return false;
+        }
+        if (std::isnan(resultScore)) {
+            log("Warning: NaN detected in value");
+            return false;
+        }
+
         auto trainingData = symmetricVariations(board, policy, resultScore);
         extend(m_selfPlayMemoryBatch, trainingData);
         saveTrainingDataBatches();
+        return true;
     }
 
 private:

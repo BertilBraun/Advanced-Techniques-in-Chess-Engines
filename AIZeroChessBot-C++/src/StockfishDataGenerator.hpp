@@ -158,20 +158,21 @@ private:
 
         for (const auto &eval : evals) {
             for (const auto &pv : eval["pvs"]) {
-                float score = parseLichessPvScore(pv);
-                scores.push_back(score);
-                std::vector<Move> moveList = parseLichessPvMoves(pv);
-                moves.push_back(moveList);
+                try {
+                    float score = parseLichessPvScore(pv);
+                    std::vector<Move> moveList = parseLichessPvMoves(pv);
+                    scores.push_back(score);
+                    moves.push_back(moveList);
+                } catch (std::runtime_error &e) {
+                    continue;
+                }
             }
         }
 
-        float max = -1.0f;
-        float min = 1.0f;
+        float boardScore = -1.0f;
         for (float score : scores) {
-            max = std::max(max, score);
-            min = std::min(min, score);
+            boardScore = std::max(score, boardScore);
         }
-        float score = std::abs(min) > std::abs(max) ? min : max;
 
         std::vector<PolicyMove> policy;
         for (size_t i = 0; i < scores.size(); ++i) {
@@ -180,7 +181,7 @@ private:
 
         normalizePolicy(policy);
 
-        write(board, policy, score);
+        write(board, policy, board.turn == Color::WHITE ? boardScore : -boardScore);
 
         std::vector<std::pair<std::vector<Move>, float>> lines;
         for (size_t i = 0; i < scores.size(); ++i) {
@@ -226,21 +227,10 @@ private:
         torch::Tensor encodedBoard = encodeBoard(board);
         torch::Tensor encodedPolicy = encodeMoves(policy);
 
-        // if any of the tensors contain NaN, we skip this sample
-        if (torch::isnan(encodedBoard).any().item<bool>() ||
-            torch::isnan(encodedPolicy).any().item<bool>()) {
-            log("Warning: NaN detected in encoded board or policy");
-            return;
+        if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value)) [[likely]] {
+            m_written++;
+            m_valueSum += (double) value;
         }
-
-        if (std::isnan(value)) {
-            log("Warning: NaN detected in value");
-            return;
-        }
-
-        m_selfPlayWriter.write(encodedBoard, encodedPolicy, value);
-        m_written++;
-        m_valueSum += (double) value;
     }
 
     void stockfishSelfPlay(StockfishEvaluator &evaluator, Board &board, size_t numMoves = 10) {
@@ -272,19 +262,15 @@ private:
     }
 
     std::vector<PolicyMove> evaluateMovesPolicy(StockfishEvaluator &evaluator, Board &board) {
-        std::vector<Move> legalMoves = board.legalMoves();
-        std::vector<float> scores;
+        std::vector<PolicyMove> policy;
 
-        for (const Move &move : legalMoves) {
+        for (const Move &move : board.legalMoves()) {
             Board copy = board.copy();
             copy.push(move);
             float score = evaluator.evaluatePosition(board.fen());
-            scores.push_back(score);
-        }
-
-        std::vector<PolicyMove> policy;
-        for (size_t i = 0; i < legalMoves.size(); ++i) {
-            policy.emplace_back(legalMoves[i], scores[i]);
+            // Note: The score is negated, because the evaluator is from the perspective of the
+            // current player, but the policy should be from the perspective of the last player
+            policy.emplace_back(move, -score);
         }
 
         normalizePolicy(policy);
@@ -293,9 +279,7 @@ private:
     }
 
     void normalizePolicy(std::vector<PolicyMove> &policy) {
-        for (PolicyMove &move : policy) {
-            move.second = std::abs(move.second);
-        }
+        // The policy should be -1.0f <= x <= 1.0f based on the pv scores
 
         float min = std::numeric_limits<float>::max();
         for (PolicyMove &move : policy) {
@@ -303,7 +287,7 @@ private:
         }
 
         for (PolicyMove &move : policy) {
-            move.second -= min;
+            move.second -= min - 0.01f;
         }
 
         float sum = 0.0f;
