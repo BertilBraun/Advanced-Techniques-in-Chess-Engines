@@ -96,10 +96,7 @@ public:
         }
         while (std::getline(file, line) && numGames < linesPerProcess) {
             json eval = json::parse(line);
-            std::string fen = eval["fen"];
-
-            Board board = Board::fromFEN(fen);
-
+            auto board = Board::fromFEN(eval["fen"]);
             auto lines = parseLichessEvalPolicy(eval["evals"], board);
 
             if (createLines) {

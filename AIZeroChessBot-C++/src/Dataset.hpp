@@ -121,10 +121,14 @@ private:
 
     DataSample loadMemory(const std::filesystem::path &memoryPath) const {
         torch::Tensor states, policyTargets, valueTargets;
-
-        torch::load(states, (memoryPath / "states.pt").string());
-        torch::load(policyTargets, (memoryPath / "policyTargets.pt").string());
-        torch::load(valueTargets, (memoryPath / "valueTargets.pt").string());
+        try {
+            torch::load(states, (memoryPath / "states.pt").string());
+            torch::load(policyTargets, (memoryPath / "policyTargets.pt").string());
+            torch::load(valueTargets, (memoryPath / "valueTargets.pt").string());
+        } catch (const c10::Error &e) {
+            log("Error loading memory:", e.what());
+            return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
+        }
 
         // if valueTargets is not of [batchSize, 1] shape -> error
         // if policyTargets is not of [batchSize, ACTION_SIZE] shape -> error
