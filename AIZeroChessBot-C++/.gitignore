@@ -4,3 +4,5 @@ libtorch/**
 **.pt
 
 src/json.hpp
+
+**/models/memory/**
