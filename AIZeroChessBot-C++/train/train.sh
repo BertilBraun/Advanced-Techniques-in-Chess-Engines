@@ -5,8 +5,8 @@
 #SBATCH --time=06:10:00                    # wall-clock time limit
 #SBATCH --mem=200000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
-#SBATCH --cpus-per-task=1                  # number of CPUs required per MPI task
-#SBATCH --ntasks-per-node=8                # maximum count of tasks per node
+#SBATCH --cpus-per-task=32                 # number of CPUs required per MPI task
+#SBATCH --ntasks-per-node=1                # maximum count of tasks per node
 #SBATCH --mail-type=ALL                    # Notify user by email when certain event types occur.
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_zero_%j.txt
@@ -24,21 +24,6 @@ cp AIZeroChessBot ../train/AIZeroChessBot
 
 cd ../train
 
-# Calculate the total number of MPI processes
-total_processes=$(($SLURM_NNODES * $SLURM_NTASKS_PER_NODE))
-
-# if total_processes is 0 or not set, then set it to 1
-if [ -z "$total_processes" ] || [ $total_processes -eq 0 ]; then
-    total_processes=1
-fi
-
-# Explanation:
-# We are running the communicator.py file with total_processes processes.
-# The communicator.py file is responsible for the communication between the training and the self-play processes.
-# The root process is responsible for the training process, while the other 5 processes are responsible for the self-play process.
-# Refer to the README.md file for information about the relationship between the number of workers and the training process.
-
-
 # Extract the SLURM job time limit in minutes and convert to seconds for timeout
 # Subtract a buffer time (e.g., 300 seconds) to allow for cleanup and requeueing
 TIME=$(squeue -j $SLURM_JOB_ID -h --Format TimeLimit)
@@ -51,7 +36,7 @@ job_time_limit_seconds=$(($job_time_limit_seconds - 300))
 # This is done to be able to requeue the job on the cluster to continue the training process.
 
 # Use the calculated job time limit for timeout
-timeout ${job_time_limit_seconds}s mpirun -np $total_processes python communicator.py train
+timeout ${job_time_limit_seconds}s ./AIZeroChessBot "train" $SLURM_CPUS_PER_TASK
 exit_status=$?
 
 

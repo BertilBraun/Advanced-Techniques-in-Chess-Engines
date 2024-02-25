@@ -87,5 +87,4 @@ dependencies:
   - pip:
       - chess==1.10.0
       - fsspec==2024.2.0
-      - mpi4py==3.1.5
       - pip==24.0
