@@ -3,17 +3,34 @@
 #include "common.hpp"
 
 #include "AlphaZeroBase.hpp"
+#include "Barrier.hpp"
 #include "Dataset.hpp"
 #include "TrainingStats.hpp"
 
 class AlphaZeroTrainer : AlphaZeroBase {
 public:
     AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
-        : AlphaZeroBase(model, args, &optimizer) {}
+        : AlphaZeroBase(model, args, &optimizer) {
+
+        // get the available devices
+        auto devices = torch::cuda::device_count();
+        log("CUDA devices available:", devices);
+
+        for (int i = 0; i < devices; i++) {
+            m_devicesList.push_back(torch::Device(torch::kCUDA, i));
+        }
+
+        for (size_t i = 0; i < devices; ++i) {
+            // TODO check if this works with the strong cast
+            m_models.push_back((Network) m_model->clone(m_devicesList[i]));
+        }
+
+        m_barrier = Barrier(devices);
+    }
 
     void run() {
         LearningStats learningStats;
-        Dataset dataset(m_model->device, m_args.batchSize, 20);
+        Dataset dataset(m_args.batchSize, 20);
 
         m_model->train(); // Set model to training mode
 
@@ -21,13 +38,13 @@ public:
              ++iteration) {
             log("Training Iteration", (iteration + 1));
 
-            dataset.load();
+            timeit([&] { dataset.load(); }, "load Dataset");
 
             while (dataset.size() < 10000) {
                 logNoNewline("Waiting for more training data. Current size:", dataset.size(),
                              "/10000\r");
                 std::this_thread::sleep_for(std::chrono::minutes(10));
-                dataset.load();
+                timeit([&] { dataset.load(); }, "load Dataset");
             }
 
             size_t numTrainingSamples = dataset.size() * m_args.batchSize;
@@ -44,7 +61,6 @@ public:
                 TrainingStats epochTrainStats = timeit([&] { return train(dataset); }, "train");
                 epochStats.update(numTrainingSamples, epochTrainStats);
                 trainStats += epochTrainStats;
-                dataset.restartWithCurrentlyLoadedMemories();
             }
 
             log("Training finished!");
@@ -70,13 +86,48 @@ public:
     }
 
 private:
+    std::vector<torch::Device> m_devicesList;
+    std::vector<Network> m_models;
+    Barrier m_barrier;
+
     TrainingStats train(Dataset &dataset) {
+        TrainingStats totalTrainStats;
+        std::mutex statsMutex;
+
+        std::vector<DataSubset> dataSubsets = dataset.intoDataSubsets(m_devicesList);
+
+        // spin up a thread for each device
+        std::vector<std::thread> threads;
+
+        for (size_t i = 0; i < m_devicesList.size(); ++i) {
+            threads.emplace_back(
+                std::thread([i, &dataSubsets, &totalTrainStats, &statsMutex, this] {
+                    TrainingStats trainStats =
+                        trainOnDevice(dataSubsets[i], m_models[i], m_devicesList[i]);
+
+                    log("Device", i, "finished training");
+
+                    statsMutex.lock();
+                    totalTrainStats += trainStats;
+                    statsMutex.unlock();
+                }));
+        }
+
+        for (auto &thread : threads) {
+            thread.join();
+        }
+
+        // TODO potentially add learning rate scheduler here
+
+        return totalTrainStats;
+    }
+
+    TrainingStats trainOnDevice(DataSubset &dataSubset, Network &model, torch::Device &device) {
         TrainingStats trainStats;
 
-        while (dataset.hasNext()) {
-            auto [states, policyTargets, valueTargets] =
-                timeit([&] { return dataset.next(); }, "Dataset Next");
-            auto [policy, value] = m_model->forward(states);
+        while (dataSubset.hasNext()) {
+            auto [states, policyTargets, valueTargets] = dataSubset.next();
+            auto [policy, value] = model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
             auto valueLoss = torch::mse_loss(value, valueTargets);
@@ -84,14 +135,78 @@ private:
 
             m_optimizer->zero_grad();
             loss.backward();
-            m_optimizer->step();
+
+            timeit([&] { aggregateGradientsToMainModel(); },
+                   "aggregateGradientsToMainModel * num devices");
+
+            // Ensure all models are updated with the main model's parameters
+            timeit([&] { synchronizeModel(model); }, "synchronizeModel * num devices");
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
         }
 
-        // TODO potentially add learning rate scheduler here
-
         return trainStats;
+    }
+
+    void aggregateGradientsToMainModel() {
+
+        // barrier here to ensure all threads have finished back propagation and gradients are
+        // available for aggregation
+        if (m_barrier.barrier()) {
+            // only do this block once (barrier returns true for only one of the threads) and not
+            // for all threads
+
+            torch::NoGradGuard no_grad; // Ensure no gradient computation happens here
+
+            for (size_t i = 0; i < m_model->parameters().size(); ++i) {
+                auto &main_param = m_model->parameters()[i];
+
+                // Accumulate gradients from all models
+                torch::Tensor grad_sum = torch::zeros_like(main_param.grad());
+                for (auto &model : m_models) {
+                    auto &param = model->parameters()[i];
+                    grad_sum += param.grad();
+                }
+
+                // Average the gradients (if desired, depending on your training strategy)
+                // grad_sum /= m_models.size();
+
+                // Update the main model's gradients with the aggregated gradients
+                main_param.mutable_grad() = grad_sum;
+            }
+
+            m_optimizer->step();
+        }
+
+        // Only continue threads once this line is reached
+        // Now the main model's parameters have been updated with the aggregated gradients
+        // All threads can now continue and should synchronize their models with the main model
+        m_barrier.barrier();
+    }
+
+    void synchronizeModel(Network &model) {
+        // Iterate over each model in m_models to update its parameters
+        auto model_params = model->named_parameters();
+        auto model_buffers = model->named_buffers();
+
+        // Iterate over parameters to update them
+        for (auto &param : m_model->named_parameters()) {
+            auto &name = param.key();
+            auto &main_param = param.value();
+            auto &model_param = *model_params.find(name);
+
+            // Ensure the parameter is copied over to the correct device
+            model_param.data().copy_(main_param.data().to(model_param.device()));
+        }
+
+        // Also ensure buffers (e.g., running mean/var in BatchNorm) are synchronized
+        for (auto &buffer : m_model->named_buffers()) {
+            auto &name = buffer.key();
+            auto &main_buffer = buffer.value();
+            auto &model_buffer = *model_buffers.find(name);
+
+            model_buffer.data().copy_(main_buffer.data().to(model_buffer.device()));
+        }
     }
 };

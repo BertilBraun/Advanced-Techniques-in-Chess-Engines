@@ -6,41 +6,12 @@
 
 using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 
-class Dataset {
+class DataSubset {
 public:
-    Dataset(torch::Device device, size_t memoryBatchSize, size_t memoriesToPreload = 10)
-        : m_device(device), m_memoriesToPreload(memoriesToPreload),
-          m_memoryBatchSize((long long) memoryBatchSize) {
-
-        if (!std::filesystem::exists(MEMORY_DIR)) {
-            std::filesystem::create_directories(MEMORY_DIR);
-        }
-    }
-
-    void load() {
-        log("Loading memories from", MEMORY_DIR);
-
-        auto newMemoryPaths = getMemoryPaths();
-
-        size_t oldMemoryPathsSize = m_memoryPathsFIFO.size();
-
-        std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
-                                                       m_memoryPathsFIFO.end());
-
-        for (const auto &memoryPath : newMemoryPaths) {
-            if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
-                m_memoryPathsFIFO.push_back(memoryPath);
-            }
-        }
-
-        restartWithCurrentlyLoadedMemories();
-
-        log("Loaded", newMemoryPaths.size() - oldMemoryPathsSize, "new memory batches",
-            m_memoryPaths.size(), "in total.");
-    }
-
-    void restartWithCurrentlyLoadedMemories() {
-        m_memoryPaths = m_memoryPathsFIFO; // copy the memory paths to the main list
+    DataSubset(const std::vector<std::filesystem::path> &memoryPaths, torch::Device device,
+               size_t memoryBatchSize, long long memoriesToPreload = 10)
+        : m_memoryPaths(memoryPaths), m_device(device), m_memoriesToPreload(memoriesToPreload),
+          m_memoryBatchSize(memoryBatchSize) {
 
         std::random_device rd;
         std::mt19937 g(rd());
@@ -78,50 +49,26 @@ public:
         return result;
     }
 
-    size_t size() const { return m_memoryPaths.size(); }
-
-    void deleteOldMemories(int retentionFactor) {
-        // delete the oldest retentionFactor% of the memories
-        float percentage = (1.0f - ((float) retentionFactor / 100.f));
-        size_t numMemoriesToDelete = percentage * m_memoryPaths.size();
-        for (size_t i = 0; i < numMemoriesToDelete; ++i) {
-            std::filesystem::remove_all(m_memoryPathsFIFO[i]);
-        }
-
-        // delete the oldest retentionFactor% of the memories
-        m_memoryPathsFIFO.erase(m_memoryPathsFIFO.begin(),
-                                m_memoryPathsFIFO.begin() + numMemoriesToDelete);
-    }
-
 private:
     std::deque<std::future<DataSample>> m_memoryFutures;
-    std::vector<std::filesystem::path> m_memoryPathsFIFO;
     std::vector<std::filesystem::path> m_memoryPaths;
     torch::Device m_device;
     size_t m_currentMemoryIndex = 0;
     size_t m_memoriesToPreload;
     long long m_memoryBatchSize;
 
+    friend class Dataset;
+
     void queueNextMemory() {
         if (m_currentMemoryIndex < m_memoryPaths.size()) {
             auto memoryPath = m_memoryPaths[m_currentMemoryIndex++];
 
             m_memoryFutures.push_back(
-                std::async(std::launch::async, &Dataset::loadMemory, this, memoryPath));
+                std::async(std::launch::async, &DataSubset::loadMemory, this, memoryPath));
         }
     }
 
-    std::vector<std::filesystem::path> getMemoryPaths() const {
-        std::vector<std::filesystem::path> memoryPaths;
-        for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
-            if (entry.is_directory() && isMemoryValid(entry.path())) {
-                memoryPaths.push_back(entry.path());
-            }
-        }
-        return memoryPaths;
-    }
-
-    DataSample loadMemory(const std::filesystem::path &memoryPath) const {
+    DataSample loadMemory(const std::filesystem::path &memoryPath) {
         torch::Tensor states, policyTargets, valueTargets;
 
         try {
@@ -152,6 +99,99 @@ private:
         valueTargets = valueTargets.to(m_device);
 
         return std::make_tuple(states, policyTargets, valueTargets);
+    }
+};
+
+class Dataset {
+public:
+    Dataset(size_t memoryBatchSize, size_t memoriesToPreload = 10)
+        : m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize((long long) memoryBatchSize) {
+
+        if (!std::filesystem::exists(MEMORY_DIR)) {
+            std::filesystem::create_directories(MEMORY_DIR);
+        }
+    }
+
+    void load() {
+        log("Loading memories from", MEMORY_DIR);
+
+        auto newMemoryPaths = getMemoryPaths();
+
+        size_t oldMemoryPathsSize = m_memoryPathsFIFO.size();
+
+        std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
+                                                       m_memoryPathsFIFO.end());
+
+        // for all items in m_memoryPathsFIFO, if it is not in newMemoryPaths, delete it
+        m_memoryPathsFIFO.erase(std::remove_if(m_memoryPathsFIFO.begin(), m_memoryPathsFIFO.end(),
+                                               [&newMemoryPaths](const auto &memoryPath) {
+                                                   return newMemoryPaths.find(memoryPath) ==
+                                                          newMemoryPaths.end();
+                                               }),
+                                m_memoryPathsFIFO.end());
+
+        // for all the new memory paths, if it is not in oldMemoryPaths, append it to
+        // m_memoryPathsFIFO this will ensure that the new memory paths are deleted last
+        for (const auto &memoryPath : newMemoryPaths) {
+            if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
+                m_memoryPathsFIFO.push_back(memoryPath);
+            }
+        }
+
+        log("Loaded", newMemoryPaths.size() - oldMemoryPathsSize, "new memory batches",
+            m_memoryPathsFIFO.size(), "in total.");
+    }
+
+    size_t size() const { return m_memoryPathsFIFO.size(); }
+
+    void deleteOldMemories(int retentionFactor) {
+        // delete the oldest retentionFactor% of the memories
+        float percentage = (1.0f - ((float) retentionFactor / 100.f));
+        size_t numMemoriesToDelete = percentage * m_memoryPathsFIFO.size();
+        for (size_t i = 0; i < numMemoriesToDelete; ++i) {
+            std::filesystem::remove_all(m_memoryPathsFIFO[i]);
+        }
+
+        // delete the oldest retentionFactor% of the memories
+        m_memoryPathsFIFO.erase(m_memoryPathsFIFO.begin(),
+                                m_memoryPathsFIFO.begin() + numMemoriesToDelete);
+    }
+
+    std::vector<DataSubset> intoDataSubsets(const std::vector<torch::Device> &devices) const {
+        std::vector<DataSubset> datasets;
+        datasets.reserve(devices.size());
+
+        size_t batchSizePerDevice = m_memoryBatchSize / devices.size();
+
+        for (size_t i = 0; i < devices.size(); ++i) {
+
+            std::vector<std::filesystem::path> memoryPaths;
+            memoryPaths.reserve(batchSizePerDevice);
+
+            for (size_t j = i * batchSizePerDevice;
+                 j < (i + 1) * batchSizePerDevice && j < m_memoryPathsFIFO.size(); ++j) {
+                memoryPaths.push_back(m_memoryPathsFIFO[j]);
+            }
+
+            datasets.emplace_back(memoryPaths, devices[i], batchSizePerDevice, m_memoriesToPreload);
+        }
+
+        return datasets;
+    }
+
+private:
+    std::vector<std::filesystem::path> m_memoryPathsFIFO;
+    size_t m_memoriesToPreload;
+    long long m_memoryBatchSize;
+
+    std::set<std::filesystem::path> getMemoryPaths() const {
+        std::set<std::filesystem::path> memoryPaths;
+        for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
+            if (entry.is_directory() && isMemoryValid(entry.path())) {
+                memoryPaths.insert(entry.path());
+            }
+        }
+        return memoryPaths;
     }
 
     bool isMemoryValid(const std::filesystem::path &memoryPath) const {
