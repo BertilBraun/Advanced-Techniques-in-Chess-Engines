@@ -13,7 +13,7 @@
 class SelfPlay {
 public:
     SelfPlay(Network &model, const TrainingArgs &args)
-        : m_model(model), m_args(args), m_selfPlayWriter(args) {}
+        : m_model(model), m_args(args), m_selfPlayWriter(args.batchSize) {}
 
     SelfPlayStats selfPlay() {
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());

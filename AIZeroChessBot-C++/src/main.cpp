@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
         for (size_t i = 0; i < numProcessors; ++i) {
             threads.emplace_back(std::thread([i, numProcessors, args] {
-                StockfishDataGenerator stockfishDataGenerator(args);
+                StockfishDataGenerator stockfishDataGenerator(args.batchSize);
                 stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json",
                                                                    true, i, numProcessors);
                 stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");

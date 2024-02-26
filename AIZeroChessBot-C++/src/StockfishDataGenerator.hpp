@@ -41,7 +41,7 @@ Stockfish can be found here: https://stockfishchess.org/download/
 
 class StockfishDataGenerator {
 public:
-    StockfishDataGenerator(const TrainingArgs &args) : m_selfPlayWriter(args) {}
+    StockfishDataGenerator(size_t batchSize) : m_selfPlayWriter(batchSize) {}
 
     void generateDataFromEliteGames(const std::string &pathToEliteGames) {
         // Generate training data from elite games

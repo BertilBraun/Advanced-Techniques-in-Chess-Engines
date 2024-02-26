@@ -20,7 +20,7 @@ struct SelfPlayMemory {
 
 class SelfPlayWriter {
 public:
-    SelfPlayWriter(const TrainingArgs &args) : m_args(args) {}
+    SelfPlayWriter(size_t batchSize) : m_batchSize(batchSize) {}
 
     bool write(const torch::Tensor &board, const torch::Tensor &policy, float resultScore) {
 
@@ -45,7 +45,7 @@ public:
     }
 
 private:
-    const TrainingArgs &m_args;
+    size_t m_batchSize;
     std::vector<SelfPlayMemory> m_selfPlayMemoryBatch;
 
     std::vector<SelfPlayMemory> symmetricVariations(const torch::Tensor &board,
@@ -74,11 +74,11 @@ private:
     }
 
     void saveTrainingDataBatches() {
-        while (m_selfPlayMemoryBatch.size() >= m_args.batchSize) {
+        while (m_selfPlayMemoryBatch.size() >= m_batchSize) {
             std::vector<SelfPlayMemory> batch(m_selfPlayMemoryBatch.begin(),
-                                              m_selfPlayMemoryBatch.begin() + m_args.batchSize);
+                                              m_selfPlayMemoryBatch.begin() + m_batchSize);
             m_selfPlayMemoryBatch.erase(m_selfPlayMemoryBatch.begin(),
-                                        m_selfPlayMemoryBatch.begin() + m_args.batchSize);
+                                        m_selfPlayMemoryBatch.begin() + m_batchSize);
 
             saveTrainingDataBatch(batch);
         }
@@ -89,12 +89,10 @@ private:
     }
 
     std::filesystem::path getNewBatchSavePath() const {
-        std::filesystem::path savePath =
-            std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME / std::to_string(randomId());
+        std::filesystem::path savePath = MEMORY_DIR / std::to_string(randomId());
 
         while (std::filesystem::exists(savePath)) {
-            savePath = std::filesystem::path(m_args.savePath) / MEMORY_DIR_NAME /
-                       std::to_string(randomId());
+            savePath = MEMORY_DIR / std::to_string(randomId());
         }
 
         // Ensure the directory exists

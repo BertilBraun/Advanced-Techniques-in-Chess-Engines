@@ -8,42 +8,43 @@ using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 
 class Dataset {
 public:
-    Dataset(const std::filesystem::path &savePath, torch::Device device, size_t memoryBatchSize,
-            size_t memoriesToPreload = 10)
-        : m_savePath(savePath / MEMORY_DIR_NAME), m_device(device),
-          m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize((long long) memoryBatchSize) {
+    Dataset(torch::Device device, size_t memoryBatchSize, size_t memoriesToPreload = 10)
+        : m_device(device), m_memoriesToPreload(memoriesToPreload),
+          m_memoryBatchSize((long long) memoryBatchSize) {
 
-        if (!std::filesystem::exists(m_savePath)) {
-            std::filesystem::create_directories(m_savePath);
+        if (!std::filesystem::exists(MEMORY_DIR)) {
+            std::filesystem::create_directories(MEMORY_DIR);
         }
     }
 
     void load() {
-        log("Loading memories from", m_savePath);
+        log("Loading memories from", MEMORY_DIR);
 
-        auto newMemoryPaths = timeit([&] { return getMemoryPaths(); }, "getMemoryPaths");
+        auto newMemoryPaths = getMemoryPaths();
 
         size_t oldMemoryPathsSize = m_memoryPathsFIFO.size();
 
-        timeit(
-            [&] {
-                std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
-                                                               m_memoryPathsFIFO.end());
+        std::set<std::filesystem::path> oldMemoryPaths(m_memoryPathsFIFO.begin(),
+                                                       m_memoryPathsFIFO.end());
 
-                for (const auto &memoryPath : newMemoryPaths) {
-                    if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
-                        m_memoryPathsFIFO.push_back(memoryPath);
-                    }
-                }
-            },
-            "updateMemoryPaths");
+        for (const auto &memoryPath : newMemoryPaths) {
+            if (oldMemoryPaths.find(memoryPath) == oldMemoryPaths.end()) {
+                m_memoryPathsFIFO.push_back(memoryPath);
+            }
+        }
 
+        restartWithCurrentlyLoadedMemories();
+
+        log("Loaded", newMemoryPaths.size() - oldMemoryPathsSize, "new memory batches",
+            m_memoryPaths.size(), "in total.");
+    }
+
+    void restartWithCurrentlyLoadedMemories() {
         m_memoryPaths = m_memoryPathsFIFO; // copy the memory paths to the main list
 
         std::random_device rd;
         std::mt19937 g(rd());
-        timeit([&] { std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g); },
-               "shuffleMemoryPaths");
+        std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g);
 
         assert(m_memoriesToPreload > 0);
 
@@ -51,9 +52,6 @@ public:
              ++m_currentMemoryIndex) {
             queueNextMemory();
         }
-
-        log("Loaded", newMemoryPaths.size() - oldMemoryPathsSize, "new memory batches",
-            m_memoryPaths.size(), "in total.");
     }
 
     bool hasNext() const { return !m_memoryFutures.empty(); }
@@ -99,7 +97,6 @@ private:
     std::deque<std::future<DataSample>> m_memoryFutures;
     std::vector<std::filesystem::path> m_memoryPathsFIFO;
     std::vector<std::filesystem::path> m_memoryPaths;
-    std::filesystem::path m_savePath;
     torch::Device m_device;
     size_t m_currentMemoryIndex = 0;
     size_t m_memoriesToPreload;
@@ -116,7 +113,7 @@ private:
 
     std::vector<std::filesystem::path> getMemoryPaths() const {
         std::vector<std::filesystem::path> memoryPaths;
-        for (const auto &entry : std::filesystem::directory_iterator(m_savePath)) {
+        for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
             if (entry.is_directory() && isMemoryValid(entry.path())) {
                 memoryPaths.push_back(entry.path());
             }
@@ -134,6 +131,10 @@ private:
         } catch (const c10::Error &e) {
             log("Error loading memory:", memoryPath);
             log("Error:", split(e.what(), '\n')[0]);
+
+            // Delete the memory
+            std::filesystem::remove_all(memoryPath);
+
             return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
         }
 

@@ -13,7 +13,7 @@ public:
 
     void run() {
         LearningStats learningStats;
-        Dataset dataset(m_savePath, m_model->device, m_args.batchSize, 20);
+        Dataset dataset(m_model->device, m_args.batchSize, 20);
 
         m_model->train(); // Set model to training mode
 
@@ -44,6 +44,7 @@ public:
                 TrainingStats epochTrainStats = timeit([&] { return train(dataset); }, "train");
                 epochStats.update(numTrainingSamples, epochTrainStats);
                 trainStats += epochTrainStats;
+                dataset.restartWithCurrentlyLoadedMemories();
             }
 
             log("Training finished!");
