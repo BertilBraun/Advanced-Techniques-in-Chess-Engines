@@ -10,7 +10,14 @@ struct ResBlockImpl : torch::nn::Cloneable<ResBlockImpl> {
     torch::nn::Conv2d conv2;
     torch::nn::BatchNorm2d bn2;
 
-    ResBlockImpl() { reset(); }
+    ResBlockImpl(int num_hidden)
+        : conv1(torch::nn::Conv2dOptions(num_hidden, num_hidden, 3).padding(1)), bn1(num_hidden),
+          conv2(torch::nn::Conv2dOptions(num_hidden, num_hidden, 3).padding(1)), bn2(num_hidden) {
+        register_module("conv1", conv1);
+        register_module("bn1", bn1);
+        register_module("conv2", conv2);
+        register_module("bn2", bn2);
+    }
 
     torch::Tensor forward(torch::Tensor x) {
         auto residual = x;
@@ -21,16 +28,7 @@ struct ResBlockImpl : torch::nn::Cloneable<ResBlockImpl> {
         return x;
     }
 
-    void reset() override {
-        conv1 = register_module(
-            "conv1",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(NUM_HIDDEN, NUM_HIDDEN, 3).padding(1)));
-        bn1 = register_module("bn1", torch::nn::BatchNorm2d(NUM_HIDDEN));
-        conv2 = register_module(
-            "conv2",
-            torch::nn::Conv2d(torch::nn::Conv2dOptions(NUM_HIDDEN, NUM_HIDDEN, 3).padding(1)));
-        bn2 = register_module("bn2", torch::nn::BatchNorm2d(NUM_HIDDEN));
-    }
+    void reset() override {}
 };
 TORCH_MODULE(ResBlock);
 
@@ -39,9 +37,7 @@ struct NetworkImpl : torch::nn::Cloneable<NetworkImpl> {
     torch::nn::Sequential startBlock, policyHead, valueHead;
     torch::nn::ModuleList backBone;
 
-    NetworkImpl() { reset(); }
-
-    void reset() override {
+    NetworkImpl() {
         // Set device based on CUDA availability
         device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
 
@@ -53,7 +49,7 @@ struct NetworkImpl : torch::nn::Cloneable<NetworkImpl> {
 
         // Initialize residual blocks
         for (int i = 0; i < NUM_RES_BLOCKS; ++i) {
-            backBone->push_back(ResBlock());
+            backBone->push_back(ResBlock(NUM_HIDDEN));
         }
 
         // Initialize policy head
@@ -76,6 +72,8 @@ struct NetworkImpl : torch::nn::Cloneable<NetworkImpl> {
 
         this->to(device);
     }
+
+    void reset() override {}
 
     PolicyValue forward(torch::Tensor x) {
         x = startBlock->forward(x);
