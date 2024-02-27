@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        auto &[state, policy, value] = DataSubset::loadSample(samplePath);
+        auto [state, policy, value] = DataSubset::loadSample(samplePath);
 
         int64_t batchSize = state.size(0);
 

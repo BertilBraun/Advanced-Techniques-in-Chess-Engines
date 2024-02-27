@@ -1,7 +1,7 @@
 build/**
 libtorch/**
 
-**.pt
+**/**.pt
 
 src/json.hpp
 
