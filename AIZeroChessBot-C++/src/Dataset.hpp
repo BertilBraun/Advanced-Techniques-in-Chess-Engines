@@ -9,9 +9,8 @@ using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 class DataSubset {
 public:
     DataSubset(const std::vector<std::filesystem::path> &memoryPaths, torch::Device device,
-               size_t memoryBatchSize, size_t memoriesToPreload = 10)
-        : m_memoryPaths(memoryPaths), m_device(device), m_memoriesToPreload(memoriesToPreload),
-          m_memoryBatchSize((long long) memoryBatchSize) {
+               size_t memoriesToPreload = 10)
+        : m_memoryPaths(memoryPaths), m_device(device), m_memoriesToPreload(memoriesToPreload) {
 
         std::random_device rd;
         std::mt19937 g(rd());
@@ -55,7 +54,6 @@ private:
     torch::Device m_device;
     size_t m_currentMemoryIndex = 0;
     size_t m_memoriesToPreload;
-    long long m_memoryBatchSize;
 
     friend class Dataset;
 
@@ -64,11 +62,13 @@ private:
             auto memoryPath = m_memoryPaths[m_currentMemoryIndex++];
 
             m_memoryFutures.push_back(
-                std::async(std::launch::async, &DataSubset::loadMemory, this, memoryPath));
+                std::async(std::launch::async, &DataSubset::loadSample, memoryPath, m_device));
         }
     }
 
-    DataSample loadMemory(const std::filesystem::path &memoryPath) {
+public:
+    static DataSample loadSample(const std::filesystem::path &memoryPath,
+                                 torch::Device device = torch::kCPU) {
         torch::Tensor states, policyTargets, valueTargets;
 
         try {
@@ -88,15 +88,15 @@ private:
         // if valueTargets is not of [batchSize, 1] shape -> error
         // if policyTargets is not of [batchSize, ACTION_SIZE] shape -> error
         // if states is not of [batchSize, 12, 8, 8] shape -> error
-        if (states.sizes() != torch::IntArrayRef({m_memoryBatchSize, 12, 8, 8}) ||
-            policyTargets.sizes() != torch::IntArrayRef({m_memoryBatchSize, ACTION_SIZE}) ||
-            valueTargets.sizes() != torch::IntArrayRef({m_memoryBatchSize, 1})) {
+        if (states.sizes() != torch::IntArrayRef({-1, 12, 8, 8}) ||
+            policyTargets.sizes() != torch::IntArrayRef({-1, ACTION_SIZE}) ||
+            valueTargets.sizes() != torch::IntArrayRef({-1, 1})) {
             return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
         }
 
-        states = states.to(m_device);
-        policyTargets = policyTargets.to(m_device);
-        valueTargets = valueTargets.to(m_device);
+        states = states.to(device);
+        policyTargets = policyTargets.to(device);
+        valueTargets = valueTargets.to(device);
 
         return std::make_tuple(states, policyTargets, valueTargets);
     }
@@ -104,8 +104,7 @@ private:
 
 class Dataset {
 public:
-    Dataset(size_t memoryBatchSize, size_t memoriesToPreload = 10)
-        : m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize(memoryBatchSize) {
+    Dataset(size_t memoriesToPreload = 10) : m_memoriesToPreload(memoriesToPreload) {
 
         if (!std::filesystem::exists(MEMORY_DIR)) {
             std::filesystem::create_directories(MEMORY_DIR);
@@ -161,20 +160,19 @@ public:
         std::vector<DataSubset> datasets;
         datasets.reserve(devices.size());
 
-        size_t batchSizePerDevice = m_memoryBatchSize / devices.size();
+        size_t memoryChunkSizePerDevice = m_memoryPathsFIFO.size() / devices.size();
 
         for (size_t i = 0; i < devices.size(); ++i) {
 
             std::vector<std::filesystem::path> memoryPaths;
-            memoryPaths.reserve(batchSizePerDevice);
+            memoryPaths.reserve(memoryChunkSizePerDevice);
 
-            for (size_t j = i * batchSizePerDevice;
-                 j < (i + 1) * batchSizePerDevice && j < m_memoryPathsFIFO.size(); ++j) {
+            for (size_t j = i * memoryChunkSizePerDevice;
+                 j < (i + 1) * memoryChunkSizePerDevice && j < m_memoryPathsFIFO.size(); ++j) {
                 memoryPaths.push_back(m_memoryPathsFIFO[j]);
             }
 
-            datasets.emplace_back(memoryPaths, devices[i], batchSizePerDevice,
-                                  (long long) m_memoriesToPreload);
+            datasets.emplace_back(memoryPaths, devices[i], m_memoriesToPreload);
         }
 
         return datasets;
@@ -183,7 +181,6 @@ public:
 private:
     std::vector<std::filesystem::path> m_memoryPathsFIFO;
     size_t m_memoriesToPreload;
-    size_t m_memoryBatchSize;
 
     std::set<std::filesystem::path> getMemoryPaths() const {
         std::set<std::filesystem::path> memoryPaths;

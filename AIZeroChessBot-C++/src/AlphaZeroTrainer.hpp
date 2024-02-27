@@ -31,7 +31,7 @@ public:
 
     void run() {
         LearningStats learningStats;
-        Dataset dataset(m_args.batchSize, 20);
+        Dataset dataset(20);
 
         m_model->train(); // Set model to training mode
 

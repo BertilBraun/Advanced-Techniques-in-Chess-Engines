@@ -10,6 +10,7 @@
 #include "AlphaMCTSNode.hpp"
 #include "AlphaZeroBase.hpp"
 #include "BoardEncoding.hpp"
+#include "Dataset.hpp"
 #include "MoveEncoding.hpp"
 #include "Network.hpp"
 
@@ -73,6 +74,56 @@ int main(int argc, char *argv[]) {
         Network model = loadModel();
 
         uciMainLoop(model, timeToThinkMs);
+    } else if (mode == "analyzeSample") {
+
+        if (argc < 3) {
+            log("Usage:", argv[0], "analyzeSample [sample id|random]");
+            return 1;
+        }
+
+        std::filesystem::path samplePath = MEMORY_DIR / argv[2];
+
+        if (argv[2] == "random") {
+            std::vector<std::filesystem::path> samples;
+            for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
+                if (entry.is_directory()) {
+                    samples.push_back(entry.path());
+                }
+            }
+
+            if (samples.empty()) {
+                log("No samples found");
+                return 1;
+            }
+
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<size_t> dist(0, samples.size() - 1);
+            samplePath = samples[dist(gen)];
+        }
+
+        if (!std::filesystem::exists(samplePath)) {
+            log("Sample does not exist:", samplePath);
+            return 1;
+        }
+
+        auto &[state, policy, value] = DataSubset::loadSample(samplePath);
+
+        int64_t batchSize = state.size(0);
+
+        for (int64_t i = 0; i < batchSize; i++) {
+            Board board = decodeBoard(state[i]);
+            auto moves = __mapPolicyToMoves(policy[i]);
+
+            std::cout << "-------------------------------------------------" << std::endl;
+            std::cout << "Board:" << std::endl;
+            std::cout << board.unicode() << std::endl;
+            std::cout << "Evaluation:" << value << std::endl;
+            std::cout << "Policy:" << std::endl;
+            for (auto [move, score] : moves) {
+                std::cout << move.uci() << " " << score << std::endl;
+            }
+        }
     } else {
         log("Invalid mode:", mode);
         return 1;

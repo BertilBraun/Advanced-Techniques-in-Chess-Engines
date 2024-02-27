@@ -57,6 +57,39 @@ torch::Tensor encodeBoards(const std::vector<Board> &boards) {
     return torch::stack(encodedBoards);
 }
 
+Board decodeBoard(const torch::Tensor &encodedBoard) {
+    // Decodes a 12x8x8 numpy array into a chess board.
+    //
+    // Each layer in the first dimension represents one of the 12 distinct
+    // piece types (6 for each color). Each cell in the 8x8 board for each layer
+    // is 1 if a piece of the layer's type is present at that cell, and 0 otherwise.
+    //
+    // The first 6 layers represent the white pieces, and the last 6 layers
+    // represent the black pieces.
+    //
+    // :param encodedBoard: The 12x8x8 numpy array to decode.
+    // :return: The decoded chess board.
+
+    Board board;
+
+    for (Color color : COLORS) {
+        for (PieceType pieceType : PIECE_TYPES) {
+            int layerIndex = color * 6 + pieceType - 1;
+            auto layer = encodedBoard[layerIndex];
+
+            for (Square square : SQUARES) {
+                int row = squareRank(square);
+                int col = squareFile(square);
+                if (layer[row][col].item<float>() > 0.5) {
+                    board.setPieceAt(square, Piece(pieceType, color));
+                }
+            }
+        }
+    }
+
+    return board;
+}
+
 torch::Tensor flipBoardHorizontal(const torch::Tensor &encodedBoard) {
     return encodedBoard.flip(2); // Flip along the width (columns)
 }
