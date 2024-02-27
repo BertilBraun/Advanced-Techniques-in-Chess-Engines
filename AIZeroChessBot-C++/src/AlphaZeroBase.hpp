@@ -82,22 +82,28 @@ public:
             torch::save(*m_optimizer, optimizerPath.string());
 
         // Save training configuration
-        saveConfiguration(lastTrainingConfigPath, modelPath.string(), optimizerPath.string(),
-                          iteration);
+        saveConfiguration(lastTrainingConfigPath, modelPath, optimizerPath, iteration);
 
         log("Model and optimizer saved at iteration", iteration);
     }
 
-    void saveConfiguration(const std::filesystem::path &path, const std::string &modelPath,
-                           const std::string &optimizerPath, int iteration) const {
+private:
+    void saveConfiguration(const std::filesystem::path &path,
+                           const std::filesystem::path &modelPath,
+                           const std::filesystem::path &optimizerPath, int iteration) const {
         std::ofstream configFile(path);
         if (!configFile.is_open()) {
             log("Failed to open config file for writing:", path);
             return;
         }
 
-        configFile << "model=" << modelPath << "\n";
-        configFile << "optimizer=" << optimizerPath << "\n";
+        // Save the absolute paths to the model and optimizer files
+
+        auto absModelPath = std::filesystem::absolute(modelPath);
+        auto absOptimizerPath = std::filesystem::absolute(optimizerPath);
+
+        configFile << "model=" << absModelPath << "\n";
+        configFile << "optimizer=" << absOptimizerPath << "\n";
         configFile << "iteration=" << iteration << "\n";
         configFile.close();
 

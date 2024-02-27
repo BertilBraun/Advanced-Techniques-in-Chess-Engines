@@ -55,10 +55,10 @@ int main(int argc, char *argv[]) {
 
         auto [moves, value] = inference(model, board);
 
-        log("Position evaluation:", value);
-        log("Moves:");
+        std::cout << "Position evaluation: " << value << std::endl;
+        std::cout << "Moves:" << std::endl;
         for (auto [move, probability] : moves) {
-            log(move.uci(), "", probability);
+            std::cout << move.uci() << " " << probability << std::endl;
         }
     } else if (mode == "play") {
         // Play a position using the model
@@ -193,7 +193,7 @@ bool hasTimeElapsed(std::chrono::time_point<std::chrono::high_resolution_clock> 
 Network loadModel() {
     Network model;
     TrainingArgs args;
-    args.savePath = "models";
+    args.savePath = "../train/models";
     AlphaZeroBase alphaZeroBase(model, args);
     model->eval();
     return model;

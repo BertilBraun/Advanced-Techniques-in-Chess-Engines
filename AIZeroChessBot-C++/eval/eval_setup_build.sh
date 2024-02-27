@@ -26,7 +26,7 @@ module restore chess
 
 
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.2.1%2Bcpu.zip"
+LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
@@ -38,15 +38,24 @@ if [ ! -f "libtorch/$LIBTORCH_ZIP" ]; then
     wget -O "libtorch/$LIBTORCH_ZIP" "$LIBTORCH_URL"
     echo "Extracting LibTorch..."
     unzip -o "libtorch/$LIBTORCH_ZIP" -d .
+else
+    echo "LibTorch already downloaded."
 fi
 
 # Download the model file
 mkdir -p models
-wget https://drive.usercontent.google.com/u/0/uc?id=1hhuy4O9grrqaL92hbFboMrwFnCZXNheq&export=download -o models/stockfish.zip
-unzip models/stockfish.zip -d models
-mv models/stockfish-8-linux/Linux/stockfish_8_x64 stockfish_8_x64
-rm -rf models/stockfish-8-linux
-rm models/stockfish.zip
+
+# Download the stockfish model file only if models/stockfish_8_x64 doesn't exist
+if [ ! -f "models/stockfish_8_x64" ]; then
+    echo "Downloading stockfish model..."
+    wget -O models/stockfish.zip https://drive.usercontent.google.com/u/0/uc?id=1hhuy4O9grrqaL92hbFboMrwFnCZXNheq\&export=download
+    unzip models/stockfish.zip -d models
+    mv models/stockfish-8-linux/Linux/stockfish_8_x64 models/stockfish_8_x64
+    rm -rf models/stockfish-8-linux
+    rm models/stockfish.zip
+else
+    echo "Stockfish model already downloaded."
+fi
 
 # Create a build directory
 mkdir -p build
