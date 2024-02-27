@@ -81,9 +81,10 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        std::filesystem::path samplePath = MEMORY_DIR / argv[2];
+        std::string sampleArg = argv[2];
+        std::filesystem::path samplePath = MEMORY_DIR / sampleArg;
 
-        if (argv[2] == "random") {
+        if (sampleArg == "random") {
             std::vector<std::filesystem::path> samples;
             for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
                 if (entry.is_directory()) {

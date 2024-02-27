@@ -24,6 +24,52 @@ public:
         }
     }
 
+    DataSubset(const DataSubset &other) {
+        m_memoryPaths = other.m_memoryPaths;
+        m_device = other.m_device;
+        m_memoriesToPreload = other.m_memoriesToPreload;
+        m_currentMemoryIndex = other.m_currentMemoryIndex;
+
+        for (size_t i = m_currentMemoryIndex; i < m_memoriesToPreload; ++i) {
+            queueNextMemory();
+        }
+    }
+
+    DataSubset &operator=(const DataSubset &other) {
+        if (this != &other) {
+            m_memoryPaths = other.m_memoryPaths;
+            m_device = other.m_device;
+            m_memoriesToPreload = other.m_memoriesToPreload;
+            m_currentMemoryIndex = other.m_currentMemoryIndex;
+
+            for (size_t i = m_currentMemoryIndex; i < m_memoriesToPreload; ++i) {
+                queueNextMemory();
+            }
+        }
+
+        return *this;
+    }
+
+    DataSubset(DataSubset &&other) {
+        m_memoryFutures = std::move(other.m_memoryFutures);
+        m_memoryPaths = std::move(other.m_memoryPaths);
+        m_device = other.m_device;
+        m_memoriesToPreload = other.m_memoriesToPreload;
+        m_currentMemoryIndex = other.m_currentMemoryIndex;
+    }
+
+    DataSubset &operator=(DataSubset &&other) {
+        if (this != &other) {
+            m_memoryFutures = std::move(other.m_memoryFutures);
+            m_memoryPaths = std::move(other.m_memoryPaths);
+            m_device = other.m_device;
+            m_memoriesToPreload = other.m_memoriesToPreload;
+            m_currentMemoryIndex = other.m_currentMemoryIndex;
+        }
+
+        return *this;
+    }
+
     bool hasNext() const { return !m_memoryFutures.empty(); }
 
     DataSample next() {
