@@ -168,7 +168,6 @@ private:
 
                     boardScore = std::max(score, boardScore);
                 } catch (std::runtime_error &e) {
-                    continue;
                 }
             }
         }

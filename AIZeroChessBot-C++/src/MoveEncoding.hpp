@@ -16,8 +16,6 @@ inline Move decodeMove(int moveIndex, Color currentColor);
 
 inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color currentColor);
 
-inline Square flipSquareHorizontal(const Square &square);
-
 inline Square flipSquareVertical(const Square &square);
 
 inline torch::Tensor flipActionProbabilitiesHorizontal(const torch::Tensor &actionProbabilities);
@@ -129,8 +127,8 @@ __precalculateFlippedIndices(const MoveMapping &moveMappings) {
     for (Square fromSquare : SQUARES) {
         for (Square toSquare : SQUARES) {
             for (PieceType promotionType : PIECE_TYPES) {
-                int flippedFromHorizontal = flipSquareHorizontal(fromSquare);
-                int flippedToHorizontal = flipSquareHorizontal(toSquare);
+                int flippedFromHorizontal = squareFlipHorizontal(fromSquare);
+                int flippedToHorizontal = squareFlipHorizontal(toSquare);
                 int flippedFromVertical = flipSquareVertical(fromSquare);
                 int flippedToVertical = flipSquareVertical(toSquare);
 
@@ -287,14 +285,6 @@ inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color 
         moves.push_back(decodeMove(moveIndex, currentColor));
     }
     return moves;
-}
-
-inline Square flipSquareHorizontal(const Square &square) {
-    // Flip the file of the square, keeping the rank constant
-    int file = squareFile(square);
-    int rank = squareRank(square);
-    auto flippedFile = 7 - file; // 0 becomes 7, 1 becomes 6, ..., 7 becomes 0
-    return (Square) (rank * 8 + flippedFile);
 }
 
 inline Square flipSquareVertical(const Square &square) {

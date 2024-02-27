@@ -22,7 +22,7 @@ inline constexpr std::array<Color, 2> COLORS = {Color::WHITE, Color::BLACK};
 inline const std::array<std::string, 2> COLOR_NAMES = {"black", "white"};
 
 enum PieceType { NONE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NUM_PIECE_TYPES };
-inline constexpr std::array<PieceType, 7> PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
+inline constexpr std::array<PieceType, 6> PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
                                                          PieceType::BISHOP, PieceType::ROOK,
                                                          PieceType::QUEEN,  PieceType::KING};
 
@@ -119,14 +119,6 @@ public:
     }
 };
 
-class InvalidMoveError : public std::invalid_argument {
-    using std::invalid_argument::invalid_argument;
-};
-
-class IllegalMoveError : public std::invalid_argument {
-    using std::invalid_argument::invalid_argument;
-};
-
 // clang-format off
 enum Square : int {
     A1, B1, C1, D1, E1, F1, G1, H1,
@@ -193,12 +185,12 @@ inline constexpr Square squareFile(Square square) { return (Square) (square & 7)
 
 inline constexpr Square squareRank(Square square) { return (Square) (square >> 3); }
 
-inline constexpr Square squareMirror(Square square) { return (Square) (square ^ 0x38); }
+inline constexpr Square squareFlipHorizontal(Square square) { return (Square) (square ^ 0x38); }
 
 inline constexpr std::array<Square, 64> __createSquares180() {
     std::array<Square, 64> squares_180{};
     for (size_t i = 0; i < SQUARES.size(); ++i) {
-        squares_180[i] = squareMirror(SQUARES[i]);
+        squares_180[i] = squareFlipHorizontal(SQUARES[i]);
     }
     return squares_180;
 }
@@ -876,16 +868,7 @@ public:
 
         std::string board_fen = parts[0];
 
-        std::vector<std::string> rows;
-        size_t start = 0;
-        size_t end = board_fen.find("/");
-        while (end != std::string::npos) {
-            rows.push_back(board_fen.substr(start, end - start));
-            start = end + 1;
-            end = board_fen.find("/", start);
-        }
-        rows.push_back(board_fen.substr(start, end));
-
+        std::vector<std::string> rows = split(board_fen, '/');
         if (rows.size() != 8) {
             throw std::invalid_argument("expected 8 rows in position part of fen: " + board_fen);
         }
@@ -2203,7 +2186,7 @@ private:
 
         Move move(from_square, to_square, promotion);
         if (!isLegal(move)) {
-            throw IllegalMoveError("No matching legal move found in the current position.");
+            throw std::runtime_error("No matching legal move found in the current position.");
         }
 
         return move;
@@ -2402,7 +2385,7 @@ void testLsbMsb() {
     }
 
     if (passed) {
-        std::cout << "All tests passed!\n";
+        std::cerr << "All tests passed!\n";
     } else {
         std::cerr << "Some tests failed.\n";
     }
@@ -2439,7 +2422,7 @@ void testPopcount() {
     }
 
     if (allTestsPassed) {
-        std::cout << "All tests passed!\n";
+        std::cerr << "All tests passed!\n";
     } else {
         std::cerr << "Some tests failed.\n";
     }
