@@ -30,6 +30,8 @@ static inline constexpr int ENCODING_CHANNELS = 6 + 6;
 // constexpr variable
 static inline constexpr int ACTION_SIZE = 1968;
 
+static inline std::string SAVE_PATH = "models";
+
 static inline const std::filesystem::path MEMORY_DIR =
     "/pfs/work7/workspace/scratch/uxude-Chess/memory";
 static inline const std::string CONFIG_FILE_NAME = "last_training_config.pt";

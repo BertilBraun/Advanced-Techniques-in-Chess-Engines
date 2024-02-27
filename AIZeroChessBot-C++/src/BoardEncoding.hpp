@@ -80,7 +80,7 @@ Board decodeBoard(const torch::Tensor &encodedBoard) {
     // :param encodedBoard: The 12x8x8 tensor to decode.
     // :return: The decoded chess board.
 
-    Board board;
+    Board board(false);
 
     for (Color color : COLORS) {
         for (PieceType pieceType : PIECE_TYPES) {

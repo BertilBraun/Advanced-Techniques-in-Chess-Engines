@@ -6,7 +6,6 @@
 #include "StockfishDataGenerator.hpp"
 #include "TrainingArgs.hpp"
 
-std::string SAVE_PATH = "models";
 
 int main(int argc, char *argv[]) {
 
