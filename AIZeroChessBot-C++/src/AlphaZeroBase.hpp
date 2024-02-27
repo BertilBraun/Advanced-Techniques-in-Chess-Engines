@@ -42,6 +42,8 @@ public:
                 // Load model state
                 if (std::filesystem::exists(modelPath)) {
                     torch::load(m_model, modelPath);
+                    m_model->device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
+                    m_model->to(m_model->device);
                 } else {
                     log("Saved model file not found:", modelPath);
                     return;
@@ -75,7 +77,9 @@ public:
         std::filesystem::path lastTrainingConfigPath = m_savePath / CONFIG_FILE_NAME;
 
         // Save model state
+        m_model->to(torch::kCPU);
         torch::save(m_model, modelPath.string());
+        m_model->to(m_model->device);
 
         // Save optimizer state
         if (m_optimizer != nullptr)
