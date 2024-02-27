@@ -24,9 +24,8 @@ public:
         }
     }
 
-    DataSubset(const DataSubset &other) {
+    DataSubset(const DataSubset &other) : m_device(other.m_device) {
         m_memoryPaths = other.m_memoryPaths;
-        m_device = other.m_device;
         m_memoriesToPreload = other.m_memoriesToPreload;
         m_currentMemoryIndex = other.m_currentMemoryIndex;
 
@@ -50,10 +49,9 @@ public:
         return *this;
     }
 
-    DataSubset(DataSubset &&other) {
+    DataSubset(DataSubset &&other) : m_device(other.m_device) {
         m_memoryFutures = std::move(other.m_memoryFutures);
         m_memoryPaths = std::move(other.m_memoryPaths);
-        m_device = other.m_device;
         m_memoriesToPreload = other.m_memoriesToPreload;
         m_currentMemoryIndex = other.m_currentMemoryIndex;
     }
