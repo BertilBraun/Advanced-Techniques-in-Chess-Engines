@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+Square flipSquareHorizontal(const Square &square);
+
 torch::Tensor encodeBoard(const Board &board) {
     // Encodes a chess board into a 12x8x8 tensor.
     //
