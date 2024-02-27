@@ -9,9 +9,9 @@ using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
 class DataSubset {
 public:
     DataSubset(const std::vector<std::filesystem::path> &memoryPaths, torch::Device device,
-               size_t memoryBatchSize, long long memoriesToPreload = 10)
+               size_t memoryBatchSize, size_t memoriesToPreload = 10)
         : m_memoryPaths(memoryPaths), m_device(device), m_memoriesToPreload(memoriesToPreload),
-          m_memoryBatchSize(memoryBatchSize) {
+          m_memoryBatchSize((long long) memoryBatchSize) {
 
         std::random_device rd;
         std::mt19937 g(rd());
@@ -105,7 +105,7 @@ private:
 class Dataset {
 public:
     Dataset(size_t memoryBatchSize, size_t memoriesToPreload = 10)
-        : m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize((long long) memoryBatchSize) {
+        : m_memoriesToPreload(memoriesToPreload), m_memoryBatchSize(memoryBatchSize) {
 
         if (!std::filesystem::exists(MEMORY_DIR)) {
             std::filesystem::create_directories(MEMORY_DIR);
@@ -183,7 +183,7 @@ public:
 private:
     std::vector<std::filesystem::path> m_memoryPathsFIFO;
     size_t m_memoriesToPreload;
-    long long m_memoryBatchSize;
+    size_t m_memoryBatchSize;
 
     std::set<std::filesystem::path> getMemoryPaths() const {
         std::set<std::filesystem::path> memoryPaths;
