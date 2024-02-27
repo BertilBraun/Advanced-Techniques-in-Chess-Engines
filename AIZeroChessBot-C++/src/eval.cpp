@@ -116,11 +116,12 @@ int main(int argc, char *argv[]) {
 
         for (int64_t i = 0; i < batchSize; i++) {
             Board board = decodeBoard(state[i]);
-            auto moves = __mapPolicyToMoves(policy[i]);
+            auto moves = __mapPolicyToMoves(policy[i], board.turn);
 
             std::cout << "-------------------------------------------------" << std::endl;
             std::cout << "Board: " << COLOR_NAMES[board.turn] << std::endl;
             std::cout << board.unicode() << std::endl;
+            std::cout << board.fen() << std::endl;
             std::cout << "Evaluation: " << value[i].item<float>() << std::endl;
             std::cout << "Policy: " << std::endl;
             for (auto [move, score] : moves) {
