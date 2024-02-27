@@ -21,9 +21,9 @@ public:
         }
 
         for (size_t i = 0; i < devices; ++i) {
-            // TODO check if this works with the strong cast
-            m_models.push_back(
-                std::static_pointer_cast<NetworkImpl>(m_model->clone(m_devicesList[i])));
+            Network modelClone(m_devicesList[i]);
+            synchronizeModel(modelClone);
+            m_models.push_back(modelClone);
         }
 
         m_barrier = Barrier(devices);

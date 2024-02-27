@@ -4,7 +4,7 @@
 
 using PolicyValue = std::pair<torch::Tensor, torch::Tensor>;
 
-struct ResBlockImpl : torch::nn::Cloneable<ResBlockImpl> {
+struct ResBlockImpl : torch::nn::Module {
     torch::nn::Conv2d conv1;
     torch::nn::BatchNorm2d bn1;
     torch::nn::Conv2d conv2;
@@ -27,19 +27,17 @@ struct ResBlockImpl : torch::nn::Cloneable<ResBlockImpl> {
         x = torch::relu(x);
         return x;
     }
-
-    void reset() override {}
 };
 TORCH_MODULE(ResBlock);
 
-struct NetworkImpl : torch::nn::Cloneable<NetworkImpl> {
+struct NetworkImpl : torch::nn::Module {
     torch::Device device = torch::kCUDA;
     torch::nn::Sequential startBlock, policyHead, valueHead;
     torch::nn::ModuleList backBone;
 
-    NetworkImpl() {
+    NetworkImpl(torch::Device device = torch::kCUDA) : device(device) {
         // Set device based on CUDA availability
-        device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
+        device = torch::cuda::is_available() ? device : torch::kCPU;
 
         // Initialize start block
         startBlock = torch::nn::Sequential(
@@ -72,8 +70,6 @@ struct NetworkImpl : torch::nn::Cloneable<NetworkImpl> {
 
         this->to(device);
     }
-
-    void reset() override {}
 
     PolicyValue forward(torch::Tensor x) {
         x = startBlock->forward(x);
