@@ -19,10 +19,15 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 endif()
 
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch")
 
 # LibTorch configuration
-set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch/share/cmake/Torch")
+if(CMAKE_CUDA_COMPILER)
+    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda")
+    set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda/share/cmake/Torch")
+else()
+    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu")
+    set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu/share/cmake/Torch")
+endif()
 find_package(Torch REQUIRED)
 
 # Automatically include all source files from the src directory

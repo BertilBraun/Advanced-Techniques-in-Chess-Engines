@@ -18,29 +18,10 @@ module restore chess
 # eval
 # ├── build
 # │   └── EvalAIZeroChessBot
-# ├── libtorch
 # ├── models
 # │   └── stockfish-8-linux
 # ├── EvalAIZeroChessBot
 # └── eval_setup_build.sh
-
-
-# Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip"
-LIBTORCH_ZIP="libtorch.zip"
-
-# Create a directory for LibTorch if it doesn't exist
-mkdir -p libtorch
-
-# Download LibTorch only if it hasn't been downloaded yet
-if [ ! -f "libtorch/$LIBTORCH_ZIP" ]; then
-    echo "Downloading LibTorch..."
-    wget -O "libtorch/$LIBTORCH_ZIP" "$LIBTORCH_URL"
-    echo "Extracting LibTorch..."
-    unzip -o "libtorch/$LIBTORCH_ZIP" -d .
-else
-    echo "LibTorch already downloaded."
-fi
 
 # Download the model file
 mkdir -p models
@@ -62,7 +43,7 @@ mkdir -p build
 cd build
 
 # Configure the project with CMake
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES ..
 
 cmake --build . --config Release
 

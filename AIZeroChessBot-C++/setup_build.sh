@@ -28,18 +28,25 @@ source ~/miniconda3/bin/activate chess
 
 
 # Set LibTorch download URL
-LIBTORCH_URL="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip"
+LIBTORCH_URL_CUDA="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip"
+LIBTORCH_URL_CPU="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
 mkdir -p libtorch
 
 # Download LibTorch only if it hasn't been downloaded yet
-if [ ! -f "libtorch/$LIBTORCH_ZIP" ]; then
+if [ ! -f "libtorch_cuda/$LIBTORCH_ZIP" ]; then
     echo "Downloading LibTorch..."
-    wget -O "libtorch/$LIBTORCH_ZIP" "$LIBTORCH_URL"
+    wget -O "libtorch_cuda/$LIBTORCH_ZIP" "$LIBTORCH_URL_CUDA"
     echo "Extracting LibTorch..."
-    unzip -o "libtorch/$LIBTORCH_ZIP" -d .
+    unzip -o "libtorch_cuda/$LIBTORCH_ZIP" -d .
+fi
+if [ ! -f "libtorch_cpu/$LIBTORCH_ZIP" ]; then
+    echo "Downloading LibTorch..."
+    wget -O "libtorch_cpu/$LIBTORCH_ZIP" "$LIBTORCH_URL_CPU"
+    echo "Extracting LibTorch..."
+    unzip -o "libtorch_cpu/$LIBTORCH_ZIP" -d .
 fi
 
 # Download src/json.hpp if it doesn't exist from https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp
@@ -53,7 +60,7 @@ mkdir -p build
 cd build
 
 # Configure the project with CMake
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES -DTorch_DIR=$(pwd)/../libtorch/share/cmake/Torch ..
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=YES ..
 cd ..
 
 # Copy compile_commands.json for IntelliSense (optional)
