@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src/**",
-                "${workspaceFolder}/libtorch/**"
+                "${workspaceFolder}/libtorch_cpu/**"
             ],
             "defines": [
                 "_DEBUG",

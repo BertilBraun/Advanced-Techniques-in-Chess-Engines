@@ -67,7 +67,11 @@ endif()
 
 # Optional: Specify include directories if you have header files in different locations
 include_directories(src)
-include_directories(libtorch/include)
+if (CMAKE_CUDA_COMPILER)
+    include_directories(libtorch_cuda/include)
+else()
+    include_directories(libtorch_cpu/include)
+endif()
 
 # Copy DLLs on Windows
 if(MSVC)

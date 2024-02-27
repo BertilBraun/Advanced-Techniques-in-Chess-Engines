@@ -33,7 +33,8 @@ LIBTORCH_URL_CPU="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-s
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist
-mkdir -p libtorch
+mkdir -p libtorch_cuda
+mkdir -p libtorch_cpu
 
 # Download LibTorch only if it hasn't been downloaded yet
 if [ ! -f "libtorch_cuda/$LIBTORCH_ZIP" ]; then
