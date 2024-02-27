@@ -110,6 +110,8 @@ int main(int argc, char *argv[]) {
 
         auto [state, policy, value] = DataSubset::loadSample(samplePath);
 
+        log("Analyzing sample:", samplePath, "with", state.size(0), "positions");
+
         int64_t batchSize = state.size(0);
 
         for (int64_t i = 0; i < batchSize; i++) {
@@ -117,10 +119,10 @@ int main(int argc, char *argv[]) {
             auto moves = __mapPolicyToMoves(policy[i]);
 
             std::cout << "-------------------------------------------------" << std::endl;
-            std::cout << "Board:" << std::endl;
+            std::cout << "Board: " << COLOR_NAMES[board.turn] << std::endl;
             std::cout << board.unicode() << std::endl;
-            std::cout << "Evaluation:" << value << std::endl;
-            std::cout << "Policy:" << std::endl;
+            std::cout << "Evaluation: " << value[i].item<float>() << std::endl;
+            std::cout << "Policy: " << std::endl;
             for (auto [move, score] : moves) {
                 std::cout << move.uci() << " " << score << std::endl;
             }

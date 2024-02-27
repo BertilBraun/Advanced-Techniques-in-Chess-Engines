@@ -120,7 +120,8 @@ private:
         torch::Tensor actionProbabilities = torch::zeros({ACTION_SIZE}, torch::kFloat32);
 
         for (const auto &child : rootNode.children) {
-            actionProbabilities[encodeMove(child.move_to_get_here)] = child.number_of_visits;
+            actionProbabilities[encodeMove(child.move_to_get_here, rootNode.board.turn)] =
+                child.number_of_visits;
         }
         actionProbabilities /= actionProbabilities.sum();
 
@@ -137,15 +138,17 @@ private:
 
         int action = torch::multinomial(temperatureActionProbabilities, 1).item<int>();
 
-        return decodeMove(action);
+        return decodeMove(action, rootNode.board.turn);
     }
 
     void writeTrainingData(SelfPlayGame &game) {
         float resultScore = getBoardResultScore(game.board);
+        Color winner = !game.board.turn;
 
         for (auto &memory : game.memory) {
             auto encodedBoard = encodeBoard(memory.board);
-            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, resultScore);
+            auto score = (memory.board.turn == winner) ? resultScore : -resultScore;
+            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, score);
         }
     }
 };

@@ -55,19 +55,15 @@ private:
 
         variations.emplace_back(board, actionProbabilities, result);
 
-        variations.emplace_back(
-            flipBoardHorizontal(board),
-            flipActionProbabilities(actionProbabilities, flipMoveIndexHorizontal), -result);
+        variations.emplace_back(flipBoardHorizontal(board),
+                                flipActionProbabilitiesHorizontal(actionProbabilities), -result);
 
         variations.emplace_back(flipBoardVertical(board),
-                                flipActionProbabilities(actionProbabilities, flipMoveIndexVertical),
-                                result);
+                                flipActionProbabilitiesVertical(actionProbabilities), result);
 
         variations.emplace_back(
             flipBoardVertical(flipBoardHorizontal(board)),
-            flipActionProbabilities(
-                actionProbabilities,
-                [](int idx) { return flipMoveIndexVertical(flipMoveIndexHorizontal(idx)); }),
+            flipActionProbabilitiesVertical(flipActionProbabilitiesHorizontal(actionProbabilities)),
             -result);
 
         return variations;

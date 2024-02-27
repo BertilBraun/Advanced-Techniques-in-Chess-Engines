@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <functional>
 #include <iomanip>
@@ -35,14 +34,16 @@ inline const std::array<std::pair<int, int>, 4> ROOK_MOVES = {{{0, 1}, {0, -1}, 
 inline const std::array<std::pair<int, int>, 4> BISHOP_MOVES = {
     {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}}};
 
-inline const std::array<std::string, 7> PIECE_SYMBOLS = {" ", "p", "n", "b", "r", "q", "k"};
-inline const std::array<std::string, 7> PIECE_NAMES = {"none", "pawn",  "knight", "bishop",
-                                                       "rook", "queen", "king"};
+inline const std::array<char, PieceType::NUM_PIECE_TYPES> PIECE_SYMBOLS = {' ', 'p', 'n', 'b',
+                                                                           'r', 'q', 'k'};
+inline const std::array<std::string, PieceType::NUM_PIECE_TYPES> PIECE_NAMES = {
+    "none", "pawn", "knight", "bishop", "rook", "queen", "king"};
+
 inline constexpr bool isValidPieceSymbol(char c) {
     return c == 'p' || c == 'n' || c == 'b' || c == 'r' || c == 'q' || c == 'k' || c == 'P' ||
            c == 'N' || c == 'B' || c == 'R' || c == 'Q' || c == 'K';
 }
-inline std::string pieceSymbol(PieceType piece_type) {
+inline char pieceSymbol(PieceType piece_type) {
     return PIECE_SYMBOLS[static_cast<int>(piece_type)];
 }
 
@@ -169,11 +170,12 @@ inline const std::array<std::string, 64> SQUARE_NAMES = {
 // clang-format on
 
 inline Square parseSquare(const std::string &name) {
-    auto it = std::find(SQUARE_NAMES.begin(), SQUARE_NAMES.end(), name);
-    if (it == SQUARE_NAMES.end()) {
-        throw std::invalid_argument("Invalid square name");
+    for (Square sq : SQUARES) {
+        if (SQUARE_NAMES[sq] == name) {
+            return sq;
+        }
     }
-    return (Square) std::distance(SQUARE_NAMES.begin(), it);
+    throw std::invalid_argument("Invalid square name");
 }
 
 inline std::string squareName(Square square) {
@@ -580,10 +582,15 @@ public:
     Piece() : value(0) {}
 
     Piece(PieceType piece_type, Color color)
-        : value((static_cast<unsigned char>(piece_type) << 1) | static_cast<unsigned char>(color)) {
-    }
+        : value(((static_cast<unsigned char>(piece_type) & 0b111) << 1) |
+                (static_cast<unsigned char>(color) & 1)) {}
 
-    Piece operator=(const Piece &other) { return Piece(other.pieceType(), other.color()); }
+    Piece(const Piece &other) : value(other.value) {}
+
+    Piece &operator=(const Piece &other) {
+        value = other.value;
+        return *this;
+    }
 
     // Get the piece type
     PieceType pieceType() const { return static_cast<PieceType>(value >> 1); }
@@ -594,7 +601,8 @@ public:
     // Get the symbol of the piece
     std::string symbol() const {
         auto symbol = pieceSymbol(pieceType());
-        return color() == Color::WHITE ? symbol : std::string(1, tolower(symbol[0]));
+        return color() == Color::WHITE ? std::string(1, (char) toupper(symbol))
+                                       : std::string(1, (char) tolower(symbol));
     }
 
     // Get the Unicode symbol of the piece
@@ -611,20 +619,17 @@ public:
 
     // Class method to create Piece from symbol
     static Piece from_symbol(char symbol) {
-        auto it = std::find_if(
-            PIECE_SYMBOLS.begin(), PIECE_SYMBOLS.end(),
-            [symbol](const std::string &s) { return tolower(s[0]) == tolower(symbol); });
-        if (it != PIECE_SYMBOLS.end()) {
-            int index = (int) std::distance(PIECE_SYMBOLS.begin(), it);
-            return Piece(static_cast<PieceType>(index),
-                         isupper(symbol) ? Color::WHITE : Color::BLACK);
+        for (PieceType pieceType : PIECE_TYPES) {
+            if (tolower(pieceSymbol(pieceType)) == tolower(symbol)) {
+                return Piece(pieceType, isupper(symbol) ? Color::WHITE : Color::BLACK);
+            }
         }
         throw std::invalid_argument("Invalid symbol for piece creation");
     }
 
 private:
     // Encoded as: 0bPPPC where PPP = PieceType (3 bits), C = Color (1 bit)
-    const unsigned char value;
+    unsigned char value;
 };
 
 class Move {
@@ -634,8 +639,11 @@ public:
     Move(int from_square, int to_square, PieceType promotion = PieceType::NONE)
         : value(getValue(from_square, to_square, promotion)) {}
 
-    Move operator=(const Move &other) {
-        return Move(other.fromSquare(), other.toSquare(), other.promotion());
+    Move(const Move &other) : value(other.value) {}
+
+    Move &operator=(const Move &other) {
+        value = other.value;
+        return *this;
     }
 
     Square fromSquare() const { return (Square) ((value & FROM_SQUARE_MASK) >> FROM_SQUARE_SHIFT); }
@@ -701,7 +709,7 @@ private:
         return value;
     }
 
-    const unsigned short value;
+    unsigned short value;
 };
 
 class SquareSet {
@@ -1270,8 +1278,7 @@ public:
 
                 auto piece = pieceAt(sq);
                 if (piece.has_value()) {
-                    builder << (invert_color ? piece.value().unicode_symbol(true)
-                                             : piece.value().unicode_symbol());
+                    builder << piece.value().unicode_symbol(invert_color);
                 } else {
                     builder << empty_square;
                 }
@@ -1302,7 +1309,7 @@ public:
     bool isCheck() const { return _checkersMask() != BB_EMPTY; }
 
     bool isIntoCheck(const Move &move) {
-        auto opt_king = this->king(turn);
+        auto opt_king = king(turn);
         if (!opt_king.has_value())
             return false;
 
@@ -1467,9 +1474,10 @@ public:
         Bitboard fromBB = BB_SQUARES[move.fromSquare()];
         Bitboard toBB = BB_SQUARES[move.toSquare()];
 
-        bool promoted = (this->m_promoted & fromBB) != 0;
+        bool promoted = (m_promoted & fromBB) != 0;
         auto piece = removePieceAt(move.fromSquare());
-        assert(piece.has_value()); // Move must be at least pseudo-legal
+        if (!piece.has_value())
+            return; // Move must be at least pseudo-legal
         auto pieceType = piece.value().pieceType();
 
         Square captureSquare = move.toSquare();
@@ -1483,7 +1491,7 @@ public:
             } else {
                 castling_rights &= ~BB_RANK_8;
             }
-        } else if (capturedPieceType == PieceType::KING && !(this->m_promoted & toBB)) {
+        } else if (capturedPieceType == PieceType::KING && !(m_promoted & toBB)) {
             if (turn == WHITE && squareRank(captureSquare) == 7) {
                 castling_rights &= ~BB_RANK_8;
             } else if (turn == BLACK && squareRank(captureSquare) == 0) {
@@ -1754,7 +1762,8 @@ public:
     bool isValid() const { return status() == Status::VALID; }
 
     bool epSkewered(Square king, Square capturer) const {
-        assert(ep_square.has_value());
+        if (!ep_square.has_value())
+            return false;
 
         Square last_double = ep_square.value() + ((turn == WHITE) ? -8 : 8);
         Bitboard occupancy = (m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer]) |
@@ -2045,7 +2054,7 @@ private:
         m_occupied_color[color] |= mask;
 
         if (promoted) {
-            this->m_promoted |= mask;
+            m_promoted |= mask;
         }
     }
 
@@ -2075,7 +2084,7 @@ private:
         }
 
         // Generate pawn moves
-        Bitboard pawns = this->m_pawns & m_occupied_color[turn] & from_mask;
+        Bitboard pawns = m_pawns & m_occupied_color[turn] & from_mask;
         // Generate pawn captures
         for (int from_square : scanReversed(pawns)) {
             Bitboard targets =
@@ -2128,7 +2137,7 @@ private:
             moves.insert(moves.end(), epMoves.begin(), epMoves.end());
         }
 
-        this->m_cachedPseudoLegalMoves = moves;
+        m_cachedPseudoLegalMoves = moves;
         return moves;
     }
 
@@ -2150,7 +2159,7 @@ private:
             moves.emplace_back(capturer, ep_square.value());
         }
 
-        this->m_cachedPseudoLegalEPMoves = moves;
+        m_cachedPseudoLegalEPMoves = moves;
         return moves;
     }
 
@@ -2269,7 +2278,7 @@ private:
                       std::back_inserter(legalMoves));
         }
 
-        this->m_cachedLegalMoves = legalMoves;
+        m_cachedLegalMoves = legalMoves;
         return legalMoves;
     }
 
@@ -2286,7 +2295,7 @@ private:
             }
         }
 
-        this->m_cachedLegalEPMoves = legalEP;
+        m_cachedLegalEPMoves = legalEP;
         return legalEP;
     }
 

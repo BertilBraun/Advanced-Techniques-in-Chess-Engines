@@ -175,7 +175,7 @@ private:
 
         normalizePolicy(policy);
 
-        write(board, policy, board.turn == Color::WHITE ? boardScore : -boardScore);
+        write(board, policy, boardScore);
 
         return lines;
     }
@@ -184,7 +184,7 @@ private:
         Board copy = board.copy();
         for (const Move &move : line) {
             copy.push(move);
-            write(copy, {{move, 1.0f}}, value);
+            write(copy, {{move, 1.0f}}, -value);
         }
     }
 
@@ -214,7 +214,7 @@ private:
 
     void write(const Board &board, const std::vector<PolicyMove> &policy, float value) {
         torch::Tensor encodedBoard = encodeBoard(board);
-        torch::Tensor encodedPolicy = encodeMoves(policy);
+        torch::Tensor encodedPolicy = encodeMoves(policy, board.turn);
 
         if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value)) [[likely]] {
             m_written++;
@@ -270,13 +270,9 @@ private:
     void normalizePolicy(std::vector<PolicyMove> &policy) {
         // The policy should be -1.0f <= x <= 1.0f based on the pv scores
 
-        float min = std::numeric_limits<float>::max();
+        // Softmax the policy
         for (PolicyMove &move : policy) {
-            min = std::min(min, move.second);
-        }
-
-        for (PolicyMove &move : policy) {
-            move.second -= min - 0.01f;
+            move.second = std::exp(move.second * 10.f);
         }
 
         float sum = 0.0f;

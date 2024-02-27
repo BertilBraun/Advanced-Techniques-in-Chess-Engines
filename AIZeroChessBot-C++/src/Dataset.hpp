@@ -132,9 +132,18 @@ public:
         // if valueTargets is not of [batchSize, 1] shape -> error
         // if policyTargets is not of [batchSize, ACTION_SIZE] shape -> error
         // if states is not of [batchSize, 12, 8, 8] shape -> error
-        if (states.sizes() != torch::IntArrayRef({-1, 12, 8, 8}) ||
-            policyTargets.sizes() != torch::IntArrayRef({-1, ACTION_SIZE}) ||
-            valueTargets.sizes() != torch::IntArrayRef({-1, 1})) {
+
+        bool valueValid = valueTargets.size(1) == 1;
+        bool policyValid = policyTargets.size(1) == ACTION_SIZE;
+        bool statesValid = states.size(1) == 12 && states.size(2) == 8 && states.size(3) == 8;
+        bool batchSizesValid = valueTargets.size(0) == policyTargets.size(0) &&
+                               policyTargets.size(0) == states.size(0) && valueTargets.size(0) > 0;
+
+        if (!valueValid || !policyValid || !statesValid || !batchSizesValid) {
+            log("Invalid memory detected:", memoryPath);
+            log("states:", states.sizes());
+            log("policyTargets:", policyTargets.sizes());
+            log("valueTargets:", valueTargets.sizes());
             return std::make_tuple(torch::Tensor(), torch::Tensor(), torch::Tensor());
         }
 
