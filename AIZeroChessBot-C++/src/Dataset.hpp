@@ -173,7 +173,8 @@ public:
                 memoryPaths.push_back(m_memoryPathsFIFO[j]);
             }
 
-            datasets.emplace_back(memoryPaths, devices[i], batchSizePerDevice, m_memoriesToPreload);
+            datasets.emplace_back(memoryPaths, devices[i], batchSizePerDevice,
+                                  (long long) m_memoriesToPreload);
         }
 
         return datasets;
