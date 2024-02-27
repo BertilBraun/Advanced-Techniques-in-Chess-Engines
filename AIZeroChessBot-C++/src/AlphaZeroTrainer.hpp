@@ -16,13 +16,14 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
-        for (int i = 0; i < devices; i++) {
+        for (size_t i = 0; i < devices; i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i));
         }
 
         for (size_t i = 0; i < devices; ++i) {
             // TODO check if this works with the strong cast
-            m_models.push_back((Network) m_model->clone(m_devicesList[i]));
+            m_models.push_back(
+                std::static_pointer_cast<NetworkImpl>(m_model->clone(m_devicesList[i])));
         }
 
         m_barrier = Barrier(devices);
