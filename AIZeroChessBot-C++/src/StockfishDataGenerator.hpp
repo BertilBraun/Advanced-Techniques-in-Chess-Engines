@@ -81,8 +81,8 @@ public:
         // Generate training data from lichess evals
         // These can be found here: https://database.lichess.org/#evals
 
-        // if (hasGenerated("lichess_evals_generated"))
-        //    return;
+        if (hasGenerated("lichess_evals_generated"))
+            return;
 
         std::ifstream file(pathToLichessEvals);
 
@@ -218,7 +218,7 @@ private:
         if (board.turn == BLACK)
             encodedPolicy = flipActionProbabilitiesVertical(encodedPolicy);
 
-        if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value, board.turn)) {
+        if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value)) {
             m_written++;
             m_valueSum += (double) value;
         }

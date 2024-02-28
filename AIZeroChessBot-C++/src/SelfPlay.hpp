@@ -148,11 +148,12 @@ private:
         for (auto &memory : game.memory) {
             auto encodedBoard = encodeBoard(memory.board);
             auto score = (memory.board.turn == winner) ? resultScore : -resultScore;
+
             if (memory.board.turn == BLACK)
                 memory.actionProbabilities =
                     flipActionProbabilitiesVertical(memory.actionProbabilities);
-            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, score,
-                                   memory.board.turn);
+
+            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, score);
         }
     }
 };

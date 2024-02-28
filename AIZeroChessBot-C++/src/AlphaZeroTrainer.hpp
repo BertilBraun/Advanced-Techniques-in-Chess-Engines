@@ -16,17 +16,19 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
-        for (size_t i = 0; i < devices; i++) {
-            m_devicesList.push_back(torch::Device(torch::kCUDA, i));
-        }
+        m_devicesList.push_back(torch::Device(torch::kCUDA, 0));
 
-        for (size_t i = 0; i < devices; ++i) {
-            Network modelClone(m_devicesList[i]);
-            synchronizeModel(modelClone);
-            m_models.push_back(modelClone);
-        }
+        // for (size_t i = 0; i < devices; i++) {
+        //     m_devicesList.push_back(torch::Device(torch::kCUDA, i));
+        // }
+        //
+        // for (auto &device : m_devicesList) {
+        //     Network modelClone(device);
+        //     // synchronizeModel(modelClone);
+        //     m_models.push_back(modelClone);
+        // }
 
-        m_barrier = Barrier(devices);
+        m_barrier = Barrier(m_devicesList.size());
     }
 
     void run() {
@@ -103,8 +105,7 @@ private:
         for (size_t i = 0; i < m_devicesList.size(); ++i) {
             threads.emplace_back(
                 std::thread([i, &dataSubsets, &totalTrainStats, &statsMutex, this] {
-                    TrainingStats trainStats =
-                        trainOnDevice(dataSubsets[i], m_models[i]);
+                    TrainingStats trainStats = trainOnDevice(dataSubsets[i], m_models[i]);
 
                     log("Device", i, "finished training");
 
@@ -128,7 +129,8 @@ private:
 
         while (dataSubset.hasNext()) {
             auto [states, policyTargets, valueTargets] = dataSubset.next();
-            auto [policy, value] = model->forward(states);
+            // auto [policy, value] = model->forward(states);
+            auto [policy, value] = m_model->forward(states); // TODO remove
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
             auto valueLoss = torch::mse_loss(value, valueTargets);
@@ -137,11 +139,12 @@ private:
             m_optimizer->zero_grad();
             loss.backward();
 
-            timeit([&] { aggregateGradientsToMainModel(); },
-                   "aggregateGradientsToMainModel * num devices");
+            m_optimizer->step(); // TODO remove
+            // timeit([&] { aggregateGradientsToMainModel(); },
+            //        "aggregateGradientsToMainModel * num devices");
 
             // Ensure all models are updated with the main model's parameters
-            timeit([&] { synchronizeModel(model); }, "synchronizeModel * num devices");
+            // timeit([&] { synchronizeModel(model); }, "synchronizeModel * num devices");
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
@@ -151,7 +154,6 @@ private:
     }
 
     void aggregateGradientsToMainModel() {
-
         // barrier here to ensure all threads have finished back propagation and gradients are
         // available for aggregation
         if (m_barrier.barrier()) {
