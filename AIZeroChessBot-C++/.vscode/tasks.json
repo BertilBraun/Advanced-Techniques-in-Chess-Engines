@@ -6,13 +6,13 @@
         {
             "label": "Build and Run",
             "type": "shell",
-            "command": "cd build && cmake --build . --config Release && cd Release && AIZeroChessBot.exe ${input:execType} 1",
+            "command": "cd build && cmake --build . --config Release && cd Release && AIZeroChessBot.exe ${input:execType}",
             "problemMatcher": []
         },
         {
             "label": "Build and Debug",
             "type": "shell",
-            "command": "cd build && cmake --build . --config Debug && cd Debug && AIZeroChessBot.exe ${input:execType} 1",
+            "command": "cd build && cmake --build . --config Debug && cd Debug && AIZeroChessBot.exe ${input:execType}",
             "problemMatcher": []
         }
     ],
@@ -20,11 +20,12 @@
         {
             "id": "execType",
             "description": "Exec Type:",
-            "default": "train",
+            "default": "train 1",
             "type": "pickString",
             "options": [
-                "train",
-                "generate",
+                "train 1",
+                "generate 1",
+                "analyzeSample random"
             ]
         },
     ]

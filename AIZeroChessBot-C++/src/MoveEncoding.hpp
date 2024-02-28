@@ -16,8 +16,6 @@ inline Move decodeMove(int moveIndex, Color currentColor);
 
 inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color currentColor);
 
-inline Square flipSquareVertical(const Square &square);
-
 inline torch::Tensor flipActionProbabilitiesHorizontal(const torch::Tensor &actionProbabilities);
 inline torch::Tensor flipActionProbabilitiesVertical(const torch::Tensor &actionProbabilities);
 
@@ -106,7 +104,7 @@ __precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 
     for (Square fromSquare : SQUARES) {
         for (Square toSquare : SQUARES) {
-            for (PieceType promotionType : PIECE_TYPES) {
+            for (PieceType promotionType : PIECE_TYPES_AND_NONE) {
                 int moveIndex = moveMappings[fromSquare][toSquare][(int) promotionType];
                 if (moveIndex != -1) {
                     reverseMoveMappings[moveIndex] = {fromSquare, toSquare, promotionType};
@@ -126,11 +124,11 @@ __precalculateFlippedIndices(const MoveMapping &moveMappings) {
 
     for (Square fromSquare : SQUARES) {
         for (Square toSquare : SQUARES) {
-            for (PieceType promotionType : PIECE_TYPES) {
+            for (PieceType promotionType : PIECE_TYPES_AND_NONE) {
                 int flippedFromHorizontal = squareFlipHorizontal(fromSquare);
                 int flippedToHorizontal = squareFlipHorizontal(toSquare);
-                int flippedFromVertical = flipSquareVertical(fromSquare);
-                int flippedToVertical = flipSquareVertical(toSquare);
+                int flippedFromVertical = squareFlipVertical(fromSquare);
+                int flippedToVertical = squareFlipVertical(toSquare);
 
                 int flippedMoveIndexHorizontal =
                     moveMappings[flippedFromHorizontal][flippedToHorizontal][(int) promotionType];
@@ -168,13 +166,18 @@ inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabi
     // :param movesWithProbabilities: The list of moves with their corresponding probabilities.
     // :return: A 1D tensor representing the encoded moves.
 
-    torch::Tensor movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat32);
+    // Initialize the tensor with -inf so that the softmax function will set the probability of
+    // illegal moves to 0
+    torch::Tensor movesEncoded =
+        torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat32);
 
     for (const auto &[move, probability] : movesWithProbabilities) {
         movesEncoded[encodeMove(move, currentColor)] = probability;
     }
 
-    return movesEncoded;
+    // Normalize the tensor to be a probability distribution
+    // Softmax multiplied by 20 to make the probabilities more confident
+    return torch::softmax(movesEncoded * 20.f, 0);
 }
 
 inline torch::Tensor __encodeLegalMoves(Board &board) {
@@ -253,11 +256,11 @@ inline int encodeMove(const Move &move, Color currentColor) {
 
     int moveIndex = __MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
 
-    if (currentColor == Color::WHITE) {
+    if (currentColor == Color::BLACK) {
         return moveIndex;
     }
 
-    return flipMoveIndexHorizontal(moveIndex);
+    return flipMoveIndexVertical(moveIndex);
 }
 
 inline Move decodeMove(int moveIndex, Color currentColor) {
@@ -266,8 +269,8 @@ inline Move decodeMove(int moveIndex, Color currentColor) {
     // :param move_index: The index of the move to decode.
     // :return: The decoded chess move.
 
-    if (currentColor == Color::BLACK) {
-        moveIndex = flipMoveIndexHorizontal(moveIndex);
+    if (currentColor == Color::WHITE) {
+        moveIndex = flipMoveIndexVertical(moveIndex);
     }
 
     auto [from_square, to_square, promotion_type] = __REVERSE_MOVE_MAPPINGS[moveIndex];
@@ -285,14 +288,6 @@ inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color 
         moves.push_back(decodeMove(moveIndex, currentColor));
     }
     return moves;
-}
-
-inline Square flipSquareVertical(const Square &square) {
-    // Flip the rank of the square, keeping the file constant
-    int file = squareFile(square);
-    int rank = squareRank(square);
-    auto flippedRank = 7 - rank; // 0 becomes 7, 1 becomes 6, ..., 7 becomes 0
-    return (Square) (flippedRank * 8 + file);
 }
 
 inline torch::Tensor flipActionProbabilitiesHorizontal(const torch::Tensor &actionProbabilities) {
@@ -322,7 +317,15 @@ inline torch::Tensor flipActionProbabilitiesVertical(const torch::Tensor &action
 }
 
 inline int flipMoveIndexHorizontal(int moveIndex) {
+    if (__FLIPPED_INDICES_HORIZONTAL[moveIndex] == -1) {
+        log("Flipped index not found for", moveIndex, "in flipMoveIndexHorizontal");
+    }
     return __FLIPPED_INDICES_HORIZONTAL[moveIndex];
 }
 
-inline int flipMoveIndexVertical(int moveIndex) { return __FLIPPED_INDICES_VERTICAL[moveIndex]; }
+inline int flipMoveIndexVertical(int moveIndex) {
+    if (__FLIPPED_INDICES_VERTICAL[moveIndex] == -1) {
+        log("Flipped index not found for", moveIndex, "in flipMoveIndexVertical");
+    }
+    return __FLIPPED_INDICES_VERTICAL[moveIndex];
+}

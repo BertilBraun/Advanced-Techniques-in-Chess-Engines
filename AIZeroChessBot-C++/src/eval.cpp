@@ -118,15 +118,22 @@ int main(int argc, char *argv[]) {
             Board board = decodeBoard(state[i]);
             auto moves = __mapPolicyToMoves(policy[i], board.turn);
 
+            // sort moves by probability
+            std::sort(moves.begin(), moves.end(),
+                      [](const auto &lhs, const auto &rhs) { return lhs.second > rhs.second; });
+
             std::cout << "-------------------------------------------------" << std::endl;
             std::cout << "Board: " << COLOR_NAMES[board.turn] << std::endl;
-            std::cout << board.unicode() << std::endl;
+            std::cout << board.unicode(false, true) << std::endl;
             std::cout << board.fen() << std::endl;
             std::cout << "Evaluation: " << value[i].item<float>() << std::endl;
-            std::cout << "Policy: " << std::endl;
+            std::cout << "Policy: " << moves.size() << " moves" << std::endl;
             for (auto [move, score] : moves) {
                 std::cout << move.uci() << " " << score << std::endl;
             }
+            std::cout << "Board with best move applied:" << std::endl;
+            board.push(moves[0].first);
+            std::cout << board.unicode(false, true) << std::endl;
         }
     } else {
         log("Invalid mode:", mode);

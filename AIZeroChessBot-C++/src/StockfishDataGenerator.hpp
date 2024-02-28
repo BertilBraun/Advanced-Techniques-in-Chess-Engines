@@ -172,8 +172,6 @@ private:
             }
         }
 
-        normalizePolicy(policy);
-
         write(board, policy, boardScore);
 
         return lines;
@@ -261,26 +259,6 @@ private:
             policy.emplace_back(move, -score);
         }
 
-        normalizePolicy(policy);
-
         return policy;
-    }
-
-    void normalizePolicy(std::vector<PolicyMove> &policy) {
-        // The policy should be -1.0f <= x <= 1.0f based on the pv scores
-
-        // Softmax the policy
-        for (PolicyMove &move : policy) {
-            move.second = std::exp(move.second * 10.f);
-        }
-
-        float sum = 0.0f;
-        for (PolicyMove &move : policy) {
-            sum += move.second;
-        }
-
-        for (PolicyMove &move : policy) {
-            move.second /= sum;
-        }
     }
 };

@@ -26,7 +26,7 @@ torch::Tensor encodeBoard(const Board &board) {
 
             for (Square square : SQUARES) {
                 if (board.turn == BLACK)
-                    square = squareFlipHorizontal(square);
+                    square = squareFlipVertical(square);
 
                 int row = squareRank(square);
                 int col = squareFile(square);

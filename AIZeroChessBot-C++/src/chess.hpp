@@ -25,6 +25,9 @@ enum PieceType { NONE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NUM_PIECE_TYPES 
 inline constexpr std::array<PieceType, 6> PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
                                                          PieceType::BISHOP, PieceType::ROOK,
                                                          PieceType::QUEEN,  PieceType::KING};
+inline constexpr std::array<PieceType, 7> PIECE_TYPES_AND_NONE = {
+    PieceType::NONE, PieceType::PAWN,  PieceType::KNIGHT, PieceType::BISHOP,
+    PieceType::ROOK, PieceType::QUEEN, PieceType::KING};
 
 inline constexpr int operator+(int a, PieceType b) { return a + static_cast<int>(b); }
 
@@ -185,12 +188,20 @@ inline constexpr Square squareFile(Square square) { return (Square) (square & 7)
 
 inline constexpr Square squareRank(Square square) { return (Square) (square >> 3); }
 
-inline constexpr Square squareFlipHorizontal(Square square) { return (Square) (square ^ 0x38); }
+inline constexpr Square squareFlipVertical(Square square) {
+    // https://www.chessprogramming.org/Vertical_Flipping
+    return (Square) (square ^ 56);
+}
+
+inline constexpr Square squareFlipHorizontal(Square square) {
+    // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#:~:text=return%20_byteswap_uint64(x)%3B%0A%7D-,Horizontal,-.%201%201%201
+    return (Square) (square ^ 7);
+}
 
 inline constexpr std::array<Square, 64> __createSquares180() {
     std::array<Square, 64> squares_180{};
     for (size_t i = 0; i < SQUARES.size(); ++i) {
-        squares_180[i] = squareFlipHorizontal(SQUARES[i]);
+        squares_180[i] = squareFlipVertical(SQUARES[i]);
     }
     return squares_180;
 }
@@ -1251,13 +1262,13 @@ public:
              (orientation == WHITE ? rank >= 0 : rank < 8);
              (orientation == WHITE ? --rank : ++rank)) {
             if (borders) {
-                builder << "  " << std::string(17, '-') << "\n" << RANK_NAMES[rank] << " ";
+                builder << "  " << std::string(17, ' ') << "\n" << RANK_NAMES[rank] << " ";
             }
 
             for (int file = 0; file < 8; ++file) {
                 Square sq = square(file, rank);
                 if (borders && file == 0)
-                    builder << "|";
+                    builder << " ";
 
                 auto piece = pieceAt(sq);
                 if (piece.has_value()) {
@@ -1267,7 +1278,7 @@ public:
                 }
 
                 if (borders)
-                    builder << "|";
+                    builder << " ";
                 else if (file < 7)
                     builder << " ";
             }
@@ -1277,7 +1288,7 @@ public:
         }
 
         if (borders) {
-            builder << "  " << std::string(17, '-') << "\n   ";
+            builder << "  " << std::string(17, ' ') << "\n   ";
             for (char c = 'a'; c <= 'h'; ++c) {
                 builder << c << (c < 'h' ? " " : "");
             }

@@ -117,15 +117,14 @@ private:
     }
 
     torch::Tensor getActionProbabilities(const AlphaMCTSNode &rootNode) const {
-        torch::Tensor actionProbabilities = torch::zeros({ACTION_SIZE}, torch::kFloat32);
+        std::vector<PolicyMove> policyMoves;
 
         for (const auto &child : rootNode.children) {
-            actionProbabilities[encodeMove(child.move_to_get_here, rootNode.board.turn)] =
-                child.number_of_visits;
+            policyMoves.push_back(
+                {child.move_to_get_here, child.number_of_visits / rootNode.number_of_visits});
         }
-        actionProbabilities /= actionProbabilities.sum();
 
-        return actionProbabilities;
+        return encodeMoves(policyMoves, rootNode.board.turn);
     }
 
     Move sampleMove(const torch::Tensor &actionProbabilities, const AlphaMCTSNode &rootNode) const {

@@ -56,10 +56,10 @@ private:
         variations.emplace_back(board, actionProbabilities, result);
 
         variations.emplace_back(flipBoardHorizontal(board),
-                                flipActionProbabilitiesHorizontal(actionProbabilities), -result);
+                                flipActionProbabilitiesHorizontal(actionProbabilities), result);
 
         variations.emplace_back(flipBoardVertical(board),
-                                flipActionProbabilitiesVertical(actionProbabilities), result);
+                                flipActionProbabilitiesVertical(actionProbabilities), -result);
 
         variations.emplace_back(
             flipBoardVertical(flipBoardHorizontal(board)),
