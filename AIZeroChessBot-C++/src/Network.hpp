@@ -35,10 +35,10 @@ struct NetworkImpl : torch::nn::Module {
     torch::nn::ModuleList backBone;
     torch::Device device = torch::kCUDA;
 
-    NetworkImpl(torch::Device device = torch::kCUDA) : device(device) {
+    NetworkImpl(torch::Device modelDevice = torch::kCUDA) : device(modelDevice) {
         // Set device based on CUDA availability
-        if (!torch::cuda::is_available())
-             device = torch::kCPU;
+        if (torch::cuda::device_count() == 0 || !torch::cuda::is_available())
+            device = torch::kCPU;
 
         // Initialize start block
         startBlock = torch::nn::Sequential(

@@ -42,7 +42,9 @@ public:
                 // Load model state
                 if (std::filesystem::exists(modelPath)) {
                     torch::load(m_model, modelPath);
-                    m_model->device = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
+                    m_model->device = torch::cuda::is_available() && torch::cuda::device_count() > 0
+                                          ? torch::kCUDA
+                                          : torch::kCPU;
                     m_model->to(m_model->device);
                 } else {
                     log("Saved model file not found:", modelPath);
@@ -94,7 +96,7 @@ public:
 private:
     void saveConfiguration(const std::filesystem::path &path,
                            const std::filesystem::path &modelPath,
-                           const std::filesystem::path &optimizerPath, int iteration) const {
+                           const std::filesystem::path &optimizerPath, size_t iteration) const {
         std::ofstream configFile(path);
         if (!configFile.is_open()) {
             log("Failed to open config file for writing:", path);

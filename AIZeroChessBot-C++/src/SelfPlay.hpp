@@ -79,6 +79,7 @@ private:
 
             if (!expandableSelfPlayGames.empty()) {
                 std::vector<Board> boards;
+                boards.reserve(expandableSelfPlayGames.size());
                 for (size_t idx : expandableSelfPlayGames) {
                     boards.push_back(selfPlayGames[idx].node->board);
                 }
@@ -87,7 +88,7 @@ private:
 
                 for (size_t i = 0; i < expandableSelfPlayGames.size(); ++i) {
                     size_t idx = expandableSelfPlayGames[i];
-                    auto &node = selfPlayGames[idx].node;
+                    AlphaMCTSNode *&node = selfPlayGames[idx].node;
 
                     auto moves = filterPolicyThenGetMovesAndProbabilities(policy[i], node->board);
 
@@ -104,7 +105,7 @@ private:
             encodedBoards.push_back(game.board);
         }
 
-        auto [policy, value] = m_model->inference(encodeBoards(encodedBoards).to(m_model->device));
+        auto [policy, _] = m_model->inference(encodeBoards(encodedBoards).to(m_model->device));
 
         // Add dirichlet noise to the policy to encourage exploration
         torch::Tensor dirichletNoise = torch::rand({ACTION_SIZE}, torch::kFloat32);
@@ -147,7 +148,11 @@ private:
         for (auto &memory : game.memory) {
             auto encodedBoard = encodeBoard(memory.board);
             auto score = (memory.board.turn == winner) ? resultScore : -resultScore;
-            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, score);
+            if (memory.board.turn == BLACK)
+                memory.actionProbabilities =
+                    flipActionProbabilitiesVertical(memory.actionProbabilities);
+            m_selfPlayWriter.write(encodedBoard, memory.actionProbabilities, score,
+                                   memory.board.turn);
         }
     }
 };

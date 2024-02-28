@@ -25,9 +25,9 @@ public:
 
     std::string toString() const {
         std::ostringstream stream;
-        stream << "Policy Loss: " << m_policyLoss / m_numBatches
-               << ", Value Loss: " << m_valueLoss / m_numBatches
-               << ", Total Loss: " << m_totalLoss / m_numBatches << ", Batches: " << m_numBatches;
+        stream << "Policy Loss: " << m_policyLoss / (float) m_numBatches
+               << ", Value Loss: " << m_valueLoss / (float) m_numBatches
+               << ", Total Loss: " << m_totalLoss / (float) m_numBatches << ", Batches: " << m_numBatches;
         return stream.str();
     }
 
@@ -72,7 +72,7 @@ class SelfPlayStats {
 public:
     SelfPlayStats() = default;
 
-    void update(int numMoves, float result) {
+    void update(size_t numMoves, float result) {
         if (numMoves == 0) {
             log("Warning: Self play game with 0 moves");
         }
@@ -90,7 +90,7 @@ public:
     }
 
     std::string toString() const {
-        float totalResult = m_totalDrawResult + m_totalWins - m_totalLosses;
+        float totalResult = m_totalDrawResult + (float) (m_totalWins - m_totalLosses);
         float averageResult = totalResult / (float) m_totalNumGames;
 
         std::ostringstream stream;
@@ -119,15 +119,15 @@ public:
     }
 
 private:
-    int m_totalNumGames = 0;
-    int m_totalNumMoves = 0;
-    int m_totalDraws = 0;
-    int m_totalWins = 0;
-    int m_totalLosses = 0;
+    size_t m_totalNumGames = 0;
+    size_t m_totalNumMoves = 0;
+    size_t m_totalDraws = 0;
+    size_t m_totalWins = 0;
+    size_t m_totalLosses = 0;
     float m_totalDrawResult = 0.0f;
 
-    SelfPlayStats(int totalNumGames, int totalNumMoves, int totalDraws, int totalWins,
-                  int totalLosses)
+    SelfPlayStats(size_t totalNumGames, size_t totalNumMoves, size_t totalDraws, size_t totalWins,
+                  size_t totalLosses)
         : m_totalNumGames(totalNumGames), m_totalNumMoves(totalNumMoves), m_totalDraws(totalDraws),
           m_totalWins(totalWins), m_totalLosses(totalLosses) {}
 };

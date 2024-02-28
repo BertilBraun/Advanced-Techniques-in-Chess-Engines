@@ -611,7 +611,7 @@ public:
     std::string unicode_symbol(bool invert_color = false) const {
         char symbolKey = symbol();
         if (invert_color) {
-            symbolKey = isupper(symbolKey) ? tolower(symbolKey) : toupper(symbolKey);
+            symbolKey = isupper(symbolKey) ? (char) tolower(symbolKey) : (char) toupper(symbolKey);
         }
         return UNICODE_PIECE_SYMBOLS.at(symbolKey);
     }
@@ -705,10 +705,10 @@ private:
     static constexpr unsigned short PROMOTION_MASK = 0x000F;
     static constexpr int PROMOTION_SHIFT = 0;
 
-    int getValue(int from_square, int to_square, PieceType promotion) {
-        int value = 0;
-        value |= (from_square << FROM_SQUARE_SHIFT);
-        value |= (to_square << TO_SQUARE_SHIFT);
+    unsigned short getValue(int from_square, int to_square, PieceType promotion) {
+        unsigned short value = 0;
+        value |= (static_cast<unsigned short>(from_square) << FROM_SQUARE_SHIFT);
+        value |= (static_cast<unsigned short>(to_square) << TO_SQUARE_SHIFT);
         value |= (static_cast<unsigned short>(promotion) << PROMOTION_SHIFT);
         return value;
     }
@@ -1049,6 +1049,8 @@ public:
         case PieceType::KING:
             bb = m_kings;
             break;
+        case PieceType::NONE:
+        case PieceType::NUM_PIECE_TYPES:
         default:
             // assert(false && "Unknown piece type");
             return BB_EMPTY;
@@ -1237,7 +1239,7 @@ public:
     }
 
     // Maps pieces by their squares using a mask to filter relevant squares.
-    std::unordered_map<Square, Piece> pieceMap(Bitboard mask = BB_ALL) {
+    std::unordered_map<Square, Piece> pieceMap(Bitboard mask = BB_ALL) const {
         std::unordered_map<Square, Piece> result;
         for (Square square : SQUARES) {
             Bitboard squareBitboard = 1ULL << square;
@@ -1261,7 +1263,7 @@ public:
 
     // Returns a string representation of the board with Unicode pieces.
     std::string unicode(bool invert_color = false, bool borders = false,
-                        const std::string &empty_square = "⭘", Color orientation = WHITE) {
+                        const std::string &empty_square = "⭘", Color orientation = WHITE) const {
         std::stringstream builder;
         for (int rank = (orientation == WHITE ? 7 : 0);
              (orientation == WHITE ? rank >= 0 : rank < 8);
@@ -2042,6 +2044,8 @@ private:
             case PieceType::KING:
                 m_kings ^= mask;
                 break;
+            case PieceType::NONE:
+            case PieceType::NUM_PIECE_TYPES:
             default:
                 return std::nullopt;
             }
@@ -2079,6 +2083,8 @@ private:
         case PieceType::KING:
             m_kings |= mask;
             break;
+        case PieceType::NONE:
+        case PieceType::NUM_PIECE_TYPES:
         default:
             return;
         }

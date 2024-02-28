@@ -10,7 +10,9 @@
 
 #include "Stockfish.hpp"
 
+#pragma warning(push, 0)
 #include "json.hpp"
+#pragma warning(pop)
 
 using json = nlohmann::json;
 
@@ -79,8 +81,8 @@ public:
         // Generate training data from lichess evals
         // These can be found here: https://database.lichess.org/#evals
 
-        if (hasGenerated("lichess_evals_generated"))
-            return;
+        // if (hasGenerated("lichess_evals_generated"))
+        //    return;
 
         std::ifstream file(pathToLichessEvals);
 
@@ -213,7 +215,10 @@ private:
         torch::Tensor encodedBoard = encodeBoard(board);
         torch::Tensor encodedPolicy = encodeMoves(policy, board.turn);
 
-        if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value)) [[likely]] {
+        if (board.turn == BLACK)
+            encodedPolicy = flipActionProbabilitiesVertical(encodedPolicy);
+
+        if (m_selfPlayWriter.write(encodedBoard, encodedPolicy, value, board.turn)) {
             m_written++;
             m_valueSum += (double) value;
         }

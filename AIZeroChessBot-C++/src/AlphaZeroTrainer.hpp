@@ -161,12 +161,12 @@ private:
             torch::NoGradGuard no_grad; // Ensure no gradient computation happens here
 
             for (size_t i = 0; i < m_model->parameters().size(); ++i) {
-                auto &main_param = m_model->parameters()[i];
+                auto main_param = m_model->parameters()[i];
 
                 // Accumulate gradients from all models
                 torch::Tensor grad_sum = torch::zeros_like(main_param.grad());
                 for (auto &model : m_models) {
-                    auto &param = model->parameters()[i];
+                    auto param = model->parameters()[i];
                     grad_sum += param.grad();
                 }
 

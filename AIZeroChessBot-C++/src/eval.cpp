@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
             std::cout << "-------------------------------------------------" << std::endl;
             std::cout << "Board: " << COLOR_NAMES[board.turn] << std::endl;
             std::cout << board.unicode(false, true) << std::endl;
-            std::cout << board.fen() << std::endl;
+            std::cout << "FEN: " << board.fen() << std::endl;
             std::cout << "Evaluation: " << value[i].item<float>() << std::endl;
             std::cout << "Policy: " << moves.size() << " moves" << std::endl;
             for (auto [move, score] : moves) {

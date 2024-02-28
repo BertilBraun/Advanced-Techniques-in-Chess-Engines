@@ -1,15 +1,21 @@
 #pragma once
 
 #ifdef _WIN32
-#pragma warning(disable : 4710)
-#pragma warning(disable : 4514)
 #pragma warning(disable : 4365)
+#pragma warning(disable : 4514)
+#pragma warning(disable : 4710)
+#pragma warning(disable : 4711)
+#pragma warning(disable : 4820)
+#pragma warning(disable : 4868)
+#pragma warning(disable : 5246)
 #pragma warning(disable : 6262)
 #endif
 
 #include "Log.hpp"
 #include "Time.hpp"
 #include "chess.hpp"
+
+#pragma warning(push, 0)
 
 #include <algorithm>
 #include <array>
@@ -21,8 +27,10 @@
 #include <stddef.h>
 #include <stdexcept>
 #include <string>
-#include <torch/torch.h>
 #include <vector>
+
+#include <torch/torch.h>
+#pragma warning(pop)
 
 using namespace chess;
 

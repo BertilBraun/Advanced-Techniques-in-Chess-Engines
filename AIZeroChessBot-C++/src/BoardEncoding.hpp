@@ -99,11 +99,15 @@ Board decodeBoard(const torch::Tensor &encodedBoard) {
 }
 
 torch::Tensor flipBoardHorizontal(const torch::Tensor &encodedBoard) {
-    return encodedBoard.flip(2); // Flip along the width (columns)
+    // Flip along the width (columns)
+    return encodedBoard.flip(2);
 }
 
 torch::Tensor flipBoardVertical(const torch::Tensor &encodedBoard) {
-    return encodedBoard.flip(1); // Flip along the height (rows)
+    // Flip along the height (rows)
+    // Also swap the layers so that the current player's pieces are at the bottom of the first
+    torch::Tensor flippedBoard = encodedBoard.flip(1);
+    return torch::cat({flippedBoard.narrow(0, 6, 6), flippedBoard.narrow(0, 0, 6)}, 0);
 }
 
 std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {

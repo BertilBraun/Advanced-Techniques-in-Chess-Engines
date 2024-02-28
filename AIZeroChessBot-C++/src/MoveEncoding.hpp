@@ -10,7 +10,7 @@ inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const to
 inline int encodeMove(const Move &move, Color currentColor);
 
 inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 Color currentColor);
+                                 Color currentColor, bool normalize = true);
 
 inline Move decodeMove(int moveIndex, Color currentColor);
 
@@ -154,25 +154,36 @@ inline const auto __FLIPPED_INDICES_HORIZONTAL =
 inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
 inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 Color currentColor) {
+                                 Color currentColor, bool normalize) {
     // Encodes a list of moves with their corresponding probabilities into a 1D tensor.
     //
     // The list of moves is a list of tuples, where each tuple contains a move and its
     // corresponding probability. The tensor has a length of TOTAL_MOVES, representing all
     // possible moves from all squares to all reachable squares. Each entry in the tensor
     // represents a possible move on the board. If the corresponding move is in the list of
+
     // moves, the entry is the probability of the move, and 0 otherwise.
     //
     // :param movesWithProbabilities: The list of moves with their corresponding probabilities.
     // :return: A 1D tensor representing the encoded moves.
 
-    // Initialize the tensor with -inf so that the softmax function will set the probability of
-    // illegal moves to 0
-    torch::Tensor movesEncoded =
-        torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat32);
+    torch::Tensor movesEncoded;
+
+    if (normalize) {
+        // Initialize the tensor with -inf so that the softmax function will set the probability of
+        // illegal moves to 0
+        movesEncoded =
+            torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat32);
+    } else {
+        movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat32);
+    }
 
     for (const auto &[move, probability] : movesWithProbabilities) {
         movesEncoded[encodeMove(move, currentColor)] = probability;
+    }
+
+    if (!normalize) {
+        return movesEncoded;
     }
 
     // Normalize the tensor to be a probability distribution
@@ -195,7 +206,7 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     for (const auto &move : board.legalMoves()) {
         movesWithProbabilities.emplace_back(move, 1.0);
     }
-    return encodeMoves(movesWithProbabilities, board.turn);
+    return encodeMoves(movesWithProbabilities, board.turn, false);
 }
 
 inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
@@ -257,10 +268,10 @@ inline int encodeMove(const Move &move, Color currentColor) {
     int moveIndex = __MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
 
     if (currentColor == Color::BLACK) {
-        return moveIndex;
+        return flipMoveIndexVertical(moveIndex);
     }
 
-    return flipMoveIndexVertical(moveIndex);
+    return moveIndex;
 }
 
 inline Move decodeMove(int moveIndex, Color currentColor) {
@@ -269,7 +280,7 @@ inline Move decodeMove(int moveIndex, Color currentColor) {
     // :param move_index: The index of the move to decode.
     // :return: The decoded chess move.
 
-    if (currentColor == Color::WHITE) {
+    if (currentColor == Color::BLACK) {
         moveIndex = flipMoveIndexVertical(moveIndex);
     }
 

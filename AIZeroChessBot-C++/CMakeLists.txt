@@ -47,7 +47,7 @@ if(NOT MSVC)
     endif()
 else()
     # MSVC specific flags
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /GL /DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
 endif()
 

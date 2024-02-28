@@ -49,14 +49,14 @@ public:
         return *this;
     }
 
-    DataSubset(DataSubset &&other) : m_device(other.m_device) {
+    DataSubset(DataSubset &&other) noexcept : m_device(other.m_device) {
         m_memoryFutures = std::move(other.m_memoryFutures);
         m_memoryPaths = std::move(other.m_memoryPaths);
         m_memoriesToPreload = other.m_memoriesToPreload;
         m_currentMemoryIndex = other.m_currentMemoryIndex;
     }
 
-    DataSubset &operator=(DataSubset &&other) {
+    DataSubset &operator=(DataSubset &&other) noexcept {
         if (this != &other) {
             m_memoryFutures = std::move(other.m_memoryFutures);
             m_memoryPaths = std::move(other.m_memoryPaths);
@@ -199,7 +199,7 @@ public:
     void deleteOldMemories(int retentionFactor) {
         // delete the oldest retentionFactor% of the memories
         float percentage = (1.0f - ((float) retentionFactor / 100.f));
-        size_t numMemoriesToDelete = percentage * m_memoryPathsFIFO.size();
+        size_t numMemoriesToDelete = (size_t) (percentage * (float) m_memoryPathsFIFO.size());
         for (size_t i = 0; i < numMemoriesToDelete; ++i) {
             std::filesystem::remove_all(m_memoryPathsFIFO[i]);
         }

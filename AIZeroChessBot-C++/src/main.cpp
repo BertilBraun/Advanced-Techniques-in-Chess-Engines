@@ -8,6 +8,13 @@
 
 int main(int argc, char *argv[]) {
 
+    argc = 3;
+    // argv = {"main", "train", "1"}
+    argv = new char *[3];
+    argv[0] = "main";
+    argv[1] = "train";
+    argv[2] = "1";
+
     if (argc != 3) {
         log("Usage:", argv[0], "[train|generate] <numProcessors>");
         return 1;
@@ -29,10 +36,10 @@ int main(int argc, char *argv[]) {
 
     TrainingArgs args{
         200,       // numIterations
-        32,        // numParallelGames
-        500,       // numIterationsPerTurn
+        5,         // numParallelGames
+        5,         // numIterationsPerTurn
         1,         // numEpochs
-        128,       // batchSize
+        16,        // batchSize
         1.0f,      // temperature
         0.25f,     // dirichletEpsilon
         0.03f,     // dirichletAlpha
@@ -59,9 +66,9 @@ int main(int argc, char *argv[]) {
                 StockfishDataGenerator stockfishDataGenerator(args.batchSize);
                 stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json",
                                                                    false, i, numProcessors);
-                stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
-                stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
-                    "models/stockfish_8_x64");
+                // stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
+                // stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
+                //     "models/stockfish_8_x64");
             }));
         }
 
@@ -101,15 +108,16 @@ int main(int argc, char *argv[]) {
         }));
     }
 
-    Network model;
-    auto optimizer =
-        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(0.02).weight_decay(1e-4));
+    // Network model;
+    // auto optimizer =
+    //     torch::optim::Adam(model->parameters(),
+    //     torch::optim::AdamOptions(0.02).weight_decay(1e-4));
 
-    AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
+    // AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
 
     log("Trainer process started");
 
-    alphaZeroTrainer.run();
+    // alphaZeroTrainer.run();
 
     for (auto &thread : threads) {
         thread.join();

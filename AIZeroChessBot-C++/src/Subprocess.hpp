@@ -31,9 +31,9 @@ public:
 
     // Overload the extraction operator for reading from the subprocess
     Subprocess &operator>>(std::string &output) {
-        std::array<char, 1024> buffer;
+        std::array<char, 1024> buffer{};
         output.clear();
-        if (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+        if (fgets(buffer.data(), (int) buffer.size(), pipe) != nullptr) {
             output = buffer.data();
         }
         return *this;
