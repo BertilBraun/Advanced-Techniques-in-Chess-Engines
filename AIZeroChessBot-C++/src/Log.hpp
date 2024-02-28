@@ -116,8 +116,8 @@ template <typename... Args> void log(Args... args) { logCommon<true>(args...); }
 template <typename... Args> void logNoNewline(Args... args) { logCommon<false>(args...); }
 
 inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
-    float progress = std::min((float) current / total, 1.0f);
-    int pos = (int) (width * progress);
+    float progress = std::min((float) current / (float) total, 1.0f);
+    int pos = (int) ((float) width * progress);
 
     std::ostringstream bar;
 

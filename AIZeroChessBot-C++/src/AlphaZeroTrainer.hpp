@@ -104,7 +104,7 @@ private:
             threads.emplace_back(
                 std::thread([i, &dataSubsets, &totalTrainStats, &statsMutex, this] {
                     TrainingStats trainStats =
-                        trainOnDevice(dataSubsets[i], m_models[i], m_devicesList[i]);
+                        trainOnDevice(dataSubsets[i], m_models[i]);
 
                     log("Device", i, "finished training");
 
@@ -123,7 +123,7 @@ private:
         return totalTrainStats;
     }
 
-    TrainingStats trainOnDevice(DataSubset &dataSubset, Network &model, torch::Device &device) {
+    TrainingStats trainOnDevice(DataSubset &dataSubset, Network &model) {
         TrainingStats trainStats;
 
         while (dataSubset.hasNext()) {

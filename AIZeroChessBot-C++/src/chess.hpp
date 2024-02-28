@@ -482,7 +482,7 @@ inline Bitboard _slidingAttacks(Square square, Bitboard occupied, const std::vec
 }
 
 inline std::array<Bitboard, 64> BB_KNIGHT_ATTACKS = [] {
-    std::array<Bitboard, 64> attacks;
+    std::array<Bitboard, 64> attacks{};
     for (Square sq : SQUARES) {
         attacks[sq] = _slidingAttacks(sq, BB_ALL, {17, 15, 10, 6, -17, -15, -10, -6});
     }
@@ -490,7 +490,7 @@ inline std::array<Bitboard, 64> BB_KNIGHT_ATTACKS = [] {
 }();
 
 inline std::array<Bitboard, 64> BB_KING_ATTACKS = [] {
-    std::array<Bitboard, 64> attacks;
+    std::array<Bitboard, 64> attacks{};
     for (Square sq : SQUARES) {
         attacks[sq] = _slidingAttacks(sq, BB_ALL, {9, 8, 7, 1, -9, -8, -7, -1});
     }
@@ -498,7 +498,7 @@ inline std::array<Bitboard, 64> BB_KING_ATTACKS = [] {
 }();
 
 inline std::array<std::array<Bitboard, 64>, 2> BB_PAWN_ATTACKS = [] {
-    std::array<std::array<Bitboard, 64>, 2> attacks;
+    std::array<std::array<Bitboard, 64>, 2> attacks{};
     for (int color = 0; color < 2; ++color) {
         for (Square sq : SQUARES) {
             attacks[color][sq] = _slidingAttacks(
@@ -524,7 +524,7 @@ inline std::vector<Bitboard> _carryRippler(Bitboard mask) {
 }
 
 inline std::array<Bitboard, 64> _mask_table(const std::vector<int> &deltas) {
-    std::array<Bitboard, 64> mask_table;
+    std::array<Bitboard, 64> mask_table{};
     for (Square square : SQUARES) {
         mask_table[square] = _slidingAttacks(square, 0, deltas) & ~_edges(square);
     }
@@ -554,7 +554,7 @@ inline auto BB_FILE_ATTACKS = _attack_table({-8, 8});
 inline auto BB_RANK_ATTACKS = _attack_table({-1, 1});
 
 inline std::array<std::array<Bitboard, 64>, 64> BB_RAYS = [] {
-    std::array<std::array<Bitboard, 64>, 64> rays;
+    std::array<std::array<Bitboard, 64>, 64> rays{};
     for (Square a : SQUARES) {
         for (Square b : SQUARES) {
             if (BB_DIAG_ATTACKS[a][0] & BB_SQUARES[b]) {
@@ -582,24 +582,24 @@ inline Bitboard between(int a, int b) {
 class Piece {
 public:
     // Constructors
-    Piece() : value(0) {}
+    Piece() : m_value(0) {}
 
     Piece(PieceType piece_type, Color color)
-        : value(((static_cast<unsigned char>(piece_type) & 0b111) << 1) |
-                (static_cast<unsigned char>(color) & 1)) {}
+        : m_value(((static_cast<unsigned char>(piece_type) & 0b111) << 1) |
+                  (static_cast<unsigned char>(color) & 1)) {}
 
-    Piece(const Piece &other) : value(other.value) {}
+    Piece(const Piece &other) : m_value(other.m_value) {}
 
     Piece &operator=(const Piece &other) {
-        value = other.value;
+        m_value = other.m_value;
         return *this;
     }
 
     // Get the piece type
-    PieceType pieceType() const { return static_cast<PieceType>(value >> 1); }
+    PieceType pieceType() const { return static_cast<PieceType>(m_value >> 1); }
 
     // Get the piece color
-    Color color() const { return static_cast<Color>(value & 1); }
+    Color color() const { return static_cast<Color>(m_value & 1); }
 
     // Get the symbol of the piece
     char symbol() const {
@@ -617,7 +617,7 @@ public:
     }
 
     // Overload hash function
-    size_t hash() const { return value; }
+    size_t hash() const { return m_value; }
 
     // Class method to create Piece from symbol
     static Piece from_symbol(char symbol) {
@@ -631,29 +631,31 @@ public:
 
 private:
     // Encoded as: 0bPPPC where PPP = PieceType (3 bits), C = Color (1 bit)
-    unsigned char value;
+    unsigned char m_value;
 };
 
 class Move {
 public:
-    Move() : value(0) {}
+    Move() : m_value(0) {}
 
     Move(int from_square, int to_square, PieceType promotion = PieceType::NONE)
-        : value(getValue(from_square, to_square, promotion)) {}
+        : m_value(getValue(from_square, to_square, promotion)) {}
 
-    Move(const Move &other) : value(other.value) {}
+    Move(const Move &other) : m_value(other.m_value) {}
 
     Move &operator=(const Move &other) {
-        value = other.value;
+        m_value = other.m_value;
         return *this;
     }
 
-    Square fromSquare() const { return (Square) ((value & FROM_SQUARE_MASK) >> FROM_SQUARE_SHIFT); }
+    Square fromSquare() const {
+        return (Square) ((m_value & FROM_SQUARE_MASK) >> FROM_SQUARE_SHIFT);
+    }
 
-    Square toSquare() const { return (Square) ((value & TO_SQUARE_MASK) >> TO_SQUARE_SHIFT); }
+    Square toSquare() const { return (Square) ((m_value & TO_SQUARE_MASK) >> TO_SQUARE_SHIFT); }
 
     PieceType promotion() const {
-        return static_cast<PieceType>((value & PROMOTION_MASK) >> PROMOTION_SHIFT);
+        return static_cast<PieceType>((m_value & PROMOTION_MASK) >> PROMOTION_SHIFT);
     }
 
     std::string uci() const {
@@ -668,9 +670,9 @@ public:
         return uci;
     }
 
-    bool operator!() const { return value == 0; }
+    bool operator!() const { return m_value == 0; }
 
-    bool operator==(const Move &other) const { return value == other.value; }
+    bool operator==(const Move &other) const { return m_value == other.m_value; }
 
     static Move null() { return Move(); }
 
@@ -711,7 +713,7 @@ private:
         return value;
     }
 
-    unsigned short value;
+    unsigned short m_value;
 };
 
 class SquareSet {
@@ -1133,12 +1135,16 @@ public:
         return SquareSet(_attacksMask(square));
     }
 
+    Bitboard attackersMask(Color color, Square square) const {
+        return _attackersMask(color, square, m_occupied);
+    }
+
     bool isAttackedBy(Color color, Square square) const {
         // Checks if the given side attacks the given square.
         //
         // Pinned pieces still count as attackers. Pawns that can be captured
         // en passant are **not** considered attacked.
-        return _attackersMask(color, square) != 0;
+        return attackersMask(color, square) != 0;
     }
 
     SquareSet attackers(Color color, Square square) const {
@@ -1148,7 +1154,7 @@ public:
         //
         // Returns a :class:`set of squares <chess::SquareSet>`.
 
-        return SquareSet(_attackersMask(color, square));
+        return SquareSet(attackersMask(color, square));
     }
 
     SquareSet pin(Color color, Square square) const {
@@ -1306,7 +1312,7 @@ public:
 
         Square king = opt_king.value();
 
-        Bitboard checkers = _attackersMask(!turn, king);
+        Bitboard checkers = attackersMask(!turn, king);
         if (checkers) {
             auto evasions = _generateEvasions(king, checkers, BB_SQUARES[move.fromSquare()],
                                               BB_SQUARES[move.toSquare()]);
@@ -1963,10 +1969,10 @@ private:
         return attacks;
     }
 
-    Bitboard _attackersMask(Color color, Square square) const {
-        Bitboard rank_pieces = BB_RANK_MASKS[square] & m_occupied;
-        Bitboard file_pieces = BB_FILE_MASKS[square] & m_occupied;
-        Bitboard diag_pieces = BB_DIAG_MASKS[square] & m_occupied;
+    Bitboard _attackersMask(Color color, Square square, Bitboard occupied) const {
+        Bitboard rank_pieces = BB_RANK_MASKS[square] & occupied;
+        Bitboard file_pieces = BB_FILE_MASKS[square] & occupied;
+        Bitboard diag_pieces = BB_DIAG_MASKS[square] & occupied;
 
         Bitboard queens_and_rooks = m_queens | m_rooks;
         Bitboard queens_and_bishops = m_queens | m_bishops;
@@ -2194,7 +2200,7 @@ private:
         auto king = this->king(turn);
         if (!king.has_value())
             return BB_EMPTY;
-        return _attackersMask(!turn, king.value());
+        return attackersMask(!turn, king.value());
     }
 
     bool _wasIntoCheck() const {
@@ -2283,7 +2289,7 @@ private:
         if (king_mask) {
             Square king = (Square) msb(king_mask);
             Bitboard blockers = sliderBlockers(king);
-            Bitboard checkers = _attackersMask(!turn, king);
+            Bitboard checkers = attackersMask(!turn, king);
             if (checkers) {
                 auto evasions = _generateEvasions(king, checkers, from_mask, to_mask);
                 for (const Move &move : evasions) {
@@ -2328,7 +2334,7 @@ private:
 
     bool _attackedForKing(Bitboard path, Bitboard occupied) const {
         for (int sq = msb(path); path; sq = msb(path)) {
-            if (_attackersMask(!turn, (Square) sq)) {
+            if (_attackersMask(!turn, (Square) sq, occupied)) {
                 return true;
             }
             path &= path - 1; // Clear the scanned bit

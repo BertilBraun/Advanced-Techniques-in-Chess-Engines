@@ -133,7 +133,7 @@ private:
     double m_valueSum = 0.0;
 
     void reportProgress(size_t current, size_t total, const std::string &message) {
-        double average = m_written == 0 ? 0 : m_valueSum / m_written;
+        double average = m_written == 0 ? 0 : m_valueSum / (double) m_written;
 
         std::string desc = message + " " + std::to_string(m_written) + " written " +
                            std::to_string(average) + " average value";
@@ -167,7 +167,7 @@ private:
                     lines.emplace_back(moves, score);
 
                     boardScore = std::max(score, boardScore);
-                } catch (std::runtime_error &e) {
+                } catch (...) {
                 }
             }
         }

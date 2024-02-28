@@ -31,13 +31,14 @@ struct ResBlockImpl : torch::nn::Module {
 TORCH_MODULE(ResBlock);
 
 struct NetworkImpl : torch::nn::Module {
-    torch::Device device = torch::kCUDA;
     torch::nn::Sequential startBlock, policyHead, valueHead;
     torch::nn::ModuleList backBone;
+    torch::Device device = torch::kCUDA;
 
     NetworkImpl(torch::Device device = torch::kCUDA) : device(device) {
         // Set device based on CUDA availability
-        device = torch::cuda::is_available() ? device : torch::kCPU;
+        if (!torch::cuda::is_available())
+             device = torch::kCPU;
 
         // Initialize start block
         startBlock = torch::nn::Sequential(

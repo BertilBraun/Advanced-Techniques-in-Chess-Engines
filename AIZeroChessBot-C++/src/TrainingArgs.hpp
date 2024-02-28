@@ -30,11 +30,11 @@ struct TrainingArgs {
     // C parameter for the UCB1 formula in the MCTS algorithm in self-play
     float cParam;
 
-    // Path to save the model to after each iteration
-    std::string savePath;
-
     // The percentage of games to retain for training for the next iteration
     int retentionRate;
+
+    // Path to save the model to after each iteration
+    std::string savePath;
 
     // Constructor with default values
     TrainingArgs(size_t numIterations = 0, size_t numParallelGames = 0,
@@ -45,6 +45,6 @@ struct TrainingArgs {
         : numIterations(numIterations), numParallelGames(numParallelGames),
           numIterationsPerTurn(numIterationsPerTurn), numEpochs(numEpochs), batchSize(batchSize),
           temperature(temperature), dirichletEpsilon(dirichletEpsilon),
-          dirichletAlpha(dirichletAlpha), cParam(cParam), savePath(std::move(savePath)),
-          retentionRate(retentionRate) {}
+          dirichletAlpha(dirichletAlpha), cParam(cParam), retentionRate(retentionRate),
+          savePath(std::move(savePath)) {}
 };

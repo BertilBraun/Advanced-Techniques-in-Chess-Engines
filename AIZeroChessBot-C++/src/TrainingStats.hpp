@@ -4,22 +4,19 @@
 
 class TrainingStats {
 public:
-    float policyLoss = 0.0f;
-    float valueLoss = 0.0f;
-    float totalLoss = 0.0f;
-    int numBatches = 0;
+    TrainingStats() = default;
 
     void update(float policyLoss, float valueLoss, float totalLoss) {
-        this->policyLoss += policyLoss;
-        this->valueLoss += valueLoss;
-        this->totalLoss += totalLoss;
-        ++numBatches;
+        m_policyLoss += policyLoss;
+        m_valueLoss += valueLoss;
+        m_totalLoss += totalLoss;
+        ++m_numBatches;
     }
 
     // Overload the + operator to add two TrainingStats objects
     TrainingStats operator+(const TrainingStats &other) const {
-        return TrainingStats{policyLoss + other.policyLoss, valueLoss + other.valueLoss,
-                             totalLoss + other.totalLoss, numBatches + other.numBatches};
+        return TrainingStats(m_policyLoss + other.m_policyLoss, m_valueLoss + other.m_valueLoss,
+                             m_totalLoss + other.m_totalLoss, m_numBatches + other.m_numBatches);
     }
     TrainingStats &operator+=(const TrainingStats &other) {
         *this = *this + other;
@@ -28,87 +25,109 @@ public:
 
     std::string toString() const {
         std::ostringstream stream;
-        stream << "Policy Loss: " << policyLoss / numBatches
-               << ", Value Loss: " << valueLoss / numBatches
-               << ", Total Loss: " << totalLoss / numBatches << ", Batches: " << numBatches;
+        stream << "Policy Loss: " << m_policyLoss / m_numBatches
+               << ", Value Loss: " << m_valueLoss / m_numBatches
+               << ", Total Loss: " << m_totalLoss / m_numBatches << ", Batches: " << m_numBatches;
         return stream.str();
     }
+
+private:
+    float m_policyLoss = 0.0f;
+    float m_valueLoss = 0.0f;
+    float m_totalLoss = 0.0f;
+    int m_numBatches = 0;
+
+    TrainingStats(float policyLoss, float valueLoss, float totalLoss, int numBatches)
+        : m_policyLoss(policyLoss), m_valueLoss(valueLoss), m_totalLoss(totalLoss),
+          m_numBatches(numBatches) {}
 };
 
 class LearningStats {
 public:
-    size_t totalNumMoves = 0;
-    size_t totalIterations = 0;
-    std::vector<TrainingStats> trainingStats;
+    LearningStats() = default;
 
     void update(size_t numMoves, const TrainingStats &stats) {
-        totalNumMoves += numMoves;
-        trainingStats.push_back(stats);
-        ++totalIterations;
+        m_totalNumMoves += numMoves;
+        m_trainingStats.push_back(stats);
+        ++m_totalIterations;
     }
 
     std::string toString() const {
         std::ostringstream stream;
-        stream << "Total Moves: " << totalNumMoves << "\n";
-        stream << "Total Iterations: " << totalIterations << "\n";
-        for (size_t i = 0; i < trainingStats.size(); ++i) {
-            stream << "Iteration " << i + 1 << ": " << trainingStats[i].toString() << "\n";
+        stream << "Total Moves: " << m_totalNumMoves << "\n";
+        stream << "Total Iterations: " << m_totalIterations << "\n";
+        for (size_t i = 0; i < m_trainingStats.size(); ++i) {
+            stream << "Iteration " << i + 1 << ": " << m_trainingStats[i].toString() << "\n";
         }
         return stream.str();
     }
+
+private:
+    size_t m_totalNumMoves = 0;
+    size_t m_totalIterations = 0;
+    std::vector<TrainingStats> m_trainingStats;
 };
 
 class SelfPlayStats {
 public:
-    int totalNumGames = 0;
-    int totalNumMoves = 0;
-    int totalDraws = 0;
-    int totalWins = 0;
-    int totalLosses = 0;
-    float totalDrawResult = 0.0f;
+    SelfPlayStats() = default;
 
     void update(int numMoves, float result) {
         if (numMoves == 0) {
             log("Warning: Self play game with 0 moves");
         }
 
-        ++totalNumGames;
-        totalNumMoves += numMoves;
+        ++m_totalNumGames;
+        m_totalNumMoves += numMoves;
         if (result == -1.0f) {
-            ++totalLosses;
+            ++m_totalLosses;
         } else if (result == 1.0f) {
-            ++totalWins;
+            ++m_totalWins;
         } else {
-            ++totalDraws;
-            totalDrawResult += result;
+            ++m_totalDraws;
+            m_totalDrawResult += result;
         }
     }
 
     std::string toString() const {
-        float totalResult = totalDrawResult + totalWins - totalLosses;
-        float averageResult = totalResult / (float) totalNumGames;
+        float totalResult = m_totalDrawResult + m_totalWins - m_totalLosses;
+        float averageResult = totalResult / (float) m_totalNumGames;
 
         std::ostringstream stream;
-        stream << "Total Games: " << totalNumGames << "\n";
-        stream << "Total Moves: " << totalNumMoves << "\n";
-        stream << "Average Moves Per Game: " << (float) totalNumMoves / (float) totalNumGames
+        stream << "Total Games: " << m_totalNumGames << "\n";
+        stream << "Total Moves: " << m_totalNumMoves << "\n";
+        stream << "Average Moves Per Game: " << (float) m_totalNumMoves / (float) m_totalNumGames
                << "\n";
         stream << "Total Result: " << totalResult << " (Wins - Losses + Draws)\n";
-        stream << "Total Draw Result: " << totalDrawResult << "\n";
+        stream << "Total Draw Result: " << m_totalDrawResult << "\n";
         stream << "Average Result: " << averageResult << " (1.0 = Win, 0.0 = Draw, -1.0 = Loss)\n";
-        stream << "Total Draws: " << totalDraws << "\n";
-        stream << "Total Wins: " << totalWins << "\n";
-        stream << "Total Losses: " << totalLosses << "\n";
+        stream << "Total Draws: " << m_totalDraws << "\n";
+        stream << "Total Wins: " << m_totalWins << "\n";
+        stream << "Total Losses: " << m_totalLosses << "\n";
         return stream.str();
     }
 
     SelfPlayStats operator+(const SelfPlayStats &other) const {
-        return SelfPlayStats{totalNumGames + other.totalNumGames,
-                             totalNumMoves + other.totalNumMoves, totalDraws + other.totalDraws,
-                             totalWins + other.totalWins, totalLosses + other.totalLosses};
+        return SelfPlayStats(m_totalNumGames + other.m_totalNumGames,
+                             m_totalNumMoves + other.m_totalNumMoves,
+                             m_totalDraws + other.m_totalDraws, m_totalWins + other.m_totalWins,
+                             m_totalLosses + other.m_totalLosses);
     }
     SelfPlayStats &operator+=(const SelfPlayStats &other) {
         *this = *this + other;
         return *this;
     }
+
+private:
+    int m_totalNumGames = 0;
+    int m_totalNumMoves = 0;
+    int m_totalDraws = 0;
+    int m_totalWins = 0;
+    int m_totalLosses = 0;
+    float m_totalDrawResult = 0.0f;
+
+    SelfPlayStats(int totalNumGames, int totalNumMoves, int totalDraws, int totalWins,
+                  int totalLosses)
+        : m_totalNumGames(totalNumGames), m_totalNumMoves(totalNumMoves), m_totalDraws(totalDraws),
+          m_totalWins(totalWins), m_totalLosses(totalLosses) {}
 };

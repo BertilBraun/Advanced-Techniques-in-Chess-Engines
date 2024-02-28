@@ -11,7 +11,7 @@
 
 class AlphaZeroSelfPlayer : AlphaZeroBase {
 public:
-    AlphaZeroSelfPlayer(size_t rank, Network &model, const TrainingArgs &args)
+    AlphaZeroSelfPlayer(Network &model, const TrainingArgs &args)
         : AlphaZeroBase(model, args) {}
 
     void run() {

@@ -1,5 +1,12 @@
 #pragma once
 
+#ifdef _WIN32
+#pragma warning(disable : 4710)
+#pragma warning(disable : 4514)
+#pragma warning(disable : 4365)
+#pragma warning(disable : 6262)
+#endif
+
 #include "Log.hpp"
 #include "Time.hpp"
 #include "chess.hpp"

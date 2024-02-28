@@ -4,7 +4,7 @@
 #include <cmath>
 #include <vector>
 
-inline std::map<std::string, unsigned long long> __timeit_results;
+inline std::map<std::string, long long> __timeit_results;
 
 // Time a function and add the result to the timeit results
 // Should be callable like this:
@@ -40,7 +40,7 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
 inline std::string getTimeitResults() {
     std::string result;
     for (auto &pair : __timeit_results) {
-        result += pair.first + ": " + std::to_string(pair.second * 1e-9f) + "s\n";
+        result += pair.first + ": " + std::to_string((double) pair.second * 1e-9) + "s\n";
     }
     return result;
 }

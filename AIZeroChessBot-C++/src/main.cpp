@@ -93,9 +93,9 @@ int main(int argc, char *argv[]) {
     for (size_t i = 0; i < numProcessors; ++i) {
         threads.emplace_back(std::thread([i, numProcessors, args] {
             Network model;
-            AlphaZeroSelfPlayer alphaZeroSelfPlayer(i + 1, model, args);
+            AlphaZeroSelfPlayer alphaZeroSelfPlayer(model, args);
 
-            log("Worker process", i, "of", numProcessors, "started");
+            log("Worker process", i + 1, "of", numProcessors, "started");
 
             alphaZeroSelfPlayer.run();
         }));
