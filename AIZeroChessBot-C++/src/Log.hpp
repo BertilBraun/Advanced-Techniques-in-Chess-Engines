@@ -78,7 +78,18 @@ template <bool AddNewline, typename... Args> void logCommon(Args... args) {
 
     std::ostringstream logStream;
     logStream << '[' << currentTime() << "] [ " << __THREAD_IDS[threadId] << " ] ";
-    (logStream << ... << (toString(args) + " "));
+
+    auto appendToLog = [&logStream](const auto &arg) {
+        std::string argStr = toString(arg);
+        logStream << argStr;
+        // Check if the last character is not a newline before adding a space
+        if (!argStr.empty() && argStr.back() != '\n') {
+            logStream << ' ';
+        }
+    };
+
+    (appendToLog(args), ...);
+
     if constexpr (AddNewline) {
         logStream << std::endl;
     }

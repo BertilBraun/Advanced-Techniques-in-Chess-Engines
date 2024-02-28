@@ -602,15 +602,14 @@ public:
     Color color() const { return static_cast<Color>(value & 1); }
 
     // Get the symbol of the piece
-    std::string symbol() const {
+    char symbol() const {
         auto symbol = pieceSymbol(pieceType());
-        return color() == Color::WHITE ? std::string(1, (char) toupper(symbol))
-                                       : std::string(1, (char) tolower(symbol));
+        return color() == Color::WHITE ? (char) toupper(symbol) : (char) tolower(symbol);
     }
 
     // Get the Unicode symbol of the piece
     std::string unicode_symbol(bool invert_color = false) const {
-        char symbolKey = symbol()[0];
+        char symbolKey = symbol();
         if (invert_color) {
             symbolKey = isupper(symbolKey) ? tolower(symbolKey) : toupper(symbolKey);
         }
@@ -1262,13 +1261,11 @@ public:
              (orientation == WHITE ? rank >= 0 : rank < 8);
              (orientation == WHITE ? --rank : ++rank)) {
             if (borders) {
-                builder << "  " << std::string(17, ' ') << "\n" << RANK_NAMES[rank] << " ";
+                builder << RANK_NAMES[rank] << " ";
             }
 
             for (int file = 0; file < 8; ++file) {
                 Square sq = square(file, rank);
-                if (borders && file == 0)
-                    builder << " ";
 
                 auto piece = pieceAt(sq);
                 if (piece.has_value()) {
@@ -1288,7 +1285,7 @@ public:
         }
 
         if (borders) {
-            builder << "  " << std::string(17, ' ') << "\n   ";
+            builder << "  ";
             for (char c = 'a'; c <= 'h'; ++c) {
                 builder << c << (c < 'h' ? " " : "");
             }
@@ -1439,10 +1436,30 @@ public:
 
     bool isFiftyMoves() { return _isHalfMoves(100); }
 
-    void push(const Move &move) {
+    void push(Move move) {
+        /*
+        Updates the position with the given *move*.
+
+        >>> Board board;
+        >>>
+        >>> Move Nf3 = Move::from_uci("g1f3");
+        >>> board.push(Nf3)  # Make the move
+
+        Null moves just increment the move counters, switch turns and forfeit
+        en passant capturing.
+
+        .. warning::
+            Moves are not checked for legality. It is the caller's
+            responsibility to ensure that the move is at least pseudo-legal or
+            a null move.
+        */
+
         // Updates the position with the given move
         // Reset the generated moves
         _resetStoredMoves();
+
+        move = _toChess960(move);
+        castling_rights = _cleanCastlingRights();
 
         // Reset en passant square
         auto epSquare = ep_square;
@@ -1461,7 +1478,7 @@ public:
         }
 
         // Zero the half-move clock for pawn moves and captures
-        if (pieceTypeAt(move.fromSquare()) == PieceType::PAWN || isCapture(move)) {
+        if (isZeroing(move)) {
             halfmove_clock = 0;
         }
 
@@ -1469,10 +1486,11 @@ public:
         Bitboard toBB = BB_SQUARES[move.toSquare()];
 
         bool promoted = (m_promoted & fromBB) != 0;
-        auto piece = removePieceAt(move.fromSquare());
-        if (!piece.has_value())
+        auto piece = _removePieceAt(move.fromSquare());
+        if (!piece.has_value()) {
             return; // Move must be at least pseudo-legal
-        auto pieceType = piece.value().pieceType();
+        }
+        auto pieceType = piece.value();
 
         Square captureSquare = move.toSquare();
         auto capturedPieceType = pieceTypeAt(captureSquare);
@@ -1517,20 +1535,19 @@ public:
         }
 
         // Handle castling moves
-        if (pieceType == PieceType::KING && m_occupied_color[turn] & toBB) {
+        if (pieceType == PieceType::KING && (m_occupied_color[turn] & toBB)) {
             // Is a castling move
-
             bool aSide = squareFile(move.toSquare()) < squareFile(move.fromSquare());
 
-            _removePieceAt(move.toSquare());
             _removePieceAt(move.fromSquare());
+            _removePieceAt(move.toSquare());
 
             if (aSide) {
-                _setPieceAt((turn == WHITE) ? D1 : D8, PieceType::ROOK, turn);
                 _setPieceAt((turn == WHITE) ? C1 : C8, PieceType::KING, turn);
+                _setPieceAt((turn == WHITE) ? D1 : D8, PieceType::ROOK, turn);
             } else {
-                _setPieceAt((turn == WHITE) ? F1 : F8, PieceType::ROOK, turn);
                 _setPieceAt((turn == WHITE) ? G1 : G8, PieceType::KING, turn);
+                _setPieceAt((turn == WHITE) ? F1 : F8, PieceType::ROOK, turn);
             }
 
         } else {
@@ -1898,6 +1915,22 @@ public:
     }
 
 private:
+    Move _toChess960(Move move) {
+        if (move.fromSquare() == E1 && (m_kings & BB_E1)) {
+            if (move.toSquare() == G1 && !(m_rooks & BB_G1))
+                return Move(E1, H1);
+            else if (move.toSquare() == C1 && !(m_rooks & BB_C1))
+                return Move(E1, A1);
+        } else if (move.fromSquare() == E8 && (m_kings & BB_E8)) {
+            if (move.toSquare() == G8 && !(m_rooks & BB_G8))
+                return Move(E8, H8);
+            else if (move.toSquare() == C8 && !(m_rooks & BB_C8))
+                return Move(E8, A8);
+        }
+
+        return move;
+    }
+
     void _resetStoredMoves() {
         m_cachedLegalMoves = std::nullopt;
         m_cachedPseudoLegalMoves = std::nullopt;
