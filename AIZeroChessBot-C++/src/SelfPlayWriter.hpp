@@ -114,8 +114,12 @@ private:
         torch::Tensor policyTargetsTensor = torch::stack(policyTargets);
         torch::Tensor valueTargetsTensor = torch::stack(valueTargets);
 
-        torch::save(statesTensor, (memoryPath / "states.pt").string());
-        torch::save(policyTargetsTensor, (memoryPath / "policyTargets.pt").string());
-        torch::save(valueTargetsTensor, (memoryPath / "valueTargets.pt").string());
+        try {
+            torch::save(statesTensor, (memoryPath / "states.pt").string());
+            torch::save(policyTargetsTensor, (memoryPath / "policyTargets.pt").string());
+            torch::save(valueTargetsTensor, (memoryPath / "valueTargets.pt").string());
+        } catch (const std::exception &e) {
+            log("Error saving training data batch:", e.what());
+        }
     }
 };

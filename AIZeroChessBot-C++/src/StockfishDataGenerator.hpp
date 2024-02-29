@@ -59,22 +59,25 @@ public:
         size_t numGames = 0;
         std::string line;
         while (std::getline(file, line)) {
-            std::vector<std::string> tokens = split(line, ' ');
+            try {
+                std::vector<std::string> tokens = split(line, ' ');
 
-            float score = std::stof(tokens[0]);
-            std::vector<Move> moves;
-            for (size_t i = 1; i < tokens.size(); ++i) {
-                moves.push_back(Move::fromUci(tokens[i]));
+                float score = std::stof(tokens[0]);
+                std::vector<Move> moves;
+                for (size_t i = 1; i < tokens.size(); ++i) {
+                    moves.push_back(Move::fromUci(tokens[i]));
+                }
+
+                // WARNING: verify the correctness of the policy encoding
+                //          In the past, some of the policy encodings needed to be flipped
+                //          vertically in case of black/white to move
+                writeLine(Board(), moves, score);
+
+                numGames++;
+                if (numGames % 1000 == 0)
+                    reportProgress(numGames, 1000000, "Elite games"); // TODO
+            } catch (...) {
             }
-
-            // WARNING: verify the correctness of the policy encoding
-            //          In the past, some of the policy encodings needed to be flipped vertically in
-            //          case of black/white to move
-            writeLine(Board(), moves, score);
-
-            numGames++;
-            if (numGames % 1000 == 0)
-                reportProgress(numGames, 1000000, "Elite games"); // TODO
         }
 
         markGenerated("elite_games_generated");
@@ -101,19 +104,22 @@ public:
             std::getline(file, line);
         }
         while (std::getline(file, line) && numGames < linesPerProcess) {
-            json eval = json::parse(line);
-            auto board = Board::fromFEN(eval["fen"]);
-            auto lines = parseLichessEvalPolicy(eval["evals"], board);
+            try {
+                json eval = json::parse(line);
+                auto board = Board::fromFEN(eval["fen"]);
+                auto lines = parseLichessEvalPolicy(eval["evals"], board);
 
-            if (createLines) {
-                for (auto &[moves, value] : lines) {
-                    writeLine(board, moves, value);
+                if (createLines) {
+                    for (auto &[moves, value] : lines) {
+                        writeLine(board, moves, value);
+                    }
                 }
-            }
 
-            numGames++;
-            if (numGames % 1000 == 0)
-                reportProgress(numGames, linesPerProcess, "Evaluations");
+                numGames++;
+                if (numGames % 1000 == 0)
+                    reportProgress(numGames, linesPerProcess, "Evaluations");
+            } catch (...) {
+            }
         }
 
         markGenerated("lichess_evals_generated");
@@ -128,8 +134,11 @@ public:
         StockfishEvaluator evaluator(pathToStockfish);
 
         for (size_t iteration = 0; tqdm(iteration, numGames, "Stockfish Self Play"); ++iteration) {
-            Board board;
-            stockfishSelfPlay(evaluator, board, numMoves);
+            try {
+                Board board;
+                stockfishSelfPlay(evaluator, board, numMoves);
+            } catch (...) {
+            }
         }
     }
 
