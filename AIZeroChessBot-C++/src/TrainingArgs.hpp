@@ -33,6 +33,9 @@ struct TrainingArgs {
     // The percentage of games to retain for training for the next iteration
     int retentionRate;
 
+    // Number of trainers to use in parallel for training
+    size_t numTrainers;
+
     // Path to save the model to after each iteration
     std::string savePath;
 
@@ -41,10 +44,10 @@ struct TrainingArgs {
                  int numIterationsPerTurn = 0, size_t numEpochs = 0, size_t batchSize = 0,
                  float temperature = 0.0f, float dirichletEpsilon = 0.0f,
                  float dirichletAlpha = 0.0f, float cParam = 0.0f, std::string savePath = "",
-                 int retentionRate = 0)
+                 int retentionRate = 0, size_t numTrainers = 0)
         : numIterations(numIterations), numParallelGames(numParallelGames),
           numIterationsPerTurn(numIterationsPerTurn), numEpochs(numEpochs), batchSize(batchSize),
           temperature(temperature), dirichletEpsilon(dirichletEpsilon),
           dirichletAlpha(dirichletAlpha), cParam(cParam), retentionRate(retentionRate),
-          savePath(std::move(savePath)) {}
+          savePath(std::move(savePath)), numTrainers(numTrainers) {}
 };

@@ -31,14 +31,15 @@ int main(int argc, char *argv[]) {
         200,       // numIterations
         32,        // numParallelGames
         500,       // numIterationsPerTurn
-        1,         // numEpochs
+        40,        // numEpochs
         128,       // batchSize
         1.0f,      // temperature
         0.25f,     // dirichletEpsilon
         0.03f,     // dirichletAlpha
         2.0f,      // cParam
         SAVE_PATH, // savePath
-        95         // retentionRate (in percent)
+        75,        // retentionRate (in percent)
+        1,         // numTrainers
     };
 
     if (isGenerate) {

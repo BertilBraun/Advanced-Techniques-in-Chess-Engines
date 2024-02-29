@@ -16,7 +16,11 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
-        for (size_t i = 0; i < devices; i++) {
+        if (devices == 0) {
+            m_devicesList.push_back(torch::Device(torch::kCPU));
+        }
+
+        for (size_t i = 0; i < std::min(devices, args.numTrainers); i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i));
         }
 
