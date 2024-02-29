@@ -16,17 +16,15 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
-        m_devicesList.push_back(torch::Device(torch::kCUDA, 0));
+        for (size_t i = 0; i < devices; i++) {
+            m_devicesList.push_back(torch::Device(torch::kCUDA, i));
+        }
 
-        // for (size_t i = 0; i < devices; i++) {
-        //     m_devicesList.push_back(torch::Device(torch::kCUDA, i));
-        // }
-        //
-        // for (auto &device : m_devicesList) {
-        //     Network modelClone(device);
-        //     // synchronizeModel(modelClone);
-        //     m_models.push_back(modelClone);
-        // }
+        for (auto &device : m_devicesList) {
+            Network modelClone(device);
+            synchronizeModel(modelClone);
+            m_models.push_back(modelClone);
+        }
 
         m_barrier = Barrier(m_devicesList.size());
     }
@@ -129,8 +127,7 @@ private:
 
         while (dataSubset.hasNext()) {
             auto [states, policyTargets, valueTargets] = dataSubset.next();
-            // auto [policy, value] = model->forward(states);
-            auto [policy, value] = m_model->forward(states); // TODO remove
+            auto [policy, value] = model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
             auto valueLoss = torch::mse_loss(value, valueTargets);
@@ -139,12 +136,10 @@ private:
             m_optimizer->zero_grad();
             loss.backward();
 
-            m_optimizer->step(); // TODO remove
-            // timeit([&] { aggregateGradientsToMainModel(); },
-            //        "aggregateGradientsToMainModel * num devices");
+            timeit([&] { aggregateGradientsToMainModel(); }, "aggregateGradientsToMainModel");
 
             // Ensure all models are updated with the main model's parameters
-            // timeit([&] { synchronizeModel(model); }, "synchronizeModel * num devices");
+            timeit([&] { synchronizeModel(model); }, "synchronizeModel");
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
@@ -163,10 +158,9 @@ private:
             torch::NoGradGuard no_grad; // Ensure no gradient computation happens here
 
             for (size_t i = 0; i < m_model->parameters().size(); ++i) {
-                auto main_param = m_model->parameters()[i];
-
                 // Accumulate gradients from all models
-                torch::Tensor grad_sum = torch::zeros_like(main_param.grad());
+                torch::Tensor grad_sum = torch::zeros_like(m_models[0]->parameters()[i].grad());
+
                 for (auto &model : m_models) {
                     auto param = model->parameters()[i];
                     grad_sum += param.grad();
@@ -176,7 +170,7 @@ private:
                 // grad_sum /= m_models.size();
 
                 // Update the main model's gradients with the aggregated gradients
-                main_param.mutable_grad() = grad_sum;
+                m_model->parameters()[i].mutable_grad() = grad_sum;
             }
 
             m_optimizer->step();

@@ -10,11 +10,11 @@ class Barrier {
 
 public:
     Barrier() = default;
-    Barrier(size_t totalThreads) : m_totalThreads(totalThreads) {}
+    Barrier(size_t totalThreads) : m_totalThreads(totalThreads) { m_barrierCounts.insert({0, 0}); }
 
     Barrier &operator=(const Barrier &other) {
         m_barrierMutex.lock();
-        m_barrierCount = other.m_barrierCount;
+        m_barrierCallCount = other.m_barrierCallCount;
         m_totalThreads = other.m_totalThreads;
         m_barrierMutex.unlock();
         return *this;
@@ -24,19 +24,26 @@ public:
         // return true for only one of the threads
 
         m_barrierMutex.lock();
-        m_barrierCount++;
+        if (m_barrierCounts[m_barrierCallCount] == m_totalThreads) {
+            m_barrierCounts.insert({++m_barrierCallCount, 0});
+        }
+        int myCallCount = m_barrierCallCount;
+        m_barrierCounts[myCallCount]++;
         m_barrierMutex.unlock();
 
-        while (m_barrierCount < m_totalThreads) {
+        while (m_barrierCounts[myCallCount] < m_totalThreads) {
             std::this_thread::yield();
         }
 
         bool isFirst = false;
         m_barrierMutex.lock();
-        if (m_barrierCount == m_totalThreads) {
+        if (m_barrierCounts[myCallCount] == m_totalThreads) {
             isFirst = true;
         }
-        m_barrierCount = 0;
+        m_barrierCounts[myCallCount]++;
+        if (m_barrierCounts[myCallCount] == 2 * m_totalThreads) {
+            m_barrierCounts.erase(myCallCount);
+        }
         m_barrierMutex.unlock();
 
         return isFirst;
@@ -44,6 +51,7 @@ public:
 
 private:
     std::mutex m_barrierMutex;
-    size_t m_barrierCount = 0;
+    std::unordered_map<size_t, size_t> m_barrierCounts;
+    size_t m_barrierCallCount = 0;
     size_t m_totalThreads = 0;
 };
