@@ -124,10 +124,10 @@ private:
 
         std::string line;
         while (std::getline(configFile, line)) {
-            auto delimiterPos = line.find('=');
-            if (delimiterPos != std::string::npos) {
-                std::string key = line.substr(0, delimiterPos);
-                std::string value = line.substr(delimiterPos + 1);
+            auto parts = split(line, '=');
+            if (parts.size() == 2) {
+                std::string key = parts[0];
+                std::string value = parts[1];
 
                 if (key == "model") {
                     modelPath = value;
