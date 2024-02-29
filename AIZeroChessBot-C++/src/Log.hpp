@@ -132,6 +132,6 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
     }
     bar << "]";
 
-    logNoNewline(bar.str(), int(progress * 100.0), '%', desc, (current == total ? "\n" : "\r"));
+    logNoNewline(bar.str(), int(progress * 100.0), '%', desc, (current >= total ? "\n" : "\r"));
     return current < total;
 }
