@@ -29,43 +29,39 @@ public:
         std::filesystem::path lastTrainingConfigPath = m_savePath / CONFIG_FILE_NAME;
 
         if (std::filesystem::exists(lastTrainingConfigPath)) {
-            try {
-                size_t loadedIteration = 0;
-                std::string modelPath, optimizerPath;
-                // Load the training configuration
-                if (!loadConfiguration(lastTrainingConfigPath, modelPath, optimizerPath,
-                                       loadedIteration)) {
-                    log("Failed to load training configuration");
-                    return;
-                }
-
-                // Load model state
-                if (std::filesystem::exists(modelPath)) {
-                    torch::load(m_model, modelPath);
-                    m_model->device = torch::cuda::is_available() && torch::cuda::device_count() > 0
-                                          ? torch::kCUDA
-                                          : torch::kCPU;
-                    m_model->to(m_model->device);
-                } else {
-                    log("Saved model file not found:", modelPath);
-                    return;
-                }
-
-                // Load optimizer state
-                if (std::filesystem::exists(optimizerPath)) {
-                    if (m_optimizer != nullptr)
-                        torch::load(*m_optimizer, optimizerPath);
-                } else {
-                    log("Saved optimizer file not found:", optimizerPath);
-                    return;
-                }
-
-                // Assuming you want to continue from the next iteration
-                m_startingIteration = loadedIteration + 1;
-                log("Model and optimizer loaded from iteration", loadedIteration);
-            } catch (const torch::Error &e) {
-                log("Error loading model and optimizer states:", e.what());
+            size_t loadedIteration = 0;
+            std::string modelPath, optimizerPath;
+            // Load the training configuration
+            if (!loadConfiguration(lastTrainingConfigPath, modelPath, optimizerPath,
+                                   loadedIteration)) {
+                log("Failed to load training configuration");
+                return;
             }
+
+            // Load model state
+            try {
+                torch::load(m_model, modelPath);
+                m_model->device = torch::cuda::is_available() && torch::cuda::device_count() > 0
+                                      ? torch::kCUDA
+                                      : torch::kCPU;
+                m_model->to(m_model->device);
+            } catch (const torch::Error &e) {
+                log("Error loading model state:", e.what());
+                return;
+            }
+
+            // Load optimizer state
+            try {
+                if (m_optimizer != nullptr)
+                    torch::load(*m_optimizer, optimizerPath);
+            } catch (const torch::Error &e) {
+                log("Error loading optimizer state:", e.what());
+                return;
+            }
+
+            // Assuming you want to continue from the next iteration
+            m_startingIteration = loadedIteration + 1;
+            log("Model and optimizer loaded from iteration", loadedIteration);
         } else {
             log("No model and optimizer found, starting from scratch");
         }
