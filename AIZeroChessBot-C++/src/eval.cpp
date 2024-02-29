@@ -123,17 +123,13 @@ int main(int argc, char *argv[]) {
                       [](const auto &lhs, const auto &rhs) { return lhs.second > rhs.second; });
 
             std::cout << "-------------------------------------------------" << std::endl;
-            std::cout << "Board: " << COLOR_NAMES[board.turn] << std::endl;
-            std::cout << board.unicode(false, true) << std::endl;
+            std::cout << board.unicode(true, true) << std::endl;
             std::cout << "FEN: " << board.fen() << std::endl;
             std::cout << "Evaluation: " << value[i].item<float>() << std::endl;
             std::cout << "Policy: " << moves.size() << " moves" << std::endl;
             for (auto [move, score] : moves) {
                 std::cout << move.uci() << " " << score << std::endl;
             }
-            std::cout << "Board with best move applied:" << std::endl;
-            board.push(moves[0].first);
-            std::cout << board.unicode(false, true) << std::endl;
         }
     } else {
         log("Invalid mode:", mode);
