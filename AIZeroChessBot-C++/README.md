@@ -54,6 +54,8 @@ AI-Zero Chess Bot comprises two main components: the Neural Network (NN) and the
   - **Policy Head**: Outputs a probability distribution over all legal moves from the current position (1968 possible moves).
   - **Value Head**: Outputs a single value estimating the likelihood of winning from the current position.
 
+For this NN architecture, we require a board encoding scheme that translates the chess board into a tensor representation, along with methods for move encoding and handling moves with associated probabilities. The design choices for the board encoding scheme are documented in [Chess Encoding for Neural Networks](/AIZeroChessBot-C++/documentation/encodings/README.md).
+
 ### Monte Carlo Tree Search (MCTS)
 
 - Utilizes the policy head to guide exploration of the game tree.

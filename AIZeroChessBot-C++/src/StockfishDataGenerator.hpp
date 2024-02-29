@@ -66,6 +66,10 @@ public:
             for (size_t i = 1; i < tokens.size(); ++i) {
                 moves.push_back(Move::fromUci(tokens[i]));
             }
+
+            // WARNING: verify the correctness of the policy encoding
+            //          In the past, some of the policy encodings needed to be flipped vertically in
+            //          case of black/white to move
             writeLine(Board(), moves, score);
 
             numGames++;
@@ -247,6 +251,9 @@ private:
         std::vector<PolicyMove> policy = evaluateMovesPolicy(evaluator, board);
         float value = evaluator.evaluatePosition(board.fen());
 
+        // WARNING: verify the correctness of the policy encoding
+        //          In the past, some of the policy encodings needed to be flipped vertically in
+        //          case of black/white to move
         write(board, policy, value);
 
         return policy;
