@@ -46,7 +46,8 @@ public:
                                       : torch::kCPU;
                 m_model->to(m_model->device);
             } catch (const torch::Error &e) {
-                log("Error loading model state:", e.what());
+                log("Error loading model state:", modelPath);
+                log("Error:", e.what());
                 return;
             }
 
@@ -55,7 +56,8 @@ public:
                 if (m_optimizer != nullptr)
                     torch::load(*m_optimizer, optimizerPath);
             } catch (const torch::Error &e) {
-                log("Error loading optimizer state:", e.what());
+                log("Error loading optimizer state:", optimizerPath);
+                log("Error:", e.what());
                 return;
             }
 
@@ -135,6 +137,24 @@ private:
                     iteration = std::stoi(value);
                 }
             }
+        }
+
+        // NOTE: The paths are saved as absolute paths, so we need to convert them to relative paths
+        //       because libtorch's load function apparently doesn't like absolute paths
+        // NOTE: Somehow the std::filesystem::relative function doesn't work as expected, so we'll
+        //       just strip the common prefix from the paths
+
+        // make the model and optimizer paths relative to the cwd
+        std::string cwd = std::filesystem::current_path().string();
+        modelPath = modelPath.substr(cwd.size() + 2);
+        // strip trailing '"' if it exists
+        if (modelPath.back() == '"') {
+            modelPath.pop_back();
+        }
+        optimizerPath = optimizerPath.substr(cwd.size() + 2);
+        // strip trailing '"' if it exists
+        if (optimizerPath.back() == '"') {
+            optimizerPath.pop_back();
         }
 
         configFile.close();

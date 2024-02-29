@@ -10,9 +10,13 @@
 
 #include "Stockfish.hpp"
 
+#ifdef _WIN32
 #pragma warning(push, 0)
+#endif
 #include "json.hpp"
+#ifdef _WIN32
 #pragma warning(pop)
+#endif
 
 using json = nlohmann::json;
 

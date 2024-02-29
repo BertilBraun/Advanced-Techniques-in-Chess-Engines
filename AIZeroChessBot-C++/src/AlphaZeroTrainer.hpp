@@ -41,9 +41,7 @@ public:
 
             timeit([&] { dataset.load(); }, "load Dataset");
 
-            while (dataset.size() < 10000) {
-                logNoNewline("Waiting for more training data. Current size:", dataset.size(),
-                             "/10000\r");
+            while (tqdm(dataset.size(), 10000, "Waiting for more training data...")) {
                 std::this_thread::sleep_for(std::chrono::minutes(10));
                 timeit([&] { dataset.load(); }, "load Dataset");
             }
@@ -133,7 +131,6 @@ private:
             auto valueLoss = torch::mse_loss(value, valueTargets);
             auto loss = policyLoss + valueLoss;
 
-            m_optimizer->zero_grad();
             loss.backward();
 
             timeit([&] { aggregateGradientsToMainModel(); }, "aggregateGradientsToMainModel");
@@ -164,6 +161,9 @@ private:
                 for (auto &model : m_models) {
                     auto param = model->parameters()[i];
                     grad_sum += param.grad();
+
+                    // Reset the gradients for the next iteration
+                    param.grad().zero_();
                 }
 
                 // Average the gradients (if desired, depending on your training strategy)

@@ -15,7 +15,9 @@
 #include "Time.hpp"
 #include "chess.hpp"
 
+#ifdef _WIN32
 #pragma warning(push, 0)
+#endif
 
 #include <algorithm>
 #include <array>
@@ -30,7 +32,9 @@
 #include <vector>
 
 #include <torch/torch.h>
+#ifdef _WIN32
 #pragma warning(pop)
+#endif
 
 using namespace chess;
 
