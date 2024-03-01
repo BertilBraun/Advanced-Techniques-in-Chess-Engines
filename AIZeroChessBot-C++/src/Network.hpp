@@ -88,5 +88,33 @@ struct NetworkImpl : torch::nn::Module {
         auto value = result.second.squeeze(1).to(torch::kCPU).detach().clone();
         return {policy, value};
     }
+
+    void printParams() {
+
+        size_t totalParams = 0;
+
+        for (auto &param : parameters()) {
+            totalParams += param.numel();
+        }
+
+        std::vector<std::pair<std::string, size_t>> params;
+        for (auto param : named_parameters()) {
+            params.push_back({param.key(), param.value().numel()});
+        }
+
+        size_t maxLen = 0;
+        for (auto &param : params) {
+            maxLen = std::max(maxLen, param.first.size());
+        }
+
+        log("Modules", std::string(maxLen - 6, ' '), ':', "Parameters");
+
+        for (auto &param : params) {
+            log(param.first, std::string(maxLen - (param.first.size() - 1), ' '), ':',
+                param.second);
+        }
+
+        log("Total Trainable Params:", totalParams);
+    }
 };
 TORCH_MODULE(Network);

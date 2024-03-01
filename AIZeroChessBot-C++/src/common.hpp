@@ -40,7 +40,7 @@ using namespace chess;
 
 static inline constexpr int ROW_COUNT = 8;
 static inline constexpr int COLUMN_COUNT = 8;
-static inline constexpr int NUM_RES_BLOCKS = 5;
+static inline constexpr int NUM_RES_BLOCKS = 8;
 static inline constexpr int NUM_HIDDEN = 256;
 // 6 types for each color
 static inline constexpr int ENCODING_CHANNELS = 6 + 6;

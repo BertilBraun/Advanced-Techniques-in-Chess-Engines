@@ -16,12 +16,14 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
+        m_model->to(torch::kCPU);
+
         if (devices == 0) {
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(devices, args.numTrainers); i++) {
-            m_devicesList.push_back(torch::Device(torch::kCUDA, i));
+        for (size_t i = 0; i < std::min(2 * devices, args.numTrainers); i++) {
+            m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
         }
 
         for (auto &device : m_devicesList) {
@@ -132,7 +134,7 @@ private:
             auto [policy, value] = model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
-            auto valueLoss = torch::mse_loss(value, valueTargets);
+            auto valueLoss = torch::mse_loss(value * 50.f, valueTargets * 50.f);
             auto loss = policyLoss + valueLoss;
 
             loss.backward();
@@ -160,11 +162,12 @@ private:
 
             for (size_t i = 0; i < m_model->parameters().size(); ++i) {
                 // Accumulate gradients from all models
-                torch::Tensor grad_sum = torch::zeros_like(m_models[0]->parameters()[i].grad());
+                torch::Tensor grad_sum =
+                    torch::zeros_like(m_models[0]->parameters()[i].grad()).to(torch::kCPU);
 
                 for (auto &model : m_models) {
                     auto param = model->parameters()[i];
-                    grad_sum += param.grad();
+                    grad_sum += param.grad().to(torch::kCPU);
 
                     // Reset the gradients for the next iteration
                     param.grad().zero_();

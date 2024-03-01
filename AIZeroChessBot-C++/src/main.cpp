@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
 
     Network model;
     auto optimizer =
-        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(0.02).weight_decay(1e-4));
+        torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(1e-3).weight_decay(2e-5));
 
     AlphaZeroTrainer alphaZeroTrainer(model, optimizer, args);
 

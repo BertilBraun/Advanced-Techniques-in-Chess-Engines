@@ -77,7 +77,7 @@ template <bool AddNewline, typename... Args> void logCommon(Args... args) {
     }
 
     std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] [ " << __THREAD_IDS[threadId] << " ] ";
+    logStream << '[' << currentTime() << "] [" << __THREAD_IDS[threadId] << "] ";
 
     auto appendToLog = [&logStream](const auto &arg) {
         std::string argStr = toString(arg);
