@@ -38,12 +38,5 @@ job_time_limit_seconds=$(($job_time_limit_seconds - 300))
 
 # Use the calculated job time limit for timeout
 timeout ${job_time_limit_seconds}s ./AIZeroChessBot "generate" $SLURM_CPUS_PER_TASK
-exit_status=$?
 
-# Check if the process was successful (exit status 0)
-if [ $exit_status -eq 0 ]; then
-    echo "Process completed successfully, re-queuing..."
-    sbatch train.sh
-else
-    echo "Process did not complete successfully, not re-queuing."
-fi
+sbatch train_test.sh
