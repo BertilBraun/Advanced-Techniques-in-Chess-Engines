@@ -23,11 +23,14 @@ public:
         return *this;
     }
 
+    float getAverageLoss() const { return m_totalLoss / (float) m_numBatches; }
+
     std::string toString() const {
         std::ostringstream stream;
         stream << "Policy Loss: " << m_policyLoss / (float) m_numBatches
                << ", Value Loss: " << m_valueLoss / (float) m_numBatches
-               << ", Total Loss: " << m_totalLoss / (float) m_numBatches << ", Batches: " << m_numBatches;
+               << ", Total Loss: " << m_totalLoss / (float) m_numBatches
+               << ", Batches: " << m_numBatches;
         return stream.str();
     }
 

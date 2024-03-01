@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
         32,        // numParallelGames
         500,       // numIterationsPerTurn
         40,        // numEpochs
-        128,       // batchSize
+        64,        // batchSize
         1.0f,      // temperature
         0.25f,     // dirichletEpsilon
         0.03f,     // dirichletAlpha

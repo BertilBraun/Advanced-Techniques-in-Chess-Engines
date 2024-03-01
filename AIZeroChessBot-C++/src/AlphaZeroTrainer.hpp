@@ -22,7 +22,7 @@ public:
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
+        for (size_t i = 0; i < std::min(4 * devices, args.numTrainers); i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
         }
 
@@ -136,6 +136,15 @@ private:
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
             auto valueLoss = torch::mse_loss(value * 50.f, valueTargets * 50.f);
             auto loss = policyLoss + valueLoss;
+
+            // if loss is a lot higher than trainStats.getAverageLoss() then log the state and
+            // policyTargets and valueTargets
+            // if (loss.item<float>() > 2 * trainStats.getAverageLoss()) {
+            //     log("High loss detected, logging state and targets");
+            //     log("State:\n", states);
+            //     log("Policy Targets:\n", policyTargets);
+            //     log("Value Targets:\n", valueTargets);
+            // }
 
             loss.backward();
 
