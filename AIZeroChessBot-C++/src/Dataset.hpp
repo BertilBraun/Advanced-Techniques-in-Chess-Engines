@@ -12,11 +12,9 @@ public:
                size_t memoriesToPreload = 10)
         : m_memoryPaths(memoryPaths), m_device(device), m_memoriesToPreload(memoriesToPreload) {
 
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::shuffle(m_memoryPaths.begin(), m_memoryPaths.end(), g);
-
         assert(m_memoriesToPreload > 0);
+
+        shuffle(m_memoryPaths);
 
         for (m_currentMemoryIndex = 0; m_currentMemoryIndex < m_memoriesToPreload;
              ++m_currentMemoryIndex) {

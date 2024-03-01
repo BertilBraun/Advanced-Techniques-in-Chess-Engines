@@ -66,3 +66,9 @@ template <typename T> inline size_t index_of(const std::vector<T> &vec, const T 
 template <typename T> inline void extend(std::vector<T> &vec, const std::vector<T> &other) {
     vec.insert(vec.end(), other.begin(), other.end());
 }
+
+template <typename T> inline void shuffle(std::vector<T> &vec) {
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(vec.begin(), vec.end(), g);
+}

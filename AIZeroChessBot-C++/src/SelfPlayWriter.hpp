@@ -70,7 +70,14 @@ private:
     }
 
     void saveTrainingDataBatches() {
-        while (m_selfPlayMemoryBatch.size() >= m_batchSize) {
+        // wait until we have enough data to save a batch
+        // we want to wait until we have enough data to properly shuffle the batch
+        // this is because we write 4 very similar samples at once, and we want to shuffle them
+        // together with other samples to avoid the same samples being in the same batch
+        while (m_selfPlayMemoryBatch.size() >= m_batchSize * 8) {
+            // shuffle m_selfPlayMemoryBatch
+            shuffle(m_selfPlayMemoryBatch);
+
             std::vector<SelfPlayMemory> batch(m_selfPlayMemoryBatch.begin(),
                                               m_selfPlayMemoryBatch.begin() + m_batchSize);
             m_selfPlayMemoryBatch.erase(m_selfPlayMemoryBatch.begin(),

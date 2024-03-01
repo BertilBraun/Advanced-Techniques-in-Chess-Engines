@@ -22,7 +22,7 @@ public:
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(4 * devices, args.numTrainers); i++) {
+        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
         }
 
