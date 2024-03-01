@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
         2.0f,      // cParam
         SAVE_PATH, // savePath
         75,        // retentionRate (in percent)
-        1,         // numTrainers
+        1000000,   // numTrainers
     };
 
     if (isGenerate) {

@@ -49,5 +49,5 @@ struct TrainingArgs {
           numIterationsPerTurn(numIterationsPerTurn), numEpochs(numEpochs), batchSize(batchSize),
           temperature(temperature), dirichletEpsilon(dirichletEpsilon),
           dirichletAlpha(dirichletAlpha), cParam(cParam), retentionRate(retentionRate),
-          savePath(std::move(savePath)), numTrainers(numTrainers) {}
+          numTrainers(numTrainers), savePath(std::move(savePath)) {}
 };
