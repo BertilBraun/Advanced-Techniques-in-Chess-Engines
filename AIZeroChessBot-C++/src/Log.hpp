@@ -153,7 +153,7 @@ public:
         m_rows.push_back({toString(args)...});
     }
 
-    std::string toString() const {
+    std::string getAsString() const {
         std::vector<size_t> columnWidths(m_columns.size(), 0);
         for (size_t i = 0; i < m_columns.size(); ++i) {
             columnWidths[i] = std::max(columnWidths[i], m_columns[i].size());

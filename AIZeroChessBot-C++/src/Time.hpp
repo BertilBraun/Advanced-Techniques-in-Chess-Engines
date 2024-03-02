@@ -44,5 +44,5 @@ inline std::string getTimeitResults() {
         table.addRow(pair.first, (double) pair.second * 1e-9);
     }
 
-    return table.toString();
+    return table.getAsString();
 }

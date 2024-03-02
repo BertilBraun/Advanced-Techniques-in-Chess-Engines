@@ -97,7 +97,7 @@ struct NetworkImpl : torch::nn::Module {
         }
 
         std::stringstream ss;
-        ss << table.toString();
+        ss << table.getAsString();
         ss << "Total Trainable Params: " << this->parameters().size();
         return ss.str();
     }
