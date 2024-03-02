@@ -136,7 +136,13 @@ private:
                     auto [policy, value] = model->forward(states);
 
                     auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
-                    auto valueLoss = torch::mse_loss(value * 50.f, valueTargets * 50.f);
+                    // Scale the values since the value targets are in the range [-1, 1] and mse
+                    // loss decreases the loss when the |value - valueTarget| is less than 1 which
+                    // is often the case with values in the range [-1, 1] and very close to 0. This
+                    // potentially leads to not learning the value function well -> scale the values
+                    // to be in the range [-25, 25] to increase the loss and make the learning more
+                    // stable.
+                    auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
                     auto loss = policyLoss + valueLoss;
 
                     // if loss is a lot higher than trainStats.getAverageLoss() then log the state
