@@ -16,13 +16,11 @@ public:
         auto devices = torch::cuda::device_count();
         log("CUDA devices available:", devices);
 
-        m_model->to(torch::kCPU);
-
         if (devices == 0) {
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(4 * devices, args.numTrainers); i++) {
+        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
         }
 
@@ -72,7 +70,7 @@ public:
             learningStats.update(numTrainingSamples, trainStats);
 
             // Retain 25% of the memory for the next iteration
-            dataset.deleteOldMemories(m_args.retentionRate);
+            timeit([&] { dataset.deleteOldMemories(m_args.retentionRate); }, "deleteOldMemories");
 
             // evaluateAlphaVsStockfish(modelPath);
 
@@ -107,7 +105,9 @@ private:
         for (size_t i = 0; i < m_devicesList.size(); ++i) {
             threads.emplace_back(
                 std::thread([i, &dataSubsets, &totalTrainStats, &statsMutex, this] {
-                    TrainingStats trainStats = trainOnDevice(dataSubsets[i], m_models[i]);
+                    TrainingStats trainStats =
+                        timeit([&] { return trainOnDevice(dataSubsets[i], m_models[i]); },
+                               "trainOnDevice");
 
                     log("Device", i, "finished training");
 
@@ -130,31 +130,36 @@ private:
         TrainingStats trainStats;
 
         while (dataSubset.hasNext()) {
-            auto [states, policyTargets, valueTargets] = dataSubset.next();
-            auto [policy, value] = model->forward(states);
+            timeit(
+                [&] {
+                    auto [states, policyTargets, valueTargets] = dataSubset.next();
+                    auto [policy, value] = model->forward(states);
 
-            auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
-            auto valueLoss = torch::mse_loss(value * 50.f, valueTargets * 50.f);
-            auto loss = policyLoss + valueLoss;
+                    auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
+                    auto valueLoss = torch::mse_loss(value * 50.f, valueTargets * 50.f);
+                    auto loss = policyLoss + valueLoss;
 
-            // if loss is a lot higher than trainStats.getAverageLoss() then log the state and
-            // policyTargets and valueTargets
-            // if (loss.item<float>() > 2 * trainStats.getAverageLoss()) {
-            //     log("High loss detected, logging state and targets");
-            //     log("State:\n", states);
-            //     log("Policy Targets:\n", policyTargets);
-            //     log("Value Targets:\n", valueTargets);
-            // }
+                    // if loss is a lot higher than trainStats.getAverageLoss() then log the state
+                    // and policyTargets and valueTargets if (loss.item<float>() > 2 *
+                    // trainStats.getAverageLoss()) {
+                    //     log("High loss detected, logging state and targets");
+                    //     log("State:\n", states);
+                    //     log("Policy Targets:\n", policyTargets);
+                    //     log("Value Targets:\n", valueTargets);
+                    // }
 
-            loss.backward();
+                    loss.backward();
 
-            timeit([&] { aggregateGradientsToMainModel(); }, "aggregateGradientsToMainModel");
+                    timeit([&] { aggregateGradientsToMainModel(); },
+                           "aggregateGradientsToMainModel");
 
-            // Ensure all models are updated with the main model's parameters
-            timeit([&] { synchronizeModel(model); }, "synchronizeModel");
+                    // Ensure all models are updated with the main model's parameters
+                    timeit([&] { synchronizeModel(model); }, "synchronizeModel");
 
-            trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
-                              loss.item<float>());
+                    trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
+                                      loss.item<float>());
+                },
+                "Training Iteration");
         }
 
         m_barrier.updateRequired(-1);
@@ -174,11 +179,11 @@ private:
             for (size_t i = 0; i < m_model->parameters().size(); ++i) {
                 // Accumulate gradients from all models
                 torch::Tensor grad_sum =
-                    torch::zeros_like(m_models[0]->parameters()[i].grad()).to(torch::kCPU);
+                    torch::zeros_like(m_models[0]->parameters()[i].grad()).to(m_model->device);
 
                 for (auto &model : m_models) {
                     auto param = model->parameters()[i];
-                    grad_sum += param.grad().to(torch::kCPU);
+                    grad_sum += param.grad().to(m_model->device);
 
                     // Reset the gradients for the next iteration
                     param.grad().zero_();

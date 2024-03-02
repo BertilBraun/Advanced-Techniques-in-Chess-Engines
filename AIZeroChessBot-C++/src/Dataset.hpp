@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 
+#include <execution>
 #include <future>
 
 using DataSample = std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>;
@@ -198,9 +199,11 @@ public:
         // delete the oldest retentionFactor% of the memories
         float percentage = (1.0f - ((float) retentionFactor / 100.f));
         size_t numMemoriesToDelete = (size_t) (percentage * (float) m_memoryPathsFIFO.size());
-        for (size_t i = 0; i < numMemoriesToDelete; ++i) {
-            std::filesystem::remove_all(m_memoryPathsFIFO[i]);
-        }
+
+        // delete the memories all in parallel
+        std::for_each(std::execution::par_unseq, m_memoryPathsFIFO.begin(),
+                      m_memoryPathsFIFO.begin() + numMemoriesToDelete,
+                      [](const auto &memoryPath) { std::filesystem::remove_all(memoryPath); });
 
         // delete the oldest retentionFactor% of the memories
         m_memoryPathsFIFO.erase(m_memoryPathsFIFO.begin(),

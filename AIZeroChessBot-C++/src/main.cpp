@@ -38,8 +38,8 @@ int main(int argc, char *argv[]) {
         0.03f,     // dirichletAlpha
         2.0f,      // cParam
         SAVE_PATH, // savePath
-        75,        // retentionRate (in percent)
-        1000000,   // numTrainers // TODO 1
+        100,       // retentionRate (in percent) // TODO 75
+        1000000,   // numTrainers // TODO 2-4
     };
 
     if (isGenerate) {
