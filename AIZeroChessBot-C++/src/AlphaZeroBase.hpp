@@ -38,13 +38,13 @@ public:
                 return;
             }
 
+            auto device = torch::cuda::is_available() && torch::cuda::device_count() > 0
+                              ? torch::kCUDA
+                              : torch::kCPU;
+
             // Load model state
             try {
-                torch::load(m_model, modelPath);
-                m_model->device = torch::cuda::is_available() && torch::cuda::device_count() > 0
-                                      ? torch::kCUDA
-                                      : torch::kCPU;
-                m_model->to(m_model->device);
+                torch::load(m_model, modelPath, device);
             } catch (const torch::Error &e) {
                 log("Error loading model state:", modelPath);
                 log("Error:", e.what());
@@ -54,7 +54,7 @@ public:
             // Load optimizer state
             try {
                 if (m_optimizer != nullptr)
-                    torch::load(*m_optimizer, optimizerPath);
+                    torch::load(*m_optimizer, optimizerPath, device);
             } catch (const torch::Error &e) {
                 log("Error loading optimizer state:", optimizerPath);
                 log("Error:", e.what());
