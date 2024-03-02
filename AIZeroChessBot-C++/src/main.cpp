@@ -31,27 +31,19 @@ int main(int argc, char *argv[]) {
         200,       // numIterations
         32,        // numParallelGames
         500,       // numIterationsPerTurn
-        1,         // numEpochs
-        64,        // batchSize
+        1,         // numEpochs // TODO 40
+        64,        // batchSize // TODO 128
         1.0f,      // temperature
         0.25f,     // dirichletEpsilon
         0.03f,     // dirichletAlpha
         2.0f,      // cParam
         SAVE_PATH, // savePath
         75,        // retentionRate (in percent)
-        1000000,   // numTrainers
+        1000000,   // numTrainers // TODO 1
     };
 
     if (isGenerate) {
         log("Data generator process started");
-
-        // Run the python script in ../src/PreprocessGenerationData.py
-        // to generate the data in the correct format
-
-        // Subprocess preprocessData("python3 ../src/PreprocessGenerationData.py", "r+");
-        // preprocessData << "data/Lichess Elite Database";
-        // preprocessData << "data/lichess_elites.txt";
-        // preprocessData << "data/lichess_db_eval.json";
 
         std::vector<std::thread> threads;
 

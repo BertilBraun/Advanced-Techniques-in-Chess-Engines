@@ -8,7 +8,7 @@ The `encodeBoard` function translates a chess board into a 12x8x8 tensor represe
 
 ## Move Encoding
 
-`encodeMove` compresses a chess move into an index within a predefined mapping, facilitating a compact representation in a 1968-dimensional vector space. This approach significantly reduces the dimensionality required to represent chess moves.
+`encodeMove` compresses a chess move into an index within a predefined mapping, facilitating a compact representation in a 1968-dimensional vector space. This approach significantly reduces the dimensionality required to represent chess moves. The mapping is constructed by iterating through all squares on the board and generating all possible moves for each piece type. The resulting indices are then used to encode moves. This encoding scheme is a lot more efficient than the traditional approach of using a 64x64 matrix to represent all possible moves as also used in AlphaZero. This reduces the dimensionality of the move space by a factor of 2 which means that the neural network has to learn a lot less parameters to predict the best move.
 
 ## Moves Encoding with Probabilities
 

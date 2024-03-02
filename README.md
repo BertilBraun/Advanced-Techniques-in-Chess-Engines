@@ -2,41 +2,51 @@
 
 ## Overview
 
-This repository hosts a collection of three distinct chess bot projects, each exploring different approaches to chess AI development. From handcrafted algorithms to cutting-edge machine learning techniques, these projects aim to cover a broad spectrum of AI strategies in the realm of chess. Each project is contained within its own subfolder, allowing for focused development and exploration.
+This repository hosts a collection of four distinct chess bot projects, each exploring different approaches to chess AI development, ranging from handcrafted algorithms to advanced machine learning and beyond. The addition of the AI-ZeroChessBot-C++ project marks a significant milestone in our exploration, representing the most developed and sophisticated chess engine in our collection. It is a direct port of the AI-ZeroChessBot to C++, further developed to leverage the performance benefits of the language. From foundational frameworks to cutting-edge techniques, these projects aim to cover a comprehensive spectrum of AI strategies in the domain of chess. Each project is contained within its own subfolder, allowing for focused development and exploration.
 
 ## Projects
 
 ### 0. Framework (Subfolder: `Framework`)
 
-A basic framework to evaluate and play chess games, providing a foundation for the subsequent chess bot projects. This framework includes a abstract `ChessBot` class which can be extended to implement different chess bots, as well as a `GameManager` class to manage game state and interactions between bots. It also includes a GUI based `HumanPlayer` class to allow human players to play against the chess bot. The framework also provides a `Tournament` class to run a all vs all tournament between different chess bots.
+Provides the basic infrastructure for evaluating and playing chess games, serving as the foundation for the other projects. Includes essential classes such as `ChessBot`, `GameManager`, `HumanPlayer`, and `Tournament`.
 
 ### 1. HandcraftedChessBot (Subfolder: `HandcraftedChessBot`)
 
-A traditional chess bot that relies on handcrafted evaluation functions, search algorithms, and optimization techniques without the use of machine learning. This project focuses on the fundamentals of chess bot design, including move generation, board evaluation, and search strategies like alpha-beta pruning and iterative deepening.
+Focuses on traditional chess bot design principles, employing handcrafted evaluation functions and optimization techniques without machine learning.
 
 **Key Features**:
 
-- Alpha-beta pruning and iterative deepening for search optimization.
-- Handcrafted evaluation functions including material count, piece-square tables, and pawn structure analysis.
+- Alpha-beta pruning and iterative deepening.
+- Handcrafted evaluation functions focusing on material count, piece-square tables, and pawn structure.
 
 ### 2. NeuralNetChessBot (Subfolder: `NeuralNetChessBot`)
 
-This project introduces a neural network-based evaluator within a basic chess bot framework. It aims to explore the impact of replacing traditional, handcrafted evaluation methods with a machine learning model trained to understand and assess chess positions.
+Explores the integration of a neural network-based evaluator within a chess bot framework, aiming to assess chess positions dynamically through machine learning.
 
 **Key Features**:
 
-- Integration of a neural network for dynamic position evaluation.
-- Training and implementation of the neural network using chess game datasets.
+- Neural network for position evaluation.
+- Training of the neural network with chess game datasets.
 
 ### 3. AI-ZeroChessBot (Subfolder: `AI-ZeroChessBot`)
 
-Inspired by AlphaZero, this ambitious project seeks to implement a chess bot that combines deep neural networks with Monte Carlo Tree Search (MCTS) to guide move selection and position evaluation. It focuses on learning from self-play without relying on pre-existing game databases or handcrafted evaluation heuristics.
+Inspired by AlphaZero, this project combines deep neural networks with Monte Carlo Tree Search (MCTS) for move selection and position evaluation, learning from self-play.
 
 **Key Features**:
 
-- Deep neural network with policy and value heads to evaluate positions and suggest moves.
-- Monte Carlo Tree Search integration for explorative and strategic move selection.
-- Self-play training mechanism for continuous learning and improvement.
+- Deep neural network with policy and value heads.
+- MCTS for strategic move selection.
+- Self-play for continuous learning.
+
+### 4. AI-ZeroChessBot-C++ (Subfolder: `AI-ZeroChessBot-C++`)
+
+A significant evolution of the AI-ZeroChessBot, ported to C++ and further developed to harness the language's performance capabilities. This project represents the pinnacle of our chess engine development, emphasizing efficiency, advanced strategies, and self-improvement through deep learning and MCTS.
+
+**Key Features**:
+
+- Ported to C++ for enhanced performance and efficiency.
+- Advanced integration of deep learning and MCTS for superior strategic depth.
+- Focus on self-improvement through extensive self-play and continuous learning.
 
 ## Repository Structure
 
@@ -52,7 +62,10 @@ ChessBot/
 ├── NeuralNetChessBot/
 │   └── README.md
 │
-└── AI-ZeroChessBot/
+├── AI-ZeroChessBot/
+│   └── README.md
+│
+└── AI-ZeroChessBot-C++/
     └── README.md
 ```
 
@@ -61,6 +74,6 @@ ChessBot/
 To get started with any of the projects:
 
 1. Clone this repository to your local machine.
-2. Navigate to the project subfolder of interest (`HandcraftedChessBot`, `NeuralNetChessBot`, or `AI-ZeroChessBot`).
+2. Navigate to the project subfolder of interest (`HandcraftedChessBot`, `NeuralNetChessBot`, `AI-ZeroChessBot`, or `AI-ZeroChessBot-C++`).
 3. Follow the instructions in the project-specific README.md for setup and running the bot.
 4. To explore the basic chess bot framework, refer to the `Framework` subfolder and try it out via `python -m Framework`.

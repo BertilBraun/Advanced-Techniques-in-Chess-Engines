@@ -25,6 +25,10 @@ cp AIZeroChessBot ../train/AIZeroChessBot
 cd ../train
 
 
+# Prepare the data for the generation process
+python3 ../src/PreprocessGenerationData.py "data/Lichess Elite Database" "data/lichess_elites.txt" "data/lichess_db_eval.json"
+
+
 # Extract the SLURM job time limit in minutes and convert to seconds for timeout
 # Subtract a buffer time (e.g., 300 seconds) to allow for cleanup and requeueing
 TIME=$(squeue -j $SLURM_JOB_ID -h --Format TimeLimit)
