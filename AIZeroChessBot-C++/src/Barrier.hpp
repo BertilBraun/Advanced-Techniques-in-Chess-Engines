@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+static inline constexpr size_t MAX_NUM_BARRIERS = 100;
+
 class Barrier {
     // This barrier implementation is not the most efficient, but it is simple and works
     // It waits for all threads to reach the barrier before continuing
@@ -10,46 +12,38 @@ class Barrier {
 
 public:
     Barrier() = default;
-    Barrier(size_t totalThreads) : m_totalThreads(totalThreads) { m_barrierCounts.insert({0, 0}); }
-
-    Barrier &operator=(const Barrier &other) {
-        m_barrierMutex.lock();
-        m_barrierCallCount = other.m_barrierCallCount;
-        m_totalThreads = other.m_totalThreads;
-        m_barrierMutex.unlock();
-        return *this;
-    }
+    Barrier(int totalThreads) : m_totalThreads(totalThreads) {}
 
     bool barrier() {
         // return true for only one of the threads
 
         m_barrierMutex.lock();
-        if (m_barrierCounts[m_barrierCallCount] == m_totalThreads) {
-            m_barrierCounts.insert({++m_barrierCallCount, 0});
-        }
-        int myCallCount = m_barrierCallCount;
+        int myCallCount = m_barrierCallCount % MAX_NUM_BARRIERS;
+
+        if (m_barrierCounts[myCallCount] >= m_totalThreads)
+            myCallCount = ++m_barrierCallCount % MAX_NUM_BARRIERS;
+
         m_barrierCounts[myCallCount]++;
         m_barrierMutex.unlock();
 
-        while (m_barrierCounts[myCallCount] < m_totalThreads) {
+        while (m_barrierCounts[myCallCount] < m_totalThreads)
             std::this_thread::yield();
-        }
 
         bool isFirst = false;
         m_barrierMutex.lock();
-        if (m_barrierCounts[myCallCount] == m_totalThreads) {
+        if (m_barrierCounts[myCallCount] == m_totalThreads)
             isFirst = true;
-        }
+
         m_barrierCounts[myCallCount]++;
-        if (m_barrierCounts[myCallCount] == 2 * m_totalThreads) {
-            m_barrierCounts.erase(myCallCount);
-        }
+        if (m_barrierCounts[myCallCount] >= 2 * m_totalThreads)
+            m_barrierCounts[myCallCount] = 0;
+
         m_barrierMutex.unlock();
 
         return isFirst;
     }
 
-    void updateRequired(size_t delta) {
+    void updateRequired(int delta) {
         m_barrierMutex.lock();
         m_totalThreads += delta;
         m_barrierMutex.unlock();
@@ -57,7 +51,7 @@ public:
 
 private:
     std::mutex m_barrierMutex;
-    std::unordered_map<size_t, size_t> m_barrierCounts;
+    std::array<std::atomic<int>, MAX_NUM_BARRIERS> m_barrierCounts{0};
     size_t m_barrierCallCount = 0;
-    size_t m_totalThreads = 0;
+    int m_totalThreads = 0;
 };
