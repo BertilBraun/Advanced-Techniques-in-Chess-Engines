@@ -49,6 +49,12 @@ public:
         return isFirst;
     }
 
+    void updateRequired(size_t delta) {
+        m_barrierMutex.lock();
+        m_totalThreads += delta;
+        m_barrierMutex.unlock();
+    }
+
 private:
     std::mutex m_barrierMutex;
     std::unordered_map<size_t, size_t> m_barrierCounts;

@@ -31,8 +31,6 @@ public:
             synchronizeModel(modelClone);
             m_models.push_back(modelClone);
         }
-
-        m_barrier = Barrier(m_devicesList.size());
     }
 
     void run() {
@@ -101,6 +99,8 @@ private:
 
         std::vector<DataSubset> dataSubsets = dataset.intoDataSubsets(m_devicesList);
 
+        m_barrier.updateRequired(m_devicesList.size());
+
         // spin up a thread for each device
         std::vector<std::thread> threads;
 
@@ -156,6 +156,8 @@ private:
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
         }
+
+        m_barrier.updateRequired(-1);
 
         return trainStats;
     }
