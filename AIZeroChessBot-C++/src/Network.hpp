@@ -89,32 +89,17 @@ struct NetworkImpl : torch::nn::Module {
         return {policy, value};
     }
 
-    void printParams() {
+    std::string toString() {
+        PrettyTable table({"Layer", "Output Shape", "Param #"});
 
-        size_t totalParams = 0;
-
-        for (auto &param : parameters()) {
-            totalParams += param.numel();
+        for (auto &param : named_parameters()) {
+            table.addRow(param.key(), param.value().sizes(), param.value().numel());
         }
 
-        std::vector<std::pair<std::string, size_t>> params;
-        for (auto param : named_parameters()) {
-            params.push_back({param.key(), param.value().numel()});
-        }
-
-        size_t maxLen = 0;
-        for (auto &param : params) {
-            maxLen = std::max(maxLen, param.first.size());
-        }
-
-        log("Modules", std::string(maxLen - 6, ' '), ':', "Parameters");
-
-        for (auto &param : params) {
-            log(param.first, std::string(maxLen - (param.first.size() - 1), ' '), ':',
-                param.second);
-        }
-
-        log("Total Trainable Params:", totalParams);
+        std::stringstream ss;
+        ss << table.toString();
+        ss << "Total Trainable Params: " << this->parameters().size();
+        return ss.str();
     }
 };
 TORCH_MODULE(Network);

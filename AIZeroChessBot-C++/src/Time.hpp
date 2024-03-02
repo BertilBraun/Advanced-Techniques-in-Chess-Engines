@@ -21,7 +21,7 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-        __timeit_results[funcName] = duration;
+        __timeit_results[funcName] += duration;
     } else {
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -31,16 +31,18 @@ template <typename Func> auto timeit(Func func, const std::string &funcName) {
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
 
-        __timeit_results[funcName] = duration;
+        __timeit_results[funcName] += duration;
 
         return result; // Return the result of the function
     }
 }
 
 inline std::string getTimeitResults() {
-    std::string result;
+    PrettyTable table({"Function", "Accumulated Time (s)"});
+
     for (auto &pair : __timeit_results) {
-        result += pair.first + ": " + std::to_string((double) pair.second * 1e-9) + "s\n";
+        table.addRow(pair.first, (double) pair.second * 1e-9);
     }
-    return result;
+
+    return table.toString();
 }

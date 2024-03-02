@@ -135,3 +135,58 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
     logNoNewline(bar.str(), int(progress * 100.0), '%', desc, (current >= total ? "\n" : "\r"));
     return current < total;
 }
+
+class PrettyTable {
+    // Helper class to print a table with a header and rows
+    // Example usage:
+    // PrettyTable table({"Column 1", "Column 2", "Column 3"});
+    // table.addRow(1, 2, 3);
+    // table.addRow(4, 5, 6);
+    // log(table.toString());
+public:
+    PrettyTable(const std::vector<std::string> &columns) : m_columns(columns) {}
+
+    template <typename... Args> void addRow(Args... args) {
+        if (sizeof...(args) != m_columns.size()) {
+            throw std::runtime_error("Row size does not match column size");
+        }
+        m_rows.push_back({toString(args)...});
+    }
+
+    std::string toString() const {
+        std::vector<size_t> columnWidths(m_columns.size(), 0);
+        for (size_t i = 0; i < m_columns.size(); ++i) {
+            columnWidths[i] = std::max(columnWidths[i], m_columns[i].size());
+        }
+        for (const auto &row : m_rows) {
+            for (size_t i = 0; i < row.size(); ++i) {
+                columnWidths[i] = std::max(columnWidths[i], row[i].size());
+            }
+        }
+
+        std::string result;
+        auto addRowToResult = [&result, &columnWidths](const std::vector<std::string> &row) {
+            result += "| ";
+            for (size_t i = 0; i < row.size(); ++i) {
+                result += row[i];
+                result += std::string(columnWidths[i] - row[i].size(), ' ');
+                result += " | ";
+            }
+            result += "\n";
+        };
+
+        addRowToResult(m_columns);
+        result += std::string((m_columns.size() + 1) * 3 +
+                                  std::accumulate(columnWidths.begin(), columnWidths.end(), 0),
+                              '-') +
+                  "\n";
+        for (const auto &row : m_rows) {
+            addRowToResult(row);
+        }
+        return result;
+    }
+
+private:
+    std::vector<std::string> m_columns;
+    std::vector<std::vector<std::string>> m_rows;
+};
