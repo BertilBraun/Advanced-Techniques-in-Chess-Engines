@@ -6,11 +6,11 @@ This repository hosts a collection of four distinct chess bot projects, each exp
 
 ## Projects
 
-### 0. Framework (Subfolder: `Framework`)
+### 0. [Framework](/Framework/README.md) (Subfolder: `Framework`)
 
 Provides the basic infrastructure for evaluating and playing chess games, serving as the foundation for the other projects. Includes essential classes such as `ChessBot`, `GameManager`, `HumanPlayer`, and `Tournament`.
 
-### 1. HandcraftedChessBot (Subfolder: `HandcraftedChessBot`)
+### 1. [HandcraftedChessBot](/HandcraftedChessBot/README.md) (Subfolder: `HandcraftedChessBot`)
 
 Focuses on traditional chess bot design principles, employing handcrafted evaluation functions and optimization techniques without machine learning.
 
@@ -19,7 +19,7 @@ Focuses on traditional chess bot design principles, employing handcrafted evalua
 - Alpha-beta pruning and iterative deepening.
 - Handcrafted evaluation functions focusing on material count, piece-square tables, and pawn structure.
 
-### 2. NeuralNetChessBot (Subfolder: `NeuralNetChessBot`)
+### 2. [NeuralNetChessBot](/NeuralNetChessBot/README.md) (Subfolder: `NeuralNetChessBot`)
 
 Explores the integration of a neural network-based evaluator within a chess bot framework, aiming to assess chess positions dynamically through machine learning.
 
@@ -28,7 +28,7 @@ Explores the integration of a neural network-based evaluator within a chess bot 
 - Neural network for position evaluation.
 - Training of the neural network with chess game datasets.
 
-### 3. AI-ZeroChessBot (Subfolder: `AI-ZeroChessBot`)
+### 3. [AI-ZeroChessBot](/AIZeroChessBot/README.md) (Subfolder: `AI-ZeroChessBot`)
 
 Inspired by AlphaZero, this project combines deep neural networks with Monte Carlo Tree Search (MCTS) for move selection and position evaluation, learning from self-play.
 
@@ -38,7 +38,7 @@ Inspired by AlphaZero, this project combines deep neural networks with Monte Car
 - MCTS for strategic move selection.
 - Self-play for continuous learning.
 
-### 4. AI-ZeroChessBot-C++ (Subfolder: `AI-ZeroChessBot-C++`)
+### 4. [AI-ZeroChessBot-C++](/AIZeroChessBot-C++/README.md) (Subfolder: `AI-ZeroChessBot-C++`)
 
 A significant evolution of the AI-ZeroChessBot, ported to C++ and further developed to harness the language's performance capabilities. This project represents the pinnacle of our chess engine development, emphasizing efficiency, advanced strategies, and self-improvement through deep learning and MCTS.
 

@@ -30,6 +30,21 @@ For this NN architecture, we require a board encoding scheme that translates the
 - Utilizes the policy head to guide exploration of the game tree.
 - Employs the value head to evaluate board positions, aiding in the selection and back propagation phases of MCTS.
 
+## Documentation
+
+The project documentation is organized into several categories, each focusing on a specific aspect of the project. The documentation provides more detailed information about specific components, development processes, and performance analysis. The documentation categories are as follows:
+
+- **[Chess Encoding for Neural Networks](/AIZeroChessBot-C++/documentation/encodings/README.md)**: Describes the board encoding scheme used to represent chess board states as inputs to the neural network.
+- **[Chess Framework](/AIZeroChessBot-C++/documentation/chess/README.md)**: Details the implementation of the chess framework in C++ and the performance improvements achieved through the translation of the framework from Python to C++.
+- **[Pre-Training System](/AIZeroChessBot-C++/documentation/pretraining/README.md)**: Discusses the pre-training system used to generate training data for the neural network using grandmaster games and stockfish evaluations.
+- **[Parallelization](/AIZeroChessBot-C++/documentation/parallelization/README.md)**: Explains the parallelization strategy used to distribute the training data generation and training processes across multiple nodes and GPUs on the cluster.
+
+## Technologies
+
+- **Programming Language**: C++17
+- **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
+- **Chess Library**: Python-Chess (self ported to C++)
+
 ## Development Plan
 
 1. **Neural Network Implementation**
@@ -44,12 +59,6 @@ For this NN architecture, we require a board encoding scheme that translates the
    - Develop benchmarks and testing protocols to evaluate the performance of ChessAI-Zero.
    - Compare performance against other bots and track improvement over time.
 
-## Technologies
-
-- **Programming Language**: C++17
-- **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
-- **Chess Library**: Python-Chess (self ported to C++)
-
 ## Getting Started
 
 To run your `AIZeroChessBot-C++` project after cloning the repository, follow these steps:
@@ -59,7 +68,7 @@ To run your `AIZeroChessBot-C++` project after cloning the repository, follow th
 1. **Run the Setup Script** (if you haven't already) to download LibTorch and generate the CMake build system. In the terminal, navigate to your project's root directory and run:
 
     ```cmd
-    .\setup_build.bat
+    setup_build.bat
     ./setup_build.sh
     ```
 
@@ -94,7 +103,7 @@ To run your project:
 2. **Run the Executable** by typing its name in the terminal:
 
     ```cmd
-    .\AIZeroChessBot.exe <train|generate> <num_workers>
+    AIZeroChessBot <train|generate> <num_workers>
     ```
 
    This command executes your program.
@@ -126,17 +135,8 @@ To run the evaluation notebook, follow these steps:
 
     This will create a new build with the evaluation mode enabled.
 2. **Open the Evaluation Notebook**: Open the `eval.ipynb` notebook in Jupyter.
-3. **[Optional] Download Model Weights**: If you want to use pre-trained model weights for the evaluation, download the model weights from [here](TODO: Add link) and place them in the `train` directory.
+3. **[Optional] Download Model Weights**: If you want to use pre-trained model weights for the evaluation, download the model weights from [here](/documentation/) (TODO: Add link) and place them in the `train` directory.
 4. **Run the Notebook**: Execute the cells in the notebook to start the evaluation process. The notebook will guide you through the evaluation steps and display the bot's performance metrics and visualizations.
-
-## Documentation
-
-The project documentation is organized into several categories, each focusing on a specific aspect of the project. The documentation provides more detailed information about specific components, development processes, and performance analysis. The documentation categories are as follows:
-
-- **[Chess Encoding for Neural Networks](/AIZeroChessBot-C++/documentation/encodings/README.md)**: Describes the board encoding scheme used to represent chess board states as inputs to the neural network.
-- **[Chess Framework](/AIZeroChessBot-C++/documentation/chess/README.md)**: Details the implementation of the chess framework in C++ and the performance improvements achieved through the translation of the framework from Python to C++.
-- **[Pre-Training System](/AIZeroChessBot-C++/documentation/pretraining/README.md)**: Discusses the pre-training system used to generate training data for the neural network using grandmaster games and stockfish evaluations.
-- **[Parallelization](/AIZeroChessBot-C++/documentation/parallelization/README.md)**: Explains the parallelization strategy used to distribute the training data generation and training processes across multiple nodes and GPUs on the cluster.
 
 ## References
 
