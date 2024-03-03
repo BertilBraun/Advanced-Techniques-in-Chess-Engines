@@ -22,8 +22,8 @@ public:
 
 protected:
     std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-    forwardBackward(const torch::Tensor &states, const torch::Tensor &policyTargets,
-                    const torch::Tensor &valueTargets, Network &model) {
+    forward(const torch::Tensor &states, const torch::Tensor &policyTargets,
+            const torch::Tensor &valueTargets, Network &model) {
         auto [policy, value] = model->forward(states);
 
         auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
@@ -44,9 +44,6 @@ protected:
         //     log("Policy Targets:\n", policyTargets);
         //     log("Value Targets:\n", valueTargets);
         // }
-
-        model->zero_grad();
-        loss.backward();
 
         return {valueLoss, policyLoss, loss};
     }
@@ -71,8 +68,10 @@ public:
             auto [states, policyTargets, valueTargets] = dataSubset.next();
 
             auto [valueLoss, policyLoss, loss] =
-                forwardBackward(states, policyTargets, valueTargets, m_model);
+                forward(states, policyTargets, valueTargets, m_model);
 
+            m_optimizer->zero_grad();
+            loss.backward();
             m_optimizer->step();
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
@@ -156,7 +155,9 @@ private:
             auto [states, policyTargets, valueTargets] = dataSubset.next();
 
             auto [valueLoss, policyLoss, loss] =
-                forwardBackward(states, policyTargets, valueTargets, model);
+                forward(states, policyTargets, valueTargets, model);
+
+            loss.backward();
 
             timeit([&] { step(model); }, "step");
 
