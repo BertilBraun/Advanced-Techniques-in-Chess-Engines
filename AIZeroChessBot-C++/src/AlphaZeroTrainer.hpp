@@ -260,7 +260,7 @@ class AlphaZeroTrainer : AlphaZeroBase {
 public:
     AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
         : AlphaZeroBase(model, args, &optimizer) {
-        if (USE_MULTI_THREADED_TRAINING) {
+        if constexpr (USE_MULTI_THREADED_TRAINING) {
             trainer = std::make_unique<MultiThreadedTrainer>(model, optimizer, args);
         } else {
             trainer = std::make_unique<SingleThreadedTrainer>(model, optimizer, args);

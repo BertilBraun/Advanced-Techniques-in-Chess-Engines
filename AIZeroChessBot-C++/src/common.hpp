@@ -55,8 +55,8 @@ static inline const std::filesystem::path MEMORY_DIR =
     "/pfs/work7/workspace/scratch/uxude-Chess/memory";
 static inline const std::string CONFIG_FILE_NAME = "last_training_config.pt";
 
-static inline constexpr bool USE_MULTI_THREADED_TRAINING = true;
-static inline constexpr size_t NUM_THREADS_FOR_TRAINING_PER_GPU = 4;
+static inline constexpr bool USE_MULTI_THREADED_TRAINING = false;
+static inline constexpr size_t NUM_THREADS_FOR_TRAINING_PER_GPU = 5;
 
 template <typename T> inline size_t index_of(const std::vector<T> &vec, const T &elem) {
     auto it = std::find(vec.begin(), vec.end(), elem);
