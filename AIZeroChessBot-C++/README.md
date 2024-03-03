@@ -145,3 +145,4 @@ To run the evaluation notebook, follow these steps:
 - [AlphaZero Explained](https://nikcheerla.github.io/deeplearningschool/2018/01/01/AlphaZero-Explained/)
 - [AlphaGo Zero Cheat Sheet](https://medium.com/applied-data-science/alphago-zero-explained-in-one-diagram-365f5abf67e0)
 - [AlphaZero from Scratch](https://www.youtube.com/watch?v=wuSQpLinRB4&ab_channel=freeCodeCamp.org)
+- [AlphaZero General](https://github.com/suragnair/alpha-zero-general)
