@@ -29,6 +29,8 @@ public:
             synchronizeModel(modelClone);
             m_models.push_back(modelClone);
         }
+
+        initializeAggregateMutexes();
     }
 
     void run() {
@@ -130,42 +132,34 @@ private:
         TrainingStats trainStats;
 
         while (dataSubset.hasNext()) {
-            timeit(
-                [&] {
-                    auto [states, policyTargets, valueTargets] = dataSubset.next();
-                    auto [policy, value] = model->forward(states);
+            auto [states, policyTargets, valueTargets] = dataSubset.next();
+            auto [policy, value] = model->forward(states);
 
-                    auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
-                    // Scale the values since the value targets are in the range [-1, 1] and mse
-                    // loss decreases the loss by squaring it when the |value - valueTarget| is less
-                    // than 1 (which is often the case with values in the range [-1, 1] and values
-                    // very close to 0). This potentially leads to not learning the value function
-                    // well -> scale the values to be in the range [-25, 25] to increase the loss
-                    // and make the learning more stable.
-                    auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
-                    auto loss = policyLoss + valueLoss;
+            auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
+            // Scale the values since the value targets are in the range [-1, 1] and mse
+            // loss decreases the loss by squaring it when the |value - valueTarget| is less
+            // than 1 (which is often the case with values in the range [-1, 1] and values
+            // very close to 0). This potentially leads to not learning the value function
+            // well -> scale the values to be in the range [-25, 25] to increase the loss
+            // and make the learning more stable.
+            auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
+            auto loss = policyLoss + valueLoss;
 
-                    // if loss is a lot higher than trainStats.getAverageLoss() then log the state
-                    // and policyTargets and valueTargets if (loss.item<float>() > 2 *
-                    // trainStats.getAverageLoss()) {
-                    //     log("High loss detected, logging state and targets");
-                    //     log("State:\n", states);
-                    //     log("Policy Targets:\n", policyTargets);
-                    //     log("Value Targets:\n", valueTargets);
-                    // }
+            // if loss is a lot higher than trainStats.getAverageLoss() then log the state
+            // and policyTargets and valueTargets if (loss.item<float>() > 2 *
+            // trainStats.getAverageLoss()) {
+            //     log("High loss detected, logging state and targets");
+            //     log("State:\n", states);
+            //     log("Policy Targets:\n", policyTargets);
+            //     log("Value Targets:\n", valueTargets);
+            // }
 
-                    loss.backward();
+            loss.backward();
 
-                    timeit([&] { aggregateGradientsToMainModel(); },
-                           "aggregateGradientsToMainModel");
+            timeit([&] { step(model); }, "step");
 
-                    // Ensure all models are updated with the main model's parameters
-                    timeit([&] { synchronizeModel(model); }, "synchronizeModel");
-
-                    trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
-                                      loss.item<float>());
-                },
-                "Training Iteration");
+            trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
+                              loss.item<float>());
         }
 
         m_barrier.updateRequired(-1);
@@ -173,42 +167,61 @@ private:
         return trainStats;
     }
 
-    void aggregateGradientsToMainModel() {
+    std::vector<std::unique_ptr<std::mutex>> m_aggregateMutexes;
+
+    void initializeAggregateMutexes() {
+        m_aggregateMutexes.clear();
+        for (size_t i = 0; i < m_model->parameters().size(); ++i) {
+            m_aggregateMutexes.push_back(std::make_unique<std::mutex>());
+        }
+    }
+
+    void step(Network &model) {
         // barrier here to ensure all threads have finished back propagation and gradients are
         // available for aggregation
-        if (m_barrier.barrier()) {
-            // only do this block once (barrier returns true for only one of the threads) and not
-            // for all threads
+        // only do this block once (barrier returns true for only one of the threads) and not
+        // for all threads
 
-            torch::NoGradGuard no_grad; // Ensure no gradient computation happens here
+        timeit(
+            [&] {
+                torch::NoGradGuard no_grad; // Ensure no gradient computation happens here
 
-            for (size_t i = 0; i < m_model->parameters().size(); ++i) {
-                // Accumulate gradients from all models
-                torch::Tensor grad_sum =
-                    torch::zeros_like(m_models[0]->parameters()[i].grad()).to(m_model->device);
-
-                for (auto &model : m_models) {
+                for (size_t i = 0; i < m_model->parameters().size(); ++i) {
+                    // Accumulate gradients to the main model's parameters
+                    auto main_param = m_model->parameters()[i];
                     auto param = model->parameters()[i];
-                    grad_sum += param.grad().to(m_model->device);
+
+                    auto grad = param.grad().to(m_model->device);
+
+                    m_aggregateMutexes[i]->lock();
+                    main_param.mutable_grad() += grad;
+                    m_aggregateMutexes[i]->unlock();
 
                     // Reset the gradients for the next iteration
                     param.grad().zero_();
                 }
-
-                // Average the gradients (if desired, depending on your training strategy)
-                // grad_sum /= m_models.size();
-
-                // Update the main model's gradients with the aggregated gradients
-                m_model->parameters()[i].mutable_grad() = grad_sum;
-            }
-
-            m_optimizer->step();
-        }
+            },
+            "aggregate gradients");
 
         // Only continue threads once this line is reached
+        if (timeit([&] { return m_barrier.barrier(); }, "barrier")) {
+
+            // Average the gradients here (if desired, depending on your training strategy)
+
+            timeit(
+                [&] {
+                    m_optimizer->step();
+                    m_optimizer->zero_grad();
+                },
+                "step optimizer");
+        }
+
         // Now the main model's parameters have been updated with the aggregated gradients
         // All threads can now continue and should synchronize their models with the main model
-        m_barrier.barrier();
+        timeit([&] { m_barrier.barrier(); }, "barrier");
+
+        // Ensure all models are updated with the main model's parameters
+        timeit([&] { synchronizeModel(model); }, "synchronizeModel");
     }
 
     void synchronizeModel(Network &model) {
