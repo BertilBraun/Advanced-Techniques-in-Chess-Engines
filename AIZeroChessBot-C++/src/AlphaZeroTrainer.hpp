@@ -20,15 +20,17 @@ public:
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
-            m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
-        }
+        m_devicesList.push_back(torch::Device(torch::kCUDA, 0));
 
-        for (auto &device : m_devicesList) {
-            Network modelClone(device);
-            synchronizeModel(modelClone);
-            m_models.push_back(modelClone);
-        }
+        // for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
+        //     m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
+        // }
+
+        // for (auto &device : m_devicesList) {
+        //     Network modelClone(device);
+        //     synchronizeModel(modelClone);
+        //     m_models.push_back(modelClone);
+        // }
 
         initializeAggregateMutexes();
     }
@@ -133,7 +135,7 @@ private:
 
         while (dataSubset.hasNext()) {
             auto [states, policyTargets, valueTargets] = dataSubset.next();
-            auto [policy, value] = model->forward(states);
+            auto [policy, value] = m_model->forward(states);
 
             auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
             // Scale the values since the value targets are in the range [-1, 1] and mse
@@ -154,9 +156,11 @@ private:
             //     log("Value Targets:\n", valueTargets);
             // }
 
+            m_optimizer->zero_grad();
             loss.backward();
+            m_optimizer->step();
 
-            timeit([&] { step(model); }, "step");
+            // timeit([&] { step(model); }, "step");
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
