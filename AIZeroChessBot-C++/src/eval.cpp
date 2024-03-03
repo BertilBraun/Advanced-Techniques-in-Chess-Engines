@@ -131,6 +131,61 @@ int main(int argc, char *argv[]) {
                 std::cout << move.uci() << " " << score << std::endl;
             }
         }
+    } else if (mode == "cleanDataset") {
+        size_t batchSize = 64;
+        std::set<std::filesystem::path> memoryPaths = Dataset::getMemoryPaths();
+
+        std::vector<torch::Tensor> batchStates, batchPolicyTargets, batchValueTargets;
+
+        for (const auto &memoryPath : memoryPaths) {
+            auto [states, policyTargets, valueTargets] = DataSubset::loadSample(memoryPath);
+            std::filesystem::remove_all(memoryPath);
+
+            // Check if we actually loaded the sample successfully
+            if (states.numel() == 0 || policyTargets.numel() == 0 || valueTargets.numel() == 0) {
+                continue; // Skip if the sample was not loaded properly
+            }
+
+            for (int64_t i = 0; i < states.size(0); i++) {
+                float value = valueTargets[i].item<float>();
+
+                if (value > -0.1 && value < 0.15 &&
+                    ((value == 0.0 && (rand() % 5 != 0)) || (rand() % 8 != 0))) {
+                    // Skip if the value is within the range we want to lighten
+                    continue;
+                }
+
+                batchStates.push_back(states[i]);
+                batchPolicyTargets.push_back(policyTargets[i]);
+                batchValueTargets.push_back(valueTargets[i]);
+            }
+
+            while (batchStates.size() > batchSize) {
+                std::vector<torch::Tensor> bStates, bPolicyTargets, bValueTargets;
+
+                bStates.assign(batchStates.begin(), batchStates.begin() + batchSize);
+                bPolicyTargets.assign(batchPolicyTargets.begin(),
+                                      batchPolicyTargets.begin() + batchSize);
+                bValueTargets.assign(batchValueTargets.begin(),
+                                     batchValueTargets.begin() + batchSize);
+
+                torch::Tensor saveStates = torch::stack(bStates);
+                torch::Tensor savePolicyTargets = torch::stack(bPolicyTargets);
+                torch::Tensor saveValueTargets = torch::stack(bValueTargets);
+
+                std::filesystem::create_directories(memoryPath);
+
+                torch::save(saveStates, (memoryPath / "states.pt").string());
+                torch::save(savePolicyTargets, (memoryPath / "policyTargets.pt").string());
+                torch::save(saveValueTargets, (memoryPath / "valueTargets.pt").string());
+
+                batchStates.erase(batchStates.begin(), batchStates.begin() + batchSize);
+                batchPolicyTargets.erase(batchPolicyTargets.begin(),
+                                         batchPolicyTargets.begin() + batchSize);
+                batchValueTargets.erase(batchValueTargets.begin(),
+                                        batchValueTargets.begin() + batchSize);
+            }
+        }
     } else {
         log("Invalid mode:", mode);
         return 1;

@@ -236,11 +236,7 @@ public:
         return datasets;
     }
 
-private:
-    std::vector<std::filesystem::path> m_memoryPathsFIFO;
-    size_t m_memoriesToPreload;
-
-    std::set<std::filesystem::path> getMemoryPaths() const {
+    static std::set<std::filesystem::path> getMemoryPaths() {
         std::set<std::filesystem::path> memoryPaths;
         for (const auto &entry : std::filesystem::directory_iterator(MEMORY_DIR)) {
             if (entry.is_directory() && isMemoryValid(entry.path())) {
@@ -250,7 +246,11 @@ private:
         return memoryPaths;
     }
 
-    bool isMemoryValid(const std::filesystem::path &memoryPath) const {
+private:
+    std::vector<std::filesystem::path> m_memoryPathsFIFO;
+    size_t m_memoriesToPreload;
+
+    static bool isMemoryValid(const std::filesystem::path &memoryPath) {
         return true; // Ignore for now, we will catch the error in loadMemory
 
         std::set<std::string> requiredFiles = {"states.pt", "policyTargets.pt", "valueTargets.pt"};

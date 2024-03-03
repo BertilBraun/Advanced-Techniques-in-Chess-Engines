@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <random>
 #include <sstream>
 #include <stddef.h>
@@ -13,6 +15,7 @@
 #include <thread>
 #include <tuple>
 #include <vector>
+
 
 std::string currentTime() {
     // Helper function to get the current time as a string
