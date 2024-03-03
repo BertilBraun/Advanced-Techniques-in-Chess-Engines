@@ -10,7 +10,7 @@ For more details on how self-play parallelization is implemented and optimized, 
 
 ## Training Parallelization
 
-Training parallelization takes advantage of multiple GPUs to expedite the neural network training process. This approach involves distributing the training workload across several GPUs and synchronizing the gradients among the models to ensure consistency and convergence. By parallelizing the training process, we can significantly reduce training time and enhance the learning efficiency of the neural network.
+Training parallelization takes advantage of multiple GPUs to expedite the neural network training process. This approach involves distributing the training workload across several GPUs and synchronizing the gradients among the models to ensure consistency and convergence. By parallelizing the training process, we hope to significantly reduce training time and enhance the learning efficiency of the neural network.
 
 For a comprehensive explanation of the training parallelization strategy, including gradient synchronization and workload distribution, see the [training documentation](/AIZeroChessBot-C++/documentation/parallelization/Training.md).
 
