@@ -32,7 +32,13 @@ protected:
         // well -> scale the values to be in the range [-25, 25] to increase the loss
         // and make the learning more stable.
         auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
-        auto loss = policyLoss + valueLoss;
+
+        auto lambda_reg = 0.05;
+        auto epsilon = 1e-7;
+
+        auto valueRegularizationLoss = lambda_reg * (1 / (epsilon + torch::abs(value)));
+
+        auto loss = policyLoss + valueLoss + valueRegularizationLoss;
 
         // if loss is a lot higher than trainStats.getAverageLoss() then log the state
         // and policyTargets and valueTargets if (loss.item<float>() > 2 *
