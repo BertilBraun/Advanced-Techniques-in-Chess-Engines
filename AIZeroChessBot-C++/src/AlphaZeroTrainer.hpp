@@ -7,10 +7,87 @@
 #include "Dataset.hpp"
 #include "TrainingStats.hpp"
 
-class AlphaZeroTrainer : AlphaZeroBase {
+// #define USE_MULTITHREADING
+
+class TrainerImplBase {
 public:
-    AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
-        : AlphaZeroBase(model, args, &optimizer) {
+    TrainerImplBase(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
+        : m_model(model), m_optimizer(&optimizer), m_args(args) {}
+
+    virtual TrainingStats train(Dataset &dataset) = 0;
+
+    void updateLearningRate(float averageLoss) {
+        // TODO potentially add learning rate scheduler here
+    }
+
+protected:
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+    forwardBackward(const torch::Tensor &states, const torch::Tensor &policyTargets,
+                    const torch::Tensor &valueTargets, Network &model) {
+        auto [policy, value] = model->forward(states);
+
+        auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
+        // Scale the values since the value targets are in the range [-1, 1] and mse
+        // loss decreases the loss by squaring it when the |value - valueTarget| is less
+        // than 1 (which is often the case with values in the range [-1, 1] and values
+        // very close to 0). This potentially leads to not learning the value function
+        // well -> scale the values to be in the range [-25, 25] to increase the loss
+        // and make the learning more stable.
+        auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
+        auto loss = policyLoss + valueLoss;
+
+        // if loss is a lot higher than trainStats.getAverageLoss() then log the state
+        // and policyTargets and valueTargets if (loss.item<float>() > 2 *
+        // trainStats.getAverageLoss()) {
+        //     log("High loss detected, logging state and targets");
+        //     log("State:\n", states);
+        //     log("Policy Targets:\n", policyTargets);
+        //     log("Value Targets:\n", valueTargets);
+        // }
+
+        model->zero_grad();
+        loss.backward();
+
+        return {valueLoss, policyLoss, loss};
+    }
+
+    Network &m_model;
+    torch::optim::Optimizer *m_optimizer;
+    const TrainingArgs &m_args;
+};
+
+class SingleThreadedTrainer : public TrainerImplBase {
+public:
+    SingleThreadedTrainer(Network &model, torch::optim::Optimizer &optimizer,
+                          const TrainingArgs &args)
+        : TrainerImplBase(model, optimizer, args) {}
+
+    TrainingStats train(Dataset &dataset) {
+        TrainingStats trainStats;
+
+        DataSubset dataSubset = dataset.intoDataSubsets({m_model->device})[0];
+
+        while (dataSubset.hasNext()) {
+            auto [states, policyTargets, valueTargets] = dataSubset.next();
+
+            auto [valueLoss, policyLoss, loss] =
+                forwardBackward(states, policyTargets, valueTargets, m_model);
+
+            m_optimizer->step();
+
+            trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
+                              loss.item<float>());
+        }
+
+        return trainStats;
+    }
+};
+
+class MultiThreadedTrainer : public TrainerImplBase {
+public:
+    MultiThreadedTrainer(Network &model, torch::optim::Optimizer &optimizer,
+                         const TrainingArgs &args)
+        : TrainerImplBase(model, optimizer, args) {
 
         // get the available devices
         auto devices = torch::cuda::device_count();
@@ -20,80 +97,18 @@ public:
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        m_devicesList.push_back(torch::Device(torch::kCUDA, 0));
+        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
+            m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
+        }
 
-        // for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
-        //     m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
-        // }
-
-        // for (auto &device : m_devicesList) {
-        //     Network modelClone(device);
-        //     synchronizeModel(modelClone);
-        //     m_models.push_back(modelClone);
-        // }
+        for (auto &device : m_devicesList) {
+            Network modelClone(device);
+            synchronizeModel(modelClone);
+            m_models.push_back(modelClone);
+        }
 
         initializeAggregateMutexes();
     }
-
-    void run() {
-        LearningStats learningStats;
-        Dataset dataset(20);
-
-        m_model->train(); // Set model to training mode
-
-        for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
-             ++iteration) {
-            log("Training Iteration", (iteration + 1));
-
-            timeit([&] { dataset.load(); }, "load Dataset");
-
-            while (tqdm(dataset.size(), 10000, "Waiting for more training data...")) {
-                std::this_thread::sleep_for(std::chrono::minutes(10));
-                timeit([&] { dataset.load(); }, "load Dataset");
-            }
-
-            size_t numTrainingSamples = dataset.size() * m_args.batchSize;
-            log("Training with", numTrainingSamples, "memories");
-
-            log("Training started!");
-
-            TrainingStats trainStats;
-            // Accumulate stats for each epoch
-            // This should show the learning progress over the number of epochs
-            //     before the new data is used
-            LearningStats epochStats;
-            for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
-                TrainingStats epochTrainStats = timeit([&] { return train(dataset); }, "train");
-                epochStats.update(numTrainingSamples, epochTrainStats);
-                trainStats += epochTrainStats;
-            }
-
-            log("Training finished!");
-
-            saveLatestModel(iteration);
-            learningStats.update(numTrainingSamples, trainStats);
-
-            // Retain 25% of the memory for the next iteration
-            timeit([&] { dataset.deleteOldMemories(m_args.retentionRate); }, "deleteOldMemories");
-
-            // evaluateAlphaVsStockfish(modelPath);
-
-            log("Iteration", (iteration + 1));
-
-            log("Train Stats:\n", trainStats.toString());
-            log("Epoch Stats:\n", epochStats.toString());
-            log("Learning stats:\n", learningStats.toString());
-
-            log("Timeit stats:\n", getTimeitResults());
-        }
-
-        log("Learning finished");
-    }
-
-private:
-    std::vector<torch::Device> m_devicesList;
-    std::vector<Network> m_models;
-    Barrier m_barrier;
 
     TrainingStats train(Dataset &dataset) {
         TrainingStats totalTrainStats;
@@ -125,42 +140,25 @@ private:
             thread.join();
         }
 
-        // TODO potentially add learning rate scheduler here
-
         return totalTrainStats;
     }
+
+private:
+    std::vector<torch::Device> m_devicesList;
+    std::vector<Network> m_models;
+    Barrier m_barrier;
+    std::vector<std::unique_ptr<std::mutex>> m_aggregateMutexes;
 
     TrainingStats trainOnDevice(DataSubset &dataSubset, Network &model) {
         TrainingStats trainStats;
 
         while (dataSubset.hasNext()) {
             auto [states, policyTargets, valueTargets] = dataSubset.next();
-            auto [policy, value] = m_model->forward(states);
 
-            auto policyLoss = torch::nn::functional::cross_entropy(policy, policyTargets);
-            // Scale the values since the value targets are in the range [-1, 1] and mse
-            // loss decreases the loss by squaring it when the |value - valueTarget| is less
-            // than 1 (which is often the case with values in the range [-1, 1] and values
-            // very close to 0). This potentially leads to not learning the value function
-            // well -> scale the values to be in the range [-25, 25] to increase the loss
-            // and make the learning more stable.
-            auto valueLoss = torch::mse_loss(value * 25.f, valueTargets * 25.f);
-            auto loss = policyLoss + valueLoss;
+            auto [valueLoss, policyLoss, loss] =
+                forwardBackward(states, policyTargets, valueTargets, model);
 
-            // if loss is a lot higher than trainStats.getAverageLoss() then log the state
-            // and policyTargets and valueTargets if (loss.item<float>() > 2 *
-            // trainStats.getAverageLoss()) {
-            //     log("High loss detected, logging state and targets");
-            //     log("State:\n", states);
-            //     log("Policy Targets:\n", policyTargets);
-            //     log("Value Targets:\n", valueTargets);
-            // }
-
-            m_optimizer->zero_grad();
-            loss.backward();
-            m_optimizer->step();
-
-            // timeit([&] { step(model); }, "step");
+            timeit([&] { step(model); }, "step");
 
             trainStats.update(policyLoss.item<float>(), valueLoss.item<float>(),
                               loss.item<float>());
@@ -171,8 +169,6 @@ private:
         return trainStats;
     }
 
-    std::vector<std::unique_ptr<std::mutex>> m_aggregateMutexes;
-
     void initializeAggregateMutexes() {
         m_aggregateMutexes.clear();
         for (size_t i = 0; i < m_model->parameters().size(); ++i) {
@@ -180,7 +176,7 @@ private:
         }
 
         for (size_t i = 0; i < m_model->parameters().size(); ++i) {
-            // Reset the gradients for the next iteration
+            // Reset the gradients for the first iteration
             m_model->parameters()[i].mutable_grad() = torch::zeros_like(m_model->parameters()[i]);
         }
     }
@@ -257,5 +253,75 @@ private:
 
             model_buffer.data().copy_(main_buffer.data().to(model_buffer.device()));
         }
+    }
+};
+
+class AlphaZeroTrainer : AlphaZeroBase {
+public:
+    AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
+        : AlphaZeroBase(model, args, &optimizer),
+#ifdef USE_MULTITHREADING
+          trainer(std::make_unique<MultiThreadedTrainer>(model, optimizer, args))
+#else
+          trainer(std::make_unique<SingleThreadedTrainer>(model, optimizer, args))
+#endif
+    {
+    }
+
+    void run() {
+        LearningStats learningStats;
+        Dataset dataset(20);
+
+        m_model->train(); // Set model to training mode
+
+        for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
+             ++iteration) {
+            log("Training Iteration", (iteration + 1));
+
+            timeit([&] { dataset.load(); }, "load Dataset");
+
+            while (tqdm(dataset.size(), 10000, "Waiting for more training data...")) {
+                std::this_thread::sleep_for(std::chrono::minutes(10));
+                timeit([&] { dataset.load(); }, "load Dataset");
+            }
+
+            size_t numTrainingSamples = dataset.size() * m_args.batchSize;
+            log("Training with", numTrainingSamples, "memories");
+
+            log("Training started!");
+
+            TrainingStats trainStats;
+            for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
+                trainStats += timeit([&] { return train(dataset); }, "train");
+            }
+
+            log("Training finished!");
+
+            saveLatestModel(iteration);
+            learningStats.update(numTrainingSamples, trainStats);
+
+            // Retain 25% of the memory for the next iteration
+            timeit([&] { dataset.deleteOldMemories(m_args.retentionRate); }, "deleteOldMemories");
+
+            // evaluateAlphaVsStockfish(modelPath);
+
+            log("Iteration", (iteration + 1));
+
+            log("Train Stats:\n", trainStats.toString());
+            log("Learning stats:\n", learningStats.toString());
+
+            log("Timeit stats:\n", getTimeitResults());
+        }
+
+        log("Learning finished");
+    }
+
+private:
+    std::unique_ptr<TrainerImplBase> trainer;
+
+    TrainingStats train(Dataset &dataset) {
+        auto trainStats = trainer->train(dataset);
+        trainer->updateLearningRate(trainStats.getAverageLoss());
+        return trainStats;
     }
 };
