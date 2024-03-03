@@ -14,8 +14,8 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
-
 
 std::string currentTime() {
     // Helper function to get the current time as a string
@@ -118,7 +118,31 @@ template <typename... Args> void log(Args... args) { logCommon<true>(args...); }
 
 template <typename... Args> void logNoNewline(Args... args) { logCommon<false>(args...); }
 
+// Global map to keep track of start times for each unique progress bar.
+std::unordered_map<std::string, std::chrono::steady_clock::time_point> start_times;
+
+inline std::string formatDuration(std::chrono::steady_clock::duration duration) {
+    auto hrs = std::chrono::duration_cast<std::chrono::hours>(duration);
+    duration -= hrs;
+    auto mins = std::chrono::duration_cast<std::chrono::minutes>(duration);
+    duration -= mins;
+    auto secs = std::chrono::duration_cast<std::chrono::seconds>(duration);
+
+    std::ostringstream oss;
+    if (hrs.count() > 0)
+        oss << hrs.count() << ":";
+    if (mins.count() > 0)
+        oss << std::setfill('0') << std::setw(hrs.count() > 0 ? 2 : 0) << mins.count() << ":";
+    oss << std::setfill('0') << std::setw(2) << secs.count();
+    return oss.str();
+}
+
 inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
+    if (start_times.find(desc) == start_times.end()) {
+        // If this is the first time this desc is being used, set the start time.
+        start_times[desc] = std::chrono::steady_clock::now();
+    }
+
     float progress = std::min((float) current / (float) total, 1.0f);
     int pos = (int) ((float) width * progress);
 
@@ -135,7 +159,39 @@ inline bool tqdm(size_t current, size_t total, std::string desc = "", int width 
     }
     bar << "]";
 
-    logNoNewline(bar.str(), int(progress * 100.0), '%', desc, (current >= total ? "\n" : "\r"));
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = now - start_times[desc];
+    auto eta =
+        std::chrono::duration_cast<std::chrono::seconds>(elapsed / progress * (1 - progress));
+    auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+    auto elements_per_second =
+        (elapsed_seconds > 0) ? (float) current / (float) elapsed_seconds : 0.0f;
+
+    bar << int(progress * 100.0) << "% ";
+
+    if (current < total) {
+        bar << current << "/" << total << " ";
+
+        bar << "[" << formatDuration(elapsed) << "<" << formatDuration(eta) << ", " << std::fixed
+            << std::setprecision(2) << elements_per_second << "it/s] ";
+
+        bar << desc << "\r";
+    } else {
+        bar << total << "/" << total << " ";
+
+        bar << "[" << formatDuration(elapsed) << ", " << std::fixed << std::setprecision(2)
+            << elements_per_second << "it/s] ";
+
+        bar << desc << "\n";
+    }
+
+    logNoNewline(bar.str());
+
+    // If we've reached 100%, remove the start time for this desc.
+    if (current >= total) {
+        start_times.erase(desc);
+    }
+
     return current < total;
 }
 
