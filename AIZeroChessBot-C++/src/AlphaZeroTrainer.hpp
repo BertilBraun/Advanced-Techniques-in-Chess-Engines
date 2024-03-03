@@ -38,7 +38,7 @@ protected:
 
         auto valueRegularizationLoss = lambda_reg * (1 / (epsilon + torch::abs(value)));
 
-        auto loss = policyLoss + valueLoss + valueRegularizationLoss;
+        auto loss = policyLoss + valueLoss + valueRegularizationLoss.mean();
 
         // if loss is a lot higher than trainStats.getAverageLoss() then log the state
         // and policyTargets and valueTargets if (loss.item<float>() > 2 *
