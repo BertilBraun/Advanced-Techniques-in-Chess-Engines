@@ -7,8 +7,6 @@
 #include "Dataset.hpp"
 #include "TrainingStats.hpp"
 
-// #define USE_MULTITHREADING
-
 class TrainerImplBase {
 public:
     TrainerImplBase(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
@@ -62,7 +60,7 @@ public:
     TrainingStats train(Dataset &dataset) {
         TrainingStats trainStats;
 
-        DataSubset dataSubset = dataset.intoDataSubsets({m_model->device})[0];
+        DataSubset dataSubset = dataset.asDataSubset(m_model->device);
 
         while (dataSubset.hasNext()) {
             auto [states, policyTargets, valueTargets] = dataSubset.next();
@@ -96,7 +94,8 @@ public:
             m_devicesList.push_back(torch::Device(torch::kCPU));
         }
 
-        for (size_t i = 0; i < std::min(5 * devices, args.numTrainers); i++) {
+        for (size_t i = 0;
+             i < std::min(NUM_THREADS_FOR_TRAINING_PER_GPU * devices, args.numTrainers); i++) {
             m_devicesList.push_back(torch::Device(torch::kCUDA, i % devices));
         }
 
@@ -260,13 +259,12 @@ private:
 class AlphaZeroTrainer : AlphaZeroBase {
 public:
     AlphaZeroTrainer(Network &model, torch::optim::Optimizer &optimizer, const TrainingArgs &args)
-        : AlphaZeroBase(model, args, &optimizer),
-#ifdef USE_MULTITHREADING
-          trainer(std::make_unique<MultiThreadedTrainer>(model, optimizer, args))
-#else
-          trainer(std::make_unique<SingleThreadedTrainer>(model, optimizer, args))
-#endif
-    {
+        : AlphaZeroBase(model, args, &optimizer) {
+        if (USE_MULTI_THREADED_TRAINING) {
+            trainer = std::make_unique<MultiThreadedTrainer>(model, optimizer, args);
+        } else {
+            trainer = std::make_unique<SingleThreadedTrainer>(model, optimizer, args);
+        }
     }
 
     void run() {
@@ -277,7 +275,7 @@ public:
 
         for (size_t iteration = m_startingIteration; iteration < m_args.numIterations;
              ++iteration) {
-            log("Training Iteration", (iteration + 1));
+            log("Training Iteration", iteration);
 
             timeit([&] { dataset.load(); }, "load Dataset");
 
@@ -306,7 +304,7 @@ public:
 
             // evaluateAlphaVsStockfish(modelPath);
 
-            log("Iteration", (iteration + 1));
+            log("Iteration", iteration);
 
             log("Train Stats:\n", trainStats.toString());
             log("Learning stats:\n", learningStats.toString());

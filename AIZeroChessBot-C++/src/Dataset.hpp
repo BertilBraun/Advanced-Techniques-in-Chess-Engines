@@ -210,6 +210,10 @@ public:
                                 m_memoryPathsFIFO.begin() + numMemoriesToDelete);
     }
 
+    DataSubset asDataSubset(const torch::Device &device) const {
+        return DataSubset(m_memoryPathsFIFO, device, m_memoriesToPreload);
+    }
+
     std::vector<DataSubset> intoDataSubsets(const std::vector<torch::Device> &devices) const {
         std::vector<DataSubset> datasets;
         datasets.reserve(devices.size());
