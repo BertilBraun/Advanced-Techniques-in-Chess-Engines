@@ -174,13 +174,14 @@ private:
         for (size_t i = 0; i < m_model->parameters().size(); ++i) {
             m_aggregateMutexes.push_back(std::make_unique<std::mutex>());
         }
+
+        for (size_t i = 0; i < m_model->parameters().size(); ++i) {
+            // Reset the gradients for the next iteration
+            m_model->parameters()[i].mutable_grad() = torch::zeros_like(m_model->parameters()[i]);
+        }
     }
 
     void step(Network &model) {
-        // barrier here to ensure all threads have finished back propagation and gradients are
-        // available for aggregation
-        // only do this block once (barrier returns true for only one of the threads) and not
-        // for all threads
 
         timeit(
             [&] {
@@ -212,6 +213,11 @@ private:
                 [&] {
                     m_optimizer->step();
                     m_optimizer->zero_grad();
+
+                    for (size_t i = 0; i < m_model->parameters().size(); ++i) {
+                        // Reset the gradients for the next iteration
+                        m_model->parameters()[i].mutable_grad().zero_();
+                    }
                 },
                 "step optimizer");
         }
