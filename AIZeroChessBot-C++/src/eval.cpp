@@ -33,6 +33,10 @@ int main(int argc, char *argv[]) {
     //              console.
     // 2. "play" -> Given a "position" and a "time to think (ms)", the model will search for the
     //              best move and print it to the console.
+    // 3. "analyzeSample" -> Given a "sample id" or "random", the sample will be loaded and printed
+    //              to the console.
+    // 4. "cleanDataset" -> This command will clean the dataset by removing samples with a value
+    //              between -0.1 and 0.15. This is done to lighten the dataset.
 
     if (argc < 2) {
         log("Usage:", argv[0], "<eval|play> [args...]");
@@ -137,9 +141,12 @@ int main(int argc, char *argv[]) {
 
         std::vector<torch::Tensor> batchStates, batchPolicyTargets, batchValueTargets;
 
+        size_t totalSamples = 0, totalKeptSamples = 0;
+
         for (const auto &memoryPath : memoryPaths) {
             auto [states, policyTargets, valueTargets] = DataSubset::loadSample(memoryPath);
             std::filesystem::remove_all(memoryPath);
+            totalSamples += states.size(0);
 
             // Check if we actually loaded the sample successfully
             if (states.numel() == 0 || policyTargets.numel() == 0 || valueTargets.numel() == 0) {
@@ -158,6 +165,7 @@ int main(int argc, char *argv[]) {
                 batchStates.push_back(states[i]);
                 batchPolicyTargets.push_back(policyTargets[i]);
                 batchValueTargets.push_back(valueTargets[i]);
+                totalKeptSamples++;
             }
 
             while (batchStates.size() > batchSize) {
@@ -184,6 +192,10 @@ int main(int argc, char *argv[]) {
                                          batchPolicyTargets.begin() + batchSize);
                 batchValueTargets.erase(batchValueTargets.begin(),
                                         batchValueTargets.begin() + batchSize);
+            }
+
+            if (totalSamples % 10000 == 0) {
+                log("Processed", totalSamples, "samples", "Kept", totalKeptSamples, "samples");
             }
         }
     } else {
