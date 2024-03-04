@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
                 //                                                    false, i, numProcessors);
                 // stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
                 stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
-                    "models/stockfish-windows-x86-64.exe", numProcessors);
+                    "models/stockfish_8_x64", numProcessors);
             }));
         }
 
