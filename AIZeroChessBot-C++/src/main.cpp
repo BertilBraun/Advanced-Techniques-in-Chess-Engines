@@ -8,6 +8,12 @@
 
 int main(int argc, char *argv[]) {
 
+    argc = 3;
+    argv = new char *[3];
+    argv[0] = "main";
+    argv[1] = "generate";
+    argv[2] = "1";
+
     if (argc != 3) {
         log("Usage:", argv[0], "[train|generate] <numProcessors>");
         return 1;
@@ -50,11 +56,11 @@ int main(int argc, char *argv[]) {
         for (size_t i = 0; i < numProcessors; ++i) {
             threads.emplace_back(std::thread([i, numProcessors, args] {
                 StockfishDataGenerator stockfishDataGenerator(args.batchSize);
-                stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json",
-                                                                   false, i, numProcessors);
+                // stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json",
+                //                                                    false, i, numProcessors);
                 // stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
-                // stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
-                //     "models/stockfish_8_x64");
+                stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
+                    "models/stockfish-windows-x86-64.exe", numProcessors);
             }));
         }
 

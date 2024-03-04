@@ -129,20 +129,35 @@ public:
         markGenerated("lichess_evals_generated");
     }
 
-    void generateDataThroughStockfishSelfPlay(const std::string &pathToStockfish,
-                                              size_t numGames = 1000, size_t numMoves = 10) {
+    void generateDataThroughStockfishSelfPlay(const std::string &pathToStockfish, size_t numThreads,
+                                              size_t numGames = 1000, size_t numMoves = 3) {
         // Create a new board
         // For the top numMoves moves, evaluate the position and write the data
         // Recurse on the new position until the game is over
         // Do this for numGames games
-        StockfishEvaluator evaluator(pathToStockfish);
 
-        for (size_t iteration = 0; tqdm(iteration, numGames, "Stockfish Self Play"); ++iteration) {
-            try {
-                Board board;
-                stockfishSelfPlay(evaluator, board, numMoves);
-            } catch (...) {
-            }
+        size_t gamesPerThread = numGames / numThreads;
+
+        std::vector<std::thread> threads;
+
+        for (size_t i = 0; i < numThreads; ++i) {
+            threads.emplace_back([this, pathToStockfish, gamesPerThread, numMoves, i] {
+                StockfishEvaluator evaluator(pathToStockfish);
+
+                for (size_t iteration = 0; tqdm(iteration, gamesPerThread, "Stockfish Self Play");
+                     ++iteration) {
+                    try {
+                        Board board;
+                        stockfishSelfPlay(evaluator, board, numMoves);
+                    } catch (std::exception &e) {
+                        std::cerr << "Error in stockfish self play: " << e.what() << std::endl;
+                    }
+                }
+            });
+        }
+
+        for (auto &thread : threads) {
+            thread.join();
         }
     }
 
@@ -241,7 +256,7 @@ private:
         }
     }
 
-    void stockfishSelfPlay(StockfishEvaluator &evaluator, Board &board, size_t numMoves = 10) {
+    void stockfishSelfPlay(StockfishEvaluator &evaluator, Board &board, size_t numMoves) {
         std::vector<PolicyMove> policy = generateAndWriteDataSample(evaluator, board);
 
         // Sort the moves by probability and take the top numMoves
