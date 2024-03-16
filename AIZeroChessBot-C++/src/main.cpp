@@ -58,9 +58,10 @@ int main(int argc, char *argv[]) {
                 StockfishDataGenerator stockfishDataGenerator(args.batchSize);
                 // stockfishDataGenerator.generateDataFromLichessEval("data/lichess_db_eval.json",
                 //                                                    false, i, numProcessors);
-                // stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt");
-                stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
-                    "models/stockfish_8_x64", numProcessors);
+                stockfishDataGenerator.generateDataFromEliteGames("data/lichess_elites.txt",
+                                                                  "stockfish-windows-x86-64.exe");
+                // stockfishDataGenerator.generateDataThroughStockfishSelfPlay(
+                //     "stockfish-windows-x86-64.exe", numProcessors);
             }));
         }
 

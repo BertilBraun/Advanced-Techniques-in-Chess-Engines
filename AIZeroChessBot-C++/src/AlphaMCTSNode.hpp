@@ -61,10 +61,13 @@ public:
         result_score += result;
         if (parent) {
             // Vectorized update of visits and scores
-            auto child_index =
-                std::distance(parent->children.begin(),
-                              std::find_if(parent->children.begin(), parent->children.end(),
-                                           [this](const auto &child) { return &child == this; }));
+            auto child_index = 0;
+            for (; child_index < parent->children.size(); ++child_index) {
+                if (&parent->children[child_index] == this) {
+                    break;
+                }
+            }
+
             parent->children_number_of_visits.index_put_(
                 {child_index}, parent->children_number_of_visits.index({child_index}) + 1.0);
             parent->children_result_scores.index_put_(

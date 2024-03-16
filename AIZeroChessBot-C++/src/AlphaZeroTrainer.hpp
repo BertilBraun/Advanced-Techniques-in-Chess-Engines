@@ -14,8 +14,20 @@ public:
 
     virtual TrainingStats train(Dataset &dataset) = 0;
 
-    void updateLearningRate(float averageLoss) {
-        // TODO potentially add learning rate scheduler here
+    void updateLearningRate(float averageLoss, size_t iteration, size_t epoch) {
+        if (iteration % 15 == 14) {
+            decayLearningRate(0.5);
+        }
+    }
+
+private:
+    void decayLearningRate(double rate) {
+        for (auto &param_group : m_optimizer->param_groups()) {
+            if (param_group.has_options()) {
+                auto &options = static_cast<torch::optim::AdamOptions &>(param_group.options());
+                options.lr(options.lr() * (1.0 - rate));
+            }
+        }
     }
 
 protected:
@@ -296,8 +308,8 @@ public:
             log("Training started!");
 
             TrainingStats trainStats;
-            for (size_t i = 0; tqdm(i, m_args.numEpochs, "Training"); ++i) {
-                trainStats += timeit([&] { return train(dataset); }, "train");
+            for (size_t epoch = 0; tqdm(epoch, m_args.numEpochs, "Training"); ++epoch) {
+                trainStats += timeit([&] { return train(dataset, iteration, epoch); }, "train");
             }
 
             log("Training finished!");
@@ -324,9 +336,9 @@ public:
 private:
     std::unique_ptr<TrainerImplBase> trainer;
 
-    TrainingStats train(Dataset &dataset) {
+    TrainingStats train(Dataset &dataset, size_t iteration, size_t epoch) {
         auto trainStats = trainer->train(dataset);
-        trainer->updateLearningRate(trainStats.getAverageLoss());
+        trainer->updateLearningRate(trainStats.getAverageLoss(), iteration, epoch);
         return trainStats;
     }
 };

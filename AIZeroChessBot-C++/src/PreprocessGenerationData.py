@@ -45,7 +45,7 @@ def process_pgn_files(database_path: str, output_file_path: str) -> None:
 
 if __name__ == '__main__':
     database_path = sys.argv[1]  # input("Enter the path to the Lichess Elite Database: ")
-    output_file = sys.argv[3]  # input("Enter the path to the output file: ")
+    output_file = sys.argv[2]  # input("Enter the path to the output file: ")
 
     eval_database_path = sys.argv[3]  # input('Enter the path to the Lichess Evaluation Database: ')
 

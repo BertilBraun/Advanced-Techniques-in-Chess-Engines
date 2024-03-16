@@ -49,7 +49,8 @@ class StockfishDataGenerator {
 public:
     StockfishDataGenerator(size_t batchSize) : m_selfPlayWriter(batchSize) {}
 
-    void generateDataFromEliteGames(const std::string &pathToEliteGames) {
+    void generateDataFromEliteGames(const std::string &pathToEliteGames,
+                                    const std::string &pathToStockfish) {
         // Generate training data from elite games
         // These can be found here: https://database.nikonoel.fr/
         // These should be preprocessed by PreprocessGenerationData.py
@@ -58,6 +59,7 @@ public:
         if (hasGenerated("elite_games_generated"))
             return;
 
+        StockfishEvaluator evaluator(pathToStockfish);
         std::ifstream file(pathToEliteGames);
 
         size_t numGames = 0;
@@ -66,21 +68,38 @@ public:
             try {
                 std::vector<std::string> tokens = split(line, ' ');
 
-                float score = std::stof(tokens[0]);
+                // Tokens[0] is the score, the rest are the moves
+                // The score is 1-0 for white win, 0-1 for black win, 1/2-1/2 for draw
+
+                float score = 0.0f;
+                if (tokens[0] == "1-0")
+                    score = 1.0f;
+                else if (tokens[0] == "0-1")
+                    score = -1.0f;
+                else if (tokens[0] == "1/2-1/2")
+                    continue; // Skip draws
+                else
+                    throw std::runtime_error("Invalid score");
+
                 std::vector<Move> moves;
                 for (size_t i = 1; i < tokens.size(); ++i) {
                     moves.push_back(Move::fromUci(tokens[i]));
                 }
 
-                // WARNING: verify the correctness of the policy encoding
-                //          In the past, some of the policy encodings needed to be flipped
-                //          vertically in case of black/white to move
-                writeLine(Board(), moves, score);
+                float scoreOffset = score * 0.8f;
+
+                Board board;
+                for (const Move &move : moves) {
+                    board.push(move);
+                    generateAndWriteDataSample(evaluator, board,
+                                               (board.turn == WHITE) ? scoreOffset : -scoreOffset);
+                }
 
                 numGames++;
                 if (numGames % 1000 == 0)
                     reportProgress(numGames, 1000000, "Elite games"); // TODO
-            } catch (...) {
+            } catch (std::exception &e) {
+                log("Error in elite games:", e.what());
             }
         }
 
@@ -274,10 +293,10 @@ private:
         }
     }
 
-    std::vector<PolicyMove> generateAndWriteDataSample(StockfishEvaluator &evaluator,
-                                                       Board &board) {
+    std::vector<PolicyMove> generateAndWriteDataSample(StockfishEvaluator &evaluator, Board &board,
+                                                       float valueOffset = 0.f) {
         std::vector<PolicyMove> policy = evaluateMovesPolicy(evaluator, board);
-        float value = evaluator.evaluatePosition(board.fen());
+        float value = evaluator.evaluatePosition(board.fen(), 15) + valueOffset;
 
         // WARNING: verify the correctness of the policy encoding
         //          In the past, some of the policy encodings needed to be flipped vertically in
@@ -293,7 +312,7 @@ private:
         for (const Move &move : board.legalMoves()) {
             Board copy = board.copy();
             copy.push(move);
-            float score = evaluator.evaluatePosition(board.fen());
+            float score = evaluator.evaluatePosition(board.fen(), 10);
             // Note: The score is negated, because the evaluator is from the perspective of the
             // current player, but the policy should be from the perspective of the last player
             policy.emplace_back(move, -score);

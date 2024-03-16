@@ -8,3 +8,5 @@ src/json.hpp
 **/models/memory/**
 
 ruff.toml
+
+**/data/**

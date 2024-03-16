@@ -11,7 +11,7 @@ float normalizeEvaluation(int score_cp) {
 
 class StockfishEvaluator {
 public:
-    StockfishEvaluator(const std::string &pathToStockfish) : stockfish(pathToStockfish, "r+") {
+    StockfishEvaluator(const std::string &pathToStockfish) : stockfish(pathToStockfish) {
         stockfish << "uci";
         stockfish << "isready";
 
@@ -22,7 +22,7 @@ public:
 
     ~StockfishEvaluator() { stockfish << "quit"; }
 
-    float evaluatePosition(const std::string &fen, int depth = 20) {
+    float evaluatePosition(const std::string &fen, int depth = 15) {
         stockfish << "position fen " + fen;
         stockfish << "go depth " + std::to_string(depth);
 
@@ -31,7 +31,7 @@ public:
         std::string line;
         stockfish >> line;
 
-        while (line.find("bestmove") != std::string::npos) {
+        while (line.find("bestmove") == std::string::npos) {
             if (line.find("score cp") != std::string::npos) {
                 std::istringstream iss(line);
                 std::string token;
