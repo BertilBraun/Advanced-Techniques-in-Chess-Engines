@@ -8,12 +8,6 @@
 
 int main(int argc, char *argv[]) {
 
-    argc = 3;
-    argv = new char *[3];
-    argv[0] = "main";
-    argv[1] = "generate";
-    argv[2] = "1";
-
     if (argc != 3) {
         log("Usage:", argv[0], "[train|generate] <numProcessors>");
         return 1;
