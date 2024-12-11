@@ -134,8 +134,12 @@ class AlphaZero:
             with open(self.save_path / 'last_training_config.json', 'r') as f:
                 last_training_config = json.load(f)
 
-            self.model.load_state_dict(torch.load(last_training_config['model']))
-            self.optimizer.load_state_dict(torch.load(last_training_config['optimizer']))
+            self.model.load_state_dict(
+                torch.load(last_training_config['model'], map_location=self.model.device, weights_only=True)
+            )
+            self.optimizer.load_state_dict(
+                torch.load(last_training_config['optimizer'], map_location=self.model.device, weights_only=True)
+            )
             self.starting_iteration = int(last_training_config['iteration'])
 
             print(f'Model and optimizer loaded from iteration {self.starting_iteration}')

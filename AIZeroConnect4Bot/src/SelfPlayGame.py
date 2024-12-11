@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from AIZeroConnect4Bot.src.Board import Board, Color
+from AIZeroConnect4Bot.src.Board import Board
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import get_board_result_score
 
@@ -10,7 +10,6 @@ from AIZeroConnect4Bot.src.Encoding import get_board_result_score
 class SelfPlayGameMemory:
     board: Board
     action_probabilities: np.ndarray
-    turn: Color
 
 
 class SelfPlayGame:
@@ -29,7 +28,7 @@ class SelfPlayGame:
         if node.is_terminal_node:
             result = get_board_result_score(node.board)
             assert result is not None
-            node.back_propagate(result)
+            node.back_propagate(-result)
             return None
 
         return node

@@ -53,15 +53,15 @@ TRAINING_ARGS = TrainingArgs(
 # Test training args to verify the implementation
 TRAINING_ARGS = TrainingArgs(
     num_iterations=20,
-    num_self_play_iterations=40,
-    num_parallel_games=4,
-    num_iterations_per_turn=400,
+    num_self_play_iterations=1,
+    num_parallel_games=1,
+    num_iterations_per_turn=200,
     num_epochs=6,
     num_separate_nodes_on_cluster=1,
     batch_size=64,
     temperature=1.0,
     dirichlet_epsilon=0.25,
-    dirichlet_alpha=0.03,
+    dirichlet_alpha=0.3,
     c_param=2.0,
     save_path='AIZeroConnect4Bot/training_data',
 )

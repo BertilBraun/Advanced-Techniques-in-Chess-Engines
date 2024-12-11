@@ -3,16 +3,14 @@ from __future__ import annotations
 import numpy as np
 from typing import List, Literal, Optional
 
-from AIZeroConnect4Bot.settings import COLUMN_COUNT, ROW_COUNT
-
-_WINNER_NOT_YET_CHECKED = object()
+from AIZeroConnect4Bot.src.settings import COLUMN_COUNT, ROW_COUNT
 
 
 class Connect4:
     def __init__(self) -> None:
         self.board = np.zeros((ROW_COUNT, COLUMN_COUNT), dtype=int)
         self.current_player: Color = 1
-        self._winner: Color | None | object = _WINNER_NOT_YET_CHECKED
+        self._winner: Optional[Color] = None
 
     def make_move(self, column: int) -> bool:
         if column < 0 or column >= COLUMN_COUNT or self.board[0][column] != 0:
@@ -20,35 +18,28 @@ class Connect4:
         for row in range(ROW_COUNT - 1, -1, -1):
             if self.board[row][column] == 0:
                 self.board[row][column] = self.current_player
-                self._winner = _WINNER_NOT_YET_CHECKED
+                if self.__check_winner(row, column):
+                    self._winner = self.current_player
                 return True
+        assert False, 'Unreachable code'
+
+    def __check_winner(self, row: int, col: int) -> bool:
+        piece = self.board[row][col]
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        for delta_row, delta_col in directions:
+            count = 1
+            for dr, dc in [(delta_row, delta_col), (-delta_row, -delta_col)]:
+                r, c = row + dr, col + dc
+                while 0 <= r < ROW_COUNT and 0 <= c < COLUMN_COUNT and self.board[r][c] == piece:
+                    count += 1
+                    if count >= 4:
+                        return True
+                    r += dr
+                    c += dc
         return False
 
     def check_winner(self) -> Optional[int]:
-        if self._winner is not _WINNER_NOT_YET_CHECKED:
-            return self._winner  # type: ignore
-        for row in range(ROW_COUNT):
-            for col in range(COLUMN_COUNT):
-                if self.board[row][col] == 0:
-                    continue
-                if (
-                    self.__check_direction(row, col, 1, 0)
-                    or self.__check_direction(row, col, 0, 1)
-                    or self.__check_direction(row, col, 1, 1)
-                    or self.__check_direction(row, col, 1, -1)
-                ):
-                    self._winner = self.board[row][col]
-                    return self.board[row][col]
-        self._winner = None
-        return None
-
-    def __check_direction(self, row: int, col: int, delta_row: int, delta_col: int) -> bool:
-        piece = self.board[row][col]
-        for i in range(1, 4):
-            r, c = row + delta_row * i, col + delta_col * i
-            if r < 0 or r >= ROW_COUNT or c < 0 or c >= COLUMN_COUNT or self.board[r][c] != piece:
-                return False
-        return True
+        return self._winner
 
     def switch_player(self) -> None:
         self.current_player = -1 if self.current_player == 1 else 1
@@ -69,10 +60,11 @@ class Connect4:
         game = Connect4()
         game.board = self.board.copy()
         game.current_player = self.current_player
+        game._winner = self._winner
         return game
 
     def is_game_over(self) -> bool:
-        return self.check_winner() is not None or self.is_full()
+        return self._winner is not None or self.is_full()
 
 
 Board = Connect4
@@ -86,9 +78,8 @@ if __name__ == '__main__':
         while True:
             column = int(input(f'Player {game.current_player}, choose a column (0-{COLUMN_COUNT-1}): '))
             if game.make_move(column):
-                winner = game.check_winner()
-                if winner:
-                    print(f'Player {winner} wins!')
+                if game.check_winner():
+                    print(f'Player {game.current_player} wins!')
                     break
                 elif game.is_full():
                     print('The game is a draw!')

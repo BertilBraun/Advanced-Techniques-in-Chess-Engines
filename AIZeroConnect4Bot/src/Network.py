@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
-from AIZeroConnect4Bot.settings import *
+from AIZeroConnect4Bot.src.settings import *
 
 
 class Network(nn.Module):

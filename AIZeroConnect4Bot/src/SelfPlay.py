@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.settings import ACTION_SIZE
+from AIZeroConnect4Bot.src.settings import ACTION_SIZE
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.Network import Network
 from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
@@ -33,11 +33,9 @@ class SelfPlay:
         while len(self_play_games) > 0:
             self._expand_self_play_games(self_play_games)
 
-            current_player_turn = self_play_games[0].root.board.current_player
-
             for spg in self_play_games:
                 action_probabilities = self._get_action_probabilities(spg.root)
-                spg.memory.append(SelfPlayGameMemory(spg.root.board, action_probabilities, current_player_turn))
+                spg.memory.append(SelfPlayGameMemory(spg.root.board, action_probabilities))
 
                 move = self._sample_move(action_probabilities, spg.root)
 
@@ -64,9 +62,6 @@ class SelfPlay:
 
             for board, probabilities in self._symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_memory.append(SelfPlayMemory(board, probabilities, result))
-                print(
-                    f'Adding training data for board:\n{board}\nwith probabilities:\n{np.round(probabilities, 3)}\nand result: {result}'
-                )
             result = -result
 
         return self_play_memory
@@ -100,17 +95,12 @@ class SelfPlay:
 
         for _ in range(self.args.num_iterations_per_turn):
             for spg in self_play_games:
-                if spg.node is not None:  # Don't re-propagate multiple times
-                    spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
+                spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
-            expandable_self_play_games = [spg for spg in self_play_games if spg.node is not None]
+            expandable_nodes: list[AlphaMCTSNode] = [spg.node for spg in self_play_games if spg.node is not None]
 
-            if len(expandable_self_play_games) > 0:
-                # spg.node is not None because it is filtered in the expandable_self_play_games list
-                boards = [
-                    spg.node.board.get_canonical_board()  # type: ignore
-                    for spg in expandable_self_play_games
-                ]
+            if len(expandable_nodes) > 0:
+                boards = [node.board.get_canonical_board() for node in expandable_nodes]
                 policy, value = self.model.inference(
                     torch.tensor(
                         np.array(boards),
@@ -119,10 +109,7 @@ class SelfPlay:
                     ).unsqueeze(1)
                 )
 
-            for i, spg in enumerate(expandable_self_play_games):
-                # spg.node is not None because it is filtered in the expandable_self_play_games list
-                node: AlphaMCTSNode = spg.node  # type: ignore
-
+            for i, node in enumerate(expandable_nodes):
                 moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
 
                 node.expand(moves)
