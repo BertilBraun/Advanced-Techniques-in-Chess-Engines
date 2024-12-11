@@ -15,6 +15,6 @@
 cd ../../
 source ~/.bashrc
 
-# python -m cProfile -o out.perf -m AIZeroConnect4Bot.train
-python -m AIZeroConnect4Bot.train
+python -m cProfile -o out.perf -m AIZeroConnect4Bot.train
+# python -m AIZeroConnect4Bot.train
 
