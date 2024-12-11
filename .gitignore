@@ -1,3 +1,4 @@
 **/__pycache__/**
 **.pt
 build/**
+**/last_training_config.json
