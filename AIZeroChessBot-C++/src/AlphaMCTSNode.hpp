@@ -53,7 +53,7 @@ public:
         children_number_of_visits = torch::zeros({static_cast<long>(moves_with_scores.size())});
         children_result_scores = torch::zeros({static_cast<long>(moves_with_scores.size())});
         children_policies = torch::from_blob(policies.data(), {static_cast<long>(policies.size())},
-                                             torch::kFloat32);
+                                             torch::kFloat16);
     }
 
     void backPropagate(float result) {

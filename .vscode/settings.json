@@ -19,6 +19,7 @@
     "cmake.configureOnOpen": true,
     "C_Cpp.default.compilerPath": "cl.exe",
     "files.associations": {
+        "*.et": "c",
         "vector": "cpp",
         "algorithm": "cpp",
         "array": "cpp",
@@ -107,7 +108,13 @@
         "xtr1common": "cpp",
         "xtree": "cpp",
         "xutility": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp",
+        "csignal": "cpp",
+        "execution": "cpp",
+        "coroutine": "cpp",
+        "resumable": "cpp"
     },
     "cmake.sourceDirectory": "C:/Projects/ChessBot/AIZeroChessBot-C++"
 }

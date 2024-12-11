@@ -13,7 +13,9 @@
 class SelfPlay {
 public:
     SelfPlay(Network &model, const TrainingArgs &args)
-        : m_model(model), m_args(args), m_selfPlayWriter(args.batchSize) {}
+        : m_model(model), m_args(args), m_selfPlayWriter(args.batchSize) {
+        m_model->eval();
+    }
 
     SelfPlayStats selfPlay() {
         std::vector<SelfPlayGame> selfPlayGames(m_args.numParallelGames, SelfPlayGame());
@@ -84,7 +86,7 @@ private:
                     boards.push_back(selfPlayGames[idx].node->board);
                 }
 
-                auto [policy, value] = m_model->inference(encodeBoards(boards).to(m_model->device));
+                auto [policy, value] = m_model->inference(encodeBoards(boards, m_model->device));
 
                 for (size_t i = 0; i < expandableSelfPlayGames.size(); ++i) {
                     size_t idx = expandableSelfPlayGames[i];
@@ -105,13 +107,13 @@ private:
             encodedBoards.push_back(game.board);
         }
 
-        auto [policy, _] = m_model->inference(encodeBoards(encodedBoards).to(m_model->device));
+        auto [policy, _] = m_model->inference(encodeBoards(encodedBoards, m_model->device));
 
         // Add dirichlet noise to the policy to encourage exploration
-        torch::Tensor dirichletNoise = torch::rand({ACTION_SIZE}, torch::kFloat32);
+        torch::Tensor dirichletNoise = torch::rand({ACTION_SIZE}, torch::kFloat16);
         dirichletNoise /= dirichletNoise.sum();
         dirichletNoise *= m_args.dirichletAlpha;
-        dirichletNoise = dirichletNoise.lerp(torch::rand({ACTION_SIZE}, torch::kFloat32),
+        dirichletNoise = dirichletNoise.lerp(torch::rand({ACTION_SIZE}, torch::kFloat16),
                                              m_args.dirichletEpsilon);
 
         return policy.lerp(dirichletNoise, 1);
@@ -146,7 +148,7 @@ private:
         Color winner = !game.board.turn;
 
         for (auto &memory : game.memory) {
-            auto encodedBoard = encodeBoard(memory.board);
+            auto encodedBoard = encodeBoard(memory.board, torch::kCPU);
             auto score = (memory.board.turn == winner) ? resultScore : -resultScore;
 
             if (memory.board.turn == BLACK)

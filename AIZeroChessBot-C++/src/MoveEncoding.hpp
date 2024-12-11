@@ -173,9 +173,9 @@ inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabi
         // Initialize the tensor with -inf so that the softmax function will set the probability of
         // illegal moves to 0
         movesEncoded =
-            torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat32);
+            torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat16);
     } else {
-        movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat32);
+        movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat16);
     }
 
     for (const auto &[move, probability] : movesWithProbabilities) {

@@ -263,7 +263,7 @@ private:
     }
 
     void write(const Board &board, const std::vector<PolicyMove> &policy, float value) {
-        torch::Tensor encodedBoard = encodeBoard(board);
+        torch::Tensor encodedBoard = encodeBoard(board, torch::kCPU);
         torch::Tensor encodedPolicy = encodeMoves(policy, board.turn);
 
         if (board.turn == BLACK)

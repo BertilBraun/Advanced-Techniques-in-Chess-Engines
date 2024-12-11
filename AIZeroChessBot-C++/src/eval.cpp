@@ -301,7 +301,7 @@ void iterate(Network &model, AlphaMCTSNode *node) {
 std::pair<std::vector<std::pair<Move, float>>, float> inference(Network &model, Board &board) {
     torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
 
-    auto [policy, value] = model->inference(encodeBoards({board}).to(model->device));
+    auto [policy, value] = model->inference(encodeBoards({board}, model->device));
 
     auto moves = filterPolicyThenGetMovesAndProbabilities(policy[0], board);
 

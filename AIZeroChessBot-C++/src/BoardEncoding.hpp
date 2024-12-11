@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-torch::Tensor encodeBoard(const Board &board) {
+torch::Tensor encodeBoard(const Board &board, torch::Device device) {
     // Encodes a chess board into a 12x8x8 tensor.
     //
     // Each layer in the first dimension represents one of the 12 distinct
@@ -17,7 +17,8 @@ torch::Tensor encodeBoard(const Board &board) {
     // :param board: The chess board to encode.
     // :return: A 12x8x8 tensor representing the encoded board.
 
-    auto encodedBoard = torch::zeros({ENCODING_CHANNELS, 8, 8});
+    auto encodedBoard = torch::zeros({ENCODING_CHANNELS, 8, 8},
+                                     torch::TensorOptions().device(device).dtype(torch::kFloat16));
 
     for (Color color : COLORS) {
         for (PieceType pieceType : PIECE_TYPES) {
@@ -41,7 +42,7 @@ torch::Tensor encodeBoard(const Board &board) {
     return encodedBoard;
 }
 
-torch::Tensor encodeBoards(const std::vector<Board> &boards) {
+torch::Tensor encodeBoards(const std::vector<Board> &boards, torch::Device device) {
     // Encodes a list of chess boards into a Nx12x8x8 tensor.
     //
     // Each layer in the first dimension represents one of the 12 distinct
@@ -58,7 +59,7 @@ torch::Tensor encodeBoards(const std::vector<Board> &boards) {
 
     std::vector<torch::Tensor> encodedBoards;
     for (const auto &board : boards) {
-        encodedBoards.push_back(encodeBoard(board));
+        encodedBoards.push_back(encodeBoard(board, device));
     }
     return torch::stack(encodedBoards);
 }
