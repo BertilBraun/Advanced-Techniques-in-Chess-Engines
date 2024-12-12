@@ -145,7 +145,7 @@ class SelfPlay:
             temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
         else:
             temperature_action_probabilities = action_probabilities
-        # Divide temperature_action_probabilities with its sum in case of an error
+
         action = np.random.choice(ACTION_SIZE, p=temperature_action_probabilities)
 
         return action
