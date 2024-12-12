@@ -48,6 +48,16 @@ A significant evolution of the AI-ZeroChessBot, ported to C++ and further develo
 - Advanced integration of deep learning and MCTS for superior strategic depth.
 - Focus on self-improvement through extensive self-play and continuous learning.
 
+### 5. [AI-ZeroConnect4Bot](/AI-ZeroConnect4Bot/README.md) (Subfolder: `AI-ZeroConnect4Bot`)
+
+This project simplifies the game to Connect 4 and applies the AI-Zero approach to develop a Connect 4 bot. The project aims to verify the correctness and effectiveness of the AI-Zero approach in a simpler game setting. Once the Connect 4 bot is successfully developed, the project will be extended to attempt the same approach in more complex games like Chess.
+
+**Key Features**:
+
+- Connect 4 game environment.
+- Optimizations for Inference like Batch Inference and Caching.
+- Optimized Hyperparameters and actual good achieved performance.
+
 ## Repository Structure
 
 ```text
