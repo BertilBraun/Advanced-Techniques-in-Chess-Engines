@@ -58,10 +58,10 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 # Test training args to verify the implementation
 TRAINING_ARGS = TrainingArgs(
     num_iterations=50,
-    num_self_play_iterations=6_000,
+    num_self_play_iterations=7040,  # parallel games * 55
     num_parallel_games=128,
-    num_iterations_per_turn=600,
-    num_epochs=5,
+    num_iterations_per_turn=800,
+    num_epochs=6,
     batch_size=64,
     temperature=1.0,
     dirichlet_epsilon=0.25,
@@ -71,24 +71,24 @@ TRAINING_ARGS = TrainingArgs(
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
     save_path='AIZeroConnect4Bot/training_data',
-    num_train_nodes_on_cluster=1,
-    num_self_play_nodes_on_cluster=7,
+    num_train_nodes_on_cluster=0,
+    num_self_play_nodes_on_cluster=4,
 )
 
 # Test training args to verify the implementation
-TRAINING_ARGS = TrainingArgs(
-    num_iterations=50,
-    num_self_play_iterations=64,
-    num_parallel_games=4,
-    num_iterations_per_turn=600,
-    num_epochs=5,
-    batch_size=64,
-    temperature=1.0,
-    dirichlet_epsilon=0.25,
-    dirichlet_alpha=1,
-    c_param=4.0,
-    sampling_window=sampling_window,
-    learning_rate=learning_rate,
-    learning_rate_scheduler=learning_rate_scheduler,
-    save_path='AIZeroConnect4Bot/training_data',
-)
+# TRAINING_ARGS = TrainingArgs(
+#     num_iterations=50,
+#     num_self_play_iterations=64,
+#     num_parallel_games=4,
+#     num_iterations_per_turn=600,
+#     num_epochs=5,
+#     batch_size=64,
+#     temperature=1.0,
+#     dirichlet_epsilon=0.25,
+#     dirichlet_alpha=1,
+#     c_param=4.0,
+#     sampling_window=sampling_window,
+#     learning_rate=learning_rate,
+#     learning_rate_scheduler=learning_rate_scheduler,
+#     save_path='AIZeroConnect4Bot/training_data',
+# )
