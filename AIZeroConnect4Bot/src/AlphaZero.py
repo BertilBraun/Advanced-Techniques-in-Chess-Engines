@@ -7,11 +7,11 @@ import torch.nn.functional as F
 from tqdm import tqdm, trange
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.Network import NN_CACHE, Network
+from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Network
 from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.util import batched_iterate, hash_board, random_id, zobrist_hash_boards
+from AIZeroConnect4Bot.src.util import batched_iterate, random_id, zobrist_hash_boards
 
 
 class AlphaZero:
@@ -138,7 +138,6 @@ class AlphaZero:
             hashes = zobrist_hash_boards(torch.stack(states))
 
             for mem, h in zip(batch, hashes):
-                h = hash_board(mem.state)
                 if h in mp:
                     count, spm = mp[h]
                     spm.policy_targets += mem.policy_targets
@@ -171,6 +170,8 @@ class AlphaZero:
             self.optimizer.load_state_dict(
                 torch.load(last_training_config['optimizer'], map_location=self.model.device, weights_only=True)
             )
+
+            print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
             NN_CACHE.clear()
 
             print(f'Model and optimizer loaded from iteration {self.starting_iteration}')

@@ -20,11 +20,9 @@ class Network(nn.Module):
 
     The architecture is based on the AlphaZero paper, but with less layers.
 
-    We use a residual neural network with 8 residual blocks.
-    The input to the network is a 12x8x8 tensor representing the board state with 6 channels for the pieces of the current player and 6 channels for the pieces of the opponent.
+    We use a residual neural network with NUM_RES_BLOCKS residual blocks.
+    The input to the network is a ENCODING_CHANNELSxROW_COUNTxCOLUMN_COUNT tensor representing the board state.
     The output of the network is a policy over all possible moves and a value for the current board state.
-
-    The amount of parameters in the network is ~13.5 million (13.591.258).
     """
 
     def __init__(self) -> None:
@@ -75,11 +73,9 @@ class Network(nn.Module):
             for hash, p, v in zip(to_process_hashes, policy, value):
                 NN_CACHE[hash] = (p, v)
 
-        if len(to_process) < len(x):
-            global TOTAL_EVALS, TOTAL_HITS
-            TOTAL_EVALS += len(x)
-            TOTAL_HITS += len(x) - len(to_process)
-            print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
+        global TOTAL_EVALS, TOTAL_HITS
+        TOTAL_EVALS += len(x)
+        TOTAL_HITS += len(x) - len(to_process)
 
         policies = torch.stack([NN_CACHE[hash][0] for hash in hashes])
         values = torch.stack([NN_CACHE[hash][1] for hash in hashes])
