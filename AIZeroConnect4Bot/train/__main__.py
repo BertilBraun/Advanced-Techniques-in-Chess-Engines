@@ -79,14 +79,16 @@ Write out all that the project contains.
 
 
 if __name__ == '__main__':
+    from pprint import pprint
+
     model = Network()
     optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
     print('Starting training')
     print('Training on:', model.device)
     print('Number of parameters:', sum(p.numel() for p in model.parameters()))
-    print('Training args:', TRAINING_ARGS)
-    print('Learning rate:', optimizer.param_groups[0]['lr'])
+    print('Training args:')
+    pprint(TRAINING_ARGS.__dict__)
 
     assert not (TRAINING_ARGS.num_train_nodes_on_cluster is None) ^ (
         TRAINING_ARGS.num_self_play_nodes_on_cluster is None
