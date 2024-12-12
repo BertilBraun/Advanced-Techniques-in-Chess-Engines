@@ -41,7 +41,7 @@ class ClusterManager:
         print('All nodes initialized')
 
         # Determine the root node (lowest ID)
-        all_ids = [f.stem for f in initialized_nodes]
+        all_ids = [f.stem.replace('initialize_', '') for f in initialized_nodes]
         self.rank = all_ids.index(my_id)
         self.size = len(all_ids)
 
