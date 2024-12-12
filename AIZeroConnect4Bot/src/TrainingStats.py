@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -26,22 +26,3 @@ class TrainingStats:
 
     def __repr__(self) -> str:
         return f'Policy Loss: {self.policy_loss / self.num_batches:.4f}, Value Loss: {self.value_loss / self.num_batches:.4f}, Total Loss: {self.total_loss / self.num_batches:.4f}'
-
-
-@dataclass
-class LearningStats:
-    total_num_games: int = 0
-    total_iterations: int = 0
-    training_stats: list[TrainingStats] = field(default_factory=lambda: [])
-
-    def update(self, num_games: int, training_stats: TrainingStats) -> None:
-        self.total_num_games += num_games
-        self.training_stats.append(training_stats)
-        self.total_iterations += 1
-
-    def __repr__(self) -> str:
-        res = f'Total Games: {self.total_num_games}\n'
-        res += f'Total Iterations: {self.total_iterations}\n'
-        for i, ts in enumerate(self.training_stats):
-            res += f'Iteration {i + 1}: {ts}\n'
-        return res

@@ -1,5 +1,6 @@
 from torch.optim import Adam
 
+from AIZeroConnect4Bot.src.ClusterAlphaZero import ClusterAlphaZero
 from AIZeroConnect4Bot.src.settings import TRAINING_ARGS
 from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
 from AIZeroConnect4Bot.src.Network import Network
@@ -72,12 +73,10 @@ To counteract this, we implemented a slowly increasing sampling window, where th
 ---
 
 
-Write out all that the project contians. 
-
-
-
+Write out all that the project contains. 
 
 """
+
 
 if __name__ == '__main__':
     model = Network()
@@ -89,4 +88,11 @@ if __name__ == '__main__':
     print('Training args:', TRAINING_ARGS)
     print('Learning rate:', optimizer.param_groups[0]['lr'])
 
-    AlphaZero(model, optimizer, TRAINING_ARGS).learn()
+    assert not (TRAINING_ARGS.num_train_nodes_on_cluster is None) ^ (
+        TRAINING_ARGS.num_self_play_nodes_on_cluster is None
+    ), 'Either both or none of the cluster args should be set'
+
+    if TRAINING_ARGS.num_train_nodes_on_cluster is not None:
+        ClusterAlphaZero(model, optimizer, TRAINING_ARGS).learn()
+    else:
+        AlphaZero(model, optimizer, TRAINING_ARGS).learn()

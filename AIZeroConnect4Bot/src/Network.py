@@ -5,6 +5,13 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from AIZeroConnect4Bot.src.settings import *
+from AIZeroConnect4Bot.src.util import zobrist_hash_boards
+
+
+NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
+
+TOTAL_EVALS = 0
+TOTAL_HITS = 0
 
 
 class Network(nn.Module):
@@ -42,17 +49,43 @@ class Network(nn.Module):
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(NUM_HIDDEN, 3, kernel_size=3, padding=1),
-            nn.BatchNorm2d(3),
+            nn.Conv2d(NUM_HIDDEN, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(3 * ROW_COUNT * COLUMN_COUNT, 1),
+            nn.Linear(32 * ROW_COUNT * COLUMN_COUNT, 1),
             nn.Tanh(),
         )
 
         self.to(self.device)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
+        # use hash_board on each board state in x and check if it is in the cache or twice in x
+        hashes = zobrist_hash_boards(x)
+        to_process = []
+        to_process_hashes = []
+        for i, h in enumerate(hashes):
+            if h not in NN_CACHE or h in hashes[:i]:
+                to_process.append(x[i])
+                to_process_hashes.append(h)
+
+        if to_process:
+            policy, value = self._forward(torch.stack(to_process))
+            for hash, p, v in zip(to_process_hashes, policy, value):
+                NN_CACHE[hash] = (p, v)
+
+        if len(to_process) < len(x):
+            global TOTAL_EVALS, TOTAL_HITS
+            TOTAL_EVALS += len(x)
+            TOTAL_HITS += len(x) - len(to_process)
+            print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
+
+        policies = torch.stack([NN_CACHE[hash][0] for hash in hashes])
+        values = torch.stack([NN_CACHE[hash][1] for hash in hashes])
+        return policies, values
+
+    def _forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for resBlock in self.backBone:
             x = resBlock(x)

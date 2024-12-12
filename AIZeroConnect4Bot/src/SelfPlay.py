@@ -16,8 +16,8 @@ from AIZeroConnect4Bot.src.Board import Move
 
 @dataclass
 class SelfPlayMemory:
-    state: np.ndarray
-    policy_targets: np.ndarray
+    state: torch.Tensor
+    policy_targets: torch.Tensor
     value_targets: float
 
 
@@ -29,6 +29,8 @@ class SelfPlay:
     def self_play(self) -> list[SelfPlayMemory]:
         self_play_memory: list[SelfPlayMemory] = []
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+
+        self.model.eval()
 
         while len(self_play_games) > 0:
             self._expand_self_play_games(self_play_games)
@@ -61,7 +63,13 @@ class SelfPlay:
             encoded_board = mem.board.get_canonical_board()
 
             for board, probabilities in self._symmetric_variations(encoded_board, mem.action_probabilities):
-                self_play_memory.append(SelfPlayMemory(board, probabilities, result))
+                self_play_memory.append(
+                    SelfPlayMemory(
+                        torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
+                        torch.tensor(probabilities.copy(), dtype=torch.float32, requires_grad=False),
+                        result,
+                    )
+                )
             result = -result
 
         return self_play_memory
@@ -99,15 +107,17 @@ class SelfPlay:
 
             expandable_nodes: list[AlphaMCTSNode] = [spg.node for spg in self_play_games if spg.node is not None]
 
-            if len(expandable_nodes) > 0:
-                boards = [node.board.get_canonical_board() for node in expandable_nodes]
-                policy, value = self.model.inference(
-                    torch.tensor(
-                        np.array(boards),
-                        device=self.model.device,
-                        dtype=torch.float32,
-                    ).unsqueeze(1)
-                )
+            if len(expandable_nodes) == 0:
+                continue
+
+            boards = [node.board.get_canonical_board() for node in expandable_nodes]
+            policy, value = self.model.inference(
+                torch.tensor(
+                    np.array(boards),
+                    device=self.model.device,
+                    dtype=torch.float32,
+                ).unsqueeze(1)
+            )
 
             for i, node in enumerate(expandable_nodes):
                 moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
