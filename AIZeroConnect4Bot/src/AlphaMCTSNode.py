@@ -24,7 +24,6 @@ class AlphaMCTSNode:
         self.number_of_visits = 0
         self.result_score = 0
         self.policy = policy
-        self.is_fully_expanded = False
 
     def init(self) -> None:
         """Initializes the node by creating a board if it doesn't have one."""
@@ -35,6 +34,10 @@ class AlphaMCTSNode:
             self.board = self.parent.board.copy()
             self.board.make_move(self.move_to_get_here)
             self.board.switch_player()
+
+    @property
+    def is_fully_expanded(self) -> bool:
+        return not not self.children
 
     @property
     def is_terminal_node(self) -> bool:
@@ -52,8 +55,6 @@ class AlphaMCTSNode:
         return ucb_score
 
     def expand(self, moves_with_scores: list[tuple[Move, float]]) -> None:
-        self.is_fully_expanded = True
-
         self.children = [
             AlphaMCTSNode(
                 policy=score,

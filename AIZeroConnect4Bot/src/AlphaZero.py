@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from tqdm import tqdm, trange
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Network, clear_cache
+from AIZeroConnect4Bot.src.Network import Network, clear_cache
 from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
