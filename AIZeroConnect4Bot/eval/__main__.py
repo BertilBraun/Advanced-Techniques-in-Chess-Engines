@@ -2,7 +2,7 @@ import json
 
 from abc import ABC, abstractmethod
 
-from AIZeroConnect4Bot.src.Board import Board, Move
+from AIZeroConnect4Bot.src.Connect4Game import Board, Move
 
 
 class Bot(ABC):

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from AIZeroConnect4Bot.eval.__main__ import Bot
-from AIZeroConnect4Bot.src.Board import Board, Move
+from AIZeroConnect4Bot.src.Connect4Game import Board, Move
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from AIZeroConnect4Bot.src.Network import Network, cached_network_inference

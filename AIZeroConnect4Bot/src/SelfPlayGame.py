@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from AIZeroConnect4Bot.src.Board import Board
+from AIZeroConnect4Bot.src.Connect4Game import Board
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import get_board_result_score
 

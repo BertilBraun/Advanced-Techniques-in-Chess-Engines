@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from AIZeroConnect4Bot.src.Board import Board, Move, null_move
+from AIZeroConnect4Bot.src.Connect4Game import Board, Move, null_move
 
 
 class AlphaMCTSNode:

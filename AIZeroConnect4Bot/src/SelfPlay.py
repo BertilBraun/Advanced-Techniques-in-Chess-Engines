@@ -11,7 +11,7 @@ from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from AIZeroConnect4Bot.src.Board import Move
+from AIZeroConnect4Bot.src.Connect4Game import Move
 
 
 @dataclass
