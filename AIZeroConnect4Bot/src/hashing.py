@@ -18,7 +18,7 @@ def create_zobrist_table(device) -> torch.Tensor:
 ZOBRIST_TABLES: dict[torch.device, torch.Tensor] = {}
 
 
-@torch.compile
+# @torch.compile
 def _zobrist_hash_boards(boards: torch.Tensor, zobrist_table: torch.Tensor) -> torch.Tensor:
     boards = boards.squeeze(1)
 
