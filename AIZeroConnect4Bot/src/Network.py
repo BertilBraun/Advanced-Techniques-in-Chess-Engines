@@ -48,7 +48,8 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
 
 
 def clear_cache() -> None:
-    print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
+    if TOTAL_EVALS != 0:
+        print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
     NN_CACHE.clear()
 
 

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from tqdm import tqdm, trange
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Network
+from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Network, clear_cache
 from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
@@ -173,8 +173,7 @@ class AlphaZero:
                 torch.load(last_training_config['optimizer'], map_location=self.model.device, weights_only=True)
             )
 
-            print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
-            NN_CACHE.clear()
+            clear_cache()
 
             print(f'Model and optimizer loaded from iteration {self.starting_iteration}')
         except FileNotFoundError:
@@ -204,7 +203,10 @@ class AlphaZero:
 
     def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
         memory_path = self.save_path / f'memory_{iteration}_{random_id()}.pt'
-        torch.save(memory, memory_path)
+        torch.save(
+            [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
+            memory_path,
+        )
         print(f'Memory saved at iteration {iteration}')
 
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> list[SelfPlayMemory]:
@@ -219,5 +221,6 @@ class AlphaZero:
         memory: list[SelfPlayMemory] = []
         for f in self.save_path.iterdir():
             if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
-                memory += torch.load(f)
+                mapped_memory = torch.load(f, weights_only=True)
+                memory += [SelfPlayMemory(*mem) for mem in mapped_memory]
         return memory
