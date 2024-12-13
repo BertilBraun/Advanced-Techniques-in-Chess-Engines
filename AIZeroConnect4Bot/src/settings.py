@@ -1,3 +1,4 @@
+import torch
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 
@@ -10,6 +11,8 @@ ENCODING_CHANNELS = 1  # 6+6 for chess, 1 for connect4
 CELL_STATES = 3  # 3 for connect4, 2 for chess
 ACTION_SIZE = COLUMN_COUNT
 AVERAGE_NUM_MOVES_PER_GAME = 20
+
+TORCH_DTYPE = torch.bfloat16  # if torch.cuda.is_available() else torch.float32
 
 
 def sampling_window(current_iteration: int) -> int:

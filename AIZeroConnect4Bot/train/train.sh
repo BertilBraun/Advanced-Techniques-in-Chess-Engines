@@ -14,6 +14,6 @@
 
 cd ../../
 source ~/.bashrc
+source .venv/bin/activate
 
-python -m AIZeroConnect4Bot.train
-
+python3.11 -m AIZeroConnect4Bot.train

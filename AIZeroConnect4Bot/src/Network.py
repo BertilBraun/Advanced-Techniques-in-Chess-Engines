@@ -42,8 +42,8 @@ def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tenso
 def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray, np.ndarray]:
     result: tuple[Tensor, Tensor] = cached_network_forward(network, x)
     policy, value = result
-    policy = softmax(policy, dim=1).cpu().numpy()
-    value = value.squeeze(1).cpu().numpy()
+    policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
+    value = value.squeeze(1).to(dtype=torch.float32, device='cpu').numpy()
     return policy, value
 
 
@@ -93,7 +93,7 @@ class Network(nn.Module):
             nn.Tanh(),
         )
 
-        self.to(self.device)
+        self.to(device=self.device, dtype=TORCH_DTYPE)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)

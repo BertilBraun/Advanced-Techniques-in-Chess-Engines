@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.src.settings import ACTION_SIZE
+from AIZeroConnect4Bot.src.settings import ACTION_SIZE, TORCH_DTYPE
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
 from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
@@ -116,7 +116,7 @@ class SelfPlay:
                 torch.tensor(
                     np.array(boards),
                     device=self.model.device,
-                    dtype=torch.float32,
+                    dtype=TORCH_DTYPE,
                 ).unsqueeze(1),
             )
 
@@ -133,7 +133,7 @@ class SelfPlay:
             torch.tensor(
                 np.array(encoded_boards),
                 device=self.model.device,
-                dtype=torch.float32,
+                dtype=TORCH_DTYPE,
             ).unsqueeze(1),
         )
 

@@ -11,6 +11,7 @@ from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Net
 from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
+from AIZeroConnect4Bot.src.settings import TORCH_DTYPE
 from AIZeroConnect4Bot.src.util import batched_iterate, random_id
 from AIZeroConnect4Bot.src.hashing import zobrist_hash_boards
 
@@ -108,9 +109,9 @@ class AlphaZero:
                 np.array(value_targets).reshape(-1, 1),
             )
 
-            state = torch.tensor(state, dtype=torch.float32, device=self.model.device)
-            policy_targets = torch.tensor(policy_targets, dtype=torch.float32, device=self.model.device)
-            value_targets = torch.tensor(value_targets, dtype=torch.float32, device=self.model.device)
+            state = torch.tensor(state, dtype=TORCH_DTYPE, device=self.model.device)
+            policy_targets = torch.tensor(policy_targets, dtype=TORCH_DTYPE, device=self.model.device)
+            value_targets = torch.tensor(value_targets, dtype=TORCH_DTYPE, device=self.model.device)
 
             out_policy, out_value = self.model(state)
 
@@ -210,7 +211,7 @@ class AlphaZero:
         window_size = self.args.sampling_window(iteration)
 
         memory: list[SelfPlayMemory] = []
-        for iter in range(max(iteration - window_size, 0), iteration):
+        for iter in range(max(iteration - window_size, 0), iteration + 1):
             memory += self._load_all_memories(iter)
         return memory
 

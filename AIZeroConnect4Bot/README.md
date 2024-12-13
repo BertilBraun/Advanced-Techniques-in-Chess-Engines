@@ -13,6 +13,8 @@ An implementation of the AlphaZero algorithm for learning Connect4. This project
 - **Temperature Parameter**: Controls exploration by adjusting the temperature parameter for the first 30 moves.
 - **Symmetric Variations for Data Augmentation**: Employs board symmetry to augment training data.
 - **Neural Network Evaluation Caching**: Caches evaluations to avoid redundant computations of board positions.
+- **Torch Compilation**: Compiles the PyTorch model and certain functions for faster execution.
+- **Optimized Datatype**: Uses bfloat16 for faster computation and reduced memory usage.
 - **Zobrist Hashing**: Implements Zobrist hashing to efficiently detect duplicate board positions.
 - **Deduplication of Positions in Evaluations and Training Data**: Avoids duplicate computations and data by averaging priors and result values for identical positions.
 - **1-Cycle Learning Rate Policy**: Adjusts the learning rate cyclically to facilitate efficient training.

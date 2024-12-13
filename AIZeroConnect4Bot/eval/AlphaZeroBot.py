@@ -6,6 +6,7 @@ from AIZeroConnect4Bot.src.Board import Board, Move
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
+from AIZeroConnect4Bot.src.settings import TORCH_DTYPE
 
 
 class AlphaZeroBot(Bot):
@@ -54,7 +55,7 @@ class AlphaZeroBot(Bot):
             torch.tensor(
                 np.array([board.get_canonical_board()]),
                 device=self.model.device,
-                dtype=torch.float32,
+                dtype=TORCH_DTYPE,
             ).unsqueeze(1),
         )
 
