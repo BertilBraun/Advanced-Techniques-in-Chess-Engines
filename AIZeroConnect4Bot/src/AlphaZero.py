@@ -11,7 +11,8 @@ from AIZeroConnect4Bot.src.Network import NN_CACHE, TOTAL_EVALS, TOTAL_HITS, Net
 from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.util import batched_iterate, random_id, zobrist_hash_boards
+from AIZeroConnect4Bot.src.util import batched_iterate, random_id
+from AIZeroConnect4Bot.src.hashing import zobrist_hash_boards
 
 
 class AlphaZero:

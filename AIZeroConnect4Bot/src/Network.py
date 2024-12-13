@@ -5,13 +5,51 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from AIZeroConnect4Bot.src.settings import *
-from AIZeroConnect4Bot.src.util import zobrist_hash_boards
+from AIZeroConnect4Bot.src.hashing import zobrist_hash_boards
 
 
 NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
 
 TOTAL_EVALS = 0
 TOTAL_HITS = 0
+
+
+def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tensor]:
+    # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
+    # use hash_board on each board state in x and check if it is in the cache or twice in x
+    hashes = zobrist_hash_boards(x)
+    to_process = []
+    to_process_hashes = []
+    for i, h in enumerate(hashes):
+        if h not in NN_CACHE or h in hashes[:i]:
+            to_process.append(x[i])
+            to_process_hashes.append(h)
+
+    if to_process:
+        policy, value = network(torch.stack(to_process))
+        for hash, p, v in zip(to_process_hashes, policy, value):
+            NN_CACHE[hash] = (p, v)
+
+    global TOTAL_EVALS, TOTAL_HITS
+    TOTAL_EVALS += len(x)
+    TOTAL_HITS += len(x) - len(to_process)
+
+    policies = torch.stack([NN_CACHE[hash][0] for hash in hashes])
+    values = torch.stack([NN_CACHE[hash][1] for hash in hashes])
+    return policies, values
+
+
+def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray, np.ndarray]:
+    result: tuple[Tensor, Tensor] = cached_network_forward(network, x)
+    policy, value = result
+    policy = softmax(policy, dim=1).cpu().numpy()
+    value = value.squeeze(1).cpu().numpy()
+    return policy, value
+
+
+def clear_cache() -> None:
+    print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
+    NN_CACHE.clear()
 
 
 class Network(nn.Module):
@@ -58,43 +96,11 @@ class Network(nn.Module):
         self.to(self.device)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
-        # use hash_board on each board state in x and check if it is in the cache or twice in x
-        hashes = zobrist_hash_boards(x)
-        to_process = []
-        to_process_hashes = []
-        for i, h in enumerate(hashes):
-            if h not in NN_CACHE or h in hashes[:i]:
-                to_process.append(x[i])
-                to_process_hashes.append(h)
-
-        if to_process:
-            policy, value = self._forward(torch.stack(to_process))
-            for hash, p, v in zip(to_process_hashes, policy, value):
-                NN_CACHE[hash] = (p, v)
-
-        global TOTAL_EVALS, TOTAL_HITS
-        TOTAL_EVALS += len(x)
-        TOTAL_HITS += len(x) - len(to_process)
-
-        policies = torch.stack([NN_CACHE[hash][0] for hash in hashes])
-        values = torch.stack([NN_CACHE[hash][1] for hash in hashes])
-        return policies, values
-
-    def _forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for resBlock in self.backBone:
             x = resBlock(x)
         policy = self.policyHead(x)
         value = self.valueHead(x)
-        return policy, value
-
-    def inference(self, x: Tensor) -> tuple[np.ndarray, np.ndarray]:
-        result: tuple[Tensor, Tensor] = self(x)
-        policy, value = result
-        policy = softmax(policy, dim=1).cpu().numpy()
-        value = value.squeeze(1).cpu().numpy()
-        # TODO analyze print('Inference:', np.round(value[0], 3), np.round(policy[0], 3))
         return policy, value
 
 

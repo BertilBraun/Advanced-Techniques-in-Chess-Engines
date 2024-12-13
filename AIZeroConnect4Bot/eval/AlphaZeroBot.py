@@ -5,7 +5,7 @@ from AIZeroConnect4Bot.eval.__main__ import Bot
 from AIZeroConnect4Bot.src.Board import Board, Move
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from AIZeroConnect4Bot.src.Network import Network
+from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
 
 
 class AlphaZeroBot(Bot):
@@ -49,12 +49,13 @@ class AlphaZeroBot(Bot):
 
     @torch.no_grad()
     def evaluation(self, board: Board) -> tuple[list[tuple[Move, float]], float]:
-        policy, value = self.model.inference(
+        policy, value = cached_network_inference(
+            self.model,
             torch.tensor(
                 np.array([board.get_canonical_board()]),
                 device=self.model.device,
                 dtype=torch.float32,
-            ).unsqueeze(1)
+            ).unsqueeze(1),
         )
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)

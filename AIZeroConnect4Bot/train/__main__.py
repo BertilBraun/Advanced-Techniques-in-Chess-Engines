@@ -1,3 +1,4 @@
+import torch
 from torch.optim import Adam
 
 from AIZeroConnect4Bot.src.ClusterAlphaZero import ClusterAlphaZero
@@ -9,6 +10,7 @@ if __name__ == '__main__':
     from pprint import pprint
 
     model = Network()
+    model: Network = torch.compile(model)  # type: ignore
     optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
     print('Starting training')

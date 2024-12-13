@@ -6,7 +6,7 @@ import torch
 
 from AIZeroConnect4Bot.src.settings import ACTION_SIZE
 from AIZeroConnect4Bot.src.util import lerp
-from AIZeroConnect4Bot.src.Network import Network
+from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
 from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
@@ -111,12 +111,13 @@ class SelfPlay:
                 continue
 
             boards = [node.board.get_canonical_board() for node in expandable_nodes]
-            policy, value = self.model.inference(
+            policy, value = cached_network_inference(
+                self.model,
                 torch.tensor(
                     np.array(boards),
                     device=self.model.device,
                     dtype=torch.float32,
-                ).unsqueeze(1)
+                ).unsqueeze(1),
             )
 
             for i, node in enumerate(expandable_nodes):
@@ -127,12 +128,13 @@ class SelfPlay:
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame]) -> np.ndarray:
         encoded_boards = [spg.board.get_canonical_board() for spg in self_play_games]
-        policy, _ = self.model.inference(
+        policy, _ = cached_network_inference(
+            self.model,
             torch.tensor(
                 np.array(encoded_boards),
                 device=self.model.device,
                 dtype=torch.float32,
-            ).unsqueeze(1)
+            ).unsqueeze(1),
         )
 
         # Add dirichlet noise to the policy to encourage exploration
