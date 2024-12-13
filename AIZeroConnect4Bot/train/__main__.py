@@ -10,6 +10,7 @@ if __name__ == '__main__':
     from pprint import pprint
 
     model = Network()
+    torch.set_float32_matmul_precision('high')
     model: Network = torch.compile(model)  # type: ignore
     optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
