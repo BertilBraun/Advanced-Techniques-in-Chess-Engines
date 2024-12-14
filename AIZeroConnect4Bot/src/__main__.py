@@ -9,10 +9,9 @@ from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
 from AIZeroConnect4Bot.src.cluster.ClusterAlphaZero import ClusterAlphaZero
 
 if __name__ == '__main__':
-    model = Network()
     log('Starting training')
-    log('Training on:', model.device)
-    # log('Number of parameters:', sum(p.numel() for p in model.parameters()))
+    log('Training on:', 'GPU' if torch.cuda.is_available() else 'CPU')
+    log('Number of parameters:', sum(p.numel() for p in Network().parameters()))
     log('Training args:')
     log(TRAINING_ARGS.__dict__, use_pprint=True)
 
@@ -23,6 +22,7 @@ if __name__ == '__main__':
     if TRAINING_ARGS.num_train_nodes_on_cluster is not None:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
+        model = Network()
         torch.set_float32_matmul_precision('high')
         if torch.cuda.is_available():
             model: Network = torch.compile(model)  # type: ignore
