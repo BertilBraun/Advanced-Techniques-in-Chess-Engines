@@ -7,7 +7,7 @@ from pathlib import Path
 from AIZeroConnect4Bot.src.util import batched_iterate, random_id
 from AIZeroConnect4Bot.src.Network import Network, clear_cache
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME
-from AIZeroConnect4Bot.src.train.Training import Trainer
+from AIZeroConnect4Bot.src.train.Trainer import Trainer
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
 from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlay, SelfPlayMemory

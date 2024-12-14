@@ -47,6 +47,7 @@ class Game(ABC, Generic[_Move]):
     @property
     @abstractmethod
     def action_size(self) -> int:
+        # The number of possible moves in the game.
         pass
 
     @property
@@ -89,8 +90,8 @@ class Game(ABC, Generic[_Move]):
             encoded[self.encode_move(move)] = 1
         return encoded
 
-    def decode_moves(self, moves: torch.Tensor) -> list[_Move]:
-        return [self.decode_move(i) for i in moves.nonzero(as_tuple=False).flatten().tolist()]
+    def decode_moves(self, moves: np.ndarray) -> list[_Move]:
+        return [self.decode_move(i) for i in moves.nonzero()[0]]
 
     @abstractmethod
     def hash_boards(self, boards: torch.Tensor) -> list[int]:

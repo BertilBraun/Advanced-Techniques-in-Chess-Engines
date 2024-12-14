@@ -72,7 +72,10 @@ def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CURRENT_GAME_MOVE, f
     # Find indices where probability > 0
     nonzero_indices = np.nonzero(policy > 0)[0]
 
-    # Pair up moves with their probabilities
-    moves_with_probabilities = list(zip(nonzero_indices, policy[nonzero_indices]))
+    # Decode the indices to moves
+    moves = CURRENT_GAME.decode_moves(nonzero_indices)
 
-    return [(CURRENT_GAME.decode_move(move), probability) for move, probability in moves_with_probabilities]
+    # Pair up moves with their probabilities
+    moves_with_probabilities = list(zip(moves, policy[nonzero_indices]))
+
+    return moves_with_probabilities
