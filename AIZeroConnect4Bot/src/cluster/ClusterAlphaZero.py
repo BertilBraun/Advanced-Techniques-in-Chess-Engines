@@ -1,6 +1,7 @@
 import time
 import torch
 
+from torch.optim import Adam
 
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
 from AIZeroConnect4Bot.src.util.log import log
@@ -12,13 +13,7 @@ from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
 
 
 class ClusterAlphaZero(AlphaZero):
-    def __init__(
-        self,
-        model: Network,
-        optimizer: torch.optim.Optimizer,
-        args: TrainingArgs,
-        load_latest_model: bool = True,
-    ) -> None:
+    def __init__(self, args: TrainingArgs, load_latest_model: bool = True) -> None:
         assert args.num_self_play_nodes_on_cluster is not None
         assert args.num_train_nodes_on_cluster is not None
         self.self_players = args.num_self_play_nodes_on_cluster
@@ -28,12 +23,19 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
 
+        model = Network()
         # move model to rank device
         model = model.to(
             device=torch.device('cuda', self.cluster_manager.rank),
             dtype=TORCH_DTYPE,
             non_blocking=False,
         )
+
+        torch.set_float32_matmul_precision('high')
+        if torch.cuda.is_available():
+            model: Network = torch.compile(model)  # type: ignore
+
+        optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
         super().__init__(model, optimizer, args, load_latest_model)
 

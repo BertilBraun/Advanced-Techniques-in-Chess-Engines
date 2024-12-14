@@ -10,11 +10,6 @@ from AIZeroConnect4Bot.src.cluster.ClusterAlphaZero import ClusterAlphaZero
 
 if __name__ == '__main__':
     model = Network()
-    torch.set_float32_matmul_precision('high')
-    if torch.cuda.is_available():
-        model: Network = torch.compile(model)  # type: ignore
-    optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
-
     log('Starting training')
     log('Training on:', model.device)
     log('Number of parameters:', sum(p.numel() for p in model.parameters()))
@@ -26,6 +21,11 @@ if __name__ == '__main__':
     ), 'Either both or none of the cluster args should be set'
 
     if TRAINING_ARGS.num_train_nodes_on_cluster is not None:
-        ClusterAlphaZero(model, optimizer, TRAINING_ARGS).learn()
+        ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
+        torch.set_float32_matmul_precision('high')
+        if torch.cuda.is_available():
+            model: Network = torch.compile(model)  # type: ignore
+        optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
+
         AlphaZero(model, optimizer, TRAINING_ARGS).learn()
