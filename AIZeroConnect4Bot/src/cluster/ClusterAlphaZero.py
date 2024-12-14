@@ -2,7 +2,7 @@ import time
 import torch
 
 
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
 from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
 from AIZeroConnect4Bot.src.cluster.ClusterManager import ClusterManager
@@ -29,7 +29,11 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager.initialize()
 
         # move model to rank device
-        model = model.to(f'cuda:{self.cluster_manager.rank}')
+        model = model.to(
+            device=torch.device('cuda', self.cluster_manager.rank),
+            dtype=TORCH_DTYPE,
+            non_blocking=False,
+        )
 
         super().__init__(model, optimizer, args, load_latest_model)
 
