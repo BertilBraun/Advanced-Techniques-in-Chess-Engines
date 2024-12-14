@@ -11,6 +11,7 @@ CURRENT_GAME: Game[Connect4Move] = Connect4Game()
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
+SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -71,7 +72,7 @@ TRAINING_ARGS = TrainingArgs(
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
-    save_path='AIZeroConnect4Bot/training_data',
+    save_path=SAVE_PATH,
     num_train_nodes_on_cluster=0,
     num_self_play_nodes_on_cluster=4,
 )
@@ -91,5 +92,7 @@ TRAINING_ARGS = TrainingArgs(
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
-    save_path='AIZeroConnect4Bot/training_data',
+    save_path=SAVE_PATH,
+    num_self_play_nodes_on_cluster=1,
+    num_train_nodes_on_cluster=0,
 )

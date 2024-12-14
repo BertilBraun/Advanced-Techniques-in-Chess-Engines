@@ -54,7 +54,11 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: Board[CURRENT_GA
     """
     legal_moves_encoded = CURRENT_GAME.encode_moves(board.get_valid_moves())
     policy *= legal_moves_encoded
-    policy /= np.sum(policy)
+    policy_sum = np.sum(policy)
+    if policy_sum == 0:
+        policy = legal_moves_encoded / np.sum(legal_moves_encoded)
+    else:
+        policy /= policy_sum
     return policy
 
 

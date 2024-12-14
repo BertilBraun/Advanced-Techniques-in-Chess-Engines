@@ -1,41 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, Literal, Optional, TypeVar
+from typing import Generic, TypeVar
 
 import numpy as np
 import torch
 
+from AIZeroConnect4Bot.src.games.Board import Board, Player  # noqa: F401
+
 _Move = TypeVar('_Move')
-Player = Literal[-1, 1]
-
-
-class Board(ABC, Generic[_Move]):
-    def __init__(self) -> None:
-        self.current_player: Player = 1
-
-    @abstractmethod
-    def make_move(self, move: _Move) -> None:
-        pass
-
-    @abstractmethod
-    def is_game_over(self) -> bool:
-        pass
-
-    @abstractmethod
-    def check_winner(self) -> Optional[Player]:
-        pass
-
-    @abstractmethod
-    def get_valid_moves(self) -> list[_Move]:
-        pass
-
-    @abstractmethod
-    def copy(self) -> Board[_Move]:
-        pass
-
-    def _switch_player(self) -> None:
-        self.current_player = -self.current_player
 
 
 class Game(ABC, Generic[_Move]):
@@ -91,7 +64,7 @@ class Game(ABC, Generic[_Move]):
         return encoded
 
     def decode_moves(self, moves: np.ndarray) -> list[_Move]:
-        return [self.decode_move(i) for i in moves.nonzero()[0]]
+        return [self.decode_move(i) for i in moves]
 
     @abstractmethod
     def hash_boards(self, boards: torch.Tensor) -> list[int]:

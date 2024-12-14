@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.eval.__main__ import Bot
+from AIZeroConnect4Bot.src.eval.Bot import Bot
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from AIZeroConnect4Bot.src.games.Game import Board
@@ -11,8 +11,8 @@ from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORC
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, network_model_file_path: str, num_iterations: int) -> None:
-        super().__init__('AlphaZeroBot')
+    def __init__(self, network_model_file_path: str, max_time_to_think: float) -> None:
+        super().__init__('AlphaZeroBot', max_time_to_think)
         self.model = Network()
         self.model.load_state_dict(
             torch.load(
@@ -22,13 +22,15 @@ class AlphaZeroBot(Bot):
             )
         )
         self.model.eval()
-        self.num_iterations = num_iterations
 
     def think(self, board: Board[CURRENT_GAME_MOVE]) -> CURRENT_GAME_MOVE:
         root = AlphaMCTSNode.root(board)
 
-        for _ in range(self.num_iterations):
+        for i in range(10000):
             self.iterate(root)
+            if self.time_is_up:
+                log(f'AlphaZeroBot has thought for {self.time_elapsed:.2f} seconds and {i+1} iterations')
+                break
 
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
@@ -68,4 +70,7 @@ class AlphaZeroBot(Bot):
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 
+        # print(
+        #    f'Evaluated board:\n{CURRENT_GAME.get_canonical_board(board)}\nPolicy: {np.round(policy[0], 3)}\nValue: {value[0]}\nMoves: {moves}'
+        # )
         return moves, value[0]

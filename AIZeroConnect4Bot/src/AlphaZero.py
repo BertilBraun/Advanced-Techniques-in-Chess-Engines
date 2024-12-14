@@ -5,7 +5,7 @@ from tqdm import trange
 from pathlib import Path
 
 from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.util import batched_iterate, random_id
+from AIZeroConnect4Bot.src.util import batched_iterate, load_json, random_id
 from AIZeroConnect4Bot.src.Network import Network, clear_cache
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME
 from AIZeroConnect4Bot.src.train.Trainer import Trainer
@@ -105,8 +105,7 @@ class AlphaZero:
     def _load_latest_model(self) -> None:
         """Load the latest model and optimizer from the last_training_config.pt file if it exists, otherwise start from scratch."""
         try:
-            with open(self.save_path / 'last_training_config.json', 'r') as f:
-                last_training_config = json.load(f)
+            last_training_config = load_json(self.save_path / 'last_training_config.json')
 
             new_starting_iteration = int(last_training_config['iteration'])
             if self.starting_iteration == new_starting_iteration:

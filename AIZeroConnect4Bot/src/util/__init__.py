@@ -1,3 +1,5 @@
+import json
+import os
 import random
 from typing import Iterable, TypeVar
 
@@ -23,3 +25,8 @@ def batched_iterate(iterable: Iterable[T], batch_size: int) -> Iterable[list[T]]
             batch = []
     if batch:
         yield batch
+
+
+def load_json(path: str | os.PathLike) -> dict:
+    with open(path, 'r') as f:
+        return json.load(f)

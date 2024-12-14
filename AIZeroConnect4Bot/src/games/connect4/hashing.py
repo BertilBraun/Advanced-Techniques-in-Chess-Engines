@@ -19,7 +19,6 @@ def create_zobrist_table(device) -> torch.Tensor:
 ZOBRIST_TABLES: dict[torch.device, torch.Tensor] = {}
 
 
-@torch.compile
 def _zobrist_hash_boards(boards: torch.Tensor, zobrist_table: torch.Tensor) -> torch.Tensor:
     boards = boards.squeeze(1)
 
@@ -52,6 +51,10 @@ def _zobrist_hash_boards(boards: torch.Tensor, zobrist_table: torch.Tensor) -> t
     for i in range(1, total_cells):
         batch_hash ^= hash_values[:, i]
     return batch_hash
+
+
+if torch.cuda.is_available():
+    _zobrist_hash_boards = torch.compile(_zobrist_hash_boards)
 
 
 def zobrist_hash_boards(boards: torch.Tensor) -> list[int]:
