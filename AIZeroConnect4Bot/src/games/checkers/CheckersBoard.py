@@ -52,9 +52,10 @@ WHITE_PROMOTION_ROW = 0x00000000000000FF  # bottom row (row 0 in index terms, bi
 
 class CheckersBoard(Board[CheckersMove]):
     def __init__(self) -> None:
-        self.black_men: int = BLACK_MEN_START
+        super().__init__()
+        self.black_pieces: int = BLACK_MEN_START
         self.black_kings: int = 0
-        self.white_men: int = WHITE_MEN_START
+        self.white_pieces: int = WHITE_MEN_START
         self.white_kings: int = 0
 
     @property
@@ -66,6 +67,7 @@ class CheckersBoard(Board[CheckersMove]):
         """
         Returns a list of (start, end) moves. If captures exist, return only captures.
         """
+        # TODO possibly currently wrong
         men = self._friendly_men()
         kings = self._friendly_kings()
         opp = self._opponent_pieces()
@@ -89,6 +91,8 @@ class CheckersBoard(Board[CheckersMove]):
         Switch current player.
         Invalidate game over cache.
         """
+        # TODO possibly currently wrong
+
         start, end = move
         start_mask = 1 << start
         end_mask = 1 << end
@@ -108,9 +112,9 @@ class CheckersBoard(Board[CheckersMove]):
         moved_piece = None
         if self.current_player == 1:
             # Black to move
-            if self.black_men & start_mask:
-                self.black_men &= ~start_mask
-                self.black_men |= end_mask
+            if self.black_pieces & start_mask:
+                self.black_pieces &= ~start_mask
+                self.black_pieces |= end_mask
                 moved_piece = 'black_man'
             elif self.black_kings & start_mask:
                 self.black_kings &= ~start_mask
@@ -118,9 +122,9 @@ class CheckersBoard(Board[CheckersMove]):
                 moved_piece = 'black_king'
         else:
             # White to move
-            if self.white_men & start_mask:
-                self.white_men &= ~start_mask
-                self.white_men |= end_mask
+            if self.white_pieces & start_mask:
+                self.white_pieces &= ~start_mask
+                self.white_pieces |= end_mask
                 moved_piece = 'white_man'
             elif self.white_kings & start_mask:
                 self.white_kings &= ~start_mask
@@ -132,14 +136,14 @@ class CheckersBoard(Board[CheckersMove]):
             # Captured piece could be in either opponent men or kings
             if self.current_player == 1:
                 # Removing white piece
-                if self.white_men & mid_mask:
-                    self.white_men &= ~mid_mask
+                if self.white_pieces & mid_mask:
+                    self.white_pieces &= ~mid_mask
                 else:
                     self.white_kings &= ~mid_mask
             else:
                 # Removing black piece
-                if self.black_men & mid_mask:
-                    self.black_men &= ~mid_mask
+                if self.black_pieces & mid_mask:
+                    self.black_pieces &= ~mid_mask
                 else:
                     self.black_kings &= ~mid_mask
 
@@ -149,12 +153,12 @@ class CheckersBoard(Board[CheckersMove]):
             # Actually black starts at top (0) and moves down, so bottom row is bits 56-63.
             # Promotion when black reaches row 7 (indices 56-63)
             if end_mask & BLACK_PROMOTION_ROW:
-                self.black_men &= ~end_mask
+                self.black_pieces &= ~end_mask
                 self.black_kings |= end_mask
         elif moved_piece == 'white_man':
             # White moves up, so promotion row is top row (bits 0-7)
             if end_mask & WHITE_PROMOTION_ROW:
-                self.white_men &= ~end_mask
+                self.white_pieces &= ~end_mask
                 self.white_kings |= end_mask
 
         # Switch player
@@ -165,8 +169,8 @@ class CheckersBoard(Board[CheckersMove]):
 
     @Board._cache()
     def check_winner(self) -> Optional[int]:
-        black_pieces = self.black_men | self.black_kings
-        white_pieces = self.white_men | self.white_kings
+        black_pieces = self.black_pieces | self.black_kings
+        white_pieces = self.white_pieces | self.white_kings
 
         if black_pieces == 0:
             # White wins
@@ -188,27 +192,27 @@ class CheckersBoard(Board[CheckersMove]):
 
     def copy(self) -> CheckersBoard:
         game = CheckersBoard()
-        game.black_men = self.black_men
+        game.black_pieces = self.black_pieces
         game.black_kings = self.black_kings
-        game.white_men = self.white_men
+        game.white_pieces = self.white_pieces
         game.white_kings = self.white_kings
         game.current_player = self.current_player
         return game
 
     def _occupied(self) -> int:
-        return self.black_men | self.black_kings | self.white_men | self.white_kings
+        return self.black_pieces | self.black_kings | self.white_pieces | self.white_kings
 
     def _empty(self) -> int:
         return ~self._occupied() & FULL_64
 
     def _opponent_pieces(self) -> int:
         if self.current_player == 1:  # black to move
-            return self.white_men | self.white_kings
+            return self.white_pieces | self.white_kings
         else:
-            return self.black_men | self.black_kings
+            return self.black_pieces | self.black_kings
 
     def _friendly_men(self) -> int:
-        return self.black_men if self.current_player == 1 else self.white_men
+        return self.black_pieces if self.current_player == 1 else self.white_pieces
 
     def _friendly_kings(self) -> int:
         return self.black_kings if self.current_player == 1 else self.white_kings

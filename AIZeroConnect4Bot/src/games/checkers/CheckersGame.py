@@ -4,9 +4,15 @@ import torch
 import numpy as np
 from typing import List
 
-from AIZeroConnect4Bot.src.games.Game import Board, Game
-from AIZeroConnect4Bot.src.games.checkers.hashing import zobrist_hash_boards
+from AIZeroConnect4Bot.src.games.Game import Game
 from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove
+
+ROW_COUNT = 8
+COLUMN_COUNT = 8
+ENCODING_CHANNELS = 4
+
+
+ZOBRIST_TABLES: dict[torch.device, torch.Tensor] = {}
 
 
 class CheckersGame(Game[CheckersMove]):
@@ -16,12 +22,13 @@ class CheckersGame(Game[CheckersMove]):
 
     @property
     def action_size(self) -> int:
-        return ACTION_SIZE
+        # TODO optimize this, Tons of moves are invalid and should not be considered
+        board_dimension = ROW_COUNT * COLUMN_COUNT
+        return board_dimension * board_dimension
 
     @property
     def representation_shape(self) -> tuple[int, int, int]:
-        ENCODING_CHANNELS = 4
-        return ENCODING_CHANNELS, 8, 8
+        return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
 
     @property
     def network_properties(self) -> tuple[int, int]:
@@ -34,19 +41,83 @@ class CheckersGame(Game[CheckersMove]):
         return 30
 
     def get_canonical_board(self, board: CheckersBoard) -> np.ndarray:
-        return (board.board * board.current_player).reshape(self.representation_shape)
+        # TODO verify correctness once valid move generation and make move are correctly implemented
+        # turn the 4 bitboards into a single 4x8x8 tensor
+        # board.black_kings, board.black_pieces, board.white_kings, board.white_pieces
+        # The bitboards are 64 bit integers, so we need to convert them to a 8x8 tensor first
+        # Then we can stack them together to get a 4x8x8 tensor
+        def bitfield_to_tensor(bitfield: int, flipped: bool) -> np.ndarray:
+            # turn 64 bit integer into a list of 8x 8bit integers, then use np.unpackbits to get a 8x8 tensor
+            byte_lists = np.array([bitfield >> i & 0xFF for i in range(0, 64, 8)], dtype=np.uint8)
+            tensor = np.unpackbits(byte_lists).reshape(ROW_COUNT, COLUMN_COUNT)
+            if flipped:
+                tensor = tensor[::-1]
+            return tensor
+
+        if board.current_player == 1:
+            return np.stack(
+                [
+                    bitfield_to_tensor(board.black_kings, flipped=False),
+                    bitfield_to_tensor(board.black_pieces, flipped=False),
+                    bitfield_to_tensor(board.white_kings, flipped=False),
+                    bitfield_to_tensor(board.white_pieces, flipped=False),
+                ]
+            )
+        else:
+            return np.stack(
+                [
+                    bitfield_to_tensor(board.white_kings, flipped=True),
+                    bitfield_to_tensor(board.white_pieces, flipped=True),
+                    bitfield_to_tensor(board.black_kings, flipped=True),
+                    bitfield_to_tensor(board.black_pieces, flipped=True),
+                ]
+            )
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
-        return zobrist_hash_boards(boards)
+
+        # each board is a 4x8x8 tensor
+        # each entry is either 0 or 1
+        # We multiply each of the 4 channels with a different 8x8 zobrist key
+        # Then sum them up to get a single hash for each board
+        # TODO no idea how fast this is, might be slow, but should be fast and correct enough for now
+
+        if boards.device not in ZOBRIST_TABLES:
+            zobrist_table = torch.randint(
+                low=-(2**63),
+                high=2**63 - 1,
+                size=(ENCODING_CHANNELS, ROW_COUNT * COLUMN_COUNT),
+                dtype=torch.long,
+                device=boards.device,
+            )
+            ZOBRIST_TABLES[boards.device] = zobrist_table
+        else:
+            zobrist_table = ZOBRIST_TABLES[boards.device]
+
+        boards = boards.reshape(-1, ENCODING_CHANNELS, ROW_COUNT * COLUMN_COUNT)
+        for i in range(ENCODING_CHANNELS):
+            boards[:, i] *= zobrist_table[i]
+
+        return torch.sum(boards, dim=(1, 2)).tolist()
 
     def encode_move(self, move: CheckersMove) -> int:
-        assert 0 <= move < COLUMN_COUNT, f'Invalid move: {move}'
-        return move
+        move_from, move_to = move
+        board_dimension = ROW_COUNT * COLUMN_COUNT
+
+        assert 0 <= move_from < board_dimension, f'Invalid move: {move}'
+        assert 0 <= move_to < board_dimension, f'Invalid move: {move}'
+
+        return move_from * board_dimension + move_to
 
     def decode_move(self, move: int) -> CheckersMove:
-        assert 0 <= move < COLUMN_COUNT, f'Invalid move: {move}'
-        return move
+        board_dimension = ROW_COUNT * COLUMN_COUNT
+        move_from = move // board_dimension
+        move_to = move % board_dimension
+
+        assert 0 <= move_from < board_dimension, f'Invalid move: {move}'
+        assert 0 <= move_to < board_dimension, f'Invalid move: {move}'
+
+        return move_from, move_to
 
     def symmetric_variations(
         self, board: np.ndarray, action_probabilities: np.ndarray
@@ -66,5 +137,19 @@ class CheckersGame(Game[CheckersMove]):
             # yield -board[:, ::-1], action_probabilities[::-1], -result
         ]
 
-    def get_initial_board(self) -> Board[CheckersMove]:
+    def get_initial_board(self) -> CheckersBoard:
         return CheckersBoard()
+
+
+if __name__ == '__main__':
+    g = CheckersGame()
+    b = g.get_initial_board()
+    print(g.get_canonical_board(b))
+    print(b.get_valid_moves())
+    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    b.make_move(b.get_valid_moves()[0])
+    print('After move')
+    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    print('After move')
+    print(g.get_canonical_board(b))

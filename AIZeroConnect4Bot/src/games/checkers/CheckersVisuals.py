@@ -14,11 +14,11 @@ class CheckersVisuals(GameVisuals[CheckersMove]):
                 cell_index = row * board_width + col
                 if board.black_kings & (1 << cell_index):
                     gui.draw_circle(row, col, 'black')
-                elif board.black_men & (1 << cell_index):
+                elif board.black_pieces & (1 << cell_index):
                     gui.draw_circle(row, col, 'dark gray')
                 elif board.white_kings & (1 << cell_index):
                     gui.draw_circle(row, col, 'white')
-                elif board.white_men & (1 << cell_index):
+                elif board.white_pieces & (1 << cell_index):
                     gui.draw_circle(row, col, 'light gray')
 
     def is_two_click_game(self) -> bool:
