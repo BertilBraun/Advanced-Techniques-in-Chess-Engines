@@ -43,14 +43,13 @@ class ClusterManager:
             log(f'Waiting for {self.size - len(initialized_node_ids)} nodes to initialize')
             time.sleep(5)
 
-        log('All nodes initialized')
-
         # Determine the root node (lowest ID)
         self.rank = initialized_node_ids.index(my_id)
 
         self.barrier('initialized')
 
         if self.is_root_node:
+            log('All nodes initialized')
             # Clean up the initialization files
             for id in initialized_node_ids:
                 (self.communication_dir / f'initialize_{id}.txt').unlink(missing_ok=True)
