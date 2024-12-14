@@ -2,3 +2,4 @@
 **.pt
 build/**
 **/last_training_config.json
+**/communication/**

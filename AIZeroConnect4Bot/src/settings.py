@@ -1,16 +1,12 @@
 import torch
+from AIZeroConnect4Bot.src.games.Game import Game
 from AIZeroConnect4Bot.src.util import lerp
-from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
+from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
+from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
 
 
-ROW_COUNT = 7
-COLUMN_COUNT = 8
-NUM_RES_BLOCKS = 10
-NUM_HIDDEN = 128
-ENCODING_CHANNELS = 1  # 6+6 for chess, 1 for connect4
-CELL_STATES = 3  # 3 for connect4, 2 for chess
-ACTION_SIZE = COLUMN_COUNT
-AVERAGE_NUM_MOVES_PER_GAME = 20
+CURRENT_GAME_MOVE = Connect4Move
+CURRENT_GAME: Game[Connect4Move] = Connect4Game()
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
@@ -79,19 +75,19 @@ TRAINING_ARGS = TrainingArgs(
 )
 
 # Test training args to verify the implementation
-# TRAINING_ARGS = TrainingArgs(
-#     num_iterations=50,
-#     num_self_play_iterations=64,
-#     num_parallel_games=4,
-#     num_iterations_per_turn=600,
-#     num_epochs=5,
-#     batch_size=64,
-#     temperature=1.0,
-#     dirichlet_epsilon=0.25,
-#     dirichlet_alpha=1,
-#     c_param=4.0,
-#     sampling_window=sampling_window,
-#     learning_rate=learning_rate,
-#     learning_rate_scheduler=learning_rate_scheduler,
-#     save_path='AIZeroConnect4Bot/training_data',
-# )
+TRAINING_ARGS = TrainingArgs(
+    num_iterations=50,
+    num_self_play_iterations=4,
+    num_parallel_games=4,
+    num_iterations_per_turn=100,
+    num_epochs=5,
+    batch_size=64,
+    temperature=1.0,
+    dirichlet_epsilon=0.25,
+    dirichlet_alpha=1,
+    c_param=4.0,
+    sampling_window=sampling_window,
+    learning_rate=learning_rate,
+    learning_rate_scheduler=learning_rate_scheduler,
+    save_path='AIZeroConnect4Bot/training_data',
+)

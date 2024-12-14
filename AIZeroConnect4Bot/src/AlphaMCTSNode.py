@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from AIZeroConnect4Bot.src.Connect4Game import Board, Move, null_move
+from AIZeroConnect4Bot.src.games.Game import Board
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE
 
 
 class AlphaMCTSNode:
     @classmethod
     def root(cls, board: Board) -> AlphaMCTSNode:
-        instance = cls(policy=1.0, move_to_get_here=null_move, parent=None, num_played_moves=0)
+        instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None, num_played_moves=0)
         instance.board = board
         instance.number_of_visits = 1
         return instance
 
     def __init__(
-        self, policy: float, move_to_get_here: Move, parent: AlphaMCTSNode | None, num_played_moves: int
+        self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: AlphaMCTSNode | None, num_played_moves: int
     ) -> None:
         self.board: Board = None  # type: ignore
         self.parent = parent
@@ -33,7 +34,6 @@ class AlphaMCTSNode:
 
             self.board = self.parent.board.copy()
             self.board.make_move(self.move_to_get_here)
-            self.board.switch_player()
 
     @property
     def is_fully_expanded(self) -> bool:
@@ -54,7 +54,7 @@ class AlphaMCTSNode:
 
         return ucb_score
 
-    def expand(self, moves_with_scores: list[tuple[Move, float]]) -> None:
+    def expand(self, moves_with_scores: list[tuple[CURRENT_GAME_MOVE, float]]) -> None:
         self.children = [
             AlphaMCTSNode(
                 policy=score,

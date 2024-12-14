@@ -1,6 +1,7 @@
 import numpy as np
 
-from AIZeroConnect4Bot.src.Connect4Game import Board, Move
+from AIZeroConnect4Bot.src.games.Game import Board
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE
 
 
 def get_board_result_score(board: Board) -> float | None:
@@ -13,13 +14,15 @@ def get_board_result_score(board: Board) -> float | None:
     if winner := board.check_winner():
         return winner * -board.current_player  # 1 if current player won, -1 if current player lost
 
-    if board.is_full():
+    if board.is_game_over():
         return 0.0
 
     return None
 
 
-def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: Board) -> list[tuple[Move, float]]:
+def filter_policy_then_get_moves_and_probabilities(
+    policy: np.ndarray, board: Board[CURRENT_GAME_MOVE]
+) -> list[tuple[CURRENT_GAME_MOVE, float]]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
 
@@ -36,7 +39,7 @@ def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: Bo
     return moves_with_probabilities
 
 
-def __filter_policy_with_legal_moves(policy: np.ndarray, board: Board) -> np.ndarray:
+def __filter_policy_with_legal_moves(policy: np.ndarray, board: Board[CURRENT_GAME_MOVE]) -> np.ndarray:
     """
     Filters a policy with the legal moves of a chess board.
 
@@ -49,13 +52,13 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: Board) -> np.nda
     :param board: The chess board to filter the policy with.
     :return: The filtered policy.
     """
-    legal_moves_encoded = board.board[0] == 0
+    legal_moves_encoded = CURRENT_GAME.encode_moves(board.get_valid_moves())
     policy *= legal_moves_encoded
     policy /= np.sum(policy)
     return policy
 
 
-def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[Move, float]]:
+def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CURRENT_GAME_MOVE, float]]:
     """
     Maps a filtered policy to a list of moves with their corresponding probabilities.
 
@@ -72,4 +75,4 @@ def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[Move, float]]:
     # Pair up moves with their probabilities
     moves_with_probabilities = list(zip(nonzero_indices, policy[nonzero_indices]))
 
-    return moves_with_probabilities
+    return [(CURRENT_GAME.decode_move(move), probability) for move, probability in moves_with_probabilities]

@@ -1,5 +1,6 @@
 import torch
-from AIZeroConnect4Bot.src.settings import CELL_STATES, COLUMN_COUNT, ROW_COUNT
+
+from AIZeroConnect4Bot.src.games.connect4.Connect4Defines import ROW_COUNT, COLUMN_COUNT, CELL_STATES
 
 
 def create_zobrist_table(device) -> torch.Tensor:

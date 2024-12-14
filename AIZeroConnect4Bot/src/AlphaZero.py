@@ -1,19 +1,16 @@
 import json
 import torch
-import random
-import numpy as np
-import torch.nn.functional as F
 
-from tqdm import tqdm, trange
+from tqdm import trange
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.Network import Network, clear_cache
-from AIZeroConnect4Bot.src.SelfPlay import SelfPlay, SelfPlayMemory
-from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.settings import TORCH_DTYPE
 from AIZeroConnect4Bot.src.util import batched_iterate, random_id
-from AIZeroConnect4Bot.src.hashing import zobrist_hash_boards
+from AIZeroConnect4Bot.src.Network import Network, clear_cache
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME
+from AIZeroConnect4Bot.src.train.Training import Trainer
+from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
+from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
+from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlay, SelfPlayMemory
 
 
 class AlphaZero:
@@ -29,6 +26,7 @@ class AlphaZero:
         self.args = args
         self.starting_iteration = 0
         self.self_play = SelfPlay(model, args)
+        self.trainer = Trainer(model, optimizer, args)
 
         self.save_path = Path(self.args.save_path)
         self.save_path.mkdir(exist_ok=True)
@@ -74,62 +72,11 @@ class AlphaZero:
 
         train_stats = TrainingStats()
         for epoch in range(self.args.num_epochs):
-            train_stats += self._train(memory, iteration)
+            train_stats += self.trainer.train(memory, iteration)
             print(f'Epoch {epoch + 1}: {train_stats}')
 
         print(f'Iteration {iteration + 1}: {train_stats}')
         self._save_latest_model(iteration)
-        return train_stats
-
-    def _train(self, memory: list[SelfPlayMemory], iteration: int) -> TrainingStats:
-        """
-        Train the model with the given memory.
-        The target is the policy and value targets from the self-play memory.
-        The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
-        """
-        random.shuffle(memory)
-
-        train_stats = TrainingStats()
-        base_lr = self.args.learning_rate(iteration)
-
-        self.model.train()
-
-        for batchIdx, sample in tqdm(
-            enumerate(batched_iterate(memory, self.args.batch_size)),
-            desc='Training batches',
-            total=len(memory) // self.args.batch_size,
-        ):
-            state = [[mem.state] for mem in sample]  # add a dimension to the state to allow the conv layers to work
-            policy_targets = [mem.policy_targets for mem in sample]
-            value_targets = [mem.value_targets for mem in sample]
-
-            state, policy_targets, value_targets = (
-                np.array(state),
-                np.array(policy_targets),
-                np.array(value_targets).reshape(-1, 1),
-            )
-
-            state = torch.tensor(state, dtype=TORCH_DTYPE, device=self.model.device)
-            policy_targets = torch.tensor(policy_targets, dtype=TORCH_DTYPE, device=self.model.device)
-            value_targets = torch.tensor(value_targets, dtype=TORCH_DTYPE, device=self.model.device)
-
-            out_policy, out_value = self.model(state)
-
-            policy_loss = F.cross_entropy(out_policy, policy_targets)
-            value_loss = F.mse_loss(out_value, value_targets)
-            loss = policy_loss + value_loss
-
-            # Update learning rate before stepping the optimizer
-            lr = self.args.learning_rate_scheduler(batchIdx / len(memory), base_lr)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            train_stats.update(policy_loss.item(), value_loss.item(), loss.item())
-
         return train_stats
 
     def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
@@ -137,7 +84,7 @@ class AlphaZero:
         mp: dict[int, tuple[int, SelfPlayMemory]] = {}
         for batch in batched_iterate(memory, 128):
             states = [mem.state for mem in batch]
-            hashes = zobrist_hash_boards(torch.stack(states))
+            hashes = CURRENT_GAME.hash_boards(torch.stack(states))
 
             for mem, h in zip(batch, hashes):
                 if h in mp:

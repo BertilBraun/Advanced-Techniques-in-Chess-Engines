@@ -1,9 +1,10 @@
 import numpy as np
 from dataclasses import dataclass
 
-from AIZeroConnect4Bot.src.Connect4Game import Board
+from AIZeroConnect4Bot.src.games.Game import Board
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import get_board_result_score
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME
 
 
 @dataclass
@@ -14,7 +15,7 @@ class SelfPlayGameMemory:
 
 class SelfPlayGame:
     def __init__(self) -> None:
-        self.board = Board()
+        self.board = CURRENT_GAME.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.root: AlphaMCTSNode = None  # type: ignore
         self.node: AlphaMCTSNode | None = None

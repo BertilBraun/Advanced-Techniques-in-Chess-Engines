@@ -12,8 +12,8 @@
 #SBATCH --output=train_zero_%j.txt
 #SBATCH --error=train_zero_%j.txt
 
-cd ../../
+cd ../
 source ~/.bashrc
 source .venv/bin/activate
 
-python3.11 -m AIZeroConnect4Bot.train
+python3.11 -m AIZeroConnect4Bot.src

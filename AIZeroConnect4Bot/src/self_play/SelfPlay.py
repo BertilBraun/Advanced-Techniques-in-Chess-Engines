@@ -4,14 +4,13 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.src.settings import ACTION_SIZE, TORCH_DTYPE
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
 from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from AIZeroConnect4Bot.src.Connect4Game import Move
 
 
 @dataclass
@@ -43,7 +42,6 @@ class SelfPlay:
 
                 spg.board = spg.root.board.copy()
                 spg.board.make_move(move)
-                spg.board.switch_player()
 
                 if spg.board.is_game_over():
                     self_play_memory.extend(self._get_training_data(spg))
@@ -60,9 +58,9 @@ class SelfPlay:
         assert result is not None, 'Game is not over'
 
         for mem in spg.memory[::-1]:
-            encoded_board = mem.board.get_canonical_board()
+            encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
 
-            for board, probabilities in self._symmetric_variations(encoded_board, mem.action_probabilities):
+            for board, probabilities in CURRENT_GAME.symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_memory.append(
                     SelfPlayMemory(
                         torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
@@ -73,22 +71,6 @@ class SelfPlay:
             result = -result
 
         return self_play_memory
-
-    def _symmetric_variations(self, board: np.ndarray, action_probabilities: np.ndarray):
-        # Original
-        yield board, action_probabilities
-
-        # Vertical flip
-        # 1234 -> becomes -> 4321
-        # 5678               8765
-        yield board[:, ::-1], action_probabilities[::-1]
-
-        # NOTE: The following implementations DO NOT WORK. They are incorrect. This would give wrong symmetries to train on.
-        # Player flip
-        # yield -board, action_probabilities, -result
-
-        # Player flip and vertical flip
-        # yield -board[:, ::-1], action_probabilities[::-1], -result
 
     @torch.no_grad()
     def _expand_self_play_games(self, self_play_games: list[SelfPlayGame]) -> None:
@@ -110,14 +92,14 @@ class SelfPlay:
             if len(expandable_nodes) == 0:
                 continue
 
-            boards = [node.board.get_canonical_board() for node in expandable_nodes]
+            boards = [CURRENT_GAME.get_canonical_board(node.board) for node in expandable_nodes]
             policy, value = cached_network_inference(
                 self.model,
                 torch.tensor(
                     np.array(boards),
                     device=self.model.device,
                     dtype=TORCH_DTYPE,
-                ).unsqueeze(1),
+                ),
             )
 
             for i, node in enumerate(expandable_nodes):
@@ -127,23 +109,23 @@ class SelfPlay:
                 node.back_propagate(value[i])
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame]) -> np.ndarray:
-        encoded_boards = [spg.board.get_canonical_board() for spg in self_play_games]
+        encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
         policy, _ = cached_network_inference(
             self.model,
             torch.tensor(
                 np.array(encoded_boards),
                 device=self.model.device,
                 dtype=TORCH_DTYPE,
-            ).unsqueeze(1),
+            ),
         )
 
         # Add dirichlet noise to the policy to encourage exploration
-        dirichlet_noise = np.random.dirichlet([self.args.dirichlet_alpha] * ACTION_SIZE)
+        dirichlet_noise = np.random.dirichlet([self.args.dirichlet_alpha] * CURRENT_GAME.action_size)
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
 
     def _get_action_probabilities(self, root_node: AlphaMCTSNode) -> np.ndarray:
-        action_probabilities = np.zeros(ACTION_SIZE, dtype=np.float32)
+        action_probabilities = np.zeros(CURRENT_GAME.action_size, dtype=np.float32)
 
         for child in root_node.children:
             action_probabilities[child.move_to_get_here] = child.number_of_visits
@@ -151,13 +133,13 @@ class SelfPlay:
 
         return action_probabilities
 
-    def _sample_move(self, action_probabilities: np.ndarray, root_node: AlphaMCTSNode) -> Move:
+    def _sample_move(self, action_probabilities: np.ndarray, root_node: AlphaMCTSNode) -> CURRENT_GAME_MOVE:
         # only use temperature for the first 30 moves, then simply use the action probabilities as they are
         if root_node.num_played_moves < 30:
             temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
         else:
             temperature_action_probabilities = action_probabilities
 
-        action = np.random.choice(ACTION_SIZE, p=temperature_action_probabilities)
+        action = np.random.choice(CURRENT_GAME.action_size, p=temperature_action_probabilities)
 
         return action
