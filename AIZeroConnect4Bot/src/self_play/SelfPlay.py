@@ -47,7 +47,6 @@ class SelfPlay:
                     self_play_memory.extend(self._get_training_data(spg))
 
             self_play_games = [spg for spg in self_play_games if not spg.board.is_game_over()]
-            print('Played iteration of self play')
 
         return self_play_memory
 
