@@ -19,8 +19,6 @@ class ClusterAlphaZero(AlphaZero):
         args: TrainingArgs,
         load_latest_model: bool = True,
     ) -> None:
-        super().__init__(model, optimizer, args, load_latest_model)
-
         assert args.num_self_play_nodes_on_cluster is not None
         assert args.num_train_nodes_on_cluster is not None
         self.self_players = args.num_self_play_nodes_on_cluster
@@ -32,6 +30,8 @@ class ClusterAlphaZero(AlphaZero):
 
         # move model to rank device
         self.model = self.model.to(f'cuda:{self.cluster_manager.rank}')
+
+        super().__init__(model, optimizer, args, load_latest_model)
 
     def learn(self) -> None:
         if self.trainers == 0 and self.cluster_manager.is_root_node:

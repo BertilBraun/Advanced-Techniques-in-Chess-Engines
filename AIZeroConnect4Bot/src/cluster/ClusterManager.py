@@ -37,7 +37,7 @@ class ClusterManager:
                 break
 
             log(f'Waiting for {self.size - len(initialized_nodes)} nodes to initialize')
-            time.sleep(1)
+            time.sleep(5)
 
         log('All nodes initialized')
 
@@ -45,6 +45,8 @@ class ClusterManager:
         all_ids = [f.stem.replace('initialize_', '') for f in initialized_nodes]
         self.rank = all_ids.index(my_id)
         self.size = len(all_ids)
+
+        self.barrier('initialized')
 
         if self.is_root_node:
             # Clean up the initialization files
