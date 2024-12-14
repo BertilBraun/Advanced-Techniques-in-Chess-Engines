@@ -25,11 +25,13 @@ class ClusterAlphaZero(AlphaZero):
 
         model = Network()
         # move model to rank device
+        node_device = torch.device('cuda', self.cluster_manager.rank)
         model = model.to(
-            device=torch.device('cuda', self.cluster_manager.rank),
+            device=node_device,
             dtype=TORCH_DTYPE,
             non_blocking=False,
         )
+        model.device = node_device
 
         torch.set_float32_matmul_precision('high')
         # if torch.cuda.is_available():
@@ -43,8 +45,6 @@ class ClusterAlphaZero(AlphaZero):
         if self.trainers == 0 and self.cluster_manager.is_root_node:
             self._mix_self_play_and_train_on_cluster()
         else:
-            if not self.cluster_manager.is_root_node:
-                time.sleep(60)  # wait for root node to start - especially compiling the model and hash functions
             if self.cluster_manager.rank < self.trainers:
                 self._train_on_cluster()
             else:
