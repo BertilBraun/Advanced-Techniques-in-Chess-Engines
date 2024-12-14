@@ -11,7 +11,7 @@ from AIZeroConnect4Bot.src.cluster.ClusterAlphaZero import ClusterAlphaZero
 if __name__ == '__main__':
     model = Network()
     torch.set_float32_matmul_precision('high')
-    # model: Network = torch.compile(model)  # type: ignore
+    model: Network = torch.compile(model)  # type: ignore
     optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
     log('Starting training')
