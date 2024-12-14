@@ -29,7 +29,7 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager.initialize()
 
         # move model to rank device
-        self.model = self.model.to(f'cuda:{self.cluster_manager.rank}')
+        model = model.to(f'cuda:{self.cluster_manager.rank}')
 
         super().__init__(model, optimizer, args, load_latest_model)
 
