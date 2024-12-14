@@ -14,6 +14,7 @@ TOTAL_EVALS = 0
 TOTAL_HITS = 0
 
 
+@torch.no_grad()
 def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tensor]:
     # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
     # use hash_board on each board state in x and check if it is in the cache or twice in x

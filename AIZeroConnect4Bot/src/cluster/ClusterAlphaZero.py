@@ -37,6 +37,8 @@ class ClusterAlphaZero(AlphaZero):
         if self.trainers == 0 and self.cluster_manager.is_root_node:
             self._mix_self_play_and_train_on_cluster()
         else:
+            if not self.cluster_manager.is_root_node:
+                time.sleep(60)  # wait for root node to start - especially compiling the model and hash functions
             if self.cluster_manager.rank < self.trainers:
                 self._train_on_cluster()
             else:
