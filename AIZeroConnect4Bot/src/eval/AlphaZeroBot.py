@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.eval.__main__ import Bot
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
@@ -32,11 +33,11 @@ class AlphaZeroBot(Bot):
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
 
-        print('---------------------- Alpha Zero Best Move ----------------------')
-        print(f'Best child has {best_child.number_of_visits:.4f} visits')
-        print(f'Best child has {best_child.result_score:.4f} result_score')
-        print(f'Best child has {best_child.policy:.4f} policy')
-        print('------------------------------------------------------------------')
+        log('---------------------- Alpha Zero Best Move ----------------------')
+        log(f'Best child has {best_child.number_of_visits:.4f} visits')
+        log(f'Best child has {best_child.result_score:.4f} result_score')
+        log(f'Best child has {best_child.policy:.4f} policy')
+        log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here
 

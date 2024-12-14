@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
+from AIZeroConnect4Bot.src.util.log import log, ratio
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
 
 
@@ -48,7 +49,7 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
 
 def clear_cache() -> None:
     if TOTAL_EVALS != 0:
-        print('Cache hit rate:', TOTAL_HITS / TOTAL_EVALS, 'on cache size', len(NN_CACHE))
+        log('Cache hit rate:', ratio(TOTAL_HITS, TOTAL_EVALS), 'on cache size', len(NN_CACHE))
     NN_CACHE.clear()
 
 

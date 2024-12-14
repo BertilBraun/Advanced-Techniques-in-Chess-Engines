@@ -84,8 +84,8 @@ class Game(ABC, Generic[_Move]):
         # Decodes an action index into a move.
         pass
 
-    def encode_moves(self, moves: list[_Move]) -> torch.Tensor:
-        encoded = torch.zeros(self.action_size, dtype=torch.float)
+    def encode_moves(self, moves: list[_Move]) -> np.ndarray:
+        encoded = np.zeros(self.action_size)
         for move in moves:
             encoded[self.encode_move(move)] = 1
         return encoded

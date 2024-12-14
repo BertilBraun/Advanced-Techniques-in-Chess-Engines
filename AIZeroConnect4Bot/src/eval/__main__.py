@@ -2,6 +2,7 @@ import json
 
 from abc import ABC, abstractmethod
 
+from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.games.Game import Board
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE
 
@@ -43,8 +44,8 @@ class Connect4HumanPlayer(Bot):
 
     def think(self, board: Board[CURRENT_GAME_MOVE]) -> CURRENT_GAME_MOVE:
         """Prompts the human player to make a move."""
-        print(CURRENT_GAME.get_canonical_board(board))
-        print(f'Enter the column number to make a move {board.get_valid_moves()}:')
+        log(CURRENT_GAME.get_canonical_board(board))
+        log(f'Enter the column number to make a move {board.get_valid_moves()}:')
 
         while True:
             try:
@@ -52,9 +53,9 @@ class Connect4HumanPlayer(Bot):
                 if move in board.get_valid_moves():
                     return move
                 else:
-                    print('Invalid move. Please try again.')
+                    log('Invalid move. Please try again.')
             except ValueError:
-                print('Invalid input. Please enter a number.')
+                log('Invalid input. Please enter a number.')
 
 
 if __name__ == '__main__':
@@ -66,4 +67,4 @@ if __name__ == '__main__':
 
     game_manager = GameManager(Connect4HumanPlayer(), AlphaZeroBot(model_path, num_iterations=1000))
 
-    print('Final Result - Winner:', game_manager.play_game())
+    log('Final Result - Winner:', game_manager.play_game())

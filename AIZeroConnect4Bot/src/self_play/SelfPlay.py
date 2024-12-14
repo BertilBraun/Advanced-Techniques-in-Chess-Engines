@@ -7,10 +7,10 @@ import torch
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
-from AIZeroConnect4Bot.src.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
-from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
+from AIZeroConnect4Bot.src.self_play.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 
 
 @dataclass

@@ -138,21 +138,22 @@ board = Connect4Board()
 game = Connect4Game()
 
 if __name__ == '__main__':
+    from AIZeroConnect4Bot.src.util.log import log
 
     def play(game: Connect4Board) -> None:
         while True:
             column = int(input(f'Player {game.current_player}, choose a column (0-{COLUMN_COUNT-1}): '))
             if game.make_move(column):
                 if game.check_winner():
-                    print(f'Player {game.current_player} wins!')
+                    log(f'Player {game.current_player} wins!')
                     break
                 elif game.is_full():
-                    print('The game is a draw!')
+                    log('The game is a draw!')
                     break
             else:
-                print('Invalid move. Try again.')
+                log('Invalid move. Try again.')
 
-            print(game.board)
+            log(game.board)
 
     game = Connect4Board()
     play(game)

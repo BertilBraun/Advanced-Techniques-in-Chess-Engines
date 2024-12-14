@@ -42,7 +42,7 @@ class Trainer:
             desc='Training batches',
             total=len(memory) // self.args.batch_size,
         ):
-            state = [[mem.state] for mem in sample]  # add a dimension to the state to allow the conv layers to work
+            state = [mem.state for mem in sample]
             policy_targets = [mem.policy_targets for mem in sample]
             value_targets = [mem.value_targets for mem in sample]
 

@@ -2,12 +2,13 @@ import time
 import torch
 
 
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME
+from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
-from AIZeroConnect4Bot.src.ClusterManager import ClusterManager
+from AIZeroConnect4Bot.src.cluster.ClusterManager import ClusterManager
 from AIZeroConnect4Bot.src.Network import Network
-from AIZeroConnect4Bot.src.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.settings import AVERAGE_NUM_MOVES_PER_GAME
+from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
+from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
 
 
 class ClusterAlphaZero(AlphaZero):
@@ -47,10 +48,10 @@ class ClusterAlphaZero(AlphaZero):
             training_stats.append(self._train_and_save_new_model(iteration))
             self._load_latest_model()
 
-        print('Training finished')
-        print('Final training stats:')
+        log('Training finished')
+        log('Final training stats:')
         for i, stats in enumerate(training_stats):
-            print(f'Iteration {i + 1}: {stats}')
+            log(f'Iteration {i + 1}: {stats}')
 
     def _self_play_on_cluster(self) -> None:
         # Starting iteration is always loaded from the latest model
@@ -65,16 +66,16 @@ class ClusterAlphaZero(AlphaZero):
         for iteration in range(self.starting_iteration, self.args.num_iterations):
             training_stats.append(self._train_one_iteration(iteration))
 
-        print('Training finished')
-        print('Final training stats:')
+        log('Training finished')
+        log('Final training stats:')
         for i, stats in enumerate(training_stats):
-            print(f'Iteration {i + 1}: {stats}')
+            log(f'Iteration {i + 1}: {stats}')
 
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
-        EXPECTED_NUM_SAMPLES = self.args.num_self_play_iterations * AVERAGE_NUM_MOVES_PER_GAME
+        EXPECTED_NUM_SAMPLES = self.args.num_self_play_iterations * CURRENT_GAME.average_num_moves_per_game
 
         while len(self._load_all_memories(iteration)) < EXPECTED_NUM_SAMPLES:
-            print('Waiting for memories...')
+            log('Waiting for memories...')
             time.sleep(60)
 
         return self._train_and_save_new_model(iteration)

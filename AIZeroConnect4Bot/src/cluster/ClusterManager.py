@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
 
+from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.util import random_id
 
 
@@ -23,7 +24,7 @@ class ClusterManager:
 
         my_id = random_id()
 
-        print('Node initialized')
+        log('Node initialized')
 
         log_file = self.communication_dir / f'initialize_{my_id}.txt'
         while True:
@@ -35,10 +36,10 @@ class ClusterManager:
             if len(initialized_nodes) == self.size:
                 break
 
-            print(f'Waiting for {self.size - len(initialized_nodes)} nodes to initialize')
+            log(f'Waiting for {self.size - len(initialized_nodes)} nodes to initialize')
             time.sleep(1)
 
-        print('All nodes initialized')
+        log('All nodes initialized')
 
         # Determine the root node (lowest ID)
         all_ids = [f.stem.replace('initialize_', '') for f in initialized_nodes]
@@ -55,7 +56,7 @@ class ClusterManager:
         log_file = self.communication_dir / f'{self.rank}{"_" + name if name else ""}.txt'
         open(log_file, 'w').close()
 
-        print(f'Node {self.rank} reached the barrier {name}')
+        log(f'Node {self.rank} reached the barrier {name}')
         while True:
             written_files = len([f for f in self.communication_dir.iterdir() if f.stem.endswith(name)])
             time.sleep(1)
@@ -69,4 +70,4 @@ class ClusterManager:
                 if f.stem.endswith(name):
                     f.unlink(missing_ok=True)
 
-        print(f'All nodes have reached the barrier {name}')
+        log(f'All nodes have reached the barrier {name}')
