@@ -32,26 +32,28 @@ class ClusterManager:
             open(log_file, 'w').close()
 
             # Count how many have initialized
-            initialized_nodes = list(self.communication_dir.iterdir())
-            if len(initialized_nodes) == self.size:
+            initialized_node_ids = [
+                f.stem.replace('initialize_', '')
+                for f in self.communication_dir.iterdir()
+                if f.stem.startswith('initialize_')
+            ]
+            if len(initialized_node_ids) == self.size:
                 break
 
-            log(f'Waiting for {self.size - len(initialized_nodes)} nodes to initialize')
+            log(f'Waiting for {self.size - len(initialized_node_ids)} nodes to initialize')
             time.sleep(5)
 
         log('All nodes initialized')
 
         # Determine the root node (lowest ID)
-        all_ids = [f.stem.replace('initialize_', '') for f in initialized_nodes]
-        self.rank = all_ids.index(my_id)
-        self.size = len(all_ids)
+        self.rank = initialized_node_ids.index(my_id)
 
         self.barrier('initialized')
 
         if self.is_root_node:
             # Clean up the initialization files
-            for f in initialized_nodes:
-                f.unlink(missing_ok=True)
+            for id in initialized_node_ids:
+                (self.communication_dir / f'initialize_{id}.txt').unlink(missing_ok=True)
 
     def barrier(self, name: str) -> None:
         # Create a barrier file for this node
