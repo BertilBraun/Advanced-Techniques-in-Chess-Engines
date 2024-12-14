@@ -71,27 +71,5 @@ class Connect4Game(Game[Connect4Move]):
             # yield -board[:, ::-1], action_probabilities[::-1], -result
         ]
 
-    def get_initial_board(self) -> Board[int]:
+    def get_initial_board(self) -> Board[Connect4Move]:
         return Connect4Board()
-
-
-if __name__ == '__main__':
-    from AIZeroConnect4Bot.src.util.log import log
-
-    def play(game: Connect4Board) -> None:
-        while True:
-            column = int(input(f'Player {game.current_player}, choose a column (0-{COLUMN_COUNT-1}): '))
-            if game.make_move(column):
-                if game.check_winner():
-                    log(f'Player {game.current_player} wins!')
-                    break
-                elif game.is_full():
-                    log('The game is a draw!')
-                    break
-            else:
-                log('Invalid move. Try again.')
-
-            log(game.board)
-
-    game = Connect4Board()
-    play(game)

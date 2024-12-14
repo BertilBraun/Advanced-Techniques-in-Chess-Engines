@@ -19,7 +19,7 @@ class Connect4Visuals(GameVisuals[Connect4Move]):
     def is_two_click_game(self) -> bool:
         return False
 
-    def get_moves_from_square(self, row: int, col: int) -> List[Tuple[int, int]]:
+    def get_moves_from_square(self, board: Board[Connect4Move], row: int, col: int) -> List[Tuple[int, int]]:
         assert False, 'Connect4 is not a two-click game'
 
     def try_make_move(

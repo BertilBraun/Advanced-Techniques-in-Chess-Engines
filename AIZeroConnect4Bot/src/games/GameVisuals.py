@@ -17,7 +17,7 @@ class GameVisuals(ABC, Generic[_Move]):
         pass
 
     @abstractmethod
-    def get_moves_from_square(self, row: int, col: int) -> List[Tuple[int, int]]:
+    def get_moves_from_square(self, board: Board[_Move], row: int, col: int) -> List[Tuple[int, int]]:
         pass
 
     @abstractmethod

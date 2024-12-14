@@ -57,8 +57,14 @@ class SelfPlay:
         result = get_board_result_score(spg.board)
         assert result is not None, 'Game is not over'
 
-        for mem in spg.memory[::-1]:
+        for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
+
+            # print(
+            #     f'encoded_board: {encoded_board}\n'
+            #     f'mem.policy_targets: {np.round(mem.action_probabilities, 3)}\n'
+            #     f'result: {result}\n'
+            # )
 
             for board, probabilities in CURRENT_GAME.symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_memory.append(

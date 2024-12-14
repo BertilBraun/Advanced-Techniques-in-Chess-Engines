@@ -17,6 +17,10 @@ class Connect4Board(Board[Connect4Move]):
         self.board = np.zeros((ROW_COUNT, COLUMN_COUNT), dtype=int)
         self._winner: Optional[Player] = None
 
+    @property
+    def board_dimensions(self) -> tuple[int, int]:
+        return ROW_COUNT, COLUMN_COUNT
+
     def make_move(self, column: Connect4Move) -> bool:
         if column < 0 or column >= COLUMN_COUNT or self.board[0][column] != 0:
             return False

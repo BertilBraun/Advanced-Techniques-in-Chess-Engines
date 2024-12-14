@@ -30,6 +30,9 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
 
+        # move model to rank device
+        self.model = self.model.to(f'cuda:{self.cluster_manager.rank}')
+
     def learn(self) -> None:
         if self.trainers == 0 and self.cluster_manager.is_root_node:
             self._mix_self_play_and_train_on_cluster()

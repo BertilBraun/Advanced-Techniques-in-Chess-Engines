@@ -45,7 +45,7 @@ class HumanPlayer(Bot):
         # If two-click game (Chess/Checkers):
         if self.selected_cell is None:
             # First click: select a piece if valid
-            moves_from_cell = self.game_visuals.get_moves_from_square(*cell)
+            moves_from_cell = self.game_visuals.get_moves_from_square(board, *cell)
             if moves_from_cell:
                 # Highlight selection and possible moves
                 self.selected_cell = cell
