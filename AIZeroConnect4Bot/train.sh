@@ -22,6 +22,13 @@ else
 
     # Initialize conda in your bash shell
     ~/miniconda3/bin/conda init bash
+    source ~/.bashrc
+
+    conda create -n Chess python=3.11 -y
+    conda activate Chess
+
+    pip install -r requirements.txt
+    pip install -r AIZeroConnect4Bot/requirements.txt
 
     # Add to .bashrc
     echo "module purge" >> ~/.bashrc
@@ -36,8 +43,6 @@ else
     echo "alias info='sinfo_t_idle'" >> ~/.bashrc
     echo "alias tail='tail -f -n 1000'" >> ~/.bashrc
     echo "conda activate Chess" >> ~/.bashrc
-    
-    source ~/.bashrc
 fi
 
 cd ../
