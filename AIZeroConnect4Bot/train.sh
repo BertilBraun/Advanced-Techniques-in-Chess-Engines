@@ -12,7 +12,8 @@
 #SBATCH --output=train_zero_%j.txt
 #SBATCH --error=train_zero_%j.txt
 
-if [ -d "~/miniconda3" ]; then
+# if miniconda is not installed, install it and create a new conda environment
+if [ -d "../../miniconda3" ]; then
   echo "Conda environment already exists."
 else
     mkdir -p ~/miniconda3

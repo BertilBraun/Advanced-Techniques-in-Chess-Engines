@@ -27,7 +27,12 @@ def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tenso
             to_process_hashes.append(h)
 
     if to_process:
-        policy, value = network(torch.stack(to_process))
+        if any(b.device != network.device for b in to_process):
+            log('Warning: Cached network forward called with mixed device inputs.')
+            log('Warning: This is inefficient and should be avoided.')
+            log('Input devices:', [b.device for b in to_process])
+            log('Network device:', network.device)
+        policy, value = network(torch.stack(to_process).to(device=network.device, dtype=TORCH_DTYPE))
         for hash, p, v in zip(to_process_hashes, policy, value):
             NN_CACHE[hash] = (p, v)
 
