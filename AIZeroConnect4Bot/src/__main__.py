@@ -12,7 +12,7 @@ if __name__ == '__main__':
     model = Network()
     log('Starting training')
     log('Training on:', model.device)
-    log('Number of parameters:', sum(p.numel() for p in model.parameters()))
+    # log('Number of parameters:', sum(p.numel() for p in model.parameters()))
     log('Training args:')
     log(TRAINING_ARGS.__dict__, use_pprint=True)
 
