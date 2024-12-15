@@ -3,7 +3,7 @@ from AIZeroConnect4Bot.src.games.Game import Game
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
 
-if False:
+if True:
     from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
 
     CURRENT_GAME_MOVE = Connect4Move

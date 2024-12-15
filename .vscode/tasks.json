@@ -10,6 +10,12 @@
             "problemMatcher": []
         },
         {
+            "label": "Train",
+            "type": "shell",
+            "command": "python -m AIZeroConnect4Bot.src",
+            "problemMatcher": []
+        },
+        {
             "label": "Play",
             "type": "shell",
             "command": "python -m HandcraftedChessBot --play",

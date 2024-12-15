@@ -25,13 +25,14 @@ class ClusterAlphaZero(AlphaZero):
 
         model = Network()
         # move model to rank device
-        node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
-        model = model.to(
-            device=node_device,
-            dtype=TORCH_DTYPE,
-            non_blocking=False,
-        )
-        model.device = node_device
+        if torch.cuda.is_available():
+            node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
+            model = model.to(
+                device=node_device,
+                dtype=TORCH_DTYPE,
+                non_blocking=False,
+            )
+            model.device = node_device
 
         torch.set_float32_matmul_precision('high')
         if torch.cuda.is_available():
