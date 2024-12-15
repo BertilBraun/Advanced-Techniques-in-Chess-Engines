@@ -39,7 +39,7 @@ class BaseGridGameGUI:
             for c in range(self.cols):
                 color = (
                     self.light_color
-                    if ((r + c) % 2 == 0 and self.checkered) or (r % 2 == 0 and not self.checkered)
+                    if ((r + c) % 2 == 0 and self.checkered) or (c % 2 == 0 and not self.checkered)
                     else self.dark_color
                 )
                 pygame.draw.rect(

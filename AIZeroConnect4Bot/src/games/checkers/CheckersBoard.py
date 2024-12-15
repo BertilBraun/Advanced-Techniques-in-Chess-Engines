@@ -4,6 +4,7 @@ from typing import Callable, Optional, List, Tuple
 
 import numpy as np
 
+
 from AIZeroConnect4Bot.src.games.Game import Board, Player
 
 CheckersMove = Tuple[int, int]
@@ -56,9 +57,6 @@ WHITE_MEN_START = np.uint64(
 BLACK_PROMOTION_ROW = np.uint64(0xFF00000000000000)  # top row (row 7 in index terms, bits 56-63)
 WHITE_PROMOTION_ROW = np.uint64(0x00000000000000FF)  # bottom row (row 0 in index terms, bits 0-7)
 
-# TODO remove
-ILLEGAL_CELLS = [i + j * BOARD_SIZE for i in range(BOARD_SIZE) for j in range(BOARD_SIZE) if (i + j) % 2 == 0]
-
 
 DR_SHIFT = -(BOARD_SIZE + 1)
 DL_SHIFT = -(BOARD_SIZE - 1)
@@ -110,48 +108,52 @@ def _decode_moves(starts: np.uint64, ends: np.uint64, shift: int) -> List[_Check
     return moves
 
 
+MaskFunc = Callable[[np.uint64], np.uint64]
+
+
 def _piece_normal_moves(
     pieces: np.uint64,
     empty: np.uint64,
     shift: int,
-    left_func: Callable[[np.uint64], np.uint64],
-    right_func: Callable[[np.uint64], np.uint64],
+    mask_func: MaskFunc,
 ) -> List[_CheckersMove]:
-    piece_left = left_func(pieces) & empty
-    moves_left = _decode_moves(pieces, piece_left, shift=shift)
-
-    piece_right = right_func(pieces) & empty
-    moves_right = _decode_moves(pieces, piece_right, shift=shift)
-
-    return moves_left + moves_right
+    piece_moves = mask_func(pieces) & empty
+    return _decode_moves(pieces, piece_moves, shift)
 
 
 def _black_piece_normal_moves(pieces: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    piece_dl = _down_left(pieces) & empty
-    moves_dl = _decode_moves(pieces, piece_dl, shift=DL_SHIFT)
+    dl_moves = _piece_normal_moves(pieces, empty, DL_SHIFT, _down_left)
+    dr_moves = _piece_normal_moves(pieces, empty, DR_SHIFT, _down_right)
+    return dl_moves + dr_moves
 
-    piece_dr = _down_right(pieces) & empty
-    moves_dr = _decode_moves(pieces, piece_dr, shift=DR_SHIFT)
 
-    return moves_dl + moves_dr
+def _white_piece_normal_moves(pieces: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
+    ul_moves = _piece_normal_moves(pieces, empty, UL_SHIFT, _up_left)
+    ur_moves = _piece_normal_moves(pieces, empty, UR_SHIFT, _up_right)
+    return ul_moves + ur_moves
+
+
+def _piece_single_captures(
+    pieces: np.uint64, enemy: np.uint64, empty: np.uint64, shift: int, mask_func: MaskFunc
+) -> List[_CheckersMove]:
+    step = mask_func(pieces) & enemy
+    cap = mask_func(step) & empty
+    moves = _decode_moves(pieces, cap, 2 * shift)
+    for s, _, captures in moves:
+        captures.append(s - shift)
+    return moves
 
 
 def _black_piece_single_captures(pieces: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    # Down-left capture
-    dl_step = _down_left(pieces) & enemy
-    dl_cap = _down_left(dl_step) & empty
-    moves_dl = _decode_moves(pieces, dl_cap, shift=2 * DL_SHIFT)
-    for s, _, captures in moves_dl:
-        captures.append(s - DL_SHIFT)
+    dl_captures = _piece_single_captures(pieces, enemy, empty, DL_SHIFT, _down_left)
+    dr_captures = _piece_single_captures(pieces, enemy, empty, DR_SHIFT, _down_right)
+    return dl_captures + dr_captures
 
-    # Down-right capture
-    dr_step = _down_right(pieces) & enemy
-    dr_cap = _down_right(dr_step) & empty
-    moves_dr = _decode_moves(pieces, dr_cap, shift=2 * DR_SHIFT)
-    for s, _, captures in moves_dr:
-        captures.append(s - DR_SHIFT)
 
-    return moves_dl + moves_dr
+def _white_piece_single_captures(pieces: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
+    ul_captures = _piece_single_captures(pieces, enemy, empty, UL_SHIFT, _up_left)
+    ur_captures = _piece_single_captures(pieces, enemy, empty, UR_SHIFT, _up_right)
+    return ul_captures + ur_captures
 
 
 DIRECTIONS = ((DR_SHIFT, (1, 1)), (DL_SHIFT, (-1, 1)), (UR_SHIFT, (1, -1)), (UL_SHIFT, (-1, -1)))
@@ -196,44 +198,68 @@ def _king_moves(occupied: np.uint64, enemy: np.uint64, start: int) -> Tuple[List
     return normal_moves, captures
 
 
-def _black_moves(pieces: np.uint64, kings: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    all_moves: List[_CheckersMove] = []
+def _check_further_capture(
+    start: int,
+    end: int,
+    shift: int,
+    dx: int,
+    dy: int,
+    enemy: np.uint64,
+    empty: np.uint64,
+) -> Optional[_CheckersMove]:
+    ey, ex = divmod(end, BOARD_SIZE)
+    if (
+        ey + 2 * dy >= 0  # in bounds
+        and ey + 2 * dy < BOARD_SIZE  # in bounds
+        and ex + 2 * dx >= 0  # in bounds
+        and ex + 2 * dx < BOARD_SIZE  # in bounds
+        and _bit_set(enemy, end - shift)  # next square is enemy
+        and _bit_set(empty, end - 2 * shift)  # square after enemy is empty
+    ):
+        return start, end - 2 * shift, [end - shift]
+    return None
+
+
+def _expand_single_captures(
+    piece_captures: List[_CheckersMove],
+    enemy: np.uint64,
+    empty: np.uint64,
+    shift_left: int,
+    shift_right: int,
+    dy: int,
+) -> List[_CheckersMove]:
+    outstanding_captures: List[_CheckersMove] = piece_captures
     all_captures: List[_CheckersMove] = []
-    # Black piece moves (down-left and down-right)
+
+    while outstanding_captures:
+        start, end, captures = outstanding_captures.pop()
+
+        capture_right = _check_further_capture(start, end, shift_right, 1, dy, enemy, empty)
+        capture_left = _check_further_capture(start, end, shift_left, -1, dy, enemy, empty)
+
+        if not capture_right and not capture_left:
+            # no further captures possible, add to all_captures
+            all_captures.append((start, end, captures))
+            continue
+
+        if capture_right:
+            capture_right[2].extend(captures)
+            outstanding_captures.append(capture_right)
+        if capture_left:
+            capture_left[2].extend(captures)
+            outstanding_captures.append(capture_left)
+
+    return all_captures
+
+
+def _black_moves(pieces: np.uint64, kings: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
     piece_captures = _black_piece_single_captures(pieces, enemy, empty)
-    print('Black Piece captures:', piece_captures)
     if piece_captures:
-        outstanding_captures = piece_captures
-        while outstanding_captures:
-            start, end, captures = outstanding_captures.pop()
-            print('Start:', start, 'End:', end, 'Captures:', captures, 'is king:', _bit_set(kings, start))
+        all_captures = _expand_single_captures(piece_captures, enemy, empty, DL_SHIFT, DR_SHIFT, -1)
+    else:
+        all_captures: List[_CheckersMove] = []
 
-            ey, ex = divmod(end, BOARD_SIZE)
-            added = False
-
-            if (
-                ey >= 2  # in bounds
-                and ex < BOARD_SIZE - 2  # in bounds
-                and _bit_set(enemy, end - DR_SHIFT)  # next square is enemy
-                and _bit_set(empty, end - 2 * DR_SHIFT)  # square after enemy is empty
-            ):
-                print('1', start, end - 2 * DR_SHIFT, captures + [end - DR_SHIFT], ex, ey)
-                outstanding_captures.append((start, end - 2 * DR_SHIFT, captures + [end - DR_SHIFT]))
-                added = True
-            if (
-                ey >= 2  # in bounds
-                and ex >= 2  # in bounds
-                and _bit_set(enemy, end - DL_SHIFT)  # next square is enemy
-                and _bit_set(empty, end - 2 * DL_SHIFT)  # square after enemy is empty
-            ):
-                print('2', start, end - 2 * DL_SHIFT, captures + [end - DL_SHIFT], ex, ey)
-                outstanding_captures.append((start, end - 2 * DL_SHIFT, captures + [end - DL_SHIFT]))
-                added = True
-
-            if not added:  # no further jump captures possible
-                all_captures.append((start, end, captures))
-
-    # Black king moves
+    all_moves: List[_CheckersMove] = []
     for start in _bitboard_to_list(kings):
         normal_moves, king_captures = _king_moves(~empty, enemy, start)
         all_captures += king_captures
@@ -246,72 +272,14 @@ def _black_moves(pieces: np.uint64, kings: np.uint64, enemy: np.uint64, empty: n
     return all_moves
 
 
-def _white_piece_normal_moves(pieces: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    piece_ul = _up_left(pieces) & empty
-    moves_ul = _decode_moves(pieces, piece_ul, shift=UL_SHIFT)
-
-    piece_ur = _up_right(pieces) & empty
-    moves_ur = _decode_moves(pieces, piece_ur, shift=UR_SHIFT)
-
-    return moves_ul + moves_ur
-
-
-def _white_piece_single_captures(pieces: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    # Up-left capture
-    ul_step = _up_left(pieces) & enemy
-    ul_cap = _up_left(ul_step) & empty
-    moves_ul = _decode_moves(pieces, ul_cap, shift=2 * UL_SHIFT)
-    for s, _, captures in moves_ul:
-        captures.append(s - UL_SHIFT)
-
-    # Up-right capture
-    ur_step = _up_right(pieces) & enemy
-    ur_cap = _up_right(ur_step) & empty
-    moves_ur = _decode_moves(pieces, ur_cap, shift=2 * UR_SHIFT)
-    for s, _, captures in moves_ur:
-        captures.append(s - UR_SHIFT)
-
-    return moves_ul + moves_ur
-
-
 def _white_moves(pieces: np.uint64, kings: np.uint64, enemy: np.uint64, empty: np.uint64) -> List[_CheckersMove]:
-    all_moves: List[_CheckersMove] = []
-    all_captures: List[_CheckersMove] = []
-    # White piece moves (up-left and up-right)
     piece_captures = _white_piece_single_captures(pieces, enemy, empty)
-    print('White Piece captures:', piece_captures)
     if piece_captures:
-        outstanding_captures = piece_captures
-        while outstanding_captures:
-            start, end, captures = outstanding_captures.pop()
-            print('Start:', start, 'End:', end, 'Captures:', captures, 'is king:', _bit_set(kings, start))
+        all_captures = _expand_single_captures(piece_captures, enemy, empty, UL_SHIFT, UR_SHIFT, 1)
+    else:
+        all_captures: List[_CheckersMove] = []
 
-            ey, ex = divmod(end, BOARD_SIZE)
-            added = False
-
-            if (
-                ey < BOARD_SIZE - 2  # in bounds
-                and ex < BOARD_SIZE - 2  # in bounds
-                and _bit_set(enemy, end - UR_SHIFT)  # next square is enemy
-                and _bit_set(empty, end - 2 * UR_SHIFT)  # square after enemy is empty
-            ):
-                print('1', start, end - 2 * UR_SHIFT, captures + [end - UR_SHIFT], ex, ey)
-                outstanding_captures.append((start, end - 2 * UR_SHIFT, captures + [end - UR_SHIFT]))
-                added = True
-            if (
-                ey < BOARD_SIZE - 2  # in bounds
-                and ex >= 2  # in bounds
-                and _bit_set(enemy, end - UL_SHIFT)  # next square is enemy
-                and _bit_set(empty, end - 2 * UL_SHIFT)  # square after enemy is empty
-            ):
-                print('2', start, end - 2 * UL_SHIFT, captures + [end - UL_SHIFT], ex, ey)
-                outstanding_captures.append((start, end - 2 * UL_SHIFT, captures + [end - UL_SHIFT]))
-                added = True
-
-            if not added:  # no further jump captures possible
-                all_captures.append((start, end, captures))
-
-    # White king moves
+    all_moves: List[_CheckersMove] = []
     for start in _bitboard_to_list(kings):
         normal_moves, king_captures = _king_moves(~empty, enemy, start)
         all_captures += king_captures
@@ -368,45 +336,10 @@ class CheckersBoard(Board[CheckersMove]):
         opp = self._opponent_pieces()
         empty = self._empty()
 
-        def _inner():
-            if self.current_player == 1:  # Black
-                return _black_moves(pieces, kings, opp, empty)
-            else:  # White
-                return _white_moves(pieces, kings, opp, empty)
-
-        moves = _inner()
-        for s, e, captures in moves:
-            if s in ILLEGAL_CELLS or e in ILLEGAL_CELLS or s < 0 or e < 0 or s >= BOARD_SQUARES or e >= BOARD_SQUARES:
-                print(f'Illegal move: {s} -> {e} with captures {captures}')
-                print('Piece:', self.get_cell(s // BOARD_SIZE, s % BOARD_SIZE))
-                print('Start:', s // BOARD_SIZE, s % BOARD_SIZE)
-                print('End:', e // BOARD_SIZE, e % BOARD_SIZE)
-                print('Current board:')
-                for i in range(BOARD_SIZE):
-                    for j in range(BOARD_SIZE):
-                        cell = self.get_cell(i, j)
-                        if i * BOARD_SIZE + j == s:
-                            print(' S', end='   ')
-                        elif i * BOARD_SIZE + j == e:
-                            print(' E', end='   ')
-                        elif cell is None:
-                            print('  ', end='   ')
-                        elif cell.value < 0:
-                            print(cell.value, end='   ')
-                        else:
-                            print(f' {cell.value}', end='   ')
-                    print()
-                    for j in range(BOARD_SIZE):
-                        print(f'{i * BOARD_SIZE + j:2}', end='   ')
-                    print()
-                    print()
-                exit()
-        print('Valid moves:')
-        from pprint import pprint
-
-        pprint(moves)
-
-        return moves
+        if self.current_player == 1:  # Black
+            return _black_moves(pieces, kings, opp, empty)
+        else:  # White
+            return _white_moves(pieces, kings, opp, empty)
 
     def make_move(self, move: CheckersMove) -> None:
         """
@@ -417,7 +350,18 @@ class CheckersBoard(Board[CheckersMove]):
         """
         start, end = move
         assert 0 <= start < BOARD_SQUARES and 0 <= end < BOARD_SQUARES, 'Invalid move'
-        assert start not in ILLEGAL_CELLS and end not in ILLEGAL_CELLS, 'Illegal cell'
+
+        # Remove captured piece if any:
+        # Do this first, before moving the piece, to get the correct valid moves
+        for s, e, captures in self._get_valid_moves():
+            if s == start and e == end:
+                for capture in captures:
+                    capture_mask = np.uint64(1 << capture)
+                    self.white_pieces &= ~capture_mask
+                    self.white_kings &= ~capture_mask
+                    self.black_pieces &= ~capture_mask
+                    self.black_kings &= ~capture_mask
+                break
 
         start_mask = np.uint64(1 << start)
         end_mask = np.uint64(1 << end)
@@ -449,17 +393,6 @@ class CheckersBoard(Board[CheckersMove]):
             elif self.white_kings & start_mask:
                 self.white_kings &= ~start_mask
                 self.white_kings |= end_mask
-
-        # Remove captured piece if any:
-        for s, e, captures in self._get_valid_moves():
-            if s == start and e == end:
-                for capture in captures:
-                    capture_mask = np.uint64(1 << capture)
-                    self.white_pieces &= ~capture_mask
-                    self.white_kings &= ~capture_mask
-                    self.black_pieces &= ~capture_mask
-                    self.black_kings &= ~capture_mask
-                break
 
         # Switch player
         self._switch_player()
