@@ -66,11 +66,12 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 
 # Test training args to verify the implementation
-NUM_SELF_PLAY_ITERATIONS = 4
+NUM_SELF_PLAY_NODES = 4
+PARALLEL_GAMES = 128  # Approximately 5min for 128 games
 TRAINING_ARGS = TrainingArgs(
     num_iterations=50,
-    num_self_play_iterations=128 * 3 * NUM_SELF_PLAY_ITERATIONS,
-    num_parallel_games=128,
+    num_self_play_iterations=PARALLEL_GAMES * 3 * NUM_SELF_PLAY_NODES,
+    num_parallel_games=PARALLEL_GAMES,
     num_iterations_per_turn=800,
     num_epochs=10,
     batch_size=16,
@@ -83,11 +84,11 @@ TRAINING_ARGS = TrainingArgs(
     learning_rate_scheduler=learning_rate_scheduler,
     save_path=SAVE_PATH,
     num_train_nodes_on_cluster=0,
-    num_self_play_nodes_on_cluster=NUM_SELF_PLAY_ITERATIONS,
+    num_self_play_nodes_on_cluster=NUM_SELF_PLAY_NODES,
 )
 
 # Test training args to verify the implementation
-TRAINING_ARGS = TrainingArgs(
+TEST_TRAINING_ARGS = TrainingArgs(
     num_iterations=50,
     num_self_play_iterations=4,
     num_parallel_games=4,
