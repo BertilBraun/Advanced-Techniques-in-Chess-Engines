@@ -29,10 +29,12 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 10:
-        return 0.2
+        return 1.0
     if current_iteration < 20:
-        return 0.02
-    return 0.002
+        return 0.1
+    if current_iteration < 30:
+        return 0.05
+    return 0.005
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
@@ -64,13 +66,14 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 
 # Test training args to verify the implementation
+NUM_SELF_PLAY_ITERATIONS = 4
 TRAINING_ARGS = TrainingArgs(
     num_iterations=50,
-    num_self_play_iterations=7040,  # parallel games * 55
+    num_self_play_iterations=128 * 3 * NUM_SELF_PLAY_ITERATIONS,
     num_parallel_games=128,
     num_iterations_per_turn=800,
-    num_epochs=6,
-    batch_size=64,
+    num_epochs=10,
+    batch_size=16,
     temperature=1.0,
     dirichlet_epsilon=0.25,
     dirichlet_alpha=1,
@@ -80,7 +83,7 @@ TRAINING_ARGS = TrainingArgs(
     learning_rate_scheduler=learning_rate_scheduler,
     save_path=SAVE_PATH,
     num_train_nodes_on_cluster=0,
-    num_self_play_nodes_on_cluster=4,
+    num_self_play_nodes_on_cluster=NUM_SELF_PLAY_ITERATIONS,
 )
 
 # Test training args to verify the implementation

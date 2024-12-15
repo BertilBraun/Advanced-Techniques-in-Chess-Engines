@@ -25,7 +25,7 @@ class ClusterAlphaZero(AlphaZero):
 
         model = Network()
         # move model to rank device
-        node_device = torch.device('cuda', self.cluster_manager.rank)
+        node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
         model = model.to(
             device=node_device,
             dtype=TORCH_DTYPE,
