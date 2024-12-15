@@ -4,6 +4,12 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Eval",
+            "type": "shell",
+            "command": "python -m AIZeroConnect4Bot.src.eval",
+            "problemMatcher": []
+        },
+        {
             "label": "Play",
             "type": "shell",
             "command": "python -m HandcraftedChessBot --play",

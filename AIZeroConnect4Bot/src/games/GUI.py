@@ -26,7 +26,10 @@ class BaseGridGameGUI:
         pygame.draw.circle(
             self.screen,
             pygame.Color(color),
-            (col * self.cell_size + self.cell_size // 2, row * self.cell_size + self.cell_size // 2),
+            (
+                col * self.cell_size + self.cell_size // 2,
+                row * self.cell_size + self.cell_size // 2,
+            ),
             self.cell_size // 3,
         )
 
@@ -34,11 +37,20 @@ class BaseGridGameGUI:
         # Default checkerboard pattern
         for r in range(self.rows):
             for c in range(self.cols):
-                color = self.light_color if (r + c) % 2 == 0 or not self.checkered else self.dark_color
+                color = (
+                    self.light_color
+                    if ((r + c) % 2 == 0 and self.checkered) or (r % 2 == 0 and not self.checkered)
+                    else self.dark_color
+                )
                 pygame.draw.rect(
                     self.screen,
                     color,
-                    pygame.Rect(c * self.cell_size, r * self.cell_size, self.cell_size, self.cell_size),
+                    pygame.Rect(
+                        c * self.cell_size,
+                        r * self.cell_size,
+                        self.cell_size,
+                        self.cell_size,
+                    ),
                 )
 
     def highlight_cell(self, row: int, col: int, color: str):
@@ -58,18 +70,18 @@ class BaseGridGameGUI:
     def update_display(self):
         pygame.display.flip()
 
-    def click_event_occurred(self) -> bool:
+    def events_occurred(self) -> tuple[bool, bool]:
+        # Poll for events and returns if (clicked, quit) occurred
+        clicked = False
+        quit = False
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
-                return True
-        return False
-
-    def quit_event_occurred(self) -> bool:
-        for event in pygame.event.get():
+                clicked = True
             if event.type == pygame.QUIT:
                 pygame.quit()
-                return True
-        return False
+                quit = True
+
+        return clicked, quit
 
     def clear_highlights_and_redraw(self, draw_pieces_func):
         # Redraw the board and pieces:

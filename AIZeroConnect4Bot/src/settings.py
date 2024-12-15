@@ -2,11 +2,15 @@ import torch
 from AIZeroConnect4Bot.src.games.Game import Game
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
 
+# from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
+# CURRENT_GAME_MOVE = Connect4Move
+# CURRENT_GAME: Game[Connect4Move] = Connect4Game()
 
-CURRENT_GAME_MOVE = Connect4Move
-CURRENT_GAME: Game[Connect4Move] = Connect4Game()
+from AIZeroConnect4Bot.src.games.checkers.CheckersGame import CheckersGame, CheckersMove
+
+CURRENT_GAME_MOVE = CheckersMove
+CURRENT_GAME: Game[CheckersMove] = CheckersGame()
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 

@@ -63,6 +63,7 @@ class Board(ABC, Generic[_Move]):
                     setattr(self, cache_name, method(self, *args, **kwargs))
                 else:
                     cls.hits[method.__name__] = cls.hits.get(method.__name__, 0) + 1
+                # TODO remove cache stats
                 print(
                     f'Cache stats for {method.__name__}: {cls.hits.get(method.__name__,0)}/{cls.calls[method.__name__]}'
                 )

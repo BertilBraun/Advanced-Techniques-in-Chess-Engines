@@ -46,10 +46,10 @@ class CheckersGame(Game[CheckersMove]):
         # board.black_kings, board.black_pieces, board.white_kings, board.white_pieces
         # The bitboards are 64 bit integers, so we need to convert them to a 8x8 tensor first
         # Then we can stack them together to get a 4x8x8 tensor
-        def bitfield_to_tensor(bitfield: int, flipped: bool) -> np.ndarray:
+        def bitfield_to_tensor(bitfield: np.uint64, flipped: bool) -> np.ndarray:
             # turn 64 bit integer into a list of 8x 8bit integers, then use np.unpackbits to get a 8x8 tensor
-            byte_lists = np.array([bitfield >> i & 0xFF for i in range(0, 64, 8)], dtype=np.uint8)
-            tensor = np.unpackbits(byte_lists).reshape(ROW_COUNT, COLUMN_COUNT)
+
+            tensor = np.unpackbits(np.frombuffer(bitfield.tobytes(), dtype=np.uint8)).reshape(ROW_COUNT, COLUMN_COUNT)
             if flipped:
                 tensor = tensor[::-1]
             return tensor
@@ -142,14 +142,39 @@ class CheckersGame(Game[CheckersMove]):
 
 
 if __name__ == '__main__':
+
+    def print_board_side_by_side(board1, board2, c):
+        print('Board 1', ' ' * 8, 'Board 2')
+        for row1, row2 in zip(board1, board2):
+            for c1 in row1:
+                print('.' if not c1 else c, end=' ')
+            print(' | ', end='')
+            for c2 in row2:
+                print('.' if not c2 else c, end=' ')
+            print()
+
+    def compare_boards(board1, board2):
+        print_board_side_by_side(board1[1], board2[1], 'X')
+        print_board_side_by_side(board1[3], board2[3], 'O')
+
     g = CheckersGame()
     b = g.get_initial_board()
-    print(g.get_canonical_board(b))
+    b1 = g.get_canonical_board(b)
+    # print(g.get_canonical_board(b))
     print(b.get_valid_moves())
-    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
-    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    # print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    # print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
     b.make_move(b.get_valid_moves()[0])
-    print('After move')
-    print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
-    print('After move')
-    print(g.get_canonical_board(b))
+    b2 = g.get_canonical_board(b)
+    print(b.get_valid_moves())
+    # print('After move')
+    # print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    # print('After move')
+    b.make_move(b.get_valid_moves()[0])
+    # print('After move')
+    # print('Hash:', g.hash_boards(torch.tensor(np.array([g.get_canonical_board(b)]))))
+    # print(g.get_canonical_board(b))
+    b3 = g.get_canonical_board(b)
+    # compare_boards(b1, b2)
+    # compare_boards(b2, b3)
+    # compare_boards(b1, b3)

@@ -20,11 +20,12 @@ class HumanPlayer(Bot):
         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
 
         while True:
-            if self.gui.quit_event_occurred():
+            clicked, quit = self.gui.events_occurred()
+            if quit:
                 exit()
 
             # We check for mouse events:
-            if self.gui.click_event_occurred():
+            if clicked:
                 cell = self.gui.get_cell_from_click()
                 if cell is not None:
                     move = self.handle_click(board, cell)
@@ -58,12 +59,12 @@ class HumanPlayer(Bot):
         else:
             # Second click: try to form a move
             from_cell = self.selected_cell
+            self.selected_cell = None
             to_cell = cell
             move = self.game_visuals.try_make_move(board, from_cell, to_cell)
             if move:
                 return move
             else:
                 # Invalid move, reset and redraw
-                self.selected_cell = None
                 self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
                 return None

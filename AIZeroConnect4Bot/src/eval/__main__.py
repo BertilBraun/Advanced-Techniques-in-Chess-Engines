@@ -30,12 +30,16 @@ class CheckersHumanPlayer(HumanPlayer):
 
 
 if __name__ == '__main__':
-    last_training_config = load_json(f'{SAVE_PATH}/last_training_config.json')
-    model_path = last_training_config['model']
+    try:
+        last_training_config = load_json(f'{SAVE_PATH}/last_training_config.json')
+        model_path = last_training_config['model']
+    except FileNotFoundError:
+        model_path = None
 
     game_manager = GameManager(
-        Connect4HumanPlayer(),
-        AlphaZeroBot(model_path, max_time_to_think=5.0),
+        # Connect4HumanPlayer(),
+        CheckersHumanPlayer(),
+        AlphaZeroBot(model_path, max_time_to_think=1.0),
     )
 
     log('Final Result - Winner:', game_manager.play_game())

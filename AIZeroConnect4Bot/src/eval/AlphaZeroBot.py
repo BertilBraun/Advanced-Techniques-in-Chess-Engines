@@ -11,16 +11,17 @@ from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORC
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, network_model_file_path: str, max_time_to_think: float) -> None:
+    def __init__(self, network_model_file_path: str | None, max_time_to_think: float) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
         self.model = Network()
-        self.model.load_state_dict(
-            torch.load(
-                network_model_file_path,
-                map_location=self.model.device,
-                weights_only=True,
+        if network_model_file_path is not None:
+            self.model.load_state_dict(
+                torch.load(
+                    network_model_file_path,
+                    map_location=self.model.device,
+                    weights_only=True,
+                )
             )
-        )
         self.model.eval()
 
     def think(self, board: Board[CURRENT_GAME_MOVE]) -> CURRENT_GAME_MOVE:

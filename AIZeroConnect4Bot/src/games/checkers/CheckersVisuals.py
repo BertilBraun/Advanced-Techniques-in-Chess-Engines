@@ -1,9 +1,8 @@
 from typing import List, Optional, Tuple
 
-from AIZeroConnect4Bot.src.games.Game import Board
 from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
 from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove
+from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove, Piece
 
 
 class CheckersVisuals(GameVisuals[CheckersMove]):
@@ -11,20 +10,20 @@ class CheckersVisuals(GameVisuals[CheckersMove]):
         board_width, board_height = board.board_dimensions
         for row in range(board_height):
             for col in range(board_width):
-                cell_index = row * board_width + col
-                if board.black_kings & (1 << cell_index):
-                    gui.draw_circle(row, col, 'black')
-                elif board.black_pieces & (1 << cell_index):
-                    gui.draw_circle(row, col, 'dark gray')
-                elif board.white_kings & (1 << cell_index):
-                    gui.draw_circle(row, col, 'white')
-                elif board.white_pieces & (1 << cell_index):
-                    gui.draw_circle(row, col, 'light gray')
+                piece = board.get_cell(row, col)
+                if piece == Piece.BLACK_KING:
+                    gui.draw_circle(row, col, 'red')
+                elif piece == Piece.BLACK_PIECE:
+                    gui.draw_circle(row, col, 'dark red')
+                elif piece == Piece.WHITE_KING:
+                    gui.draw_circle(row, col, 'yellow')
+                elif piece == Piece.WHITE_PIECE:
+                    gui.draw_circle(row, col, 'light yellow')
 
     def is_two_click_game(self) -> bool:
         return True
 
-    def get_moves_from_square(self, board: Board[CheckersMove], row: int, col: int) -> List[Tuple[int, int]]:
+    def get_moves_from_square(self, board: CheckersBoard, row: int, col: int) -> List[Tuple[int, int]]:
         valid_moves = board.get_valid_moves()
         board_width, board_height = board.board_dimensions
         from_index = row * board_width + col
@@ -38,7 +37,7 @@ class CheckersVisuals(GameVisuals[CheckersMove]):
 
     def try_make_move(
         self,
-        board: Board[CheckersMove],
+        board: CheckersBoard,
         from_cell: Optional[Tuple[int, int]],
         to_cell: Tuple[int, int],
     ) -> Optional[CheckersMove]:
