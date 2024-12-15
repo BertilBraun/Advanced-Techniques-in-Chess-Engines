@@ -1,23 +1,27 @@
 import torch
-from AIZeroConnect4Bot.src.games.Game import Game
 from AIZeroConnect4Bot.src.util import lerp
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
 
 if True:
     from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
+    from AIZeroConnect4Bot.src.games.connect4.Connect4Visuals import Connect4Visuals
 
     CURRENT_GAME_MOVE = Connect4Move
-    CURRENT_GAME: Game[Connect4Move] = Connect4Game()
+    CURRENT_GAME = Connect4Game()
+    CURRENT_GAME_VISUALS = Connect4Visuals()
 else:
     from AIZeroConnect4Bot.src.games.checkers.CheckersGame import CheckersGame, CheckersMove
+    from AIZeroConnect4Bot.src.games.checkers.CheckersVisuals import CheckersVisuals
 
     CURRENT_GAME_MOVE = CheckersMove
-    CURRENT_GAME: Game[CheckersMove] = CheckersGame()
+    CURRENT_GAME = CheckersGame()
+    CURRENT_GAME_VISUALS = CheckersVisuals()
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
+TESTING = False
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -66,43 +70,44 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 
 # Test training args to verify the implementation
-NUM_SELF_PLAY_NODES = 4
-PARALLEL_GAMES = 128  # Approximately 5min for 128 games
-TRAINING_ARGS = TrainingArgs(
-    num_iterations=50,
-    num_self_play_iterations=PARALLEL_GAMES * 3 * NUM_SELF_PLAY_NODES,
-    num_parallel_games=PARALLEL_GAMES,
-    num_iterations_per_turn=800,
-    num_epochs=10,
-    batch_size=16,
-    temperature=1.0,
-    dirichlet_epsilon=0.25,
-    dirichlet_alpha=1,
-    c_param=4.0,
-    sampling_window=sampling_window,
-    learning_rate=learning_rate,
-    learning_rate_scheduler=learning_rate_scheduler,
-    save_path=SAVE_PATH,
-    num_train_nodes_on_cluster=0,
-    num_self_play_nodes_on_cluster=NUM_SELF_PLAY_NODES,
-)
-
-# Test training args to verify the implementation
-TEST_TRAINING_ARGS = TrainingArgs(
-    num_iterations=50,
-    num_self_play_iterations=4,
-    num_parallel_games=4,
-    num_iterations_per_turn=100,
-    num_epochs=5,
-    batch_size=64,
-    temperature=1.0,
-    dirichlet_epsilon=0.25,
-    dirichlet_alpha=1,
-    c_param=4.0,
-    sampling_window=sampling_window,
-    learning_rate=learning_rate,
-    learning_rate_scheduler=learning_rate_scheduler,
-    save_path=SAVE_PATH,
-    num_self_play_nodes_on_cluster=1,
-    num_train_nodes_on_cluster=0,
-)
+if torch.cuda.is_available() and not TESTING:
+    NUM_SELF_PLAY_NODES = 4
+    PARALLEL_GAMES = 128  # Approximately 5min for 128 games
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=50,
+        num_self_play_iterations=PARALLEL_GAMES * 3 * NUM_SELF_PLAY_NODES,
+        num_parallel_games=PARALLEL_GAMES,
+        num_iterations_per_turn=800,
+        num_epochs=10,
+        batch_size=16,
+        temperature=1.0,
+        dirichlet_epsilon=0.25,
+        dirichlet_alpha=1,
+        c_param=4.0,
+        sampling_window=sampling_window,
+        learning_rate=learning_rate,
+        learning_rate_scheduler=learning_rate_scheduler,
+        save_path=SAVE_PATH,
+        num_train_nodes_on_cluster=0,
+        num_self_play_nodes_on_cluster=NUM_SELF_PLAY_NODES,
+    )
+else:
+    # Test training args to verify the implementation
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=50,
+        num_self_play_iterations=4,
+        num_parallel_games=4,
+        num_iterations_per_turn=100,
+        num_epochs=5,
+        batch_size=64,
+        temperature=1.0,
+        dirichlet_epsilon=0.25,
+        dirichlet_alpha=1,
+        c_param=4.0,
+        sampling_window=sampling_window,
+        learning_rate=learning_rate,
+        learning_rate_scheduler=learning_rate_scheduler,
+        save_path=SAVE_PATH,
+        num_self_play_nodes_on_cluster=1,
+        num_train_nodes_on_cluster=0,
+    )
