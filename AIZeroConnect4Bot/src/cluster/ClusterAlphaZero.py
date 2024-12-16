@@ -55,7 +55,7 @@ class ClusterAlphaZero(AlphaZero):
         training_stats: list[TrainingStats] = []
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            num_self_play_calls = self.args.num_self_play_iterations // self.self_players
+            num_self_play_calls = self.args.num_self_play_iterations // self.self_players // 2
             self._self_play_and_write_memory(iteration, num_self_play_calls)
             training_stats.append(self._train_and_save_new_model(iteration))
             self._load_latest_model()

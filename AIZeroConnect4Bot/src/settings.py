@@ -75,10 +75,10 @@ if torch.cuda.is_available() and not TESTING:
     PARALLEL_GAMES = 128  # Approximately 5min for 128 games
     TRAINING_ARGS = TrainingArgs(
         num_iterations=50,
-        num_self_play_iterations=PARALLEL_GAMES * 3 * NUM_SELF_PLAY_NODES,
+        num_self_play_iterations=PARALLEL_GAMES * 2 * NUM_SELF_PLAY_NODES,
         num_parallel_games=PARALLEL_GAMES,
         num_iterations_per_turn=800,
-        num_epochs=10,
+        num_epochs=6,
         batch_size=16,
         temperature=1.0,
         dirichlet_epsilon=0.25,
