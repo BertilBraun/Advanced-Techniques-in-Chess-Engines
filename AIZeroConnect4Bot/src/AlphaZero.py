@@ -80,28 +80,6 @@ class AlphaZero:
         self._save_latest_model(iteration)
         return train_stats
 
-    def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
-        """Deduplicate the positions in the memory by averaging the policy and value targets for the same board state."""
-        mp: dict[int, tuple[int, SelfPlayMemory]] = {}
-        for batch in batched_iterate(memory, 128):
-            states = [mem.state for mem in batch]
-            hashes = CURRENT_GAME.hash_boards(torch.stack(states))
-
-            for mem, h in zip(batch, hashes):
-                if h in mp:
-                    count, spm = mp[h]
-                    spm.policy_targets += mem.policy_targets
-                    spm.value_targets += mem.value_targets
-                    mp[h] = (count + 1, spm)
-                else:
-                    mp[h] = (1, mem)
-
-        for count, spm in mp.values():
-            spm.policy_targets /= count
-            spm.value_targets /= count
-
-        return [spm for _, spm in mp.values()]
-
     def _load_latest_model(self) -> None:
         """Load the latest model and optimizer from the last_training_config.pt file if it exists, otherwise start from scratch."""
         try:
@@ -166,8 +144,42 @@ class AlphaZero:
 
     def _load_all_memories(self, iteration: int) -> list[SelfPlayMemory]:
         memory: list[SelfPlayMemory] = []
+        num_files = 0
+
         for f in self.save_path.iterdir():
             if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
                 mapped_memory = torch.load(f, weights_only=True)
                 memory += [SelfPlayMemory(*mem) for mem in mapped_memory]
+                num_files += 1
+                f.unlink()
+
+        if num_files > 1:
+            memory = self._deduplicate_positions(memory)
+
+        torch.save(
+            [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
+            self.save_path / f'memory_{iteration}_deduplicated.pt',
+        )
         return memory
+
+    def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
+        """Deduplicate the positions in the memory by averaging the policy and value targets for the same board state."""
+        mp: dict[int, tuple[int, SelfPlayMemory]] = {}
+        for batch in batched_iterate(memory, 128):
+            states = [mem.state for mem in batch]
+            hashes = CURRENT_GAME.hash_boards(torch.stack(states))
+
+            for mem, h in zip(batch, hashes):
+                if h in mp:
+                    count, spm = mp[h]
+                    spm.policy_targets += mem.policy_targets
+                    spm.value_targets += mem.value_targets
+                    mp[h] = (count + 1, spm)
+                else:
+                    mp[h] = (1, mem)
+
+        for count, spm in mp.values():
+            spm.policy_targets /= count
+            spm.value_targets /= count
+
+        return [spm for _, spm in mp.values()]

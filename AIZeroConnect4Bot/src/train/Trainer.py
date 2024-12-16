@@ -37,6 +37,9 @@ class Trainer:
 
         self.model.train()
 
+        # TODO can we load the samples in training format? - Alternatively at least not convert them from Tensors to SelfPlayMemory
+        # TODO why does it not learn anything?!
+
         for batchIdx, sample in tqdm(
             enumerate(batched_iterate(memory, self.args.batch_size)),
             desc='Training batches',
@@ -63,7 +66,7 @@ class Trainer:
             loss = policy_loss + value_loss
 
             # Update learning rate before stepping the optimizer
-            lr = self.args.learning_rate_scheduler(batchIdx / len(memory), base_lr)
+            lr = self.args.learning_rate_scheduler((batchIdx * self.args.batch_size) / len(memory), base_lr)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
