@@ -1,7 +1,7 @@
 import numpy as np
 
 from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, CURRENT_BOARD
 
 
 def get_board_result_score(board: Board) -> float | None:
@@ -21,7 +21,7 @@ def get_board_result_score(board: Board) -> float | None:
 
 
 def filter_policy_then_get_moves_and_probabilities(
-    policy: np.ndarray, board: Board[CURRENT_GAME_MOVE]
+    policy: np.ndarray, board: CURRENT_BOARD
 ) -> list[tuple[CURRENT_GAME_MOVE, float]]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
@@ -39,7 +39,7 @@ def filter_policy_then_get_moves_and_probabilities(
     return moves_with_probabilities
 
 
-def __filter_policy_with_legal_moves(policy: np.ndarray, board: Board[CURRENT_GAME_MOVE]) -> np.ndarray:
+def __filter_policy_with_legal_moves(policy: np.ndarray, board: CURRENT_BOARD) -> np.ndarray:
     """
     Filters a policy with the legal moves of a chess board.
 

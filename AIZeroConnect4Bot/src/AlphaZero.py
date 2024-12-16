@@ -6,7 +6,7 @@ from pathlib import Path
 
 from AIZeroConnect4Bot.src.util.log import log
 from AIZeroConnect4Bot.src.util import batched_iterate, load_json, random_id
-from AIZeroConnect4Bot.src.Network import Network, clear_cache
+from AIZeroConnect4Bot.src.Network import Network, clear_model_inference_cache
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME
 from AIZeroConnect4Bot.src.train.Trainer import Trainer
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
@@ -98,7 +98,7 @@ class AlphaZero:
                 torch.load(last_training_config['optimizer'], map_location=self.model.device, weights_only=True)
             )
 
-            clear_cache()
+            clear_model_inference_cache()
 
             log(f'Model and optimizer loaded from iteration {self.starting_iteration}')
         except FileNotFoundError:
@@ -129,7 +129,7 @@ class AlphaZero:
     def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
         memory_path = self.save_path / f'memory_{iteration}_{random_id()}.pt'
         torch.save(
-            [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
+            [(mem.state, mem.policy_targets, mem.value_target) for mem in memory],
             memory_path,
         )
         log(f'Memory saved at iteration {iteration}')
@@ -151,15 +151,15 @@ class AlphaZero:
                 mapped_memory = torch.load(f, weights_only=True)
                 memory += [SelfPlayMemory(*mem) for mem in mapped_memory]
                 num_files += 1
-                f.unlink()
+                # f.unlink()
 
-        if num_files > 1:
-            memory = self._deduplicate_positions(memory)
-
-        torch.save(
-            [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
-            self.save_path / f'memory_{iteration}_deduplicated.pt',
-        )
+        # if num_files > 1:
+        #     memory = self._deduplicate_positions(memory)
+        #
+        # torch.save(
+        #     [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
+        #     self.save_path / f'memory_{iteration}_deduplicated.pt',
+        # )
         return memory
 
     def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
@@ -173,13 +173,13 @@ class AlphaZero:
                 if h in mp:
                     count, spm = mp[h]
                     spm.policy_targets += mem.policy_targets
-                    spm.value_targets += mem.value_targets
+                    spm.value_target += mem.value_target
                     mp[h] = (count + 1, spm)
                 else:
                     mp[h] = (1, mem)
 
         for count, spm in mp.values():
             spm.policy_targets /= count
-            spm.value_targets /= count
+            spm.value_target /= count
 
         return [spm for _, spm in mp.values()]

@@ -4,3 +4,5 @@ build/**
 **/last_training_config.json
 **/communication/**
 **/logs/**
+graph*
+**.perf

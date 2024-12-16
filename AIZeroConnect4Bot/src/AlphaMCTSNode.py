@@ -1,14 +1,15 @@
 from __future__ import annotations
+import os
+import time
 
 import numpy as np
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE
+from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
 
 
 class AlphaMCTSNode:
     @classmethod
-    def root(cls, board: Board) -> AlphaMCTSNode:
+    def root(cls, board: CURRENT_BOARD) -> AlphaMCTSNode:
         instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None, num_played_moves=0)
         instance.board = board
         instance.number_of_visits = 1
@@ -17,7 +18,7 @@ class AlphaMCTSNode:
     def __init__(
         self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: AlphaMCTSNode | None, num_played_moves: int
     ) -> None:
-        self.board: Board = None  # type: ignore
+        self.board: CURRENT_BOARD = None  # type: ignore
         self.parent = parent
         self.children: list[AlphaMCTSNode] = []
         self.move_to_get_here = move_to_get_here
@@ -86,9 +87,10 @@ class AlphaMCTSNode:
         q_score = np.zeros(len(self.children), dtype=np.float32)
         visited_children = self.children_number_of_visits > 0
         q_score[visited_children] = (
-            self.children_result_scores[visited_children] / self.children_number_of_visits[visited_children]
+            1
+            - ((self.children_result_scores[visited_children] / self.children_number_of_visits[visited_children]) + 1)
+            / 2
         )
-        q_score = 1 - ((q_score + 1) / 2)
 
         policy_score = c_param * np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 
@@ -109,3 +111,59 @@ policy: {self.policy:.2f}
 move: {self.move_to_get_here}
 children: {len(self.children)}
 )"""
+
+    def show_graph(self):
+        nodes = []
+        edges = []
+        self._show_graph(nodes, edges)
+        print('Max depth, num terminal nodes, num nodes')
+        print(self._collect_stats(self))
+
+        print('Actual num unique nodes:', len(set(nodes)))
+
+        # write in graphviz format
+        with open('graph.dot', 'w') as f:
+            f.write('digraph G {\n')
+            for node in nodes:
+                f.write(f'"{node}" [shape=box];\n')
+            for edge in edges:
+                f.write(f'"{edge[0]}" -> "{edge[1]}";\n')
+            f.write('}\n')
+
+        # convert to png
+        current_time = time.strftime('%Y%m%d-%H%M%S')
+        os.system(f'dot -Tpng graph.dot -o graph_{current_time}.png')
+        os.system(f'graph_{current_time}.png')
+        exit()
+
+    def _collect_stats(self, node, depth=0):
+        if not node.board:
+            # max depth, num terminal nodes, num nodes
+            return 0, 0, 0
+        max_depth = depth
+        num_terminal_nodes = 0
+        num_nodes = 1
+        for child in node.children:
+            child_max_depth, child_num_terminal_nodes, child_num_nodes = self._collect_stats(child, depth + 1)
+            max_depth = max(max_depth, child_max_depth)
+            num_terminal_nodes += child_num_terminal_nodes
+            num_nodes += child_num_nodes
+        if node.board.is_game_over():
+            num_terminal_nodes += 1
+        return max_depth, num_terminal_nodes, num_nodes
+
+    def graph_id(self):
+        return f"""{self.board.to_string(False) if self.board else 'None'}
+visits: {self.number_of_visits}
+score: {self.result_score:.2f}
+policy: {self.policy:.2f}
+ucb: {(round(self.ucb(), 2)) if self.parent else "None"}"""
+
+    def _show_graph(self, nodes, edges):
+        if self.board is None:
+            return
+        nodes.append(self.graph_id())
+        if self.parent:
+            edges.append((self.parent.graph_id(), self.graph_id()))
+        for child in self.children:
+            child._show_graph(nodes, edges)

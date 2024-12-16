@@ -1,10 +1,10 @@
+import time
 from typing import Optional, Tuple
 
 from AIZeroConnect4Bot.src.eval.Bot import Bot
 from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
 from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME_MOVE
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME_MOVE, CURRENT_BOARD
 
 
 class HumanPlayer(Bot):
@@ -15,7 +15,7 @@ class HumanPlayer(Bot):
         self.game_visuals = game_visuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
-    def think(self, board: Board[CURRENT_GAME_MOVE]) -> CURRENT_GAME_MOVE:
+    def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
         # Common input loop for all games
         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
 
@@ -37,7 +37,9 @@ class HumanPlayer(Bot):
                         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(new_board, self.gui))
                         return move
 
-    def handle_click(self, board: Board[CURRENT_GAME_MOVE], cell: Tuple[int, int]) -> Optional[CURRENT_GAME_MOVE]:
+            time.sleep(0.2)
+
+    def handle_click(self, board: CURRENT_BOARD, cell: Tuple[int, int]) -> Optional[CURRENT_GAME_MOVE]:
         # If game is one-click move (like Connect4), we try to form a move immediately
         if not self.game_visuals.is_two_click_game():
             # Single-click logic: just try to form a move

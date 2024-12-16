@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 import time
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME_MOVE
+from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME_MOVE
 
 
 class Bot(ABC):
@@ -13,7 +12,7 @@ class Bot(ABC):
         self.max_time_to_think = max_time_to_think
 
     @abstractmethod
-    def think(self, board: Board[CURRENT_GAME_MOVE]) -> CURRENT_GAME_MOVE:
+    def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
         """This method is called when it's the bot's turn to move. It should return the move that the bot wants to make."""
         raise NotImplementedError('Subclasses must implement this method')
 

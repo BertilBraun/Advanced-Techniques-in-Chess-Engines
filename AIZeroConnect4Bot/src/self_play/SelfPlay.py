@@ -17,7 +17,7 @@ from AIZeroConnect4Bot.src.self_play.SelfPlayGame import SelfPlayGame, SelfPlayG
 class SelfPlayMemory:
     state: torch.Tensor
     policy_targets: torch.Tensor
-    value_targets: float
+    value_target: float
 
 
 class SelfPlay:
@@ -126,7 +126,10 @@ class SelfPlay:
         )
 
         # Add dirichlet noise to the policy to encourage exploration
-        dirichlet_noise = np.random.dirichlet([self.args.dirichlet_alpha] * CURRENT_GAME.action_size)
+        dirichlet_noise = np.random.dirichlet(
+            [self.args.dirichlet_alpha] * CURRENT_GAME.action_size,
+            size=len(self_play_games),
+        )
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
 

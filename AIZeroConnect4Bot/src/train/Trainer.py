@@ -6,11 +6,12 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from AIZeroConnect4Bot.src.util import batched_iterate
-from AIZeroConnect4Bot.src.Network import Network
+from AIZeroConnect4Bot.src.Network import VALUE_OUTPUT_HEADS, Network
 from AIZeroConnect4Bot.src.settings import TORCH_DTYPE
 from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
 from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
 from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlayMemory
+from AIZeroConnect4Bot.src.util.log import log
 
 
 class Trainer:
@@ -39,20 +40,22 @@ class Trainer:
 
         # TODO can we load the samples in training format? - Alternatively at least not convert them from Tensors to SelfPlayMemory
         # TODO why does it not learn anything?!
+        # - Learning rate is too high? too low?
+        # - Samples correct?
+        # - MCTS correct? - doesn't seem to be the case with tictactoe
 
-        for batchIdx, sample in tqdm(
-            enumerate(batched_iterate(memory, self.args.batch_size)),
-            desc='Training batches',
-            total=len(memory) // self.args.batch_size,
-        ):
-            state = [mem.state for mem in sample]
-            policy_targets = [mem.policy_targets for mem in sample]
-            value_targets = [mem.value_targets for mem in sample]
+        validation_batch = memory[: self.args.batch_size]
+        memory = memory[self.args.batch_size :]
+
+        def calculate_loss_for_batch(batch: list[SelfPlayMemory]):
+            state = [mem.state for mem in batch]
+            policy_targets = [mem.policy_targets for mem in batch]
+            value_targets = [[mem.value_target] * VALUE_OUTPUT_HEADS for mem in batch]
 
             state, policy_targets, value_targets = (
                 np.array(state),
                 np.array(policy_targets),
-                np.array(value_targets).reshape(-1, 1),
+                np.array(value_targets),
             )
 
             state = torch.tensor(state, dtype=TORCH_DTYPE, device=self.model.device)
@@ -60,10 +63,27 @@ class Trainer:
             value_targets = torch.tensor(value_targets, dtype=TORCH_DTYPE, device=self.model.device)
 
             out_policy, out_value = self.model(state)
+            # out_value is of shape (batch_size, 32), we want to run MSE on each value separately and add the sum to the total loss
 
             policy_loss = F.cross_entropy(out_policy, policy_targets)
-            value_loss = F.mse_loss(out_value, value_targets)
+            # Are mutliple heads really sensible?
+            # TODO mult by 10 to make it more impactful??
+            value_loss = F.mse_loss(out_value * 2, value_targets * 2, reduction='sum')
             loss = policy_loss + value_loss
+
+            # example for value loss
+            # targets = torch.tensor([1, 2, 3, 4, 5], dtype=TORCH_DTYPE)
+            # outputs = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10] for _ in range(5)], dtype=TORCH_DTYPE)
+            # print(F.mse_loss(outputs, targets, reduction='none'))
+
+            return policy_loss, value_loss, loss
+
+        for batchIdx, sample in tqdm(
+            enumerate(batched_iterate(memory, self.args.batch_size)),
+            desc='Training batches',
+            total=len(memory) // self.args.batch_size,
+        ):
+            policy_loss, value_loss, loss = calculate_loss_for_batch(sample)
 
             # Update learning rate before stepping the optimizer
             lr = self.args.learning_rate_scheduler((batchIdx * self.args.batch_size) / len(memory), base_lr)
@@ -75,5 +95,11 @@ class Trainer:
             self.optimizer.step()
 
             train_stats.update(policy_loss.item(), value_loss.item(), loss.item())
+
+        with torch.no_grad():
+            validation_policy_loss, validation_value_loss, validation_loss = calculate_loss_for_batch(validation_batch)
+            log(f'Validation loss: {validation_loss.item()}')
+            log(f'Validation policy loss: {validation_policy_loss.item()}')
+            log(f'Validation value loss: {validation_value_loss.item()}')
 
         return train_stats

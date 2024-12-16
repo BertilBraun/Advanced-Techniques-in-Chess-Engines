@@ -8,10 +8,12 @@ from AIZeroConnect4Bot.src.util.log import log, ratio
 from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
 
 
-NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
+VALUE_OUTPUT_HEADS = 32
 
-TOTAL_EVALS = 0
-TOTAL_HITS = 0
+_NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
+
+_TOTAL_EVALS = 0
+_TOTAL_HITS = 0
 
 
 @torch.no_grad()
@@ -22,37 +24,39 @@ def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tenso
     to_process = []
     to_process_hashes = []
     for i, h in enumerate(hashes):
-        if h not in NN_CACHE or h in hashes[:i]:
+        if h not in _NN_CACHE or h in hashes[:i]:
             to_process.append(x[i])
             to_process_hashes.append(h)
 
     if to_process:
-        # if any device index is not the same as the network device index, log a warning
         policy, value = network(torch.stack(to_process))
         for hash, p, v in zip(to_process_hashes, policy, value):
-            NN_CACHE[hash] = (p, v)
+            _NN_CACHE[hash] = (p, v)
 
-    global TOTAL_EVALS, TOTAL_HITS
-    TOTAL_EVALS += len(x)
-    TOTAL_HITS += len(x) - len(to_process)
+    global _TOTAL_EVALS, _TOTAL_HITS
+    _TOTAL_EVALS += len(x)
+    _TOTAL_HITS += len(x) - len(to_process)
 
-    policies = torch.stack([NN_CACHE[hash][0] for hash in hashes])
-    values = torch.stack([NN_CACHE[hash][1] for hash in hashes])
+    policies = torch.stack([_NN_CACHE[hash][0] for hash in hashes])
+    values = torch.stack([_NN_CACHE[hash][1] for hash in hashes])
     return policies, values
 
 
 def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray, np.ndarray]:
     result: tuple[Tensor, Tensor] = cached_network_forward(network, x)
-    policy, value = result
+    policy, values = result
     policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-    value = value.squeeze(1).to(dtype=torch.float32, device='cpu').numpy()
+    values = values.to(dtype=torch.float32, device='cpu').numpy()
+    value = np.mean(values, axis=1)
+    for board, p, v in zip(x, policy, value):
+        print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
     return policy, value
 
 
-def clear_cache() -> None:
-    if TOTAL_EVALS != 0:
-        log('Cache hit rate:', ratio(TOTAL_HITS, TOTAL_EVALS), 'on cache size', len(NN_CACHE))
-    NN_CACHE.clear()
+def clear_model_inference_cache() -> None:
+    if _TOTAL_EVALS != 0:
+        log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', len(_NN_CACHE))
+    _NN_CACHE.clear()
 
 
 class Network(nn.Module):
@@ -96,7 +100,7 @@ class Network(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(32 * row_count * column_count, 1),
+            nn.Linear(32 * row_count * column_count, VALUE_OUTPUT_HEADS),
             nn.Tanh(),
         )
 
@@ -108,6 +112,7 @@ class Network(nn.Module):
             x = resBlock(x)
         policy = self.policyHead(x)
         value = self.valueHead(x)
+        # print('Forward pass:', policy, value)
         return policy, value
 
 

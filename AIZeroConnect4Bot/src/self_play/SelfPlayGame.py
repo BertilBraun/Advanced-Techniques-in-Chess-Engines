@@ -1,15 +1,14 @@
 import numpy as np
 from dataclasses import dataclass
 
-from AIZeroConnect4Bot.src.games.Game import Board
 from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
 from AIZeroConnect4Bot.src.Encoding import get_board_result_score
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME
+from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME
 
 
 @dataclass
 class SelfPlayGameMemory:
-    board: Board
+    board: CURRENT_BOARD
     action_probabilities: np.ndarray
 
 

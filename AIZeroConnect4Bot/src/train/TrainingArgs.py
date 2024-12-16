@@ -34,7 +34,7 @@ class TrainingArgs:
     """This is the sampling temperature to use for the MCTS algorithm in self-play"""
 
     dirichlet_epsilon: float
-    """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration"""
+    """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
 
     dirichlet_alpha: float
     """This is the alpha value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. Apparently the value should be around 10/number_of_actions. So for Connect4 with 7 columns this value should be around 1.5, and for chess with 400 possible moves this value should be around 0.025"""

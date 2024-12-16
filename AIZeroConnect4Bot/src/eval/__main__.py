@@ -25,8 +25,8 @@ if __name__ == '__main__':
     MAX_TIME_TO_THINK = 1.0
 
     game_manager = GameManager(
-        CommonHumanPlayer(),
         AlphaZeroBot(model_path, max_time_to_think=MAX_TIME_TO_THINK),
+        CommonHumanPlayer(),
     )
 
     log('Final Result - Winner:', game_manager.play_game())
