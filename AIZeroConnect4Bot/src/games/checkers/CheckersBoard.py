@@ -8,19 +8,21 @@ from AIZeroConnect4Bot.src.games.Game import Board, Player
 CheckersMove = Tuple[int, int]
 _CheckersMove = Tuple[int, int, List[int]]  # start, end, captures
 
+uint64 = int
+
 BOARD_SIZE = 8
 BOARD_SQUARES = BOARD_SIZE * BOARD_SIZE
 
 # File masks to prevent wrapping
-A_FILE = 0x0101010101010101  # leftmost column bits set
-H_FILE = 0x8080808080808080  # rightmost column bits set
+A_FILE: uint64 = 0x0101010101010101  # leftmost column bits set
+H_FILE: uint64 = 0x8080808080808080  # rightmost column bits set
 
 # Mask for 64-bit
-FULL_64 = (1 << 64) - 1
+FULL_64: uint64 = (1 << 64) - 1
 
 # Starting positions (bitboards)
 # Black piece:
-BLACK_MEN_START = (
+BLACK_MEN_START: uint64 = (
     (1 << 1)
     | (1 << 3)
     | (1 << 5)
@@ -36,7 +38,7 @@ BLACK_MEN_START = (
 )
 
 # White piece:
-WHITE_MEN_START = (
+WHITE_MEN_START: uint64 = (
     (1 << 40)
     | (1 << 42)
     | (1 << 44)
@@ -52,8 +54,8 @@ WHITE_MEN_START = (
 )
 
 # Promotion rows:
-BLACK_PROMOTION_ROW = 0xFF00000000000000  # top row (row 7 in index terms, bits 56-63)
-WHITE_PROMOTION_ROW = 0x00000000000000FF  # bottom row (row 0 in index terms, bits 0-7)
+BLACK_PROMOTION_ROW: uint64 = 0xFF00000000000000  # top row (row 7 in index terms, bits 56-63)
+WHITE_PROMOTION_ROW: uint64 = 0x00000000000000FF  # bottom row (row 0 in index terms, bits 0-7)
 
 
 DR_SHIFT = -(BOARD_SIZE + 1)
@@ -62,39 +64,31 @@ UR_SHIFT = BOARD_SIZE - 1
 UL_SHIFT = BOARD_SIZE + 1
 
 
-def _bit_set(bitboard: int, index: int) -> bool:
+def _bit_set(bitboard: uint64, index: int) -> bool:
     return (bitboard & ((1) << (index))) != 0
 
 
-def _down_right(bitboard: int) -> int:
+def _down_right(bitboard: uint64) -> uint64:
     return (bitboard & ~H_FILE) << (BOARD_SIZE + 1)
 
 
-def _down_left(bitboard: int) -> int:
+def _down_left(bitboard: uint64) -> uint64:
     return (bitboard & ~A_FILE) << (BOARD_SIZE - 1)
 
 
-def _up_right(bitboard: int) -> int:
+def _up_right(bitboard: uint64) -> uint64:
     return (bitboard & ~H_FILE) >> (BOARD_SIZE - 1)
 
 
-def _up_left(bitboard: int) -> int:
+def _up_left(bitboard: uint64) -> uint64:
     return (bitboard & ~A_FILE) >> (BOARD_SIZE + 1)
 
 
-def _least_significant_bit(bitboard: int) -> int:
+def _least_significant_bit(bitboard: uint64) -> int:
     return (bitboard & -bitboard).bit_length() - 1
 
 
-BITBOARD_INDEX_LOOKUP_TABLE = [[i for i in range(j.bit_length()) if j & (1 << i)] for j in range(256)]
-
-
-def _bitboard_to_list2(bitboard: int) -> List[int]:
-    unsigned_big = bitboard.to_bytes(8, 'little', signed=False)
-    return [i + rpos for i, b in zip(range(0, 64, 8), unsigned_big) for rpos in BITBOARD_INDEX_LOOKUP_TABLE[b]]
-
-
-def _bitboard_to_list(bitboard: int) -> List[int]:
+def _bitboard_to_list(bitboard: uint64) -> List[int]:
     indices = []
     working = bitboard
     while working:
@@ -104,7 +98,7 @@ def _bitboard_to_list(bitboard: int) -> List[int]:
     return indices
 
 
-def _decode_moves(starts: int, ends: int, shift: int) -> List[_CheckersMove]:
+def _decode_moves(starts: uint64, ends: uint64, shift: int) -> List[_CheckersMove]:
     moves: List[_CheckersMove] = []
     for end_square in _bitboard_to_list(ends):
         start_square = end_square + shift
@@ -113,12 +107,12 @@ def _decode_moves(starts: int, ends: int, shift: int) -> List[_CheckersMove]:
     return moves
 
 
-MaskFunc = Callable[[int], int]
+MaskFunc = Callable[[uint64], uint64]
 
 
 def _piece_normal_moves(
-    pieces: int,
-    empty: int,
+    pieces: uint64,
+    empty: uint64,
     shift: int,
     mask_func: MaskFunc,
 ) -> List[_CheckersMove]:
@@ -126,19 +120,21 @@ def _piece_normal_moves(
     return _decode_moves(pieces, piece_moves, shift)
 
 
-def _black_piece_normal_moves(pieces: int, empty: int) -> List[_CheckersMove]:
+def _black_piece_normal_moves(pieces: uint64, empty: uint64) -> List[_CheckersMove]:
     dl_moves = _piece_normal_moves(pieces, empty, DL_SHIFT, _down_left)
     dr_moves = _piece_normal_moves(pieces, empty, DR_SHIFT, _down_right)
     return dl_moves + dr_moves
 
 
-def _white_piece_normal_moves(pieces: int, empty: int) -> List[_CheckersMove]:
+def _white_piece_normal_moves(pieces: uint64, empty: uint64) -> List[_CheckersMove]:
     ul_moves = _piece_normal_moves(pieces, empty, UL_SHIFT, _up_left)
     ur_moves = _piece_normal_moves(pieces, empty, UR_SHIFT, _up_right)
     return ul_moves + ur_moves
 
 
-def _piece_single_captures(pieces: int, enemy: int, empty: int, shift: int, mask_func: MaskFunc) -> List[_CheckersMove]:
+def _piece_single_captures(
+    pieces: uint64, enemy: uint64, empty: uint64, shift: int, mask_func: MaskFunc
+) -> List[_CheckersMove]:
     step = mask_func(pieces) & enemy
     cap = mask_func(step) & empty
     moves = _decode_moves(pieces, cap, 2 * shift)
@@ -147,13 +143,13 @@ def _piece_single_captures(pieces: int, enemy: int, empty: int, shift: int, mask
     return moves
 
 
-def _black_piece_single_captures(pieces: int, enemy: int, empty: int) -> List[_CheckersMove]:
+def _black_piece_single_captures(pieces: uint64, enemy: uint64, empty: uint64) -> List[_CheckersMove]:
     dl_captures = _piece_single_captures(pieces, enemy, empty, DL_SHIFT, _down_left)
     dr_captures = _piece_single_captures(pieces, enemy, empty, DR_SHIFT, _down_right)
     return dl_captures + dr_captures
 
 
-def _white_piece_single_captures(pieces: int, enemy: int, empty: int) -> List[_CheckersMove]:
+def _white_piece_single_captures(pieces: uint64, enemy: uint64, empty: uint64) -> List[_CheckersMove]:
     ul_captures = _piece_single_captures(pieces, enemy, empty, UL_SHIFT, _up_left)
     ur_captures = _piece_single_captures(pieces, enemy, empty, UR_SHIFT, _up_right)
     return ul_captures + ur_captures
@@ -162,7 +158,7 @@ def _white_piece_single_captures(pieces: int, enemy: int, empty: int) -> List[_C
 DIRECTIONS = ((DR_SHIFT, (1, 1)), (DL_SHIFT, (-1, 1)), (UR_SHIFT, (1, -1)), (UL_SHIFT, (-1, -1)))
 
 
-def _king_moves(occupied: int, enemy: int, start: int) -> Tuple[List[_CheckersMove], List[_CheckersMove]]:
+def _king_moves(occupied: uint64, enemy: uint64, start: int) -> Tuple[List[_CheckersMove], List[_CheckersMove]]:
     normal_moves: List[_CheckersMove] = []
     captures: List[_CheckersMove] = []
 
@@ -207,8 +203,8 @@ def _check_further_capture(
     shift: int,
     dx: int,
     dy: int,
-    enemy: int,
-    empty: int,
+    enemy: uint64,
+    empty: uint64,
 ) -> Optional[_CheckersMove]:
     ey, ex = divmod(end, BOARD_SIZE)
     if (
@@ -225,8 +221,8 @@ def _check_further_capture(
 
 def _expand_single_captures(
     piece_captures: List[_CheckersMove],
-    enemy: int,
-    empty: int,
+    enemy: uint64,
+    empty: uint64,
     shift_left: int,
     shift_right: int,
     dy: int,
@@ -255,7 +251,7 @@ def _expand_single_captures(
     return all_captures
 
 
-def _black_moves(pieces: int, kings: int, enemy: int, empty: int) -> List[_CheckersMove]:
+def _black_moves(pieces: uint64, kings: uint64, enemy: uint64, empty: uint64) -> List[_CheckersMove]:
     piece_captures = _black_piece_single_captures(pieces, enemy, empty)
     if piece_captures:
         all_captures = _expand_single_captures(piece_captures, enemy, empty, DL_SHIFT, DR_SHIFT, 1)
@@ -275,7 +271,7 @@ def _black_moves(pieces: int, kings: int, enemy: int, empty: int) -> List[_Check
     return all_moves
 
 
-def _white_moves(pieces: int, kings: int, enemy: int, empty: int) -> List[_CheckersMove]:
+def _white_moves(pieces: uint64, kings: uint64, enemy: uint64, empty: uint64) -> List[_CheckersMove]:
     piece_captures = _white_piece_single_captures(pieces, enemy, empty)
     if piece_captures:
         all_captures = _expand_single_captures(piece_captures, enemy, empty, UL_SHIFT, UR_SHIFT, -1)
@@ -305,10 +301,10 @@ class Piece(Enum):
 class CheckersBoard(Board[CheckersMove]):
     def __init__(self) -> None:
         super().__init__()
-        self.black_pieces: int = BLACK_MEN_START
-        self.black_kings: int = 0
-        self.white_pieces: int = WHITE_MEN_START
-        self.white_kings: int = 0
+        self.black_pieces: uint64 = BLACK_MEN_START
+        self.black_kings: uint64 = 0
+        self.white_pieces: uint64 = WHITE_MEN_START
+        self.white_kings: uint64 = 0
 
     @property
     def board_dimensions(self) -> Tuple[int, int]:
@@ -434,22 +430,22 @@ class CheckersBoard(Board[CheckersMove]):
         game.current_player = self.current_player
         return game
 
-    def _occupied(self) -> int:
+    def _occupied(self) -> uint64:
         return self.black_pieces | self.black_kings | self.white_pieces | self.white_kings
 
-    def _empty(self) -> int:
+    def _empty(self) -> uint64:
         return ~self._occupied() & FULL_64
 
-    def _opponent_pieces(self) -> int:
+    def _opponent_pieces(self) -> uint64:
         if self.current_player == 1:  # black to move
             return self.white_pieces | self.white_kings
         else:
             return self.black_pieces | self.black_kings
 
-    def _friendly_piece(self) -> int:
+    def _friendly_piece(self) -> uint64:
         return self.black_pieces if self.current_player == 1 else self.white_pieces
 
-    def _friendly_kings(self) -> int:
+    def _friendly_kings(self) -> uint64:
         return self.black_kings if self.current_player == 1 else self.white_kings
 
 
