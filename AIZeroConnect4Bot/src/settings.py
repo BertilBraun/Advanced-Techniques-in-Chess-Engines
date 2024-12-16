@@ -33,12 +33,14 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 10:
-        return 1.0
+        return 0.2
     if current_iteration < 20:
-        return 0.1
-    if current_iteration < 30:
         return 0.05
-    return 0.005
+    if current_iteration < 30:
+        return 0.02
+    if current_iteration < 50:
+        return 0.005
+    return 0.002
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
@@ -71,14 +73,16 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 # Test training args to verify the implementation
 if torch.cuda.is_available() and not TESTING:
-    NUM_SELF_PLAY_NODES = 4
+    NUM_NODES = 8
+    NUM_TRAINERS = 1
+    NUM_SELF_PLAY_NODES = NUM_NODES - NUM_TRAINERS
     PARALLEL_GAMES = 128  # Approximately 5min for 128 games
     TRAINING_ARGS = TrainingArgs(
         num_iterations=50,
         num_self_play_iterations=PARALLEL_GAMES * 2 * NUM_SELF_PLAY_NODES,
         num_parallel_games=PARALLEL_GAMES,
         num_iterations_per_turn=800,
-        num_epochs=6,
+        num_epochs=5,
         batch_size=16,
         temperature=1.0,
         dirichlet_epsilon=0.25,
@@ -88,7 +92,7 @@ if torch.cuda.is_available() and not TESTING:
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
         save_path=SAVE_PATH,
-        num_train_nodes_on_cluster=0,
+        num_train_nodes_on_cluster=1,
         num_self_play_nodes_on_cluster=NUM_SELF_PLAY_NODES,
     )
 else:
