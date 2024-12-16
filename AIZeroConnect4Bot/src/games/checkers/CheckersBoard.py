@@ -4,8 +4,6 @@ from typing import Callable, Optional, List, Tuple
 
 from AIZeroConnect4Bot.src.games.Game import Board, Player
 
-# NOTE: Somehow.. For some reason.. The int type is faster by a factor of 2 than the np.uint64 type.
-np_uint64 = int
 
 CheckersMove = Tuple[int, int]
 _CheckersMove = Tuple[int, int, List[int]]  # start, end, captures
@@ -14,15 +12,15 @@ BOARD_SIZE = 8
 BOARD_SQUARES = BOARD_SIZE * BOARD_SIZE
 
 # File masks to prevent wrapping
-A_FILE = np_uint64(0x0101010101010101)  # leftmost column bits set
-H_FILE = np_uint64(0x8080808080808080)  # rightmost column bits set
+A_FILE = 0x0101010101010101  # leftmost column bits set
+H_FILE = 0x8080808080808080  # rightmost column bits set
 
 # Mask for 64-bit
-FULL_64 = np_uint64((1 << 64) - 1)
+FULL_64 = (1 << 64) - 1
 
 # Starting positions (bitboards)
 # Black piece:
-BLACK_MEN_START = np_uint64(
+BLACK_MEN_START = (
     (1 << 1)
     | (1 << 3)
     | (1 << 5)
@@ -38,7 +36,7 @@ BLACK_MEN_START = np_uint64(
 )
 
 # White piece:
-WHITE_MEN_START = np_uint64(
+WHITE_MEN_START = (
     (1 << 40)
     | (1 << 42)
     | (1 << 44)
@@ -54,8 +52,8 @@ WHITE_MEN_START = np_uint64(
 )
 
 # Promotion rows:
-BLACK_PROMOTION_ROW = np_uint64(0xFF00000000000000)  # top row (row 7 in index terms, bits 56-63)
-WHITE_PROMOTION_ROW = np_uint64(0x00000000000000FF)  # bottom row (row 0 in index terms, bits 0-7)
+BLACK_PROMOTION_ROW = 0xFF00000000000000  # top row (row 7 in index terms, bits 56-63)
+WHITE_PROMOTION_ROW = 0x00000000000000FF  # bottom row (row 0 in index terms, bits 0-7)
 
 
 DR_SHIFT = -(BOARD_SIZE + 1)
@@ -64,42 +62,49 @@ UR_SHIFT = BOARD_SIZE - 1
 UL_SHIFT = BOARD_SIZE + 1
 
 
-def _bit_set(bitboard: np_uint64, index: int) -> bool:
-    return (bitboard & (np_uint64(1) << np_uint64(index))) != 0
+def _bit_set(bitboard: int, index: int) -> bool:
+    return (bitboard & ((1) << (index))) != 0
 
 
-def _down_right(bitboard: np_uint64) -> np_uint64:
-    return np_uint64((bitboard & ~H_FILE) << np_uint64(BOARD_SIZE + 1))
+def _down_right(bitboard: int) -> int:
+    return (bitboard & ~H_FILE) << (BOARD_SIZE + 1)
 
 
-def _down_left(bitboard: np_uint64) -> np_uint64:
-    return np_uint64((bitboard & ~A_FILE) << np_uint64(BOARD_SIZE - 1))
+def _down_left(bitboard: int) -> int:
+    return (bitboard & ~A_FILE) << (BOARD_SIZE - 1)
 
 
-def _up_right(bitboard: np_uint64) -> np_uint64:
-    return np_uint64((bitboard & ~H_FILE) >> np_uint64(BOARD_SIZE - 1))
+def _up_right(bitboard: int) -> int:
+    return (bitboard & ~H_FILE) >> (BOARD_SIZE - 1)
 
 
-def _up_left(bitboard: np_uint64) -> np_uint64:
-    return np_uint64((bitboard & ~A_FILE) >> np_uint64(BOARD_SIZE + 1))
+def _up_left(bitboard: int) -> int:
+    return (bitboard & ~A_FILE) >> (BOARD_SIZE + 1)
 
 
-def _least_significant_bit(bitboard: np_uint64) -> int:
-    int_bb = int(bitboard)
-    return (int_bb & -int_bb).bit_length() - 1
+def _least_significant_bit(bitboard: int) -> int:
+    return (bitboard & -bitboard).bit_length() - 1
 
 
-def _bitboard_to_list(bitboard: np_uint64) -> List[int]:
+BITBOARD_INDEX_LOOKUP_TABLE = [[i for i in range(j.bit_length()) if j & (1 << i)] for j in range(256)]
+
+
+def _bitboard_to_list2(bitboard: int) -> List[int]:
+    unsigned_big = bitboard.to_bytes(8, 'little', signed=False)
+    return [i + rpos for i, b in zip(range(0, 64, 8), unsigned_big) for rpos in BITBOARD_INDEX_LOOKUP_TABLE[b]]
+
+
+def _bitboard_to_list(bitboard: int) -> List[int]:
     indices = []
     working = bitboard
     while working:
         index = _least_significant_bit(working)
         indices.append(index)
-        working &= ~(np_uint64(1) << np_uint64(index))
+        working &= ~((1) << (index))
     return indices
 
 
-def _decode_moves(starts: np_uint64, ends: np_uint64, shift: int) -> List[_CheckersMove]:
+def _decode_moves(starts: int, ends: int, shift: int) -> List[_CheckersMove]:
     moves: List[_CheckersMove] = []
     for end_square in _bitboard_to_list(ends):
         start_square = end_square + shift
@@ -108,12 +113,12 @@ def _decode_moves(starts: np_uint64, ends: np_uint64, shift: int) -> List[_Check
     return moves
 
 
-MaskFunc = Callable[[np_uint64], np_uint64]
+MaskFunc = Callable[[int], int]
 
 
 def _piece_normal_moves(
-    pieces: np_uint64,
-    empty: np_uint64,
+    pieces: int,
+    empty: int,
     shift: int,
     mask_func: MaskFunc,
 ) -> List[_CheckersMove]:
@@ -121,21 +126,19 @@ def _piece_normal_moves(
     return _decode_moves(pieces, piece_moves, shift)
 
 
-def _black_piece_normal_moves(pieces: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _black_piece_normal_moves(pieces: int, empty: int) -> List[_CheckersMove]:
     dl_moves = _piece_normal_moves(pieces, empty, DL_SHIFT, _down_left)
     dr_moves = _piece_normal_moves(pieces, empty, DR_SHIFT, _down_right)
     return dl_moves + dr_moves
 
 
-def _white_piece_normal_moves(pieces: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _white_piece_normal_moves(pieces: int, empty: int) -> List[_CheckersMove]:
     ul_moves = _piece_normal_moves(pieces, empty, UL_SHIFT, _up_left)
     ur_moves = _piece_normal_moves(pieces, empty, UR_SHIFT, _up_right)
     return ul_moves + ur_moves
 
 
-def _piece_single_captures(
-    pieces: np_uint64, enemy: np_uint64, empty: np_uint64, shift: int, mask_func: MaskFunc
-) -> List[_CheckersMove]:
+def _piece_single_captures(pieces: int, enemy: int, empty: int, shift: int, mask_func: MaskFunc) -> List[_CheckersMove]:
     step = mask_func(pieces) & enemy
     cap = mask_func(step) & empty
     moves = _decode_moves(pieces, cap, 2 * shift)
@@ -144,13 +147,13 @@ def _piece_single_captures(
     return moves
 
 
-def _black_piece_single_captures(pieces: np_uint64, enemy: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _black_piece_single_captures(pieces: int, enemy: int, empty: int) -> List[_CheckersMove]:
     dl_captures = _piece_single_captures(pieces, enemy, empty, DL_SHIFT, _down_left)
     dr_captures = _piece_single_captures(pieces, enemy, empty, DR_SHIFT, _down_right)
     return dl_captures + dr_captures
 
 
-def _white_piece_single_captures(pieces: np_uint64, enemy: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _white_piece_single_captures(pieces: int, enemy: int, empty: int) -> List[_CheckersMove]:
     ul_captures = _piece_single_captures(pieces, enemy, empty, UL_SHIFT, _up_left)
     ur_captures = _piece_single_captures(pieces, enemy, empty, UR_SHIFT, _up_right)
     return ul_captures + ur_captures
@@ -159,7 +162,7 @@ def _white_piece_single_captures(pieces: np_uint64, enemy: np_uint64, empty: np_
 DIRECTIONS = ((DR_SHIFT, (1, 1)), (DL_SHIFT, (-1, 1)), (UR_SHIFT, (1, -1)), (UL_SHIFT, (-1, -1)))
 
 
-def _king_moves(occupied: np_uint64, enemy: np_uint64, start: int) -> Tuple[List[_CheckersMove], List[_CheckersMove]]:
+def _king_moves(occupied: int, enemy: int, start: int) -> Tuple[List[_CheckersMove], List[_CheckersMove]]:
     normal_moves: List[_CheckersMove] = []
     captures: List[_CheckersMove] = []
 
@@ -177,15 +180,15 @@ def _king_moves(occupied: np_uint64, enemy: np_uint64, start: int) -> Tuple[List
                 if _bit_set(enemy, pos):
                     # capture
                     if 0 <= px + dx < BOARD_SIZE and 0 <= py + dy < BOARD_SIZE and not _bit_set(occupied, pos - shift):
-                        occupied &= ~(np_uint64(1) << np_uint64(pos))
-                        occupied &= ~(np_uint64(1) << np_uint64(start))
-                        occupied |= np_uint64(1) << np_uint64(pos - shift)
-                        enemy &= ~(np_uint64(1) << np_uint64(pos))
+                        occupied &= ~((1) << (pos))
+                        occupied &= ~((1) << (start))
+                        occupied |= (1) << (pos - shift)
+                        enemy &= ~((1) << (pos))
                         _, next_captures = _king_moves(occupied, enemy, pos - shift)
-                        occupied |= np_uint64(1) << np_uint64(start)
-                        occupied |= np_uint64(1) << np_uint64(pos)
-                        occupied &= ~(np_uint64(1) << np_uint64(pos - shift))
-                        enemy |= np_uint64(1) << np_uint64(pos)
+                        occupied |= (1) << (start)
+                        occupied |= (1) << (pos)
+                        occupied &= ~((1) << (pos - shift))
+                        enemy |= (1) << (pos)
                         for s, e, capt in next_captures:
                             captures.append((start, e, [pos] + capt))
                         if not next_captures:
@@ -204,8 +207,8 @@ def _check_further_capture(
     shift: int,
     dx: int,
     dy: int,
-    enemy: np_uint64,
-    empty: np_uint64,
+    enemy: int,
+    empty: int,
 ) -> Optional[_CheckersMove]:
     ey, ex = divmod(end, BOARD_SIZE)
     if (
@@ -222,8 +225,8 @@ def _check_further_capture(
 
 def _expand_single_captures(
     piece_captures: List[_CheckersMove],
-    enemy: np_uint64,
-    empty: np_uint64,
+    enemy: int,
+    empty: int,
     shift_left: int,
     shift_right: int,
     dy: int,
@@ -252,7 +255,7 @@ def _expand_single_captures(
     return all_captures
 
 
-def _black_moves(pieces: np_uint64, kings: np_uint64, enemy: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _black_moves(pieces: int, kings: int, enemy: int, empty: int) -> List[_CheckersMove]:
     piece_captures = _black_piece_single_captures(pieces, enemy, empty)
     if piece_captures:
         all_captures = _expand_single_captures(piece_captures, enemy, empty, DL_SHIFT, DR_SHIFT, 1)
@@ -272,7 +275,7 @@ def _black_moves(pieces: np_uint64, kings: np_uint64, enemy: np_uint64, empty: n
     return all_moves
 
 
-def _white_moves(pieces: np_uint64, kings: np_uint64, enemy: np_uint64, empty: np_uint64) -> List[_CheckersMove]:
+def _white_moves(pieces: int, kings: int, enemy: int, empty: int) -> List[_CheckersMove]:
     piece_captures = _white_piece_single_captures(pieces, enemy, empty)
     if piece_captures:
         all_captures = _expand_single_captures(piece_captures, enemy, empty, UL_SHIFT, UR_SHIFT, -1)
@@ -302,10 +305,10 @@ class Piece(Enum):
 class CheckersBoard(Board[CheckersMove]):
     def __init__(self) -> None:
         super().__init__()
-        self.black_pieces: np_uint64 = BLACK_MEN_START
-        self.black_kings: np_uint64 = np_uint64(0)
-        self.white_pieces: np_uint64 = WHITE_MEN_START
-        self.white_kings: np_uint64 = np_uint64(0)
+        self.black_pieces: int = BLACK_MEN_START
+        self.black_kings: int = 0
+        self.white_pieces: int = WHITE_MEN_START
+        self.white_kings: int = 0
 
     @property
     def board_dimensions(self) -> Tuple[int, int]:
@@ -356,15 +359,15 @@ class CheckersBoard(Board[CheckersMove]):
         for s, e, captures in self._get_valid_moves():
             if s == start and e == end:
                 for capture in captures:
-                    capture_mask = np_uint64(1 << capture)
+                    capture_mask = 1 << capture
                     self.white_pieces &= ~capture_mask
                     self.white_kings &= ~capture_mask
                     self.black_pieces &= ~capture_mask
                     self.black_kings &= ~capture_mask
                 break
 
-        start_mask = np_uint64(1 << start)
-        end_mask = np_uint64(1 << end)
+        start_mask = 1 << start
+        end_mask = 1 << end
 
         # Move piece:
         if self.current_player == 1:
@@ -431,26 +434,27 @@ class CheckersBoard(Board[CheckersMove]):
         game.current_player = self.current_player
         return game
 
-    def _occupied(self) -> np_uint64:
+    def _occupied(self) -> int:
         return self.black_pieces | self.black_kings | self.white_pieces | self.white_kings
 
-    def _empty(self) -> np_uint64:
+    def _empty(self) -> int:
         return ~self._occupied() & FULL_64
 
-    def _opponent_pieces(self) -> np_uint64:
+    def _opponent_pieces(self) -> int:
         if self.current_player == 1:  # black to move
             return self.white_pieces | self.white_kings
         else:
             return self.black_pieces | self.black_kings
 
-    def _friendly_piece(self) -> np_uint64:
+    def _friendly_piece(self) -> int:
         return self.black_pieces if self.current_player == 1 else self.white_pieces
 
-    def _friendly_kings(self) -> np_uint64:
+    def _friendly_kings(self) -> int:
         return self.black_kings if self.current_player == 1 else self.white_kings
 
 
 if __name__ == '__main__':
+    import time
 
     def dfs(board, depth):
         if depth == 0:
@@ -459,8 +463,6 @@ if __name__ == '__main__':
             new_board = board.copy()
             new_board.make_move(move)
             dfs(new_board, depth - 1)
-
-    import time
 
     start = time.time()
     dfs(CheckersBoard(), 6)
