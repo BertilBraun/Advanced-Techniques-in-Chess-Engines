@@ -13,6 +13,8 @@ from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
 from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlayMemory
 from AIZeroConnect4Bot.src.util.log import log
 
+# TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
+
 
 class Trainer:
     def __init__(

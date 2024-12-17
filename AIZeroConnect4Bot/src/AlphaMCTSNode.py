@@ -47,13 +47,15 @@ class AlphaMCTSNode:
     def ucb(self, c_param: float = 0.1) -> float:
         assert self.parent, 'Node must have a parent'
 
-        ucb_score = self.policy * c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
+        policy_score = c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
 
         if self.number_of_visits > 0:
             # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
-            ucb_score += 1 - ((self.result_score / self.number_of_visits) + 1) / 2
+            q_score = 1 - ((self.result_score / self.number_of_visits) + 1) / 2
+        else:
+            q_score = 0
 
-        return ucb_score
+        return policy_score * self.policy + q_score
 
     def expand(self, moves_with_scores: list[tuple[CURRENT_GAME_MOVE, float]]) -> None:
         self.children = [
