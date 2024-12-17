@@ -57,6 +57,8 @@ class AlphaZeroBot(Bot):
         if current_node.is_terminal_node:
             result = get_board_result_score(current_node.board)
             assert result is not None, 'Game is not over'
+            if current_node.board.current_player != root.board.current_player:
+                result = -result
         else:
             moves_with_scores, result = self.evaluation(current_node.board)
             current_node.expand(moves_with_scores)

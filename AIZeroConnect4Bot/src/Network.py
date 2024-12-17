@@ -46,8 +46,8 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
     policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
     values = values.to(dtype=torch.float32, device='cpu').numpy()
     value = np.mean(values, axis=1)
-    for board, p, v in zip(x, policy, value):
-        print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
+    # for board, p, v in zip(x, policy, value):
+    #     print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
     return policy, value
 
 

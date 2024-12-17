@@ -81,7 +81,7 @@ class AlphaMCTSNode:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += 1
             self.parent.children_result_scores[child_index] += result
-            self.parent.back_propagate(result)
+            self.parent.back_propagate(-result)
 
     def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""

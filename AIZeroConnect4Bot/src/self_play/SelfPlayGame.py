@@ -28,7 +28,10 @@ class SelfPlayGame:
         if node.is_terminal_node:
             result = get_board_result_score(node.board)
             assert result is not None
-            node.back_propagate(-result)
+            if node.board.current_player == self.root.board.current_player:
+                node.back_propagate(result)
+            else:
+                node.back_propagate(-result)
             return None
 
         return node

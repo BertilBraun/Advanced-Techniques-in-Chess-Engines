@@ -93,12 +93,14 @@ class SelfPlay:
             for spg in self_play_games:
                 spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
-            expandable_nodes: list[AlphaMCTSNode] = [spg.node for spg in self_play_games if spg.node is not None]
+            expandable_nodes: list[tuple[SelfPlayGame, AlphaMCTSNode]] = [
+                (spg, spg.node) for spg in self_play_games if spg.node is not None
+            ]
 
             if len(expandable_nodes) == 0:
                 continue
 
-            boards = [CURRENT_GAME.get_canonical_board(node.board) for node in expandable_nodes]
+            boards = [CURRENT_GAME.get_canonical_board(node.board) for _, node in expandable_nodes]
             policy, value = cached_network_inference(
                 self.model,
                 torch.tensor(
@@ -108,11 +110,14 @@ class SelfPlay:
                 ),
             )
 
-            for i, node in enumerate(expandable_nodes):
+            for i, (spg, node) in enumerate(expandable_nodes):
                 moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
 
                 node.expand(moves)
-                node.back_propagate(value[i])
+                if node.board.current_player == spg.root.board.current_player:
+                    node.back_propagate(value[i])
+                else:
+                    node.back_propagate(-value[i])
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame]) -> np.ndarray:
         encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
