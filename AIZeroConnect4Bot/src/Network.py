@@ -5,10 +5,8 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from AIZeroConnect4Bot.src.util.log import log, ratio
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
+from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
 
-
-VALUE_OUTPUT_HEADS = 32
 
 _NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
 

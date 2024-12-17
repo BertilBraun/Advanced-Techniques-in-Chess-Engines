@@ -9,6 +9,7 @@ SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = False
 
 PLAY_C_PARAM = 1.0
+VALUE_OUTPUT_HEADS = 32
 
 
 def sampling_window(current_iteration: int) -> int:

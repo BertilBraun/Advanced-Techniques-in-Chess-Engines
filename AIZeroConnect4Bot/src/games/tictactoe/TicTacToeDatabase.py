@@ -3,15 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, Tuple, List
 
-import numpy as np
 
 from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeGame import TicTacToeGame
 
-# Define the outcome constants
-OUTCOME_WIN = 1
-OUTCOME_DRAW = 0
-OUTCOME_LOSS = -1
 
 # Type aliases for memoization
 MemoKey = Tuple[int, ...]  # board_state
@@ -23,26 +17,6 @@ memo: Dict[MemoKey, MemoValue] = {}
 
 def board_to_key(board: TicTacToeBoard) -> Tuple[int, ...]:
     return tuple(board.board.tolist())
-
-
-def board_from_str(s: str) -> TicTacToeBoard:
-    """Example:
-     OX
-     OX
-    OXO"""
-    board = TicTacToeBoard()
-    for j, line in enumerate(s.split('\n')):
-        for i in range(3):
-            if line[i] == 'X':
-                board.board[j * 3 + i] = 1
-            elif line[i] == 'O':
-                board.board[j * 3 + i] = -1
-    if s.count('O') > s.count('X'):
-        board.board *= -1
-        board.current_player = 1
-    else:
-        board.current_player = 1 if s.count('X') == s.count('O') else -1
-    return board
 
 
 def minimax(board: TicTacToeBoard) -> int:
@@ -166,21 +140,6 @@ def generate_database(output_file: str):
 
 if __name__ == '__main__':
     output_file = 'tictactoe_database.txt'
-    board = TicTacToeBoard()
-    board.board = np.array([-1, 0, 0, 0, 0, 0, 1, -1, 1])
-    board.current_player = 1
-
-    print(board.board.reshape(3, 3))
-    print(TicTacToeGame().get_canonical_board(board).flatten().tolist())
-    print(minimax(board))
-    for move in board.get_valid_moves():
-        new_board = board.copy()
-        new_board.make_move(move)
-        print(new_board.board.reshape(3, 3))
-        print(minimax(new_board))
-    print(get_best_moves(board))
-    # exit()
-
     print('Generating TicTacToe database...')
     generate_database(output_file)
     print(f'Database saved to {output_file}')

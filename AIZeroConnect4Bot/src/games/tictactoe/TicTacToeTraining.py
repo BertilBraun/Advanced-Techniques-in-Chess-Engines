@@ -3,14 +3,16 @@ from torch.utils.data import Dataset, DataLoader
 import ast
 import torch.nn as nn
 
+from AIZeroConnect4Bot.src.Network import Network
 from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
 from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeGame import TicTacToeGame
+from AIZeroConnect4Bot.src.settings import VALUE_OUTPUT_HEADS
 
 # --------------------------
 # 1. Dataset Preparation
 # --------------------------
 
-NUM_VALUE_OUTPUTS = 1
+NUM_VALUE_OUTPUTS = VALUE_OUTPUT_HEADS
 NUM_EPOCHS = 50
 BATCH_SIZE = 16
 DATASET_PERCENTAGE = 0.8
@@ -25,7 +27,7 @@ class TicTacToeDataset(Dataset):
 
                 # Convert board string to list of integers
                 board = ast.literal_eval(board_str)
-                board_tensor = torch.tensor(board, dtype=torch.float32)
+                board_tensor = torch.tensor(board, dtype=torch.float32).reshape(1, 3, 3)
 
                 # Convert moves string to list of integers and then to multi-hot encoding
                 moves = ast.literal_eval(moves_str)
@@ -236,7 +238,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test, batch_size=BATCH_SIZE, shuffle=False)
 
     # Instantiate the model
-    model = TicTacToeNet()
+    model = Network()
 
     # Move the model to GPU if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -274,7 +276,7 @@ if __name__ == '__main__':
 
         # Get the canonical board state if necessary
         # Assuming get_canonical_board returns a normalized board state
-        canonical_board = game.get_canonical_board(board).flatten()
+        canonical_board = game.get_canonical_board(board)
         board_tensor = canonical_board  # Already in tuple format
         print('Canonical Board:')
         print(canonical_board.reshape(3, 3))
