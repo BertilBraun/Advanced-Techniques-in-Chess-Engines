@@ -68,7 +68,8 @@ class Trainer:
             out_policy, out_value = self.model(state)
             # out_value is of shape (batch_size, 32), we want to run MSE on each value separately and add the sum to the total loss
 
-            policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
+            # TODO? policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
+            policy_loss = F.cross_entropy(out_policy, policy_targets)
             # Are mutliple heads really sensible?
             # TODO mult by 10 to make it more impactful??
             value_loss = F.mse_loss(out_value, value_targets)

@@ -4,6 +4,7 @@ import torch
 from tqdm import trange
 from pathlib import Path
 
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.util.log import log
 from src.util import batched_iterate, load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -78,6 +79,10 @@ class AlphaZero:
 
         log(f'Iteration {iteration + 1}: {train_stats}')
         self._save_latest_model(iteration)
+
+        if iteration > 0:
+            self._play_two_most_recent_models(iteration)
+
         return train_stats
 
     def _load_latest_model(self) -> None:
@@ -103,6 +108,17 @@ class AlphaZero:
             log(f'Model and optimizer loaded from iteration {self.starting_iteration}')
         except FileNotFoundError:
             log('No model and optimizer found, starting from scratch')
+
+    def _load_model(self, iteration: int) -> Network:
+        try:
+            model = Network()
+            model.load_state_dict(
+                torch.load(self.save_path / f'model_{iteration}.pt', map_location=model.device, weights_only=True)
+            )
+            return model
+        except FileNotFoundError:
+            log(f'No model found for iteration {iteration}')
+            raise
 
     def _save_latest_model(self, iteration: int) -> None:
         """Save the model and optimizer to the current directory with the current iteration number. Also save the current training configuration to last_training_config.json."""
@@ -144,22 +160,12 @@ class AlphaZero:
 
     def _load_all_memories(self, iteration: int) -> list[SelfPlayMemory]:
         memory: list[SelfPlayMemory] = []
-        num_files = 0
 
         for f in self.save_path.iterdir():
             if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
                 mapped_memory = torch.load(f, weights_only=True)
                 memory += [SelfPlayMemory(*mem) for mem in mapped_memory]
-                num_files += 1
-                # f.unlink()
 
-        # if num_files > 1:
-        #     memory = self._deduplicate_positions(memory)
-        #
-        # torch.save(
-        #     [(mem.state, mem.policy_targets, mem.value_targets) for mem in memory],
-        #     self.save_path / f'memory_{iteration}_deduplicated.pt',
-        # )
         return memory
 
     def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
@@ -183,3 +189,15 @@ class AlphaZero:
             spm.value_target /= count
 
         return [spm for _, spm in mp.values()]
+
+    def _play_two_most_recent_models(self, iteration: int) -> None:
+        """Play two most recent models against each other."""
+
+        current_model = self._load_model(iteration)
+        previous_model = self._load_model(iteration - 1)
+
+        model_evaluation = ModelEvaluation()
+        wins, losses, draws = model_evaluation.play_two_models_batch(current_model, previous_model, 64)
+
+        log(f'Results after playing two most recent models at iteration {iteration}:')
+        log(f'Wins: {wins}, Losses: {losses}, Draws: {draws}')

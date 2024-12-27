@@ -35,8 +35,8 @@ class TicTacToeGame(Game[TicTacToeMove]):
 
     @property
     def network_properties(self) -> tuple[int, int]:
-        NUM_RES_BLOCKS = 2
-        NUM_HIDDEN = 16
+        NUM_RES_BLOCKS = 6
+        NUM_HIDDEN = 64
         return NUM_RES_BLOCKS, NUM_HIDDEN
 
     @property

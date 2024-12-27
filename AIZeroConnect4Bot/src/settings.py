@@ -20,9 +20,9 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
+    # if current_iteration < 10:
+    #    return 0.01
     if current_iteration < 10:
-        return 0.01
-    if current_iteration < 20:
         return 0.005
     if current_iteration < 30:
         return 0.002
@@ -45,9 +45,9 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 
 def dirichlet_alpha(iteration: int) -> float:
-    if iteration < 50:  # TODO
-        return 0.01
-    return 0.6
+    # if iteration < 50:  # TODO
+    #     return 0.01
+    return 0.3
 
 
 # Chess training args
@@ -148,16 +148,16 @@ elif True:
     else:
         # Test training args to verify the implementation
         TRAINING_ARGS = TrainingArgs(
-            num_iterations=50,
-            num_self_play_iterations=128 * 3,
-            num_parallel_games=64,
-            num_iterations_per_turn=800,
-            num_epochs=10,
-            batch_size=16,
-            temperature=1.0,
+            num_iterations=10,
+            num_self_play_iterations=128 * 4 * 2,
+            num_parallel_games=128,
+            num_iterations_per_turn=600,
+            num_epochs=4,
+            batch_size=32,
+            temperature=1.25,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=dirichlet_alpha,
-            c_param=1,
+            c_param=2,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,

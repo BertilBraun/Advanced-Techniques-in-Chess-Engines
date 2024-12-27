@@ -6,3 +6,6 @@ build/**
 **/logs/**
 graph*
 **.perf
+
+**.pth
+**tictactoe_database.txt

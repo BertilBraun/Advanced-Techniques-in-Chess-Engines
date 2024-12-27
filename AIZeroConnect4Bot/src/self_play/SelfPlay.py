@@ -88,7 +88,6 @@ class SelfPlay:
 
             spg.root = AlphaMCTSNode.root(spg.board)
             spg.root.expand(moves)
-            spg.node = spg.root
 
         for _ in range(self.args.num_iterations_per_turn):
             for spg in self_play_games:
@@ -116,9 +115,9 @@ class SelfPlay:
 
                 node.expand(moves)
                 if node.board.current_player == spg.root.board.current_player:
-                    node.back_propagate(0)  # TODO reactivate node.back_propagate(value[i])
+                    node.back_propagate(value[i])
                 else:
-                    node.back_propagate(0)  # TODO reactivate node.back_propagate(-value[i])
+                    node.back_propagate(-value[i])
         # spg.root.show_graph()  # TODO remove this
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
@@ -153,6 +152,7 @@ class SelfPlay:
         # only use temperature for the first 30 moves, then simply use the action probabilities as they are
         if root_node.num_played_moves < 30:
             temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
+            temperature_action_probabilities /= np.sum(temperature_action_probabilities)
         else:
             temperature_action_probabilities = action_probabilities
 

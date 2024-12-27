@@ -24,7 +24,7 @@ class AlphaZeroBot(Bot):
         self.model.eval()
 
     def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
-        board.board = np.array([1, 0, 1, 0, -1, 0, 0, 0, -1])
+        # board.board = np.array([1, 0, 1, 0, -1, 0, 0, 0, -1])
         root = AlphaMCTSNode.root(board)
 
         for i in range(800):  # TODO 1_000_000
@@ -33,7 +33,7 @@ class AlphaZeroBot(Bot):
                 log(f'AlphaZeroBot has thought for {self.time_elapsed:.2f} seconds and {i+1} iterations')
                 break
 
-        root.show_graph()
+        # root.show_graph()
 
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
@@ -42,6 +42,10 @@ class AlphaZeroBot(Bot):
         log(f'Best child has {best_child.number_of_visits:.4f} visits')
         log(f'Best child has {best_child.result_score:.4f} result_score')
         log(f'Best child has {best_child.policy:.4f} policy')
+        log('Child moves:', [child.move_to_get_here for child in root.children])
+        log('Child visits:', [child.number_of_visits for child in root.children])
+        log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
+        log('Child policies:', [round(child.policy, 2) for child in root.children])
         log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here

@@ -29,5 +29,5 @@ class TrainingStats:
         return ts
 
     def __repr__(self) -> str:
-        samples = self.num_batches * self.batch_size
+        samples = self.num_batches  # * self.batch_size
         return f'Policy Loss: {self.policy_loss / samples:.4f}, Value Loss: {self.value_loss / samples:.4f}, Total Loss: {self.total_loss / samples:.4f}'
