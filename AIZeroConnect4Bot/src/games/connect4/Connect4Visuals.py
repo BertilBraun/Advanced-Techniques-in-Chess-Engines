@@ -1,10 +1,10 @@
 from typing import List, Optional, Tuple
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
-from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.games.connect4.Connect4Board import Connect4Board
-from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Move
+from src.games.Game import Board
+from src.games.GUI import BaseGridGameGUI
+from src.games.GameVisuals import GameVisuals
+from src.games.connect4.Connect4Board import Connect4Board
+from src.games.connect4.Connect4Game import Connect4Move
 
 
 class Connect4Visuals(GameVisuals[Connect4Move]):

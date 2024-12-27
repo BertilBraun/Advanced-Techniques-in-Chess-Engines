@@ -1,6 +1,6 @@
 import torch
-from AIZeroConnect4Bot.src.util import lerp
-from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
+from src.util import lerp
+from src.train.TrainingArgs import TrainingArgs
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
@@ -9,7 +9,7 @@ SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = False
 
 PLAY_C_PARAM = 1.0
-VALUE_OUTPUT_HEADS = 32
+VALUE_OUTPUT_HEADS = 1
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -21,14 +21,14 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 10:
-        return 0.2
+        return 0.01
     if current_iteration < 20:
-        return 0.05
-    if current_iteration < 30:
-        return 0.02
-    if current_iteration < 50:
         return 0.005
-    return 0.002
+    if current_iteration < 30:
+        return 0.002
+    if current_iteration < 50:
+        return 0.0005
+    return 0.0002
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
@@ -42,6 +42,12 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         return lerp(min_lr, base_lr, batch_percentage * 2)
     else:
         return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
+
+
+def dirichlet_alpha(iteration: int) -> float:
+    if iteration < 50:  # TODO
+        return 0.01
+    return 0.6
 
 
 # Chess training args
@@ -59,9 +65,9 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 # )
 
 if False:
-    from AIZeroConnect4Bot.src.games.connect4.Connect4Game import Connect4Game, Connect4Move
-    from AIZeroConnect4Bot.src.games.connect4.Connect4Board import Connect4Board
-    from AIZeroConnect4Bot.src.games.connect4.Connect4Visuals import Connect4Visuals
+    from src.games.connect4.Connect4Game import Connect4Game, Connect4Move
+    from src.games.connect4.Connect4Board import Connect4Board
+    from src.games.connect4.Connect4Visuals import Connect4Visuals
 
     CURRENT_GAME_MOVE = Connect4Move
     CURRENT_GAME = Connect4Game()
@@ -114,18 +120,18 @@ if False:
         )
 
 elif False:
-    from AIZeroConnect4Bot.src.games.checkers.CheckersGame import CheckersGame, CheckersMove
-    from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import CheckersBoard
-    from AIZeroConnect4Bot.src.games.checkers.CheckersVisuals import CheckersVisuals
+    from src.games.checkers.CheckersGame import CheckersGame, CheckersMove
+    from src.games.checkers.CheckersBoard import CheckersBoard
+    from src.games.checkers.CheckersVisuals import CheckersVisuals
 
     CURRENT_GAME_MOVE = CheckersMove
     CURRENT_GAME = CheckersGame()
     CURRENT_BOARD = CheckersBoard()
     CURRENT_GAME_VISUALS = CheckersVisuals()
 elif True:
-    from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeGame import TicTacToeGame, TicTacToeMove
-    from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
-    from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeVisuals import TicTacToeVisuals
+    from src.games.tictactoe.TicTacToeGame import TicTacToeGame, TicTacToeMove
+    from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
+    from src.games.tictactoe.TicTacToeVisuals import TicTacToeVisuals
 
     CURRENT_GAME_MOVE = TicTacToeMove
     CURRENT_GAME = TicTacToeGame()
@@ -145,12 +151,30 @@ elif True:
             num_iterations=50,
             num_self_play_iterations=128 * 3,
             num_parallel_games=64,
-            num_iterations_per_turn=500,
-            num_epochs=2,
+            num_iterations_per_turn=800,
+            num_epochs=10,
             batch_size=16,
             temperature=1.0,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.6,
+            dirichlet_alpha=dirichlet_alpha,
+            c_param=1,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+            save_path=SAVE_PATH,
+            num_self_play_nodes_on_cluster=1,
+            num_train_nodes_on_cluster=0,
+        )
+        TEST_TRAINING_ARGS = TrainingArgs(
+            num_iterations=50,
+            num_self_play_iterations=2,
+            num_parallel_games=1,
+            num_iterations_per_turn=800,
+            num_epochs=3,
+            batch_size=16,
+            temperature=1.0,
+            dirichlet_epsilon=0.25,
+            dirichlet_alpha=dirichlet_alpha,
             c_param=1,
             sampling_window=sampling_window,
             learning_rate=learning_rate,

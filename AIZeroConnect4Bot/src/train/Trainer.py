@@ -1,3 +1,4 @@
+import math
 import torch
 import random
 import numpy as np
@@ -5,13 +6,13 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from AIZeroConnect4Bot.src.util import batched_iterate
-from AIZeroConnect4Bot.src.Network import VALUE_OUTPUT_HEADS, Network
-from AIZeroConnect4Bot.src.settings import TORCH_DTYPE
-from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlayMemory
-from AIZeroConnect4Bot.src.util.log import log
+from src.util import batched_iterate
+from src.Network import VALUE_OUTPUT_HEADS, Network
+from src.settings import TORCH_DTYPE
+from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingStats import TrainingStats
+from src.self_play.SelfPlay import SelfPlayMemory
+from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
 
@@ -35,7 +36,7 @@ class Trainer:
         """
         random.shuffle(memory)
 
-        train_stats = TrainingStats()
+        train_stats = TrainingStats(self.args.batch_size)
         base_lr = self.args.learning_rate(iteration)
 
         self.model.train()
@@ -52,7 +53,7 @@ class Trainer:
         def calculate_loss_for_batch(batch: list[SelfPlayMemory]):
             state = [mem.state for mem in batch]
             policy_targets = [mem.policy_targets for mem in batch]
-            value_targets = [[mem.value_target] * VALUE_OUTPUT_HEADS for mem in batch]
+            value_targets = [[math.tanh(mem.value_target)] * VALUE_OUTPUT_HEADS for mem in batch]
 
             state, policy_targets, value_targets = (
                 np.array(state),
@@ -67,10 +68,10 @@ class Trainer:
             out_policy, out_value = self.model(state)
             # out_value is of shape (batch_size, 32), we want to run MSE on each value separately and add the sum to the total loss
 
-            policy_loss = F.cross_entropy(out_policy, policy_targets)
+            policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
             # Are mutliple heads really sensible?
             # TODO mult by 10 to make it more impactful??
-            value_loss = F.mse_loss(out_value * 2, value_targets * 2, reduction='sum')
+            value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
 
             # example for value loss
@@ -99,9 +100,9 @@ class Trainer:
             train_stats.update(policy_loss.item(), value_loss.item(), loss.item())
 
         with torch.no_grad():
+            validation_stats = TrainingStats(self.args.batch_size)
             validation_policy_loss, validation_value_loss, validation_loss = calculate_loss_for_batch(validation_batch)
-            log(f'Validation loss: {validation_loss.item()}')
-            log(f'Validation policy loss: {validation_policy_loss.item()}')
-            log(f'Validation value loss: {validation_value_loss.item()}')
+            validation_stats.update(validation_policy_loss.item(), validation_value_loss.item(), validation_loss.item())
+            log(f'Validation stats: {validation_stats}')
 
         return train_stats

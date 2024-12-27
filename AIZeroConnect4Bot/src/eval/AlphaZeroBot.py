@@ -1,12 +1,12 @@
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.eval.Bot import Bot
-from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
-from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE
+from src.util.log import log
+from src.eval.Bot import Bot
+from src.AlphaMCTSNode import AlphaMCTSNode
+from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.Network import Network, cached_network_inference
+from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE
 
 
 class AlphaZeroBot(Bot):
@@ -24,9 +24,10 @@ class AlphaZeroBot(Bot):
         self.model.eval()
 
     def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
+        board.board = np.array([1, 0, 1, 0, -1, 0, 0, 0, -1])
         root = AlphaMCTSNode.root(board)
 
-        for i in range(10000):
+        for i in range(800):  # TODO 1_000_000
             self.iterate(root)
             if self.time_is_up:
                 log(f'AlphaZeroBot has thought for {self.time_elapsed:.2f} seconds and {i+1} iterations')
@@ -79,6 +80,10 @@ class AlphaZeroBot(Bot):
                 dtype=TORCH_DTYPE,
             ),
         )
+        # TODO remove this
+        # Test, wheather the search is working
+        # policy = np.full(policy.shape, 1 / policy.shape[1])
+        # value = np.full(value.shape, 0.0)
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 

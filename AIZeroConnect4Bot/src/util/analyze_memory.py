@@ -1,23 +1,33 @@
 # load in the latest memory from training_data
 # Display the board, probabilities, and value of the latest 20 memories
 
-import os
-import torch
+from collections import Counter
 import numpy as np
 
-from AIZeroConnect4Bot.src.settings import SAVE_PATH
+from torch.optim import Adam
 
+from src.Network import Network
+from src.AlphaZero import AlphaZero
+from src.settings import TRAINING_ARGS
+
+
+model = Network()
+az = AlphaZero(model, Adam(model.parameters()), TRAINING_ARGS, False)
 for i in range(200, -1, -1):
-    for file in os.listdir(SAVE_PATH):
-        if file.startswith(f'memory_{i}_dedu'):
-            memory = torch.load(SAVE_PATH + '/' + file)
-            for m in memory:  # [:200]:
-                if m[2] == 1 or m[2] == -1:
-                    continue
-                # print board nicer than with 1, 0, -1 use X, O, and empty
-                for row in m[0][0]:
-                    print(' '.join(['X' if x == 1 else 'O' if x == -1 else '.' for x in row]))
-                print(np.round(m[1], 2))
-                print(m[2])
-                print()
-            exit()
+    memory = az._load_all_memories(i)
+    if memory:
+        memory = az._deduplicate_positions(memory)
+        for m in memory[:200]:
+            # print board nicer than with 1, 0, -1 use X, O, and empty
+            for row in m.state[0]:
+                print(' '.join(['X' if x == 1 else 'O' if x == -1 else '.' for x in row]))
+            print(np.round(m.policy_targets, 2))
+            print(m.value_target)
+            print()
+
+        value_counter = Counter()
+        for m in memory:
+            value_counter[round(m.value_target, 2)] += 1
+        print(value_counter)
+
+        exit()

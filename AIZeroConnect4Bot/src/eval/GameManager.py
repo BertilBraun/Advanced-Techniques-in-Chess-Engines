@@ -1,7 +1,7 @@
 from typing import Optional
-from AIZeroConnect4Bot.src.eval.Bot import Bot
-from AIZeroConnect4Bot.src.games.Game import Player
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME
+from src.eval.Bot import Bot
+from src.games.Game import Player
+from src.settings import CURRENT_GAME
 
 
 class GameManager:

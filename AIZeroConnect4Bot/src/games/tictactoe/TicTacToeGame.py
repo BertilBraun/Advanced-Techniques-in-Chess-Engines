@@ -4,15 +4,15 @@ import torch
 import numpy as np
 from typing import List
 
-from AIZeroConnect4Bot.src.games.Game import Game
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import (
+from src.games.Game import Game
+from src.games.tictactoe.TicTacToeBoard import (
     ROW_COUNT,
     COLUMN_COUNT,
     BOARD_SIZE,
     TicTacToeBoard,
     TicTacToeMove,
 )
-from AIZeroConnect4Bot.src.util.ZobristHasher import ZobristHasher
+from src.util.ZobristHasher import ZobristHasher
 
 ENCODING_CHANNELS = 1  # TODO also try out for 3 channels
 ACTION_SIZE = BOARD_SIZE

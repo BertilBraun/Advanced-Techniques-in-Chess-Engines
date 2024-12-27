@@ -4,13 +4,13 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
-from AIZeroConnect4Bot.src.util import lerp
-from AIZeroConnect4Bot.src.Network import Network, cached_network_inference
-from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroConnect4Bot.src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.self_play.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
+from src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
+from src.util import lerp
+from src.Network import Network, cached_network_inference
+from src.AlphaMCTSNode import AlphaMCTSNode
+from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.train.TrainingArgs import TrainingArgs
+from src.self_play.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
 
 
 @dataclass
@@ -25,14 +25,14 @@ class SelfPlay:
         self.model = model
         self.args = args
 
-    def self_play(self) -> list[SelfPlayMemory]:
+    def self_play(self, iteration: int) -> list[SelfPlayMemory]:
         self_play_memory: list[SelfPlayMemory] = []
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
 
         self.model.eval()
 
         while len(self_play_games) > 0:
-            self._expand_self_play_games(self_play_games)
+            self._expand_self_play_games(self_play_games, iteration)
 
             for spg in self_play_games:
                 action_probabilities = self._get_action_probabilities(spg.root)
@@ -45,6 +45,7 @@ class SelfPlay:
 
                 if spg.board.is_game_over():
                     self_play_memory.extend(self._get_training_data(spg))
+                    # exit()  # TODO remove this
 
             self_play_games = [spg for spg in self_play_games if not spg.board.is_game_over()]
 
@@ -79,8 +80,8 @@ class SelfPlay:
         return self_play_memory
 
     @torch.no_grad()
-    def _expand_self_play_games(self, self_play_games: list[SelfPlayGame]) -> None:
-        policy = self._get_policy_with_noise(self_play_games)
+    def _expand_self_play_games(self, self_play_games: list[SelfPlayGame], iteration: int) -> None:
+        policy = self._get_policy_with_noise(self_play_games, iteration)
 
         for spg, spg_policy in zip(self_play_games, policy):
             moves = filter_policy_then_get_moves_and_probabilities(spg_policy, spg.board)
@@ -115,11 +116,12 @@ class SelfPlay:
 
                 node.expand(moves)
                 if node.board.current_player == spg.root.board.current_player:
-                    node.back_propagate(value[i])
+                    node.back_propagate(0)  # TODO reactivate node.back_propagate(value[i])
                 else:
-                    node.back_propagate(-value[i])
+                    node.back_propagate(0)  # TODO reactivate node.back_propagate(-value[i])
+        # spg.root.show_graph()  # TODO remove this
 
-    def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame]) -> np.ndarray:
+    def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
         encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
         policy, _ = cached_network_inference(
             self.model,
@@ -132,7 +134,7 @@ class SelfPlay:
 
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(
-            [self.args.dirichlet_alpha] * CURRENT_GAME.action_size,
+            [self.args.dirichlet_alpha(iteration)] * CURRENT_GAME.action_size,
             size=len(self_play_games),
         )
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)

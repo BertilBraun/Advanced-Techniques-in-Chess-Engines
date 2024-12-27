@@ -6,7 +6,7 @@ from typing import Generic, TypeVar
 import numpy as np
 import torch
 
-from AIZeroConnect4Bot.src.games.Board import Board, Player  # noqa: F401
+from src.games.Board import Board, Player  # noqa: F401
 
 _Move = TypeVar('_Move')
 

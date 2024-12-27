@@ -4,8 +4,8 @@ import torch
 import numpy as np
 from typing import List
 
-from AIZeroConnect4Bot.src.games.Game import Game
-from AIZeroConnect4Bot.src.games.connect4.Connect4Defines import (
+from src.games.Game import Game
+from src.games.connect4.Connect4Defines import (
     ROW_COUNT,
     COLUMN_COUNT,
     ACTION_SIZE,
@@ -14,8 +14,8 @@ from AIZeroConnect4Bot.src.games.connect4.Connect4Defines import (
     NUM_HIDDEN,
     AVERAGE_NUM_MOVES_PER_GAME,
 )
-from AIZeroConnect4Bot.src.games.connect4.Connect4Board import Connect4Board, Connect4Move
-from AIZeroConnect4Bot.src.util.ZobristHasher import ZobristHasher
+from src.games.connect4.Connect4Board import Connect4Board, Connect4Move
+from src.util.ZobristHasher import ZobristHasher
 
 
 class Connect4Game(Game[Connect4Move]):

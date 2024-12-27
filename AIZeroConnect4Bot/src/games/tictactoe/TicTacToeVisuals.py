@@ -1,10 +1,10 @@
 from typing import List, Optional, Tuple
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
-from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard, ROW_COUNT
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeGame import TicTacToeMove
+from src.games.Game import Board
+from src.games.GUI import BaseGridGameGUI
+from src.games.GameVisuals import GameVisuals
+from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard, ROW_COUNT
+from src.games.tictactoe.TicTacToeGame import TicTacToeMove
 
 
 class TicTacToeVisuals(GameVisuals[TicTacToeMove]):

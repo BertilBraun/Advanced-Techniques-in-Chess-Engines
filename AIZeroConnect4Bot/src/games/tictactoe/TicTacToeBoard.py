@@ -4,8 +4,8 @@ import numpy as np
 from typing import Optional
 
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.games.Board import Player
+from src.games.Game import Board
+from src.games.Board import Player
 
 TicTacToeMove = int
 

@@ -4,9 +4,9 @@ import numpy as np
 from typing import Optional
 
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.games.Board import Player
-from AIZeroConnect4Bot.src.games.connect4.Connect4Defines import ROW_COUNT, COLUMN_COUNT
+from src.games.Game import Board
+from src.games.Board import Player
+from src.games.connect4.Connect4Defines import ROW_COUNT, COLUMN_COUNT
 
 Connect4Move = int
 

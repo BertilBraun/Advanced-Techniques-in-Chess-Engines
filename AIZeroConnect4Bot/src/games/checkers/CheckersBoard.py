@@ -2,7 +2,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Callable, Optional, List, Tuple
 
-from AIZeroConnect4Bot.src.games.Game import Board, Player
+from src.games.Game import Board, Player
 
 
 CheckersMove = Tuple[int, int]

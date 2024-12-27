@@ -1,10 +1,10 @@
 import time
 from typing import Optional, Tuple
 
-from AIZeroConnect4Bot.src.eval.Bot import Bot
-from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
-from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME_MOVE, CURRENT_BOARD
+from src.eval.Bot import Bot
+from src.games.GUI import BaseGridGameGUI
+from src.games.GameVisuals import GameVisuals
+from src.settings import CURRENT_GAME_MOVE, CURRENT_BOARD
 
 
 class HumanPlayer(Bot):

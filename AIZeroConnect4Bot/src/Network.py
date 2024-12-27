@@ -1,17 +1,20 @@
+from collections import Counter
 import torch
 import numpy as np
 import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
-from AIZeroConnect4Bot.src.util.log import log, ratio
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
+from src.util.log import log, ratio
+from src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
 
 
 _NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
 
 _TOTAL_EVALS = 0
 _TOTAL_HITS = 0
+
+_NN_VALUE_OUTPUT = Counter()
 
 
 @torch.no_grad()
@@ -37,6 +40,8 @@ def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tenso
 
     policies = torch.stack([_NN_CACHE[hash][0] for hash in hashes])
     values = torch.stack([_NN_CACHE[hash][1] for hash in hashes])
+    for v in values:
+        _NN_VALUE_OUTPUT[round(v.item(), 1)] += 1
     return policies, values
 
 

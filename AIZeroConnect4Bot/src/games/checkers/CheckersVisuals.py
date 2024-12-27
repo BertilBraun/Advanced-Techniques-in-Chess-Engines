@@ -1,8 +1,8 @@
 from typing import List, Optional, Tuple
 
-from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
-from AIZeroConnect4Bot.src.games.GameVisuals import GameVisuals
-from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove, Piece
+from src.games.GUI import BaseGridGameGUI
+from src.games.GameVisuals import GameVisuals
+from src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove, Piece
 
 
 class CheckersVisuals(GameVisuals[CheckersMove]):

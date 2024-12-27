@@ -1,12 +1,12 @@
 import torch
 from torch.optim import Adam
 
-from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.settings import TRAINING_ARGS
+from src.util.log import log
+from src.settings import TRAINING_ARGS
 
-from AIZeroConnect4Bot.src.Network import Network
-from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
-from AIZeroConnect4Bot.src.cluster.ClusterAlphaZero import ClusterAlphaZero
+from src.Network import Network
+from src.AlphaZero import AlphaZero
+from src.cluster.ClusterAlphaZero import ClusterAlphaZero
 
 if __name__ == '__main__':
     log('Starting training')

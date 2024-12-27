@@ -4,14 +4,14 @@ import torch
 from tqdm import trange
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.util import batched_iterate, load_json, random_id
-from AIZeroConnect4Bot.src.Network import Network, clear_model_inference_cache
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME
-from AIZeroConnect4Bot.src.train.Trainer import Trainer
-from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
-from AIZeroConnect4Bot.src.self_play.SelfPlay import SelfPlay, SelfPlayMemory
+from src.util.log import log
+from src.util import batched_iterate, load_json, random_id
+from src.Network import Network, clear_model_inference_cache
+from src.settings import CURRENT_GAME
+from src.train.Trainer import Trainer
+from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingStats import TrainingStats
+from src.self_play.SelfPlay import SelfPlay, SelfPlayMemory
 
 
 class AlphaZero:
@@ -60,7 +60,7 @@ class AlphaZero:
             num_self_play_calls // self.args.num_parallel_games,
             desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
         ):
-            memory += self.self_play.self_play()
+            memory += self.self_play.self_play(iteration)
 
         log(f'Collected {len(memory)} self-play memories.')
         self._save_memory(memory, iteration)
@@ -71,7 +71,7 @@ class AlphaZero:
         memory = self._deduplicate_positions(memory)
         log(f'Deduplicated to {len(memory)} unique positions.')
 
-        train_stats = TrainingStats()
+        train_stats = TrainingStats(self.args.batch_size)
         for epoch in range(self.args.num_epochs):
             train_stats += self.trainer.train(memory, iteration)
             log(f'Epoch {epoch + 1}: {train_stats}')

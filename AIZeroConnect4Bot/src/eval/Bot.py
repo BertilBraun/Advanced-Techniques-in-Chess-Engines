@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import time
 
-from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME_MOVE
+from src.settings import CURRENT_BOARD, CURRENT_GAME_MOVE
 
 
 class Bot(ABC):

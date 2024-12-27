@@ -1,8 +1,8 @@
 import time
 from pathlib import Path
 
-from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.util import random_id
+from src.util.log import log
+from src.util import random_id
 
 
 class ClusterManager:

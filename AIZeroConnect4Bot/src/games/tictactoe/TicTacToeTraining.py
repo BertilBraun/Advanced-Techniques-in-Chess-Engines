@@ -3,10 +3,12 @@ from torch.utils.data import Dataset, DataLoader
 import ast
 import torch.nn as nn
 
-from AIZeroConnect4Bot.src.Network import Network
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeGame import TicTacToeGame
-from AIZeroConnect4Bot.src.settings import VALUE_OUTPUT_HEADS
+from src.Network import Network
+from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
+from src.games.tictactoe.TicTacToeGame import TicTacToeGame
+from src.self_play.SelfPlay import SelfPlayMemory
+from src.settings import TRAINING_ARGS, VALUE_OUTPUT_HEADS
+from src.train.Trainer import Trainer
 
 # --------------------------
 # 1. Dataset Preparation
@@ -90,7 +92,25 @@ class TicTacToeNet(nn.Module):
 # --------------------------
 
 
-def train_model(model, dataloader, device, num_epochs=20):
+def train_model(model, dataloader, device, num_epochs, iteration):
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    trainer = Trainer(model, optimizer, TRAINING_ARGS)
+
+    print('Training with lr:', TRAINING_ARGS.learning_rate(iteration))
+
+    self_play_memories: list[SelfPlayMemory] = []
+    for batch in dataloader:
+        board, moves, outcome = batch
+        for b, m, o in zip(board, moves, outcome):
+            self_play_memories.append(SelfPlayMemory(b, m, o))
+            # print(f'Added memory: {b}, {m}, {o}')
+
+    for epoch in range(num_epochs):
+        trainer.train(self_play_memories, iteration)
+        print(f'Epoch {epoch+1}/{num_epochs} done')
+
+
+def train_model2(model, dataloader, device, num_epochs=20):
     # Define loss functions
     policy_loss_fn = nn.BCEWithLogitsLoss()
     value_loss_fn = nn.MSELoss()
@@ -246,8 +266,8 @@ if __name__ == '__main__':
 
     # Train the model
     print('Starting training...')
-    for _ in range(NUM_EPOCHS):
-        train_model(model, train_dataloader, device, num_epochs=1)
+    for iter in range(NUM_EPOCHS):
+        train_model(model, train_dataloader, device, num_epochs=1, iteration=iter)
 
         # Evaluate the model
         evaluate_model(model, test_dataloader, device)

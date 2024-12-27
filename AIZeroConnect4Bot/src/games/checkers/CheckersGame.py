@@ -4,9 +4,9 @@ import torch
 import numpy as np
 from typing import List
 
-from AIZeroConnect4Bot.src.games.Game import Game
-from AIZeroConnect4Bot.src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
-from AIZeroConnect4Bot.src.util.ZobristHasher import ZobristHasher
+from src.games.Game import Game
+from src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
+from src.util.ZobristHasher import ZobristHasher
 
 ROW_COUNT = BOARD_SIZE
 COLUMN_COUNT = BOARD_SIZE

@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Dict, Tuple, List
 
 
-from AIZeroConnect4Bot.src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
+from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
 
 
 # Type aliases for memoization

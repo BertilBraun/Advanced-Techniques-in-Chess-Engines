@@ -3,13 +3,13 @@ import torch
 
 from torch.optim import Adam
 
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, TORCH_DTYPE
-from AIZeroConnect4Bot.src.util.log import log
-from AIZeroConnect4Bot.src.AlphaZero import AlphaZero
-from AIZeroConnect4Bot.src.cluster.ClusterManager import ClusterManager
-from AIZeroConnect4Bot.src.Network import Network
-from AIZeroConnect4Bot.src.train.TrainingArgs import TrainingArgs
-from AIZeroConnect4Bot.src.train.TrainingStats import TrainingStats
+from src.settings import CURRENT_GAME, TORCH_DTYPE
+from src.util.log import log
+from src.AlphaZero import AlphaZero
+from src.cluster.ClusterManager import ClusterManager
+from src.Network import Network
+from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingStats import TrainingStats
 
 
 class ClusterAlphaZero(AlphaZero):

@@ -4,7 +4,8 @@ import time
 
 import numpy as np
 
-from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
+from src.Network import _NN_VALUE_OUTPUT
+from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
 
 
 class AlphaMCTSNode:
@@ -81,7 +82,7 @@ class AlphaMCTSNode:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += 1
             self.parent.children_result_scores[child_index] += result
-            self.parent.back_propagate(-result)
+            self.parent.back_propagate(-result * 0.9)
 
     def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
@@ -135,8 +136,10 @@ children: {len(self.children)}
         # convert to png
         current_time = time.strftime('%Y%m%d-%H%M%S')
         os.system(f'dot -Tpng graph.dot -o graph_{current_time}.png')
-        os.system(f'graph_{current_time}.png')
-        exit()
+        # os.system(f'graph_{current_time}.png')
+        print(_NN_VALUE_OUTPUT)
+        _NN_VALUE_OUTPUT.clear()
+        # exit()
 
     def _collect_stats(self, node, depth=0):
         if not node.board:
@@ -159,6 +162,7 @@ children: {len(self.children)}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 policy: {self.policy:.2f}
+calc_policy: {round(self.number_of_visits / self.parent.number_of_visits, 2) if self.parent else 1}
 ucb: {(round(self.ucb(), 2)) if self.parent else "None"}"""
 
     def _show_graph(self, nodes, edges):

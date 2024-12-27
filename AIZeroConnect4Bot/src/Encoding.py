@@ -1,7 +1,7 @@
 import numpy as np
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, CURRENT_BOARD
+from src.games.Game import Board
+from src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, CURRENT_BOARD
 
 
 def get_board_result_score(board: Board) -> float | None:

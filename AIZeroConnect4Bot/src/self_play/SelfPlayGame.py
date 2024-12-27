@@ -1,9 +1,9 @@
 import numpy as np
 from dataclasses import dataclass
 
-from AIZeroConnect4Bot.src.AlphaMCTSNode import AlphaMCTSNode
-from AIZeroConnect4Bot.src.Encoding import get_board_result_score
-from AIZeroConnect4Bot.src.settings import CURRENT_BOARD, CURRENT_GAME
+from src.AlphaMCTSNode import AlphaMCTSNode
+from src.Encoding import get_board_result_score
+from src.settings import CURRENT_BOARD, CURRENT_GAME
 
 
 @dataclass

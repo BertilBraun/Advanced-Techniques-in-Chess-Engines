@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Generic, List, Optional, Tuple, TypeVar
 
-from AIZeroConnect4Bot.src.games.Game import Board
-from AIZeroConnect4Bot.src.games.GUI import BaseGridGameGUI
+from src.games.Game import Board
+from src.games.GUI import BaseGridGameGUI
 
 _Move = TypeVar('_Move')
 
