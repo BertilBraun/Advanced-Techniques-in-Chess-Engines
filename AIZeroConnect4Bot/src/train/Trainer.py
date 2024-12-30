@@ -13,7 +13,6 @@ from src.settings import TORCH_DTYPE
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.self_play.SelfPlay import SelfPlayMemory
-from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
@@ -56,7 +55,7 @@ class Trainer:
         def calculate_loss_for_batch(batch: list[SelfPlayMemory]):
             state = [mem.state for mem in batch]
             policy_targets = [mem.policy_targets for mem in batch]
-            value_targets = [[math.tanh(mem.value_target)] * VALUE_OUTPUT_HEADS for mem in batch]
+            value_targets = [[mem.value_target] * VALUE_OUTPUT_HEADS for mem in batch]
 
             state, policy_targets, value_targets = (
                 np.array(state),
@@ -94,6 +93,7 @@ class Trainer:
 
             # Update learning rate before stepping the optimizer
             lr = self.args.learning_rate_scheduler((batchIdx * self.args.batch_size) / len(memory), base_lr)
+            tf.summary.scalar(f'learning_rate/iteration_{iteration}', lr, step=batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 

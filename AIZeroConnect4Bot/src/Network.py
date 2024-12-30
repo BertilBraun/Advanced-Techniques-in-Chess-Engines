@@ -1,12 +1,10 @@
-from collections import Counter
-import tensorflow as tf
 import torch
 import numpy as np
+import tensorflow as tf
 import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
-from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log, ratio
 from src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
 
@@ -51,12 +49,6 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
     value = np.mean(values, axis=1)
     # for board, p, v in zip(x, policy, value):
     #     print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
-
-    # TODO uniform policy and 0 value for testing
-    policy = np.ones_like(policy) / policy.shape[1]
-    value = np.zeros_like(value)
-    policy = np.ones((1, 9)) / 9
-    value = np.zeros((1))
     return policy, value
 
 

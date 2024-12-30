@@ -167,7 +167,7 @@ elif True:
     else:
         # Test training args to verify the implementation
         TRAINING_ARGS = TrainingArgs(
-            num_iterations=4,
+            num_iterations=12,
             num_self_play_games_per_iteration=128 * 4 * 2,
             num_parallel_games=128,
             num_searches_per_turn=60,
@@ -177,14 +177,14 @@ elif True:
             dirichlet_epsilon=0.25,
             dirichlet_alpha=lambda _: 0.3,
             c_param=2,
-            sampling_window=lambda _: 1,
+            sampling_window=lambda _: 3,
             learning_rate=lambda _: 0.001,
-            learning_rate_scheduler=lambda _, lr: lr,
+            learning_rate_scheduler=learning_rate_scheduler,
             save_path=SAVE_PATH + '/tictactoe',
             num_self_play_nodes_on_cluster=1,
             num_train_nodes_on_cluster=0,
         )
-        TRAINING_ARGS = TrainingArgs(
+        TEST_TRAINING_ARGS = TrainingArgs(
             num_iterations=50,
             num_self_play_games_per_iteration=2,
             num_parallel_games=1,

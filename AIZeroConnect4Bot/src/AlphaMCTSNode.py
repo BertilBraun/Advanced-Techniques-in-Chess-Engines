@@ -1,12 +1,9 @@
 from __future__ import annotations
 import math
-import os
-import time
 
 import numpy as np
 
 from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
-from src.train.TrainingArgs import TrainingArgs
 
 
 class AlphaMCTSNode:
@@ -73,8 +70,8 @@ class AlphaMCTSNode:
         ]
 
         # Convert to NumPy arrays
-        self.children_number_of_visits = np.array([child.number_of_visits for child in self.children], dtype=np.int16)
-        self.children_result_scores = np.array([child.result_score for child in self.children], dtype=np.int16)
+        self.children_number_of_visits = np.zeros(len(self.children), dtype=np.uint32)
+        self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
     def back_propagate(self, result: float) -> None:
@@ -83,33 +80,14 @@ class AlphaMCTSNode:
         if self.parent:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += 1
-            self.parent.children_result_scores[child_index] += result
+            self.parent.children_q_scores[child_index] = 1 - ((self.result_score / self.number_of_visits) + 1) / 2
             self.parent.back_propagate(-result)
 
     def best_child(self, c_param: float) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
-        # TODO remove
-        best_child: AlphaMCTSNode = None  # type: ignore
-        best_ucb = -np.inf
-        for child in self.children:
-            ucb = child.ucb(c_param)
-            if ucb > best_ucb:
-                best_ucb = ucb
-                best_child = child
-        best_child.init()
-        return best_child
-
-        q_score = np.zeros(len(self.children), dtype=np.float32)
-        visited_children = self.children_number_of_visits > 0
-        q_score[visited_children] = (
-            1
-            - ((self.children_result_scores[visited_children] / self.children_number_of_visits[visited_children]) + 1)
-            / 2
-        )
-
         policy_score = c_param * np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 
-        ucb_scores = q_score + self.children_policies * policy_score
+        ucb_scores = self.children_q_scores + self.children_policies * policy_score
 
         # Select the best child
         best_child = self.children[np.argmax(ucb_scores)]
@@ -126,63 +104,3 @@ policy: {self.policy:.2f}
 move: {self.move_to_get_here}
 children: {len(self.children)}
 )"""
-
-    def show_graph(self, args: TrainingArgs, iteration: int):
-        nodes = []
-        edges = []
-        self._show_graph(nodes, edges, args)
-        print('Max depth, num terminal nodes, num nodes')
-        print(self._collect_stats(self))
-
-        print('Actual num unique nodes:', len(set(nodes)))
-
-        # write in graphviz format
-        with open(f'graph_{iteration}.dot', 'w') as f:
-            f.write('digraph G {\n')
-            for node in nodes:
-                f.write(f'"{node}" [shape=box];\n')
-            for edge in edges:
-                f.write(f'"{edge[0]}" -> "{edge[1]}";\n')
-            f.write('}\n')
-
-        # convert to png
-        os.system(f'dot -Tpng graph_{iteration}.dot -o graph_{iteration}.png')
-        # os.system(f'graph_{current_time}.png')
-        # exit()
-
-    def _collect_stats(self, node, depth=0):
-        if not node.board:
-            # max depth, num terminal nodes, num nodes
-            return 0, 0, 0
-        max_depth = depth
-        num_terminal_nodes = 0
-        num_nodes = 1
-        for child in node.children:
-            child_max_depth, child_num_terminal_nodes, child_num_nodes = self._collect_stats(child, depth + 1)
-            max_depth = max(max_depth, child_max_depth)
-            num_terminal_nodes += child_num_terminal_nodes
-            num_nodes += child_num_nodes
-        if node.board.is_game_over():
-            num_terminal_nodes += 1
-        return max_depth, num_terminal_nodes, num_nodes
-
-    def graph_id(self, args: TrainingArgs):
-        b = 'None'
-        if self.board:
-            b = CURRENT_GAME.get_canonical_board(self.board)[0] - CURRENT_GAME.get_canonical_board(self.board)[1]
-        return f"""{b}
-visits: {self.number_of_visits}
-score: {self.result_score:.2f}
-policy: {self.policy:.2f}
-calc_policy: {round(self.number_of_visits / self.parent.number_of_visits, 2) if self.parent else 1}
-ucb: {(round(self.ucb(args.c_param), 2)) if self.parent else "None"}
-child_moves: {[child.move_to_get_here for child in self.children]}"""
-
-    def _show_graph(self, nodes, edges, args: TrainingArgs):
-        if self is None or self.board is None or (not self.is_fully_expanded and not self.is_terminal_node):
-            return
-        nodes.append(self.graph_id(args))
-        if self.parent:
-            edges.append((self.parent.graph_id(args), self.graph_id(args)))
-        for child in self.children:
-            child._show_graph(nodes, edges, args)

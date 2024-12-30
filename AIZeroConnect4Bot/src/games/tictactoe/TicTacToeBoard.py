@@ -29,24 +29,20 @@ class TicTacToeBoard(Board[TicTacToeMove]):
             return False
 
         self.board[move] = self.current_player
-        if self._check_winner():
+        if self._check_winner(move):
             self._winner = self.current_player
         self._switch_player()
         return True
 
-    def _check_winner(self) -> bool:
-        # Only need to check the current player
-        for i in range(ROW_COUNT):
-            if np.all(self.board[i * ROW_COUNT : (i + 1) * ROW_COUNT] == self.current_player):
-                return True
-        for i in range(COLUMN_COUNT):
-            if np.all(self.board[i::ROW_COUNT] == self.current_player):
-                return True
-        if np.all(self.board[:: ROW_COUNT + 1] == self.current_player):
-            return True
-        if np.all(self.board[ROW_COUNT - 1 : BOARD_SIZE - 1 : ROW_COUNT - 1] == self.current_player):
-            return True
-        return False
+    def _check_winner(self, move: TicTacToeMove) -> bool:
+        r, c = divmod(move, ROW_COUNT)
+
+        return (
+            np.sum(self.board[r * ROW_COUNT : (r + 1) * ROW_COUNT]) == ROW_COUNT * self.current_player
+            or np.sum(self.board[c::ROW_COUNT]) == COLUMN_COUNT * self.current_player
+            or np.sum(self.board[:: ROW_COUNT + 1]) == ROW_COUNT * self.current_player
+            or np.sum(self.board[ROW_COUNT - 1 : BOARD_SIZE - 1 : ROW_COUNT - 1]) == ROW_COUNT * self.current_player
+        )
 
     def check_winner(self) -> Optional[Player]:
         return self._winner

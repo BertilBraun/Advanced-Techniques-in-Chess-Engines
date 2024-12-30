@@ -40,15 +40,17 @@ class AlphaZeroBot(Bot):
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
 
-        # TODO log('---------------------- Alpha Zero Best Move ----------------------')
-        # TODO log(f'Best child has {best_child.number_of_visits:.4f} visits')
-        # TODO log(f'Best child has {best_child.result_score:.4f} result_score')
-        # TODO log(f'Best child has {best_child.policy:.4f} policy')
-        # TODO log('Child moves:', [child.move_to_get_here for child in root.children])
-        # TODO log('Child visits:', [child.number_of_visits for child in root.children])
-        # TODO log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
-        # TODO log('Child policies:', [round(child.policy, 2) for child in root.children])
-        # TODO log('------------------------------------------------------------------')
+        log('---------------------- Alpha Zero Best Move ----------------------')
+        log('Best child index:', best_child_index)
+        log('Child number of visits:', root.children_number_of_visits)
+        log(f'Best child has {best_child.number_of_visits} visits')
+        log(f'Best child has {best_child.result_score:.4f} result_score')
+        log(f'Best child has {best_child.policy:.4f} policy')
+        log('Child moves:', [child.move_to_get_here for child in root.children])
+        log('Child visits:', [child.number_of_visits for child in root.children])
+        log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
+        log('Child policies:', [round(child.policy, 2) for child in root.children])
+        log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here
 
@@ -64,8 +66,7 @@ class AlphaZeroBot(Bot):
         if current_node.is_terminal_node:
             result = get_board_result_score(current_node.board)
             assert result is not None, 'Game is not over'
-            if current_node.board.current_player != root.board.current_player:
-                result = -result
+            result = -result
         else:
             moves_with_scores, result = self.evaluation(current_node.board)
             current_node.expand(moves_with_scores)

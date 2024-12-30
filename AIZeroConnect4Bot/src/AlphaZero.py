@@ -7,7 +7,6 @@ from tqdm import trange
 from pathlib import Path
 
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log
 from src.util import batched_iterate, load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -82,20 +81,15 @@ class AlphaZero:
 
         tf.summary.histogram('training_sample_values', torch.tensor([mem.value_target for mem in memory]), iteration)
 
-        # tf.summary.histogram(
-        #     'nn_output_value_distribution',
-        #     torch.tensor([mem.policy_targets for mem in memory]).flatten(),
-        #     iteration,
-        # )
-
         # figure out average spikeyness of policy targets.
         # Should be close to 1 if the policy is very spikey, and close to 1/9 if it is very uniform.
-        for i, mem in enumerate(memory):
-            assert (
-                abs(mem.policy_targets.sum() - 1) < 1e-5
-            ), f'Policy target sum is not 1 for memory {i}: {mem.policy_targets.sum()} != 1 ({mem.policy_targets})'
         spikiness = sum((mem.policy_targets).max().item() for mem in memory) / len(memory)
-        tf.summary.scalar('policy_spikiness', spikiness, iteration)
+        tf.summary.scalar(
+            'policy_spikiness',
+            spikiness,
+            iteration,
+            description='Close to 1 if spikey, close to 1/ACTION_SIZE if uniform',
+        )
         tf.summary.histogram(
             'policy_targets', torch.stack([mem.policy_targets for mem in memory]).reshape(-1), iteration
         )
@@ -214,25 +208,6 @@ class AlphaZero:
 
     def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
         """Deduplicate the positions in the memory by averaging the policy and value targets for the same board state."""
-        m: dict[int, list[SelfPlayMemory]] = {}
-        for mem in memory:
-            h = CURRENT_GAME.hash_boards(torch.stack([mem.state]))[0]
-            if h in m:
-                m[h].append(mem)
-            else:
-                m[h] = [mem]
-
-        for h, mems in m.items():
-            if any(m.value_target != mems[0].value_target for m in mems):
-                log('Different value targets for the same board state!')
-                from collections import Counter
-
-                log(Counter(m.value_target for m in mems))
-                board = mems[0].state[0] - mems[0].state[1]
-                log(board)
-
-        exit()
-
         mp: dict[int, tuple[int, SelfPlayMemory]] = {}
         for batch in batched_iterate(memory, 128):
             states = [mem.state for mem in batch]
