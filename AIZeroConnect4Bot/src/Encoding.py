@@ -56,6 +56,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CURRENT_BOARD) -
     policy *= legal_moves_encoded
     policy_sum = np.sum(policy)
     if policy_sum == 0:
+        assert False, 'No legal moves found'
         policy = legal_moves_encoded / np.sum(legal_moves_encoded)
     else:
         policy /= policy_sum

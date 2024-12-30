@@ -17,11 +17,11 @@ for iter in range(100):
             if l1.strip() != l2.strip():
                 print(f'Line {i}: {l1.strip()} != {l2.strip()}')
                 # search next [shape=box] and replace it with [shape=box, fillcolor=red, style=filled]
-                for j in range(i + 1, len(f1_lines)):
-                    if '[shape=box]' in f1_lines[j]:
-                        f1_lines[j] = f1_lines[j].replace('[shape=box]', '[shape=box, fillcolor=red, style=filled]')
-                        i = j
+                while i < len(f1_lines):
+                    if '[shape=box]' in f1_lines[i]:
+                        f1_lines[i] = f1_lines[i].replace('[shape=box]', '[shape=box, fillcolor=red, style=filled]')
                         break
+                    i += 1
             i += 1
         with open(f'graph_{iter}_diff.dot', 'w') as f:
             f.writelines(f1_lines)

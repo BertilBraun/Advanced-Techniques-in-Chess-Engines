@@ -34,7 +34,9 @@ class SelfPlayGame:
         return node
 
     def back_propagate(self, result: float, node: AlphaMCTSNode) -> None:
-        if node.board.current_player == self.root.board.current_player:
+        node.back_propagate(-result)
+        return  # TODO remove this
+        if node.board.current_player != self.root.board.current_player:
             node.back_propagate(result)
         else:
             node.back_propagate(-result)

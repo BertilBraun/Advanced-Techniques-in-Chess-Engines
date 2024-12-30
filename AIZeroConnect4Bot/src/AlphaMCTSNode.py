@@ -175,7 +175,8 @@ visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 policy: {self.policy:.2f}
 calc_policy: {round(self.number_of_visits / self.parent.number_of_visits, 2) if self.parent else 1}
-ucb: {(round(self.ucb(args.c_param), 2)) if self.parent else "None"}"""
+ucb: {(round(self.ucb(args.c_param), 2)) if self.parent else "None"}
+child_moves: {[child.move_to_get_here for child in self.children]}"""
 
     def _show_graph(self, nodes, edges, args: TrainingArgs):
         if self is None or self.board is None or (not self.is_fully_expanded and not self.is_terminal_node):

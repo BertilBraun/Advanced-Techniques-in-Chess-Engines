@@ -301,7 +301,8 @@ visits: {self.visit_count}
 score: {self.value_sum:.2f}
 policy: {self.prior:.2f}
 calc_policy: {round(self.visit_count / self.parent.visit_count, 2) if self.parent else 1}
-ucb: {(round(self.parent.get_ucb(self), 2)) if self.parent else "None"}"""
+ucb: {(round(self.parent.get_ucb(self), 2)) if self.parent else "None"}
+child_moves: {[child.action_taken for child in self.children]}"""
 
     def _show_graph(self, nodes, edges):
         if self is None or (
@@ -467,7 +468,7 @@ az = AlphaZero(
     lambda x: (torch.ones((1, 9)) / 9, torch.zeros((1, 1))),
     None,
     TicTacToe(),
-    {'C': 2, 'num_searches': 60, 'temperature': 1.25, 'dirichlet_epsilon': 0.25, 'dirichlet_alpha': 0.3},
+    {'C': 2, 'num_searches': 200, 'temperature': 1.25, 'dirichlet_epsilon': 0.25, 'dirichlet_alpha': 0.3},
 )
 
 az.selfPlay()
