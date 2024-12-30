@@ -28,10 +28,13 @@ class SelfPlayGame:
         if node.is_terminal_node:
             result = get_board_result_score(node.board)
             assert result is not None
-            if node.board.current_player == self.root.board.current_player:
-                node.back_propagate(result)
-            else:
-                node.back_propagate(-result)
+            self.back_propagate(result, node)
             return None
 
         return node
+
+    def back_propagate(self, result: float, node: AlphaMCTSNode) -> None:
+        if node.board.current_player == self.root.board.current_player:
+            node.back_propagate(result)
+        else:
+            node.back_propagate(-result)

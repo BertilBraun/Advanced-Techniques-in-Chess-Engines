@@ -188,7 +188,7 @@ elif True:
             num_iterations=50,
             num_self_play_games_per_iteration=2,
             num_parallel_games=1,
-            num_searches_per_turn=600,
+            num_searches_per_turn=60,
             num_epochs=3,
             batch_size=16,
             temperature=1.25,

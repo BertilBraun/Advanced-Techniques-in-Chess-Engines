@@ -8,7 +8,7 @@ T = TypeVar('T')
 
 
 def lerp(a: T, b: T, t: float) -> T:
-    return t * a + (1 - t) * b  # type: ignore
+    return (1 - t) * a + t * b  # type: ignore
 
 
 def random_id() -> str:

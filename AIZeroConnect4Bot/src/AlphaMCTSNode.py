@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import os
 import time
 
@@ -39,16 +40,17 @@ class AlphaMCTSNode:
 
     @property
     def is_fully_expanded(self) -> bool:
-        return not not self.children
+        return len(self.children) > 0
 
     @property
     def is_terminal_node(self) -> bool:
-        return self.board is not None and self.board.is_game_over()
+        assert self.board, 'Node must have a board'
+        return self.board.is_game_over()
 
     def ucb(self, c_param: float) -> float:
         assert self.parent, 'Node must have a parent'
 
-        policy_score = c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
+        policy_score = c_param * math.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
 
         if self.number_of_visits > 0:
             # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
@@ -86,6 +88,16 @@ class AlphaMCTSNode:
 
     def best_child(self, c_param: float) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
+        # TODO remove
+        best_child: AlphaMCTSNode = None  # type: ignore
+        best_ucb = -np.inf
+        for child in self.children:
+            ucb = child.ucb(c_param)
+            if ucb > best_ucb:
+                best_ucb = ucb
+                best_child = child
+        best_child.init()
+        return best_child
 
         q_score = np.zeros(len(self.children), dtype=np.float32)
         visited_children = self.children_number_of_visits > 0
@@ -115,7 +127,7 @@ move: {self.move_to_get_here}
 children: {len(self.children)}
 )"""
 
-    def show_graph(self, args: TrainingArgs):
+    def show_graph(self, args: TrainingArgs, iteration: int):
         nodes = []
         edges = []
         self._show_graph(nodes, edges, args)
@@ -125,7 +137,7 @@ children: {len(self.children)}
         print('Actual num unique nodes:', len(set(nodes)))
 
         # write in graphviz format
-        with open('graph.dot', 'w') as f:
+        with open(f'graph_{iteration}.dot', 'w') as f:
             f.write('digraph G {\n')
             for node in nodes:
                 f.write(f'"{node}" [shape=box];\n')
@@ -134,8 +146,7 @@ children: {len(self.children)}
             f.write('}\n')
 
         # convert to png
-        current_time = time.strftime('%Y%m%d-%H%M%S')
-        os.system(f'dot -Tpng graph.dot -o graph_{current_time}.png')
+        os.system(f'dot -Tpng graph_{iteration}.dot -o graph_{iteration}.png')
         # os.system(f'graph_{current_time}.png')
         # exit()
 
@@ -167,7 +178,7 @@ calc_policy: {round(self.number_of_visits / self.parent.number_of_visits, 2) if 
 ucb: {(round(self.ucb(args.c_param), 2)) if self.parent else "None"}"""
 
     def _show_graph(self, nodes, edges, args: TrainingArgs):
-        if self.board is None:
+        if self is None or self.board is None or (not self.is_fully_expanded and not self.is_terminal_node):
             return
         nodes.append(self.graph_id(args))
         if self.parent:

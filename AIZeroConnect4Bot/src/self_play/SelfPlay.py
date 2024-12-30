@@ -33,6 +33,7 @@ class SelfPlay:
 
         while len(self_play_games) > 0:
             self._expand_self_play_games(self_play_games, iteration)
+            iteration += 1  # TODO remove this
 
             for spg in self_play_games:
                 action_probabilities = self._get_action_probabilities(spg.root)
@@ -110,6 +111,15 @@ class SelfPlay:
             else:
                 print('Move is valid and in DB')
 
+    def dump_search_tree_to_string(self, node: AlphaMCTSNode) -> str:
+        res = ''
+        res += node.graph_id(self.args) + '\n'
+        for child in node.children:
+            child.init()
+        for child in sorted(node.children, key=lambda x: x.move_to_get_here, reverse=True):
+            res += self.dump_search_tree_to_string(child)
+        return res
+
     @torch.no_grad()
     def _expand_self_play_games(self, self_play_games: list[SelfPlayGame], iteration: int) -> None:
         policy = self._get_policy_with_noise(self_play_games, iteration)
@@ -120,7 +130,10 @@ class SelfPlay:
             spg.root = AlphaMCTSNode.root(spg.board)
             spg.root.expand(moves)
 
+        f = open(f'search_tree_{iteration}.txt', 'w')
         for _ in range(self.args.num_searches_per_turn):
+            f.write('------------------------------------\n')
+            f.write(self.dump_search_tree_to_string(self_play_games[0].root))
             for spg in self_play_games:
                 spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
@@ -145,11 +158,8 @@ class SelfPlay:
                 moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
 
                 node.expand(moves)
-                if node.board.current_player == spg.root.board.current_player:
-                    node.back_propagate(value[i])
-                else:
-                    node.back_propagate(-value[i])
-        spg.root.show_graph(self.args)  # TODO remove this
+                spg.back_propagate(value[i], node)
+        spg.root.show_graph(self.args, iteration)  # TODO remove this
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
         encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
@@ -186,6 +196,7 @@ class SelfPlay:
             temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)
             temperature_action_probabilities /= np.sum(temperature_action_probabilities)
         else:
+            assert False  # TODO remove
             temperature_action_probabilities = action_probabilities
 
         np.random.seed(42)  # TODO remove this
