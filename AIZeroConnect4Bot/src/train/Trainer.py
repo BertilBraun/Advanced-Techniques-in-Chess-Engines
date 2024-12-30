@@ -1,4 +1,5 @@
 import math
+import tensorflow as tf
 import torch
 import random
 import numpy as np
@@ -12,6 +13,7 @@ from src.settings import TORCH_DTYPE
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.self_play.SelfPlay import SelfPlayMemory
+from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
@@ -38,6 +40,7 @@ class Trainer:
 
         train_stats = TrainingStats(self.args.batch_size)
         base_lr = self.args.learning_rate(iteration)
+        tf.summary.scalar('learning_rate', base_lr, step=iteration)
 
         self.model.train()
 

@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-from src.Network import _NN_VALUE_OUTPUT
 from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
+from src.train.TrainingArgs import TrainingArgs
 
 
 class AlphaMCTSNode:
@@ -45,7 +45,7 @@ class AlphaMCTSNode:
     def is_terminal_node(self) -> bool:
         return self.board is not None and self.board.is_game_over()
 
-    def ucb(self, c_param: float = 0.1) -> float:
+    def ucb(self, c_param: float) -> float:
         assert self.parent, 'Node must have a parent'
 
         policy_score = c_param * np.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
@@ -84,7 +84,7 @@ class AlphaMCTSNode:
             self.parent.children_result_scores[child_index] += result
             self.parent.back_propagate(-result)
 
-    def best_child(self, c_param: float = 0.1) -> AlphaMCTSNode:
+    def best_child(self, c_param: float) -> AlphaMCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
 
         q_score = np.zeros(len(self.children), dtype=np.float32)
@@ -115,10 +115,10 @@ move: {self.move_to_get_here}
 children: {len(self.children)}
 )"""
 
-    def show_graph(self):
+    def show_graph(self, args: TrainingArgs):
         nodes = []
         edges = []
-        self._show_graph(nodes, edges)
+        self._show_graph(nodes, edges, args)
         print('Max depth, num terminal nodes, num nodes')
         print(self._collect_stats(self))
 
@@ -137,8 +137,6 @@ children: {len(self.children)}
         current_time = time.strftime('%Y%m%d-%H%M%S')
         os.system(f'dot -Tpng graph.dot -o graph_{current_time}.png')
         # os.system(f'graph_{current_time}.png')
-        print(_NN_VALUE_OUTPUT)
-        _NN_VALUE_OUTPUT.clear()
         # exit()
 
     def _collect_stats(self, node, depth=0):
@@ -157,19 +155,22 @@ children: {len(self.children)}
             num_terminal_nodes += 1
         return max_depth, num_terminal_nodes, num_nodes
 
-    def graph_id(self):
-        return f"""{self.board.to_string(False) if self.board else 'None'}
+    def graph_id(self, args: TrainingArgs):
+        b = 'None'
+        if self.board:
+            b = CURRENT_GAME.get_canonical_board(self.board)[0] - CURRENT_GAME.get_canonical_board(self.board)[1]
+        return f"""{b}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 policy: {self.policy:.2f}
 calc_policy: {round(self.number_of_visits / self.parent.number_of_visits, 2) if self.parent else 1}
-ucb: {(round(self.ucb(), 2)) if self.parent else "None"}"""
+ucb: {(round(self.ucb(args.c_param), 2)) if self.parent else "None"}"""
 
-    def _show_graph(self, nodes, edges):
+    def _show_graph(self, nodes, edges, args: TrainingArgs):
         if self.board is None:
             return
-        nodes.append(self.graph_id())
+        nodes.append(self.graph_id(args))
         if self.parent:
-            edges.append((self.parent.graph_id(), self.graph_id()))
+            edges.append((self.parent.graph_id(args), self.graph_id(args)))
         for child in self.children:
-            child._show_graph(nodes, edges)
+            child._show_graph(nodes, edges, args)

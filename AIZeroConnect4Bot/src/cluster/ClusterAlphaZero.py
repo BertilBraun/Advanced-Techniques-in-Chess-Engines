@@ -2,6 +2,7 @@ import time
 import torch
 
 from torch.optim import Adam
+from tensorflow._api.v2.summary import create_file_writer
 
 from src.settings import CURRENT_GAME, TORCH_DTYPE
 from src.util.log import log
@@ -43,19 +44,21 @@ class ClusterAlphaZero(AlphaZero):
         super().__init__(model, optimizer, args, load_latest_model)
 
     def learn(self) -> None:
-        if self.trainers == 0 and self.cluster_manager.is_root_node:
-            self._mix_self_play_and_train_on_cluster()
-        else:
-            if self.cluster_manager.rank < self.trainers:
-                self._train_on_cluster()
+        with create_file_writer(str(self.save_path / 'logs')).as_default():
+            if self.trainers == 0 and self.cluster_manager.is_root_node:
+                self._mix_self_play_and_train_on_cluster()
             else:
-                self._self_play_on_cluster()
+                if self.cluster_manager.rank < self.trainers:
+                    self._train_on_cluster()
+                else:
+                    self._self_play_on_cluster()
 
     def _mix_self_play_and_train_on_cluster(self) -> None:
         training_stats: list[TrainingStats] = []
+        starting_iteration = self.starting_iteration
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            num_self_play_calls = self.args.num_self_play_iterations // self.self_players // 2
+            num_self_play_calls = self.args.num_self_play_games_per_iteration // self.self_players // 2
             self._self_play_and_write_memory(iteration, num_self_play_calls)
             training_stats.append(self._train_and_save_new_model(iteration))
             self._load_latest_model()
@@ -63,17 +66,18 @@ class ClusterAlphaZero(AlphaZero):
         log('Training finished')
         log('Final training stats:')
         for i, stats in enumerate(training_stats):
-            log(f'Iteration {i + 1}: {stats}')
+            log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_on_cluster(self) -> None:
         # Starting iteration is always loaded from the latest model
         while self.starting_iteration < self.args.num_iterations:
-            num_self_play_calls = self.args.num_self_play_iterations // self.self_players
+            num_self_play_calls = self.args.num_self_play_games_per_iteration // self.self_players
             self._self_play_and_write_memory(self.starting_iteration, num_self_play_calls)
             self._load_latest_model()
 
     def _train_on_cluster(self) -> None:
         training_stats: list[TrainingStats] = []
+        starting_iteration = self.starting_iteration
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
             training_stats.append(self._train_one_iteration(iteration))
@@ -81,10 +85,10 @@ class ClusterAlphaZero(AlphaZero):
         log('Training finished')
         log('Final training stats:')
         for i, stats in enumerate(training_stats):
-            log(f'Iteration {i + 1}: {stats}')
+            log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
-        EXPECTED_NUM_SAMPLES = self.args.num_self_play_iterations * CURRENT_GAME.average_num_moves_per_game
+        EXPECTED_NUM_SAMPLES = self.args.num_self_play_games_per_iteration * CURRENT_GAME.average_num_moves_per_game
 
         while len(self._load_all_memories(iteration)) < EXPECTED_NUM_SAMPLES:
             log('Waiting for memories...')

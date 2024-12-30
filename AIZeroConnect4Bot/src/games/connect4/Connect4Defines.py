@@ -1,6 +1,6 @@
 ROW_COUNT = 7
 COLUMN_COUNT = 8
-NUM_RES_BLOCKS = 10
+NUM_RES_BLOCKS = 9
 NUM_HIDDEN = 128
 ENCODING_CHANNELS = 1  # 6+6 for chess, 1 for connect4
 CELL_STATES = 3  # 3 for connect4, 2 for chess

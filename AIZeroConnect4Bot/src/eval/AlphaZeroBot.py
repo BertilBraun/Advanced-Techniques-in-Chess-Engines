@@ -10,27 +10,29 @@ from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, network_model_file_path: str | None, max_time_to_think: float) -> None:
+    def __init__(self, network_model_file_path: str | Network | None, max_time_to_think: float) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
-        self.model = Network()
-        if network_model_file_path is not None:
-            self.model.load_state_dict(
-                torch.load(
-                    network_model_file_path,
-                    map_location=self.model.device,
-                    weights_only=True,
+        if isinstance(network_model_file_path, Network):
+            self.model = network_model_file_path
+        else:
+            self.model = Network()
+            if network_model_file_path is not None:
+                self.model.load_state_dict(
+                    torch.load(
+                        network_model_file_path,
+                        map_location=self.model.device,
+                        weights_only=True,
+                    )
                 )
-            )
         self.model.eval()
 
     def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
         # board.board = np.array([1, 0, 1, 0, -1, 0, 0, 0, -1])
         root = AlphaMCTSNode.root(board)
 
-        for i in range(800):  # TODO 1_000_000
+        for _ in range(1_000_000):
             self.iterate(root)
             if self.time_is_up:
-                log(f'AlphaZeroBot has thought for {self.time_elapsed:.2f} seconds and {i+1} iterations')
                 break
 
         # root.show_graph()
@@ -38,15 +40,15 @@ class AlphaZeroBot(Bot):
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
 
-        log('---------------------- Alpha Zero Best Move ----------------------')
-        log(f'Best child has {best_child.number_of_visits:.4f} visits')
-        log(f'Best child has {best_child.result_score:.4f} result_score')
-        log(f'Best child has {best_child.policy:.4f} policy')
-        log('Child moves:', [child.move_to_get_here for child in root.children])
-        log('Child visits:', [child.number_of_visits for child in root.children])
-        log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
-        log('Child policies:', [round(child.policy, 2) for child in root.children])
-        log('------------------------------------------------------------------')
+        # TODO log('---------------------- Alpha Zero Best Move ----------------------')
+        # TODO log(f'Best child has {best_child.number_of_visits:.4f} visits')
+        # TODO log(f'Best child has {best_child.result_score:.4f} result_score')
+        # TODO log(f'Best child has {best_child.policy:.4f} policy')
+        # TODO log('Child moves:', [child.move_to_get_here for child in root.children])
+        # TODO log('Child visits:', [child.number_of_visits for child in root.children])
+        # TODO log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
+        # TODO log('Child policies:', [round(child.policy, 2) for child in root.children])
+        # TODO log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here
 
@@ -55,9 +57,9 @@ class AlphaZeroBot(Bot):
         while not current_node.is_terminal_node and current_node.is_fully_expanded:
             current_node = current_node.best_child(PLAY_C_PARAM)
 
-        if not current_node.is_terminal_node:
-            print('Currently at node:')
-            current_node.board.display()
+        # TODO if not current_node.is_terminal_node:
+        # TODO     print('Currently at node:')
+        # TODO     current_node.board.display()
 
         if current_node.is_terminal_node:
             result = get_board_result_score(current_node.board)
@@ -68,9 +70,9 @@ class AlphaZeroBot(Bot):
             moves_with_scores, result = self.evaluation(current_node.board)
             current_node.expand(moves_with_scores)
 
-        if not current_node.is_terminal_node:
-            print('Result:', result)
-            print('Child visits:', [child.number_of_visits for child in current_node.children])
+        # TODO if not current_node.is_terminal_node:
+        # TODO     print('Result:', result)
+        # TODO     print('Child visits:', [child.number_of_visits for child in current_node.children])
 
         current_node.back_propagate(result)
 

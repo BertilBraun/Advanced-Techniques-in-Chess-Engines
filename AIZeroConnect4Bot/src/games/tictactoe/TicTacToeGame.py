@@ -14,7 +14,7 @@ from src.games.tictactoe.TicTacToeBoard import (
 )
 from src.util.ZobristHasher import ZobristHasher
 
-ENCODING_CHANNELS = 1  # TODO also try out for 3 channels
+ENCODING_CHANNELS = 3  # TODO also try out for 3 channels
 ACTION_SIZE = BOARD_SIZE
 
 
@@ -35,7 +35,7 @@ class TicTacToeGame(Game[TicTacToeMove]):
 
     @property
     def network_properties(self) -> tuple[int, int]:
-        NUM_RES_BLOCKS = 6
+        NUM_RES_BLOCKS = 4
         NUM_HIDDEN = 64
         return NUM_RES_BLOCKS, NUM_HIDDEN
 
@@ -45,7 +45,16 @@ class TicTacToeGame(Game[TicTacToeMove]):
         return AVERAGE_NUM_MOVES_PER_GAME
 
     def get_canonical_board(self, board: TicTacToeBoard) -> np.ndarray:
-        return (board.board * board.current_player).reshape(self.representation_shape)
+        # TODO 3 channels for player 1, player 2 and empty cells?
+        canonical_board = board.board * board.current_player
+        return np.stack(
+            [
+                (canonical_board == 1).astype(np.float32),
+                (canonical_board == -1).astype(np.float32),
+                (canonical_board == 0).astype(np.float32),
+            ]
+        ).reshape(self.representation_shape)
+        # return (board.board * board.current_player).reshape(self.representation_shape)
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'

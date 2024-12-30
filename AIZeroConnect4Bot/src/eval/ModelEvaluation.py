@@ -3,6 +3,9 @@ import numpy as np
 from typing import Tuple
 
 from src.Network import Network
+from src.eval.AlphaZeroBot import AlphaZeroBot
+from src.eval.GameManager import GameManager
+from src.eval.RandomPlayer import RandomPlayer
 from src.settings import CURRENT_BOARD, CURRENT_GAME
 
 
@@ -106,6 +109,58 @@ class ModelEvaluation:
             games = [game for game in games if not game.is_game_over()]
 
         return win, loss, draw
+
+    def play_vs_random(self, model: Network, num_games: int = 64) -> Tuple[int, int, int]:
+        # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
+        wins = draws = losses = 0
+
+        az_bot = AlphaZeroBot(model, max_time_to_think=0.02)  # 20ms
+        random_bot = RandomPlayer()
+        for p1, p2 in ((az_bot, random_bot), (random_bot, az_bot)):
+            game_manager = GameManager(p1, p2)
+            for _ in range(num_games // 2):
+                result = game_manager.play_game()
+                if result == 1:
+                    if p1 == az_bot:
+                        wins += 1
+                    else:
+                        losses += 1
+                elif result == -1:
+                    if p2 == az_bot:
+                        wins += 1
+                    else:
+                        losses += 1
+                else:
+                    draws += 1
+
+        return wins, losses, draws
+
+    def play_two_models_search(
+        self, current_model: Network, previous_model: Network, num_games: int = 64
+    ) -> Tuple[int, int, int]:
+        wins = draws = losses = 0
+
+        for model1, model2 in [(current_model, previous_model), (previous_model, current_model)]:
+            game_manager = GameManager(
+                AlphaZeroBot(model1, max_time_to_think=0.02),  # 40ms
+                AlphaZeroBot(model2, max_time_to_think=0.02),  # 40ms
+            )
+            for _ in range(num_games // 2):
+                result = game_manager.play_game()
+                if result == 1:
+                    if model1 == current_model:
+                        wins += 1
+                    else:
+                        losses += 1
+                elif result == -1:
+                    if model2 == current_model:
+                        wins += 1
+                    else:
+                        losses += 1
+                else:
+                    draws += 1
+
+        return wins, losses, draws
 
     def play_two_models_batch(
         self, current_model: Network, previous_model: Network, batch_size: int = 64

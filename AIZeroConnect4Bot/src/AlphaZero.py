@@ -1,10 +1,13 @@
 import json
 import torch
+import tensorflow as tf
+from tensorflow._api.v2.summary import create_file_writer
 
 from tqdm import trange
 from pathlib import Path
 
 from src.eval.ModelEvaluation import ModelEvaluation
+from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log
 from src.util import batched_iterate, load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -31,28 +34,30 @@ class AlphaZero:
         self.trainer = Trainer(model, optimizer, args)
 
         self.save_path = Path(self.args.save_path)
-        self.save_path.mkdir(exist_ok=True)
+        self.save_path.mkdir(parents=True, exist_ok=True)
 
         if load_latest_model:
             self._load_latest_model()
 
     def learn(self) -> None:
         training_stats: list[TrainingStats] = []
+        starting_iteration = self.starting_iteration
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            self._self_play_and_write_memory(
-                iteration,
-                self.args.num_self_play_iterations,
-            )
+            with create_file_writer(str(self.save_path / 'logs')).as_default():
+                self._self_play_and_write_memory(
+                    iteration,
+                    self.args.num_self_play_games_per_iteration,
+                )
 
-            training_stats.append(self._train_and_save_new_model(iteration))
+                training_stats.append(self._train_and_save_new_model(iteration))
 
-            self._load_latest_model()
+                self._load_latest_model()
 
         log('Training finished')
         log('Final training stats:')
         for i, stats in enumerate(training_stats):
-            log(f'Iteration {i + 1}: {stats}')
+            log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_and_write_memory(self, iteration: int, num_self_play_calls: int):
         memory: list[SelfPlayMemory] = []
@@ -69,13 +74,52 @@ class AlphaZero:
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         memory = self._load_all_memories_to_train_on_for_iteration(iteration)
         log(f'Loaded {len(memory)} self-play memories.')
+        tf.summary.scalar('num_training_samples', len(memory), iteration)
+
         memory = self._deduplicate_positions(memory)
         log(f'Deduplicated to {len(memory)} unique positions.')
+        tf.summary.scalar('num_deduplicated_samples', len(memory), iteration)
+
+        tf.summary.histogram('training_sample_values', torch.tensor([mem.value_target for mem in memory]), iteration)
+
+        # tf.summary.histogram(
+        #     'nn_output_value_distribution',
+        #     torch.tensor([mem.policy_targets for mem in memory]).flatten(),
+        #     iteration,
+        # )
+
+        # figure out average spikeyness of policy targets.
+        # Should be close to 1 if the policy is very spikey, and close to 1/9 if it is very uniform.
+        for i, mem in enumerate(memory):
+            assert (
+                abs(mem.policy_targets.sum() - 1) < 1e-5
+            ), f'Policy target sum is not 1 for memory {i}: {mem.policy_targets.sum()} != 1 ({mem.policy_targets})'
+        spikiness = sum((mem.policy_targets).max().item() for mem in memory) / len(memory)
+        tf.summary.scalar('policy_spikiness', spikiness, iteration)
+        tf.summary.histogram(
+            'policy_targets', torch.stack([mem.policy_targets for mem in memory]).reshape(-1), iteration
+        )
 
         train_stats = TrainingStats(self.args.batch_size)
         for epoch in range(self.args.num_epochs):
-            train_stats += self.trainer.train(memory, iteration)
-            log(f'Epoch {epoch + 1}: {train_stats}')
+            epoch_train_stats = self.trainer.train(memory, iteration)
+            tf.summary.scalar(
+                'policy_loss',
+                epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
+                iteration * self.args.num_epochs + epoch,
+            )
+            tf.summary.scalar(
+                'value_loss',
+                epoch_train_stats.value_loss / epoch_train_stats.num_batches,
+                iteration * self.args.num_epochs + epoch,
+            )
+            tf.summary.scalar(
+                'total_loss',
+                epoch_train_stats.total_loss / epoch_train_stats.num_batches,
+                iteration * self.args.num_epochs + epoch,
+            )
+            log(f'Epoch {epoch + 1}: {epoch_train_stats}')
+            train_stats += epoch_train_stats
 
         log(f'Iteration {iteration + 1}: {train_stats}')
         self._save_latest_model(iteration)
@@ -95,6 +139,8 @@ class AlphaZero:
                 log(f'No new model found, starting from iteration {self.starting_iteration}')
                 return
 
+            clear_model_inference_cache(self.starting_iteration)
+
             self.starting_iteration = new_starting_iteration
             self.model.load_state_dict(
                 torch.load(last_training_config['model'], map_location=self.model.device, weights_only=True)
@@ -102,8 +148,6 @@ class AlphaZero:
             self.optimizer.load_state_dict(
                 torch.load(last_training_config['optimizer'], map_location=self.model.device, weights_only=True)
             )
-
-            clear_model_inference_cache()
 
             log(f'Model and optimizer loaded from iteration {self.starting_iteration}')
         except FileNotFoundError:
@@ -170,6 +214,25 @@ class AlphaZero:
 
     def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
         """Deduplicate the positions in the memory by averaging the policy and value targets for the same board state."""
+        m: dict[int, list[SelfPlayMemory]] = {}
+        for mem in memory:
+            h = CURRENT_GAME.hash_boards(torch.stack([mem.state]))[0]
+            if h in m:
+                m[h].append(mem)
+            else:
+                m[h] = [mem]
+
+        for h, mems in m.items():
+            if any(m.value_target != mems[0].value_target for m in mems):
+                log('Different value targets for the same board state!')
+                from collections import Counter
+
+                log(Counter(m.value_target for m in mems))
+                board = mems[0].state[0] - mems[0].state[1]
+                log(board)
+
+        exit()
+
         mp: dict[int, tuple[int, SelfPlayMemory]] = {}
         for batch in batched_iterate(memory, 128):
             states = [mem.state for mem in batch]
@@ -197,7 +260,20 @@ class AlphaZero:
         previous_model = self._load_model(iteration - 1)
 
         model_evaluation = ModelEvaluation()
-        wins, losses, draws = model_evaluation.play_two_models_batch(current_model, previous_model, 64)
+        wins, losses, draws = model_evaluation.play_two_models_search(current_model, previous_model, 30)
+        # wins, losses, draws = model_evaluation.play_two_models_batch(current_model, previous_model, 64)
 
         log(f'Results after playing two most recent models at iteration {iteration}:')
         log(f'Wins: {wins}, Losses: {losses}, Draws: {draws}')
+
+        tf.summary.scalar('win_loss_draw_vs_previous_model/wins', wins, iteration)
+        tf.summary.scalar('win_loss_draw_vs_previous_model/losses', losses, iteration)
+        tf.summary.scalar('win_loss_draw_vs_previous_model/draws', draws, iteration)
+
+        wins, losses, draws = model_evaluation.play_vs_random(current_model, 30)
+        log(f'Results after playing vs random at iteration {iteration}:')
+        log(f'Wins: {wins}, Losses: {losses}, Draws: {draws}')
+
+        tf.summary.scalar('win_loss_draw_vs_random/wins', wins, iteration)
+        tf.summary.scalar('win_loss_draw_vs_random/losses', losses, iteration)
+        tf.summary.scalar('win_loss_draw_vs_random/draws', draws, iteration)

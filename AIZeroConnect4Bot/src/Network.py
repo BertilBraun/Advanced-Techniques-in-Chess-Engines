@@ -1,10 +1,12 @@
 from collections import Counter
+import tensorflow as tf
 import torch
 import numpy as np
 import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
+from src.util.TrainingDashboard import TrainingDashboard
 from src.util.log import log, ratio
 from src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
 
@@ -13,8 +15,6 @@ _NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
 
 _TOTAL_EVALS = 0
 _TOTAL_HITS = 0
-
-_NN_VALUE_OUTPUT = Counter()
 
 
 @torch.no_grad()
@@ -40,8 +40,6 @@ def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tenso
 
     policies = torch.stack([_NN_CACHE[hash][0] for hash in hashes])
     values = torch.stack([_NN_CACHE[hash][1] for hash in hashes])
-    for v in values:
-        _NN_VALUE_OUTPUT[round(v.item(), 1)] += 1
     return policies, values
 
 
@@ -53,11 +51,22 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
     value = np.mean(values, axis=1)
     # for board, p, v in zip(x, policy, value):
     #     print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
+
+    # TODO uniform policy and 0 value for testing
+    policy = np.ones_like(policy) / policy.shape[1]
+    value = np.zeros_like(value)
+    policy = np.ones((1, 9)) / 9
+    value = np.zeros((1))
     return policy, value
 
 
-def clear_model_inference_cache() -> None:
+def clear_model_inference_cache(iteration: int) -> None:
     if _TOTAL_EVALS != 0:
+        tf.summary.scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, step=iteration)
+        tf.summary.scalar('unique_positions_in_cache', len(_NN_CACHE), step=iteration)
+        tf.summary.histogram(
+            'nn_output_value_distribution', [round(v.item(), 1) for _, v in _NN_CACHE.values()], step=iteration
+        )
         log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', len(_NN_CACHE))
     _NN_CACHE.clear()
 

@@ -42,6 +42,7 @@ class Connect4Game(Game[Connect4Move]):
         return AVERAGE_NUM_MOVES_PER_GAME
 
     def get_canonical_board(self, board: Connect4Board) -> np.ndarray:
+        # TODO 3 channels for player 1, player 2 and empty cells?
         return (board.board * board.current_player).reshape(self.representation_shape)
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:

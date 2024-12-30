@@ -45,7 +45,7 @@ class SelfPlay:
 
                 if spg.board.is_game_over():
                     self_play_memory.extend(self._get_training_data(spg))
-                    # exit()  # TODO remove this
+                    exit()  # TODO remove this
 
             self_play_games = [spg for spg in self_play_games if not spg.board.is_game_over()]
 
@@ -57,6 +57,8 @@ class SelfPlay:
         # 1 if current player won, -1 if current player lost, 0 if draw
         result = get_board_result_score(spg.board)
         assert result is not None, 'Game is not over'
+
+        self.analyze(spg)
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
@@ -79,6 +81,35 @@ class SelfPlay:
 
         return self_play_memory
 
+    def analyze(self, spg):
+        database = {}
+        with open('tictactoe_database.txt', 'r') as f:
+            for line in f:
+                # (0, 0, 0, 0, 0, 0, 0, 0, 0);(0, 1, 2, 3, 4, 5, 6, 7, 8);0
+                board, valid_moves, result = line.split(';')
+                board = eval(board)
+                valid_moves = eval(valid_moves)
+                database[board] = (valid_moves, int(result))
+
+        for i, mem in enumerate(spg.memory[::-1]):  # reverse to flip the result for the other player
+            if i >= len(spg.memory) - 1:
+                continue
+            encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
+            board = tuple((encoded_board[0] - encoded_board[1]).reshape(-1).tolist())
+            valid_moves, db_result = database[board]
+
+            moves = filter_policy_then_get_moves_and_probabilities(mem.action_probabilities, mem.board)
+
+            if max(moves, key=lambda x: x[1])[0] not in valid_moves:
+                if (encoded_board[0] + encoded_board[1]).sum() >= 3:
+                    print('Moves:', list(sorted(moves, key=lambda x: x[1], reverse=True)))
+                    print('Valid moves from db:', valid_moves)
+                    print('Result:', str(result).strip(), 'DB Result:', db_result)
+                    print('Curr Board:\n', np.array(board).reshape(3, 3))
+                    # input()
+            else:
+                print('Move is valid and in DB')
+
     @torch.no_grad()
     def _expand_self_play_games(self, self_play_games: list[SelfPlayGame], iteration: int) -> None:
         policy = self._get_policy_with_noise(self_play_games, iteration)
@@ -89,7 +120,7 @@ class SelfPlay:
             spg.root = AlphaMCTSNode.root(spg.board)
             spg.root.expand(moves)
 
-        for _ in range(self.args.num_iterations_per_turn):
+        for _ in range(self.args.num_searches_per_turn):
             for spg in self_play_games:
                 spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
@@ -118,7 +149,7 @@ class SelfPlay:
                     node.back_propagate(value[i])
                 else:
                     node.back_propagate(-value[i])
-        # spg.root.show_graph()  # TODO remove this
+        spg.root.show_graph(self.args)  # TODO remove this
 
     def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
         encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
@@ -132,9 +163,10 @@ class SelfPlay:
         )
 
         # Add dirichlet noise to the policy to encourage exploration
+        np.random.seed(42)  # TODO remove this
         dirichlet_noise = np.random.dirichlet(
             [self.args.dirichlet_alpha(iteration)] * CURRENT_GAME.action_size,
-            size=len(self_play_games),
+            # TODO readd this size=len(self_play_games),
         )
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
@@ -156,6 +188,7 @@ class SelfPlay:
         else:
             temperature_action_probabilities = action_probabilities
 
+        np.random.seed(42)  # TODO remove this
         action = np.random.choice(CURRENT_GAME.action_size, p=temperature_action_probabilities)
 
-        return action
+        return CURRENT_GAME.decode_move(action)
