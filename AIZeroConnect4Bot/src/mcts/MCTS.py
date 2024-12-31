@@ -7,10 +7,10 @@ import torch
 from src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
 from src.util import lerp
 from src.Network import Network, cached_network_inference
-from src.AlphaMCTSNode import AlphaMCTSNode
+from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from src.train.TrainingArgs import TrainingArgs
-from src.self_play.SelfPlayGame import SelfPlayGame, SelfPlayGameMemory
+from src.train.TrainingArgs import MCTSArgs
+from src.mcts.MCTSGame import MCTSGame, MCTSGameMemory
 
 
 @dataclass
@@ -20,14 +20,16 @@ class SelfPlayMemory:
     value_target: float
 
 
-class SelfPlay:
-    def __init__(self, model: Network, args: TrainingArgs) -> None:
+class MCTS:
+    def __init__(self, model: Network, args: MCTSArgs) -> None:
         self.model = model
         self.args = args
 
     def self_play(self, iteration: int) -> list[SelfPlayMemory]:
+        # TODO split out a MCTS.search function and decouple the self-play from the mcts. The self-play should be in the AlphaZero class, the search should be usable in the self-play, model-vs-model evaluation and AlphaZeroBot
+
         self_play_memory: list[SelfPlayMemory] = []
-        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self_play_games: list[MCTSGame] = [MCTSGame() for _ in range(self.args.num_parallel_games)]
 
         self.model.eval()
 
@@ -36,7 +38,7 @@ class SelfPlay:
 
             for spg in self_play_games:
                 action_probabilities = self._get_action_probabilities(spg.root)
-                spg.memory.append(SelfPlayGameMemory(spg.root.board, action_probabilities))
+                spg.memory.append(MCTSGameMemory(spg.root.board, action_probabilities))
 
                 move = self._sample_move(action_probabilities, spg.root)
 
@@ -50,7 +52,7 @@ class SelfPlay:
 
         return self_play_memory
 
-    def _get_training_data(self, spg: SelfPlayGame) -> list[SelfPlayMemory]:
+    def _get_training_data(self, spg: MCTSGame) -> list[SelfPlayMemory]:
         self_play_memory: list[SelfPlayMemory] = []
 
         # 1 if current player won, -1 if current player lost, 0 if draw
@@ -79,20 +81,20 @@ class SelfPlay:
         return self_play_memory
 
     @torch.no_grad()
-    def _expand_self_play_games(self, self_play_games: list[SelfPlayGame], iteration: int) -> None:
+    def _expand_self_play_games(self, self_play_games: list[MCTSGame], iteration: int) -> None:
         policy = self._get_policy_with_noise(self_play_games, iteration)
 
         for spg, spg_policy in zip(self_play_games, policy):
             moves = filter_policy_then_get_moves_and_probabilities(spg_policy, spg.board)
 
-            spg.root = AlphaMCTSNode.root(spg.board)
+            spg.root = MCTSNode.root(spg.board)
             spg.root.expand(moves)
 
         for _ in range(self.args.num_searches_per_turn):
             for spg in self_play_games:
                 spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
-            expandable_nodes: list[tuple[SelfPlayGame, AlphaMCTSNode]] = [
+            expandable_nodes: list[tuple[MCTSGame, MCTSNode]] = [
                 (spg, spg.node) for spg in self_play_games if spg.node is not None
             ]
 
@@ -115,7 +117,7 @@ class SelfPlay:
                 node.expand(moves)
                 node.back_propagate(value[i])
 
-    def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
+    def _get_policy_with_noise(self, self_play_games: list[MCTSGame], iteration: int) -> np.ndarray:
         encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
         policy, _ = cached_network_inference(
             self.model,
@@ -134,7 +136,7 @@ class SelfPlay:
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
 
-    def _get_action_probabilities(self, root_node: AlphaMCTSNode) -> np.ndarray:
+    def _get_action_probabilities(self, root_node: MCTSNode) -> np.ndarray:
         action_probabilities = np.zeros(CURRENT_GAME.action_size, dtype=np.float32)
 
         for child in root_node.children:
@@ -143,7 +145,7 @@ class SelfPlay:
 
         return action_probabilities
 
-    def _sample_move(self, action_probabilities: np.ndarray, root_node: AlphaMCTSNode) -> CURRENT_GAME_MOVE:
+    def _sample_move(self, action_probabilities: np.ndarray, root_node: MCTSNode) -> CURRENT_GAME_MOVE:
         # only use temperature for the first 30 moves, then simply use the action probabilities as they are
         if root_node.num_played_moves < 30:
             temperature_action_probabilities = action_probabilities ** (1 / self.args.temperature)

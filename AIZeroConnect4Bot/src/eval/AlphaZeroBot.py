@@ -3,7 +3,7 @@ import torch
 
 from src.util.log import log
 from src.eval.Bot import Bot
-from src.AlphaMCTSNode import AlphaMCTSNode
+from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.Network import Network, cached_network_inference
 from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE
@@ -27,15 +27,13 @@ class AlphaZeroBot(Bot):
         self.model.eval()
 
     def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
-        # board.board = np.array([1, 0, 1, 0, -1, 0, 0, 0, -1])
-        root = AlphaMCTSNode.root(board)
+        root = MCTSNode.root(board)
 
-        for _ in range(1_000_000):
+        for _ in range(2**16 - 1):
+            # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
             self.iterate(root)
             if self.time_is_up:
                 break
-
-        # root.show_graph()
 
         best_child_index = np.argmax(root.children_number_of_visits)
         best_child = root.children[best_child_index]
@@ -54,14 +52,10 @@ class AlphaZeroBot(Bot):
 
         return best_child.move_to_get_here
 
-    def iterate(self, root: AlphaMCTSNode) -> None:
+    def iterate(self, root: MCTSNode) -> None:
         current_node = root
         while not current_node.is_terminal_node and current_node.is_fully_expanded:
             current_node = current_node.best_child(PLAY_C_PARAM)
-
-        # TODO if not current_node.is_terminal_node:
-        # TODO     print('Currently at node:')
-        # TODO     current_node.board.display()
 
         if current_node.is_terminal_node:
             result = get_board_result_score(current_node.board)
@@ -70,10 +64,6 @@ class AlphaZeroBot(Bot):
         else:
             moves_with_scores, result = self.evaluation(current_node.board)
             current_node.expand(moves_with_scores)
-
-        # TODO if not current_node.is_terminal_node:
-        # TODO     print('Result:', result)
-        # TODO     print('Child visits:', [child.number_of_visits for child in current_node.children])
 
         current_node.back_propagate(result)
 
@@ -87,10 +77,6 @@ class AlphaZeroBot(Bot):
                 dtype=TORCH_DTYPE,
             ),
         )
-        # TODO remove this
-        # Test, wheather the search is working
-        # policy = np.full(policy.shape, 1 / policy.shape[1])
-        # value = np.full(value.shape, 0.0)
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 

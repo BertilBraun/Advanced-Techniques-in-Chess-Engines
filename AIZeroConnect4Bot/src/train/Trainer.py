@@ -1,8 +1,7 @@
-import math
-import tensorflow as tf
 import torch
 import random
 import numpy as np
+import tensorflow as tf
 import torch.nn.functional as F
 
 from tqdm import tqdm
@@ -12,7 +11,7 @@ from src.Network import VALUE_OUTPUT_HEADS, Network
 from src.settings import TORCH_DTYPE
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
-from src.self_play.SelfPlay import SelfPlayMemory
+from src.mcts.MCTS import SelfPlayMemory
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete

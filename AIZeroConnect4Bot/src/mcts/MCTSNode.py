@@ -6,20 +6,20 @@ import numpy as np
 from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
 
 
-class AlphaMCTSNode:
+class MCTSNode:
     @classmethod
-    def root(cls, board: CURRENT_BOARD) -> AlphaMCTSNode:
+    def root(cls, board: CURRENT_BOARD) -> MCTSNode:
         instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None, num_played_moves=0)
         instance.board = board
         instance.number_of_visits = 1
         return instance
 
     def __init__(
-        self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: AlphaMCTSNode | None, num_played_moves: int
+        self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: MCTSNode | None, num_played_moves: int
     ) -> None:
         self.board: CURRENT_BOARD = None  # type: ignore
         self.parent = parent
-        self.children: list[AlphaMCTSNode] = []
+        self.children: list[MCTSNode] = []
         self.move_to_get_here = move_to_get_here
         self.num_played_moves = num_played_moves  # This is the number of moves played to get to this node
         self.number_of_visits = 0
@@ -59,7 +59,7 @@ class AlphaMCTSNode:
 
     def expand(self, moves_with_scores: list[tuple[CURRENT_GAME_MOVE, float]]) -> None:
         self.children = [
-            AlphaMCTSNode(
+            MCTSNode(
                 policy=score,
                 move_to_get_here=move,
                 parent=self,
@@ -70,7 +70,7 @@ class AlphaMCTSNode:
         ]
 
         # Convert to NumPy arrays
-        self.children_number_of_visits = np.zeros(len(self.children), dtype=np.uint32)
+        self.children_number_of_visits = np.zeros(len(self.children), dtype=np.uint16)
         self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
@@ -83,7 +83,7 @@ class AlphaMCTSNode:
             self.parent.children_q_scores[child_index] = 1 - ((self.result_score / self.number_of_visits) + 1) / 2
             self.parent.back_propagate(-result)
 
-    def best_child(self, c_param: float) -> AlphaMCTSNode:
+    def best_child(self, c_param: float) -> MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
         policy_score = c_param * np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 

@@ -14,7 +14,7 @@ from src.settings import CURRENT_GAME
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
-from src.self_play.SelfPlay import SelfPlay, SelfPlayMemory
+from src.mcts.MCTS import MCTS, SelfPlayMemory
 
 
 class AlphaZero:
@@ -29,7 +29,7 @@ class AlphaZero:
         self.optimizer = optimizer
         self.args = args
         self.starting_iteration = 0
-        self.self_play = SelfPlay(model, args)
+        self.self_play = MCTS(model, args.mcts_args)
         self.trainer = Trainer(model, optimizer, args)
 
         self.save_path = Path(self.args.save_path)
@@ -62,8 +62,8 @@ class AlphaZero:
         memory: list[SelfPlayMemory] = []
 
         for _ in trange(
-            num_self_play_calls // self.args.num_parallel_games,
-            desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
+            num_self_play_calls // self.args.mcts_args.num_parallel_games,
+            desc=f'Self Play for {self.args.mcts_args.num_parallel_games} games in parallel',
         ):
             memory += self.self_play.self_play(iteration)
 

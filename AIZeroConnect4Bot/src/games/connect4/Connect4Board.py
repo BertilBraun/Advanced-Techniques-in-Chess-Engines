@@ -21,17 +21,14 @@ class Connect4Board(Board[Connect4Move]):
     def board_dimensions(self) -> tuple[int, int]:
         return ROW_COUNT, COLUMN_COUNT
 
-    def make_move(self, column: Connect4Move) -> bool:
-        if column < 0 or column >= COLUMN_COUNT or self.board[0][column] != 0:
-            return False
-        for row in range(ROW_COUNT - 1, -1, -1):
-            if self.board[row][column] == 0:
-                self.board[row][column] = self.current_player
-                if self.__check_winner(row, column):
-                    self._winner = self.current_player
-                self._switch_player()
-                return True
-        assert False, 'Unreachable code'
+    def make_move(self, column: Connect4Move) -> None:
+        assert self._winner is None, 'Game is already over'
+        assert 0 <= column < COLUMN_COUNT and self.board[0][column] == 0, 'Invalid move'
+        row = np.argmax(self.board[:, column] == 0).item()
+        self.board[row][column] = self.current_player
+        if self.__check_winner(row, column):
+            self._winner = self.current_player
+        self._switch_player()
 
     def __check_winner(self, row: int, col: int) -> bool:
         piece = self.board[row][col]
@@ -52,10 +49,10 @@ class Connect4Board(Board[Connect4Move]):
         return self._winner
 
     def is_full(self) -> bool:
-        return np.all(self.board[0] != 0)  # type: ignore
+        return np.all(self.board[0] != 0).item()
 
     def get_valid_moves(self) -> list[Connect4Move]:
-        return [col for col in range(COLUMN_COUNT) if self.board[0][col] == 0]
+        return np.where(self.board[0] == 0)[0].tolist()
 
     def get_board_state(self) -> np.ndarray:
         return self.board.copy()

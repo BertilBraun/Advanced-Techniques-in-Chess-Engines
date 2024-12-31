@@ -6,7 +6,7 @@ import torch.nn as nn
 from src.Network import Network
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
 from src.games.tictactoe.TicTacToeGame import TicTacToeGame
-from src.self_play.SelfPlay import SelfPlayMemory
+from src.mcts.MCTS import SelfPlayMemory
 from src.settings import TRAINING_ARGS, VALUE_OUTPUT_HEADS
 from src.train.Trainer import Trainer
 
