@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
+from src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, TORCH_DTYPE
 from src.util import lerp
 from src.Network import Network, cached_network_inference
 from src.mcts.MCTSNode import MCTSNode
@@ -20,7 +20,7 @@ class SelfPlayMemory:
     value_target: float
 
 
-class MCTS:
+class SelfPlay:
     def __init__(self, model: Network, args: MCTSArgs) -> None:
         self.model = model
         self.args = args
@@ -34,9 +34,10 @@ class MCTS:
         self.model.eval()
 
         while len(self_play_games) > 0:
-            self.search(self_play_games, iteration)
+            self._expand_self_play_games(self_play_games, iteration)
 
-            for spg, action_probabilities in zip(self_play_games, self.search([spg.board for spg in self_play_games])):
+            for spg in self_play_games:
+                action_probabilities = self._get_action_probabilities(spg.root)
                 spg.memory.append(SelfPlayGameMemory(spg.root.board, action_probabilities))
 
                 move = self._sample_move(action_probabilities, spg.root)
@@ -51,22 +52,50 @@ class MCTS:
 
         return self_play_memory
 
+    def _get_training_data(self, spg: SelfPlayGame) -> list[SelfPlayMemory]:
+        self_play_memory: list[SelfPlayMemory] = []
+
+        # 1 if current player won, -1 if current player lost, 0 if draw
+        result = get_board_result_score(spg.board)
+        assert result is not None, 'Game is not over'
+
+        for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
+            encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
+
+            # print(
+            #     f'encoded_board: {encoded_board}\n'
+            #     f'mem.policy_targets: {np.round(mem.action_probabilities, 3)}\n'
+            #     f'result: {result}\n'
+            # )
+
+            for board, probabilities in CURRENT_GAME.symmetric_variations(encoded_board, mem.action_probabilities):
+                self_play_memory.append(
+                    SelfPlayMemory(
+                        torch.tensor(board, dtype=torch.int8, requires_grad=False),
+                        torch.tensor(probabilities, dtype=torch.float32, requires_grad=False),
+                        result,
+                    )
+                )
+            result = -result
+
+        return self_play_memory
+
     @torch.no_grad()
-    def search(self, boards: list[CURRENT_BOARD], iteration: int) -> list[np.ndarray]:
-        policy = self._get_policy_with_noise(boards, iteration)
+    def _expand_self_play_games(self, self_play_games: list[SelfPlayGame], iteration: int) -> None:
+        policy = self._get_policy_with_noise(self_play_games, iteration)
 
-        for board, spg_policy in zip(boards, policy):
-            moves = filter_policy_then_get_moves_and_probabilities(spg_policy, board)
+        for spg, spg_policy in zip(self_play_games, policy):
+            moves = filter_policy_then_get_moves_and_probabilities(spg_policy, spg.board)
 
-            board.root = MCTSNode.root(board)
-            board.root.expand(moves)
+            spg.root = MCTSNode.root(spg.board)
+            spg.root.expand(moves)
 
         for _ in range(self.args.num_searches_per_turn):
-            for board in boards:
-                board.node = self._get_best_child_or_back_propagate(board.root, self.args.c_param)
+            for spg in self_play_games:
+                spg.node = spg.get_best_child_or_back_propagate(self.args.c_param)
 
             expandable_nodes: list[tuple[SelfPlayGame, MCTSNode]] = [
-                (spg, spg.node) for spg in boards if spg.node is not None
+                (spg, spg.node) for spg in self_play_games if spg.node is not None
             ]
 
             if len(expandable_nodes) == 0:
@@ -82,16 +111,14 @@ class MCTS:
                 ),
             )
 
-            for i, (board, node) in enumerate(expandable_nodes):
+            for i, (spg, node) in enumerate(expandable_nodes):
                 moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
 
                 node.expand(moves)
                 node.back_propagate(value[i])
 
-        return [self._get_action_probabilities(board.root) for board in boards]
-
-    def _get_policy_with_noise(self, boards: list[CURRENT_BOARD], iteration: int) -> np.ndarray:
-        encoded_boards = [CURRENT_GAME.get_canonical_board(board) for board in boards]
+    def _get_policy_with_noise(self, self_play_games: list[SelfPlayGame], iteration: int) -> np.ndarray:
+        encoded_boards = [CURRENT_GAME.get_canonical_board(spg.board) for spg in self_play_games]
         policy, _ = cached_network_inference(
             self.model,
             torch.tensor(
@@ -104,7 +131,7 @@ class MCTS:
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(
             [self.args.dirichlet_alpha(iteration)] * CURRENT_GAME.action_size,
-            size=len(boards),
+            size=len(self_play_games),
         )
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
@@ -129,17 +156,3 @@ class MCTS:
         action = np.random.choice(CURRENT_GAME.action_size, p=temperature_action_probabilities)
 
         return CURRENT_GAME.decode_move(action)
-
-    def _get_best_child_or_back_propagate(self, root_node: MCTSNode, c_param: float) -> MCTSNode | None:
-        node = root_node
-
-        while node.is_fully_expanded:
-            node = node.best_child(c_param)
-
-        if node.is_terminal_node:
-            result = get_board_result_score(node.board)
-            assert result is not None
-            node.back_propagate(-result)
-            return None
-
-        return node
