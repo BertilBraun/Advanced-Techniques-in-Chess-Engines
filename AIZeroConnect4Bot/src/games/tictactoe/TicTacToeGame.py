@@ -40,13 +40,17 @@ class TicTacToeGame(Game[TicTacToeMove]):
 
     def get_canonical_board(self, board: TicTacToeBoard) -> np.ndarray:
         canonical_board = board.board * board.current_player
-        return np.stack(
-            [
-                (canonical_board == 1).astype(np.float32),
-                (canonical_board == -1).astype(np.float32),
-                (canonical_board == 0).astype(np.float32),
-            ]
-        ).reshape(self.representation_shape)
+        return (
+            np.stack(
+                (
+                    (canonical_board == 1),
+                    (canonical_board == -1),
+                    (canonical_board == 0),
+                )
+            )
+            .astype(np.float32)
+            .reshape(self.representation_shape)
+        )
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'

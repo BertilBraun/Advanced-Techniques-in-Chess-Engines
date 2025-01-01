@@ -32,8 +32,7 @@ class Connect4Board(Board[Connect4Move]):
 
     def __check_winner(self, row: int, col: int) -> bool:
         piece = self.board[row][col]
-        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        for delta_row, delta_col in directions:
+        for delta_row, delta_col in ((1, 0), (0, 1), (1, 1), (1, -1)):
             count = 1
             for dr, dc in [(delta_row, delta_col), (-delta_row, -delta_col)]:
                 r, c = row + dr, col + dc

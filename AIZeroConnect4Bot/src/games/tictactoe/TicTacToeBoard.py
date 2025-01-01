@@ -29,12 +29,12 @@ class TicTacToeBoard(Board[TicTacToeMove]):
             return False
 
         self.board[move] = self.current_player
-        if self._check_winner(move):
+        if self.__check_winner(move):
             self._winner = self.current_player
         self._switch_player()
         return True
 
-    def _check_winner(self, move: TicTacToeMove) -> bool:
+    def __check_winner(self, move: TicTacToeMove) -> bool:
         r, c = divmod(move, ROW_COUNT)
 
         return (

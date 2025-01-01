@@ -6,15 +6,14 @@ import torch.nn as nn
 from src.Network import Network
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
 from src.games.tictactoe.TicTacToeGame import TicTacToeGame
-from src.mcts.MCTS import SelfPlayMemory
-from src.settings import TRAINING_ARGS, VALUE_OUTPUT_HEADS
-from src.train.Trainer import Trainer
+from src.alpha_zero.SelfPlay import SelfPlayMemory
+from src.settings import TRAINING_ARGS
+from src.alpha_zero.train.Trainer import Trainer
 
 # --------------------------
 # 1. Dataset Preparation
 # --------------------------
 
-NUM_VALUE_OUTPUTS = VALUE_OUTPUT_HEADS
 NUM_EPOCHS = 50
 BATCH_SIZE = 16
 DATASET_PERCENTAGE = 0.8
@@ -38,7 +37,7 @@ class TicTacToeDataset(Dataset):
                     moves_tensor[move] = 1.0  # Multi-hot encoding
 
                 # Convert outcome to float (-1, 0, 1)
-                outcome = torch.tensor([float(outcome_str)] * NUM_VALUE_OUTPUTS, dtype=torch.float32)
+                outcome = torch.tensor([float(outcome_str)], dtype=torch.float32)
 
                 self.data.append((board_tensor, moves_tensor, outcome))
 
@@ -73,7 +72,7 @@ class TicTacToeNet(nn.Module):
         self.policy_head = nn.Linear(64, 9)
 
         # Value head with tanh activation
-        self.value_head = nn.Linear(64, NUM_VALUE_OUTPUTS)
+        self.value_head = nn.Linear(64, 1)
 
     def forward(self, x):
         x = self.backbone(x)
@@ -96,7 +95,7 @@ def train_model(model, dataloader, device, num_epochs, iteration):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     trainer = Trainer(model, optimizer, TRAINING_ARGS)
 
-    print('Training with lr:', TRAINING_ARGS.learning_rate(iteration))
+    print('Training with lr:', TRAINING_ARGS.training.learning_rate(iteration))
 
     self_play_memories: list[SelfPlayMemory] = []
     for batch in dataloader:

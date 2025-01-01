@@ -36,12 +36,13 @@ class Connect4Game(Game[Connect4Move]):
         return AVERAGE_NUM_MOVES_PER_GAME
 
     def get_canonical_board(self, board: Connect4Board) -> np.ndarray:
+        canonical_board = board.board * board.current_player
         return (
             np.stack(
                 (
-                    board.board == 1,
-                    board.board == -1,
-                    board.board == 0,
+                    canonical_board == 1,
+                    canonical_board == -1,
+                    canonical_board == 0,
                 )
             )
             .astype(np.float32)
