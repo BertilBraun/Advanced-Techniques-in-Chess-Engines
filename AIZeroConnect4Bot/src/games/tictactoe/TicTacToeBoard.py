@@ -48,7 +48,7 @@ class TicTacToeBoard(Board[TicTacToeMove]):
         return self._winner
 
     def is_full(self) -> bool:
-        return np.all(self.board != 0)  # type: ignore
+        return np.all(self.board != 0).item()
 
     def get_valid_moves(self) -> list[TicTacToeMove]:
         return [move for move in range(BOARD_SIZE) if self.board[move] == 0]
@@ -65,17 +65,3 @@ class TicTacToeBoard(Board[TicTacToeMove]):
 
     def is_game_over(self) -> bool:
         return self._winner is not None or self.is_full()
-
-    # TODO remove
-    def display(self):
-        print(self.to_string(True))
-
-    def to_string(self, large) -> str:
-        s = ''
-        mp = {0: ' ' if large else '.', 1: 'X', -1: 'O'}
-        for i in range(ROW_COUNT):
-            concat = '|' if large else ''
-            s += concat.join([mp[self.board[i * ROW_COUNT + j]] for j in range(COLUMN_COUNT)]) + '\n'
-            if i < ROW_COUNT - 1 and large:
-                s += '-' * 5 + '\n'
-        return s

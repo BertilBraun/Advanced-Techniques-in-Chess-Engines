@@ -31,12 +31,6 @@ class Game(ABC, Generic[_Move]):
 
     @property
     @abstractmethod
-    def network_properties(self) -> tuple[int, int]:
-        # (num_res_blocks, hidden_dim)
-        pass
-
-    @property
-    @abstractmethod
     def average_num_moves_per_game(self) -> int:
         pass
 

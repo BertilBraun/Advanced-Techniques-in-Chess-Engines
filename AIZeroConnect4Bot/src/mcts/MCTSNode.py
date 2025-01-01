@@ -9,19 +9,16 @@ from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
 class MCTSNode:
     @classmethod
     def root(cls, board: CURRENT_BOARD) -> MCTSNode:
-        instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None, num_played_moves=0)
+        instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None)
         instance.board = board
         instance.number_of_visits = 1
         return instance
 
-    def __init__(
-        self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: MCTSNode | None, num_played_moves: int
-    ) -> None:
+    def __init__(self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: MCTSNode | None) -> None:
         self.board: CURRENT_BOARD = None  # type: ignore
         self.parent = parent
         self.children: list[MCTSNode] = []
         self.move_to_get_here = move_to_get_here
-        self.num_played_moves = num_played_moves  # This is the number of moves played to get to this node
         self.number_of_visits = 0
         self.result_score = 0
         self.policy = policy
@@ -63,7 +60,6 @@ class MCTSNode:
                 policy=score,
                 move_to_get_here=move,
                 parent=self,
-                num_played_moves=self.num_played_moves + 1,
             )
             for move, score in moves_with_scores
             if score > 0.0
@@ -98,7 +94,6 @@ class MCTSNode:
         return f"""AlphaMCTSNode(
 {self.board}
 visits: {self.number_of_visits}
-depth: {self.num_played_moves}
 score: {self.result_score:.2f}
 policy: {self.policy:.2f}
 move: {self.move_to_get_here}

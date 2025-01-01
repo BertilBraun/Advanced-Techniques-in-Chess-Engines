@@ -7,11 +7,11 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.util import batched_iterate
-from src.Network import VALUE_OUTPUT_HEADS, Network
+from src.Network import Network
 from src.settings import TORCH_DTYPE
-from src.train.TrainingArgs import TrainingArgs
-from src.train.TrainingStats import TrainingStats
-from src.mcts.MCTS import SelfPlayMemory
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.alpha_zero.SelfPlay import SelfPlayMemory
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
@@ -43,10 +43,6 @@ class Trainer:
         self.model.train()
 
         # TODO can we load the samples in training format? - Alternatively at least not convert them from Tensors to SelfPlayMemory
-        # TODO why does it not learn anything?!
-        # - Learning rate is too high? too low?
-        # - Samples correct?
-        # - MCTS correct? - doesn't seem to be the case with tictactoe
 
         validation_batch = memory[: self.args.batch_size]
         memory = memory[self.args.batch_size :]
@@ -54,7 +50,7 @@ class Trainer:
         def calculate_loss_for_batch(batch: list[SelfPlayMemory]):
             state = [mem.state for mem in batch]
             policy_targets = [mem.policy_targets for mem in batch]
-            value_targets = [[mem.value_target] * VALUE_OUTPUT_HEADS for mem in batch]
+            value_targets = [[mem.value_target] for mem in batch]
 
             state, policy_targets, value_targets = (
                 np.array(state),
@@ -67,19 +63,10 @@ class Trainer:
             value_targets = torch.tensor(value_targets, dtype=TORCH_DTYPE, device=self.model.device)
 
             out_policy, out_value = self.model(state)
-            # out_value is of shape (batch_size, 32), we want to run MSE on each value separately and add the sum to the total loss
 
-            # TODO? policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
             policy_loss = F.cross_entropy(out_policy, policy_targets)
-            # Are mutliple heads really sensible?
-            # TODO mult by 10 to make it more impactful??
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
-
-            # example for value loss
-            # targets = torch.tensor([1, 2, 3, 4, 5], dtype=TORCH_DTYPE)
-            # outputs = torch.tensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10] for _ in range(5)], dtype=TORCH_DTYPE)
-            # print(F.mse_loss(outputs, targets, reduction='none'))
 
             return policy_loss, value_loss, loss
 

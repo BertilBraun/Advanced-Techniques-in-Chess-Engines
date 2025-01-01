@@ -7,11 +7,11 @@ import numpy as np
 from torch.optim import Adam
 
 from src.Network import Network
-from src.AlphaZero import AlphaZero
+from src.alpha_zero.AlphaZero import AlphaZero
 from src.settings import TRAINING_ARGS
 
 
-model = Network()
+model = Network(4, 64)
 az = AlphaZero(model, Adam(model.parameters()), TRAINING_ARGS, False)
 for i in range(200, -1, -1):
     memory = az._load_all_memories(i)

@@ -6,15 +6,15 @@ from tensorflow._api.v2.summary import create_file_writer
 from tqdm import trange
 from pathlib import Path
 
+from src.alpha_zero.SelfPlay import SelfPlay, SelfPlayMemory
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.util.log import log
 from src.util import batched_iterate, load_json, random_id
 from src.Network import Network, clear_model_inference_cache
 from src.settings import CURRENT_GAME
-from src.train.Trainer import Trainer
-from src.train.TrainingArgs import TrainingArgs
-from src.train.TrainingStats import TrainingStats
-from src.mcts.MCTS import MCTS, SelfPlayMemory
+from src.alpha_zero.train.Trainer import Trainer
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingStats import TrainingStats
 
 
 class AlphaZero:
@@ -29,7 +29,7 @@ class AlphaZero:
         self.optimizer = optimizer
         self.args = args
         self.starting_iteration = 0
-        self.self_play = MCTS(model, args.mcts_args)
+        self.self_play = SelfPlay(model, args)
         self.trainer = Trainer(model, optimizer, args)
 
         self.save_path = Path(self.args.save_path)
@@ -62,8 +62,8 @@ class AlphaZero:
         memory: list[SelfPlayMemory] = []
 
         for _ in trange(
-            num_self_play_calls // self.args.mcts_args.num_parallel_games,
-            desc=f'Self Play for {self.args.mcts_args.num_parallel_games} games in parallel',
+            num_self_play_calls // self.args.num_parallel_games,
+            desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
         ):
             memory += self.self_play.self_play(iteration)
 
@@ -128,7 +128,7 @@ class AlphaZero:
         try:
             last_training_config = load_json(self.save_path / 'last_training_config.json')
 
-            new_starting_iteration = int(last_training_config['iteration'])
+            new_starting_iteration = int(last_training_config['iteration']) + 1
             if self.starting_iteration == new_starting_iteration:
                 log(f'No new model found, starting from iteration {self.starting_iteration}')
                 return
@@ -149,7 +149,7 @@ class AlphaZero:
 
     def _load_model(self, iteration: int) -> Network:
         try:
-            model = Network()
+            model = Network(self.args.nn_num_layers, self.args.nn_hidden_size)
             model.load_state_dict(
                 torch.load(self.save_path / f'model_{iteration}.pt', map_location=model.device, weights_only=True)
             )
@@ -235,20 +235,17 @@ class AlphaZero:
         previous_model = self._load_model(iteration - 1)
 
         model_evaluation = ModelEvaluation()
-        wins, losses, draws = model_evaluation.play_two_models_search(current_model, previous_model, 30)
-        # wins, losses, draws = model_evaluation.play_two_models_batch(current_model, previous_model, 64)
+        results = model_evaluation.play_two_models_search(current_model, previous_model, 30)
 
-        log(f'Results after playing two most recent models at iteration {iteration}:')
-        log(f'Wins: {wins}, Losses: {losses}, Draws: {draws}')
+        log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
-        tf.summary.scalar('win_loss_draw_vs_previous_model/wins', wins, iteration)
-        tf.summary.scalar('win_loss_draw_vs_previous_model/losses', losses, iteration)
-        tf.summary.scalar('win_loss_draw_vs_previous_model/draws', draws, iteration)
+        tf.summary.scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
+        tf.summary.scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
+        tf.summary.scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
 
-        wins, losses, draws = model_evaluation.play_vs_random(current_model, 30)
-        log(f'Results after playing vs random at iteration {iteration}:')
-        log(f'Wins: {wins}, Losses: {losses}, Draws: {draws}')
+        results = model_evaluation.play_vs_random(current_model, 30)
+        log(f'Results after playing vs random at iteration {iteration}:', results)
 
-        tf.summary.scalar('win_loss_draw_vs_random/wins', wins, iteration)
-        tf.summary.scalar('win_loss_draw_vs_random/losses', losses, iteration)
-        tf.summary.scalar('win_loss_draw_vs_random/draws', draws, iteration)
+        tf.summary.scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
+        tf.summary.scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
+        tf.summary.scalar('win_loss_draw_vs_random/draws', results.draws, iteration)

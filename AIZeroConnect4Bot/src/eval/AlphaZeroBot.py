@@ -6,7 +6,7 @@ from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.Network import Network, cached_network_inference
-from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE
+from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
 
 
 class AlphaZeroBot(Bot):
@@ -15,13 +15,13 @@ class AlphaZeroBot(Bot):
         if isinstance(network_model_file_path, Network):
             self.model = network_model_file_path
         else:
-            self.model = Network()
+            self.model = Network(TRAINING_ARGS.nn_num_layers, TRAINING_ARGS.nn_hidden_size)
             if network_model_file_path is not None:
                 self.model.load_state_dict(
                     torch.load(
                         network_model_file_path,
                         map_location=self.model.device,
-                        weights_only=True,
+                        weights_only=False,
                     )
                 )
         self.model.eval()
@@ -35,11 +35,11 @@ class AlphaZeroBot(Bot):
             if self.time_is_up:
                 break
 
-        best_child_index = np.argmax(root.children_number_of_visits)
-        best_child = root.children[best_child_index]
+        best_move_index = np.argmax(root.children_number_of_visits)
+        best_child = root.children[best_move_index]
 
         log('---------------------- Alpha Zero Best Move ----------------------')
-        log('Best child index:', best_child_index)
+        log('Best child index:', best_move_index)
         log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
         log(f'Best child has {best_child.result_score:.4f} result_score')

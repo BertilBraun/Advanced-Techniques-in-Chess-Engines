@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from src.mcts.MCTSArgs import MCTSArgs
-
 
 @dataclass
 class TrainingArgs:
@@ -11,7 +9,32 @@ class TrainingArgs:
 
     These are hyperparameters that can be tuned to improve the performance of the AlphaZero algorithm. They are not very intuitive and are usually found by trial and error. See the references for more information on the hyperparameters."""
 
-    mcts_args: MCTSArgs
+    mcts_num_searches_per_turn: int
+    """This is the maximum number of searches to run the MCTS algorithm in self-play. 
+    I.e. the number of times that a node is expanded and evaluated in the MCTS algorithm to get the next move to play.
+    I.e. we continue to play the game util one of the players wins or the game is a draw. At each move we run the MCTS algorithm to get the next move to play for the current player. Here we run the MCTS algorithm num_searches times to get the next move to play.
+    """
+
+    mcts_dirichlet_epsilon: float
+    """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
+
+    mcts_dirichlet_alpha: Callable[[int], float]
+    """This is the alpha value function to use for the dirichlet noise to add to the root node in self-play to encourage exploration. The iteration is passed in and the alpha value to use should be returned. Apparently the value should be around 10/number_of_actions. So for Connect4 with 7 columns this value should be around 1.5, and for chess with 400 possible moves this value should be around 0.025"""
+
+    mcts_c_param: float
+    """This is the c parameter to use for the UCB1 formula in the MCTS algorithm in self-play. It is used to balance exploration and exploitation in the MCTS algorithm. Values between 1 and 6 seem sensible. The higher the value the more exploration is favored over exploitation."""
+
+    nn_num_layers: int
+    """This is the number of layers to use for the neural network"""
+
+    nn_hidden_size: int
+    """This is the dimension of the hidden layers to use for the neural network. Typically 32-64 for simpler games like TicTacToe, 128-256 for medium complexity games like Connect4 and 512-1024 for complex games like Chess"""
+
+    temperature: float
+    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
+
+    num_parallel_games: int
+    """This is the number of games to run in parallel for self-play."""
 
     num_iterations: int
     """This is the number of iterations to run first self-play then train"""

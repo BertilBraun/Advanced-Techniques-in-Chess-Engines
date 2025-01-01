@@ -1,5 +1,4 @@
 import torch
-from typing import Dict
 
 
 class ZobristHasher:
@@ -8,7 +7,7 @@ class ZobristHasher:
         self.rows = rows
         self.cols = cols
         self.size = planes * rows * cols
-        self.keys_per_device: Dict[torch.device, torch.Tensor] = {}
+        self.keys_per_device: dict[torch.device, torch.Tensor] = {}
 
     def _create_zobrist_keys(self, device: torch.device) -> torch.Tensor:
         """Create random zobrist keys on a Device."""

@@ -45,12 +45,6 @@ class CheckersGame(Game[CheckersMove]):
         return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
 
     @property
-    def network_properties(self) -> tuple[int, int]:
-        NUM_RES_BLOCKS = 10
-        NUM_HIDDEN = 128
-        return NUM_RES_BLOCKS, NUM_HIDDEN
-
-    @property
     def average_num_moves_per_game(self) -> int:
         return 30
 

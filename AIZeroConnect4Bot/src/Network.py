@@ -6,10 +6,10 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from src.util.log import log, ratio
-from src.settings import CURRENT_GAME, TORCH_DTYPE, VALUE_OUTPUT_HEADS
+from src.settings import CURRENT_GAME, TORCH_DTYPE
 
-
-_NN_CACHE: dict[int, tuple[Tensor, Tensor]] = {}
+_NETWORK_ID = int
+_NN_CACHE: dict[_NETWORK_ID, dict[int, tuple[Tensor, Tensor]]] = {}
 
 _TOTAL_EVALS = 0
 _TOTAL_HITS = 0
@@ -19,25 +19,27 @@ _TOTAL_HITS = 0
 def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tensor]:
     # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
     # use hash_board on each board state in x and check if it is in the cache or twice in x
+    network_hashtable = _NN_CACHE.setdefault(id(network), {})
+
     hashes = CURRENT_GAME.hash_boards(x)
     to_process = []
     to_process_hashes = []
     for i, h in enumerate(hashes):
-        if h not in _NN_CACHE or h in hashes[:i]:
+        if h not in network_hashtable or h in hashes[:i]:
             to_process.append(x[i])
             to_process_hashes.append(h)
 
     if to_process:
         policy, value = network(torch.stack(to_process))
         for hash, p, v in zip(to_process_hashes, policy, value):
-            _NN_CACHE[hash] = (p, v)
+            network_hashtable[hash] = (p, v)
 
     global _TOTAL_EVALS, _TOTAL_HITS
     _TOTAL_EVALS += len(x)
     _TOTAL_HITS += len(x) - len(to_process)
 
-    policies = torch.stack([_NN_CACHE[hash][0] for hash in hashes])
-    values = torch.stack([_NN_CACHE[hash][1] for hash in hashes])
+    policies = torch.stack([network_hashtable[hash][0] for hash in hashes])
+    values = torch.stack([network_hashtable[hash][1] for hash in hashes])
     return policies, values
 
 
@@ -57,7 +59,9 @@ def clear_model_inference_cache(iteration: int) -> None:
         tf.summary.scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, step=iteration)
         tf.summary.scalar('unique_positions_in_cache', len(_NN_CACHE), step=iteration)
         tf.summary.histogram(
-            'nn_output_value_distribution', [round(v.item(), 1) for _, v in _NN_CACHE.values()], step=iteration
+            'nn_output_value_distribution',
+            [round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()],
+            step=iteration,
         )
         log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', len(_NN_CACHE))
     _NN_CACHE.clear()
@@ -74,25 +78,24 @@ class Network(nn.Module):
     The output of the network is a policy over all possible moves and a value for the current board state.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, num_res_blocks: int, hidden_size: int) -> None:
         super().__init__()
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         encoding_channels, row_count, column_count = CURRENT_GAME.representation_shape
-        num_res_blocks, num_hidden = CURRENT_GAME.network_properties
         action_size = CURRENT_GAME.action_size
 
         self.startBlock = nn.Sequential(
-            nn.Conv2d(encoding_channels, num_hidden, kernel_size=3, padding=1),
-            nn.BatchNorm2d(num_hidden),
+            nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm2d(hidden_size),
             nn.ReLU(),
         )
 
-        self.backBone = nn.ModuleList([ResBlock(num_hidden) for _ in range(num_res_blocks)])
+        self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(num_hidden, 32, kernel_size=3, padding=1),
+            nn.Conv2d(hidden_size, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
@@ -100,11 +103,11 @@ class Network(nn.Module):
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(num_hidden, 32, kernel_size=3, padding=1),
+            nn.Conv2d(hidden_size, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(32 * row_count * column_count, VALUE_OUTPUT_HEADS),
+            nn.Linear(32 * row_count * column_count, 1),
             nn.Tanh(),
         )
 

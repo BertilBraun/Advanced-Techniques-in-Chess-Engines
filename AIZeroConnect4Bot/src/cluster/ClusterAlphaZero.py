@@ -6,7 +6,7 @@ from tensorflow._api.v2.summary import create_file_writer
 
 from src.settings import CURRENT_GAME, TORCH_DTYPE
 from src.util.log import log
-from src.AlphaZero import AlphaZero
+from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterManager import ClusterManager
 from src.Network import Network
 from src.train.TrainingArgs import TrainingArgs
@@ -24,7 +24,7 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
 
-        model = Network()
+        model = Network(args.nn_num_layers, args.nn_hidden_size)
         # move model to rank device
         if torch.cuda.is_available():
             node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())

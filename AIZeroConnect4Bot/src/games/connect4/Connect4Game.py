@@ -10,8 +10,6 @@ from src.games.connect4.Connect4Defines import (
     COLUMN_COUNT,
     ACTION_SIZE,
     ENCODING_CHANNELS,
-    NUM_RES_BLOCKS,
-    NUM_HIDDEN,
     AVERAGE_NUM_MOVES_PER_GAME,
 )
 from src.games.connect4.Connect4Board import Connect4Board, Connect4Move
@@ -34,16 +32,21 @@ class Connect4Game(Game[Connect4Move]):
         return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
 
     @property
-    def network_properties(self) -> tuple[int, int]:
-        return NUM_RES_BLOCKS, NUM_HIDDEN
-
-    @property
     def average_num_moves_per_game(self) -> int:
         return AVERAGE_NUM_MOVES_PER_GAME
 
     def get_canonical_board(self, board: Connect4Board) -> np.ndarray:
-        # TODO 3 channels for player 1, player 2 and empty cells?
-        return (board.board * board.current_player).reshape(self.representation_shape)
+        return (
+            np.stack(
+                (
+                    board.board == 1,
+                    board.board == -1,
+                    board.board == 0,
+                )
+            )
+            .astype(np.float32)
+            .reshape(self.representation_shape)
+        )
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'

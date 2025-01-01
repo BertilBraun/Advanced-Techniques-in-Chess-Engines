@@ -5,13 +5,12 @@ from src.util.log import log
 from src.settings import TRAINING_ARGS
 
 from src.Network import Network
-from src.AlphaZero import AlphaZero
+from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterAlphaZero import ClusterAlphaZero
 
 if __name__ == '__main__':
     log('Starting training')
     log('Training on:', 'GPU' if torch.cuda.is_available() else 'CPU')
-    log('Number of parameters:', sum(p.numel() for p in Network().parameters()))
     log('Training args:')
     log(TRAINING_ARGS.__dict__, use_pprint=True)
 
@@ -22,7 +21,7 @@ if __name__ == '__main__':
     if TRAINING_ARGS.num_train_nodes_on_cluster is not None:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
-        model = Network()
+        model = Network(TRAINING_ARGS.nn_num_layers, TRAINING_ARGS.nn_hidden_size)
         torch.set_float32_matmul_precision('high')
         if torch.cuda.is_available():
             model: Network = torch.compile(model)  # type: ignore

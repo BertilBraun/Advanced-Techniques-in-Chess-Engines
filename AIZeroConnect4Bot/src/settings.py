@@ -1,6 +1,6 @@
 import torch
 from src.util import lerp
-from src.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
@@ -9,7 +9,6 @@ SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = False
 
 PLAY_C_PARAM = 1.0
-VALUE_OUTPUT_HEADS = 1
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -73,6 +72,9 @@ if False:
     CURRENT_GAME = Connect4Game()
     CURRENT_BOARD = Connect4Board()
     CURRENT_GAME_VISUALS = Connect4Visuals()
+
+    NN_HIDDEN_SIZE = 128
+    NN_NUM_LAYERS = 9
 
     # Test training args to verify the implementation
     if torch.cuda.is_available() and not TESTING:
@@ -147,6 +149,8 @@ elif False:
     CURRENT_GAME = CheckersGame()
     CURRENT_BOARD = CheckersBoard()
     CURRENT_GAME_VISUALS = CheckersVisuals()
+    NUM_RES_BLOCKS = 10
+    NUM_HIDDEN = 128
 elif True:
     from src.games.tictactoe.TicTacToeGame import TicTacToeGame, TicTacToeMove
     from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
@@ -156,6 +160,9 @@ elif True:
     CURRENT_GAME = TicTacToeGame()
     CURRENT_BOARD = TicTacToeBoard
     CURRENT_GAME_VISUALS = TicTacToeVisuals()
+
+    NN_HIDDEN_SIZE = 64
+    NN_NUM_LAYERS = 4
 
     # Test training args to verify the implementation
     if torch.cuda.is_available() and not TESTING:
@@ -170,13 +177,15 @@ elif True:
             num_iterations=12,
             num_self_play_games_per_iteration=128 * 4 * 2,
             num_parallel_games=128,
-            num_searches_per_turn=60,
             num_epochs=4,
             batch_size=64,
             temperature=1.25,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,
-            c_param=2,
+            mcts_num_searches_per_turn=60,
+            mcts_dirichlet_epsilon=0.25,
+            mcts_dirichlet_alpha=lambda _: 0.3,
+            mcts_c_param=2,
+            nn_hidden_size=NN_HIDDEN_SIZE,
+            nn_num_layers=NN_NUM_LAYERS,
             sampling_window=lambda _: 3,
             learning_rate=lambda _: 0.001,
             learning_rate_scheduler=learning_rate_scheduler,
@@ -188,13 +197,15 @@ elif True:
             num_iterations=50,
             num_self_play_games_per_iteration=2,
             num_parallel_games=1,
-            num_searches_per_turn=200,
             num_epochs=3,
             batch_size=16,
             temperature=1.25,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,
-            c_param=2,
+            mcts_num_searches_per_turn=200,
+            mcts_dirichlet_epsilon=0.25,
+            mcts_dirichlet_alpha=lambda _: 0.3,
+            mcts_c_param=2,
+            nn_hidden_size=NN_HIDDEN_SIZE,
+            nn_num_layers=NN_NUM_LAYERS,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,
