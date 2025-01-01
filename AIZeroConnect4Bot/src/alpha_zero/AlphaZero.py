@@ -236,7 +236,7 @@ class AlphaZero:
 
         model_evaluation = ModelEvaluation()
         results = model_evaluation.play_two_models_search(
-            current_model, previous_model, 30, self.args.evaluation.num_searches_per_turn
+            current_model, previous_model, self.args.evaluation.num_games, self.args.evaluation.num_searches_per_turn
         )
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
@@ -245,7 +245,9 @@ class AlphaZero:
         tf.summary.scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
         tf.summary.scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
 
-        results = model_evaluation.play_vs_random(current_model, 30, self.args.evaluation.num_searches_per_turn)
+        results = model_evaluation.play_vs_random(
+            current_model, self.args.evaluation.num_games, self.args.evaluation.num_searches_per_turn
+        )
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
         tf.summary.scalar('win_loss_draw_vs_random/wins', results.wins, iteration)

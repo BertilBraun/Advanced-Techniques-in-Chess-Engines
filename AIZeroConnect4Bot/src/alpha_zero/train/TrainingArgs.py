@@ -92,6 +92,9 @@ class EvaluationParams:
     num_searches_per_turn: int
     """This is the number of searches to run the MCTS algorithm in the evaluation. This is used to evaluate the model against itself to see how well it is doing. The higher the number the more accurate the evaluation but the slower the evaluation. Typically 20-50 for evaluation"""
 
+    num_games: int
+    """This is the number of games to play for the evaluation. The more games the more accurate the evaluation but the longer the evaluation. Typically 32-256 for evaluation"""
+
 
 @dataclass
 class TrainingArgs:
