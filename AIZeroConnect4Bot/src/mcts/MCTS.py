@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from src.settings import CURRENT_BOARD, CURRENT_GAME, TORCH_DTYPE
+from src.settings import CurrentBoard, CurrentGame, TORCH_DTYPE
 from src.util import lerp
 from src.Network import Network, cached_network_inference
 from src.mcts.MCTSNode import MCTSNode
@@ -15,7 +15,7 @@ class MCTS:
         self.args = args
 
     @torch.no_grad()
-    def search(self, boards: list[CURRENT_BOARD]) -> list[np.ndarray]:
+    def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
         policy = self._get_policy_with_noise(boards)
 
         nodes: list[MCTSNode] = []
@@ -36,7 +36,7 @@ class MCTS:
             if len(expandable_nodes) == 0:
                 continue
 
-            encoded_boards = [CURRENT_GAME.get_canonical_board(node.board) for node in expandable_nodes]
+            encoded_boards = [CurrentGame.get_canonical_board(node.board) for node in expandable_nodes]
             policy, value = cached_network_inference(
                 self.model,
                 torch.tensor(
@@ -54,8 +54,8 @@ class MCTS:
 
         return [self._get_action_probabilities(root) for root in nodes]
 
-    def _get_policy_with_noise(self, boards: list[CURRENT_BOARD]) -> np.ndarray:
-        encoded_boards = [CURRENT_GAME.get_canonical_board(board) for board in boards]
+    def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
+        encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
         policy, _ = cached_network_inference(
             self.model,
             torch.tensor(
@@ -67,14 +67,14 @@ class MCTS:
 
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(
-            [self.args.dirichlet_alpha] * CURRENT_GAME.action_size,
+            [self.args.dirichlet_alpha] * CurrentGame.action_size,
             size=len(boards),
         )
         policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
         return policy
 
     def _get_action_probabilities(self, root_node: MCTSNode) -> np.ndarray:
-        action_probabilities = np.zeros(CURRENT_GAME.action_size, dtype=np.float32)
+        action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
 
         for child in root_node.children:
             action_probabilities[child.move_to_get_here] = child.number_of_visits

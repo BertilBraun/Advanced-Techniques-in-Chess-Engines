@@ -3,7 +3,6 @@ from os import environ
 environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 import pygame  # noqa: E402
-from typing import Optional, Tuple  # noqa: E402
 
 
 class BaseGridGameGUI:
@@ -59,7 +58,7 @@ class BaseGridGameGUI:
         highlight_surf.fill(pygame.Color(color))
         self.screen.blit(highlight_surf, (col * self.cell_size, row * self.cell_size))
 
-    def get_cell_from_click(self) -> Optional[Tuple[int, int]]:
+    def get_cell_from_click(self) -> tuple[int, int] | None:
         pos = pygame.mouse.get_pos()
         col = pos[0] // self.cell_size
         row = pos[1] // self.cell_size

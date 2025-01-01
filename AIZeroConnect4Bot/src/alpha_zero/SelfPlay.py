@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
-from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Network import Network
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
@@ -19,20 +19,20 @@ class SelfPlayMemory:
 
 @dataclass
 class SelfPlayGameMemory:
-    board: CURRENT_BOARD
+    board: CurrentBoard
     action_probabilities: np.ndarray
 
 
 class SelfPlayGame:
     def __init__(self) -> None:
-        self.board = CURRENT_GAME.get_initial_board()
+        self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.num_played_moves = 0
 
 
 def sample_move(
     action_probabilities: np.ndarray, num_played_moves: int = 0, temperature: float = 1.0
-) -> CURRENT_GAME_MOVE:
+) -> CurrentGameMove:
     # only use temperature for the first 30 moves, then simply use the action probabilities as they are
     if num_played_moves < 30:
         temperature_action_probabilities = action_probabilities ** (1 / temperature)
@@ -40,9 +40,9 @@ def sample_move(
     else:
         temperature_action_probabilities = action_probabilities
 
-    action = np.random.choice(CURRENT_GAME.action_size, p=temperature_action_probabilities)
+    action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
-    return CURRENT_GAME.decode_move(action)
+    return CurrentGame.decode_move(action)
 
 
 class SelfPlay:
@@ -88,9 +88,9 @@ class SelfPlay:
         assert result is not None, 'Game is not over'
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
-            encoded_board = CURRENT_GAME.get_canonical_board(mem.board)
+            encoded_board = CurrentGame.get_canonical_board(mem.board)
 
-            for board, probabilities in CURRENT_GAME.symmetric_variations(encoded_board, mem.action_probabilities):
+            for board, probabilities in CurrentGame.symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_memory.append(
                     SelfPlayMemory(
                         torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),

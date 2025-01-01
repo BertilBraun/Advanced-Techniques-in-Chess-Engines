@@ -40,16 +40,6 @@ class Board(ABC, Generic[_Move]):
     def _switch_player(self) -> None:
         self.current_player = -self.current_player
 
-    # Define a cache decorator to cache the results of the get_valid_moves and check_winner methods.
-    # Define a _invalidate_cache method to invalidate the cache when a move is made.
-    # Usage should be:
-    # @Board._cache()
-    # def get_valid_moves(self) -> list[_Move]:
-    #     pass
-    #
-    # def make_move(self, move: _Move) -> None:
-    #     self._invalidate_cache()
-
     @classmethod
     def _cache(cls):
         def cache_decorator(method):

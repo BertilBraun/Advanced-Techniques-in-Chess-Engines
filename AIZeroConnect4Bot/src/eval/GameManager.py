@@ -1,7 +1,7 @@
 from typing import Optional
 from src.eval.Bot import Bot
 from src.games.Game import Player
-from src.settings import CURRENT_GAME
+from src.settings import CurrentGame
 
 
 class GameManager:
@@ -11,7 +11,7 @@ class GameManager:
 
     def play_game(self, verify_moves=True) -> Optional[Player]:
         """Manages the gameplay loop until the game is over or a player quits."""
-        self.board = CURRENT_GAME.get_initial_board()
+        self.board = CurrentGame.get_initial_board()
         while not self.board.is_game_over():
             current_player = self.players[self.board.current_player]
 

@@ -78,9 +78,8 @@ class Trainer:
             policy_loss, value_loss, loss = calculate_loss_for_batch(sample)
 
             # Update learning rate before stepping the optimizer
-            lr = self.args.training.learning_rate_scheduler(
-                (batchIdx * self.args.training.batch_size) / len(memory), base_lr
-            )
+            batch_percentage = (batchIdx * self.args.training.batch_size) / len(memory)
+            lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
             tf.summary.scalar(f'learning_rate/iteration_{iteration}', lr, step=batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr

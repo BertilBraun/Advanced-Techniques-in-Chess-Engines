@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from src.eval.Bot import Bot
 from src.games.GUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
-from src.settings import CURRENT_GAME_MOVE, CURRENT_BOARD
+from src.settings import CurrentGameMove, CurrentBoard
 
 
 class HumanPlayer(Bot):
@@ -15,7 +15,7 @@ class HumanPlayer(Bot):
         self.game_visuals = game_visuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
-    def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
+    def think(self, board: CurrentBoard) -> CurrentGameMove:
         # Common input loop for all games
         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
 
@@ -39,7 +39,7 @@ class HumanPlayer(Bot):
 
             time.sleep(0.2)
 
-    def handle_click(self, board: CURRENT_BOARD, cell: Tuple[int, int]) -> Optional[CURRENT_GAME_MOVE]:
+    def handle_click(self, board: CurrentBoard, cell: Tuple[int, int]) -> Optional[CurrentGameMove]:
         # If game is one-click move (like Connect4), we try to form a move immediately
         if not self.game_visuals.is_two_click_game():
             # Single-click logic: just try to form a move

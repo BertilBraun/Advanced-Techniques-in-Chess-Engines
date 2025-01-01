@@ -6,7 +6,7 @@ from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.Network import Network, cached_network_inference
-from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
 
 
 class AlphaZeroBot(Bot):
@@ -15,7 +15,7 @@ class AlphaZeroBot(Bot):
         if isinstance(network_model_file_path, Network):
             self.model = network_model_file_path
         else:
-            self.model = Network(TRAINING_ARGS.nn_num_layers, TRAINING_ARGS.nn_hidden_size)
+            self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size)
             if network_model_file_path is not None:
                 self.model.load_state_dict(
                     torch.load(
@@ -26,7 +26,7 @@ class AlphaZeroBot(Bot):
                 )
         self.model.eval()
 
-    def think(self, board: CURRENT_BOARD) -> CURRENT_GAME_MOVE:
+    def think(self, board: CurrentBoard) -> CurrentGameMove:
         root = MCTSNode.root(board)
 
         for _ in range(2**16 - 1):
@@ -68,11 +68,11 @@ class AlphaZeroBot(Bot):
         current_node.back_propagate(result)
 
     @torch.no_grad()
-    def evaluation(self, board: CURRENT_BOARD) -> tuple[list[tuple[CURRENT_GAME_MOVE, float]], float]:
+    def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
         policy, value = cached_network_inference(
             self.model,
             torch.tensor(
-                np.array([CURRENT_GAME.get_canonical_board(board)]),
+                np.array([CurrentGame.get_canonical_board(board)]),
                 device=self.model.device,
                 dtype=TORCH_DTYPE,
             ),

@@ -76,10 +76,10 @@ if False:
     from src.games.connect4.Connect4Board import Connect4Board
     from src.games.connect4.Connect4Visuals import Connect4Visuals
 
-    CURRENT_GAME_MOVE = Connect4Move
-    CURRENT_GAME = Connect4Game()
-    CURRENT_BOARD = Connect4Board()
-    CURRENT_GAME_VISUALS = Connect4Visuals()
+    CurrentGameMove = Connect4Move
+    CurrentGame = Connect4Game()
+    CurrentBoard = Connect4Board()
+    CurrentGameVisuals = Connect4Visuals()
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -153,10 +153,10 @@ elif False:
     from src.games.checkers.CheckersBoard import CheckersBoard
     from src.games.checkers.CheckersVisuals import CheckersVisuals
 
-    CURRENT_GAME_MOVE = CheckersMove
-    CURRENT_GAME = CheckersGame()
-    CURRENT_BOARD = CheckersBoard()
-    CURRENT_GAME_VISUALS = CheckersVisuals()
+    CurrentGameMove = CheckersMove
+    CurrentGame = CheckersGame()
+    CurrentBoard = CheckersBoard()
+    CurrentGameVisuals = CheckersVisuals()
     NUM_RES_BLOCKS = 10
     NUM_HIDDEN = 128
 elif True:
@@ -164,10 +164,10 @@ elif True:
     from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
     from src.games.tictactoe.TicTacToeVisuals import TicTacToeVisuals
 
-    CURRENT_GAME_MOVE = TicTacToeMove
-    CURRENT_GAME = TicTacToeGame()
-    CURRENT_BOARD = TicTacToeBoard
-    CURRENT_GAME_VISUALS = TicTacToeVisuals()
+    CurrentGameMove = TicTacToeMove
+    CurrentGame = TicTacToeGame()
+    CurrentBoard = TicTacToeBoard
+    CurrentGameVisuals = TicTacToeVisuals()
 
     NN_HIDDEN_SIZE = 64
     NN_NUM_LAYERS = 4

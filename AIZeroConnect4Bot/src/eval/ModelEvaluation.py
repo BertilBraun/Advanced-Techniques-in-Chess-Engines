@@ -9,7 +9,7 @@ from src.Network import Network
 from src.alpha_zero.SelfPlay import sample_move
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
-from src.settings import CURRENT_BOARD, CURRENT_GAME
+from src.settings import CurrentBoard, CurrentGame
 from src.games.Game import Player
 
 
@@ -41,11 +41,11 @@ class Results:
         return f'Wins: {self.wins}, Losses: {self.losses}, Draws: {self.draws}'
 
 
-EvaluationModel = Callable[[list[CURRENT_BOARD]], list[np.ndarray]]
+EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 
 
 class ModelEvaluation:
-    # This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself
+    """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
     def play_vs_random(self, model: Network, num_games: int = 64, num_searches_per_turn: int = 20) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
@@ -58,12 +58,12 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        def model1(boards: list[CURRENT_BOARD]) -> list[np.ndarray]:
+        def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return MCTS(model, mcts_args).search(boards)
 
-        def model2(boards: list[CURRENT_BOARD]) -> list[np.ndarray]:
-            def get_random_policy(board: CURRENT_BOARD) -> np.ndarray:
-                return CURRENT_GAME.encode_moves([random.choice(board.get_valid_moves())])
+        def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            def get_random_policy(board: CurrentBoard) -> np.ndarray:
+                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())])
 
             return [get_random_policy(board) for board in boards]
 
@@ -84,10 +84,10 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        def model1(boards: list[CURRENT_BOARD]) -> list[np.ndarray]:
+        def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return MCTS(current_model, mcts_args).search(boards)
 
-        def model2(boards: list[CURRENT_BOARD]) -> list[np.ndarray]:
+        def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return MCTS(previous_model, mcts_args).search(boards)
 
         results += self._play_two_models_search(model1, model2, num_games // 2)
@@ -98,7 +98,7 @@ class ModelEvaluation:
     def _play_two_models_search(self, model1: EvaluationModel, model2: EvaluationModel, num_games: int) -> Results:
         results = Results(0, 0, 0)
 
-        games = [CURRENT_BOARD() for _ in range(num_games)]
+        games = [CurrentBoard() for _ in range(num_games)]
         while games:
             assert all(game.current_player == games[0].current_player for game in games)
             if games[0].current_player == 1:

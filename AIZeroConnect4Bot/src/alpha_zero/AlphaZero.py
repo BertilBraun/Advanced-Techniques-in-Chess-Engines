@@ -11,7 +11,7 @@ from src.eval.ModelEvaluation import ModelEvaluation
 from src.util.log import log
 from src.util import batched_iterate, load_json, random_id
 from src.Network import Network, clear_model_inference_cache
-from src.settings import CURRENT_GAME
+from src.settings import CurrentGame
 from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
@@ -81,14 +81,14 @@ class AlphaZero:
 
         tf.summary.histogram('training_sample_values', torch.tensor([mem.value_target for mem in memory]), iteration)
 
-        # figure out average spikeyness of policy targets.
-        # Should be close to 1 if the policy is very spikey, and close to 1/9 if it is very uniform.
         spikiness = sum((mem.policy_targets).max().item() for mem in memory) / len(memory)
         tf.summary.scalar(
             'policy_spikiness',
             spikiness,
             iteration,
-            description='Close to 1 if spikey, close to 1/ACTION_SIZE if uniform',
+            description="""The spikiness of the policy targets.
+The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
+The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the policy is unsure about the best move.""",
         )
         tf.summary.histogram(
             'policy_targets', torch.stack([mem.policy_targets for mem in memory]).reshape(-1), iteration
@@ -211,7 +211,7 @@ class AlphaZero:
         mp: dict[int, tuple[int, SelfPlayMemory]] = {}
         for batch in batched_iterate(memory, 128):
             states = [mem.state for mem in batch]
-            hashes = CURRENT_GAME.hash_boards(torch.stack(states))
+            hashes = CurrentGame.hash_boards(torch.stack(states))
 
             for mem, h in zip(batch, hashes):
                 if h in mp:

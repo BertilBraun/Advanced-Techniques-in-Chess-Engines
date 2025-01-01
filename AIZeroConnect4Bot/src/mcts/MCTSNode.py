@@ -3,19 +3,19 @@ import math
 
 import numpy as np
 
-from src.settings import CURRENT_BOARD, CURRENT_GAME, CURRENT_GAME_MOVE
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 
 
 class MCTSNode:
     @classmethod
-    def root(cls, board: CURRENT_BOARD) -> MCTSNode:
-        instance = cls(policy=1.0, move_to_get_here=CURRENT_GAME.null_move, parent=None)
+    def root(cls, board: CurrentBoard) -> MCTSNode:
+        instance = cls(policy=1.0, move_to_get_here=CurrentGame.null_move, parent=None)
         instance.board = board
         instance.number_of_visits = 1
         return instance
 
-    def __init__(self, policy: float, move_to_get_here: CURRENT_GAME_MOVE, parent: MCTSNode | None) -> None:
-        self.board: CURRENT_BOARD = None  # type: ignore
+    def __init__(self, policy: float, move_to_get_here: CurrentGameMove, parent: MCTSNode | None) -> None:
+        self.board: CurrentBoard = None  # type: ignore
         self.parent = parent
         self.children: list[MCTSNode] = []
         self.move_to_get_here = move_to_get_here
@@ -54,7 +54,7 @@ class MCTSNode:
 
         return policy_score * self.policy + q_score
 
-    def expand(self, moves_with_scores: list[tuple[CURRENT_GAME_MOVE, float]]) -> None:
+    def expand(self, moves_with_scores: list[tuple[CurrentGameMove, float]]) -> None:
         self.children = [
             MCTSNode(
                 policy=score,
@@ -65,7 +65,7 @@ class MCTSNode:
             if score > 0.0
         ]
 
-        # Convert to NumPy arrays
+        # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.uint16)
         self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)

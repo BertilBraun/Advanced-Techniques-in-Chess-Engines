@@ -1,7 +1,7 @@
 import numpy as np
 
 from src.games.Game import Board
-from src.settings import CURRENT_GAME, CURRENT_GAME_MOVE, CURRENT_BOARD
+from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
 
 
 def get_board_result_score(board: Board) -> float | None:
@@ -21,8 +21,8 @@ def get_board_result_score(board: Board) -> float | None:
 
 
 def filter_policy_then_get_moves_and_probabilities(
-    policy: np.ndarray, board: CURRENT_BOARD
-) -> list[tuple[CURRENT_GAME_MOVE, float]]:
+    policy: np.ndarray, board: CurrentBoard
+) -> list[tuple[CurrentGameMove, float]]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
 
@@ -39,7 +39,7 @@ def filter_policy_then_get_moves_and_probabilities(
     return moves_with_probabilities
 
 
-def __filter_policy_with_legal_moves(policy: np.ndarray, board: CURRENT_BOARD) -> np.ndarray:
+def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) -> np.ndarray:
     """
     Filters a policy with the legal moves of a chess board.
 
@@ -52,7 +52,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CURRENT_BOARD) -
     :param board: The chess board to filter the policy with.
     :return: The filtered policy.
     """
-    legal_moves_encoded = CURRENT_GAME.encode_moves(board.get_valid_moves())
+    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
     policy *= legal_moves_encoded
     policy_sum = np.sum(policy)
     if policy_sum == 0:
@@ -63,7 +63,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CURRENT_BOARD) -
     return policy
 
 
-def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CURRENT_GAME_MOVE, float]]:
+def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CurrentGameMove, float]]:
     """
     Maps a filtered policy to a list of moves with their corresponding probabilities.
 
@@ -78,7 +78,7 @@ def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CURRENT_GAME_MOVE, f
     nonzero_indices = np.nonzero(policy > 0)[0]
 
     # Decode the indices to moves
-    moves = CURRENT_GAME.decode_moves(nonzero_indices)
+    moves = CurrentGame.decode_moves(nonzero_indices)
 
     # Pair up moves with their probabilities
     moves_with_probabilities = list(zip(moves, policy[nonzero_indices]))

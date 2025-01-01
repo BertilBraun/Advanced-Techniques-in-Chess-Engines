@@ -4,7 +4,7 @@ import torch
 from torch.optim import Adam
 from tensorflow._api.v2.summary import create_file_writer
 
-from src.settings import CURRENT_GAME, TORCH_DTYPE
+from src.settings import CurrentGame, TORCH_DTYPE
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterManager import ClusterManager
@@ -69,7 +69,7 @@ class ClusterAlphaZero(AlphaZero):
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_on_cluster(self) -> None:
-        # Starting iteration is always loaded from the latest model
+        # Starting iteration is always loaded in the _load_latest_model method
         while self.starting_iteration < self.args.num_iterations:
             num_self_play_calls = self.args.self_play.num_games_per_iteration // self.self_players
             self._self_play_and_write_memory(self.starting_iteration, num_self_play_calls)
@@ -88,7 +88,7 @@ class ClusterAlphaZero(AlphaZero):
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
-        EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CURRENT_GAME.average_num_moves_per_game
+        EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CurrentGame.average_num_moves_per_game
 
         while len(self._load_all_memories(iteration)) < EXPECTED_NUM_SAMPLES:
             log('Waiting for memories...')

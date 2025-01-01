@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from src.util.log import log, ratio
-from src.settings import CURRENT_GAME, TORCH_DTYPE
+from src.settings import CurrentGame, TORCH_DTYPE
 
 _NETWORK_ID = int
 _NN_CACHE: dict[_NETWORK_ID, dict[int, tuple[Tensor, Tensor]]] = {}
@@ -19,27 +19,27 @@ _TOTAL_HITS = 0
 def cached_network_forward(network: nn.Module, x: Tensor) -> tuple[Tensor, Tensor]:
     # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
     # use hash_board on each board state in x and check if it is in the cache or twice in x
-    network_hashtable = _NN_CACHE.setdefault(id(network), {})
+    current_network_cache = _NN_CACHE.setdefault(id(network), {})
 
-    hashes = CURRENT_GAME.hash_boards(x)
+    hashes = CurrentGame.hash_boards(x)
     to_process = []
     to_process_hashes = []
     for i, h in enumerate(hashes):
-        if h not in network_hashtable or h in hashes[:i]:
+        if h not in current_network_cache or h in hashes[:i]:
             to_process.append(x[i])
             to_process_hashes.append(h)
 
     if to_process:
         policy, value = network(torch.stack(to_process))
         for hash, p, v in zip(to_process_hashes, policy, value):
-            network_hashtable[hash] = (p, v)
+            current_network_cache[hash] = (p, v)
 
     global _TOTAL_EVALS, _TOTAL_HITS
     _TOTAL_EVALS += len(x)
     _TOTAL_HITS += len(x) - len(to_process)
 
-    policies = torch.stack([network_hashtable[hash][0] for hash in hashes])
-    values = torch.stack([network_hashtable[hash][1] for hash in hashes])
+    policies = torch.stack([current_network_cache[hash][0] for hash in hashes])
+    values = torch.stack([current_network_cache[hash][1] for hash in hashes])
     return policies, values
 
 
@@ -48,9 +48,8 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
     policy, values = result
     policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
     values = values.to(dtype=torch.float32, device='cpu').numpy()
+    # TODO value mean should not be required anymore - remainder of the multiple value output model
     value = np.mean(values, axis=1)
-    # for board, p, v in zip(x, policy, value):
-    #     print(f'Evaluated board:\n{board}\nPolicy: {np.round(p, 3)}\nValue: {v}')
     return policy, value
 
 
@@ -83,8 +82,8 @@ class Network(nn.Module):
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        encoding_channels, row_count, column_count = CURRENT_GAME.representation_shape
-        action_size = CURRENT_GAME.action_size
+        encoding_channels, row_count, column_count = CurrentGame.representation_shape
+        action_size = CurrentGame.action_size
 
         self.startBlock = nn.Sequential(
             nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding=1),
@@ -119,7 +118,6 @@ class Network(nn.Module):
             x = resBlock(x)
         policy = self.policyHead(x)
         value = self.valueHead(x)
-        # print('Forward pass:', policy, value)
         return policy, value
 
 
