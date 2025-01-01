@@ -213,6 +213,7 @@ elif True:
             evaluation=EvaluationParams(
                 num_searches_per_turn=60,
                 num_games=30,
+                every_n_iterations=3,
             ),
         )
         # TEST_TRAINING_ARGS = TrainingArgs(

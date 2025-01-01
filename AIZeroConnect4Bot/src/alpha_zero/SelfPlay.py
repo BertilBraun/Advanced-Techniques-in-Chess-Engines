@@ -2,19 +2,13 @@ import torch
 import numpy as np
 from dataclasses import dataclass
 
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Network import Network
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
-
-
-@dataclass
-class SelfPlayMemory:
-    state: torch.Tensor
-    policy_targets: torch.Tensor
-    value_target: float
 
 
 @dataclass
@@ -50,10 +44,10 @@ class SelfPlay:
         self.model = model
         self.args = args
 
-    def self_play(self, iteration: int) -> list[SelfPlayMemory]:
+    def self_play(self, iteration: int) -> SelfPlayDataset:
         self.model.eval()
 
-        self_play_memory: list[SelfPlayMemory] = []
+        self_play_dataset = SelfPlayDataset()
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.self_play.num_parallel_games)]
 
         mcts = MCTS(
@@ -74,14 +68,14 @@ class SelfPlay:
                 spg.board.make_move(move)
 
                 if spg.board.is_game_over():
-                    self_play_memory.extend(self._get_training_data(spg))
+                    self_play_dataset += self._get_training_data(spg)
 
             self_play_games = [spg for spg in self_play_games if not spg.board.is_game_over()]
 
-        return self_play_memory
+        return self_play_dataset
 
-    def _get_training_data(self, spg: SelfPlayGame) -> list[SelfPlayMemory]:
-        self_play_memory: list[SelfPlayMemory] = []
+    def _get_training_data(self, spg: SelfPlayGame) -> SelfPlayDataset:
+        self_play_dataset = SelfPlayDataset()
 
         # 1 if current player won, -1 if current player lost, 0 if draw
         result = get_board_result_score(spg.board)
@@ -91,13 +85,11 @@ class SelfPlay:
             encoded_board = CurrentGame.get_canonical_board(mem.board)
 
             for board, probabilities in CurrentGame.symmetric_variations(encoded_board, mem.action_probabilities):
-                self_play_memory.append(
-                    SelfPlayMemory(
-                        torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
-                        torch.tensor(probabilities.copy(), dtype=torch.float32, requires_grad=False),
-                        result,
-                    )
+                self_play_dataset.add_sample(
+                    torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
+                    torch.tensor(probabilities.copy(), dtype=torch.float32, requires_grad=False),
+                    result,
                 )
             result = -result
 
-        return self_play_memory
+        return self_play_dataset

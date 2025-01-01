@@ -95,6 +95,9 @@ class EvaluationParams:
     num_games: int
     """This is the number of games to play for the evaluation. The more games the more accurate the evaluation but the longer the evaluation. Typically 32-256 for evaluation"""
 
+    every_n_iterations: int
+    """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
+
 
 @dataclass
 class TrainingArgs:

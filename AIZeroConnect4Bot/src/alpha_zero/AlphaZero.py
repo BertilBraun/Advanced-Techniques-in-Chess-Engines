@@ -6,12 +6,12 @@ from tensorflow._api.v2.summary import create_file_writer
 from tqdm import trange
 from pathlib import Path
 
-from src.alpha_zero.SelfPlay import SelfPlay, SelfPlayMemory
+from src.alpha_zero.SelfPlay import SelfPlay
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.util.log import log
-from src.util import batched_iterate, load_json, random_id
+from src.util import load_json, random_id
 from src.Network import Network, clear_model_inference_cache
-from src.settings import CurrentGame
 from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
@@ -59,29 +59,29 @@ class AlphaZero:
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_and_write_memory(self, iteration: int, num_self_play_calls: int):
-        memory: list[SelfPlayMemory] = []
+        dataset = SelfPlayDataset()
 
         for _ in trange(
             num_self_play_calls // self.args.self_play.num_parallel_games,
             desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
         ):
-            memory += self.self_play.self_play(iteration)
+            dataset += self.self_play.self_play(iteration)
 
-        log(f'Collected {len(memory)} self-play memories.')
-        self._save_memory(memory, iteration)
+        log(f'Collected {len(dataset)} self-play memories.')
+        dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
-        memory = self._load_all_memories_to_train_on_for_iteration(iteration)
-        log(f'Loaded {len(memory)} self-play memories.')
-        tf.summary.scalar('num_training_samples', len(memory), iteration)
+        dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+        log(f'Loaded {len(dataset)} self-play memories.')
+        tf.summary.scalar('num_training_samples', len(dataset), iteration)
 
-        memory = self._deduplicate_positions(memory)
-        log(f'Deduplicated to {len(memory)} unique positions.')
-        tf.summary.scalar('num_deduplicated_samples', len(memory), iteration)
+        dataset.deduplicate()
+        log(f'Deduplicated to {len(dataset)} unique positions.')
+        tf.summary.scalar('num_deduplicated_samples', len(dataset), iteration)
 
-        tf.summary.histogram('training_sample_values', torch.tensor([mem.value_target for mem in memory]), iteration)
+        tf.summary.histogram('training_sample_values', torch.tensor(dataset.value_targets), iteration)
 
-        spikiness = sum((mem.policy_targets).max().item() for mem in memory) / len(memory)
+        spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
         tf.summary.scalar(
             'policy_spikiness',
             spikiness,
@@ -90,13 +90,11 @@ class AlphaZero:
 The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
 The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the policy is unsure about the best move.""",
         )
-        tf.summary.histogram(
-            'policy_targets', torch.stack([mem.policy_targets for mem in memory]).reshape(-1), iteration
-        )
+        tf.summary.histogram('policy_targets', torch.stack(dataset.policy_targets).reshape(-1), iteration)
 
         train_stats = TrainingStats()
         for epoch in range(self.args.training.num_epochs):
-            epoch_train_stats = self.trainer.train(memory, iteration)
+            epoch_train_stats = self.trainer.train(dataset, iteration)
             tf.summary.scalar(
                 'policy_loss',
                 epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
@@ -180,59 +178,24 @@ The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the
 
         log(f'Model and optimizer saved at iteration {iteration}')
 
-    def _save_memory(self, memory: list[SelfPlayMemory], iteration: int) -> None:
-        memory_path = self.save_path / f'memory_{iteration}_{random_id()}.pt'
-        torch.save(
-            [(mem.state, mem.policy_targets, mem.value_target) for mem in memory],
-            memory_path,
-        )
-        log(f'Memory saved at iteration {iteration}')
-
-    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> list[SelfPlayMemory]:
+    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayDataset:
         window_size = self.args.training.sampling_window(iteration)
 
-        memory: list[SelfPlayMemory] = []
+        dataset = SelfPlayDataset()
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            memory += self._load_all_memories(iter)
-        return memory
+            for f in self.save_path.iterdir():
+                if f.suffix == '.pt' and f.stem.startswith(f'memory_{iter}_'):
+                    dataset += SelfPlayDataset.load(f, self.model.device)
 
-    def _load_all_memories(self, iteration: int) -> list[SelfPlayMemory]:
-        memory: list[SelfPlayMemory] = []
-
-        for f in self.save_path.iterdir():
-            if f.suffix == '.pt' and f.stem.startswith(f'memory_{iteration}_'):
-                mapped_memory = torch.load(f, weights_only=True)
-                memory += [SelfPlayMemory(*mem) for mem in mapped_memory]
-
-        return memory
-
-    def _deduplicate_positions(self, memory: list[SelfPlayMemory]) -> list[SelfPlayMemory]:
-        """Deduplicate the positions in the memory by averaging the policy and value targets for the same board state."""
-        mp: dict[int, tuple[int, SelfPlayMemory]] = {}
-        for batch in batched_iterate(memory, 128):
-            states = [mem.state for mem in batch]
-            hashes = CurrentGame.hash_boards(torch.stack(states))
-
-            for mem, h in zip(batch, hashes):
-                if h in mp:
-                    count, spm = mp[h]
-                    spm.policy_targets += mem.policy_targets
-                    spm.value_target += mem.value_target
-                    mp[h] = (count + 1, spm)
-                else:
-                    mp[h] = (1, mem)
-
-        for count, spm in mp.values():
-            spm.policy_targets /= count
-            spm.value_target /= count
-
-        return [spm for _, spm in mp.values()]
+        return dataset
 
     def _play_two_most_recent_models(self, iteration: int) -> None:
         """Play two most recent models against each other."""
+        if iteration % self.args.evaluation.every_n_iterations != 0 or iteration == 0:
+            return
 
         current_model = self._load_model(iteration)
-        previous_model = self._load_model(iteration - 1)
+        previous_model = self._load_model(iteration - self.args.evaluation.every_n_iterations)
 
         model_evaluation = ModelEvaluation()
         results = model_evaluation.play_two_models_search(

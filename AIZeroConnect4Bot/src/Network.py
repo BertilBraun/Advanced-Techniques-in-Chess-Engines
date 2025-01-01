@@ -54,15 +54,16 @@ def cached_network_inference(network: nn.Module, x: Tensor) -> tuple[np.ndarray,
 
 
 def clear_model_inference_cache(iteration: int) -> None:
+    cache_size = sum(len(cache) for cache in _NN_CACHE.values())
     if _TOTAL_EVALS != 0:
         tf.summary.scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, step=iteration)
-        tf.summary.scalar('unique_positions_in_cache', len(_NN_CACHE), step=iteration)
+        tf.summary.scalar('unique_positions_in_cache', cache_size, step=iteration)
         tf.summary.histogram(
             'nn_output_value_distribution',
             [round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()],
             step=iteration,
         )
-        log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', len(_NN_CACHE))
+        log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', cache_size)
     _NN_CACHE.clear()
 
 

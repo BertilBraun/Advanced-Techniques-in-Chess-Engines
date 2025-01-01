@@ -1,17 +1,15 @@
 import torch
-import random
-import numpy as np
 import tensorflow as tf
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-from src.util import batched_iterate
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.Network import Network
 from src.settings import TORCH_DTYPE
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
-from src.alpha_zero.SelfPlay import SelfPlayMemory
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
@@ -28,13 +26,27 @@ class Trainer:
         self.optimizer = optimizer
         self.args = args
 
-    def train(self, memory: list[SelfPlayMemory], iteration: int) -> TrainingStats:
+    def train(self, dataset: SelfPlayDataset, iteration: int) -> TrainingStats:
         """
         Train the model with the given memory.
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        random.shuffle(memory)
+        train_dataset, validation_dataset = torch.utils.data.random_split(
+            dataset, [len(dataset) - self.args.training.batch_size, self.args.training.batch_size]
+        )
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=self.args.training.batch_size,
+            shuffle=True,
+            drop_last=False,
+        )
+        validation_dataloader = DataLoader(
+            validation_dataset,
+            batch_size=self.args.training.batch_size,
+            shuffle=True,
+            drop_last=False,
+        )
 
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
@@ -42,25 +54,14 @@ class Trainer:
 
         self.model.train()
 
-        # TODO can we load the samples in training format? - Alternatively at least not convert them from Tensors to SelfPlayMemory
+        def calculate_loss_for_batch(
+            batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            state, policy_targets, value_targets = batch
 
-        validation_batch = memory[: self.args.training.batch_size]
-        memory = memory[self.args.training.batch_size :]
-
-        def calculate_loss_for_batch(batch: list[SelfPlayMemory]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-            state = [mem.state for mem in batch]
-            policy_targets = [mem.policy_targets for mem in batch]
-            value_targets = [[mem.value_target] for mem in batch]
-
-            state, policy_targets, value_targets = (
-                np.array(state),
-                np.array(policy_targets),
-                np.array(value_targets),
-            )
-
-            state = torch.tensor(state, dtype=TORCH_DTYPE, device=self.model.device)
-            policy_targets = torch.tensor(policy_targets, dtype=TORCH_DTYPE, device=self.model.device)
-            value_targets = torch.tensor(value_targets, dtype=TORCH_DTYPE, device=self.model.device)
+            state = state.to(device=self.model.device, dtype=TORCH_DTYPE)
+            policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
+            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
 
             out_policy, out_value = self.model(state)
 
@@ -70,15 +71,11 @@ class Trainer:
 
             return policy_loss, value_loss, loss
 
-        for batchIdx, sample in tqdm(
-            enumerate(batched_iterate(memory, self.args.training.batch_size)),
-            desc='Training batches',
-            total=len(memory) // self.args.training.batch_size,
-        ):
-            policy_loss, value_loss, loss = calculate_loss_for_batch(sample)
+        for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
+            policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
             # Update learning rate before stepping the optimizer
-            batch_percentage = (batchIdx * self.args.training.batch_size) / len(memory)
+            batch_percentage = batchIdx / len(train_dataloader)
             lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
             tf.summary.scalar(f'learning_rate/iteration_{iteration}', lr, step=batchIdx)
             for param_group in self.optimizer.param_groups:
@@ -92,8 +89,9 @@ class Trainer:
 
         with torch.no_grad():
             validation_stats = TrainingStats()
-            validation_policy_loss, validation_value_loss, validation_loss = calculate_loss_for_batch(validation_batch)
-            validation_stats.update(validation_policy_loss.item(), validation_value_loss.item(), validation_loss.item())
+            for validation_batch in validation_dataloader:
+                val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
+                validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item())
             log(f'Validation stats: {validation_stats}')
 
         return train_stats
