@@ -1,6 +1,14 @@
 import torch
 from src.util import lerp
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingArgs import (
+    ClusterParams,
+    EvaluationParams,
+    MCTSParams,
+    NetworkParams,
+    SelfPlayParams,
+    TrainingArgs,
+    TrainingParams,
+)
 
 TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
 
@@ -175,43 +183,56 @@ elif True:
         # Test training args to verify the implementation
         TRAINING_ARGS = TrainingArgs(
             num_iterations=12,
-            num_self_play_games_per_iteration=128 * 4 * 2,
-            num_parallel_games=128,
-            num_epochs=4,
-            batch_size=64,
-            temperature=1.25,
-            mcts_num_searches_per_turn=60,
-            mcts_dirichlet_epsilon=0.25,
-            mcts_dirichlet_alpha=lambda _: 0.3,
-            mcts_c_param=2,
-            nn_hidden_size=NN_HIDDEN_SIZE,
-            nn_num_layers=NN_NUM_LAYERS,
-            sampling_window=lambda _: 3,
-            learning_rate=lambda _: 0.001,
-            learning_rate_scheduler=learning_rate_scheduler,
             save_path=SAVE_PATH + '/tictactoe',
-            num_self_play_nodes_on_cluster=1,
-            num_train_nodes_on_cluster=0,
+            mcts=MCTSParams(
+                num_searches_per_turn=60,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 0.3,
+                c_param=2,
+            ),
+            network=NetworkParams(
+                num_layers=NN_NUM_LAYERS,
+                hidden_size=NN_HIDDEN_SIZE,
+            ),
+            self_play=SelfPlayParams(
+                temperature=1.25,
+                num_parallel_games=128,
+                num_games_per_iteration=128 * 4 * 2,
+            ),
+            cluster=ClusterParams(
+                num_self_play_nodes_on_cluster=1,
+                num_train_nodes_on_cluster=0,
+            ),
+            training=TrainingParams(
+                num_epochs=4,
+                batch_size=64,
+                sampling_window=lambda _: 3,
+                learning_rate=lambda _: 0.001,
+                learning_rate_scheduler=learning_rate_scheduler,
+            ),
+            evaluation=EvaluationParams(
+                num_searches_per_turn=60,
+            ),
         )
-        TEST_TRAINING_ARGS = TrainingArgs(
-            num_iterations=50,
-            num_self_play_games_per_iteration=2,
-            num_parallel_games=1,
-            num_epochs=3,
-            batch_size=16,
-            temperature=1.25,
-            mcts_num_searches_per_turn=200,
-            mcts_dirichlet_epsilon=0.25,
-            mcts_dirichlet_alpha=lambda _: 0.3,
-            mcts_c_param=2,
-            nn_hidden_size=NN_HIDDEN_SIZE,
-            nn_num_layers=NN_NUM_LAYERS,
-            sampling_window=sampling_window,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
-            save_path=SAVE_PATH,
-            num_self_play_nodes_on_cluster=1,
-            num_train_nodes_on_cluster=0,
-        )
+        # TEST_TRAINING_ARGS = TrainingArgs(
+        #     num_iterations=50,
+        #     num_self_play_games_per_iteration=2,
+        #     num_parallel_games=1,
+        #     num_epochs=3,
+        #     batch_size=16,
+        #     temperature=1.25,
+        #     mcts_num_searches_per_turn=200,
+        #     mcts_dirichlet_epsilon=0.25,
+        #     mcts_dirichlet_alpha=lambda _: 0.3,
+        #     mcts_c_param=2,
+        #     nn_hidden_size=NN_HIDDEN_SIZE,
+        #     nn_num_layers=NN_NUM_LAYERS,
+        #     sampling_window=sampling_window,
+        #     learning_rate=learning_rate,
+        #     learning_rate_scheduler=learning_rate_scheduler,
+        #     save_path=SAVE_PATH,
+        #     num_self_play_nodes_on_cluster=1,
+        #     num_train_nodes_on_cluster=0,
+        # )
 
     args = TRAINING_ARGS

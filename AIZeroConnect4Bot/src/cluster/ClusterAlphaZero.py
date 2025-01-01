@@ -9,22 +9,22 @@ from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterManager import ClusterManager
 from src.Network import Network
-from src.train.TrainingArgs import TrainingArgs
-from src.train.TrainingStats import TrainingStats
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingStats import TrainingStats
 
 
 class ClusterAlphaZero(AlphaZero):
     def __init__(self, args: TrainingArgs, load_latest_model: bool = True) -> None:
-        assert args.num_self_play_nodes_on_cluster is not None
-        assert args.num_train_nodes_on_cluster is not None
-        self.self_players = args.num_self_play_nodes_on_cluster
-        self.trainers = args.num_train_nodes_on_cluster
+        assert args.cluster.num_self_play_nodes_on_cluster is not None
+        assert args.cluster.num_train_nodes_on_cluster is not None
+        self.self_players = args.cluster.num_self_play_nodes_on_cluster
+        self.trainers = args.cluster.num_train_nodes_on_cluster
         assert self.trainers in [0, 1], 'For now, only one trainer is supported'
 
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
 
-        model = Network(args.nn_num_layers, args.nn_hidden_size)
+        model = Network(args.network.num_layers, args.network.hidden_size)
         # move model to rank device
         if torch.cuda.is_available():
             node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
@@ -58,7 +58,7 @@ class ClusterAlphaZero(AlphaZero):
         starting_iteration = self.starting_iteration
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            num_self_play_calls = self.args.num_self_play_games_per_iteration // self.self_players // 2
+            num_self_play_calls = self.args.self_play.num_games_per_iteration // self.self_players // 2
             self._self_play_and_write_memory(iteration, num_self_play_calls)
             training_stats.append(self._train_and_save_new_model(iteration))
             self._load_latest_model()
@@ -71,7 +71,7 @@ class ClusterAlphaZero(AlphaZero):
     def _self_play_on_cluster(self) -> None:
         # Starting iteration is always loaded from the latest model
         while self.starting_iteration < self.args.num_iterations:
-            num_self_play_calls = self.args.num_self_play_games_per_iteration // self.self_players
+            num_self_play_calls = self.args.self_play.num_games_per_iteration // self.self_players
             self._self_play_and_write_memory(self.starting_iteration, num_self_play_calls)
             self._load_latest_model()
 
@@ -88,7 +88,7 @@ class ClusterAlphaZero(AlphaZero):
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
-        EXPECTED_NUM_SAMPLES = self.args.num_self_play_games_per_iteration * CURRENT_GAME.average_num_moves_per_game
+        EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CURRENT_GAME.average_num_moves_per_game
 
         while len(self._load_all_memories(iteration)) < EXPECTED_NUM_SAMPLES:
             log('Waiting for memories...')

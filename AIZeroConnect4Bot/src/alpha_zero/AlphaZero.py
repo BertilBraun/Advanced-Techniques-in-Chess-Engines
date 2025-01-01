@@ -46,7 +46,7 @@ class AlphaZero:
             with create_file_writer(str(self.save_path / 'logs')).as_default():
                 self._self_play_and_write_memory(
                     iteration,
-                    self.args.num_self_play_games_per_iteration,
+                    self.args.self_play.num_games_per_iteration,
                 )
 
                 training_stats.append(self._train_and_save_new_model(iteration))
@@ -62,8 +62,8 @@ class AlphaZero:
         memory: list[SelfPlayMemory] = []
 
         for _ in trange(
-            num_self_play_calls // self.args.num_parallel_games,
-            desc=f'Self Play for {self.args.num_parallel_games} games in parallel',
+            num_self_play_calls // self.args.self_play.num_parallel_games,
+            desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
         ):
             memory += self.self_play.self_play(iteration)
 
@@ -94,23 +94,23 @@ class AlphaZero:
             'policy_targets', torch.stack([mem.policy_targets for mem in memory]).reshape(-1), iteration
         )
 
-        train_stats = TrainingStats(self.args.batch_size)
-        for epoch in range(self.args.num_epochs):
+        train_stats = TrainingStats()
+        for epoch in range(self.args.training.num_epochs):
             epoch_train_stats = self.trainer.train(memory, iteration)
             tf.summary.scalar(
                 'policy_loss',
                 epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
-                iteration * self.args.num_epochs + epoch,
+                iteration * self.args.training.num_epochs + epoch,
             )
             tf.summary.scalar(
                 'value_loss',
                 epoch_train_stats.value_loss / epoch_train_stats.num_batches,
-                iteration * self.args.num_epochs + epoch,
+                iteration * self.args.training.num_epochs + epoch,
             )
             tf.summary.scalar(
                 'total_loss',
                 epoch_train_stats.total_loss / epoch_train_stats.num_batches,
-                iteration * self.args.num_epochs + epoch,
+                iteration * self.args.training.num_epochs + epoch,
             )
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
@@ -149,7 +149,7 @@ class AlphaZero:
 
     def _load_model(self, iteration: int) -> Network:
         try:
-            model = Network(self.args.nn_num_layers, self.args.nn_hidden_size)
+            model = Network(self.args.network.num_layers, self.args.network.hidden_size)
             model.load_state_dict(
                 torch.load(self.save_path / f'model_{iteration}.pt', map_location=model.device, weights_only=True)
             )
@@ -189,7 +189,7 @@ class AlphaZero:
         log(f'Memory saved at iteration {iteration}')
 
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> list[SelfPlayMemory]:
-        window_size = self.args.sampling_window(iteration)
+        window_size = self.args.training.sampling_window(iteration)
 
         memory: list[SelfPlayMemory] = []
         for iter in range(max(iteration - window_size, 0), iteration + 1):
@@ -235,7 +235,9 @@ class AlphaZero:
         previous_model = self._load_model(iteration - 1)
 
         model_evaluation = ModelEvaluation()
-        results = model_evaluation.play_two_models_search(current_model, previous_model, 30)
+        results = model_evaluation.play_two_models_search(
+            current_model, previous_model, 30, self.args.evaluation.num_searches_per_turn
+        )
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
@@ -243,7 +245,7 @@ class AlphaZero:
         tf.summary.scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
         tf.summary.scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
 
-        results = model_evaluation.play_vs_random(current_model, 30)
+        results = model_evaluation.play_vs_random(current_model, 30, self.args.evaluation.num_searches_per_turn)
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
         tf.summary.scalar('win_loss_draw_vs_random/wins', results.wins, iteration)

@@ -14,14 +14,14 @@ if __name__ == '__main__':
     log('Training args:')
     log(TRAINING_ARGS.__dict__, use_pprint=True)
 
-    assert not (TRAINING_ARGS.num_train_nodes_on_cluster is None) ^ (
-        TRAINING_ARGS.num_self_play_nodes_on_cluster is None
+    assert not (TRAINING_ARGS.cluster.num_train_nodes_on_cluster is None) ^ (
+        TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster is None
     ), 'Either both or none of the cluster args should be set'
 
-    if TRAINING_ARGS.num_train_nodes_on_cluster is not None:
+    if TRAINING_ARGS.cluster.num_train_nodes_on_cluster is not None:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
-        model = Network(TRAINING_ARGS.nn_num_layers, TRAINING_ARGS.nn_hidden_size)
+        model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size)
         torch.set_float32_matmul_precision('high')
         if torch.cuda.is_available():
             model: Network = torch.compile(model)  # type: ignore

@@ -36,18 +36,18 @@ class Trainer:
         """
         random.shuffle(memory)
 
-        train_stats = TrainingStats(self.args.batch_size)
-        base_lr = self.args.learning_rate(iteration)
+        train_stats = TrainingStats()
+        base_lr = self.args.training.learning_rate(iteration)
         tf.summary.scalar('learning_rate', base_lr, step=iteration)
 
         self.model.train()
 
         # TODO can we load the samples in training format? - Alternatively at least not convert them from Tensors to SelfPlayMemory
 
-        validation_batch = memory[: self.args.batch_size]
-        memory = memory[self.args.batch_size :]
+        validation_batch = memory[: self.args.training.batch_size]
+        memory = memory[self.args.training.batch_size :]
 
-        def calculate_loss_for_batch(batch: list[SelfPlayMemory]):
+        def calculate_loss_for_batch(batch: list[SelfPlayMemory]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state = [mem.state for mem in batch]
             policy_targets = [mem.policy_targets for mem in batch]
             value_targets = [[mem.value_target] for mem in batch]
@@ -71,14 +71,16 @@ class Trainer:
             return policy_loss, value_loss, loss
 
         for batchIdx, sample in tqdm(
-            enumerate(batched_iterate(memory, self.args.batch_size)),
+            enumerate(batched_iterate(memory, self.args.training.batch_size)),
             desc='Training batches',
-            total=len(memory) // self.args.batch_size,
+            total=len(memory) // self.args.training.batch_size,
         ):
             policy_loss, value_loss, loss = calculate_loss_for_batch(sample)
 
             # Update learning rate before stepping the optimizer
-            lr = self.args.learning_rate_scheduler((batchIdx * self.args.batch_size) / len(memory), base_lr)
+            lr = self.args.training.learning_rate_scheduler(
+                (batchIdx * self.args.training.batch_size) / len(memory), base_lr
+            )
             tf.summary.scalar(f'learning_rate/iteration_{iteration}', lr, step=batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
@@ -90,7 +92,7 @@ class Trainer:
             train_stats.update(policy_loss.item(), value_loss.item(), loss.item())
 
         with torch.no_grad():
-            validation_stats = TrainingStats(self.args.batch_size)
+            validation_stats = TrainingStats()
             validation_policy_loss, validation_value_loss, validation_loss = calculate_loss_for_batch(validation_batch)
             validation_stats.update(validation_policy_loss.item(), validation_value_loss.item(), validation_loss.item())
             log(f'Validation stats: {validation_stats}')

@@ -54,15 +54,15 @@ class SelfPlay:
         self.model.eval()
 
         self_play_memory: list[SelfPlayMemory] = []
-        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.self_play.num_parallel_games)]
 
         mcts = MCTS(
             self.model,
             MCTSArgs(
-                num_searches_per_turn=self.args.mcts_num_searches_per_turn,
-                dirichlet_epsilon=self.args.mcts_dirichlet_epsilon,
-                dirichlet_alpha=self.args.mcts_dirichlet_alpha(iteration),
-                c_param=self.args.mcts_c_param,
+                num_searches_per_turn=self.args.mcts.num_searches_per_turn,
+                dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
+                dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
+                c_param=self.args.mcts.c_param,
             ),
         )
 
@@ -70,7 +70,7 @@ class SelfPlay:
             for spg, action_probabilities in zip(self_play_games, mcts.search([spg.board for spg in self_play_games])):
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
 
-                move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
+                move = sample_move(action_probabilities, spg.num_played_moves, self.args.self_play.temperature)
                 spg.board.make_move(move)
 
                 if spg.board.is_game_over():
@@ -93,8 +93,8 @@ class SelfPlay:
             for board, probabilities in CURRENT_GAME.symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_memory.append(
                     SelfPlayMemory(
-                        torch.tensor(board, dtype=torch.int8, requires_grad=False),
-                        torch.tensor(probabilities, dtype=torch.float32, requires_grad=False),
+                        torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
+                        torch.tensor(probabilities.copy(), dtype=torch.float32, requires_grad=False),
                         result,
                     )
                 )

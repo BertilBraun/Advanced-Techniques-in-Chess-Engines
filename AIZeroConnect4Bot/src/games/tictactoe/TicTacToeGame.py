@@ -64,17 +64,11 @@ class TicTacToeGame(Game[TicTacToeMove]):
         self, board: np.ndarray, action_probabilities: np.ndarray
     ) -> List[tuple[np.ndarray, np.ndarray]]:
         return [
-            # Original board
-            (board, action_probabilities),
-            # Vertical flip
-            # 1234 -> becomes -> 4321
-            # 5678               8765
-            # TODO check - should work (np.flip(board, axis=2), np.flip(action_probabilities)),
-            # NOTE: The following implementations DO NOT WORK. They are incorrect. This would give wrong symmetries to train on.
-            # Player flip
-            # yield -board, action_probabilities, -result
-            # Player flip and vertical flip
-            # yield -board[:, ::-1], action_probabilities[::-1], -result
+            (  # 90*k degree rotation
+                np.rot90(board, k=k, axes=(1, 2)),
+                np.rot90(action_probabilities.reshape(ROW_COUNT, COLUMN_COUNT), k=k).flatten(),
+            )
+            for k in range(4)
         ]
 
     def get_initial_board(self) -> TicTacToeBoard:
