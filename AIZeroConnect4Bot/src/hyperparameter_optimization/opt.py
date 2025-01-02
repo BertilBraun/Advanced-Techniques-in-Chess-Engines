@@ -21,7 +21,7 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
         mcts_c_param = trial.suggest_float('mcts_c_param', 1.0, 6.0, step=1)
 
         network_num_layers = trial.suggest_int('network_num_layers', 2, 8, step=3)
-        network_hidden_size_exponent = trial.suggest_int('network_hidden_size', 5, 9, step=2)  # 32, 128, 512
+        network_hidden_size_exponent = trial.suggest_int('network_hidden_size_exponent', 5, 9, step=2)  # 32, 128, 512
         network_hidden_size = 2**network_hidden_size_exponent
 
         if network_num_layers > 2 and network_hidden_size_exponent > 5:
@@ -33,7 +33,7 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
         )
 
         training_num_epochs = trial.suggest_int('training_num_epochs', 2, 6, step=2)
-        training_batch_size_exponent = trial.suggest_int('training_batch_size', 4, 8, step=2)  # 16, 64, 256
+        training_batch_size_exponent = trial.suggest_int('training_batch_size_exponent', 4, 8, step=2)  # 16, 64, 256
         training_batch_size = 2**training_batch_size_exponent
         training_learning_rate_initial = trial.suggest_float('training_learning_rate_initial', 5e-3, 1e-1, log=True)
         training_decay_rate = trial.suggest_float('learning_rate_decay_rate', 0.85, 0.99)
@@ -155,22 +155,16 @@ if __name__ == '__main__':
     log('Most relevant hyperparameters:')
     print(optuna.importance.get_param_importances(study))
 
-"""After Optimizing for 50 iterations for TicTacToe:
+"""After Optimizing for TicTacToe:
 
-Best trial (Trial: 50) with loss 0.730:
-{'learning_rate_decay_rate': 0.8637337465482163,
- 'mcts_c_param': 1.0,
- 'mcts_dirichlet_alpha': 0.2,
- 'mcts_dirichlet_epsilon': 0.0,
- 'mcts_num_searches_per_turn': 100,
- 'network_hidden_size': 5,
- 'network_num_layers': 2,
- 'optimizer_type': 'AdamW',
- 'sampling_window_initial': 3,
- 'sampling_window_max': 25,
- 'selfplay_num_games_per_iteration': 512,
- 'selfplay_temperature': 1.8,
- 'training_batch_size': 8,
- 'training_learning_rate_initial': 0.024183149175821355,
- 'training_num_epochs': 4}
+Study statistics:
+  Number of finished trials: 88
+  Number of pruned trials: 20
+  Number of complete trials: 28
+
+Best trial (Trial: 79) with loss 0.698:
+{'mcts_num_searches_per_turn': 100, 'mcts_dirichlet_epsilon': 0.0, 'mcts_dirichlet_alpha': 0.2, 'mcts_c_param': 1.0, 'network_num_layers': 2, 'network_hidden_size_exponent': 5, 'selfplay_temperature': 1.8, 'selfplay_num_games_per_iteration': 512, 'training_num_epochs': 4, 'training_batch_size_exponent': 8, 'training_learning_rate_initial': 0.02310216465004561, 'learning_rate_decay_rate': 0.8624339039875765, 'sampling_window_initial': 3, 'sampling_window_max': 25}
+
+Most relevant hyperparameters:
+{'mcts_dirichlet_epsilon': np.float64(0.34450795717547333), 'sampling_window_max': np.float64(0.17085732233001472), 'training_batch_size_exponent': np.float64(0.15131826914727717), 'mcts_c_param': np.float64(0.1443145208637471), 'learning_rate_decay_rate': np.float64(0.09779456325483078), 'selfplay_temperature': np.float64(0.05329892198678179), 'network_hidden_size_exponent': np.float64(0.01277041094967793), 'mcts_num_searches_per_turn': np.float64(0.009384432920882502), 'selfplay_num_games_per_iteration': np.float64(0.005003434178581438), 'sampling_window_initial': np.float64(0.004917520690605678), 'network_num_layers': np.float64(0.004213624212112882), 'training_num_epochs': np.float64(0.0016190222900145524)}
 """
