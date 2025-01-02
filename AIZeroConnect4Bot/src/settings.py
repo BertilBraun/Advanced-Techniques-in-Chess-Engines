@@ -10,7 +10,8 @@ from src.alpha_zero.train.TrainingArgs import (
     TrainingParams,
 )
 
-TORCH_DTYPE = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+USE_GPU = torch.cuda.is_available() and False
+TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
@@ -85,7 +86,7 @@ if False:
     NN_NUM_LAYERS = 9
 
     # Test training args to verify the implementation
-    if torch.cuda.is_available() and not TESTING:
+    if USE_GPU and not TESTING:
         NUM_NODES = 8
         NUM_TRAINERS = 1
         NUM_SELF_PLAY_NODES = NUM_NODES - NUM_TRAINERS

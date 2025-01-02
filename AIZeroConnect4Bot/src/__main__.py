@@ -5,7 +5,7 @@ from torch.optim import Adam
 
 from src.util.compile import try_compile
 from src.util.log import log
-from src.settings import TRAINING_ARGS
+from src.settings import TRAINING_ARGS, USE_GPU
 
 from src.Network import Network
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -13,7 +13,7 @@ from src.cluster.ClusterAlphaZero import ClusterAlphaZero
 
 if __name__ == '__main__':
     log('Starting training')
-    log('Training on:', 'GPU' if torch.cuda.is_available() else 'CPU')
+    log('Training on:', 'GPU' if USE_GPU else 'CPU')
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
 

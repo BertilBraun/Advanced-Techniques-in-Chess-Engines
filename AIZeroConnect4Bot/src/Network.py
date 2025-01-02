@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import nn, Tensor, softmax
 
 from src.util.log import log, ratio
-from src.settings import CurrentGame, TORCH_DTYPE
+from src.settings import USE_GPU, CurrentGame, TORCH_DTYPE
 
 _NETWORK_ID = int  # type alias for network id
 _NN_CACHE: dict[_NETWORK_ID, dict[int, tuple[Tensor, Tensor]]] = {}
@@ -29,7 +29,7 @@ class Network(nn.Module):
     def __init__(self, num_res_blocks: int, hidden_size: int, device: torch.device | None) -> None:
         super().__init__()
 
-        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = device if device is not None else torch.device('cuda' if USE_GPU else 'cpu')
 
         encoding_channels, row_count, column_count = CurrentGame.representation_shape
         action_size = CurrentGame.action_size

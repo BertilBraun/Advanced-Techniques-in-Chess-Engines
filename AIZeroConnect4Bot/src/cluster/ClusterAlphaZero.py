@@ -5,7 +5,7 @@ from torch.optim import Adam
 from tensorflow._api.v2.summary import create_file_writer
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.settings import CurrentGame
+from src.settings import USE_GPU, CurrentGame
 from src.util.compile import try_compile
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -27,7 +27,7 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager.initialize()
 
         # move model to rank device
-        if torch.cuda.is_available():
+        if USE_GPU:
             node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
         else:
             node_device = torch.device('cpu')
