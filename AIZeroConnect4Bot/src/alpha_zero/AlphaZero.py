@@ -81,7 +81,7 @@ class AlphaZero:
         log(f'Deduplicated to {len(dataset)} unique positions.')
         tf.summary.scalar('num_deduplicated_samples', len(dataset), iteration)
 
-        tf.summary.histogram('training_sample_values', torch.tensor(dataset.value_targets), iteration)
+        tf.summary.histogram('training_sample_values', torch.tensor(dataset.value_targets).cpu(), iteration)
 
         spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
         tf.summary.scalar(
@@ -92,7 +92,7 @@ class AlphaZero:
 The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
 The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the policy is unsure about the best move.""",
         )
-        tf.summary.histogram('policy_targets', torch.stack(dataset.policy_targets).reshape(-1), iteration)
+        tf.summary.histogram('policy_targets', torch.stack(dataset.policy_targets).reshape(-1).cpu(), iteration)
 
         train_stats = TrainingStats()
         for epoch in range(self.args.training.num_epochs):

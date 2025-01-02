@@ -10,7 +10,7 @@ from src.alpha_zero.train.TrainingArgs import (
     TrainingParams,
 )
 
-USE_GPU = torch.cuda.is_available() and False
+USE_GPU = torch.cuda.is_available()
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
