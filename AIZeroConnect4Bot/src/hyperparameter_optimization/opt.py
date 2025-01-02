@@ -24,7 +24,7 @@ def objective(trial: optuna.Trial) -> float:
     # Define hyperparameter sampling
     mcts_num_searches_per_turn = trial.suggest_int('mcts_num_searches_per_turn', 50, 200, step=50)
     mcts_dirichlet_epsilon = trial.suggest_float('mcts_dirichlet_epsilon', 0.0, 1.0, step=0.25)
-    mcts_dirichlet_alpha = trial.suggest_float('mcts_dirichlet_alpha', 0.25, 1.0, step=0.25)
+    mcts_dirichlet_alpha = trial.suggest_float('mcts_dirichlet_alpha', 0.2, 0.4, step=0.1)
     mcts_c_param = trial.suggest_float('mcts_c_param', 1.0, 6.0, step=1)
 
     network_num_layers = trial.suggest_int('network_num_layers', 2, 8, step=3)
@@ -42,7 +42,7 @@ def objective(trial: optuna.Trial) -> float:
     training_num_epochs = trial.suggest_int('training_num_epochs', 2, 6, step=2)
     training_batch_size_exponent = trial.suggest_int('training_batch_size', 4, 8, step=2)  # 16 to 256
     training_batch_size = 2**training_batch_size_exponent
-    training_learning_rate_initial = trial.suggest_float('training_learning_rate_initial', 1e-5, 1e-1, log=True)
+    training_learning_rate_initial = trial.suggest_float('training_learning_rate_initial', 5e-3, 1e-1, log=True)
     training_decay_rate = trial.suggest_float('learning_rate_decay_rate', 0.85, 0.99)
 
     cluster_params = ClusterParams(num_train_nodes_on_cluster=0, num_self_play_nodes_on_cluster=1)
@@ -134,8 +134,8 @@ if __name__ == '__main__':
     )
     study.optimize(
         objective,
-        n_trials=150,
-        timeout=1200,  # 20 minutes
+        n_trials=50,
+        timeout=600,  # 10 minutes
     )
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
