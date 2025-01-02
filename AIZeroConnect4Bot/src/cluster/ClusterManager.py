@@ -73,4 +73,4 @@ class ClusterManager:
                 if f.stem.endswith(name):
                     f.unlink(missing_ok=True)
 
-        log(f'All nodes have reached the barrier {name}')
+            log(f'All nodes have reached the barrier {name}')

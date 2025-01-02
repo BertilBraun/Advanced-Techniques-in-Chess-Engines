@@ -59,7 +59,7 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
 
         self_play_params = SelfPlayParams(
             temperature=selfplay_temperature,
-            num_parallel_games=64,
+            num_parallel_games=128,
             num_games_per_iteration=selfplay_num_games_per_iteration,
         )
 
@@ -104,7 +104,7 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
 
 
 if __name__ == '__main__':
-    SEPERATE_NODES = 8
+    SEPERATE_NODES = 4
     NUM_TRIALS = 80
     TIMEOUT = 600  # 10 minutes
 
