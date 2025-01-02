@@ -134,8 +134,8 @@ if __name__ == '__main__':
     )
     study.optimize(
         objective,
-        n_trials=50,
-        timeout=600,
+        n_trials=150,
+        timeout=1200,  # 20 minutes
     )
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
