@@ -17,8 +17,7 @@ from src.alpha_zero.train.TrainingStats import TrainingStats
 
 class ClusterAlphaZero(AlphaZero):
     def __init__(self, args: TrainingArgs, load_latest_model: bool = True) -> None:
-        assert args.cluster.num_self_play_nodes_on_cluster is not None
-        assert args.cluster.num_train_nodes_on_cluster is not None
+        assert args.cluster, 'ClusterAlphaZero should only be used with cluster training'
         self.self_players = args.cluster.num_self_play_nodes_on_cluster
         self.trainers = args.cluster.num_train_nodes_on_cluster
         assert self.trainers in [0, 1], 'For now, only one trainer is supported'

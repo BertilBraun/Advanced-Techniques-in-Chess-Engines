@@ -191,7 +191,7 @@ The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the
 
     def _play_two_most_recent_models(self, iteration: int) -> None:
         """Play two most recent models against each other."""
-        if iteration % self.args.evaluation.every_n_iterations != 0 or iteration == 0:
+        if not self.args.evaluation or iteration % self.args.evaluation.every_n_iterations != 0 or iteration == 0:
             return
 
         current_model = self._load_model(iteration)

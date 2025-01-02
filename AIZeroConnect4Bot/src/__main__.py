@@ -17,11 +17,7 @@ if __name__ == '__main__':
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
 
-    assert (TRAINING_ARGS.cluster.num_train_nodes_on_cluster is None) == (
-        TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster is None
-    ), 'Either both or none of the cluster args should be set'
-
-    if TRAINING_ARGS.cluster.num_train_nodes_on_cluster is not None:
+    if TRAINING_ARGS.cluster:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
         model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)

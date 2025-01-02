@@ -43,10 +43,10 @@ class SelfPlayParams:
 
 @dataclass
 class ClusterParams:
-    num_train_nodes_on_cluster: Optional[int]
+    num_train_nodes_on_cluster: int
     """This is the number of separate nodes on the cluster to use to parallelize the training. None means to not use a cluster and train on the local machine"""
 
-    num_self_play_nodes_on_cluster: Optional[int]
+    num_self_play_nodes_on_cluster: int
     """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with. None means to not use a cluster and train on the local machine"""
 
 
@@ -110,6 +110,6 @@ class TrainingArgs:
     mcts: MCTSParams
     network: NetworkParams
     self_play: SelfPlayParams
-    cluster: ClusterParams
     training: TrainingParams
-    evaluation: EvaluationParams
+    cluster: Optional[ClusterParams] = None
+    evaluation: Optional[EvaluationParams] = None
