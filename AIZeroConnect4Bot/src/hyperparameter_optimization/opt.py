@@ -94,7 +94,7 @@ def objective(trial: optuna.Trial) -> float:
     )
 
     # Run the training loop
-    model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=None)
+    model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=torch.device('cpu'))
     torch.set_float32_matmul_precision('high')
     model = try_compile(model)
 
