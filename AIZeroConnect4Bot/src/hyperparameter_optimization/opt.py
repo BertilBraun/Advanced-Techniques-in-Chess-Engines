@@ -24,7 +24,7 @@ def objective(trial: optuna.Trial) -> float:
     # Define hyperparameter sampling
     mcts_num_searches_per_turn = trial.suggest_int('mcts_num_searches_per_turn', 50, 200, step=50)
     mcts_dirichlet_epsilon = trial.suggest_float('mcts_dirichlet_epsilon', 0.0, 1.0, step=0.25)
-    mcts_dirichlet_alpha = trial.suggest_float('mcts_dirichlet_alpha', 0.0, 1.0, step=0.25)
+    mcts_dirichlet_alpha = trial.suggest_float('mcts_dirichlet_alpha', 0.25, 1.0, step=0.25)
     mcts_c_param = trial.suggest_float('mcts_c_param', 1.0, 6.0, step=1)
 
     network_num_layers = trial.suggest_int('network_num_layers', 2, 8, step=3)
