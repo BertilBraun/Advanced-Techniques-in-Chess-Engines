@@ -61,7 +61,7 @@ class Trainer:
 
             state = state.to(device=self.model.device, dtype=TORCH_DTYPE)
             policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
-            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
+            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE).unsqueeze(1)
 
             out_policy, out_value = self.model(state)
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 
 import torch
 from os import PathLike
@@ -69,7 +70,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             self.add_sample(state, policy_target / count, value_target / count)
 
     @staticmethod
-    def load(file_path: str | PathLike, device: torch.device) -> SelfPlayDataset:
+    def load(file_path: str | PathLike, device: torch.device | None) -> SelfPlayDataset:
         data: tuple[torch.Tensor, torch.Tensor, torch.Tensor] = torch.load(
             file_path, weights_only=True, map_location=device
         )
@@ -80,6 +81,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         dataset.policy_targets = [policy_target for policy_target in policy_targets]
         dataset.value_targets = value_targets.tolist()
         return dataset
+
+    @staticmethod
+    def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device | None) -> SelfPlayDataset:
+        for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt'):
+            return SelfPlayDataset.load(file_path, device)
+
+        raise FileNotFoundError(f'No memory file found for iteration {iteration}')
 
     def save(self, file_path: str | PathLike) -> None:
         states = torch.stack(self.states)

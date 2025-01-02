@@ -236,5 +236,3 @@ elif True:
         #     num_self_play_nodes_on_cluster=1,
         #     num_train_nodes_on_cluster=0,
         # )
-
-    args = TRAINING_ARGS

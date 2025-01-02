@@ -4,6 +4,7 @@ import torch
 from torch.optim import Adam
 from tensorflow._api.v2.summary import create_file_writer
 
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.settings import CurrentGame, TORCH_DTYPE
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -90,7 +91,7 @@ class ClusterAlphaZero(AlphaZero):
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
         EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CurrentGame.average_num_moves_per_game
 
-        while len(self._load_all_memories(iteration)) < EXPECTED_NUM_SAMPLES:
+        while len(SelfPlayDataset.load_iteration(self.save_path, iteration, device=None)) < EXPECTED_NUM_SAMPLES:
             log('Waiting for memories...')
             time.sleep(60)
 

@@ -1,3 +1,5 @@
+import src.environ_setup  # isort:skip # noqa import first to setup environment variables and other configurations
+
 import torch
 from torch.optim import Adam
 
@@ -12,9 +14,9 @@ if __name__ == '__main__':
     log('Starting training')
     log('Training on:', 'GPU' if torch.cuda.is_available() else 'CPU')
     log('Training args:')
-    log(TRAINING_ARGS.__dict__, use_pprint=True)
+    log(TRAINING_ARGS, use_pprint=True)
 
-    assert not (TRAINING_ARGS.cluster.num_train_nodes_on_cluster is None) ^ (
+    assert (TRAINING_ARGS.cluster.num_train_nodes_on_cluster is None) == (
         TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster is None
     ), 'Either both or none of the cluster args should be set'
 

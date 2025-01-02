@@ -1,4 +1,5 @@
 import json
+from typing import Generator
 import torch
 import tensorflow as tf
 from tensorflow._api.v2.summary import create_file_writer
@@ -38,18 +39,19 @@ class AlphaZero:
         if load_latest_model:
             self._load_latest_model()
 
-    def learn(self) -> None:
+    def learn(self) -> Generator[tuple[int, TrainingStats], None, None]:
         training_stats: list[TrainingStats] = []
         starting_iteration = self.starting_iteration
 
-        for iteration in range(self.starting_iteration, self.args.num_iterations):
-            with create_file_writer(str(self.save_path / 'logs')).as_default():
+        with create_file_writer(str(self.save_path / 'logs')).as_default():
+            for iteration in range(self.starting_iteration, self.args.num_iterations):
                 self._self_play_and_write_memory(
                     iteration,
                     self.args.self_play.num_games_per_iteration,
                 )
 
                 training_stats.append(self._train_and_save_new_model(iteration))
+                yield iteration, training_stats[-1]
 
                 self._load_latest_model()
 
@@ -183,9 +185,7 @@ The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the
 
         dataset = SelfPlayDataset()
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            for f in self.save_path.iterdir():
-                if f.suffix == '.pt' and f.stem.startswith(f'memory_{iter}_'):
-                    dataset += SelfPlayDataset.load(f, self.model.device)
+            dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
 
         return dataset
 
