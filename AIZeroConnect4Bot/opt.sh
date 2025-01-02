@@ -51,13 +51,13 @@ source ~/.bashrc
 # Start 16 detached training processes in parallel, each using 1 GPU, then wait for all of them to finish while piping the output to files
 # python3.11 -m src.hyperparameter_optimization.opt
 
-python3.11 -m AIZeroConnect4Bot.src.hyperparameter_optimization.opt > opt_zero_0.txt &
+python3.11 -m src.hyperparameter_optimization.opt > opt_zero_0.txt &
 
 sleep 10
 
 for i in {1..14}
 do
-    python3.11 -m AIZeroConnect4Bot.src.hyperparameter_optimization.opt > opt_zero_$i.txt &
+    python3.11 -m src.hyperparameter_optimization.opt > opt_zero_$i.txt &
 done
 
-python3.11 -m AIZeroConnect4Bot.src.hyperparameter_optimization.opt > opt_zero_15.txt
+python3.11 -m src.hyperparameter_optimization.opt > opt_zero_15.txt
