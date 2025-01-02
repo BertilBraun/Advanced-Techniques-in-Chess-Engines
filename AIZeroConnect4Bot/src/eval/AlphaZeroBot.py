@@ -15,7 +15,7 @@ class AlphaZeroBot(Bot):
         if isinstance(network_model_file_path, Network):
             self.model = network_model_file_path
         else:
-            self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size)
+            self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
             if network_model_file_path is not None:
                 self.model.load_state_dict(
                     torch.load(

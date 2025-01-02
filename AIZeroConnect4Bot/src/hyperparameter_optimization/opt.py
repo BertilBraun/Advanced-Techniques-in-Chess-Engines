@@ -94,7 +94,7 @@ def objective(trial: optuna.Trial) -> float:
     )
 
     # Run the training loop
-    model = Network(training_args.network.num_layers, training_args.network.hidden_size)
+    model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=None)
     torch.set_float32_matmul_precision('high')
     model = try_compile(model)
 
@@ -138,4 +138,14 @@ if __name__ == '__main__':
         timeout=600,
     )
 
-    print(study.best_params)
+    pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
+    complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+
+    log('Study statistics:')
+    log(f'  Number of finished trials: {len(study.trials)}')
+    log(f'  Number of pruned trials: {len(pruned_trials)}')
+    log(f'  Number of complete trials: {len(complete_trials)}')
+
+    log(f'Best trial ({study.best_trial.number}):')
+    log(study.best_trial.params)
+    log('With best loss:', study.best_value)

@@ -257,7 +257,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test, batch_size=BATCH_SIZE, shuffle=False)
 
     # Instantiate the model
-    model = Network(4, 64)
+    model = Network(4, 64, device=None)
 
     # Move the model to GPU if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

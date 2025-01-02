@@ -5,7 +5,7 @@ from torch.optim import Adam
 from tensorflow._api.v2.summary import create_file_writer
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.settings import CurrentGame, TORCH_DTYPE
+from src.settings import CurrentGame
 from src.util.compile import try_compile
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -26,16 +26,13 @@ class ClusterAlphaZero(AlphaZero):
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
 
-        model = Network(args.network.num_layers, args.network.hidden_size)
         # move model to rank device
         if torch.cuda.is_available():
             node_device = torch.device('cuda', self.cluster_manager.rank % torch.cuda.device_count())
-            model = model.to(
-                device=node_device,
-                dtype=TORCH_DTYPE,
-                non_blocking=False,
-            )
-            model.device = node_device
+        else:
+            node_device = torch.device('cpu')
+
+        model = Network(args.network.num_layers, args.network.hidden_size, device=node_device)
 
         torch.set_float32_matmul_precision('high')
         model = try_compile(model)

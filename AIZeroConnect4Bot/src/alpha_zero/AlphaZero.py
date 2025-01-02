@@ -149,9 +149,9 @@ The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the
 
     def _load_model(self, iteration: int) -> Network:
         try:
-            model = Network(self.args.network.num_layers, self.args.network.hidden_size)
+            model = Network(self.args.network.num_layers, self.args.network.hidden_size, self.model.device)
             model.load_state_dict(
-                torch.load(self.save_path / f'model_{iteration}.pt', map_location=model.device, weights_only=True)
+                torch.load(self.save_path / f'model_{iteration}.pt', map_location=self.model.device, weights_only=True)
             )
             return model
         except FileNotFoundError:

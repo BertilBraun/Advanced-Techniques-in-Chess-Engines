@@ -6,7 +6,7 @@ T = TypeVar('T')
 
 
 def try_compile(element: T) -> T:
-    return element  # TODO disabled compilation for now
+    # return element  # TODO disabled compilation for now
 
     try:
         return torch.compile(element)  # type: ignore

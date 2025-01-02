@@ -24,7 +24,7 @@ if __name__ == '__main__':
     if TRAINING_ARGS.cluster.num_train_nodes_on_cluster is not None:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
-        model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size)
+        model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
         torch.set_float32_matmul_precision('high')
         model = try_compile(model)
         optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
