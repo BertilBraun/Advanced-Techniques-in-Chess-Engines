@@ -16,6 +16,7 @@ from src.alpha_zero.train.TrainingArgs import (
     EvaluationParams,
 )
 from src.settings import SAVE_PATH, learning_rate_scheduler
+from src.util.compile import try_compile
 from src.util.log import log
 
 
@@ -95,8 +96,7 @@ def objective(trial: optuna.Trial) -> float:
     # Run the training loop
     model = Network(training_args.network.num_layers, training_args.network.hidden_size)
     torch.set_float32_matmul_precision('high')
-    if torch.cuda.is_available():
-        model: Network = torch.compile(model)  # type: ignore
+    model = try_compile(model)
 
     optimizer_type = trial.suggest_categorical('optimizer_type', ['AdamW', 'SGD'])
 

@@ -1,5 +1,7 @@
 import torch
 
+from src.util.compile import try_compile
+
 
 class ZobristHasher:
     def __init__(self, planes: int, rows: int, cols: int):
@@ -70,5 +72,4 @@ def _zobrist_hash_boards(boards: torch.Tensor, keys: torch.Tensor) -> torch.Tens
     return hashes
 
 
-if torch.cuda.is_available():
-    _zobrist_hash_boards = torch.compile(_zobrist_hash_boards)
+_zobrist_hash_boards = try_compile(_zobrist_hash_boards)

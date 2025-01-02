@@ -6,6 +6,7 @@ from tensorflow._api.v2.summary import create_file_writer
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.settings import CurrentGame, TORCH_DTYPE
+from src.util.compile import try_compile
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterManager import ClusterManager
@@ -37,8 +38,7 @@ class ClusterAlphaZero(AlphaZero):
             model.device = node_device
 
         torch.set_float32_matmul_precision('high')
-        if torch.cuda.is_available():
-            model: Network = torch.compile(model)  # type: ignore
+        model = try_compile(model)
 
         optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 

@@ -3,6 +3,7 @@ import src.environ_setup  # isort:skip # noqa import first to setup environment 
 import torch
 from torch.optim import Adam
 
+from src.util.compile import try_compile
 from src.util.log import log
 from src.settings import TRAINING_ARGS
 
@@ -25,8 +26,7 @@ if __name__ == '__main__':
     else:
         model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size)
         torch.set_float32_matmul_precision('high')
-        if torch.cuda.is_available():
-            model: Network = torch.compile(model)  # type: ignore
+        model = try_compile(model)
         optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
 
         AlphaZero(model, optimizer, TRAINING_ARGS).learn()
