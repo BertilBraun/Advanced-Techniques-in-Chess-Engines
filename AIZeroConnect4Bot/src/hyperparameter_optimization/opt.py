@@ -2,7 +2,7 @@ import src.environ_setup  # isort:skip # noqa import first to setup environment 
 
 import torch
 import optuna
-from torch.optim import AdamW, SGD
+from torch.optim import AdamW
 
 from src.Network import Network
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -15,7 +15,7 @@ from src.alpha_zero.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
 )
-from src.settings import SAVE_PATH, learning_rate_scheduler
+from src.settings import SAVE_PATH, USE_GPU, learning_rate_scheduler
 from src.util.compile import try_compile
 from src.util.log import log
 
@@ -94,20 +94,12 @@ def objective(trial: optuna.Trial) -> float:
     )
 
     # Run the training loop
-    model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=None)
+    device = torch.device('cuda', trial.number % torch.cuda.device_count()) if USE_GPU else torch.device('cpu')
+    model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=device)
     torch.set_float32_matmul_precision('high')
     model = try_compile(model)
 
-    optimizer_type = trial.suggest_categorical('optimizer_type', ['AdamW', 'SGD'])
-
-    if optimizer_type == 'AdamW':
-        optimizer = AdamW(model.parameters(), lr=training_learning_rate_initial, weight_decay=1e-4, amsgrad=True)
-    elif optimizer_type == 'SGD':
-        optimizer = SGD(
-            model.parameters(), lr=training_learning_rate_initial, weight_decay=1e-4, nesterov=True, momentum=0.9
-        )
-    else:
-        raise ValueError(f'Unknown optimizer type: {optimizer_type}')
+    optimizer = AdamW(model.parameters(), lr=training_learning_rate_initial, weight_decay=1e-4, amsgrad=True)
 
     log(f'Running trial {trial.number} with the following hyperparameters:')
     log(trial.params, use_pprint=True)
@@ -134,7 +126,7 @@ if __name__ == '__main__':
     )
     study.optimize(
         objective,
-        n_trials=50,
+        n_trials=80,
         timeout=600,  # 10 minutes
     )
 

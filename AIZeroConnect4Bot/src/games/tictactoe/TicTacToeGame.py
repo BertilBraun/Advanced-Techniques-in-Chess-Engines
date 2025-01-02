@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch
 import numpy as np
-from typing import List
 
 from src.games.Game import Game
 from src.games.tictactoe.TicTacToeBoard import (
@@ -52,7 +51,7 @@ class TicTacToeGame(Game[TicTacToeMove]):
             .reshape(self.representation_shape)
         )
 
-    def hash_boards(self, boards: torch.Tensor) -> List[int]:
+    def hash_boards(self, boards: torch.Tensor) -> list[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
         return self.Hasher.zobrist_hash_boards(boards)
 
@@ -66,7 +65,7 @@ class TicTacToeGame(Game[TicTacToeMove]):
 
     def symmetric_variations(
         self, board: np.ndarray, action_probabilities: np.ndarray
-    ) -> List[tuple[np.ndarray, np.ndarray]]:
+    ) -> list[tuple[np.ndarray, np.ndarray]]:
         return [
             (  # 90*k degree rotation
                 np.rot90(board, k=k, axes=(1, 2)),

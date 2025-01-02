@@ -1,7 +1,7 @@
 import time
 import torch
 
-from torch.optim import Adam
+from torch.optim import AdamW
 from tensorflow._api.v2.summary import create_file_writer
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
@@ -37,7 +37,7 @@ class ClusterAlphaZero(AlphaZero):
         torch.set_float32_matmul_precision('high')
         model = try_compile(model)
 
-        optimizer = Adam(model.parameters(), lr=0.2, weight_decay=1e-4)
+        optimizer = AdamW(model.parameters(), lr=0.2, weight_decay=1e-4)
 
         super().__init__(model, optimizer, args, load_latest_model)
 
