@@ -1,3 +1,4 @@
+import random
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -62,33 +63,35 @@ def visualize(system_usage_file='system_usage.csv', events_file='events.csv'):
     axs[3].set_title('GPU VRAM Usage')
     axs[3].legend(loc='upper left')
 
-    # Add background color for events
+    event_identifiers: dict[str, tuple[str, str]] = {}
+
     for event in events:
-        event_name = event['event_name']
+        name = event['event_name']
+        # Add background color for events
+        if name not in event_identifiers:
+            colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:olive', 'tab:cyan']
+            event_identifiers[name] = (random.choice(colors), name.replace('_', ' ').title())
+
+    patches = []
+    labels = []
+
+    for event in events:
+        name = event['event_name']
         start = event['start']
         end = event['end']
-
-        if event_name == 'self_play':
-            color = 'green'
-        elif event_name == 'training':
-            color = 'orange'
-        elif event_name == 'dataset_loading':
-            color = 'blue'
-        else:
-            color = 'grey'
+        color, label = event_identifiers[name]
 
         for ax in axs:
             ax.axvspan(start, end, color=color, alpha=0.3)
 
-    # Create custom legends for background colors
-    self_play_patch = mpatches.Patch(color='green', alpha=0.3, label='Self-Play')
-    training_patch = mpatches.Patch(color='orange', alpha=0.3, label='Training')
-    dataset_loading_patch = mpatches.Patch(color='blue', alpha=0.3, label='Dataset Loading')
+        # Add event to legend
+        patches.append(mpatches.Patch(color=color, alpha=0.3, label=label))
+        labels.append(label)
 
     # Combine existing legends with event legends
     handles, labels = axs[-1].get_legend_handles_labels()
-    handles.extend([self_play_patch, training_patch, dataset_loading_patch])
-    labels.extend(['Self-Play', 'Training', 'Dataset Loading'])
+    handles.extend(patches)
+    labels.extend(labels)
 
     # Add the combined legend to the last subplot
     axs[-1].legend(handles=handles, loc='upper left')

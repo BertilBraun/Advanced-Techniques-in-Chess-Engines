@@ -8,16 +8,21 @@ import csv
 
 from src.settings import USE_PROFILING
 
+SYSTEM_USAGE_FILENAME = 'system_usage.csv'
+EVENTS_FILENAME = 'events.csv'
+
 
 # Usage Logger
-def _log_system_usage(interval=1, filename='system_usage.csv'):
+def _log_system_usage(interval=1):
     """
     Logs CPU, RAM, GPU, and VRAM usage every 'interval' seconds to a CSV file.
     """
+    open(EVENTS_FILENAME, 'w').close()  # Clear events file
+
     # Get the current process
     process = psutil.Process()
 
-    with open(filename, mode='w', newline='') as file:
+    with open(SYSTEM_USAGE_FILENAME, mode='w', newline='') as file:
         writer = csv.writer(file)
         # Write header
         writer.writerow(['timestamp', 'cpu_percent', 'ram_usage', 'gpu_load', 'gpu_memory_used', 'gpu_memory_total'])
@@ -54,7 +59,7 @@ def start_usage_logger():
 
 # Event Logger as Context Manager
 @contextmanager
-def log_event(event_name, filename='events.csv'):
+def log_event(event_name):
     """
     Context manager to log the start and end of an event.
     """
@@ -63,7 +68,7 @@ def log_event(event_name, filename='events.csv'):
         if not USE_PROFILING:
             return
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(filename, mode='a', newline='') as file:
+        with open(EVENTS_FILENAME, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([timestamp, start_end, event_name])
             file.flush()

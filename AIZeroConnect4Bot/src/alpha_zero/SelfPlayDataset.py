@@ -26,48 +26,68 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     """
 
     def __init__(self):
-        self.states: list[torch.Tensor] = []
-        self.policy_targets: list[torch.Tensor] = []
-        self.value_targets: list[float] = []
+        self.additional_states: list[torch.Tensor] = []
+        self.additional_policy_targets: list[torch.Tensor] = []
+        self.additional_value_targets: list[float] = []
+        self.states: torch.Tensor = torch.empty(0)
+        self.policy_targets: torch.Tensor = torch.empty(0)
+        self.value_targets: torch.Tensor = torch.empty(0)
 
     def add_sample(self, state: torch.Tensor, policy_target: torch.Tensor, value_target: float) -> None:
-        self.states.append(state)
-        self.policy_targets.append(policy_target)
-        self.value_targets.append(value_target)
+        self.additional_states.append(state)
+        self.additional_policy_targets.append(policy_target)
+        self.additional_value_targets.append(value_target)
 
     def __len__(self) -> int:
-        return len(self.states)
+        return len(self.additional_states) + len(self.states)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, float]:
-        return self.states[idx], self.policy_targets[idx], self.value_targets[idx]
+        if idx < len(self.states):
+            return self.states[idx], self.policy_targets[idx], self.value_targets[idx]  # type: ignore
+
+        idx -= len(self.states)
+        return self.additional_states[idx], self.additional_policy_targets[idx], self.additional_value_targets[idx]
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
+        self.collect()
+        other.collect()
+
         new_dataset = SelfPlayDataset()
-        new_dataset.states = self.states + other.states
-        new_dataset.policy_targets = self.policy_targets + other.policy_targets
-        new_dataset.value_targets = self.value_targets + other.value_targets
+        new_dataset.states = torch.cat([self.states, other.states])
+        new_dataset.policy_targets = torch.cat([self.policy_targets, other.policy_targets])
+        new_dataset.value_targets = torch.cat([self.value_targets, other.value_targets])
         return new_dataset
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
+        assert len(self.additional_states) == 0, 'Additional data must be empty. Call collect() before deduplicating'
+
         mp: dict[int, tuple[int, tuple[torch.Tensor, torch.Tensor, float]]] = {}
-        hashes = CurrentGame.hash_boards(torch.stack(self.states))
+        hashes = CurrentGame.hash_boards(self.states)
         for i, h in enumerate(hashes):
             if h in mp:
                 count, (state, policy_target, value_target) = mp[h]
-                mp[h] = (
+                mp[h] = (  # type: ignore
                     count + 1,
-                    (state, policy_target + self.policy_targets[i], value_target + self.value_targets[i]),
+                    (
+                        state,
+                        policy_target + self.policy_targets[i],
+                        value_target + self.value_targets[i],
+                    ),
                 )
             else:
-                mp[h] = (1, (self.states[i], self.policy_targets[i], self.value_targets[i]))
+                mp[h] = (  # type: ignore
+                    1,
+                    (self.states[i], self.policy_targets[i], self.value_targets[i]),
+                )
 
-        self.states = []
-        self.policy_targets = []
-        self.value_targets = []
+        self.additional_states = []
+        self.additional_policy_targets = []
+        self.additional_value_targets = []
 
-        for count, (state, policy_target, value_target) in mp.values():
-            self.add_sample(state, policy_target / count, value_target / count)
+        self.states = torch.stack([state for _, (state, _, _) in mp.values()])
+        self.policy_targets = torch.stack([policy_target / count for count, (_, policy_target, _) in mp.values()])
+        self.value_targets = torch.tensor([value_target / count for count, (_, _, value_target) in mp.values()])
 
     @staticmethod
     def load(file_path: str | PathLike, device: torch.device | None) -> SelfPlayDataset:
@@ -77,9 +97,9 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         states, policy_targets, value_targets = data
 
         dataset = SelfPlayDataset()
-        dataset.states = [state for state in states]
-        dataset.policy_targets = [policy_target for policy_target in policy_targets]
-        dataset.value_targets = value_targets.tolist()
+        dataset.states = states
+        dataset.policy_targets = policy_targets
+        dataset.value_targets = value_targets
         return dataset
 
     @staticmethod
@@ -90,9 +110,17 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         return dataset
 
-    def save(self, file_path: str | PathLike) -> None:
-        states = torch.stack(self.states)
-        policy_targets = torch.stack(self.policy_targets)
-        value_targets = torch.tensor(self.value_targets)
+    def collect(self) -> None:
+        if len(self.additional_states) == 0:
+            return
+        self.states = torch.cat([self.states, torch.stack(self.additional_states)])
+        self.policy_targets = torch.cat([self.policy_targets, torch.stack(self.additional_policy_targets)])
+        self.value_targets = torch.cat([self.value_targets, torch.tensor(self.additional_value_targets)])
+        self.additional_states = []
+        self.additional_policy_targets = []
+        self.additional_value_targets = []
 
-        torch.save((states, policy_targets, value_targets), file_path)
+    def save(self, file_path: str | PathLike) -> None:
+        self.collect()
+
+        torch.save((self.states, self.policy_targets, self.value_targets), file_path)
