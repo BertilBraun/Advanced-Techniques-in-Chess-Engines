@@ -1,10 +1,8 @@
-import time
 import torch
 
 from torch.optim import AdamW
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.settings import USE_GPU, CurrentGame
+from src.settings import USE_GPU
 from src.util.compile import try_compile
 from src.util.log import log
 from src.alpha_zero.AlphaZero import AlphaZero
@@ -77,21 +75,9 @@ class ClusterAlphaZero(AlphaZero):
         starting_iteration = self.starting_iteration
 
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            training_stats.append(self._train_one_iteration(iteration))
+            training_stats.append(self._train_and_save_new_model(iteration))
 
         log('Training finished')
         log('Final training stats:')
         for i, stats in enumerate(training_stats):
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
-
-    def _train_one_iteration(self, iteration: int) -> TrainingStats:
-        EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CurrentGame.average_num_moves_per_game
-
-        while (
-            len(SelfPlayDataset.load_iteration(self.save_path, iteration, device=torch.device('cpu')))
-            < EXPECTED_NUM_SAMPLES
-        ):
-            log('Waiting for memories...')
-            time.sleep(20)
-
-        return self._train_and_save_new_model(iteration)

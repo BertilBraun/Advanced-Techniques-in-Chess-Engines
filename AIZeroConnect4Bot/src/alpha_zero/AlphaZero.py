@@ -10,6 +10,7 @@ from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.settings import TB_SUMMARY
 from src.util.compile import try_compile
+from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util import load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -66,56 +67,59 @@ class AlphaZero:
             num_self_play_calls // self.args.self_play.num_parallel_games,
             desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
         ):
-            dataset += self.self_play.self_play(iteration)
+            with log_exceptions('Self play'):
+                dataset += self.self_play.self_play(iteration)
 
         log(f'Collected {len(dataset)} self-play memories.')
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
-        dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-        log(f'Loaded {len(dataset)} self-play memories.')
-
-        TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
-
-        dataset.deduplicate()
-        log(f'Deduplicated to {len(dataset)} unique positions.')
-
-        TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
-        TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
-
-        # The spikiness of the policy targets.
-        # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
-        spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
-        TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
-
-        TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
-
         train_stats = TrainingStats()
-        for epoch in range(self.args.training.num_epochs):
-            epoch_train_stats = self.trainer.train(dataset, iteration)
-            TB_SUMMARY.add_scalar(
-                'policy_loss',
-                epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
-                iteration * self.args.training.num_epochs + epoch,
-            )
-            TB_SUMMARY.add_scalar(
-                'value_loss',
-                epoch_train_stats.value_loss / epoch_train_stats.num_batches,
-                iteration * self.args.training.num_epochs + epoch,
-            )
-            TB_SUMMARY.add_scalar(
-                'total_loss',
-                epoch_train_stats.total_loss / epoch_train_stats.num_batches,
-                iteration * self.args.training.num_epochs + epoch,
-            )
-            log(f'Epoch {epoch + 1}: {epoch_train_stats}')
-            train_stats += epoch_train_stats
 
-        log(f'Iteration {iteration + 1}: {train_stats}')
-        self._save_latest_model(iteration)
+        with log_exceptions('Training'):
+            dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+            log(f'Loaded {len(dataset)} self-play memories.')
 
-        if iteration > 0:
-            self._play_two_most_recent_models(iteration)
+            TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
+
+            dataset.deduplicate()
+            log(f'Deduplicated to {len(dataset)} unique positions.')
+
+            TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
+            TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
+
+            # The spikiness of the policy targets.
+            # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
+            spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
+            TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
+
+            TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
+
+            for epoch in range(self.args.training.num_epochs):
+                epoch_train_stats = self.trainer.train(dataset, iteration)
+                TB_SUMMARY.add_scalar(
+                    'policy_loss',
+                    epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
+                    iteration * self.args.training.num_epochs + epoch,
+                )
+                TB_SUMMARY.add_scalar(
+                    'value_loss',
+                    epoch_train_stats.value_loss / epoch_train_stats.num_batches,
+                    iteration * self.args.training.num_epochs + epoch,
+                )
+                TB_SUMMARY.add_scalar(
+                    'total_loss',
+                    epoch_train_stats.total_loss / epoch_train_stats.num_batches,
+                    iteration * self.args.training.num_epochs + epoch,
+                )
+                log(f'Epoch {epoch + 1}: {epoch_train_stats}')
+                train_stats += epoch_train_stats
+
+            log(f'Iteration {iteration + 1}: {train_stats}')
+            self._save_latest_model(iteration)
+
+            if iteration > 0:
+                self._play_two_most_recent_models(iteration)
 
         return train_stats
 

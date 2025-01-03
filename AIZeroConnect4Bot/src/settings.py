@@ -28,7 +28,7 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 4
-    return min(4 + (current_iteration - 5) // 2, 20)
+    return min(4 + (current_iteration - 5) // 2, 10)
 
 
 def learning_rate(current_iteration: int) -> float:
@@ -89,9 +89,9 @@ if True:
     CurrentBoard = Connect4Board
     CurrentGameVisuals = Connect4Visuals()
 
-    NUM_NODES = 4
+    NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 8  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 8 - NUM_TRAINERS  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -99,7 +99,7 @@ if True:
     PARALLEL_GAMES = 128
 
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=12,
+        num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         mcts=MCTSParams(
             num_searches_per_turn=600,
