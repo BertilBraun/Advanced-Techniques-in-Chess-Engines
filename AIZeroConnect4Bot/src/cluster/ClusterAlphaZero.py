@@ -12,6 +12,7 @@ from src.cluster.ClusterManager import ClusterManager
 from src.Network import Network
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.util.profiler import start_usage_logger
 
 
 class ClusterAlphaZero(AlphaZero):
@@ -23,6 +24,9 @@ class ClusterAlphaZero(AlphaZero):
 
         self.cluster_manager = ClusterManager(self.self_players + self.trainers)
         self.cluster_manager.initialize()
+
+        if self.cluster_manager.is_root_node:
+            start_usage_logger()
 
         # move model to rank device
         if USE_GPU:

@@ -17,11 +17,11 @@ if __name__ == '__main__':
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
 
-    start_usage_logger()
-
     if TRAINING_ARGS.cluster:
         ClusterAlphaZero(TRAINING_ARGS).learn()
     else:
+        start_usage_logger()
+
         model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
         model = try_compile(model)
         optimizer = AdamW(model.parameters(), lr=0.2, weight_decay=1e-4)
