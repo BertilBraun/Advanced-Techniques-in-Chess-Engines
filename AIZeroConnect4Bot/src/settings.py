@@ -15,7 +15,7 @@ TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
-TESTING = False
+TESTING = True
 
 PLAY_C_PARAM = 1.0
 
