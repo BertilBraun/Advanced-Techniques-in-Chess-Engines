@@ -92,6 +92,6 @@ class ClusterAlphaZero(AlphaZero):
             < EXPECTED_NUM_SAMPLES
         ):
             log('Waiting for memories...')
-            time.sleep(60)
+            time.sleep(20)
 
         return self._train_and_save_new_model(iteration)

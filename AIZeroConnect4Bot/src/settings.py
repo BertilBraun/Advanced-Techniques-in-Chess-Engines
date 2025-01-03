@@ -90,8 +90,8 @@ if True:
     CurrentGameVisuals = Connect4Visuals()
 
     NUM_NODES = 4
-    NUM_TRAINERS = 0
-    NUM_SELF_PLAYERS = (NUM_NODES - NUM_TRAINERS) * 4  # Assuming 4 parallel self players per node
+    NUM_TRAINERS = 1
+    NUM_SELF_PLAYERS = NUM_NODES * 8  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -114,7 +114,7 @@ if True:
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=PARALLEL_GAMES,
-            num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
+            num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
