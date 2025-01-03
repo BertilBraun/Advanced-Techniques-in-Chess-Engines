@@ -8,7 +8,7 @@ T = TypeVar('T')
 def try_compile(element: T) -> T:
     from src.settings import USE_GPU
 
-    if not USE_GPU:
+    if not USE_GPU or True:
         return element  # TODO disabled compilation for now
 
     try:
