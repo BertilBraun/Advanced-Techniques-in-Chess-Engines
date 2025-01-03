@@ -44,6 +44,8 @@ class AlphaZero:
         training_stats: list[TrainingStats] = []
         starting_iteration = self.starting_iteration
 
+        torch.cuda.memory._record_memory_history()
+
         with create_file_writer(str(self.save_path / 'logs')).as_default():
             for iteration in range(self.starting_iteration, self.args.num_iterations):
                 self._self_play_and_write_memory(
@@ -76,11 +78,7 @@ class AlphaZero:
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         with log_event('dataset_loading'):
-            torch.cuda.memory._record_memory_history()
-
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-
-            torch.cuda.memory._dump_snapshot('my_snapshot.pickle')
 
             log(f'Loaded {len(dataset)} self-play memories.')
             tf.summary.scalar('num_training_samples', len(dataset), iteration)
@@ -88,6 +86,8 @@ class AlphaZero:
         with log_event('dataset_deduplication'):
             dataset.deduplicate()
             log(f'Deduplicated to {len(dataset)} unique positions.')
+
+        torch.cuda.memory._dump_snapshot('my_snapshot.pickle')
 
         with log_event('dataset_logging'):
             tf.summary.scalar('num_deduplicated_samples', len(dataset), iteration)
