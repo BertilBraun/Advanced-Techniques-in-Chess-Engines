@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=train_zero              # job name
 #SBATCH --partition=accelerated            # mby GPU queue for the resource allocation.
-#SBATCH --time=02:00:00                    # wall-clock time limit
+#SBATCH --time=04:00:00                    # wall-clock time limit
 #SBATCH --mem=400000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
 #SBATCH --cpus-per-task=16                 # number of CPUs required per MPI task
