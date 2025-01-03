@@ -47,11 +47,6 @@ class SelfPlay:
     def self_play(self, iteration: int) -> SelfPlayDataset:
         self.model.eval()
 
-        from src.alpha_zero.AlphaZero import print_mem
-
-        print('Self play start')
-        print_mem()
-
         self_play_dataset = SelfPlayDataset(self.model.device)
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.self_play.num_parallel_games)]
 
@@ -65,13 +60,7 @@ class SelfPlay:
             ),
         )
 
-        print('MCTS initialized')
-        print_mem()
-
         while len(self_play_games) > 0:
-            print('Iteration: ', self_play_games[0].num_played_moves)
-            print_mem()
-
             for spg, action_probabilities in zip(self_play_games, mcts.search([spg.board for spg in self_play_games])):
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
 

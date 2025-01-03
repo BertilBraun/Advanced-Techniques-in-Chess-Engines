@@ -20,7 +20,6 @@ from src.util.profiler import log_event
 
 
 def print_mem():
-    return
     device = torch.device('cuda')
     free, total = torch.cuda.memory.mem_get_info(device)
     free /= 1024**2
@@ -30,6 +29,8 @@ def print_mem():
     allocated = torch.cuda.memory_allocated(device)
     allocated /= 1024**2
     print(f'Free: {free:.2f} MB, Total: {total:.2f} MB, Reserved: {reserved:.2f} MB, Allocated: {allocated:.2f} MB')
+
+    print(torch.cuda.memory_summary(device))
 
 
 class AlphaZero:
@@ -93,6 +94,7 @@ class AlphaZero:
                 print_mem()
                 dataset += self.self_play.self_play(iteration)
                 print('Memory post self play')
+                print_mem()
 
         log(f'Collected {len(dataset)} self-play memories.')
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
