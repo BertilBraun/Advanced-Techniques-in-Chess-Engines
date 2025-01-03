@@ -118,7 +118,7 @@ if True:
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
-            num_train_nodes_on_cluster=0,
+            num_train_nodes_on_cluster=NUM_TRAINERS,
         ),
         training=TrainingParams(
             num_epochs=4,
