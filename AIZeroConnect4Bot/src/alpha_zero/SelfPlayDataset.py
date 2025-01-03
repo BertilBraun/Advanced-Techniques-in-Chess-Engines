@@ -53,7 +53,9 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         other.collect()
 
         if self.states.device != other.states.device:
-            print('Warning: Merging datasets with different devices. Moving data to the device of the first dataset.')
+            print(
+                f'Warning: Merging datasets with different devices: ({self.states.device} and {other.states.device}). Moving data to the device of the first dataset.'
+            )
 
             other.states = other.states.to(self.states.device)
             other.policy_targets = other.policy_targets.to(self.policy_targets.device)

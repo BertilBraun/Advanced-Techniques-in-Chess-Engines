@@ -78,7 +78,17 @@ class AlphaZero:
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         with log_event('dataset_loading'):
+            print('Pre dataset loading')
+            print(torch.cuda.memory.mem_get_info(self.model.device))
+            print(torch.cuda.memory_summary(self.model.device))
+            print(torch.cuda.memory_reserved(self.model.device))
+            print(torch.cuda.memory_allocated(self.model.device))
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+            print('Post dataset loading')
+            print(torch.cuda.memory.mem_get_info(self.model.device))
+            print(torch.cuda.memory_summary(self.model.device))
+            print(torch.cuda.memory_reserved(self.model.device))
+            print(torch.cuda.memory_allocated(self.model.device))
 
             log(f'Loaded {len(dataset)} self-play memories.')
             tf.summary.scalar('num_training_samples', len(dataset), iteration)

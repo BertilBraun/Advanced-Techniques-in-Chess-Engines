@@ -32,8 +32,6 @@ class ClusterAlphaZero(AlphaZero):
             node_device = torch.device('cpu')
 
         model = Network(args.network.num_layers, args.network.hidden_size, device=node_device)
-
-        torch.set_float32_matmul_precision('high')
         model = try_compile(model)
 
         optimizer = AdamW(model.parameters(), lr=0.2, weight_decay=1e-4)
