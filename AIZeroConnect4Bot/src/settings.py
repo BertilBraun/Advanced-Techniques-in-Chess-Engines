@@ -147,11 +147,7 @@ if True:
             self_play=SelfPlayParams(
                 temperature=1.25,
                 num_parallel_games=32,
-                num_games_per_iteration=32 * 2,
-            ),
-            cluster=ClusterParams(
-                num_self_play_nodes_on_cluster=1,
-                num_train_nodes_on_cluster=0,
+                num_games_per_iteration=32,
             ),
             training=TrainingParams(
                 num_epochs=4,
