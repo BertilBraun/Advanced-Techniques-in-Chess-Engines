@@ -84,7 +84,10 @@ class AlphaZero:
                 num_self_play_calls // self.args.self_play.num_parallel_games,
                 desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
             ):
+                print('Memory pre self play')
+                print_mem()
                 dataset += self.self_play.self_play(iteration)
+                print('Memory post self play')
 
         log(f'Collected {len(dataset)} self-play memories.')
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
