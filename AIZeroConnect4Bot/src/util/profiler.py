@@ -1,0 +1,101 @@
+import threading
+import time
+import psutil
+import GPUtil
+from datetime import datetime
+from contextlib import contextmanager
+import csv
+
+from src.settings import USE_PROFILING
+
+
+# Usage Logger
+def _log_system_usage(interval=1, filename='system_usage.csv'):
+    """
+    Logs CPU, RAM, GPU, and VRAM usage every 'interval' seconds to a CSV file.
+    """
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # Write header
+        writer.writerow(['timestamp', 'cpu_percent', 'ram_percent', 'gpu_load', 'gpu_memory_used', 'gpu_memory_total'])
+
+        while True:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cpu_percent = psutil.cpu_percent(interval=None)
+            ram_percent = psutil.virtual_memory().percent
+
+            gpus: list[GPUtil.GPU] = GPUtil.getGPUs()
+            if gpus:
+                gpu_load = gpus[0].load * 100  # Percentage
+                gpu_memory_used = gpus[0].memoryUsed
+                gpu_memory_total = gpus[0].memoryTotal
+            else:
+                gpu_load = 0
+                gpu_memory_used = 0
+                gpu_memory_total = 0
+
+            writer.writerow([timestamp, cpu_percent, ram_percent, gpu_load, gpu_memory_used, gpu_memory_total])
+            file.flush()  # Ensure data is written to disk
+            time.sleep(interval)
+
+
+def start_usage_logger():
+    """
+    Starts the system usage logger in a separate daemon thread.
+    """
+    if not USE_PROFILING:
+        return
+    logger_thread = threading.Thread(target=_log_system_usage, daemon=True)
+    logger_thread.start()
+
+
+_EVENT_LOGGER_INITIALIZED = False
+
+
+# Event Logger as Context Manager
+@contextmanager
+def log_event(event_name, filename='events.csv'):
+    """
+    Context manager to log the start and end of an event.
+    """
+    global _EVENT_LOGGER_INITIALIZED
+    if not _EVENT_LOGGER_INITIALIZED and USE_PROFILING:
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['timestamp', 'start_end', 'event_name'])
+        _EVENT_LOGGER_INITIALIZED = True
+
+    def _log_event(start_end):
+        if not USE_PROFILING:
+            return
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([timestamp, start_end, event_name])
+            file.flush()
+
+    _log_event('START')
+    try:
+        yield
+    finally:
+        _log_event('END')
+
+
+if __name__ == '__main__':
+    # Simulated Self-Play and Training Functions
+    def self_play():
+        with log_event('self_play'):
+            print('Self-play started.')
+            time.sleep(5)  # Simulate self-play duration
+            print('Self-play ended.')
+
+    def training():
+        with log_event('training'):
+            print('Training started.')
+            time.sleep(10)  # Simulate training duration
+            print('Training ended.')
+
+    start_usage_logger()
+    self_play()
+    training()
+    print('All tasks completed.')

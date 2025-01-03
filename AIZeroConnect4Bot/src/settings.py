@@ -10,6 +10,7 @@ from src.alpha_zero.train.TrainingArgs import (
     TrainingParams,
 )
 
+USE_PROFILING = True
 USE_GPU = torch.cuda.is_available()
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
@@ -115,6 +116,41 @@ if True:
             ),
             cluster=ClusterParams(
                 num_self_play_nodes_on_cluster=4,
+                num_train_nodes_on_cluster=0,
+            ),
+            training=TrainingParams(
+                num_epochs=4,
+                batch_size=128,
+                sampling_window=sampling_window,
+                learning_rate=learning_rate,
+                learning_rate_scheduler=learning_rate_scheduler,
+            ),
+            evaluation=EvaluationParams(
+                num_searches_per_turn=60,
+                num_games=30,
+                every_n_iterations=3,
+            ),
+        )
+        TRAINING_ARGS = TrainingArgs(
+            num_iterations=2,
+            save_path=SAVE_PATH + '/connect4',
+            mcts=MCTSParams(
+                num_searches_per_turn=60,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 0.3,
+                c_param=2,
+            ),
+            network=NetworkParams(
+                num_layers=NN_NUM_LAYERS,
+                hidden_size=NN_HIDDEN_SIZE,
+            ),
+            self_play=SelfPlayParams(
+                temperature=1.25,
+                num_parallel_games=128,
+                num_games_per_iteration=128 * 2 * 2,
+            ),
+            cluster=ClusterParams(
+                num_self_play_nodes_on_cluster=1,
                 num_train_nodes_on_cluster=0,
             ),
             training=TrainingParams(

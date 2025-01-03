@@ -10,12 +10,15 @@ from src.settings import TRAINING_ARGS, USE_GPU
 from src.Network import Network
 from src.alpha_zero.AlphaZero import AlphaZero
 from src.cluster.ClusterAlphaZero import ClusterAlphaZero
+from src.util.profiler import start_usage_logger
 
 if __name__ == '__main__':
     log('Starting training')
     log('Training on:', 'GPU' if USE_GPU else 'CPU')
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
+
+    start_usage_logger()
 
     if TRAINING_ARGS.cluster:
         ClusterAlphaZero(TRAINING_ARGS).learn()
