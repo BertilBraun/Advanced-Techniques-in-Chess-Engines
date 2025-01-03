@@ -6,7 +6,6 @@ from os import PathLike
 from torch.utils.data import Dataset
 
 from src.settings import CurrentGame
-from src.util.profiler import log_event
 
 
 class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
@@ -119,8 +118,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device) -> SelfPlayDataset:
         dataset = SelfPlayDataset(device)
         for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt'):
-            with log_event(f'dataset_loading_{file_path.name}'):
-                dataset += SelfPlayDataset.load(file_path, device)
+            dataset += SelfPlayDataset.load(file_path, device)
 
         return dataset
 

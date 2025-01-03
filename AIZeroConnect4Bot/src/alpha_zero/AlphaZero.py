@@ -15,19 +15,6 @@ from src.Network import Network, clear_model_inference_cache
 from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
-from src.util.profiler import log_event
-
-
-def print_mem():
-    device = torch.device('cuda')
-    free, total = torch.cuda.memory.mem_get_info(device)
-    free /= 1024**2
-    total /= 1024**2
-    reserved = torch.cuda.memory_reserved(device)
-    reserved /= 1024**2
-    allocated = torch.cuda.memory_allocated(device)
-    allocated /= 1024**2
-    print(f'Free: {free:.2f} MB, Total: {total:.2f} MB, Reserved: {reserved:.2f} MB, Allocated: {allocated:.2f} MB')
 
 
 class AlphaZero:
@@ -55,18 +42,11 @@ class AlphaZero:
         training_stats: list[TrainingStats] = []
         starting_iteration = self.starting_iteration
 
-        print('Memory pre learn')
-        print_mem()
-
         for iteration in range(self.starting_iteration, self.args.num_iterations):
-            print('Memory pre iteration')
-            print_mem()
             self._self_play_and_write_memory(
                 iteration,
                 self.args.self_play.num_games_per_iteration,
             )
-            print('Memory post self play')
-            print_mem()
 
             training_stats.append(self._train_and_save_new_model(iteration))
             yield iteration, training_stats[-1]
@@ -81,72 +61,62 @@ class AlphaZero:
     def _self_play_and_write_memory(self, iteration: int, num_self_play_calls: int):
         dataset = SelfPlayDataset(self.model.device)
 
-        with log_event('self_play'):
-            for _ in trange(
-                num_self_play_calls // self.args.self_play.num_parallel_games,
-                desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
-            ):
-                print('Memory pre self play')
-                print_mem()
-                dataset += self.self_play.self_play(iteration)
-                print('Memory post self play')
-                print_mem()
+        for _ in trange(
+            num_self_play_calls // self.args.self_play.num_parallel_games,
+            desc=f'Self Play for {self.args.self_play.num_parallel_games} games in parallel',
+        ):
+            dataset += self.self_play.self_play(iteration)
 
         log(f'Collected {len(dataset)} self-play memories.')
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-
         log(f'Loaded {len(dataset)} self-play memories.')
+
         TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
 
-        with log_event('dataset_deduplication'):
-            dataset.deduplicate()
-            log(f'Deduplicated to {len(dataset)} unique positions.')
+        dataset.deduplicate()
+        log(f'Deduplicated to {len(dataset)} unique positions.')
 
-        torch.cuda.memory._dump_snapshot('my_snapshot.pickle')
+        TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
+        TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
 
-        with log_event('dataset_logging'):
-            TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
-            TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
+        # The spikiness of the policy targets.
+        # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
+        spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
+        TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
 
-            # The spikiness of the policy targets.
-            # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
-            spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
-            TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
+        TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
 
-            TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
+        train_stats = TrainingStats()
+        for epoch in range(self.args.training.num_epochs):
+            epoch_train_stats = self.trainer.train(dataset, iteration)
+            TB_SUMMARY.add_scalar(
+                'policy_loss',
+                epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
+                iteration * self.args.training.num_epochs + epoch,
+            )
+            TB_SUMMARY.add_scalar(
+                'value_loss',
+                epoch_train_stats.value_loss / epoch_train_stats.num_batches,
+                iteration * self.args.training.num_epochs + epoch,
+            )
+            TB_SUMMARY.add_scalar(
+                'total_loss',
+                epoch_train_stats.total_loss / epoch_train_stats.num_batches,
+                iteration * self.args.training.num_epochs + epoch,
+            )
+            log(f'Epoch {epoch + 1}: {epoch_train_stats}')
+            train_stats += epoch_train_stats
 
-        with log_event('training'):
-            train_stats = TrainingStats()
-            for epoch in range(self.args.training.num_epochs):
-                epoch_train_stats = self.trainer.train(dataset, iteration)
-                TB_SUMMARY.add_scalar(
-                    'policy_loss',
-                    epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
-                    iteration * self.args.training.num_epochs + epoch,
-                )
-                TB_SUMMARY.add_scalar(
-                    'value_loss',
-                    epoch_train_stats.value_loss / epoch_train_stats.num_batches,
-                    iteration * self.args.training.num_epochs + epoch,
-                )
-                TB_SUMMARY.add_scalar(
-                    'total_loss',
-                    epoch_train_stats.total_loss / epoch_train_stats.num_batches,
-                    iteration * self.args.training.num_epochs + epoch,
-                )
-                log(f'Epoch {epoch + 1}: {epoch_train_stats}')
-                train_stats += epoch_train_stats
+        log(f'Iteration {iteration + 1}: {train_stats}')
+        self._save_latest_model(iteration)
 
-            log(f'Iteration {iteration + 1}: {train_stats}')
-            self._save_latest_model(iteration)
+        if iteration > 0:
+            self._play_two_most_recent_models(iteration)
 
-            if iteration > 0:
-                self._play_two_most_recent_models(iteration)
-
-            return train_stats
+        return train_stats
 
     def _load_latest_model(self) -> None:
         """Load the latest model and optimizer from the last_training_config.pt file if it exists, otherwise start from scratch."""
