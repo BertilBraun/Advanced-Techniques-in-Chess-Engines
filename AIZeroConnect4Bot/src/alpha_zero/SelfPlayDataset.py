@@ -5,7 +5,6 @@ import torch
 from os import PathLike
 from torch.utils.data import Dataset
 
-from src.alpha_zero.AlphaZero import print_mem
 from src.settings import CurrentGame
 
 
@@ -36,6 +35,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def add_sample(self, state: torch.Tensor, policy_target: torch.Tensor, value_target: float) -> None:
         print('Adding sample')
+        from src.alpha_zero.AlphaZero import print_mem
+
         print_mem()
         self.additional_states.append(state)
         self.additional_policy_targets.append(policy_target)
