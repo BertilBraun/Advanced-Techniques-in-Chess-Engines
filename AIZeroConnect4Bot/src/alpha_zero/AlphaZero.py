@@ -20,6 +20,7 @@ from src.util.profiler import log_event
 
 
 def print_mem():
+    return
     device = torch.device('cuda')
     free, total = torch.cuda.memory.mem_get_info(device)
     free /= 1024**2
