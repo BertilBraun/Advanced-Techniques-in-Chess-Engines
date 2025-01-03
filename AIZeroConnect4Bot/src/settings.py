@@ -91,7 +91,7 @@ if True:
 
     NUM_NODES = 4
     NUM_TRAINERS = 0
-    NUM_SELF_PLAYERS = (NUM_NODES - NUM_TRAINERS) * 8  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = (NUM_NODES - NUM_TRAINERS) * 4  # Assuming 4 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
