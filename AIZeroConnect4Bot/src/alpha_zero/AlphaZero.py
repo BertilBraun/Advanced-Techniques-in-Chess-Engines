@@ -19,6 +19,14 @@ from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.profiler import log_event
 
 
+def print_mem():
+    device = torch.device('cuda')
+    print(torch.cuda.memory.mem_get_info(device))
+    print(torch.cuda.memory_summary(device))
+    print(torch.cuda.memory_reserved(device))
+    print(torch.cuda.memory_allocated(device))
+
+
 class AlphaZero:
     def __init__(
         self,
@@ -44,14 +52,19 @@ class AlphaZero:
         training_stats: list[TrainingStats] = []
         starting_iteration = self.starting_iteration
 
-        torch.cuda.memory._record_memory_history()
+        print('Memory pre learn')
+        print_mem()
 
         with create_file_writer(str(self.save_path / 'logs')).as_default():
             for iteration in range(self.starting_iteration, self.args.num_iterations):
+                print('Memory pre iteration')
+                print_mem()
                 self._self_play_and_write_memory(
                     iteration,
                     self.args.self_play.num_games_per_iteration,
                 )
+                print('Memory post self play')
+                print_mem()
 
                 training_stats.append(self._train_and_save_new_model(iteration))
                 yield iteration, training_stats[-1]
@@ -79,16 +92,10 @@ class AlphaZero:
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         with log_event('dataset_loading'):
             print('Pre dataset loading')
-            print(torch.cuda.memory.mem_get_info(self.model.device))
-            print(torch.cuda.memory_summary(self.model.device))
-            print(torch.cuda.memory_reserved(self.model.device))
-            print(torch.cuda.memory_allocated(self.model.device))
+            print_mem()
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             print('Post dataset loading')
-            print(torch.cuda.memory.mem_get_info(self.model.device))
-            print(torch.cuda.memory_summary(self.model.device))
-            print(torch.cuda.memory_reserved(self.model.device))
-            print(torch.cuda.memory_allocated(self.model.device))
+            print_mem()
 
             log(f'Loaded {len(dataset)} self-play memories.')
             tf.summary.scalar('num_training_samples', len(dataset), iteration)
