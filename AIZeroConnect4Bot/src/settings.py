@@ -28,6 +28,9 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
+    base_lr = 0.025
+    lr_decay = 0.85
+    return base_lr * (lr_decay**current_iteration)
     # if current_iteration < 10:
     #    return 0.01
     if current_iteration < 10:
@@ -111,15 +114,15 @@ if True:
                 num_games_per_iteration=128 * 4 * 2,
             ),
             cluster=ClusterParams(
-                num_self_play_nodes_on_cluster=1,
+                num_self_play_nodes_on_cluster=4,
                 num_train_nodes_on_cluster=0,
             ),
             training=TrainingParams(
                 num_epochs=4,
                 batch_size=128,
-                sampling_window=lambda _: 1,  # TODO sampling_window,
-                learning_rate=lambda _: 0.001,
-                learning_rate_scheduler=lambda _, lr: lr,  # TODO learning_rate_scheduler,
+                sampling_window=sampling_window,
+                learning_rate=learning_rate,
+                learning_rate_scheduler=learning_rate_scheduler,
             ),
             evaluation=EvaluationParams(
                 num_searches_per_turn=60,
