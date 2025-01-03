@@ -223,8 +223,7 @@ class AlphaZero:
 
         dataset = SelfPlayDataset(self.model.device)
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            with log_event('dataset_loading'):
-                dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+            dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
 
         return dataset
 
