@@ -98,15 +98,10 @@ class AlphaZero:
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
-        with log_event('dataset_loading'):
-            print('Pre dataset loading')
-            print_mem()
-            dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-            print('Post dataset loading')
-            print_mem()
+        dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
 
-            log(f'Loaded {len(dataset)} self-play memories.')
-            tf.summary.scalar('num_training_samples', len(dataset), iteration)
+        log(f'Loaded {len(dataset)} self-play memories.')
+        tf.summary.scalar('num_training_samples', len(dataset), iteration)
 
         with log_event('dataset_deduplication'):
             dataset.deduplicate()
@@ -228,7 +223,8 @@ class AlphaZero:
 
         dataset = SelfPlayDataset(self.model.device)
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+            with log_event('dataset_loading'):
+                dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
 
         return dataset
 
