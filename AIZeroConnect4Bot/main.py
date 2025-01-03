@@ -26,4 +26,4 @@ if __name__ == '__main__':
         model = try_compile(model)
         optimizer = AdamW(model.parameters(), lr=0.2, weight_decay=1e-4)
 
-        AlphaZero(model, optimizer, TRAINING_ARGS).learn()
+        list(AlphaZero(model, optimizer, TRAINING_ARGS).learn())
