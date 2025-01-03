@@ -1,5 +1,4 @@
 torch
 numpy
 optuna
-tensorflow
 tensorboard

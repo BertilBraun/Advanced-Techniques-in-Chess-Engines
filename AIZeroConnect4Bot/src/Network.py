@@ -1,12 +1,11 @@
 import torch
 import numpy as np
-import tensorflow as tf
 import torch.nn.functional as F
 
 from torch import nn, Tensor, softmax
 
 from src.util.log import log, ratio
-from src.settings import USE_GPU, CurrentGame, TORCH_DTYPE
+from src.settings import TB_SUMMARY, USE_GPU, CurrentGame, TORCH_DTYPE
 
 _NETWORK_ID = int  # type alias for network id
 _NN_CACHE: dict[_NETWORK_ID, dict[int, tuple[Tensor, Tensor]]] = {}
@@ -129,12 +128,12 @@ def cached_network_inference(network: Network, x: Tensor) -> tuple[np.ndarray, n
 def clear_model_inference_cache(iteration: int) -> None:
     cache_size = sum(len(cache) for cache in _NN_CACHE.values())
     if _TOTAL_EVALS != 0:
-        tf.summary.scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, step=iteration)
-        tf.summary.scalar('unique_positions_in_cache', cache_size, step=iteration)
-        tf.summary.histogram(
+        TB_SUMMARY.add_scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, iteration)
+        TB_SUMMARY.add_scalar('unique_positions_in_cache', cache_size, iteration)
+        TB_SUMMARY.add_histogram(
             'nn_output_value_distribution',
             [round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()],
-            step=iteration,
+            iteration,
         )
         log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', cache_size)
     _NN_CACHE.clear()

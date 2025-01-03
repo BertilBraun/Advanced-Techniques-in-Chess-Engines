@@ -1,5 +1,4 @@
 import torch
-import tensorflow as tf
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
@@ -7,7 +6,7 @@ from tqdm import tqdm
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.Network import Network
-from src.settings import TORCH_DTYPE
+from src.settings import TB_SUMMARY, TORCH_DTYPE
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -50,7 +49,7 @@ class Trainer:
 
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
-        tf.summary.scalar('learning_rate', base_lr, step=iteration)
+        TB_SUMMARY.add_scalar('learning_rate', base_lr, iteration)
 
         self.model.train()
 
@@ -77,7 +76,7 @@ class Trainer:
             # Update learning rate before stepping the optimizer
             batch_percentage = batchIdx / len(train_dataloader)
             lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
-            tf.summary.scalar(f'learning_rate/iteration_{iteration}', lr, step=batchIdx)
+            TB_SUMMARY.add_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 

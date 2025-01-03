@@ -1,8 +1,6 @@
 import json
 from typing import Generator
 import torch
-import tensorflow as tf
-from tensorflow._api.v2.summary import create_file_writer
 
 from tqdm import trange
 from pathlib import Path
@@ -10,6 +8,7 @@ from pathlib import Path
 from src.alpha_zero.SelfPlay import SelfPlay
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
+from src.settings import TB_SUMMARY
 from src.util.log import log
 from src.util import load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -59,21 +58,20 @@ class AlphaZero:
         print('Memory pre learn')
         print_mem()
 
-        with create_file_writer(str(self.save_path / 'logs')).as_default():
-            for iteration in range(self.starting_iteration, self.args.num_iterations):
-                print('Memory pre iteration')
-                print_mem()
-                self._self_play_and_write_memory(
-                    iteration,
-                    self.args.self_play.num_games_per_iteration,
-                )
-                print('Memory post self play')
-                print_mem()
+        for iteration in range(self.starting_iteration, self.args.num_iterations):
+            print('Memory pre iteration')
+            print_mem()
+            self._self_play_and_write_memory(
+                iteration,
+                self.args.self_play.num_games_per_iteration,
+            )
+            print('Memory post self play')
+            print_mem()
 
-                training_stats.append(self._train_and_save_new_model(iteration))
-                yield iteration, training_stats[-1]
+            training_stats.append(self._train_and_save_new_model(iteration))
+            yield iteration, training_stats[-1]
 
-                self._load_latest_model()
+            self._load_latest_model()
 
         log('Training finished')
         log('Final training stats:')
@@ -101,7 +99,7 @@ class AlphaZero:
         dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
 
         log(f'Loaded {len(dataset)} self-play memories.')
-        tf.summary.scalar('num_training_samples', len(dataset), iteration)
+        TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
 
         with log_event('dataset_deduplication'):
             dataset.deduplicate()
@@ -110,48 +108,37 @@ class AlphaZero:
         torch.cuda.memory._dump_snapshot('my_snapshot.pickle')
 
         with log_event('dataset_logging'):
-            tf.summary.scalar('num_deduplicated_samples', len(dataset), iteration)
+            TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
+            TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
 
-            tf.summary.histogram('training_sample_values', dataset.value_targets.cpu(), iteration)
-
+            # The spikiness of the policy targets.
+            # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
             spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
-            tf.summary.scalar(
-                'policy_spikiness',
-                spikiness,
-                iteration,
-                description="""The spikiness of the policy targets.
-    The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
-    The more uniform the policy is, the closer to 1/ACTION_SIZE it will be. I.e. the policy is unsure about the best move.""",
-            )
-            tf.summary.histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
+            TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
+
+            TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
 
         with log_event('training'):
             train_stats = TrainingStats()
             for epoch in range(self.args.training.num_epochs):
                 epoch_train_stats = self.trainer.train(dataset, iteration)
-                tf.summary.scalar(
+                TB_SUMMARY.add_scalar(
                     'policy_loss',
                     epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
                 )
-                tf.summary.scalar(
+                TB_SUMMARY.add_scalar(
                     'value_loss',
                     epoch_train_stats.value_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
                 )
-                tf.summary.scalar(
+                TB_SUMMARY.add_scalar(
                     'total_loss',
                     epoch_train_stats.total_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
                 )
                 log(f'Epoch {epoch + 1}: {epoch_train_stats}')
                 train_stats += epoch_train_stats
-
-            del dataset
-            import gc
-
-            gc.collect()
-            torch.cuda.empty_cache()
 
             log(f'Iteration {iteration + 1}: {train_stats}')
             self._save_latest_model(iteration)
@@ -242,15 +229,15 @@ class AlphaZero:
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
-        tf.summary.scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
-        tf.summary.scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
-        tf.summary.scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
 
         results = model_evaluation.play_vs_random(
             current_model, self.args.evaluation.num_games, self.args.evaluation.num_searches_per_turn
         )
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
-        tf.summary.scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
-        tf.summary.scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
-        tf.summary.scalar('win_loss_draw_vs_random/draws', results.draws, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
+        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/draws', results.draws, iteration)

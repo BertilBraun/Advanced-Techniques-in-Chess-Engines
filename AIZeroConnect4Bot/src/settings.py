@@ -1,4 +1,5 @@
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from src.util import lerp
 from src.alpha_zero.train.TrainingArgs import (
     ClusterParams,
@@ -19,6 +20,8 @@ SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
 PLAY_C_PARAM = 1.0
+
+TB_SUMMARY = SummaryWriter(LOG_FOLDER)
 
 
 def sampling_window(current_iteration: int) -> int:

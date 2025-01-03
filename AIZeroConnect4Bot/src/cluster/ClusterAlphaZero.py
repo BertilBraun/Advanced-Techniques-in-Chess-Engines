@@ -2,7 +2,6 @@ import time
 import torch
 
 from torch.optim import AdamW
-from tensorflow._api.v2.summary import create_file_writer
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.settings import USE_GPU, CurrentGame
@@ -39,14 +38,13 @@ class ClusterAlphaZero(AlphaZero):
         super().__init__(model, optimizer, args, load_latest_model)
 
     def learn(self) -> None:
-        with create_file_writer(str(self.save_path / 'logs')).as_default():
-            if self.trainers == 0 and self.cluster_manager.is_root_node:
-                self._mix_self_play_and_train_on_cluster()
+        if self.trainers == 0 and self.cluster_manager.is_root_node:
+            self._mix_self_play_and_train_on_cluster()
+        else:
+            if self.cluster_manager.rank < self.trainers:
+                self._train_on_cluster()
             else:
-                if self.cluster_manager.rank < self.trainers:
-                    self._train_on_cluster()
-                else:
-                    self._self_play_on_cluster()
+                self._self_play_on_cluster()
 
     def _mix_self_play_and_train_on_cluster(self) -> None:
         training_stats: list[TrainingStats] = []
