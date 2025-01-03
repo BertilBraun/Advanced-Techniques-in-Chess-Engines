@@ -1,4 +1,3 @@
-import random
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -64,13 +63,13 @@ def visualize(system_usage_file='system_usage.csv', events_file='events.csv'):
     axs[3].legend(loc='upper left')
 
     event_identifiers: dict[str, tuple[str, str]] = {}
+    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:olive', 'tab:cyan']
 
     for event in events:
         name = event['event_name']
         # Add background color for events
         if name not in event_identifiers:
-            colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:olive', 'tab:cyan']
-            event_identifiers[name] = (random.choice(colors), name.replace('_', ' ').title())
+            event_identifiers[name] = (colors.pop(0), name.replace('_', ' ').title())
 
     patches = []
     labels = []
@@ -85,8 +84,9 @@ def visualize(system_usage_file='system_usage.csv', events_file='events.csv'):
             ax.axvspan(start, end, color=color, alpha=0.3)
 
         # Add event to legend
-        patches.append(mpatches.Patch(color=color, alpha=0.3, label=label))
-        labels.append(label)
+        if label not in labels:
+            patches.append(mpatches.Patch(color=color, alpha=0.3, label=label))
+            labels.append(label)
 
     # Combine existing legends with event legends
     handles, labels = axs[-1].get_legend_handles_labels()

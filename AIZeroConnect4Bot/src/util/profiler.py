@@ -74,6 +74,7 @@ def log_event(event_name):
             file.flush()
 
     _log_event('START')
+    time.sleep(2)
     try:
         yield
     finally:
