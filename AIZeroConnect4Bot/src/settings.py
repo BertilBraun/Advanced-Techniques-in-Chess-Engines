@@ -89,51 +89,50 @@ if True:
     CurrentBoard = Connect4Board
     CurrentGameVisuals = Connect4Visuals()
 
+    NUM_NODES = 4
+    NUM_TRAINERS = 0
+    NUM_SELF_PLAYERS = (NUM_NODES - NUM_TRAINERS) * 8  # Assuming 8 parallel self players per node
+
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    # Test training args to verify the implementation
-    if USE_GPU and not TESTING:
-        NUM_NODES = 8
-        NUM_TRAINERS = 1
-        NUM_SELF_PLAY_NODES = NUM_NODES - NUM_TRAINERS
-        PARALLEL_GAMES = 128  # Approximately 5min for 128 games
-    else:
-        TRAINING_ARGS = TrainingArgs(
-            num_iterations=12,
-            save_path=SAVE_PATH + '/connect4',
-            mcts=MCTSParams(
-                num_searches_per_turn=600,
-                dirichlet_epsilon=0.25,
-                dirichlet_alpha=lambda _: 0.3,
-                c_param=2,
-            ),
-            network=NetworkParams(
-                num_layers=NN_NUM_LAYERS,
-                hidden_size=NN_HIDDEN_SIZE,
-            ),
-            self_play=SelfPlayParams(
-                temperature=1.25,
-                num_parallel_games=128,
-                num_games_per_iteration=128 * 4 * 2,
-            ),
-            cluster=ClusterParams(
-                num_self_play_nodes_on_cluster=4 * 8,
-                num_train_nodes_on_cluster=0,
-            ),
-            training=TrainingParams(
-                num_epochs=4,
-                batch_size=128,
-                sampling_window=sampling_window,
-                learning_rate=learning_rate,
-                learning_rate_scheduler=learning_rate_scheduler,
-            ),
-            evaluation=EvaluationParams(
-                num_searches_per_turn=60,
-                num_games=30,
-                every_n_iterations=3,
-            ),
-        )
+    PARALLEL_GAMES = 128
+
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=12,
+        save_path=SAVE_PATH + '/connect4',
+        mcts=MCTSParams(
+            num_searches_per_turn=600,
+            dirichlet_epsilon=0.25,
+            dirichlet_alpha=lambda _: 0.3,
+            c_param=2,
+        ),
+        network=NetworkParams(
+            num_layers=NN_NUM_LAYERS,
+            hidden_size=NN_HIDDEN_SIZE,
+        ),
+        self_play=SelfPlayParams(
+            temperature=1.25,
+            num_parallel_games=PARALLEL_GAMES,
+            num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
+        ),
+        cluster=ClusterParams(
+            num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
+            num_train_nodes_on_cluster=0,
+        ),
+        training=TrainingParams(
+            num_epochs=4,
+            batch_size=128,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+        ),
+        evaluation=EvaluationParams(
+            num_searches_per_turn=60,
+            num_games=30,
+            every_n_iterations=3,
+        ),
+    )
 
 
 elif False:
@@ -164,7 +163,7 @@ elif True:
     if torch.cuda.is_available() and not TESTING:
         NUM_NODES = 8
         NUM_TRAINERS = 1
-        NUM_SELF_PLAY_NODES = NUM_NODES - NUM_TRAINERS
+        NUM_SELF_PLAYERS = NUM_NODES - NUM_TRAINERS
         PARALLEL_GAMES = 128  # Approximately 5min for 128 games
         TRAINING_ARGS = None
     else:
