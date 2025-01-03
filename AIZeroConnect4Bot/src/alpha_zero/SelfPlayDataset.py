@@ -25,21 +25,22 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     - Save the samples to a file
     """
 
-    def __init__(self):
+    def __init__(self, device: torch.device) -> None:
+        self.device = device
         self.additional_states: list[torch.Tensor] = []
         self.additional_policy_targets: list[torch.Tensor] = []
         self.additional_value_targets: list[float] = []
-        self.states: torch.Tensor = torch.empty(0)
-        self.policy_targets: torch.Tensor = torch.empty(0)
-        self.value_targets: torch.Tensor = torch.empty(0)
+        self.states: torch.Tensor = torch.empty(0, device=device)
+        self.policy_targets: torch.Tensor = torch.empty(0, device=device)
+        self.value_targets: torch.Tensor = torch.empty(0, device=device)
 
     def add_sample(self, state: torch.Tensor, policy_target: torch.Tensor, value_target: float) -> None:
         print('Adding sample')
         from src.alpha_zero.AlphaZero import print_mem
 
         print_mem()
-        self.additional_states.append(state)
-        self.additional_policy_targets.append(policy_target)
+        self.additional_states.append(state.to(self.device))
+        self.additional_policy_targets.append(policy_target.to(self.device))
         self.additional_value_targets.append(value_target)
 
     def __len__(self) -> int:
@@ -56,16 +57,16 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.collect()
         other.collect()
 
-        if self.states.device != other.states.device:
+        if self.device != other.device:
             print(
-                f'Warning: Merging datasets with different devices: ({self.states.device} and {other.states.device}). Moving data to the device of the first dataset.'
+                f'Warning: Merging datasets with different devices: ({self.device} and {other.device}). Moving data to the device of the first dataset.'
             )
 
-            other.states = other.states.to(self.states.device)
-            other.policy_targets = other.policy_targets.to(self.policy_targets.device)
-            other.value_targets = other.value_targets.to(self.value_targets.device)
+            other.states = other.states.to(self.device)
+            other.policy_targets = other.policy_targets.to(self.device)
+            other.value_targets = other.value_targets.to(self.device)
 
-        new_dataset = SelfPlayDataset()
+        new_dataset = SelfPlayDataset(self.device)
         new_dataset.states = torch.cat([self.states, other.states])
         new_dataset.policy_targets = torch.cat([self.policy_targets, other.policy_targets])
         new_dataset.value_targets = torch.cat([self.value_targets, other.value_targets])
@@ -100,40 +101,43 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         self.states = torch.stack([state for _, (state, _, _) in mp.values()])
         self.policy_targets = torch.stack([policy_target / count for count, (_, policy_target, _) in mp.values()])
-        self.value_targets = torch.tensor([value_target / count for count, (_, _, value_target) in mp.values()])
+        self.value_targets = torch.tensor(
+            [value_target / count for count, (_, _, value_target) in mp.values()], device=self.device
+        )
 
     @staticmethod
-    def load(file_path: str | PathLike, device: torch.device | None) -> SelfPlayDataset:
+    def load(file_path: str | PathLike, device: torch.device) -> SelfPlayDataset:
         data: tuple[torch.Tensor, torch.Tensor, torch.Tensor] = torch.load(
             file_path, weights_only=True, map_location=device
         )
         states, policy_targets, value_targets = data
 
-        dataset = SelfPlayDataset()
+        dataset = SelfPlayDataset(device)
         dataset.states = states
         dataset.policy_targets = policy_targets
         dataset.value_targets = value_targets
         return dataset
 
     @staticmethod
-    def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device | None) -> SelfPlayDataset:
-        dataset = SelfPlayDataset()
+    def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device) -> SelfPlayDataset:
+        dataset = SelfPlayDataset(device)
         for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt'):
             dataset += SelfPlayDataset.load(file_path, device)
 
         return dataset
 
     def collect(self) -> None:
+        """Collect the additional data into the main data tensors."""
         if len(self.additional_states) == 0:
             return
 
-        additional_states = torch.stack(self.additional_states).to(self.states.device)
+        additional_states = torch.stack(self.additional_states)
         self.states = torch.cat([self.states, additional_states])
 
-        policy_targets = torch.stack(self.additional_policy_targets).to(self.policy_targets.device)
+        policy_targets = torch.stack(self.additional_policy_targets)
         self.policy_targets = torch.cat([self.policy_targets, policy_targets])
 
-        value_targets = torch.tensor(self.additional_value_targets).to(self.value_targets.device)
+        value_targets = torch.tensor(self.additional_value_targets, device=self.device)
         self.value_targets = torch.cat([self.value_targets, value_targets])
 
         self.additional_states = []

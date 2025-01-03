@@ -85,7 +85,10 @@ class ClusterAlphaZero(AlphaZero):
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
         EXPECTED_NUM_SAMPLES = self.args.self_play.num_games_per_iteration * CurrentGame.average_num_moves_per_game
 
-        while len(SelfPlayDataset.load_iteration(self.save_path, iteration, device=None)) < EXPECTED_NUM_SAMPLES:
+        while (
+            len(SelfPlayDataset.load_iteration(self.save_path, iteration, device=torch.device('cpu')))
+            < EXPECTED_NUM_SAMPLES
+        ):
             log('Waiting for memories...')
             time.sleep(60)
 

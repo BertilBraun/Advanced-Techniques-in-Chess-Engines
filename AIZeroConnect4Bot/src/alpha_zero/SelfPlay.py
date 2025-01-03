@@ -52,7 +52,7 @@ class SelfPlay:
         print('Self play start')
         print_mem()
 
-        self_play_dataset = SelfPlayDataset()
+        self_play_dataset = SelfPlayDataset(self.model.device)
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.self_play.num_parallel_games)]
 
         mcts = MCTS(
@@ -87,7 +87,7 @@ class SelfPlay:
         return self_play_dataset
 
     def _get_training_data(self, spg: SelfPlayGame) -> SelfPlayDataset:
-        self_play_dataset = SelfPlayDataset()
+        self_play_dataset = SelfPlayDataset(self.model.device)
 
         # 1 if current player won, -1 if current player lost, 0 if draw
         result = get_board_result_score(spg.board)

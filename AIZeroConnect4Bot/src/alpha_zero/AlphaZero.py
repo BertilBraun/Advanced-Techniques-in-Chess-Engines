@@ -81,7 +81,7 @@ class AlphaZero:
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_and_write_memory(self, iteration: int, num_self_play_calls: int):
-        dataset = SelfPlayDataset()
+        dataset = SelfPlayDataset(self.model.device)
 
         with log_event('self_play'):
             for _ in trange(
@@ -225,7 +225,7 @@ class AlphaZero:
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayDataset:
         window_size = self.args.training.sampling_window(iteration)
 
-        dataset = SelfPlayDataset()
+        dataset = SelfPlayDataset(self.model.device)
         for iter in range(max(iteration - window_size, 0), iteration + 1):
             dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
 
