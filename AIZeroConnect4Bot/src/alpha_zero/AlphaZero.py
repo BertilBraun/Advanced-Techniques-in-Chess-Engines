@@ -9,6 +9,7 @@ from src.alpha_zero.SelfPlay import SelfPlay
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.settings import TB_SUMMARY
+from src.util.compile import try_compile
 from src.util.log import log
 from src.util import load_json, random_id
 from src.Network import Network, clear_model_inference_cache
@@ -145,6 +146,7 @@ class AlphaZero:
     def _load_model(self, iteration: int) -> Network:
         try:
             model = Network(self.args.network.num_layers, self.args.network.hidden_size, self.model.device)
+            model = try_compile(model)
             model.load_state_dict(
                 torch.load(self.save_path / f'model_{iteration}.pt', map_location=self.model.device, weights_only=True)
             )

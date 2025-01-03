@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from src.util.compile import try_compile
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
@@ -16,6 +17,7 @@ class AlphaZeroBot(Bot):
             self.model = network_model_file_path
         else:
             self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
+            self.model = try_compile(self.model)
             if network_model_file_path is not None:
                 self.model.load_state_dict(
                     torch.load(
