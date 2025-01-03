@@ -75,7 +75,7 @@ class AlphaZero:
         dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
-        with log_event('training'):
+        with log_event('dataset_loading'):
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             log(f'Loaded {len(dataset)} self-play memories.')
             tf.summary.scalar('num_training_samples', len(dataset), iteration)
@@ -97,6 +97,7 @@ class AlphaZero:
             )
             tf.summary.histogram('policy_targets', torch.stack(dataset.policy_targets).reshape(-1).cpu(), iteration)
 
+        with log_event('training'):
             train_stats = TrainingStats()
             for epoch in range(self.args.training.num_epochs):
                 epoch_train_stats = self.trainer.train(dataset, iteration)
@@ -117,6 +118,12 @@ class AlphaZero:
                 )
                 log(f'Epoch {epoch + 1}: {epoch_train_stats}')
                 train_stats += epoch_train_stats
+
+            del dataset
+            import gc
+
+            gc.collect()
+            torch.cuda.empty_cache()
 
             log(f'Iteration {iteration + 1}: {train_stats}')
             self._save_latest_model(iteration)

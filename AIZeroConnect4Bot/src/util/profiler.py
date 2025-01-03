@@ -14,15 +14,18 @@ def _log_system_usage(interval=1, filename='system_usage.csv'):
     """
     Logs CPU, RAM, GPU, and VRAM usage every 'interval' seconds to a CSV file.
     """
+    # Get the current process
+    process = psutil.Process()
+
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         # Write header
-        writer.writerow(['timestamp', 'cpu_percent', 'ram_percent', 'gpu_load', 'gpu_memory_used', 'gpu_memory_total'])
+        writer.writerow(['timestamp', 'cpu_percent', 'ram_usage', 'gpu_load', 'gpu_memory_used', 'gpu_memory_total'])
 
         while True:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            cpu_percent = psutil.cpu_percent(interval=None)
-            ram_percent = psutil.virtual_memory().percent
+            cpu_percent = process.cpu_percent(interval=None)
+            ram_usage = process.memory_info().rss / 2**20  # Convert to MB
 
             gpus: list[GPUtil.GPU] = GPUtil.getGPUs()
             if gpus:
@@ -34,7 +37,7 @@ def _log_system_usage(interval=1, filename='system_usage.csv'):
                 gpu_memory_used = 0
                 gpu_memory_total = 0
 
-            writer.writerow([timestamp, cpu_percent, ram_percent, gpu_load, gpu_memory_used, gpu_memory_total])
+            writer.writerow([timestamp, cpu_percent, ram_usage, gpu_load, gpu_memory_used, gpu_memory_total])
             file.flush()  # Ensure data is written to disk
             time.sleep(interval)
 
