@@ -6,7 +6,9 @@ from typing import Optional
 
 from src.games.Game import Board
 from src.games.Board import Player
-from src.games.connect4.Connect4Defines import ROW_COUNT, COLUMN_COUNT
+
+ROW_COUNT = 7
+COLUMN_COUNT = 8
 
 Connect4Move = int
 

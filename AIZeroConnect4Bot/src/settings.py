@@ -72,7 +72,7 @@ def dirichlet_alpha(iteration: int) -> float:
 #     c_param=4.0,  # unknown
 # )
 
-if False:
+if True:
     from src.games.connect4.Connect4Game import Connect4Game, Connect4Move
     from src.games.connect4.Connect4Board import Connect4Board
     from src.games.connect4.Connect4Visuals import Connect4Visuals
@@ -91,63 +91,43 @@ if False:
         NUM_TRAINERS = 1
         NUM_SELF_PLAY_NODES = NUM_NODES - NUM_TRAINERS
         PARALLEL_GAMES = 128  # Approximately 5min for 128 games
-        TRAINING_ARGS = TrainingArgs(
-            num_iterations=50,
-            num_self_play_games_per_iteration=PARALLEL_GAMES * 2 * NUM_SELF_PLAY_NODES,
-            num_parallel_games=PARALLEL_GAMES,
-            num_searches_per_turn=800,
-            num_epochs=5,
-            batch_size=16,
-            temperature=1.0,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=1,
-            c_param=4.0,
-            sampling_window=sampling_window,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
-            save_path=SAVE_PATH,
-            num_train_nodes_on_cluster=1,
-            num_self_play_nodes_on_cluster=NUM_SELF_PLAY_NODES,
-        )
     else:
-        # Test training args to verify the implementation
-        TRAINING_ARGS = TrainingArgs(
-            num_iterations=50,
-            num_self_play_games_per_iteration=128,
-            num_parallel_games=64,
-            num_searches_per_turn=200,
-            num_epochs=2,
-            batch_size=16,
-            temperature=1.0,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=1,
-            c_param=4.0,
-            sampling_window=sampling_window,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
-            save_path=SAVE_PATH,
-            num_self_play_nodes_on_cluster=1,
-            num_train_nodes_on_cluster=0,
-        )
-        # Test training args to verify the implementation
         TRAINING_ARGS = TrainingArgs(
             num_iterations=8,
-            num_self_play_games_per_iteration=128 * 4 * 2,
-            num_parallel_games=128,
-            num_searches_per_turn=600,
-            num_epochs=4,
-            batch_size=128,
-            temperature=1.25,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,
-            c_param=2,
-            sampling_window=lambda _: 1,
-            learning_rate=lambda _: 0.001,
-            learning_rate_scheduler=lambda _, lr: lr,
             save_path=SAVE_PATH + '/connect4',
-            num_self_play_nodes_on_cluster=1,
-            num_train_nodes_on_cluster=0,
+            mcts=MCTSParams(
+                num_searches_per_turn=600,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 0.3,
+                c_param=2,
+            ),
+            network=NetworkParams(
+                num_layers=NN_NUM_LAYERS,
+                hidden_size=NN_HIDDEN_SIZE,
+            ),
+            self_play=SelfPlayParams(
+                temperature=1.25,
+                num_parallel_games=128,
+                num_games_per_iteration=128 * 4 * 2,
+            ),
+            cluster=ClusterParams(
+                num_self_play_nodes_on_cluster=1,
+                num_train_nodes_on_cluster=0,
+            ),
+            training=TrainingParams(
+                num_epochs=4,
+                batch_size=128,
+                sampling_window=lambda _: 1,  # TODO sampling_window,
+                learning_rate=lambda _: 0.001,
+                learning_rate_scheduler=lambda _, lr: lr,  # TODO learning_rate_scheduler,
+            ),
+            evaluation=EvaluationParams(
+                num_searches_per_turn=60,
+                num_games=30,
+                every_n_iterations=3,
+            ),
         )
+
 
 elif False:
     from src.games.checkers.CheckersGame import CheckersGame, CheckersMove

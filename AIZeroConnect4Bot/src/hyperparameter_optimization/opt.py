@@ -162,7 +162,7 @@ Study statistics:
   Number of pruned trials: 20
   Number of complete trials: 28
 
-Best trial (Trial: 79) with loss 0.698:
+Best trial (Trial: 79) with loss 0.698 (after 6 iterations):
 {'mcts_num_searches_per_turn': 100, 'mcts_dirichlet_epsilon': 0.0, 'mcts_dirichlet_alpha': 0.2, 'mcts_c_param': 1.0, 'network_num_layers': 2, 'network_hidden_size_exponent': 5, 'selfplay_temperature': 1.8, 'selfplay_num_games_per_iteration': 512, 'training_num_epochs': 4, 'training_batch_size_exponent': 8, 'training_learning_rate_initial': 0.02310216465004561, 'learning_rate_decay_rate': 0.8624339039875765, 'sampling_window_initial': 3, 'sampling_window_max': 25}
 
 Most relevant hyperparameters:

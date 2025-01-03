@@ -5,15 +5,12 @@ import numpy as np
 from typing import List
 
 from src.games.Game import Game
-from src.games.connect4.Connect4Defines import (
-    ROW_COUNT,
-    COLUMN_COUNT,
-    ACTION_SIZE,
-    ENCODING_CHANNELS,
-    AVERAGE_NUM_MOVES_PER_GAME,
-)
-from src.games.connect4.Connect4Board import Connect4Board, Connect4Move
+from src.games.connect4.Connect4Board import Connect4Board, Connect4Move, ROW_COUNT, COLUMN_COUNT
 from src.util.ZobristHasher import ZobristHasher
+
+ENCODING_CHANNELS = 3
+ACTION_SIZE = COLUMN_COUNT
+AVERAGE_NUM_MOVES_PER_GAME = 20
 
 
 class Connect4Game(Game[Connect4Move]):
