@@ -35,10 +35,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.value_targets: torch.Tensor = torch.empty(0, device=device)
 
     def add_sample(self, state: torch.Tensor, policy_target: torch.Tensor, value_target: float) -> None:
-        print('Adding sample')
-        from src.alpha_zero.AlphaZero import print_mem
-
-        print_mem()
         self.additional_states.append(state.to(self.device))
         self.additional_policy_targets.append(policy_target.to(self.device))
         self.additional_value_targets.append(value_target)

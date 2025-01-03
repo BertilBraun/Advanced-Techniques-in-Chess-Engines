@@ -16,15 +16,7 @@ class MCTS:
 
     @torch.no_grad()
     def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
-        from src.alpha_zero.AlphaZero import print_mem
-
-        print('MCTS search start')
-        print_mem()
-
         policy = self._get_policy_with_noise(boards)
-
-        print('After policy with noise')
-        print_mem()
 
         nodes: list[MCTSNode] = []
         for board, spg_policy in zip(boards, policy):
@@ -33,9 +25,6 @@ class MCTS:
             root = MCTSNode.root(board)
             root.expand(moves)
             nodes.append(root)
-
-        print('After expand')
-        print_mem()
 
         for _ in range(self.args.num_searches_per_turn):
             expandable_nodes: list[MCTSNode] = []
@@ -62,9 +51,6 @@ class MCTS:
 
                 node.expand(moves)
                 node.back_propagate(value[i])
-
-            print('After search iteration')
-            print_mem()
 
         return [self._get_action_probabilities(root) for root in nodes]
 

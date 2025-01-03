@@ -30,8 +30,6 @@ def print_mem():
     allocated /= 1024**2
     print(f'Free: {free:.2f} MB, Total: {total:.2f} MB, Reserved: {reserved:.2f} MB, Allocated: {allocated:.2f} MB')
 
-    print(torch.cuda.memory_summary(device))
-
 
 class AlphaZero:
     def __init__(
