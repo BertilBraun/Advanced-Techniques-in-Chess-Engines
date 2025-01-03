@@ -52,6 +52,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.collect()
         other.collect()
 
+        if self.states.device != other.states.device:
+            print('Warning: Merging datasets with different devices. Moving data to the device of the first dataset.')
+
+            other.states = other.states.to(self.states.device)
+            other.policy_targets = other.policy_targets.to(self.policy_targets.device)
+            other.value_targets = other.value_targets.to(self.value_targets.device)
+
         new_dataset = SelfPlayDataset()
         new_dataset.states = torch.cat([self.states, other.states])
         new_dataset.policy_targets = torch.cat([self.policy_targets, other.policy_targets])
@@ -113,9 +120,16 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def collect(self) -> None:
         if len(self.additional_states) == 0:
             return
-        self.states = torch.cat([self.states, torch.stack(self.additional_states)])
-        self.policy_targets = torch.cat([self.policy_targets, torch.stack(self.additional_policy_targets)])
-        self.value_targets = torch.cat([self.value_targets, torch.tensor(self.additional_value_targets)])
+
+        additional_states = torch.stack(self.additional_states).to(self.states.device)
+        self.states = torch.cat([self.states, additional_states])
+
+        policy_targets = torch.stack(self.additional_policy_targets).to(self.policy_targets.device)
+        self.policy_targets = torch.cat([self.policy_targets, policy_targets])
+
+        value_targets = torch.tensor(self.additional_value_targets).to(self.value_targets.device)
+        self.value_targets = torch.cat([self.value_targets, value_targets])
+
         self.additional_states = []
         self.additional_policy_targets = []
         self.additional_value_targets = []
