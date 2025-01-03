@@ -79,7 +79,7 @@ if True:
 
     CurrentGameMove = Connect4Move
     CurrentGame = Connect4Game()
-    CurrentBoard = Connect4Board()
+    CurrentBoard = Connect4Board
     CurrentGameVisuals = Connect4Visuals()
 
     NN_HIDDEN_SIZE = 128

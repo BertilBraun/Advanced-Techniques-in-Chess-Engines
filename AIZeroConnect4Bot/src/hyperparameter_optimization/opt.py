@@ -81,6 +81,7 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
         )
 
         # Run the training loop
+        # TODO depending on how much of the GPU is actually used, we might be able to run CPU only but with more trials and more trials in parallel, or multiple trials on the same GPU at the same time
         device = torch.device('cuda', rank % torch.cuda.device_count()) if USE_GPU else torch.device('cpu')
         model = Network(training_args.network.num_layers, training_args.network.hidden_size, device=device)
         torch.set_float32_matmul_precision('high')

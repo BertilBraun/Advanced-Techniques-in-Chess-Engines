@@ -26,7 +26,9 @@ class Connect4Board(Board[Connect4Move]):
     def make_move(self, column: Connect4Move) -> None:
         assert self._winner is None, 'Game is already over'
         assert 0 <= column < COLUMN_COUNT and self.board[0][column] == 0, 'Invalid move'
-        row = np.argmax(self.board[:, column] == 0).item()
+        row = np.argmax(self.board[:, column] != 0).item() - 1
+        if row == -1:  # If the column is empty
+            row = ROW_COUNT - 1
         self.board[row][column] = self.current_player
         if self.__check_winner(row, column):
             self._winner = self.current_player
