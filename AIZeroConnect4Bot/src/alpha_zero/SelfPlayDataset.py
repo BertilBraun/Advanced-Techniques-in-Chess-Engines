@@ -84,10 +84,11 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device | None) -> SelfPlayDataset:
+        dataset = SelfPlayDataset()
         for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt'):
-            return SelfPlayDataset.load(file_path, device)
+            dataset += SelfPlayDataset.load(file_path, device)
 
-        raise FileNotFoundError(f'No memory file found for iteration {iteration}')
+        return dataset
 
     def save(self, file_path: str | PathLike) -> None:
         states = torch.stack(self.states)
