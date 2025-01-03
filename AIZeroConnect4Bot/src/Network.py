@@ -132,7 +132,7 @@ def clear_model_inference_cache(iteration: int) -> None:
         TB_SUMMARY.add_scalar('unique_positions_in_cache', cache_size, iteration)
         TB_SUMMARY.add_histogram(
             'nn_output_value_distribution',
-            [round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()],
+            np.array([round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()]),
             iteration,
         )
         log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', cache_size)
