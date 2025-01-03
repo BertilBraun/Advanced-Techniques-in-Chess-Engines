@@ -77,6 +77,7 @@ class SelfPlay:
 
                 move = sample_move(action_probabilities, spg.num_played_moves, self.args.self_play.temperature)
                 spg.board.make_move(move)
+                spg.num_played_moves += 1
 
                 if spg.board.is_game_over():
                     self_play_dataset += self._get_training_data(spg)
