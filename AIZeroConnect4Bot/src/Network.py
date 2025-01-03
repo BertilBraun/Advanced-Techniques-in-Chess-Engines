@@ -104,7 +104,8 @@ def cached_network_forward(network: Network, x: Tensor) -> tuple[Tensor, Tensor]
     if to_process:
         policy, value = network(torch.stack(to_process).to(network.device))
         for hash, p, v in zip(to_process_hashes, policy, value):
-            current_network_cache[hash] = (p, v)
+            # save a copy of the tensors to avoid memory leaks
+            current_network_cache[hash] = (p.clone(), v.clone())
 
     global _TOTAL_EVALS, _TOTAL_HITS
     _TOTAL_EVALS += len(x)

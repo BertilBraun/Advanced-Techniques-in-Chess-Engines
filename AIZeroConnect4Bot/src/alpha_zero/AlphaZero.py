@@ -21,10 +21,14 @@ from src.util.profiler import log_event
 
 def print_mem():
     device = torch.device('cuda')
-    print(torch.cuda.memory.mem_get_info(device))
-    print(torch.cuda.memory_summary(device))
-    print(torch.cuda.memory_reserved(device))
-    print(torch.cuda.memory_allocated(device))
+    free, total = torch.cuda.memory.mem_get_info(device)
+    free /= 1024**2
+    total /= 1024**2
+    reserved = torch.cuda.memory_reserved(device)
+    reserved /= 1024**2
+    allocated = torch.cuda.memory_allocated(device)
+    allocated /= 1024**2
+    print(f'Free: {free:.2f} MB, Total: {total:.2f} MB, Reserved: {reserved:.2f} MB, Allocated: {allocated:.2f} MB')
 
 
 class AlphaZero:
