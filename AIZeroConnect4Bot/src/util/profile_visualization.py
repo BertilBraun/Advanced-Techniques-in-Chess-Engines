@@ -7,7 +7,7 @@ def parse_events(filename='events.csv'):
     """
     Parses the events log and returns a list of events with start and end times.
     """
-    df = pd.read_csv(filename, header=None, names=['timestamp', 'event_type', 'event_name'], skiprows=1)
+    df = pd.read_csv(filename, header=None, names=['timestamp', 'event_type', 'event_name'])
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     events = []

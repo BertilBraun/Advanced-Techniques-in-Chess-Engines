@@ -80,8 +80,11 @@ class AlphaZero:
             log(f'Loaded {len(dataset)} self-play memories.')
             tf.summary.scalar('num_training_samples', len(dataset), iteration)
 
+        with log_event('dataset_deduplication'):
             dataset.deduplicate()
             log(f'Deduplicated to {len(dataset)} unique positions.')
+
+        with log_event('dataset_logging'):
             tf.summary.scalar('num_deduplicated_samples', len(dataset), iteration)
 
             tf.summary.histogram('training_sample_values', torch.tensor(dataset.value_targets).cpu(), iteration)

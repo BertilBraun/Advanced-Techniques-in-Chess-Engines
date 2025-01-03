@@ -52,21 +52,12 @@ def start_usage_logger():
     logger_thread.start()
 
 
-_EVENT_LOGGER_INITIALIZED = False
-
-
 # Event Logger as Context Manager
 @contextmanager
 def log_event(event_name, filename='events.csv'):
     """
     Context manager to log the start and end of an event.
     """
-    global _EVENT_LOGGER_INITIALIZED
-    if not _EVENT_LOGGER_INITIALIZED and USE_PROFILING:
-        with open(filename, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['timestamp', 'start_end', 'event_name'])
-        _EVENT_LOGGER_INITIALIZED = True
 
     def _log_event(start_end):
         if not USE_PROFILING:
@@ -81,6 +72,7 @@ def log_event(event_name, filename='events.csv'):
     try:
         yield
     finally:
+        time.sleep(2)
         _log_event('END')
 
 
