@@ -20,8 +20,13 @@ from src.util.log import log
 # TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
-# DONE? something between Deduplication and Training Batches takes 10min?!
+# DONE something between Deduplication and Training Batches takes 10min?!
 # DONE [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
+
+# TODO /memory_19_deduplicated.pt (deflated 96%) Why is the memory able to be compressed so much? What about the memory is so compressible?
+
+# TODO Not always reload each iteration, but only if the memory is not already loaded
+# TODO single GPU for training, multiple GPUs for self-play?
 
 
 class Trainer:
@@ -41,29 +46,28 @@ class Trainer:
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        log(f'Training model on iteration {iteration}')
         train_dataset, validation_dataset = torch.utils.data.random_split(
             dataset, [len(dataset) - self.args.training.batch_size, self.args.training.batch_size]
         )
-        log(f'Training on {len(train_dataset)} samples, validating on {len(validation_dataset)} samples')
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
+            num_workers=4,
         )
-        log(f'Loaded training data')
         validation_dataloader = DataLoader(
             validation_dataset,
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
         )
-        log(f'Loaded validation data')
 
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
         log_scalar('learning_rate', base_lr, iteration)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = base_lr
 
         self.model.train()
 
@@ -71,13 +75,6 @@ class Trainer:
             batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
-
-            if state.device != self.model.device:
-                log(f'Warning: Moving data to model device ({state.device} -> {self.model.device})')
-
-                state = state.to(device=self.model.device)
-                policy_targets = policy_targets.to(device=self.model.device)
-                value_targets = value_targets.to(device=self.model.device)
 
             state = state.to(dtype=TORCH_DTYPE)
             policy_targets = policy_targets.to(dtype=TORCH_DTYPE)
@@ -91,16 +88,8 @@ class Trainer:
 
             return policy_loss, value_loss, loss
 
-        log(f'Starting training loop')
-        for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
+        for batch in tqdm(train_dataloader, desc='Training batches'):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
-
-            # Update learning rate before stepping the optimizer
-            batch_percentage = batchIdx / len(train_dataloader)
-            lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
-            log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
 
             self.optimizer.zero_grad()
             loss.backward()

@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from src.util import lerp
 from src.alpha_zero.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
@@ -61,19 +60,6 @@ def learning_rate(current_iteration: int) -> float:
     if current_iteration < 50:
         return 0.0005
     return 0.0002
-
-
-def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
-    """1 Cycle learning rate policy.
-    Ramp up from lr/10 to lr over 50% of the batches, then ramp down to lr/10 over the remaining 50% of the batches.
-    Do this for each epoch separately.
-    """
-    min_lr = base_lr / 10
-
-    if batch_percentage < 0.5:
-        return lerp(min_lr, base_lr, batch_percentage * 2)
-    else:
-        return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
 
 
 # Chess training args
@@ -136,7 +122,6 @@ if True:
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
         ),
         evaluation=EvaluationParams(
             num_searches_per_turn=60,
@@ -172,7 +157,6 @@ if True:
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
         ),
     )
 
@@ -237,7 +221,6 @@ elif True:
                 batch_size=64,
                 sampling_window=lambda _: 3,
                 learning_rate=lambda _: 0.001,
-                learning_rate_scheduler=learning_rate_scheduler,
             ),
             evaluation=EvaluationParams(
                 num_searches_per_turn=60,
