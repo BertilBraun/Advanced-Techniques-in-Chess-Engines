@@ -7,8 +7,8 @@ from typing import Optional
 from src.games.Game import Board
 from src.games.Board import Player
 
-ROW_COUNT = 7
-COLUMN_COUNT = 8
+ROW_COUNT = 6
+COLUMN_COUNT = 7
 
 Connect4Move = int
 
@@ -18,10 +18,6 @@ class Connect4Board(Board[Connect4Move]):
         super().__init__()
         self.board = np.zeros((ROW_COUNT, COLUMN_COUNT), dtype=int)
         self._winner: Optional[Player] = None
-
-    @property
-    def board_dimensions(self) -> tuple[int, int]:
-        return ROW_COUNT, COLUMN_COUNT
 
     def make_move(self, column: Connect4Move) -> None:
         assert self._winner is None, 'Game is already over'
@@ -56,9 +52,6 @@ class Connect4Board(Board[Connect4Move]):
 
     def get_valid_moves(self) -> list[Connect4Move]:
         return np.where(self.board[0] == 0)[0].tolist()
-
-    def get_board_state(self) -> np.ndarray:
-        return self.board.copy()
 
     def copy(self) -> Connect4Board:
         game = Connect4Board()

@@ -101,8 +101,8 @@ if True:
         mcts=MCTSParams(
             num_searches_per_turn=600,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,
-            c_param=2,
+            dirichlet_alpha=lambda _: 1.0,
+            c_param=4,
         ),
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,

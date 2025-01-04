@@ -1,3 +1,5 @@
+import src.environ_setup  # isort:skip # noqa import first to setup environment variables and other configurations
+
 from src.util import load_json
 from src.util.log import log
 from src.settings import CurrentGame, CurrentGameVisuals, SAVE_PATH
@@ -19,6 +21,7 @@ if __name__ == '__main__':
     try:
         last_training_config = load_json(f'{SAVE_PATH}/last_training_config.json')
         model_path = last_training_config['model']
+        log('Using model from last training:', model_path)
     except FileNotFoundError:
         model_path = None
 
@@ -30,3 +33,5 @@ if __name__ == '__main__':
     )
 
     log('Final Result - Winner:', game_manager.play_game())
+    log('Board:')
+    log(game_manager.board.board)

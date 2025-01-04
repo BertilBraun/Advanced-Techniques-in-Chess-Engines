@@ -20,10 +20,6 @@ class TicTacToeBoard(Board[TicTacToeMove]):
         self.board = np.zeros((BOARD_SIZE), dtype=int)
         self._winner: Optional[Player] = None
 
-    @property
-    def board_dimensions(self) -> tuple[int, int]:
-        return ROW_COUNT, COLUMN_COUNT
-
     def make_move(self, move: TicTacToeMove) -> bool:
         if move < 0 or move >= BOARD_SIZE or self.board[move] != 0:
             return False
@@ -51,10 +47,7 @@ class TicTacToeBoard(Board[TicTacToeMove]):
         return np.all(self.board != 0).item()
 
     def get_valid_moves(self) -> list[TicTacToeMove]:
-        return [move for move in range(BOARD_SIZE) if self.board[move] == 0]
-
-    def get_board_state(self) -> np.ndarray:
-        return self.board.copy()
+        return np.where(self.board == 0)[0].tolist()
 
     def copy(self) -> TicTacToeBoard:
         game = TicTacToeBoard()

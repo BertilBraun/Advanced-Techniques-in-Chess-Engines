@@ -19,13 +19,13 @@ class AlphaZeroBot(Bot):
             self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
             self.model = try_compile(self.model)
             if network_model_file_path is not None:
-                self.model.load_state_dict(
-                    torch.load(
-                        network_model_file_path,
-                        map_location=self.model.device,
-                        weights_only=False,
-                    )
-                )
+                # modify state_dict by removing _orig_mod. from all keys
+                original_state_dict = torch.load(network_model_file_path, map_location=self.model.device)
+                new_state_dict = {}
+                for key in original_state_dict.keys():
+                    new_state_dict[key.replace('_orig_mod.', '')] = original_state_dict[key]
+
+                self.model.load_state_dict(new_state_dict)
         self.model.eval()
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
@@ -44,7 +44,7 @@ class AlphaZeroBot(Bot):
         log('Best child index:', best_move_index)
         log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
-        log(f'Best child has {best_child.result_score:.4f} result_score')
+        log(f'Best child has {best_child.result_score} result_score')
         log(f'Best child has {best_child.policy:.4f} policy')
         log('Child moves:', [child.move_to_get_here for child in root.children])
         log('Child visits:', [child.number_of_visits for child in root.children])
@@ -82,4 +82,4 @@ class AlphaZeroBot(Bot):
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 
-        return moves, value[0]
+        return moves, value[0].item()

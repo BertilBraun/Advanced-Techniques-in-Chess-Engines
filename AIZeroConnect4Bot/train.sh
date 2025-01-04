@@ -16,7 +16,7 @@ source setup.sh
 
 for i in {0..14} 
 do
-    python3.11 main.py &
+    python3.11 train.py &
 done
 
-python3.11 main.py
+python3.11 train.py

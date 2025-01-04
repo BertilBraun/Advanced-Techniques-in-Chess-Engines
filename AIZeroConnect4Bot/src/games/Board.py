@@ -12,11 +12,6 @@ class Board(ABC, Generic[_Move]):
     def __init__(self) -> None:
         self.current_player: Player = 1
 
-    @property
-    @abstractmethod
-    def board_dimensions(self) -> tuple[int, int]:
-        pass
-
     @abstractmethod
     def make_move(self, move: _Move) -> None:
         pass

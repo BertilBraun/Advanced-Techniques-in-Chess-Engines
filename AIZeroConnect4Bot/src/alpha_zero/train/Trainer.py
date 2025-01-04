@@ -17,7 +17,7 @@ from src.util.log import log
 # DONE simply set num_epochs to 1 and increase the num_iterations, while decreasing how fast the window size grows but increasing the base and max window size
 # TODO game and inference nodes? So that 100% GPU is used on inference nodes and as many nodes as needed can supply the self-play nodes
 # TODO current MCTS -> BatchedMCTS and create new ClientServerMCTS - based on what protocol?
-# TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
+# DONE make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
 # DONE something between Deduplication and Training Batches takes 10min?!
@@ -27,6 +27,12 @@ from src.util.log import log
 
 # TODO Not always reload each iteration, but only if the memory is not already loaded
 # TODO single GPU for training, multiple GPUs for self-play?
+
+# TODO use both the final game result as well as the MCTS root value_sum / num_visits as the value target for the NN training. Averaging f.e.
+
+# DONE reduce board size to 6x7
+
+# TODO parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
 
 
 class Trainer:

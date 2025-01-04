@@ -14,4 +14,4 @@
 
 source setup.sh
 
-python3.11 main.py
+python3.11 train.py
