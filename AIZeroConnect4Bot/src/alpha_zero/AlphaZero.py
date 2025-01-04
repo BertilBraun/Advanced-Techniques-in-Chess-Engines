@@ -187,15 +187,14 @@ class AlphaZero:
         dataset = SelfPlayDataset(self.model.device)
         for iter in range(max(iteration - window_size, 0), iteration + 1):
             iteration_dataset = SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+            file_paths = SelfPlayDataset.get_files_to_load_for_iteration(self.save_path, iter)
 
-            if len(iteration_dataset) != 0 and DEDUPLICATE_EACH_ITERATION:
-                old_size = len(iteration_dataset)
+            if len(iteration_dataset) != 0 and len(file_paths) > 1 and DEDUPLICATE_EACH_ITERATION:
                 iteration_dataset.deduplicate()
-                if old_size != len(iteration_dataset):
-                    log(f'Deduplicated memory_{iter} from {old_size} to {len(iteration_dataset)}')
-                    for file_path in SelfPlayDataset.get_files_to_load_for_iteration(self.save_path, iter):
-                        Path(file_path).unlink()
-                    iteration_dataset.save(self.save_path / f'memory_{iter}_deduplicated.pt')
+                for file_path in file_paths:
+                    Path(file_path).unlink()
+                iteration_dataset.save(self.save_path / f'memory_{iter}_deduplicated.pt')
+                log(f'Deduplicated memory_{iter} to {len(iteration_dataset)}')
 
             dataset += iteration_dataset
 
