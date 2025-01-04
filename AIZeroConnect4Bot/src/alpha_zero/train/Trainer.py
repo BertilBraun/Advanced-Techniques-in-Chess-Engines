@@ -41,21 +41,25 @@ class Trainer:
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
+        log(f'Training model on iteration {iteration}')
         train_dataset, validation_dataset = torch.utils.data.random_split(
             dataset, [len(dataset) - self.args.training.batch_size, self.args.training.batch_size]
         )
+        log(f'Training on {len(train_dataset)} samples, validating on {len(validation_dataset)} samples')
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
         )
+        log(f'Loaded training data')
         validation_dataloader = DataLoader(
             validation_dataset,
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
         )
+        log(f'Loaded validation data')
 
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
@@ -87,6 +91,7 @@ class Trainer:
 
             return policy_loss, value_loss, loss
 
+        log(f'Starting training loop')
         for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
