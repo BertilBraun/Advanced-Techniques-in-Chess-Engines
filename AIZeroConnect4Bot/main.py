@@ -33,7 +33,7 @@ if __name__ == '__main__':
         log('Training args:')
         log(TRAINING_ARGS, use_pprint=True)
 
-        start_usage_logger()  # TODO everyone
+    start_usage_logger(cluster_manager.rank)
 
     device = torch.device('cuda', cluster_manager.rank % torch.cuda.device_count()) if USE_GPU else torch.device('cpu')
 
