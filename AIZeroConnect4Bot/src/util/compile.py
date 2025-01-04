@@ -9,7 +9,7 @@ def try_compile(element: T) -> T:
     from src.settings import USE_GPU
 
     if not USE_GPU:
-        return element  # TODO disabled compilation for now
+        return element
 
     try:
         return torch.compile(element)  # type: ignore

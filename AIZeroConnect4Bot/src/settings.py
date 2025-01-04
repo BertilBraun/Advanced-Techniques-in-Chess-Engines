@@ -117,8 +117,8 @@ if True:
             num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         ),
         cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
-            num_train_nodes_on_cluster=NUM_TRAINERS,
+            num_self_play_nodes_on_cluster=1,  # TODO NUM_SELF_PLAYERS,
+            num_train_nodes_on_cluster=0,  # TODO NUM_TRAINERS,
         ),
         training=TrainingParams(
             num_epochs=4,

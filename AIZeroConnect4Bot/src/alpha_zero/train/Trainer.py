@@ -12,6 +12,12 @@ from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
 
 # TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
+# TODO do so, save model after each epoch, use smaller num_parallel_games
+# TODO game and inference nodes? So that 100% GPU is used on inference nodes and as many nodes as needed can supply the self-play nodes
+# TODO save deduplicated dataset for the previous iteration
+# TODO simply set num_epochs to 1 and increase the num_iterations, while decreasing how fast the window size grows but increasing the base and max window size
+# TODO current MCTS -> BatchedMCTS and create new ClientServerMCTS - based on what protocol?
+# TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
 class Trainer:
@@ -45,6 +51,7 @@ class Trainer:
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
+            pin_memory=True,
         )
 
         train_stats = TrainingStats()
