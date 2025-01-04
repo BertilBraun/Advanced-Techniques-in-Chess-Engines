@@ -20,6 +20,10 @@ from src.util.log import log
 # TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
+# TODO something between Deduplication and Training Batches takes 10min?!
+# TODO [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
+
+
 class Trainer:
     def __init__(
         self,
