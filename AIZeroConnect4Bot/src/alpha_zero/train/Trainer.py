@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.Network import Network
-from src.settings import TB_SUMMARY, TORCH_DTYPE
+from src.settings import TORCH_DTYPE, log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -20,8 +20,8 @@ from src.util.log import log
 # TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
-# TODO something between Deduplication and Training Batches takes 10min?!
-# TODO [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
+# DONE? something between Deduplication and Training Batches takes 10min?!
+# DONE [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
 
 
 class Trainer:
@@ -49,19 +49,17 @@ class Trainer:
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
-            pin_memory=True,
         )
         validation_dataloader = DataLoader(
             validation_dataset,
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
-            pin_memory=True,
         )
 
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
-        TB_SUMMARY.add_scalar('learning_rate', base_lr, iteration)
+        log_scalar('learning_rate', base_lr, iteration)
 
         self.model.train()
 
@@ -95,7 +93,7 @@ class Trainer:
             # Update learning rate before stepping the optimizer
             batch_percentage = batchIdx / len(train_dataloader)
             lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
-            TB_SUMMARY.add_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
+            log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 

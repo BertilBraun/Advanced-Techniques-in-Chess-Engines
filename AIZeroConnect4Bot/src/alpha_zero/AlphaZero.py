@@ -8,7 +8,7 @@ from pathlib import Path
 from src.alpha_zero.SelfPlay import SelfPlay
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import DEDUPLICATE_EACH_ITERATION, TB_SUMMARY
+from src.settings import DEDUPLICATE_EACH_ITERATION, log_histogram, log_scalar
 from src.util.compile import try_compile
 from src.util.exceptions import log_exceptions
 from src.util.log import log
@@ -80,35 +80,35 @@ class AlphaZero:
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             log(f'Loaded {len(dataset)} self-play memories.')
 
-            TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
+            log_scalar('num_training_samples', len(dataset), iteration)
 
             if not DEDUPLICATE_EACH_ITERATION:
                 dataset.deduplicate()
                 log(f'Deduplicated to {len(dataset)} unique positions.')
 
-            TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
-            TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
+            log_scalar('num_deduplicated_samples', len(dataset), iteration)
+            log_histogram('training_sample_states', dataset.states, iteration)
 
             # The spikiness of the policy targets.
             # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
             spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
-            TB_SUMMARY.add_scalar('policy_spikiness', spikiness, iteration)
+            log_scalar('policy_spikiness', spikiness, iteration)
 
-            TB_SUMMARY.add_histogram('policy_targets', dataset.policy_targets.reshape(-1).cpu(), iteration)
+            log_histogram('policy_targets', dataset.policy_targets, iteration)
 
             for epoch in range(self.args.training.num_epochs):
                 epoch_train_stats = self.trainer.train(dataset, iteration)
-                TB_SUMMARY.add_scalar(
+                log_scalar(
                     'policy_loss',
                     epoch_train_stats.policy_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
                 )
-                TB_SUMMARY.add_scalar(
+                log_scalar(
                     'value_loss',
                     epoch_train_stats.value_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
                 )
-                TB_SUMMARY.add_scalar(
+                log_scalar(
                     'total_loss',
                     epoch_train_stats.total_loss / epoch_train_stats.num_batches,
                     iteration * self.args.training.num_epochs + epoch,
@@ -216,15 +216,15 @@ class AlphaZero:
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
+        log_scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
+        log_scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
+        log_scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
 
         results = model_evaluation.play_vs_random(
             current_model, self.args.evaluation.num_games, self.args.evaluation.num_searches_per_turn
         )
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
-        TB_SUMMARY.add_scalar('win_loss_draw_vs_random/draws', results.draws, iteration)
+        log_scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
+        log_scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
+        log_scalar('win_loss_draw_vs_random/draws', results.draws, iteration)

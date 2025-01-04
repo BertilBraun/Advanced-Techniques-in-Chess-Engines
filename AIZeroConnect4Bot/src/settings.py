@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from src.util import lerp
@@ -20,10 +21,24 @@ SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
 DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration
+LOG_HISTOGRAMS = False
 
 PLAY_C_PARAM = 1.0
 
-TB_SUMMARY = SummaryWriter(LOG_FOLDER)
+_TB_SUMMARY = SummaryWriter(LOG_FOLDER)
+
+
+def log_scalar(name: str, value: float, iteration: int) -> None:
+    _TB_SUMMARY.add_scalar(name, value, iteration)
+
+
+def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) -> None:
+    if not LOG_HISTOGRAMS:
+        return
+    values = values.reshape(-1)
+    if isinstance(values, torch.Tensor):
+        values = values.cpu().numpy()
+    _TB_SUMMARY.add_histogram(name, values, iteration)
 
 
 def sampling_window(current_iteration: int) -> int:
