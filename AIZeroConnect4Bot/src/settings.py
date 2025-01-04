@@ -19,6 +19,8 @@ LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
+DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration
+
 PLAY_C_PARAM = 1.0
 
 TB_SUMMARY = SummaryWriter(LOG_FOLDER)
@@ -26,15 +28,15 @@ TB_SUMMARY = SummaryWriter(LOG_FOLDER)
 
 def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
-    if current_iteration < 5:
-        return 4
-    return min(4 + (current_iteration - 5) // 2, 10)
+    if current_iteration < 20:
+        return 20
+    return min(20 + (current_iteration - 20) // 8, 40)
 
 
 def learning_rate(current_iteration: int) -> float:
     base_lr = 0.025
     lr_decay = 0.85
-    return base_lr * (lr_decay**current_iteration)
+    return base_lr * (lr_decay ** (current_iteration / 4))
     # if current_iteration < 10:
     #    return 0.01
     if current_iteration < 10:
@@ -57,12 +59,6 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         return lerp(min_lr, base_lr, batch_percentage * 2)
     else:
         return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
-
-
-def dirichlet_alpha(iteration: int) -> float:
-    # if iteration < 50:  # TODO
-    #     return 0.01
-    return 0.3
 
 
 # Chess training args
@@ -96,10 +92,10 @@ if True:
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 128
+    PARALLEL_GAMES = 64
 
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=25,
+        num_iterations=100,
         save_path=SAVE_PATH + '/connect4',
         mcts=MCTSParams(
             num_searches_per_turn=600,
@@ -117,11 +113,11 @@ if True:
             num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         ),
         cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=1,  # TODO NUM_SELF_PLAYERS,
-            num_train_nodes_on_cluster=0,  # TODO NUM_TRAINERS,
+            num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
+            num_train_nodes_on_cluster=NUM_TRAINERS,
         ),
         training=TrainingParams(
-            num_epochs=4,
+            num_epochs=1,
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
@@ -131,6 +127,37 @@ if True:
             num_searches_per_turn=60,
             num_games=30,
             every_n_iterations=3,
+        ),
+    )
+    # TODO remove
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=25,
+        save_path=SAVE_PATH + '/connect4',
+        mcts=MCTSParams(
+            num_searches_per_turn=60,
+            dirichlet_epsilon=0.25,
+            dirichlet_alpha=lambda _: 0.3,
+            c_param=2,
+        ),
+        network=NetworkParams(
+            num_layers=NN_NUM_LAYERS,
+            hidden_size=NN_HIDDEN_SIZE,
+        ),
+        self_play=SelfPlayParams(
+            temperature=1.25,
+            num_parallel_games=4,
+            num_games_per_iteration=4 * 2,
+        ),
+        cluster=ClusterParams(
+            num_self_play_nodes_on_cluster=1,
+            num_train_nodes_on_cluster=0,
+        ),
+        training=TrainingParams(
+            num_epochs=4,
+            batch_size=128,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
         ),
     )
 

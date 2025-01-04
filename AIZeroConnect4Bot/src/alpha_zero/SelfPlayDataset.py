@@ -58,6 +58,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 f'Warning: Merging datasets with different devices: ({self.device} and {other.device}). Moving data to the device of the first dataset.'
             )
 
+            other.device = self.device
             other.states = other.states.to(self.device)
             other.policy_targets = other.policy_targets.to(self.device)
             other.value_targets = other.value_targets.to(self.device)
@@ -115,9 +116,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return dataset
 
     @staticmethod
+    def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[str]:
+        return [str(file_path) for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt')]
+
+    @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device) -> SelfPlayDataset:
         dataset = SelfPlayDataset(device)
-        for file_path in Path(folder_path).glob(f'memory_{iteration}_*.pt'):
+        for file_path in SelfPlayDataset.get_files_to_load_for_iteration(folder_path, iteration):
             dataset += SelfPlayDataset.load(file_path, device)
 
         return dataset

@@ -8,7 +8,7 @@ from pathlib import Path
 from src.alpha_zero.SelfPlay import SelfPlay
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import TB_SUMMARY
+from src.settings import DEDUPLICATE_EACH_ITERATION, TB_SUMMARY
 from src.util.compile import try_compile
 from src.util.exceptions import log_exceptions
 from src.util.log import log
@@ -82,8 +82,9 @@ class AlphaZero:
 
             TB_SUMMARY.add_scalar('num_training_samples', len(dataset), iteration)
 
-            dataset.deduplicate()
-            log(f'Deduplicated to {len(dataset)} unique positions.')
+            if not DEDUPLICATE_EACH_ITERATION:
+                dataset.deduplicate()
+                log(f'Deduplicated to {len(dataset)} unique positions.')
 
             TB_SUMMARY.add_scalar('num_deduplicated_samples', len(dataset), iteration)
             TB_SUMMARY.add_histogram('training_sample_states', dataset.states.cpu(), iteration)
@@ -118,8 +119,7 @@ class AlphaZero:
             log(f'Iteration {iteration + 1}: {train_stats}')
             self._save_latest_model(iteration)
 
-            if iteration > 0:
-                self._play_two_most_recent_models(iteration)
+            self._play_two_most_recent_models(iteration)
 
         return train_stats
 
@@ -186,7 +186,18 @@ class AlphaZero:
 
         dataset = SelfPlayDataset(self.model.device)
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            dataset += SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+            iteration_dataset = SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+
+            if len(iteration_dataset) != 0 and DEDUPLICATE_EACH_ITERATION:
+                old_size = len(iteration_dataset)
+                iteration_dataset.deduplicate()
+                if old_size != len(iteration_dataset):
+                    log(f'Deduplicated memory_{iter} from {old_size} to {len(iteration_dataset)}')
+                    for file_path in SelfPlayDataset.get_files_to_load_for_iteration(self.save_path, iter):
+                        Path(file_path).unlink()
+                    iteration_dataset.save(self.save_path / f'memory_{iter}_deduplicated.pt')
+
+            dataset += iteration_dataset
 
         return dataset
 

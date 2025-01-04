@@ -11,11 +11,11 @@ from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
 
-# TODO AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
-# TODO do so, save model after each epoch, use smaller num_parallel_games
+# DONE AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
+# DONE do so, save model after each epoch, use smaller num_parallel_games
+# DONE save deduplicated dataset for the previous iteration
+# DONE simply set num_epochs to 1 and increase the num_iterations, while decreasing how fast the window size grows but increasing the base and max window size
 # TODO game and inference nodes? So that 100% GPU is used on inference nodes and as many nodes as needed can supply the self-play nodes
-# TODO save deduplicated dataset for the previous iteration
-# TODO simply set num_epochs to 1 and increase the num_iterations, while decreasing how fast the window size grows but increasing the base and max window size
 # TODO current MCTS -> BatchedMCTS and create new ClientServerMCTS - based on what protocol?
 # TODO make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
@@ -45,6 +45,7 @@ class Trainer:
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
+            pin_memory=True,
         )
         validation_dataloader = DataLoader(
             validation_dataset,
@@ -65,9 +66,16 @@ class Trainer:
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
 
-            state = state.to(device=self.model.device, dtype=TORCH_DTYPE)
-            policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
-            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE).unsqueeze(1)
+            if state.device != self.model.device:
+                log(f'Warning: Moving data to model device ({state.device} -> {self.model.device})')
+
+                state = state.to(device=self.model.device)
+                policy_targets = policy_targets.to(device=self.model.device)
+                value_targets = value_targets.to(device=self.model.device)
+
+            state = state.to(dtype=TORCH_DTYPE)
+            policy_targets = policy_targets.to(dtype=TORCH_DTYPE)
+            value_targets = value_targets.to(dtype=TORCH_DTYPE).unsqueeze(1)
 
             out_policy, out_value = self.model(state)
 
