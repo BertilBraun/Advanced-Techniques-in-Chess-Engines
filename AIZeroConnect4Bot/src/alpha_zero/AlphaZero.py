@@ -91,7 +91,7 @@ class AlphaZero:
 
             # The spikiness of the policy targets.
             # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
-            spikiness = sum((policy_targets).max().item() for policy_targets in dataset.policy_targets) / len(dataset)
+            spikiness = dataset.policy_targets.max(dim=1).values.mean().item()
             log_scalar('policy_spikiness', spikiness, iteration)
 
             log_histogram('policy_targets', dataset.policy_targets, iteration)
