@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop\zip\zip'
+USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop\zip2\zip'
 
 
 def load_usage(folder_path: str) -> pd.DataFrame:
@@ -15,13 +15,17 @@ def visualize():
     system_df = load_usage(USAGE_FOLDER)
     system_df['timestamp'] = pd.to_datetime(system_df['timestamp'])
 
+    system_df = system_df.sort_values(by='timestamp')
+    # Recompute time differences
+    system_df['time_diff'] = system_df['timestamp'].diff().dt.total_seconds()
+
+    # Remove rows with negative or unusually large gaps
+    system_df = system_df[system_df['time_diff'] > 0]
+
     ranks = system_df['rank'].unique()
     gpu_ids = system_df['gpu_id'].unique()
 
     axs = plt.subplots(4, 1, figsize=(15, 20), sharex=True)[1]
-
-    # inspect system_df
-    print(system_df.head())
 
     # CPU Usage
     for rank in ranks:

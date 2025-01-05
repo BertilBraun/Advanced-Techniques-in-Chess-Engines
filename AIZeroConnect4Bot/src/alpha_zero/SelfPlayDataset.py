@@ -29,8 +29,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     - Save the samples to a file
     """
 
-    def __init__(self, device: torch.device) -> None:
-        self.device = device
+    def __init__(self) -> None:
         self.states: list[np.ndarray] = []
         self.policy_targets: list[np.ndarray] = []
         self.value_targets: list[float] = []
@@ -47,21 +46,21 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         if idx < len(self.states):
             decoded_state = decode_board_state(self.states[idx])
             return (
-                torch.from_numpy(decoded_state).to(self.device),
-                torch.from_numpy(self.policy_targets[idx]).to(self.device),
-                torch.tensor(self.value_targets[idx], dtype=torch.float32, device=self.device),
+                torch.from_numpy(decoded_state),
+                torch.from_numpy(self.policy_targets[idx]),
+                torch.tensor(self.value_targets[idx], dtype=torch.float32),
             )
 
         idx -= len(self.states)
         decoded_state = decode_board_state(self.states[idx])
         return (
-            torch.from_numpy(decoded_state).to(self.device),
-            torch.from_numpy(self.policy_targets[idx]).to(self.device),
-            torch.tensor(self.value_targets[idx], dtype=torch.float32, device=self.device),
+            torch.from_numpy(decoded_state),
+            torch.from_numpy(self.policy_targets[idx]),
+            torch.tensor(self.value_targets[idx], dtype=torch.float32),
         )
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
-        new_dataset = SelfPlayDataset(self.device)
+        new_dataset = SelfPlayDataset()
         new_dataset.states = self.states + other.states
         new_dataset.policy_targets = self.policy_targets + other.policy_targets
         new_dataset.value_targets = self.value_targets + other.value_targets
@@ -91,13 +90,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
 
     @staticmethod
-    def load(file_path: str | PathLike, device: torch.device) -> SelfPlayDataset:
+    def load(file_path: str | PathLike) -> SelfPlayDataset:
         with h5py.File(file_path, 'r') as file:
             metadata = dict(file.attrs)
             message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
             assert metadata == SelfPlayDataset._get_current_metadata(), message
 
-            dataset = SelfPlayDataset(device)
+            dataset = SelfPlayDataset()
             dataset.states = [state for state in file['states']]  # type: ignore
             dataset.policy_targets = [policy_target for policy_target in file['policy_targets']]  # type: ignore
             dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
@@ -109,10 +108,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return [str(file_path) for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
 
     @staticmethod
-    def load_iteration(folder_path: str | PathLike, iteration: int, device: torch.device) -> SelfPlayDataset:
-        dataset = SelfPlayDataset(device)
+    def load_iteration(folder_path: str | PathLike, iteration: int) -> SelfPlayDataset:
+        dataset = SelfPlayDataset()
         for file_path in SelfPlayDataset.get_files_to_load_for_iteration(folder_path, iteration):
-            dataset += SelfPlayDataset.load(file_path, device)
+            dataset += SelfPlayDataset.load(file_path)
 
         return dataset
 

@@ -61,10 +61,12 @@ class ClusterAlphaZero:
     def _train_one_iteration(self, iteration: int) -> TrainingStats:
         EXPECTED_NUM_SAMPLES = self.az.args.self_play.num_games_per_iteration * CurrentGame.average_num_moves_per_game
 
-        while (
-            len(SelfPlayDataset.load_iteration(self.az.args.save_path, iteration, device=torch.device('cpu')))
-            < EXPECTED_NUM_SAMPLES
-        ):
+        def num_samples_in_current_and_previous_iteration(iteration: int) -> int:
+            current_len = len(SelfPlayDataset.load_iteration(self.az.args.save_path, iteration))
+            previous_len = len(SelfPlayDataset.load_iteration(self.az.args.save_path, iteration - 1))
+            return current_len + previous_len
+
+        while num_samples_in_current_and_previous_iteration(iteration) < EXPECTED_NUM_SAMPLES:
             log('Waiting for memories...')
             time.sleep(20)
 

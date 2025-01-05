@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.Network import Network
-from src.settings import TORCH_DTYPE, log_scalar
+from src.settings import TORCH_DTYPE, USE_GPU, log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -37,6 +37,9 @@ from src.util.log import log
 
 # TODO parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
 
+# TODO Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
+# TODO server model as TensorRT
+
 
 class Trainer:
     def __init__(
@@ -63,7 +66,8 @@ class Trainer:
             batch_size=self.args.training.batch_size,
             shuffle=True,
             drop_last=False,
-            # setting num_workers significantly increases the loading time of the dataset - therefore it is not used
+            num_workers=8,
+            pin_memory=USE_GPU,
         )
         validation_dataloader = DataLoader(
             validation_dataset,
@@ -83,9 +87,10 @@ class Trainer:
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
 
-            state = state.to(dtype=TORCH_DTYPE)
-            policy_targets = policy_targets.to(dtype=TORCH_DTYPE)
-            value_targets = value_targets.to(dtype=TORCH_DTYPE).unsqueeze(1)
+            state = state.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
+            policy_targets = policy_targets.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
+            value_targets = value_targets.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
+            value_targets = value_targets.unsqueeze(1)
 
             out_policy, out_value = self.model(state)
 
@@ -94,6 +99,10 @@ class Trainer:
             loss = policy_loss + value_loss
 
             return policy_loss, value_loss, loss
+
+        total_policy_loss = torch.tensor(0.0, device=self.model.device)
+        total_value_loss = torch.tensor(0.0, device=self.model.device)
+        total_loss = torch.tensor(0.0, device=self.model.device)
 
         for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
@@ -109,13 +118,22 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
 
-            train_stats.update(policy_loss.item(), value_loss.item(), loss.item())
+            total_policy_loss += policy_loss
+            total_value_loss += value_loss
+            total_loss += loss
+
+        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item())
 
         with torch.no_grad():
             validation_stats = TrainingStats()
-            for validation_batch in validation_dataloader:
+            for i, validation_batch in enumerate(validation_dataloader):
                 val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
+
+                log_scalar('val_policy_loss', val_policy_loss.item(), i + (iteration * len(validation_dataloader)))
+                log_scalar('val_value_loss', val_value_loss.item(), i + (iteration * len(validation_dataloader)))
+                log_scalar('val_loss', val_loss.item(), i + (iteration * len(validation_dataloader)))
                 validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item())
+
             log(f'Validation stats: {validation_stats}')
 
         return train_stats

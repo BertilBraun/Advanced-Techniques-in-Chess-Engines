@@ -63,7 +63,7 @@ class AlphaZero:
             log(f'Iteration {starting_iteration + i + 1}: {stats}')
 
     def _self_play_and_write_memory(self, iteration: int, num_self_play_calls: int):
-        dataset = SelfPlayDataset(self.model.device)
+        dataset = SelfPlayDataset()
 
         for _ in trange(
             num_self_play_calls // self.args.self_play.num_parallel_games,
@@ -193,9 +193,9 @@ class AlphaZero:
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        dataset = SelfPlayDataset(self.model.device)
+        dataset = SelfPlayDataset()
         for iter in range(max(iteration - window_size, 0), iteration + 1):
-            iteration_dataset = SelfPlayDataset.load_iteration(self.save_path, iter, self.model.device)
+            iteration_dataset = SelfPlayDataset.load_iteration(self.save_path, iter)
             file_paths = SelfPlayDataset.get_files_to_load_for_iteration(self.save_path, iter)
 
             if len(iteration_dataset) != 0 and len(file_paths) > 1 and DEDUPLICATE_EACH_ITERATION:
