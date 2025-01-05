@@ -109,15 +109,15 @@ if True:
             num_train_nodes_on_cluster=NUM_TRAINERS,
         ),
         training=TrainingParams(
-            num_epochs=1,
+            num_epochs=2,
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
         ),
         evaluation=EvaluationParams(
             num_searches_per_turn=60,
-            num_games=30,
-            every_n_iterations=3,
+            num_games=20,
+            every_n_iterations=5,
         ),
     )
     # TODO remove

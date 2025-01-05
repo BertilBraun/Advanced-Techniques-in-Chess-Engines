@@ -121,8 +121,8 @@ class AlphaZero:
                 log(f'Epoch {epoch + 1}: {epoch_train_stats}')
                 train_stats += epoch_train_stats
 
-            log(f'Iteration {iteration + 1}: {train_stats}')
-            self._save_latest_model(iteration)
+                log(f'Iteration {iteration + 1}: {train_stats}')
+                self._save_latest_model(iteration)
 
             self._play_two_most_recent_models(iteration)
 
