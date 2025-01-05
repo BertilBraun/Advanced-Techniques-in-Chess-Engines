@@ -92,7 +92,7 @@ class AlphaZero:
                 log(f'Deduplicated to {len(dataset)} unique positions.')
 
             log_scalar('num_deduplicated_samples', len(dataset), iteration)
-            log_histogram('training_sample_states', np.array(dataset.states), iteration)
+            log_histogram('training_sample_values', np.array(dataset.value_targets), iteration)
 
             # The spikiness of the policy targets.
             # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
