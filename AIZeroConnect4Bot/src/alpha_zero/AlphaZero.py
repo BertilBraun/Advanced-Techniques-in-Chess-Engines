@@ -1,4 +1,5 @@
 import json
+from time import time
 from typing import Generator
 import numpy as np
 import torch
@@ -79,6 +80,10 @@ class AlphaZero:
 
         with log_exceptions('Training'):
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+            while len(dataset) == 0:
+                log('No memories found, waiting for self-play to finish...')
+                time.sleep(5)
+                dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             log(f'Loaded {len(dataset)} self-play memories.')
 
             log_scalar('num_training_samples', len(dataset), iteration)
