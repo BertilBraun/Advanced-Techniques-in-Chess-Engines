@@ -23,13 +23,13 @@ from src.util.log import log
 # DONE something between Deduplication and Training Batches takes 10min?!
 # DONE [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
 
-# TODO /memory_19_deduplicated.pt (deflated 96%) Why is the memory able to be compressed so much? What about the memory is so compressible? Yeah.. just a lot of either 0 or 1 values.. Does it make sense to store it as a bit array?
-# TODO with the encoded boards, stuff like caching and hashing etc as well as inter process comunication of the states should be way faster and more efficient
-# TODO optimize encode and decode with numpy
-# TODO load and save via numpy not torch
+# DONE /memory_19_deduplicated.pt (deflated 96%) Why is the memory able to be compressed so much? What about the memory is so compressible? Yeah.. just a lot of either 0 or 1 values.. Does it make sense to store it as a bit array?
+# TODO with the encoded boards, inter process comunication of the states should be way faster and more efficient
+# DONE optimize encode and decode with numpy
+# DONE load and save via numpy not torch
 
 # NOT_REQUIRED Not always reload each iteration, but only if the memory is not already loaded - only takes a second to load the memory
-# TODO single GPU for training, multiple GPUs for self-play?
+# DONE single GPU for training, multiple GPUs for self-play?
 
 # TODO use both the final game result as well as the MCTS root value_sum / num_visits as the value target for the NN training. Averaging f.e.
 

@@ -7,7 +7,7 @@ from src.Network import Network
 from src.alpha_zero.AlphaZero import AlphaZero
 from src.alpha_zero.train.TrainingArgs import TrainingArgs, MCTSParams, NetworkParams, SelfPlayParams, TrainingParams
 from src.cluster.ClusterManager import ClusterManager
-from src.settings import SAVE_PATH, USE_GPU, learning_rate_scheduler
+from src.settings import SAVE_PATH, USE_GPU
 from src.util.compile import try_compile
 from src.util.log import log
 
@@ -68,7 +68,6 @@ def objective(rank: int) -> Callable[[optuna.Trial], float]:
             batch_size=training_batch_size,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
         )
 
         training_args = TrainingArgs(

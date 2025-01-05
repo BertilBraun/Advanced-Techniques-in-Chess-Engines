@@ -256,12 +256,9 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train, batch_size=BATCH_SIZE, shuffle=True)
     test_dataloader = DataLoader(test, batch_size=BATCH_SIZE, shuffle=False)
 
-    # Instantiate the model
-    model = Network(4, 64, device=None)
-
-    # Move the model to GPU if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
+    # Instantiate the model
+    model = Network(4, 64, device=device)
 
     # Train the model
     print('Starting training...')

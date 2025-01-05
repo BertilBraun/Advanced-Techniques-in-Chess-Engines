@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from typing import List
 
+from src.Encoding import decode_board_state
 from src.games.Game import Game
 from src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
 from src.util.ZobristHasher import ZobristHasher
@@ -50,7 +51,6 @@ class CheckersGame(Game[CheckersMove]):
 
     def get_canonical_board(self, board: CheckersBoard) -> np.ndarray:
         # turn the 4 bitboards into a single 4x8x8 tensor
-        # TODO use the same code as the SelfPlayGameMemory as that seems to be quite a bit faster
 
         def bitfield_to_tensor(bitfield: np.uint64) -> np.ndarray:
             # turn 64 bit integer into a list of 8x 8bit integers, then use np.unpackbits to get a 8x8 tensor
@@ -59,7 +59,7 @@ class CheckersGame(Game[CheckersMove]):
             ).reshape(ROW_COUNT, COLUMN_COUNT)
 
         if board.current_player == 1:
-            return np.stack(
+            res = np.stack(
                 [
                     bitfield_to_tensor(board.black_kings),
                     bitfield_to_tensor(board.black_pieces),
@@ -67,8 +67,20 @@ class CheckersGame(Game[CheckersMove]):
                     bitfield_to_tensor(board.white_pieces),
                 ]
             )
+            assert res == decode_board_state(
+                np.array(
+                    [
+                        board.black_kings,
+                        board.black_pieces,
+                        board.white_kings,
+                        board.white_pieces,
+                    ]
+                )
+            )
+
+            return res
         else:
-            return np.stack(
+            res = np.stack(
                 [
                     np.flip(bitfield_to_tensor(board.white_kings), axis=0),
                     np.flip(bitfield_to_tensor(board.white_pieces), axis=0),
@@ -76,6 +88,22 @@ class CheckersGame(Game[CheckersMove]):
                     np.flip(bitfield_to_tensor(board.black_pieces), axis=0),
                 ]
             )
+
+            assert res == np.flip(
+                decode_board_state(
+                    np.array(
+                        [
+                            board.white_kings,
+                            board.white_pieces,
+                            board.black_kings,
+                            board.black_pieces,
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+
+            return res
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'

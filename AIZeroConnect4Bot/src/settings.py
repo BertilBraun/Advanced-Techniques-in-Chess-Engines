@@ -21,7 +21,6 @@ TESTING = True
 
 DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration - increases loading time
 LOG_HISTOGRAMS = False  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
-VALIDATE_DATASET = False  # Perform checks on the dataset to ensure it is valid - slows down training
 
 PLAY_C_PARAM = 1.0
 
@@ -43,24 +42,15 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
 
 def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
-    if current_iteration < 20:
-        return 20
-    return min(20 + (current_iteration - 20) // 8, 40)
+    if current_iteration < 10:
+        return 10
+    return min(10 + (current_iteration - 10) // 6, 30)
 
 
 def learning_rate(current_iteration: int) -> float:
     base_lr = 0.025
-    lr_decay = 0.85
+    lr_decay = 0.9
     return base_lr * (lr_decay ** (current_iteration / 4))
-    # if current_iteration < 10:
-    #    return 0.01
-    if current_iteration < 10:
-        return 0.005
-    if current_iteration < 30:
-        return 0.002
-    if current_iteration < 50:
-        return 0.0005
-    return 0.0002
 
 
 # Chess training args

@@ -4,6 +4,41 @@ from src.games.Game import Board
 from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
 
 
+_N_BITS = CurrentGame.representation_shape[1] * CurrentGame.representation_shape[2]
+assert _N_BITS <= 64, 'The state is too large to encode'
+# Prepare the bit masks: 1, 2, 4, ..., 2^(n_bits-1)
+_BIT_MASK = 1 << np.arange(_N_BITS, dtype=np.uint64)  # use uint64 to prevent overflow
+
+
+def encode_board_state(state: np.ndarray) -> np.ndarray:
+    """Encode the state into a tuple of integers. Each integer represents a channel of the state. This assumes that the state is a binary state.
+
+    The encoding is done by setting the i-th bit of the integer to the i-th bit of the flattened state.
+    For example, if the state is:
+    [[1, 0],
+     [0, 1]]
+    The encoding would be:
+    >>> 1001
+    """
+    # Shape: (channels, height * width)
+    flattened = state.reshape(state.shape[0], -1).astype(np.uint64)
+
+    # Perform vectorized dot product to encode each channel
+    encoded = (flattened * _BIT_MASK).sum(axis=1)
+
+    return encoded
+
+
+def decode_board_state(state: np.ndarray) -> np.ndarray:
+    # Convert to uint64 to prevent overflow
+    encoded_array = state.astype(np.uint64).reshape(-1, 1)  # shape: (channels, 1)
+
+    # Extract bits for each channel
+    bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8).reshape(CurrentGame.representation_shape)
+
+    return bits
+
+
 def get_board_result_score(board: Board) -> float | None:
     """
     Returns the result score for the given board.

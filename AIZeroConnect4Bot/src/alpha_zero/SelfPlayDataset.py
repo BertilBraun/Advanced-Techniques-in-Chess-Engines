@@ -7,7 +7,8 @@ from os import PathLike
 from pathlib import Path
 from torch.utils.data import Dataset
 
-from src.settings import VALIDATE_DATASET, CurrentGame
+from src.Encoding import decode_board_state, encode_board_state
+from src.settings import CurrentGame
 from src.util import random_id
 
 
@@ -37,7 +38,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.additional_value_targets: list[float] = []
 
     def add_sample(self, state: np.ndarray, policy_target: np.ndarray, value_target: float) -> None:
-        self.states.append(self._encode_state(state))
+        self.states.append(encode_board_state(state))
         self.additional_policy_targets.append(policy_target)
         self.additional_value_targets.append(value_target)
 
@@ -46,15 +47,17 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, float]:
         if idx < len(self.states):
+            decoded_state = decode_board_state(self.states[idx])
             return (
-                self._decode_state(self.states[idx]).to(self.device),
+                torch.from_numpy(decoded_state).to(self.device),
                 torch.from_numpy(self.policy_targets[idx]).to(self.device),
                 self.value_targets[idx],
             )
 
         idx -= len(self.states)
+        decoded_state = decode_board_state(self.states[idx])
         return (
-            self._decode_state(self.states[idx]).to(self.device),
+            torch.from_numpy(decoded_state).to(self.device),
             torch.from_numpy(self.additional_policy_targets[idx]).to(self.device),
             self.additional_value_targets[idx],
         )
@@ -71,9 +74,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        assert (
-            not self.additional_policy_targets and not self.additional_value_targets
-        ), 'Additional data must be empty. Call collect() before deduplicating'
+        self.collect()
 
         mp: dict[tuple[int, ...], tuple[int, tuple[torch.Tensor, float]]] = {}
         for state, policy_target, value_target in zip(self.states, self.policy_targets, self.value_targets):
@@ -100,11 +101,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @staticmethod
     def load(file_path: str | PathLike, device: torch.device) -> SelfPlayDataset:
         with h5py.File(file_path, 'r') as file:
-            if VALIDATE_DATASET:
-                metadata = dict(file.attrs)
-                if metadata != SelfPlayDataset._get_current_metadata():
-                    message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-                    assert False, message
+            metadata = dict(file.attrs)
+            if metadata != SelfPlayDataset._get_current_metadata():
+                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
+                assert False, message
 
             dataset = SelfPlayDataset(device)
             dataset.states = [state for state in file['states']]  # type: ignore
@@ -162,43 +162,3 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             'representation_shape': str(CurrentGame.representation_shape),
             'game': CurrentGame.__class__.__name__,
         }
-
-    def _encode_state(self, state: np.ndarray) -> np.ndarray:
-        """Encode the state into a tuple of integers. Each integer represents a channel of the state. This assumes that the state is a binary state.
-
-        The encoding is done by setting the i-th bit of the integer to the i-th bit of the flattened state.
-        For example, if the state is:
-        [[1, 0],
-         [0, 1]]
-        The encoding would be:
-        >>> 1001
-        """
-        channels, height, width = state.shape
-        n_bits = height * width
-        assert n_bits <= 64, 'The state is too large to encode'
-
-        # Prepare the bit masks: 1, 2, 4, ..., 2^(n_bits-1)
-        bit_masks = 1 << np.arange(n_bits, dtype=np.uint64)  # Use uint64 to prevent overflow
-
-        # Shape: (channels, height * width)
-        flattened = state.reshape(channels, -1).astype(np.uint64)
-
-        # Perform vectorized dot product to encode each channel
-        encoded = (flattened * bit_masks).sum(axis=1)
-
-        return encoded
-
-    def _decode_state(self, state: np.ndarray) -> torch.Tensor:
-        channels, height, width = CurrentGame.representation_shape
-        n_bits = height * width
-
-        # Prepare the bit masks: 1, 2, 4, ..., 2^(n_bits-1)
-        bit_masks = 1 << np.arange(n_bits, dtype=np.uint64)  # Shape: (n_bits,)
-
-        # Convert state tuple to a NumPy array for vectorized operations
-        encoded_array = state.astype(np.uint64).reshape(channels, 1)
-
-        # Extract bits for each channel
-        bits = ((encoded_array & bit_masks) > 0).astype(np.int8).reshape(channels, height, width)
-
-        return torch.from_numpy(bits).to(torch.int8)
