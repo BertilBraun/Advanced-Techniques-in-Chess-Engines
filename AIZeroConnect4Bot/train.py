@@ -19,8 +19,6 @@ def get_device(cluster_manager: ClusterManager, trainers: int) -> torch.device:
     if not USE_GPU:
         return torch.device('cpu')
 
-    return torch.device('cuda', cluster_manager.rank % torch.cuda.device_count())
-
     if cluster_manager.rank == 0:
         # reserve the device 0 for training
         return torch.device('cuda', 0)
