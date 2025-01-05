@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH --job-name=train_zero              # job name
-#SBATCH --partition=accelerated            # mby GPU queue for the resource allocation.
+#SBATCH --partition=accelerated-h100            # mby GPU queue for the resource allocation.
 #SBATCH --time=04:00:00                    # wall-clock time limit
 #SBATCH --mem=400000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
-#SBATCH --cpus-per-task=17                 # number of CPUs required per MPI task
+#SBATCH --cpus-per-task=25                 # number of CPUs required per MPI task
 #SBATCH --ntasks-per-node=1                # maximum count of tasks per node
 #SBATCH --mail-type=ALL                    # Notify user by email when certain event types occur.
 #SBATCH --gres=gpu:3
@@ -14,7 +14,7 @@
 
 source setup.sh
 
-for i in {0..15} 
+for i in {0..23} 
 do
     python3.11 train.py &
 done
