@@ -1,5 +1,5 @@
 import json
-from time import time
+import time
 from typing import Generator
 import numpy as np
 import torch

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import traceback
 
 from src.util.log import log
 
@@ -9,3 +10,4 @@ def log_exceptions(name: str):
         yield
     except Exception as e:
         log(f'Exception in {name}: {e}')
+        traceback.print_exc()

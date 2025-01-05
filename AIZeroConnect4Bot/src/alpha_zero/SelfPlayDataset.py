@@ -45,13 +45,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def __len__(self) -> int:
         return len(self.states)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, float]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if idx < len(self.states):
             decoded_state = decode_board_state(self.states[idx])
             return (
                 torch.from_numpy(decoded_state).to(self.device),
                 torch.from_numpy(self.policy_targets[idx]).to(self.device),
-                self.value_targets[idx],
+                torch.tensor(self.value_targets[idx], dtype=torch.float32, device=self.device),
             )
 
         idx -= len(self.states)
@@ -59,7 +59,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return (
             torch.from_numpy(decoded_state).to(self.device),
             torch.from_numpy(self.additional_policy_targets[idx]).to(self.device),
-            self.additional_value_targets[idx],
+            torch.tensor(self.additional_value_targets[idx], dtype=torch.float32, device=self.device),
         )
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
