@@ -75,8 +75,6 @@ class Trainer:
         train_stats = TrainingStats()
         base_lr = self.args.training.learning_rate(iteration)
         log_scalar('learning_rate', base_lr, iteration)
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = base_lr
 
         self.model.train()
 
@@ -97,8 +95,15 @@ class Trainer:
 
             return policy_loss, value_loss, loss
 
-        for batch in tqdm(train_dataloader, desc='Training batches'):
+        for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
+
+            # Update learning rate before stepping the optimizer
+            batch_percentage = batchIdx / len(train_dataloader)
+            lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
+            log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
 
             self.optimizer.zero_grad()
             loss.backward()

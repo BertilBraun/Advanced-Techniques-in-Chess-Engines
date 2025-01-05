@@ -10,6 +10,7 @@ from src.alpha_zero.train.TrainingArgs import (
     TrainingArgs,
     TrainingParams,
 )
+from src.util import lerp
 
 USE_PROFILING = True
 USE_GPU = torch.cuda.is_available()
@@ -51,6 +52,19 @@ def learning_rate(current_iteration: int) -> float:
     base_lr = 0.025
     lr_decay = 0.9
     return base_lr * (lr_decay ** (current_iteration / 4))
+
+
+def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
+    """1 Cycle learning rate policy.
+    Ramp up from lr/10 to lr over 50% of the batches, then ramp down to lr/10 over the remaining 50% of the batches.
+    Do this for each epoch separately.
+    """
+    min_lr = base_lr / 10
+
+    if batch_percentage < 0.5:
+        return lerp(min_lr, base_lr, batch_percentage * 2)
+    else:
+        return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
 
 
 # Chess training args
@@ -113,6 +127,7 @@ if True:
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
         ),
         evaluation=EvaluationParams(
             num_searches_per_turn=60,
@@ -136,18 +151,19 @@ if True:
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=16,
-            num_games_per_iteration=16 * 2,
+            num_parallel_games=64,
+            num_games_per_iteration=64 * 2,
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=1,
             num_train_nodes_on_cluster=0,
         ),
         training=TrainingParams(
-            num_epochs=4,
-            batch_size=8,
+            num_epochs=2,
+            batch_size=16,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
         ),
     )
 

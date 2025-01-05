@@ -78,6 +78,14 @@ class TrainingParams:
         return 0.002
     """
 
+    learning_rate_scheduler: Callable[[float, float], float]
+    """This is a function that returns the learning rate to use for the training. The function should take the batch percentage and the base learning rate as input and return the learning rate to use for that batch. This is used to implement a learning rate scheduler that changes the learning rate during training. The batch percentage is the percentage of the batch that has been processed so far. The base learning rate is the learning rate to use for the current iteration.
+    Example:
+    def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
+        min_lr = base_lr / 10
+        return lerp(min_lr, base_lr, batch_percentage)
+    """
+
 
 @dataclass
 class EvaluationParams:
