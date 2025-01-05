@@ -7,7 +7,7 @@ from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.Network import Network, cached_network_inference
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
+from src.settings import USE_GPU, CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
 
 
 class AlphaZeroBot(Bot):
@@ -16,7 +16,11 @@ class AlphaZeroBot(Bot):
         if isinstance(network_model_file_path, Network):
             self.model = network_model_file_path
         else:
-            self.model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=None)
+            self.model = Network(
+                TRAINING_ARGS.network.num_layers,
+                TRAINING_ARGS.network.hidden_size,
+                device=torch.device('cuda' if USE_GPU else 'cpu'),
+            )
             self.model = try_compile(self.model)
             if network_model_file_path is not None:
                 # modify state_dict by removing _orig_mod. from all keys
@@ -44,7 +48,7 @@ class AlphaZeroBot(Bot):
         log('Best child index:', best_move_index)
         log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
-        log(f'Best child has {best_child.result_score} result_score')
+        log(f'Best child has {best_child.result_score:.4f} result_score')
         log(f'Best child has {best_child.policy:.4f} policy')
         log('Child moves:', [child.move_to_get_here for child in root.children])
         log('Child visits:', [child.number_of_visits for child in root.children])
@@ -82,4 +86,4 @@ class AlphaZeroBot(Bot):
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 
-        return moves, value[0].item()
+        return moves, value[0]

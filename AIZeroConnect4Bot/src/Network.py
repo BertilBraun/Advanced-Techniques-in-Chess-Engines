@@ -119,7 +119,8 @@ def cached_network_inference(network: Network, x: Tensor) -> tuple[np.ndarray, n
     result: tuple[Tensor, Tensor] = cached_network_forward(network, x)
     policy, value = result
     policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-    value = value.to(dtype=torch.float32, device='cpu').numpy()
+    value = value.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
+
     return policy, value
 
 

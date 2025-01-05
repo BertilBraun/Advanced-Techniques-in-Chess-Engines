@@ -43,9 +43,9 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
 
 def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
-    if current_iteration < 10:
-        return 10
-    return min(10 + (current_iteration - 10) // 6, 30)
+    if current_iteration < 5:
+        return 5
+    return min(5 + (current_iteration - 5) // 6, 30)
 
 
 def learning_rate(current_iteration: int) -> float:
@@ -98,7 +98,7 @@ if True:
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 64
+    PARALLEL_GAMES = 128
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -106,8 +106,8 @@ if True:
         mcts=MCTSParams(
             num_searches_per_turn=600,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,  # 1.0
-            c_param=2,  # 4
+            dirichlet_alpha=lambda _: 1.0,
+            c_param=4,
         ),
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,
