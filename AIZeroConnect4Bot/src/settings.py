@@ -92,8 +92,8 @@ if True:
         mcts=MCTSParams(
             num_searches_per_turn=600,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 1.0,
-            c_param=4,
+            dirichlet_alpha=lambda _: 0.3,  # 1.0
+            c_param=2,  # 4
         ),
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,
@@ -125,7 +125,7 @@ if True:
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         mcts=MCTSParams(
-            num_searches_per_turn=60,
+            num_searches_per_turn=100,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=lambda _: 0.3,
             c_param=2,
@@ -136,8 +136,8 @@ if True:
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=2,
-            num_games_per_iteration=2 * 2,
+            num_parallel_games=16,
+            num_games_per_iteration=16 * 2,
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=1,
@@ -145,7 +145,7 @@ if True:
         ),
         training=TrainingParams(
             num_epochs=4,
-            batch_size=4,
+            batch_size=8,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
         ),

@@ -81,7 +81,7 @@ class AlphaZero:
         with log_exceptions('Training'):
             while not SelfPlayDataset.get_files_to_load_for_iteration(self.save_path, iteration):
                 log('No memories found, waiting for self-play to finish...')
-                time.sleep(5)
+                time.sleep(20)
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             log(f'Loaded {len(dataset)} self-play memories.')
 
