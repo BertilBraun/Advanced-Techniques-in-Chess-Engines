@@ -44,6 +44,7 @@ def _log_system_usage(interval: float, rank: int):
                 gpu_memory_used = gpus[gpu_id].memoryUsed
                 gpu_memory_total = gpus[gpu_id].memoryTotal
             else:
+                gpu_id = -1
                 gpu_load = 0
                 gpu_memory_used = 0
                 gpu_memory_total = 0

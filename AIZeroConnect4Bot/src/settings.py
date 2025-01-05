@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from src.alpha_zero.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
@@ -19,8 +19,9 @@ LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
-DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration
-LOG_HISTOGRAMS = False
+DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration - increases loading time
+LOG_HISTOGRAMS = False  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
+VALIDATE_DATASET = False  # Perform checks on the dataset to ensure it is valid - slows down training
 
 PLAY_C_PARAM = 1.0
 
@@ -145,8 +146,8 @@ if True:
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=4,
-            num_games_per_iteration=4 * 2,
+            num_parallel_games=2,
+            num_games_per_iteration=2 * 2,
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=1,
@@ -154,7 +155,7 @@ if True:
         ),
         training=TrainingParams(
             num_epochs=4,
-            batch_size=128,
+            batch_size=4,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
         ),

@@ -1,4 +1,5 @@
+h5py
 torch
 numpy
 optuna
-tensorboard
+tensorboardX

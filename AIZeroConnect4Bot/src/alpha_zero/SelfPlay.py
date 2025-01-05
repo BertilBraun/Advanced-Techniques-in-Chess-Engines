@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 from dataclasses import dataclass
 
@@ -87,8 +86,8 @@ class SelfPlay:
 
             for board, probabilities in CurrentGame.symmetric_variations(encoded_board, mem.action_probabilities):
                 self_play_dataset.add_sample(
-                    torch.tensor(board.copy(), dtype=torch.int8, requires_grad=False),
-                    torch.tensor(probabilities.copy(), dtype=torch.float32, requires_grad=False),
+                    board.copy().astype(np.int8),
+                    probabilities.copy().astype(np.float32),
                     result,
                 )
             result = -result

@@ -50,6 +50,8 @@ class CheckersGame(Game[CheckersMove]):
 
     def get_canonical_board(self, board: CheckersBoard) -> np.ndarray:
         # turn the 4 bitboards into a single 4x8x8 tensor
+        # TODO use the same code as the SelfPlayGameMemory as that seems to be quite a bit faster
+
         def bitfield_to_tensor(bitfield: np.uint64) -> np.ndarray:
             # turn 64 bit integer into a list of 8x 8bit integers, then use np.unpackbits to get a 8x8 tensor
             return np.unpackbits(

@@ -10,3 +10,5 @@ graph*
 **.pth
 **tictactoe_database.txt
 **.csv
+**.hdf5
+**.prof

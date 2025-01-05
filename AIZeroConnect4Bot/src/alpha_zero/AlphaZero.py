@@ -1,5 +1,6 @@
 import json
 from typing import Generator
+import numpy as np
 import torch
 
 from tqdm import trange
@@ -12,7 +13,7 @@ from src.settings import DEDUPLICATE_EACH_ITERATION, log_histogram, log_scalar
 from src.util.compile import try_compile
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.util import load_json, random_id
+from src.util import load_json
 from src.Network import Network, clear_model_inference_cache
 from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
@@ -71,7 +72,7 @@ class AlphaZero:
                 dataset += self.self_play.self_play(iteration)
 
         log(f'Collected {len(dataset)} self-play memories.')
-        dataset.save(self.save_path / f'memory_{iteration}_{random_id()}.pt')
+        dataset.save(self.save_path, iteration)
 
     def _train_and_save_new_model(self, iteration: int) -> TrainingStats:
         train_stats = TrainingStats()
@@ -87,11 +88,11 @@ class AlphaZero:
                 log(f'Deduplicated to {len(dataset)} unique positions.')
 
             log_scalar('num_deduplicated_samples', len(dataset), iteration)
-            log_histogram('training_sample_states', dataset.states, iteration)
+            log_histogram('training_sample_states', np.array(dataset.states), iteration)
 
             # The spikiness of the policy targets.
             # The more confident the policy is, the closer to 1 it will be. I.e. the policy is sure about the best move.
-            spikiness = dataset.policy_targets.max(dim=1).values.mean().item()
+            spikiness = dataset.policy_targets.max(axis=1).mean().item()
             log_scalar('policy_spikiness', spikiness, iteration)
 
             log_histogram('policy_targets', dataset.policy_targets, iteration)
@@ -124,7 +125,7 @@ class AlphaZero:
         return train_stats
 
     def _load_latest_model(self) -> None:
-        """Load the latest model and optimizer from the last_training_config.pt file if it exists, otherwise start from scratch."""
+        """Load the latest model and optimizer from the last_training_config.json file if it exists, otherwise start from scratch."""
         try:
             last_training_config = load_json(self.save_path / 'last_training_config.json')
 
@@ -197,7 +198,7 @@ class AlphaZero:
                 iteration_dataset.deduplicate()
                 for file_path in file_paths:
                     Path(file_path).unlink()
-                iteration_dataset.save(self.save_path / f'memory_{iter}_deduplicated.pt')
+                iteration_dataset.save(self.save_path, iter, 'deduplicated')
                 log(f'Deduplicated memory_{iter} to {len(iteration_dataset)}')
 
             dataset += iteration_dataset
