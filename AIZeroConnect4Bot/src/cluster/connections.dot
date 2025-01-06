@@ -1,0 +1,61 @@
+digraph ProcessCommunication {
+    rankdir=LR; // Left-to-right layout
+    node [shape=box, style=rounded];
+
+    // Nodes
+    Trainer [label="Trainer"];
+    Commander [label="Commander"];
+    Evaluation [label="Evaluation"];
+    LoadBalancer [label="LoadBalancer"];
+    
+    subgraph cluster_SelfPlay {
+        label="SelfPlay Processes";
+        style=filled;
+        color=lightgrey;
+        SelfPlay0 [label="SelfPlay 0"];
+        SelfPlay1 [label="SelfPlay 1"];
+        SelfPlay2 [label="SelfPlay 2"];
+        SelfPlay3 [label="SelfPlay 3"];
+        SelfPlay4 [label="SelfPlay 4"];
+    }
+
+    subgraph cluster_InferenceServer {
+        label="Inference Servers";
+        style=filled;
+        color=lightgrey;
+        InferenceServer1 [label="InferenceServer 1"];
+        InferenceServer2 [label="InferenceServer 2"];
+        InferenceServer3 [label="InferenceServer 3"];
+    }
+
+    // Edges (Trainer and Commander - Duplex Connection)
+    Trainer -> Commander [label="trainer_commander_pipe"];
+    Commander -> Trainer [label="trainer_commander_pipe"];
+
+    // Edges (SelfPlay and LoadBalancer)
+    SelfPlay0 -> LoadBalancer [label="self_play_to_load_balancer_pipe"];
+    SelfPlay1 -> LoadBalancer [label="self_play_to_load_balancer_pipe"];
+    SelfPlay2 -> LoadBalancer [label="self_play_to_load_balancer_pipe"];
+    SelfPlay3 -> LoadBalancer [label="self_play_to_load_balancer_pipe"];
+    SelfPlay4 -> LoadBalancer [label="self_play_to_load_balancer_pipe"];
+
+    // Edges (LoadBalancer and InferenceServer)
+    LoadBalancer -> InferenceServer1 [label="load_balancer_output_pipe"];
+    LoadBalancer -> InferenceServer2 [label="load_balancer_output_pipe"];
+    LoadBalancer -> InferenceServer3 [label="load_balancer_output_pipe"];
+
+    // Edges (Commander and InferenceServer)
+    Commander -> InferenceServer1 [label="commander_inference_server_pipe"];
+    Commander -> InferenceServer2 [label="commander_inference_server_pipe"];
+    Commander -> InferenceServer3 [label="commander_inference_server_pipe"];
+
+    // Edges (Commander and SelfPlay)
+    Commander -> SelfPlay0 [label="commander_self_play_pipe"];
+    Commander -> SelfPlay1 [label="commander_self_play_pipe"];
+    Commander -> SelfPlay2 [label="commander_self_play_pipe"];
+    Commander -> SelfPlay3 [label="commander_self_play_pipe"];
+    Commander -> SelfPlay4 [label="commander_self_play_pipe"];
+
+    // Edges (Commander and Evaluation)
+    Commander -> Evaluation [label="commander_evaluation_pipe"];
+}

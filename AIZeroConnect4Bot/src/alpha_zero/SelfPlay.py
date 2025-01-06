@@ -2,12 +2,12 @@ import numpy as np
 from dataclasses import dataclass
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
-from src.Network import Network
 from src.Encoding import get_board_result_score
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 
 
 @dataclass
@@ -39,18 +39,16 @@ def sample_move(
 
 
 class SelfPlay:
-    def __init__(self, model: Network, args: TrainingArgs) -> None:
-        self.model = model
+    def __init__(self, client: InferenceClient, args: SelfPlayParams) -> None:
+        self.client = client
         self.args = args
 
     def self_play(self, iteration: int) -> SelfPlayDataset:
-        self.model.eval()
-
-        self_play_dataset = SelfPlayDataset(self.model.device)
-        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.self_play.num_parallel_games)]
+        self_play_dataset = SelfPlayDataset()
+        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
 
         mcts = MCTS(
-            self.model,
+            self.client,
             MCTSArgs(
                 num_searches_per_turn=self.args.mcts.num_searches_per_turn,
                 dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
@@ -63,7 +61,7 @@ class SelfPlay:
             for spg, action_probabilities in zip(self_play_games, mcts.search([spg.board for spg in self_play_games])):
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
 
-                move = sample_move(action_probabilities, spg.num_played_moves, self.args.self_play.temperature)
+                move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
                 spg.board.make_move(move)
                 spg.num_played_moves += 1
 
@@ -75,7 +73,7 @@ class SelfPlay:
         return self_play_dataset
 
     def _get_training_data(self, spg: SelfPlayGame) -> SelfPlayDataset:
-        self_play_dataset = SelfPlayDataset(self.model.device)
+        self_play_dataset = SelfPlayDataset()
 
         # 1 if current player won, -1 if current player lost, 0 if draw
         result = get_board_result_score(spg.board)

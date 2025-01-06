@@ -1,25 +1,25 @@
 import torch
 import numpy as np
 
-from src.settings import CurrentBoard, CurrentGame, TORCH_DTYPE
+from src.cluster.InferenceClient import InferenceClient
+from src.settings import CurrentBoard, CurrentGame
 from src.util import lerp
-from src.Network import Network, cached_network_inference
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.mcts.MCTSArgs import MCTSArgs
 
 
 class MCTS:
-    def __init__(self, model: Network, args: MCTSArgs) -> None:
-        self.model = model
+    def __init__(self, client: InferenceClient, args: MCTSArgs) -> None:
+        self.client = client
         self.args = args
 
     @torch.no_grad()
     def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
-        policy = self._get_policy_with_noise(boards)
+        policies = self._get_policy_with_noise(boards)
 
         nodes: list[MCTSNode] = []
-        for board, spg_policy in zip(boards, policy):
+        for board, spg_policy in zip(boards, policies):
             moves = filter_policy_then_get_moves_and_probabilities(spg_policy, board)
 
             root = MCTSNode.root(board)
@@ -36,34 +36,18 @@ class MCTS:
             if len(expandable_nodes) == 0:
                 continue
 
-            encoded_boards = [CurrentGame.get_canonical_board(node.board) for node in expandable_nodes]
-            policy, value = cached_network_inference(
-                self.model,
-                torch.tensor(
-                    np.array(encoded_boards),
-                    device=self.model.device,
-                    dtype=TORCH_DTYPE,
-                ),
-            )
+            policies, values = self.client.inference([node.board for node in expandable_nodes])
 
             for i, node in enumerate(expandable_nodes):
-                moves = filter_policy_then_get_moves_and_probabilities(policy[i], node.board)
+                moves = filter_policy_then_get_moves_and_probabilities(policies[i], node.board)
 
                 node.expand(moves)
-                node.back_propagate(value[i])
+                node.back_propagate(values[i])
 
         return [self._get_action_probabilities(root) for root in nodes]
 
     def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
-        encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
-        policy, _ = cached_network_inference(
-            self.model,
-            torch.tensor(
-                np.array(encoded_boards),
-                device=self.model.device,
-                dtype=TORCH_DTYPE,
-            ),
-        )
+        policy, _ = self.client.inference(boards)
 
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(

@@ -1,36 +1,21 @@
 import numpy as np
 import torch
 
-from src.util.compile import try_compile
+from src.cluster.InferenceServerProcess import start_inference_server
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from src.Network import Network, cached_network_inference
-from src.settings import USE_GPU, CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM, TORCH_DTYPE, TRAINING_ARGS
+from src.settings import CurrentBoard, CurrentGameMove, PLAY_C_PARAM
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, network_model_file_path: str | Network | None, max_time_to_think: float) -> None:
+    def __init__(self, iteration: int, max_time_to_think: float) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
-        if isinstance(network_model_file_path, Network):
-            self.model = network_model_file_path
-        else:
-            self.model = Network(
-                TRAINING_ARGS.network.num_layers,
-                TRAINING_ARGS.network.hidden_size,
-                device=torch.device('cuda' if USE_GPU else 'cpu'),
-            )
-            self.model = try_compile(self.model)
-            if network_model_file_path is not None:
-                # modify state_dict by removing _orig_mod. from all keys
-                original_state_dict = torch.load(network_model_file_path, map_location=self.model.device)
-                new_state_dict = {}
-                for key in original_state_dict.keys():
-                    new_state_dict[key.replace('_orig_mod.', '')] = original_state_dict[key]
 
-                self.model.load_state_dict(new_state_dict)
-        self.model.eval()
+        inference_client, stop_inference_server = start_inference_server(iteration)
+        self.inference_client = inference_client
+        self.stop_inference_server = stop_inference_server
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         root = MCTSNode.root(board)
@@ -75,14 +60,7 @@ class AlphaZeroBot(Bot):
 
     @torch.no_grad()
     def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
-        policy, value = cached_network_inference(
-            self.model,
-            torch.tensor(
-                np.array([CurrentGame.get_canonical_board(board)]),
-                device=self.model.device,
-                dtype=TORCH_DTYPE,
-            ),
-        )
+        policy, value = self.inference_client.inference([board])
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 

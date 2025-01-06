@@ -37,17 +37,16 @@ class SelfPlayParams:
     num_parallel_games: int
     """This is the number of games to run in parallel for self-play."""
 
-    num_games_per_iteration: int
-    """This is the number of self-play iterations to run per iteration. I.e. the number of games to play and collect data for to train with"""
+    mcts: MCTSParams
 
 
 @dataclass
 class ClusterParams:
-    num_train_nodes_on_cluster: int
-    """This is the number of separate nodes on the cluster to use to parallelize the training. None means to not use a cluster and train on the local machine"""
-
     num_self_play_nodes_on_cluster: int
-    """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with. None means to not use a cluster and train on the local machine"""
+    """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with."""
+
+    num_inference_nodes_on_cluster: int
+    """This is the number of separate nodes on the cluster to use to parallelize the inference. This should most likely be the number of GPUs-1 available on the cluster. One GPU is typically used for training and the rest for inference."""
 
 
 @dataclass
@@ -100,6 +99,12 @@ class EvaluationParams:
 
 
 @dataclass
+class InferenceParams:
+    batch_size: int
+    """This is the size of the batch to use for inference. The higher the batch size the faster the inference but the more memory is used. Typically 32-512 for inference"""
+
+
+@dataclass
 class TrainingArgs:
     save_path: str
     """This is the path to save the model, datasamples, training logs, etc. to after each iteration"""
@@ -107,9 +112,12 @@ class TrainingArgs:
     num_iterations: int
     """This is the number of iterations to run first self-play then train"""
 
-    mcts: MCTSParams
+    num_games_per_iteration: int
+    """This is the number of self-play games to run per iteration. I.e. the number of games to play and collect data for to train with"""
+
     network: NetworkParams
     self_play: SelfPlayParams
     training: TrainingParams
-    cluster: Optional[ClusterParams] = None
+    cluster: ClusterParams
+    inference: InferenceParams
     evaluation: Optional[EvaluationParams] = None

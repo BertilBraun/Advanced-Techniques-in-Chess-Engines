@@ -4,6 +4,7 @@ from tensorboardX import SummaryWriter
 from src.alpha_zero.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
+    InferenceParams,
     MCTSParams,
     NetworkParams,
     SelfPlayParams,
@@ -20,7 +21,6 @@ LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
-DEDUPLICATE_EACH_ITERATION = True  # Deduplicate the dataset after each iteration - increases loading time
 LOG_HISTOGRAMS = False  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
 PLAY_C_PARAM = 1.0
@@ -45,12 +45,12 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 5
-    return min(5 + (current_iteration - 5) // 6, 30)
+    return min(5 + (current_iteration - 5) // 6, 15)
 
 
 def learning_rate(current_iteration: int) -> float:
     base_lr = 0.025
-    lr_decay = 0.9
+    lr_decay = 0.95
     return base_lr * (lr_decay ** (current_iteration / 4))
 
 
@@ -103,27 +103,31 @@ if True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/connect4',
-        mcts=MCTSParams(
-            num_searches_per_turn=600,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 1.0,
-            c_param=4,
-        ),
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
+        inference=InferenceParams(
+            batch_size=512,
+        ),
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=PARALLEL_GAMES,
-            num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+            mcts=MCTSParams(
+                num_searches_per_turn=600,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 1.0,
+                c_param=4,
+            ),
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
-            num_train_nodes_on_cluster=NUM_TRAINERS,
+            # All available GPUs except the one used for training
+            num_inference_nodes_on_cluster=torch.cuda.device_count() - 1,
         ),
         training=TrainingParams(
-            num_epochs=2,
+            num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
@@ -136,27 +140,30 @@ if True:
         ),
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
-        mcts=MCTSParams(
-            num_searches_per_turn=100,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=lambda _: 0.3,
-            c_param=2,
-        ),
+        num_games_per_iteration=64,
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
+        inference=InferenceParams(
+            batch_size=64,
+        ),
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=64,
-            num_games_per_iteration=64 * 2,
+            mcts=MCTSParams(
+                num_searches_per_turn=100,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 0.3,
+                c_param=2,
+            ),
         ),
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=1,
-            num_train_nodes_on_cluster=0,
+            num_inference_nodes_on_cluster=1,
         ),
         training=TrainingParams(
             num_epochs=2,

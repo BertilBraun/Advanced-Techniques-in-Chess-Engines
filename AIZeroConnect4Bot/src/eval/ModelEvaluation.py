@@ -5,8 +5,8 @@ import numpy as np
 from typing import Callable
 from dataclasses import dataclass
 
-from src.Network import Network
 from src.alpha_zero.SelfPlay import sample_move
+from src.cluster.InferenceServerProcess import start_inference_server
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
@@ -47,7 +47,7 @@ EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
-    def play_vs_random(self, model: Network, num_games: int = 64, num_searches_per_turn: int = 20) -> Results:
+    def play_vs_random(self, iteration: int, num_games: int = 64, num_searches_per_turn: int = 20) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
         results = Results(0, 0, 0)
 
@@ -58,8 +58,10 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
+        current_model, stop_current_model = start_inference_server(iteration)
+
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            return MCTS(model, mcts_args).search(boards)
+            return MCTS(current_model, mcts_args).search(boards)
 
         def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
@@ -70,10 +72,16 @@ class ModelEvaluation:
         results += self._play_two_models_search(model1, model2, num_games // 2)
         results += -self._play_two_models_search(model2, model1, num_games // 2)
 
+        stop_current_model()
+
         return results
 
     def play_two_models_search(
-        self, current_model: Network, previous_model: Network, num_games: int = 64, num_searches_per_turn: int = 20
+        self,
+        current_model_iteration: int,
+        previous_model_iteration: int,
+        num_games: int = 64,
+        num_searches_per_turn: int = 20,
     ) -> Results:
         results = Results(0, 0, 0)
 
@@ -84,6 +92,9 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
+        current_model, stop_current_model = start_inference_server(current_model_iteration)
+        previous_model, stop_previous_model = start_inference_server(previous_model_iteration)
+
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return MCTS(current_model, mcts_args).search(boards)
 
@@ -92,6 +103,9 @@ class ModelEvaluation:
 
         results += self._play_two_models_search(model1, model2, num_games // 2)
         results += -self._play_two_models_search(model2, model1, num_games // 2)
+
+        stop_current_model()
+        stop_previous_model()
 
         return results
 

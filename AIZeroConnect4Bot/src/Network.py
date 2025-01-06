@@ -1,17 +1,9 @@
 import torch
-import numpy as np
 import torch.nn.functional as F
 
-from torch import nn, Tensor, softmax
+from torch import nn, Tensor
 
-from src.util.log import log, ratio
-from src.settings import CurrentGame, TORCH_DTYPE, log_histogram, log_scalar
-
-_NETWORK_ID = int  # type alias for network id
-_NN_CACHE: dict[_NETWORK_ID, dict[int, tuple[Tensor, Tensor]]] = {}
-
-_TOTAL_EVALS = 0
-_TOTAL_HITS = 0
+from src.settings import CurrentGame, TORCH_DTYPE
 
 
 class Network(nn.Module):
@@ -84,55 +76,3 @@ class ResBlock(nn.Module):
         x += residual
         x = F.relu(x)
         return x
-
-
-@torch.no_grad()
-def cached_network_forward(network: Network, x: Tensor) -> tuple[Tensor, Tensor]:
-    # Cache the results and deduplicate positions (only run calculation once and return the result in multiple places)
-    # use hash_board on each board state in x and check if it is in the cache or twice in x
-    current_network_cache = _NN_CACHE.setdefault(id(network), {})
-
-    hashes = CurrentGame.hash_boards(x)
-    to_process = []
-    to_process_hashes = []
-    for i, h in enumerate(hashes):
-        if h not in current_network_cache or h in hashes[:i]:
-            to_process.append(x[i])
-            to_process_hashes.append(h)
-
-    if to_process:
-        policy, value = network(torch.stack(to_process).to(network.device))
-        for hash, p, v in zip(to_process_hashes, policy, value):
-            # save a copy of the tensors to avoid memory leaks
-            current_network_cache[hash] = (p.clone(), v.clone())
-
-    global _TOTAL_EVALS, _TOTAL_HITS
-    _TOTAL_EVALS += len(x)
-    _TOTAL_HITS += len(x) - len(to_process)
-
-    policies = torch.stack([current_network_cache[hash][0] for hash in hashes])
-    values = torch.stack([current_network_cache[hash][1] for hash in hashes])
-    return policies, values
-
-
-def cached_network_inference(network: Network, x: Tensor) -> tuple[np.ndarray, np.ndarray]:
-    result: tuple[Tensor, Tensor] = cached_network_forward(network, x)
-    policy, value = result
-    policy = softmax(policy, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-    value = value.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
-
-    return policy, value
-
-
-def clear_model_inference_cache(iteration: int) -> None:
-    cache_size = sum(len(cache) for cache in _NN_CACHE.values())
-    if _TOTAL_EVALS != 0:
-        log_scalar('cache_hit_rate', _TOTAL_HITS / _TOTAL_EVALS, iteration)
-        log_scalar('unique_positions_in_cache', cache_size, iteration)
-        log_histogram(
-            'nn_output_value_distribution',
-            np.array([round(v.item(), 1) for network in _NN_CACHE.values() for _, v in network.values()]),
-            iteration,
-        )
-        log('Cache hit rate:', ratio(_TOTAL_HITS, _TOTAL_EVALS), 'on cache size', cache_size)
-    _NN_CACHE.clear()

@@ -7,7 +7,7 @@ from tqdm import tqdm
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.Network import Network
 from src.settings import TORCH_DTYPE, USE_GPU, log_scalar
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingArgs import TrainingParams
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
 
@@ -15,8 +15,10 @@ from src.util.log import log
 # DONE do so, save model after each epoch, use smaller num_parallel_games
 # DONE save deduplicated dataset for the previous iteration
 # DONE simply set num_epochs to 1 and increase the num_iterations, while decreasing how fast the window size grows but increasing the base and max window size
-# TODO game and inference nodes? So that 100% GPU is used on inference nodes and as many nodes as needed can supply the self-play nodes
-# TODO current MCTS -> BatchedMCTS and create new ClientServerMCTS - based on what protocol?
+# DONE game and inference nodes? So that 100% GPU is used on inference nodes and as many nodes as needed can supply the self-play nodes
+# DONE current MCTS -> BatchedMCTS and create new ClientServerMCTS - based on what protocol?
+# DONE make sure to instantly update the inference servers once a new model is available
+# DONE infrence server caching
 # DONE make sure, that each process logs their CPU and RAM usage and the root logs usage for all GPUs - Display all data and averages in visualization
 
 
@@ -24,7 +26,7 @@ from src.util.log import log
 # DONE [17.03.24] [INFO] Exception in Training: cannot pin 'torch.cuda.FloatTensor' only dense CPU tensors can be pinned
 
 # DONE /memory_19_deduplicated.pt (deflated 96%) Why is the memory able to be compressed so much? What about the memory is so compressible? Yeah.. just a lot of either 0 or 1 values.. Does it make sense to store it as a bit array?
-# TODO with the encoded boards, inter process comunication of the states should be way faster and more efficient
+# DONE with the encoded boards, inter process comunication of the states should be way faster and more efficient
 # DONE optimize encode and decode with numpy
 # DONE load and save via numpy not torch
 
@@ -38,7 +40,6 @@ from src.util.log import log
 # TODO parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
 
 # TODO Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
-# TODO server model as TensorRT
 
 
 class Trainer:
@@ -46,7 +47,7 @@ class Trainer:
         self,
         model: Network,
         optimizer: torch.optim.Optimizer,
-        args: TrainingArgs,
+        args: TrainingParams,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -59,11 +60,11 @@ class Trainer:
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
         train_dataset, validation_dataset = torch.utils.data.random_split(
-            dataset, [len(dataset) - self.args.training.batch_size, self.args.training.batch_size]
+            dataset, [len(dataset) - self.args.batch_size, self.args.batch_size]
         )
         train_dataloader = DataLoader(
             train_dataset,
-            batch_size=self.args.training.batch_size,
+            batch_size=self.args.batch_size,
             shuffle=True,
             drop_last=False,
             num_workers=8,
@@ -71,13 +72,13 @@ class Trainer:
         )
         validation_dataloader = DataLoader(
             validation_dataset,
-            batch_size=self.args.training.batch_size,
+            batch_size=self.args.batch_size,
             shuffle=True,
             drop_last=False,
         )
 
         train_stats = TrainingStats()
-        base_lr = self.args.training.learning_rate(iteration)
+        base_lr = self.args.learning_rate(iteration)
         log_scalar('learning_rate', base_lr, iteration)
 
         self.model.train()
@@ -109,7 +110,7 @@ class Trainer:
 
             # Update learning rate before stepping the optimizer
             batch_percentage = batchIdx / len(train_dataloader)
-            lr = self.args.training.learning_rate_scheduler(batch_percentage, base_lr)
+            lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
             log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
@@ -122,7 +123,7 @@ class Trainer:
             total_value_loss += value_loss
             total_loss += loss
 
-        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item())
+        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item(), len(train_dataloader))
 
         with torch.no_grad():
             validation_stats = TrainingStats()

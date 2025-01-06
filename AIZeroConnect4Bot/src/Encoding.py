@@ -18,10 +18,16 @@ def encode_board_state(state: np.ndarray) -> np.ndarray:
     [[1, 0],
      [0, 1]]
     The encoding would be:
-    >>> 1001
+    >>> 1001 = 9
+
+    For a state with multiple channels, the encoding is done for each channel separately.
+    [[[1, 0]],
+     [[0, 1]]]
+    The encoding would be:
+    >>> [10, 01] = [2, 1]
     """
     # Shape: (channels, height * width)
-    flattened = state.reshape(state.shape[0], -1).astype(np.uint64)
+    flattened = state[:-1].reshape(state.shape[0] - 1, -1).astype(np.uint64)
 
     # Perform vectorized dot product to encode each channel
     encoded = (flattened * _BIT_MASK).sum(axis=1)
@@ -31,7 +37,13 @@ def encode_board_state(state: np.ndarray) -> np.ndarray:
 
 def decode_board_state(state: np.ndarray) -> np.ndarray:
     # Convert to uint64 to prevent overflow
-    encoded_array = state.astype(np.uint64).reshape(-1, 1)  # shape: (channels, 1)
+    state = state.astype(np.uint64)
+
+    # Reconstruct last channel
+    last_channel = (~state.sum()) & ((1 << _N_BITS) - 1)
+    state = np.concatenate([state, last_channel], axis=0)
+
+    encoded_array = state.reshape(-1, 1)  # shape: (channels, 1)
 
     # Extract bits for each channel
     bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8).reshape(CurrentGame.representation_shape)
