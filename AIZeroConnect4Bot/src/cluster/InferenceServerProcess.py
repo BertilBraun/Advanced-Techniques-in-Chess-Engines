@@ -122,7 +122,8 @@ class InferenceServer:
 
     def _clear_cache(self, iteration: int) -> None:
         if self.total_evals != 0:
-            log_scalar('cache_hit_rate', self.total_hits / self.total_evals, iteration)
+            cache_hit_rate = (self.total_hits / self.total_evals) * 100
+            log_scalar('cache_hit_rate', cache_hit_rate, iteration)
             log_scalar('unique_positions_in_cache', len(self.cache), iteration)
             log_histogram(
                 'nn_output_value_distribution',
@@ -130,7 +131,7 @@ class InferenceServer:
                 iteration,
             )
 
-            log(f'Cache hit rate: {self.total_hits / self.total_evals} on cache size {len(self.cache)}')
+            log(f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.cache)}')
         self.cache.clear()
 
     def _prepare_model_for_inference(self, model: Network) -> Network:

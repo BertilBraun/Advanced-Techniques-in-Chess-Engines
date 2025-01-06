@@ -71,6 +71,6 @@ def save_model_and_optimizer(model: Network, optimizer: torch.optim.Optimizer, i
 
 
 def get_latest_model_iteration(max_iteration: int = TRAINING_ARGS.num_iterations) -> int:
-    while max_iteration >= 0 and not model_save_path(max_iteration - 1).exists():
+    while max_iteration >= 0 and not model_save_path(max_iteration).exists():
         max_iteration -= 1
     return max(max_iteration, 0)

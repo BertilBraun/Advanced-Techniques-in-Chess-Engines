@@ -1,36 +1,39 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class TrainingStats:
-    _policy_loss: list[float] = field(default_factory=list)
-    _value_loss: list[float] = field(default_factory=list)
-    _total_loss: list[float] = field(default_factory=list)
+    _policy_loss: float = 0.0
+    _value_loss: float = 0.0
+    _total_loss: float = 0.0
+    _num_batches: int = 0
 
     @property
     def policy_loss(self) -> float:
-        return sum(self._policy_loss) / len(self._policy_loss)
+        return self._policy_loss / self._num_batches
 
     @property
     def value_loss(self) -> float:
-        return sum(self._value_loss) / len(self._value_loss)
+        return self._value_loss / self._num_batches
 
     @property
     def total_loss(self) -> float:
-        return sum(self._total_loss) / len(self._total_loss)
+        return self._total_loss / self._num_batches
 
     def update(self, policy_loss: float, value_loss: float, total_loss: float, num_batches: int = 1) -> None:
-        self._policy_loss.extend([policy_loss] * num_batches)
-        self._value_loss.extend([value_loss] * num_batches)
-        self._total_loss.extend([total_loss] * num_batches)
+        self._policy_loss += policy_loss
+        self._value_loss += value_loss
+        self._total_loss += total_loss
+        self._num_batches += num_batches
 
     def __add__(self, other: TrainingStats) -> TrainingStats:
         return TrainingStats(
             self._policy_loss + other._policy_loss,
             self._value_loss + other._value_loss,
             self._total_loss + other._total_loss,
+            self._num_batches + other._num_batches,
         )
 
     def __repr__(self) -> str:
