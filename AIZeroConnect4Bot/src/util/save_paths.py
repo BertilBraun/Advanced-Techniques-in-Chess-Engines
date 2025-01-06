@@ -35,7 +35,7 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
         return model
     except FileNotFoundError:
         log(f'No model found for: {path}')
-        raise
+        return create_model(args, device)
 
 
 def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimizer:
@@ -51,7 +51,7 @@ def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimize
 def load_model_and_optimizer(
     iteration: int, args: NetworkParams, device: torch.device
 ) -> tuple[Network, torch.optim.Optimizer]:
-    if iteration == 0:
+    if iteration <= 0:
         model = create_model(args, device)
         optimizer = create_optimizer(model)
     else:
@@ -71,6 +71,6 @@ def save_model_and_optimizer(model: Network, optimizer: torch.optim.Optimizer, i
 
 
 def get_latest_model_iteration(max_iteration: int = TRAINING_ARGS.num_iterations) -> int:
-    while max_iteration != 0 and not model_save_path(max_iteration - 1).exists():
+    while max_iteration >= 0 and not model_save_path(max_iteration - 1).exists():
         max_iteration -= 1
-    return max_iteration
+    return max(max_iteration, 0)

@@ -69,7 +69,7 @@ class CommanderProcess:
 
         self.commander_inference_server_pipes: list[PipeConnection] = []
         for device_id in range(self.num_inference_nodes):
-            commander_inference_server_pipe, inference_server_commander_pipe = Pipe(duplex=False)
+            inference_server_commander_pipe, commander_inference_server_pipe = Pipe(duplex=False)
             self.commander_inference_server_pipes.append(commander_inference_server_pipe)
 
             p = Process(
@@ -98,9 +98,12 @@ class CommanderProcess:
     def run(self):
         Path(TRAINING_ARGS.save_path).mkdir(parents=True, exist_ok=True)
 
+        log('Setting up connections...')
         self._setup_connections()
+        log('Connections set up.')
 
         starting_iteration = get_latest_model_iteration()
+        log(f'Starting training at iteration {starting_iteration}.')
 
         for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
             # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
@@ -108,9 +111,11 @@ class CommanderProcess:
                 self.commander_inference_server_pipes + self.commander_self_play_pipes + [self.commander_trainer_pipe]
             ):
                 pipe.send(f'START AT ITERATION: {iteration}')
+            log(f'All processes started at iteration {iteration}.')
 
             # Wait for Trainer to finish
             assert self.commander_trainer_pipe.recv() == 'FINISHED'
+            log(f'Trainer finished at iteration {iteration}.')
 
             # start EvaluationProcess
             p = Process(target=run_evaluation_process, args=(iteration,))

@@ -44,7 +44,7 @@ class TrainerProcess:
         log('Training process stopped.')
 
     def train(self, iteration: int) -> None:
-        model, optimizer = load_model_and_optimizer(iteration - 1, self.args.network, self.device)
+        model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device)
 
         trainer = Trainer(model, optimizer, self.args.training)
 
@@ -60,7 +60,7 @@ class TrainerProcess:
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
 
-        save_model_and_optimizer(model, optimizer, iteration)
+        save_model_and_optimizer(model, optimizer, iteration + 1)
 
         log(f'Iteration {iteration + 1}: {train_stats}')
         self._log_to_tensorboard(iteration, train_stats, dataset)

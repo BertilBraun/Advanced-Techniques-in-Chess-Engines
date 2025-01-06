@@ -21,7 +21,7 @@ def run_inference_server(
     timeout: float = 0.05,
 ):
     assert inference_input_pipe.readable and inference_input_pipe.writable, 'Input pipe must be readable and writable'
-    assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable'
+    assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable'
     assert TRAINING_ARGS.inference.batch_size > 0, 'Batch size must be greater than 0'
     assert timeout >= 0, 'Timeout must be non-negative'
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, 'Invalid device ID'
@@ -67,7 +67,7 @@ class InferenceServer:
 
     def run(self):
         num_non_cached_requests = 0
-        batch_requests: list[tuple[bytes, np.ndarray | None]] = []
+        batch_requests: list[list[tuple[bytes, np.ndarray | None]]] = []
         time_last_batch = time.time()
 
         self.model = create_model(TRAINING_ARGS.network, self.device)
@@ -80,6 +80,7 @@ class InferenceServer:
                 assert isinstance(message, np.ndarray), f'Expected message to be a numpy array, got {message}'
                 encoded_boards = message  # Expecting numpy array
 
+                request_batch: list[tuple[bytes, np.ndarray | None]] = []
                 hashes = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
                 for i, (board_hash, encoded_board) in enumerate(zip(hashes, encoded_boards)):
                     if board_hash not in self.cache and board_hash not in hashes[:i]:
@@ -87,7 +88,9 @@ class InferenceServer:
                         decoded_board = decode_board_state(encoded_board)
                     else:
                         decoded_board = None
-                    batch_requests.append((board_hash, decoded_board))
+                    request_batch.append((board_hash, decoded_board))
+
+                batch_requests.append(request_batch)
 
                 time_last_batch = time.time()
 
@@ -136,29 +139,35 @@ class InferenceServer:
         return model
 
     @torch.no_grad()
-    def _process_batch(self, batch_requests: list[tuple[bytes, np.ndarray | None]]) -> None:
+    def _process_batch(self, batch_requests: list[list[tuple[bytes, np.ndarray | None]]]) -> None:
         to_process: list[np.ndarray] = []
         to_process_hashes: list[bytes] = []
-        for hash, board in batch_requests:
-            if board is not None:
-                to_process.append(board)
-                to_process_hashes.append(hash)
+        for request_batch in batch_requests:
+            for hash, board in request_batch:
+                if board is not None:
+                    to_process.append(board)
+                    to_process_hashes.append(hash)
 
-        assert len(to_process) >= TRAINING_ARGS.inference.batch_size, 'Batch size not met'
+        if to_process:
+            input_tensor = torch.tensor(np.array(to_process), dtype=TORCH_DTYPE).to(self.model.device)
 
-        input_tensor = torch.tensor(np.array(to_process), dtype=TORCH_DTYPE).to(self.model.device)
+            policies, values = self.model(input_tensor)
 
-        policies, values = self.model(input_tensor)
+            policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
+            values = values.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
 
-        policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-        values = values.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
-
-        for hash, p, v in zip(to_process_hashes, policies, values):
-            self.cache[hash] = (p.copy(), v.copy())
+            for hash, p, v in zip(to_process_hashes, policies, values):
+                self.cache[hash] = (p.copy(), v.copy())
 
         self.total_evals += len(batch_requests)
         self.total_hits += len(batch_requests) - len(to_process)
 
-        for hash, _ in batch_requests:
-            policy, value = self.cache[hash]
-            self.inference_input_pipe.send((policy, value))
+        for request_batch in batch_requests:
+            batch_policies: list[np.ndarray] = []
+            batch_values: list[np.ndarray] = []
+            for hash, _ in request_batch:
+                policy, value = self.cache[hash]
+                batch_policies.append(policy)
+                batch_values.append(value)
+
+            self.inference_input_pipe.send((np.array(batch_policies), np.array(batch_values)))

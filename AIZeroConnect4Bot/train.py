@@ -3,6 +3,7 @@ import src.environ_setup  # noqa # isort:skip # This import is necessary for set
 from src.cluster.CommanderProcess import CommanderProcess
 from src.util.log import log
 from src.settings import TRAINING_ARGS, USE_GPU
+from src.util.profiler import start_usage_logger
 
 
 if __name__ == '__main__':
@@ -10,6 +11,8 @@ if __name__ == '__main__':
     log('Training on:', 'GPU' if USE_GPU else 'CPU')
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
+
+    start_usage_logger()
 
     commander = CommanderProcess(
         num_self_play_nodes=TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster,

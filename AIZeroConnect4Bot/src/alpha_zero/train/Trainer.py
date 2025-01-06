@@ -41,6 +41,12 @@ from src.util.log import log
 
 # TODO Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
 
+# TODO remove or increase number of load balancers if that is a bottleneck
+# TODO batched write back from inference server
+# TODO read and write with bytes instead of numpy arrays
+# TODO profile
+# DONE system usage logger
+
 
 class Trainer:
     def __init__(

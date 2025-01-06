@@ -11,11 +11,9 @@ class InferenceClient:
 
     def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
+
         self.server_conn.send(np.array(encoded_boards))
 
-        policy, value = np.zeros((len(boards), CurrentGame.action_size)), np.zeros(len(boards))
-
-        for i in range(len(boards)):
-            policy[i], value[i] = self.server_conn.recv()
+        policy, value = self.server_conn.recv()
 
         return policy, value

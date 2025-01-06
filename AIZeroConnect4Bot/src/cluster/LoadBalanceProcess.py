@@ -26,7 +26,7 @@ class LoadBalancerProcess:
     def run(self):
         while True:
             for pipe in self.input_pipes:
-                while pipe.poll():  # TODO does this block?
+                while pipe.poll():
                     message = pipe.recv()
                     self.load_balancer.send_request(message, pipe)
 

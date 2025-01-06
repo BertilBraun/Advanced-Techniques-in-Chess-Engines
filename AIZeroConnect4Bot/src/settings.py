@@ -143,17 +143,17 @@ if True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
-        num_games_per_iteration=64,
+        num_games_per_iteration=32,
         network=NetworkParams(
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=64,
+            batch_size=8,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=64,
+            num_parallel_games=32,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
                 dirichlet_epsilon=0.25,
@@ -162,12 +162,12 @@ if True:
             ),
         ),
         cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=1,
-            num_inference_nodes_on_cluster=1,
+            num_self_play_nodes_on_cluster=2,
+            num_inference_nodes_on_cluster=2,
         ),
         training=TrainingParams(
             num_epochs=2,
-            batch_size=16,
+            batch_size=32,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,

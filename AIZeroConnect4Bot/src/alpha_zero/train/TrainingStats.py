@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class TrainingStats:
-    _policy_loss: list[float] = []
-    _value_loss: list[float] = []
-    _total_loss: list[float] = []
+    _policy_loss: list[float] = field(default_factory=list)
+    _value_loss: list[float] = field(default_factory=list)
+    _total_loss: list[float] = field(default_factory=list)
 
     @property
     def policy_loss(self) -> float:
