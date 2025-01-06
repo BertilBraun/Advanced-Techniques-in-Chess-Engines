@@ -11,9 +11,13 @@ class InferenceClient:
 
     def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
+        encoded_bytes = np.array(encoded_boards).tobytes()
 
-        self.server_conn.send(np.array(encoded_boards))
+        self.server_conn.send_bytes(encoded_bytes)
 
-        policy, value = self.server_conn.recv()
+        result = self.server_conn.recv_bytes()
+
+        result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
+        policy, value = result[:, :-1], result[:, -1]
 
         return policy, value

@@ -96,13 +96,13 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
     :return: The filtered policy.
     """
     legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
-    policy *= legal_moves_encoded
-    policy_sum = np.sum(policy)
+    filtered_policy = policy * legal_moves_encoded
+    policy_sum = np.sum(filtered_policy)
     if policy_sum == 0:
-        policy = legal_moves_encoded / np.sum(legal_moves_encoded)
+        filtered_policy = legal_moves_encoded / np.sum(legal_moves_encoded)
     else:
-        policy /= policy_sum
-    return policy
+        filtered_policy /= policy_sum
+    return filtered_policy
 
 
 def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CurrentGameMove, float]]:

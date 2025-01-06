@@ -1,14 +1,14 @@
-from multiprocessing import Process
 import time
-from typing import Callable
 import torch
 import numpy as np
+from typing import Callable
+from multiprocessing import Process
 from multiprocessing.connection import Pipe, PipeConnection
 
 from src.Encoding import decode_board_state
 from src.Network import Network
 from src.cluster.InferenceClient import InferenceClient
-from src.settings import TORCH_DTYPE, TRAINING_ARGS, USE_GPU, log_histogram, log_scalar
+from src.settings import TORCH_DTYPE, TRAINING_ARGS, USE_GPU, log_histogram, log_scalar, CurrentGame
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.save_paths import create_model, load_model, model_save_path
@@ -76,9 +76,9 @@ class InferenceServer:
         while True:
             # Check for new requests with a timeout
             if self.inference_input_pipe.poll(self.timeout):
-                message = self.inference_input_pipe.recv()
-                assert isinstance(message, np.ndarray), f'Expected message to be a numpy array, got {message}'
-                encoded_boards = message  # Expecting numpy array
+                message = self.inference_input_pipe.recv_bytes()
+                channels = CurrentGame.representation_shape[0]
+                encoded_boards = np.frombuffer(message, dtype=np.uint64).reshape(-1, channels)
 
                 request_batch: list[tuple[bytes, np.ndarray | None]] = []
                 hashes = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
@@ -159,15 +159,15 @@ class InferenceServer:
             for hash, p, v in zip(to_process_hashes, policies, values):
                 self.cache[hash] = (p.copy(), v.copy())
 
-        self.total_evals += len(batch_requests)
-        self.total_hits += len(batch_requests) - len(to_process)
+        total_samples_evaluated = sum(len(batch) for batch in batch_requests)
+        self.total_evals += total_samples_evaluated
+        self.total_hits += total_samples_evaluated - len(to_process)
 
         for request_batch in batch_requests:
-            batch_policies: list[np.ndarray] = []
-            batch_values: list[np.ndarray] = []
+            batch_results: list[np.ndarray] = []
+
             for hash, _ in request_batch:
                 policy, value = self.cache[hash]
-                batch_policies.append(policy)
-                batch_values.append(value)
+                batch_results.append(np.concatenate((policy, [value])))
 
-            self.inference_input_pipe.send((np.array(batch_policies), np.array(batch_values)))
+            self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())

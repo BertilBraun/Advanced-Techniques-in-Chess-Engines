@@ -22,9 +22,9 @@ class TrainingStats:
         return sum(self._total_loss) / len(self._total_loss)
 
     def update(self, policy_loss: float, value_loss: float, total_loss: float, num_batches: int = 1) -> None:
-        self._policy_loss.append(policy_loss)
-        self._value_loss.append(value_loss)
-        self._total_loss.append(total_loss)
+        self._policy_loss.extend([policy_loss] * num_batches)
+        self._value_loss.extend([value_loss] * num_batches)
+        self._total_loss.extend([total_loss] * num_batches)
 
     def __add__(self, other: TrainingStats) -> TrainingStats:
         return TrainingStats(

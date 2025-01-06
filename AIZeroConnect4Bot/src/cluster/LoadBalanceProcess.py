@@ -27,10 +27,10 @@ class LoadBalancerProcess:
         while True:
             for pipe in self.input_pipes:
                 while pipe.poll():
-                    message = pipe.recv()
+                    message = pipe.recv_bytes()
                     self.load_balancer.send_request(message, pipe)
 
             for response, pipe in self.load_balancer.recieve_responses():
-                pipe.send(response)
+                pipe.send_bytes(response)
 
             time.sleep(0.001)

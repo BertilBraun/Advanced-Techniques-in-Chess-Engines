@@ -118,7 +118,13 @@ class CommanderProcess:
             log(f'Trainer finished at iteration {iteration}.')
 
             # start EvaluationProcess
-            p = Process(target=run_evaluation_process, args=(iteration,))
+            p = Process(
+                target=run_evaluation_process,
+                args=(
+                    0,  # let the evaluation process run on the trainer device
+                    iteration,
+                ),
+            )
             p.start()
 
         log('Training complete. Sending STOP to all processes.')

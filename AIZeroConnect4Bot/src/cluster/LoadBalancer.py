@@ -1,5 +1,4 @@
 from typing import Generator
-from numpy import ndarray
 from multiprocessing.connection import PipeConnection
 
 
@@ -14,7 +13,7 @@ class LoadBalancer:
         """Finds the server with the least number of pending requests."""
         return self.server_loads.index(min(self.server_loads))
 
-    def send_request(self, encoded_boards: ndarray, client_conn: PipeConnection) -> None:
+    def send_request(self, message: bytes, client_conn: PipeConnection) -> None:
         """
         Sends an inference request to the least loaded server and maps the client connection.
 
@@ -23,11 +22,11 @@ class LoadBalancer:
             client_conn (PipeConnection): The Pipe connection to the client.
         """
         server_idx = self.get_least_loaded_server()
-        self.inference_servers[server_idx].send(encoded_boards)
+        self.inference_servers[server_idx].send_bytes(message)
         self.server_loads[server_idx] += 1
         self.server_to_clients[server_idx].append(client_conn)
 
-    def recieve_responses(self) -> Generator[tuple[tuple[ndarray, float], PipeConnection], None, None]:
+    def recieve_responses(self) -> Generator[tuple[bytes, PipeConnection], None, None]:
         """
         Generator that yields responses from servers and retrieves the corresponding client connections.
 
@@ -36,9 +35,7 @@ class LoadBalancer:
         """
         for server_idx, server_conn in enumerate(self.inference_servers):
             while server_conn.poll():
-                response = server_conn.recv()
+                response = server_conn.recv_bytes()
                 self.server_loads[server_idx] -= 1
-
                 client_conn = self.server_to_clients[server_idx].pop(0)
-
                 yield response, client_conn
