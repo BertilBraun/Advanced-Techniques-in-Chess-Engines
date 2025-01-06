@@ -41,7 +41,7 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
 def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimizer:
     try:
         optimizer = create_optimizer(model)
-        optimizer.load_state_dict(torch.load(path, map_location=model.device))
+        optimizer.load_state_dict(torch.load(path, map_location=model.device, weights_only=True))
         return optimizer
     except FileNotFoundError:
         log(f'No optimizer found for: {path}')
