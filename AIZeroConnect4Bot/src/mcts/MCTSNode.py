@@ -67,7 +67,7 @@ class MCTSNode:
         ]
 
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
-        self.children_number_of_visits = np.zeros(len(self.children), dtype=np.uint16)
+        self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
