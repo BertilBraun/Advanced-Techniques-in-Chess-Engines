@@ -34,7 +34,7 @@ def run_inference_server(
 
 def start_inference_server(iteration: int) -> tuple[InferenceClient, Callable[[], None]]:
     inference_server_pipe, inference_client_pipe = Pipe()
-    commander_pipe, commander_pipe_child = Pipe()
+    commander_pipe, commander_pipe_child = Pipe(duplex=False)
 
     inference_server = Process(target=run_inference_server, args=(inference_server_pipe, commander_pipe, iteration))
     inference_server.start()
@@ -193,4 +193,5 @@ class InferenceServer:
                 batch_results.append(np.concatenate((policy, [value])))
 
             log(f'Sending {len(batch_results)} results to client')
+            self.inference_input_pipe.send_bytes(b'Hello World' * 10000)
             self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())
