@@ -39,13 +39,11 @@ class MCTS:
             root.expand(moves)
             nodes.append(root)
 
-        async def run_searcher(root: MCTSNode, searches: int) -> None:
-            for _ in range(searches):
-                await self.iterate(root)
-
         for root in nodes:
             for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-                await asyncio.gather(*[self.iterate(root) for _ in range(self.args.num_parallel_searches)])
+                for _ in range(self.args.num_parallel_searches):
+                    await self.iterate(root)
+                # await asyncio.gather(*[self.iterate(root) for _ in range(self.args.num_parallel_searches)])
 
         return [self._get_action_probabilities(root) for root in nodes]
 
