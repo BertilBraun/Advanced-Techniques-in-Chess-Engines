@@ -192,4 +192,5 @@ class InferenceServer:
                 policy, value = self.cache[hash]
                 batch_results.append(np.concatenate((policy, [value])))
 
+            log(f'Sending {len(batch_results)} results to client')
             self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())
