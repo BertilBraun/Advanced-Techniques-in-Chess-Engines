@@ -1,8 +1,8 @@
 import time
-from torch.multiprocessing.connection import PipeConnection
 
 from src.cluster.LoadBalancer import LoadBalancer
 from src.util.exceptions import log_exceptions
+from src.util.PipeConnection import PipeConnection
 
 
 def run_load_balancer_process(
