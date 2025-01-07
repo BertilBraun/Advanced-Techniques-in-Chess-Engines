@@ -93,7 +93,7 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 50  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 5  # TODO 50 # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
