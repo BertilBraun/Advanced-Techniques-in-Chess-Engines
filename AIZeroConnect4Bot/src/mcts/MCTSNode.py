@@ -73,6 +73,7 @@ class MCTSNode:
 
     def update_virtual_losses(self, delta: int) -> None:
         self.virtual_losses += delta
+        self.number_of_visits += delta
         if self.parent:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += delta
