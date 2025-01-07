@@ -93,7 +93,7 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 50  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 2  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -109,7 +109,7 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=64,  # TODO increase a lot
+            batch_size=4,  # TODO increase a lot
         ),
         self_play=SelfPlayParams(
             temperature=1.25,

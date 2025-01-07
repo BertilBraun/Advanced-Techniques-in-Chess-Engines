@@ -29,8 +29,9 @@ print('Running inference')
 
 async def main():
     print('Inference result:')
-    res = await client.inference([CurrentBoard()])
-    print(res)
+    for _ in range(100):
+        res = await client.inference([CurrentBoard()])
+        print(res)
     print('Inference done')
 
 
