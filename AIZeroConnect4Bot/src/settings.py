@@ -125,7 +125,7 @@ if True:
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
             # All available GPUs except the one used for training
-            num_inference_nodes_on_cluster=torch.cuda.device_count() - 1,
+            num_inference_nodes_on_cluster=1,  # TODO torch.cuda.device_count() - 1,
         ),
         training=TrainingParams(
             num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
