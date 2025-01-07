@@ -10,7 +10,7 @@ from src.settings import CurrentBoard
 
 
 pipe1, pipe2 = multiprocessing.Pipe()
-comm1, comm2 = multiprocessing.Pipe()
+comm1, comm2 = multiprocessing.Pipe(duplex=False)
 
 print('Starting inference server')
 p1 = multiprocessing.Process(target=run_inference_server, args=(pipe1, comm1, 0))
