@@ -49,7 +49,7 @@ class MCTSNode:
 
         if self.number_of_visits > 0:
             # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
-            q_score = 1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
+            q_score = self._q_score()
         else:
             q_score = 0
 
@@ -71,16 +71,23 @@ class MCTSNode:
         self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
 
+    def update_virtual_losses(self, delta: int) -> None:
+        self.virtual_losses += delta
+        if self.parent:
+            child_index = self.parent.children.index(self)
+            self.parent.children_number_of_visits[child_index] += delta
+            self.children_q_scores[child_index] = self._q_score()
+
+    def _q_score(self) -> float:
+        return 1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
+
     def back_propagate(self, result: float) -> None:
         self.number_of_visits += 1
         self.result_score += result
         if self.parent:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += 1
-            # q score with virtual loss is calculated
-            self.parent.children_q_scores[child_index] = (
-                1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
-            )
+            self.parent.children_q_scores[child_index] = self._q_score()
             self.parent.back_propagate(-result)
 
     def best_child(self, c_param: float) -> MCTSNode:

@@ -18,7 +18,7 @@ class MCTS:
         if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param)):
             return
 
-        node.virtual_losses += 1
+        node.update_virtual_losses(1)
 
         policies, values = await self.client.inference([node.board])
 
@@ -26,7 +26,7 @@ class MCTS:
         node.expand(moves)
         node.back_propagate(values[0])
 
-        node.virtual_losses -= 1
+        node.update_virtual_losses(-1)
 
     async def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
         policies = await self._get_policy_with_noise(boards)

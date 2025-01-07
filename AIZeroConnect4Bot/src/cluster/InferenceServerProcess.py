@@ -74,7 +74,8 @@ class InferenceServer:
         while True:
             if self.inference_input_pipe.poll(self.timeout) and self.model is not None:
                 batch_requests = self._get_batch_requests()
-                self._process_batch(batch_requests)
+                if batch_requests:
+                    self._process_batch(batch_requests)
 
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
