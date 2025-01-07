@@ -3,7 +3,6 @@ import time
 from src.cluster.LoadBalancer import LoadBalancer
 from src.util.exceptions import log_exceptions
 from src.util.PipeConnection import PipeConnection
-from src.util.log import log
 
 
 def run_load_balancer_process(
@@ -29,11 +28,9 @@ class LoadBalancerProcess:
             for pipe in self.input_pipes:
                 while pipe.poll():
                     message = pipe.recv_bytes()
-                    log(f'Load balancer received message: {len(message)} bytes')
                     self.load_balancer.send_request(message, pipe)
 
             for response, pipe in self.load_balancer.recieve_responses():
-                log(f'Load balancer sending response: {len(response)} bytes')
                 pipe.send_bytes(response)
 
-            time.sleep(0.00001)
+            time.sleep(0.000005)
