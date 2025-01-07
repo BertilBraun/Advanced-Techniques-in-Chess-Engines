@@ -101,6 +101,11 @@ class InferenceServer:
             if self.inference_input_pipe.poll(self.timeout):
                 request_batch, batch_new_hashes = self._get_batch_request(all_hashes)
 
+                log(f'Got {len(request_batch)} new requests')
+                log(request_batch)
+                log(f'Got {len(batch_new_hashes)} new hashes')
+                log(batch_new_hashes)
+
                 if len(batch_new_hashes) == 0:
                     log('No new hashes, sending responses from cache...')
                     self._send_response_from_cache(request_batch)
