@@ -9,6 +9,8 @@ from src.util.log import log
 inference_calls = -50
 inference_time = 0
 
+_INFERENCE_RESPONSES: dict[bytes, bytes | None] = {}
+
 
 class InferenceClient:
     def __init__(self, server_conn: PipeConnection):
@@ -25,17 +27,26 @@ class InferenceClient:
 
         self.server_conn.send_bytes(encoded_bytes)
 
-        await asyncio.sleep(0.005)  # About the min time it takes the inference server to process a request
-        while not self.server_conn.poll():
-            await asyncio.sleep(0.00001)
-        # TODO if that is done async, then the recieved bytes could be from a different send request. Somehow they will have to be matched back up
+        _INFERENCE_RESPONSES[encoded_bytes] = None
 
-        result = self.server_conn.recv_bytes()
+        # TODO if that is done async, then the recieved bytes could be from a different send request in another iteration of the inference loop. Somehow they will have to be matched back up
+
+        await asyncio.sleep(0.001)  # About the min time it takes the inference server to process a request
+        while not _INFERENCE_RESPONSES[encoded_bytes]:
+            if self.server_conn.poll():
+                hashes_and_results = self.server_conn.recv_bytes()
+                hashes, results = hashes_and_results.split(b'\n\n\n')
+                _INFERENCE_RESPONSES[hashes] = results
+            else:
+                await asyncio.sleep(0.00001)
+
+        result = _INFERENCE_RESPONSES[encoded_bytes]
+        assert result is not None, 'Result should not be None'
 
         inference_time += time.time() - start
 
-        if inference_calls % 100 == 1:
-            log(f'Average inference request time: {inference_time / inference_calls:.2f}s')
+        if inference_calls % 10000 == 1:
+            pass  # log(f'Average inference request time: {inference_time / inference_calls:.2f}s')
         if inference_calls == 0:
             inference_time = 0
 

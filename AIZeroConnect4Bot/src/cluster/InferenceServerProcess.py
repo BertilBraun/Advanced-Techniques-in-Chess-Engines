@@ -111,10 +111,13 @@ class InferenceServer:
                 all_hashes.update(batch_new_hashes)
 
                 if len(all_hashes) >= TRAINING_ARGS.inference.batch_size:
-                    log('Batch full, processing...')
+                    pass  # log('Batch full, processing...')
                     break
         else:
-            log(f'Batch timeout, processing {len(all_hashes)} inferences from {len(batch_requests)} total requests...')
+            if len(batch_requests):
+                pass  # log(
+                pass  #     f'Batch timeout, processing {len(all_hashes)} inferences from {len(batch_requests)} total requests...'
+                pass  # )
 
         return batch_requests
 
@@ -183,9 +186,12 @@ class InferenceServer:
             policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
             values = values.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
 
-            inference_calc_time += time.time() - start
+            inf_calc_time = time.time() - start
+            inference_calc_time += inf_calc_time
 
-            log(f'Average inference calc time: {inference_calc_time / inference_requests:.2f}s')
+            pass  # log(
+            pass  #     f'Average inference calc time: {inf_calc_time} on average: {inference_calc_time / inference_requests:.2f}s'
+            pass  # )
 
             for hash, p, v in zip(to_process_hashes, policies, values):
                 self.cache[hash] = (p.copy(), v.copy())
@@ -204,4 +210,8 @@ class InferenceServer:
             policy, value = self.cache[hash]
             batch_results.append(np.concatenate((policy, [value])))
 
-        self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())
+        # Send back the hash as well as the result concatenated
+        result = np.array(batch_results).tobytes()
+        hashes = b''.join(hash for hash, _ in request_batch)
+        data = hashes + b'\n\n\n' + result
+        self.inference_input_pipe.send_bytes(data)
