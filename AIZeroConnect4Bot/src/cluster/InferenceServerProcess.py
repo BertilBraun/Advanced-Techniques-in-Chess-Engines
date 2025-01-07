@@ -64,7 +64,7 @@ class InferenceServer:
         self.commander_pipe = commander_pipe
         self.timeout = timeout
 
-        self.model: Network
+        self.model: Network = None  # type: ignore
         self.device = torch.device(f'cuda:{device_id}') if USE_GPU else torch.device('cpu')
 
         self.cache: dict[bytes, tuple[np.ndarray, np.ndarray]] = {}
@@ -73,7 +73,7 @@ class InferenceServer:
 
     def run(self):
         while True:
-            if self.inference_input_pipe.poll(self.timeout):
+            if self.inference_input_pipe.poll(self.timeout) and self.model is not None:
                 batch_requests = self._get_batch_requests()
                 self._process_batch(batch_requests)
 
