@@ -73,8 +73,9 @@ class InferenceServer:
 
     def run(self):
         while True:
-            batch_requests = self._get_batch_requests()
-            self._process_batch(batch_requests)
+            if self.inference_input_pipe.poll(self.timeout):
+                batch_requests = self._get_batch_requests()
+                self._process_batch(batch_requests)
 
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
