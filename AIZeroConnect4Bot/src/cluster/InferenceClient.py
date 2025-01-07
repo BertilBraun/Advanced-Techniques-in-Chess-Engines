@@ -3,6 +3,7 @@ import numpy as np
 from src.settings import CurrentBoard, CurrentGame
 from src.Encoding import encode_board_state
 from src.util.PipeConnection import PipeConnection
+from src.util.log import log
 
 inference_calls = 0
 inference_time = 0
@@ -27,8 +28,7 @@ class InferenceClient:
 
         inference_time += time.time() - start
 
-        if inference_calls % 100 == 0:
-            print(f'Average inference request time: {inference_time / inference_calls:.2f}s')
+        log(f'Average inference request time: {inference_time / inference_calls:.2f}s')
 
         result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
         policy, value = result[:, :-1], result[:, -1]

@@ -167,8 +167,7 @@ class InferenceServer:
 
             inference_calc_time += time.time() - start
 
-            if inference_requests % 100 == 0:
-                print(f'Average inference calc time: {inference_calc_time / inference_requests:.2f}s')
+            log(f'Average inference calc time: {inference_calc_time / inference_requests:.2f}s')
 
             for hash, p, v in zip(to_process_hashes, policies, values):
                 self.cache[hash] = (p.copy(), v.copy())
