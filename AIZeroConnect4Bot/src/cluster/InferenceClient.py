@@ -13,7 +13,7 @@ inference_time = 0
 class InferenceClient:
     def __init__(self, server_conn: PipeConnection):
         assert server_conn.readable and server_conn.writable, 'PipeConnection must be readable and writable'
-        self.server_conn = asyncio_pipe.Connection(server_conn)
+        self.server_conn = server_conn  # asyncio_pipe.Connection(server_conn)
 
     async def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
@@ -25,7 +25,7 @@ class InferenceClient:
 
         self.server_conn.send_bytes(encoded_bytes)
 
-        result = await self.server_conn.recv_bytes()
+        result = self.server_conn.recv_bytes()
 
         inference_time += time.time() - start
 
