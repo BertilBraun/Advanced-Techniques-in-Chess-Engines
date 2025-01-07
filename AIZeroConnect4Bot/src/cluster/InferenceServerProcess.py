@@ -99,7 +99,7 @@ class InferenceServer:
         all_hashes = Counter()
         batch_start_time = time.time()
 
-        while batch_start_time - time.time() < self.timeout:
+        while time.time() - batch_start_time < self.timeout:
             if self.inference_input_pipe.poll(self.timeout):
                 request_batch, add_num_non_cached_requests = self._get_batch_request(all_hashes)
 
