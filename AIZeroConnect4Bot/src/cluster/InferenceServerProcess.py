@@ -104,7 +104,6 @@ class InferenceServer:
 
                 # If no new hashes and there is not a single hash in the required hashes that is also in all_hashes, i.e. the intersection is empty
                 if len(batch_new_hashes) == 0 and batch_required_hashes.isdisjoint(all_hashes):
-                    log('No new hashes, sending responses from cache...')
                     self._send_response_from_cache(request_batch)
                 else:
                     batch_requests.append(request_batch)
