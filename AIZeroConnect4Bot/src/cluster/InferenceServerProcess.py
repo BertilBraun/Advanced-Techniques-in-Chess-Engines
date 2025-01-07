@@ -1,3 +1,4 @@
+from collections import Counter
 import time
 import torch
 import numpy as np
@@ -72,6 +73,7 @@ class InferenceServer:
     def run(self):
         num_non_cached_requests = 0
         batch_requests: list[list[tuple[bytes, np.ndarray | None]]] = []
+        all_hashes = Counter()
         time_last_batch = time.time()
 
         self.model = create_model(TRAINING_ARGS.network, self.device)
@@ -86,8 +88,9 @@ class InferenceServer:
 
                 request_batch: list[tuple[bytes, np.ndarray | None]] = []
                 hashes = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
-                for i, (board_hash, encoded_board) in enumerate(zip(hashes, encoded_boards)):
-                    if board_hash not in self.cache and board_hash not in hashes[:i]:
+                for board_hash, encoded_board in zip(hashes, encoded_boards):
+                    if board_hash not in self.cache and all_hashes[board_hash] == 0:
+                        all_hashes[board_hash] += 1
                         num_non_cached_requests += 1
                         decoded_board = decode_board_state(encoded_board)
                     else:
@@ -99,15 +102,21 @@ class InferenceServer:
                 time_last_batch = time.time()
 
                 if num_non_cached_requests >= TRAINING_ARGS.inference.batch_size:
+                    log('Batch full, processing...')
                     self._process_batch(batch_requests)
-                    batch_requests = []
+                    batch_requests.clear()
+                    all_hashes.clear()
                     num_non_cached_requests = 0
                     time_last_batch = time.time()
 
             # Check if the oldest request has been waiting longer than the timeout
             if batch_requests and (time.time() - time_last_batch) >= self.timeout:
+                log(
+                    f'Batch timeout, processing {num_non_cached_requests} inferences from {len(batch_requests)} total requests...'
+                )
                 self._process_batch(batch_requests)
-                batch_requests = []
+                batch_requests.clear()
+                all_hashes.clear()
                 num_non_cached_requests = 0
                 time_last_batch = time.time()
 

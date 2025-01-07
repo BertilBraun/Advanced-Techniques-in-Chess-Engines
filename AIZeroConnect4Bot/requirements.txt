@@ -3,3 +3,4 @@ torch
 numpy
 optuna
 tensorboardX
+asyncio-pipe

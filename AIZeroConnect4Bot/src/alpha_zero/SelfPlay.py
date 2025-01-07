@@ -43,7 +43,7 @@ class SelfPlay:
         self.client = client
         self.args = args
 
-    def self_play(self, iteration: int) -> SelfPlayDataset:
+    async def self_play(self, iteration: int) -> SelfPlayDataset:
         self_play_dataset = SelfPlayDataset()
         self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
 
@@ -58,7 +58,9 @@ class SelfPlay:
         )
 
         while len(self_play_games) > 0:
-            for spg, action_probabilities in zip(self_play_games, mcts.search([spg.board for spg in self_play_games])):
+            mcts_action_probabilities = await mcts.search([spg.board for spg in self_play_games])
+
+            for spg, action_probabilities in zip(self_play_games, mcts_action_probabilities):
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
 
                 move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)

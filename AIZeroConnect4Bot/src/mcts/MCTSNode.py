@@ -21,6 +21,7 @@ class MCTSNode:
         self.move_to_get_here = move_to_get_here
         self.number_of_visits = 0
         self.result_score = 0
+        self.virtual_losses = 0
         self.policy = policy
 
     def init(self) -> None:
@@ -48,7 +49,7 @@ class MCTSNode:
 
         if self.number_of_visits > 0:
             # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
-            q_score = 1 - ((self.result_score / self.number_of_visits) + 1) / 2
+            q_score = 1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
         else:
             q_score = 0
 
@@ -76,7 +77,10 @@ class MCTSNode:
         if self.parent:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += 1
-            self.parent.children_q_scores[child_index] = 1 - ((self.result_score / self.number_of_visits) + 1) / 2
+            # q score with virtual loss is calculated
+            self.parent.children_q_scores[child_index] = (
+                1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
+            )
             self.parent.back_propagate(-result)
 
     def best_child(self, c_param: float) -> MCTSNode:
@@ -95,6 +99,7 @@ class MCTSNode:
 {self.board}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
+virtual loss: {self.virtual_losses}
 policy: {self.policy:.2f}
 move: {self.move_to_get_here}
 children: {len(self.children)}

@@ -93,7 +93,7 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 12  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 50  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -109,7 +109,7 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=1024,
+            batch_size=64,  # TODO increase a lot
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
@@ -124,7 +124,7 @@ if True:
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
             # All available GPUs except the one used for training
-            num_inference_nodes_on_cluster=(torch.cuda.device_count() - 1) * 2,
+            num_inference_nodes_on_cluster=torch.cuda.device_count() - 1,
         ),
         training=TrainingParams(
             num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted

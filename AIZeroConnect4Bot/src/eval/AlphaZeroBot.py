@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 from src.cluster.InferenceServerProcess import start_inference_server
 from src.util.log import log
@@ -17,12 +16,12 @@ class AlphaZeroBot(Bot):
         self.inference_client = inference_client
         self.stop_inference_server = stop_inference_server
 
-    def think(self, board: CurrentBoard) -> CurrentGameMove:
+    async def think(self, board: CurrentBoard) -> CurrentGameMove:
         root = MCTSNode.root(board)
 
         for _ in range(2**16 - 1):
             # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
-            self.iterate(root)
+            await self.iterate(root)  # TODO could these just run in parallel? Virtual loss probably
             if self.time_is_up:
                 break
 
@@ -43,7 +42,7 @@ class AlphaZeroBot(Bot):
 
         return best_child.move_to_get_here
 
-    def iterate(self, root: MCTSNode) -> None:
+    async def iterate(self, root: MCTSNode) -> None:
         current_node = root
         while not current_node.is_terminal_node and current_node.is_fully_expanded:
             current_node = current_node.best_child(PLAY_C_PARAM)
@@ -53,14 +52,13 @@ class AlphaZeroBot(Bot):
             assert result is not None, 'Game is not over'
             result = -result
         else:
-            moves_with_scores, result = self.evaluation(current_node.board)
+            moves_with_scores, result = await self.evaluation(current_node.board)
             current_node.expand(moves_with_scores)
 
         current_node.back_propagate(result)
 
-    @torch.no_grad()
-    def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
-        policy, value = self.inference_client.inference([board])
+    async def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
+        policy, value = await self.inference_client.inference([board])
 
         moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
 

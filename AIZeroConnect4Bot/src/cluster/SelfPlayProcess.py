@@ -1,3 +1,4 @@
+import asyncio
 from src.settings import TRAINING_ARGS
 from src.util.log import log
 from src.alpha_zero.SelfPlay import SelfPlay
@@ -13,7 +14,7 @@ def run_self_play_process(commander_pipe: PipeConnection, inference_server_pipe:
     client = InferenceClient(inference_server_pipe)
     self_play_process = SelfPlayProcess(client, TRAINING_ARGS, commander_pipe)
     with log_exceptions('Self play process'):
-        self_play_process.run()
+        asyncio.run(self_play_process.run())
 
 
 class SelfPlayProcess:
@@ -22,14 +23,14 @@ class SelfPlayProcess:
         self.self_play = SelfPlay(client, args.self_play)
         self.commander_pipe = commander_pipe
 
-    def run(self):
+    async def run(self):
         current_iteration = 0
         running = False
 
         while True:
             if running:
                 with log_exceptions('Self play'):
-                    dataset = self.self_play.self_play(current_iteration)
+                    dataset = await self.self_play.self_play(current_iteration)
 
                     log(f'Collected {len(dataset)} self-play memories.')
                     dataset.save(self.args.save_path, current_iteration)

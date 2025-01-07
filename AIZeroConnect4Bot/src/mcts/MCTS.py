@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 
 from src.cluster.InferenceClient import InferenceClient
@@ -14,9 +13,22 @@ class MCTS:
         self.client = client
         self.args = args
 
-    @torch.no_grad()
-    def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
-        policies = self._get_policy_with_noise(boards)
+    async def iterate(self, root: MCTSNode) -> None:
+        if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param)):
+            return
+
+        node.virtual_losses += 1
+
+        policies, values = await self.client.inference([node.board])
+
+        moves = filter_policy_then_get_moves_and_probabilities(policies[0], node.board)
+        node.expand(moves)
+        node.back_propagate(values[0])
+
+        node.virtual_losses -= 1
+
+    async def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
+        policies = await self._get_policy_with_noise(boards)
 
         nodes: list[MCTSNode] = []
         for board, spg_policy in zip(boards, policies):
@@ -26,28 +38,18 @@ class MCTS:
             root.expand(moves)
             nodes.append(root)
 
-        for _ in range(self.args.num_searches_per_turn):
-            expandable_nodes: list[MCTSNode] = []
-            for root in nodes:
-                node = self._get_best_child_or_back_propagate(root, self.args.c_param)
-                if node is not None:
-                    expandable_nodes.append(node)
+        async def run_searcher(root: MCTSNode, searches: int) -> None:
+            for _ in range(searches):
+                await self.iterate(root)
 
-            if len(expandable_nodes) == 0:
-                continue
-
-            policies, values = self.client.inference([node.board for node in expandable_nodes])
-
-            for i, node in enumerate(expandable_nodes):
-                moves = filter_policy_then_get_moves_and_probabilities(policies[i], node.board)
-
-                node.expand(moves)
-                node.back_propagate(values[i])
+        for root in nodes:
+            for _ in range(16):
+                await run_searcher(root, self.args.num_searches_per_turn // 16)
 
         return [self._get_action_probabilities(root) for root in nodes]
 
-    def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
-        policy, _ = self.client.inference(boards)
+    async def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
+        policy, _ = await self.client.inference(boards)
 
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(
