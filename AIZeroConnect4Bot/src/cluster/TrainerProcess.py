@@ -15,7 +15,7 @@ from src.util.PipeConnection import PipeConnection
 
 def run_trainer_process(commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable.'
-    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, 'Invalid device ID'
+    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     trainer_process = TrainerProcess(device_id, commander_pipe)
     with log_exceptions('Trainer process'):

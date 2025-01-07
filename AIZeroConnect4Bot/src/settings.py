@@ -98,7 +98,7 @@ if True:
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 128
+    PARALLEL_GAMES = 64
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -109,7 +109,7 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=512,
+            batch_size=1024,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,

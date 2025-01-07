@@ -2,13 +2,13 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop\zip2\zip'
+USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop'
 
 
 def load_usage(folder_path: str) -> pd.DataFrame:
-    # find all files in folder of format usage_*.csv - load them all and return them in a single dataframe
+    # find all files in folder of format usage*.csv - load them all and return them in a single dataframe
 
-    return pd.concat(pd.read_csv(file, parse_dates=['timestamp']) for file in Path(folder_path).glob('usage_*.csv'))
+    return pd.concat(pd.read_csv(file, parse_dates=['timestamp']) for file in Path(folder_path).glob('usage*.csv'))
 
 
 def visualize():

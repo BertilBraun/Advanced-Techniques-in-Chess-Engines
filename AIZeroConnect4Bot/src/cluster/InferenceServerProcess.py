@@ -24,7 +24,7 @@ def run_inference_server(
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable'
     assert TRAINING_ARGS.inference.batch_size > 0, 'Batch size must be greater than 0'
     assert timeout >= 0, 'Timeout must be non-negative'
-    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, 'Invalid device ID'
+    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     server = InferenceServer(inference_input_pipe, commander_pipe, device_id, timeout)
     with log_exceptions(f'Inference server ({device_id})'):
@@ -45,6 +45,10 @@ def start_inference_server(iteration: int) -> tuple[InferenceClient, Callable[[]
         inference_server.join()
 
     return InferenceClient(inference_client_pipe), stop_inference_server
+
+
+inference_requests = 0
+inference_calc_time = 0
 
 
 class InferenceServer:
@@ -150,12 +154,21 @@ class InferenceServer:
                     to_process_hashes.append(hash)
 
         if to_process:
+            global inference_requests, inference_calc_time
+            inference_requests += 1
+            start = time.time()
+
             input_tensor = torch.tensor(np.array(to_process), dtype=TORCH_DTYPE).to(self.model.device)
 
             policies, values = self.model(input_tensor)
 
             policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
             values = values.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
+
+            inference_calc_time += time.time() - start
+
+            if inference_requests % 100 == 0:
+                print(f'Average inference calc time: {inference_calc_time / inference_requests:.2f}s')
 
             for hash, p, v in zip(to_process_hashes, policies, values):
                 self.cache[hash] = (p.copy(), v.copy())

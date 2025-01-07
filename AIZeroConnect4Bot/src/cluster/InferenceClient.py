@@ -1,7 +1,11 @@
+import time
 import numpy as np
 from src.settings import CurrentBoard, CurrentGame
 from src.Encoding import encode_board_state
 from src.util.PipeConnection import PipeConnection
+
+inference_calls = 0
+inference_time = 0
 
 
 class InferenceClient:
@@ -13,9 +17,18 @@ class InferenceClient:
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
         encoded_bytes = np.array(encoded_boards).tobytes()
 
+        global inference_calls, inference_time
+        inference_calls += 1
+        start = time.time()
+
         self.server_conn.send_bytes(encoded_bytes)
 
         result = self.server_conn.recv_bytes()
+
+        inference_time += time.time() - start
+
+        if inference_calls % 100 == 0:
+            print(f'Average inference request time: {inference_time / inference_calls:.2f}s')
 
         result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
         policy, value = result[:, :-1], result[:, -1]

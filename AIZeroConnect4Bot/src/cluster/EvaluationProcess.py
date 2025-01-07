@@ -9,7 +9,7 @@ from src.alpha_zero.train.TrainingArgs import TrainingArgs
 
 
 def run_evaluation_process(device_id: int, iteration: int):
-    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, 'Invalid device ID'
+    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     evaluation_process = EvaluationProcess(TRAINING_ARGS, device_id)
     evaluation_process.run(iteration)
