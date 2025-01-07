@@ -1,11 +1,16 @@
 import src.environ_setup  # noqa # isort:skip # This import is necessary for setting up the environment variables
 
-import torch.multiprocessing as mp
-
-mp.set_start_method('spawn')
-
 
 if __name__ == '__main__':
+    import torch.multiprocessing as mp
+
+    mp.set_start_method('spawn')
+
+    import torch  # noqa
+
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.matmul.allow_tf32 = True
+
     from src.util.log import log
     from src.settings import TRAINING_ARGS, USE_GPU
     from src.util.profiler import start_usage_logger

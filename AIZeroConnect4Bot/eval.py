@@ -1,5 +1,7 @@
 import src.environ_setup  # isort:skip # noqa import first to setup environment variables and other configurations
 
+import torch
+
 from src.util import load_json
 from src.util.log import log
 from src.settings import CurrentGame, CurrentGameVisuals, SAVE_PATH
@@ -7,6 +9,9 @@ from src.games.GUI import BaseGridGameGUI
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot
+
+torch.set_float32_matmul_precision('high')
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 class CommonHumanPlayer(HumanPlayer):

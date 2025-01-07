@@ -12,6 +12,10 @@ from src.util.compile import try_compile
 from src.util.log import log
 
 
+torch.set_float32_matmul_precision('high')
+torch.backends.cuda.matmul.allow_tf32 = True
+
+
 def objective(rank: int) -> Callable[[optuna.Trial], float]:
     def _objective(trial: optuna.Trial) -> float:
         # Define hyperparameter sampling
