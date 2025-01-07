@@ -1,3 +1,4 @@
+import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
@@ -77,7 +78,7 @@ class CommanderProcess:
                 args=(
                     inference_server_to_load_balancer_pipes[device_id],
                     inference_server_commander_pipe,
-                    device_id + 1,
+                    (device_id % max(torch.cuda.device_count() - 1, 1)) + 1,
                 ),
             )
             p.start()
