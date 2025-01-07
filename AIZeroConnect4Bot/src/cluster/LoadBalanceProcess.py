@@ -33,4 +33,4 @@ class LoadBalancerProcess:
             for response, pipe in self.load_balancer.recieve_responses():
                 pipe.send_bytes(response)
 
-            time.sleep(0.001)
+            time.sleep(0.00001)

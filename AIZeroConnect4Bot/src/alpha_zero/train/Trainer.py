@@ -73,7 +73,7 @@ class Trainer:
             batch_size=self.args.batch_size,
             shuffle=True,
             drop_last=False,
-            num_workers=8,
+            num_workers=2,
             pin_memory=USE_GPU,
         )
         validation_dataloader = DataLoader(

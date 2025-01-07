@@ -124,7 +124,7 @@ if True:
         cluster=ClusterParams(
             num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
             # All available GPUs except the one used for training
-            num_inference_nodes_on_cluster=torch.cuda.device_count() - 1,
+            num_inference_nodes_on_cluster=(torch.cuda.device_count() - 1) * 2,
         ),
         training=TrainingParams(
             num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
@@ -136,11 +136,11 @@ if True:
         evaluation=EvaluationParams(
             num_searches_per_turn=60,
             num_games=20,
-            every_n_iterations=5,
+            every_n_iterations=10,
         ),
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
