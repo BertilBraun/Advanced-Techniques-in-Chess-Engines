@@ -102,6 +102,7 @@ class InferenceServer:
                 request_batch, batch_new_hashes = self._get_batch_request(all_hashes)
 
                 if len(batch_new_hashes) == 0:
+                    log('No new hashes, sending responses from cache...')
                     self._send_response_from_cache(request_batch)
                 else:
                     batch_requests.append(request_batch)

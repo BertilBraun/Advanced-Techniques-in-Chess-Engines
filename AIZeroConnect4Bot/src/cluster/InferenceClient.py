@@ -28,6 +28,7 @@ class InferenceClient:
         await asyncio.sleep(0.005)  # About the min time it takes the inference server to process a request
         while not self.server_conn.poll():
             await asyncio.sleep(0.00001)
+        # TODO if that is done async, then the recieved bytes could be from a different send request. Somehow they will have to be matched back up
 
         result = self.server_conn.recv_bytes()
 
