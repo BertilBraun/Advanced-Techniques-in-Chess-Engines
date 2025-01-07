@@ -1,12 +1,16 @@
 import src.environ_setup  # noqa # isort:skip # This import is necessary for setting up the environment variables
 
-from src.cluster.CommanderProcess import CommanderProcess
-from src.util.log import log
-from src.settings import TRAINING_ARGS, USE_GPU
-from src.util.profiler import start_usage_logger
+import torch.multiprocessing as mp
+
+mp.set_start_method('spawn')
 
 
 if __name__ == '__main__':
+    from src.util.log import log
+    from src.settings import TRAINING_ARGS, USE_GPU
+    from src.util.profiler import start_usage_logger
+    from src.cluster.CommanderProcess import CommanderProcess
+
     log('Starting training')
     log('Training on:', 'GPU' if USE_GPU else 'CPU')
     log('Training args:')
