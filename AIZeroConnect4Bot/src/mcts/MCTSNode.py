@@ -77,7 +77,7 @@ class MCTSNode:
         if self.parent:
             child_index = self.parent.children.index(self)
             self.parent.children_number_of_visits[child_index] += delta
-            self.children_q_scores[child_index] = self._q_score()
+            self.parent.children_q_scores[child_index] = self._q_score()
 
     def _q_score(self) -> float:
         return 1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
