@@ -2,7 +2,7 @@ import time
 import torch
 import numpy as np
 from pathlib import Path
-from multiprocessing.connection import PipeConnection
+from multiprocessing.connection import _ConnectionBase
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS, USE_GPU, log_histogram, log_scalar, CurrentGame
@@ -13,7 +13,7 @@ from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingStats import TrainingStats
 
 
-def run_trainer_process(commander_pipe: PipeConnection, device_id: int):
+def run_trainer_process(commander_pipe: _ConnectionBase, device_id: int):
     assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable.'
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, 'Invalid device ID'
 
@@ -23,7 +23,7 @@ def run_trainer_process(commander_pipe: PipeConnection, device_id: int):
 
 
 class TrainerProcess:
-    def __init__(self, device_id: int, commander_pipe: PipeConnection) -> None:
+    def __init__(self, device_id: int, commander_pipe: _ConnectionBase) -> None:
         self.args = TRAINING_ARGS
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 

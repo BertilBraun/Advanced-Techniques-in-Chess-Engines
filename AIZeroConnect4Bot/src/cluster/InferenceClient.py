@@ -1,12 +1,12 @@
 import numpy as np
-from multiprocessing.connection import PipeConnection
+from multiprocessing.connection import _ConnectionBase
 from src.settings import CurrentBoard, CurrentGame
 from src.Encoding import encode_board_state
 
 
 class InferenceClient:
-    def __init__(self, server_conn: PipeConnection):
-        assert server_conn.readable and server_conn.writable, 'Connection must be readable and writable'
+    def __init__(self, server_conn: _ConnectionBase):
+        assert server_conn.readable and server_conn.writable, '_ConnectionBase must be readable and writable'
         self.server_conn = server_conn
 
     def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:

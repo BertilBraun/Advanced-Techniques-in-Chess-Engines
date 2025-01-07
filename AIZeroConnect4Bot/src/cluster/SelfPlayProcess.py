@@ -1,4 +1,4 @@
-from multiprocessing.connection import PipeConnection
+from multiprocessing.connection import _ConnectionBase
 
 from src.settings import TRAINING_ARGS
 from src.util.log import log
@@ -8,7 +8,7 @@ from src.util.exceptions import log_exceptions
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 
 
-def run_self_play_process(commander_pipe: PipeConnection, inference_server_pipe: PipeConnection):
+def run_self_play_process(commander_pipe: _ConnectionBase, inference_server_pipe: _ConnectionBase):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
     client = InferenceClient(inference_server_pipe)
@@ -18,7 +18,7 @@ def run_self_play_process(commander_pipe: PipeConnection, inference_server_pipe:
 
 
 class SelfPlayProcess:
-    def __init__(self, client: InferenceClient, args: TrainingArgs, commander_pipe: PipeConnection) -> None:
+    def __init__(self, client: InferenceClient, args: TrainingArgs, commander_pipe: _ConnectionBase) -> None:
         self.args = args
         self.self_play = SelfPlay(client, args.self_play)
         self.commander_pipe = commander_pipe

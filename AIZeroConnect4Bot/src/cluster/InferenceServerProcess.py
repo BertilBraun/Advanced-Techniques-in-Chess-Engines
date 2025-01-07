@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from typing import Callable
 from multiprocessing import Process
-from multiprocessing.connection import Pipe, PipeConnection
+from multiprocessing.connection import Pipe, _ConnectionBase
 
 from src.Encoding import decode_board_state
 from src.Network import Network
@@ -15,8 +15,8 @@ from src.util.save_paths import create_model, load_model, model_save_path
 
 
 def run_inference_server(
-    inference_input_pipe: PipeConnection,
-    commander_pipe: PipeConnection,
+    inference_input_pipe: _ConnectionBase,
+    commander_pipe: _ConnectionBase,
     device_id: int,
     timeout: float = 0.05,
 ):
@@ -50,8 +50,8 @@ def start_inference_server(iteration: int) -> tuple[InferenceClient, Callable[[]
 class InferenceServer:
     def __init__(
         self,
-        inference_input_pipe: PipeConnection,
-        commander_pipe: PipeConnection,
+        inference_input_pipe: _ConnectionBase,
+        commander_pipe: _ConnectionBase,
         device_id: int,
         timeout: float = 0.05,
     ):

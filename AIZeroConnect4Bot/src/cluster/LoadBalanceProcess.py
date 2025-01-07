@@ -1,12 +1,12 @@
 import time
-from multiprocessing.connection import PipeConnection
+from multiprocessing.connection import _ConnectionBase
 
 from src.cluster.LoadBalancer import LoadBalancer
 from src.util.exceptions import log_exceptions
 
 
 def run_load_balancer_process(
-    load_balancer_input_pipes: list[PipeConnection], load_balancer_output_pipes: list[PipeConnection]
+    load_balancer_input_pipes: list[_ConnectionBase], load_balancer_output_pipes: list[_ConnectionBase]
 ):
     all_readable_and_writable = all(
         pipe.readable and pipe.writable for pipe in load_balancer_input_pipes + load_balancer_output_pipes
@@ -19,7 +19,7 @@ def run_load_balancer_process(
 
 
 class LoadBalancerProcess:
-    def __init__(self, input_pipes: list[PipeConnection], output_pipes: list[PipeConnection]) -> None:
+    def __init__(self, input_pipes: list[_ConnectionBase], output_pipes: list[_ConnectionBase]) -> None:
         self.load_balancer = LoadBalancer(output_pipes)
         self.input_pipes = input_pipes
 
