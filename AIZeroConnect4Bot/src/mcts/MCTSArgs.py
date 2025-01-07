@@ -11,6 +11,9 @@ class MCTSArgs:
     I.e. we continue to play the game util one of the players wins or the game is a draw. At each move we run the MCTS algorithm to get the next move to play for the current player. Here we run the MCTS algorithm num_searches times to get the next move to play.
     """
 
+    num_parallel_searches: int
+    """This is the number of parallel strands which should parallelize the MCTS algorithm. Higher values enable more parallelism and thus faster search. However, it also increases the exploration of the search tree. Values between 1 and 16 seem sensible."""
+
     dirichlet_epsilon: float
     """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
 

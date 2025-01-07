@@ -103,7 +103,10 @@ class InferenceServer:
             if self.inference_input_pipe.poll(self.timeout):
                 request_batch, add_num_non_cached_requests = self._get_batch_request(all_hashes)
 
-                batch_requests.append(request_batch)
+                if add_num_non_cached_requests == 0:
+                    self._send_response_from_cache(request_batch)
+                else:
+                    batch_requests.append(request_batch)
                 num_non_cached_requests += add_num_non_cached_requests
 
                 if num_non_cached_requests >= TRAINING_ARGS.inference.batch_size:
@@ -190,10 +193,13 @@ class InferenceServer:
         self.total_hits += total_samples_evaluated - len(to_process)
 
         for request_batch in batch_requests:
-            batch_results: list[np.ndarray] = []
+            self._send_response_from_cache(request_batch)
 
-            for hash, _ in request_batch:
-                policy, value = self.cache[hash]
-                batch_results.append(np.concatenate((policy, [value])))
+    def _send_response_from_cache(self, request_batch: list[tuple[bytes, np.ndarray | None]]) -> None:
+        batch_results: list[np.ndarray] = []
 
-            self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())
+        for hash, _ in request_batch:
+            policy, value = self.cache[hash]
+            batch_results.append(np.concatenate((policy, [value])))
+
+        self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())

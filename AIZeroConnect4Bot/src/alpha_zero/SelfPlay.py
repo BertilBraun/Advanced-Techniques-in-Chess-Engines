@@ -51,6 +51,7 @@ class SelfPlay:
             self.client,
             MCTSArgs(
                 num_searches_per_turn=self.args.mcts.num_searches_per_turn,
+                num_parallel_searches=self.args.mcts.num_parallel_searches,
                 dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
                 dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
                 c_param=self.args.mcts.c_param,

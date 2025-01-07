@@ -93,7 +93,7 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 5  # TODO 50 # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 50  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -116,6 +116,7 @@ if True:
             num_parallel_games=PARALLEL_GAMES,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
+                num_parallel_searches=16,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 1.0,
                 c_param=4,
@@ -156,6 +157,7 @@ if True:
             num_parallel_games=32,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 0.3,
                 c_param=2,

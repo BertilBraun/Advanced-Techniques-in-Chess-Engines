@@ -60,6 +60,7 @@ class ModelEvaluation:
 
         mcts_args = MCTSArgs(
             num_searches_per_turn=num_searches_per_turn,
+            num_parallel_searches=8,
             c_param=2,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
@@ -94,6 +95,7 @@ class ModelEvaluation:
 
         mcts_args = MCTSArgs(
             num_searches_per_turn=num_searches_per_turn,
+            num_parallel_searches=8,
             c_param=2,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,

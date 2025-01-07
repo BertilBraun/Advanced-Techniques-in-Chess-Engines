@@ -1,3 +1,4 @@
+import asyncio
 import numpy as np
 
 from src.cluster.InferenceClient import InferenceClient
@@ -43,8 +44,8 @@ class MCTS:
                 await self.iterate(root)
 
         for root in nodes:
-            for _ in range(16):
-                await run_searcher(root, self.args.num_searches_per_turn // 16)
+            for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
+                await asyncio.gather(*[self.iterate(root) for _ in range(self.args.num_parallel_searches)])
 
         return [self._get_action_probabilities(root) for root in nodes]
 
