@@ -1,4 +1,3 @@
-from collections import Counter
 import time
 import torch
 import numpy as np
@@ -94,51 +93,48 @@ class InferenceServer:
         self._clear_cache(iteration)
 
     def _get_batch_requests(self) -> list[list[tuple[bytes, np.ndarray | None]]]:
-        num_non_cached_requests = 0
         batch_requests: list[list[tuple[bytes, np.ndarray | None]]] = []
-        all_hashes = Counter()
+        all_hashes: set[bytes] = set()
         batch_start_time = time.time()
 
         while time.time() - batch_start_time < self.timeout:
             if self.inference_input_pipe.poll(self.timeout):
-                request_batch, add_num_non_cached_requests = self._get_batch_request(all_hashes)
+                request_batch, batch_new_hashes = self._get_batch_request(all_hashes)
 
-                if add_num_non_cached_requests == 0:
+                if len(batch_new_hashes) == 0:
                     self._send_response_from_cache(request_batch)
                 else:
                     batch_requests.append(request_batch)
-                num_non_cached_requests += add_num_non_cached_requests
 
-                if num_non_cached_requests >= TRAINING_ARGS.inference.batch_size:
+                all_hashes.update(batch_new_hashes)
+
+                if len(all_hashes) >= TRAINING_ARGS.inference.batch_size:
                     log('Batch full, processing...')
                     break
         else:
-            log(
-                f'Batch timeout, processing {num_non_cached_requests} inferences from {len(batch_requests)} total requests...'
-            )
+            log(f'Batch timeout, processing {len(all_hashes)} inferences from {len(batch_requests)} total requests...')
 
         return batch_requests
 
-    def _get_batch_request(self, all_hashes: Counter) -> tuple[list[tuple[bytes, np.ndarray | None]], int]:
-        num_non_cached_requests = 0
-
+    def _get_batch_request(self, all_hashes: set[bytes]) -> tuple[list[tuple[bytes, np.ndarray | None]], set[bytes]]:
         message = self.inference_input_pipe.recv_bytes()
         channels = CurrentGame.representation_shape[0]
         encoded_boards = np.frombuffer(message, dtype=np.uint64).reshape(-1, channels)
 
-        request_batch: list[tuple[bytes, np.ndarray | None]] = []
-        hashes = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
+        hashes: list[bytes] = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
 
+        my_new_hashes: set[bytes] = set()
+
+        request_batch: list[tuple[bytes, np.ndarray | None]] = []
         for board_hash, encoded_board in zip(hashes, encoded_boards):
-            if board_hash not in self.cache and all_hashes[board_hash] == 0:
-                all_hashes[board_hash] += 1
-                num_non_cached_requests += 1
+            if board_hash not in self.cache and board_hash not in all_hashes and board_hash not in my_new_hashes:
+                my_new_hashes.add(board_hash)
                 decoded_board = decode_board_state(encoded_board)
             else:
                 decoded_board = None
             request_batch.append((board_hash, decoded_board))
 
-        return request_batch, num_non_cached_requests
+        return request_batch, my_new_hashes
 
     def _clear_cache(self, iteration: int) -> None:
         if self.total_evals != 0:
