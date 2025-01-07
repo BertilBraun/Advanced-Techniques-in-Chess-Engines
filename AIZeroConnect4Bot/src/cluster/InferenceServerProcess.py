@@ -192,7 +192,4 @@ class InferenceServer:
                 policy, value = self.cache[hash]
                 batch_results.append(np.concatenate((policy, [value])))
 
-            log(f'Sending {len(batch_results)} results to client')
-            self.inference_input_pipe.send_bytes(b'Hello World' * 10000)  # TODO remove
             self.inference_input_pipe.send_bytes(np.array(batch_results).tobytes())
-            print('Sent results to client')
