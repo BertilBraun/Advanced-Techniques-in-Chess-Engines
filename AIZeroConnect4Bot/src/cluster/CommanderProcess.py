@@ -1,5 +1,4 @@
-from multiprocessing import Process
-from multiprocessing.connection import Pipe, _ConnectionBase
+from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
 from src.util.save_paths import get_latest_model_iteration
@@ -10,6 +9,7 @@ from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
 from src.settings import TRAINING_ARGS
 from src.util.log import log
+from src.util.PipeConnection import PipeConnection
 
 # setup one Trainer Process
 # setup one LoadBalancer Process
@@ -24,15 +24,15 @@ class CommanderProcess:
         self.num_inference_nodes = num_inference_nodes
 
         self.trainer_process: Process
-        self.commander_trainer_pipe: _ConnectionBase
+        self.commander_trainer_pipe: PipeConnection
 
         self.load_balancer_process: Process
 
         self.inference_server_processes: list[Process] = []
-        self.commander_inference_server_pipes: list[_ConnectionBase] = []
+        self.commander_inference_server_pipes: list[PipeConnection] = []
 
         self.self_play_processes: list[Process] = []
-        self.commander_self_play_pipes: list[_ConnectionBase] = []
+        self.commander_self_play_pipes: list[PipeConnection] = []
 
     def _setup_connections(self) -> None:
         # The Trainer and Commander has a Pipe connection
@@ -47,16 +47,16 @@ class CommanderProcess:
         self.trainer_process.start()
 
         # SelfPlay and LoadBalancer
-        self_play_to_load_balancer_pipes: list[_ConnectionBase] = []
-        load_balancer_input_pipes: list[_ConnectionBase] = []
+        self_play_to_load_balancer_pipes: list[PipeConnection] = []
+        load_balancer_input_pipes: list[PipeConnection] = []
         for _ in range(self.num_self_play_nodes):
             self_play_pipe, load_balancer_input_pipe = Pipe(duplex=True)
             self_play_to_load_balancer_pipes.append(self_play_pipe)
             load_balancer_input_pipes.append(load_balancer_input_pipe)
 
         # InferenceServer and LoadBalancer
-        inference_server_to_load_balancer_pipes: list[_ConnectionBase] = []
-        load_balancer_output_pipes: list[_ConnectionBase] = []
+        inference_server_to_load_balancer_pipes: list[PipeConnection] = []
+        load_balancer_output_pipes: list[PipeConnection] = []
         for _ in range(self.num_inference_nodes):
             inference_server_pipe, load_balancer_output_pipe = Pipe(duplex=True)
             inference_server_to_load_balancer_pipes.append(inference_server_pipe)
@@ -67,7 +67,7 @@ class CommanderProcess:
         )
         self.load_balancer_process.start()
 
-        self.commander_inference_server_pipes: list[_ConnectionBase] = []
+        self.commander_inference_server_pipes: list[PipeConnection] = []
         for device_id in range(self.num_inference_nodes):
             inference_server_commander_pipe, commander_inference_server_pipe = Pipe(duplex=False)
             self.commander_inference_server_pipes.append(commander_inference_server_pipe)
@@ -83,7 +83,7 @@ class CommanderProcess:
             p.start()
             self.inference_server_processes.append(p)
 
-        self.commander_self_play_pipes: list[_ConnectionBase] = []
+        self.commander_self_play_pipes: list[PipeConnection] = []
         for client_idx in range(self.num_self_play_nodes):
             self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
             self.commander_self_play_pipes.append(commander_self_play_pipe)
