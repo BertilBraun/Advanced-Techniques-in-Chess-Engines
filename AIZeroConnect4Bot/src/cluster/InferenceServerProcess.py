@@ -99,14 +99,10 @@ class InferenceServer:
 
         while time.time() - batch_start_time < self.timeout:
             if self.inference_input_pipe.poll(self.timeout):
-                request_batch, batch_new_hashes = self._get_batch_request(all_hashes)
+                request_batch, batch_new_hashes, batch_required_hashes = self._get_batch_request(all_hashes)
 
-                log(f'Got {len(request_batch)} new requests')
-                log(request_batch)
-                log(f'Got {len(batch_new_hashes)} new hashes')
-                log(batch_new_hashes)
-
-                if len(batch_new_hashes) == 0:
+                # If no new hashes and there is not a single hash in the required hashes that is also in all_hashes, i.e. the intersection is empty
+                if len(batch_new_hashes) == 0 and batch_required_hashes.isdisjoint(all_hashes):
                     log('No new hashes, sending responses from cache...')
                     self._send_response_from_cache(request_batch)
                 else:
@@ -122,7 +118,9 @@ class InferenceServer:
 
         return batch_requests
 
-    def _get_batch_request(self, all_hashes: set[bytes]) -> tuple[list[tuple[bytes, np.ndarray | None]], set[bytes]]:
+    def _get_batch_request(
+        self, all_hashes: set[bytes]
+    ) -> tuple[list[tuple[bytes, np.ndarray | None]], set[bytes], set[bytes]]:
         message = self.inference_input_pipe.recv_bytes()
         channels = CurrentGame.representation_shape[0]
         encoded_boards = np.frombuffer(message, dtype=np.uint64).reshape(-1, channels)
@@ -130,6 +128,7 @@ class InferenceServer:
         hashes: list[bytes] = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
 
         my_new_hashes: set[bytes] = set()
+        my_required_hashes: set[bytes] = set()
 
         request_batch: list[tuple[bytes, np.ndarray | None]] = []
         for board_hash, encoded_board in zip(hashes, encoded_boards):
@@ -137,10 +136,11 @@ class InferenceServer:
                 my_new_hashes.add(board_hash)
                 decoded_board = decode_board_state(encoded_board)
             else:
+                my_required_hashes.add(board_hash)
                 decoded_board = None
             request_batch.append((board_hash, decoded_board))
 
-        return request_batch, my_new_hashes
+        return request_batch, my_new_hashes, my_required_hashes
 
     def _clear_cache(self, iteration: int) -> None:
         if self.total_evals != 0:
