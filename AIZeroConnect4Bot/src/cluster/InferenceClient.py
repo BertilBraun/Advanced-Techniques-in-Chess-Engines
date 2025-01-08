@@ -58,6 +58,11 @@ class InferenceClient:
             _INFERENCE_REQUESTS = []
             _REQUEST_INDEX += 1
 
+            if _REQUEST_INDEX % 100 == 0:
+                log(
+                    f'Inference request index: {_REQUEST_INDEX} for {_NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]} boards with on average {sum(_NUM_BOARDS_IN_INFERENCE_REQUEST.values()) / len(_NUM_BOARDS_IN_INFERENCE_REQUEST)} boards per request'
+                )
+
         # If that is done async, then the recieved bytes could be from a different send request in another iteration of the inference loop. Somehow they will have to be matched back up
 
         while not _INFERENCE_RESPONSES[my_request_index]:
