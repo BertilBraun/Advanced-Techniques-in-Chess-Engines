@@ -105,9 +105,14 @@ class InferenceServer:
                 request_batch, batch_new_hashes, batch_required_hashes = self._get_batch_request(all_hashes)
 
                 # If no new hashes and there is not a single hash in the required hashes that is also in all_hashes, i.e. the intersection is empty
-                if len(batch_new_hashes) == 0 and batch_required_hashes.isdisjoint(all_hashes):
+                if (
+                    len(batch_new_hashes) == 0
+                    and batch_required_hashes.isdisjoint(all_hashes)
+                    and len(batch_requests) == 0  # otherwise out of order
+                ):
                     # log('All hashes in batch already in cache, sending responses...')
                     self._send_response_from_cache(request_batch)
+                    # TODO caching should be done on the load balancer
                 else:
                     batch_requests.append(request_batch)
 
