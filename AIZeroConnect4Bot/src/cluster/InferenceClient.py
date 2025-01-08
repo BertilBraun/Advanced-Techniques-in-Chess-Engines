@@ -33,6 +33,7 @@ class InferenceClient:
         encoded_bytes = np.array(encoded_boards).tobytes()
 
         if encoded_bytes in _RESULT_CACHE:
+            log('Cache hit')
             return _RESULT_CACHE[encoded_bytes]
 
         my_request_index = _REQUEST_INDEX
@@ -69,7 +70,6 @@ class InferenceClient:
                     # Clean up the memory to prevent memory leaks
                     del _INFERENCE_RESPONSES[request_id - 50]
                     del _NUM_BOARDS_IN_INFERENCE_REQUEST[request_id - 50]
-
             else:
                 await asyncio.sleep(0.00001)
 
