@@ -98,7 +98,7 @@ if True:
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 64
+    PARALLEL_GAMES = 128
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -154,10 +154,10 @@ if True:
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=32,
+            num_parallel_games=8,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=4,
+                num_parallel_searches=16,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 0.3,
                 c_param=2,

@@ -1,0 +1,17 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "profile",
+            "type": "shell",
+            "command": "viztracer --max_stack_depth 11 --tracer_entries 1000000 train.py",
+        },
+        {
+            "label": "view profile",
+            "type": "shell",
+            "command": "python -m src.util.profile_visualization",
+        }
+    ]
+}

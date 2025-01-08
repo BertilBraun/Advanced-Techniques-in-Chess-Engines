@@ -39,9 +39,10 @@ class MCTS:
             root.expand(moves)
             nodes.append(root)
 
-        for root in nodes:
-            for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-                await asyncio.gather(*[self.iterate(root) for _ in range(self.args.num_parallel_searches)])
+        for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
+            await asyncio.gather(
+                *[self.iterate(root) for _ in range(self.args.num_parallel_searches) for root in nodes]
+            )
 
         return [self._get_action_probabilities(root) for root in nodes]
 
@@ -70,6 +71,8 @@ class MCTS:
 
         while node.is_fully_expanded:
             node = node.best_child(c_param)
+            if node is None:
+                return None
 
         if node.is_terminal_node:
             result = get_board_result_score(node.board)

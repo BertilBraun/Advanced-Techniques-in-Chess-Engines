@@ -18,7 +18,7 @@ def run_inference_server(
     inference_input_pipe: PipeConnection,
     commander_pipe: PipeConnection,
     device_id: int,
-    timeout: float = 0.05,
+    timeout: float = 0.001,
 ):
     assert inference_input_pipe.readable and inference_input_pipe.writable, 'Input pipe must be readable and writable'
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable'
@@ -50,6 +50,8 @@ def start_inference_server(iteration: int) -> tuple[InferenceClient, Callable[[]
 inference_requests = 0
 inference_calc_time = 0
 
+RequestBatch = tuple[int, list[tuple[bytes, np.ndarray | None]]]
+
 
 class InferenceServer:
     def __init__(
@@ -57,7 +59,7 @@ class InferenceServer:
         inference_input_pipe: PipeConnection,
         commander_pipe: PipeConnection,
         device_id: int,
-        timeout: float = 0.05,
+        timeout: float,
     ):
         self.inference_input_pipe = inference_input_pipe
         self.commander_pipe = commander_pipe
@@ -93,8 +95,8 @@ class InferenceServer:
         self.model = self._prepare_model_for_inference(self.model)
         self._clear_cache(iteration)
 
-    def _get_batch_requests(self) -> list[list[tuple[bytes, np.ndarray | None]]]:
-        batch_requests: list[list[tuple[bytes, np.ndarray | None]]] = []
+    def _get_batch_requests(self) -> list[RequestBatch]:
+        batch_requests: list[RequestBatch] = []
         all_hashes: set[bytes] = set()
         batch_start_time = time.time()
 
@@ -121,12 +123,11 @@ class InferenceServer:
 
         return batch_requests
 
-    def _get_batch_request(
-        self, all_hashes: set[bytes]
-    ) -> tuple[list[tuple[bytes, np.ndarray | None]], set[bytes], set[bytes]]:
+    def _get_batch_request(self, all_hashes: set[bytes]) -> tuple[RequestBatch, set[bytes], set[bytes]]:
         message = self.inference_input_pipe.recv_bytes()
         channels = CurrentGame.representation_shape[0]
-        encoded_boards = np.frombuffer(message, dtype=np.uint64).reshape(-1, channels)
+        request_id = int.from_bytes(message[:4], 'big')
+        encoded_boards = np.frombuffer(message[4:], dtype=np.uint64).reshape(-1, channels)
 
         hashes: list[bytes] = [encoded_board.data.tobytes() for encoded_board in encoded_boards]
 
@@ -143,7 +144,7 @@ class InferenceServer:
                 decoded_board = None
             request_batch.append((board_hash, decoded_board))
 
-        return request_batch, my_new_hashes, my_required_hashes
+        return (request_id, request_batch), my_new_hashes, my_required_hashes
 
     def _clear_cache(self, iteration: int) -> None:
         if self.total_evals != 0:
@@ -165,11 +166,11 @@ class InferenceServer:
         return model
 
     @torch.no_grad()
-    def _process_batch(self, batch_requests: list[list[tuple[bytes, np.ndarray | None]]]) -> None:
+    def _process_batch(self, batch_requests: list[RequestBatch]) -> None:
         to_process: list[np.ndarray] = []
         to_process_hashes: list[bytes] = []
         for request_batch in batch_requests:
-            for hash, board in request_batch:
+            for hash, board in request_batch[1]:
                 if board is not None:
                     to_process.append(board)
                     to_process_hashes.append(hash)
@@ -184,7 +185,7 @@ class InferenceServer:
             policies, values = self.model(input_tensor)
 
             policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-            values = values.to(dtype=torch.float32, device='cpu').numpy().mean(axis=1)
+            values = torch.mean(values, dim=1).to(dtype=torch.float32, device='cpu').numpy()
 
             inf_calc_time = time.time() - start
             inference_calc_time += inf_calc_time
@@ -203,15 +204,16 @@ class InferenceServer:
         for request_batch in batch_requests:
             self._send_response_from_cache(request_batch)
 
-    def _send_response_from_cache(self, request_batch: list[tuple[bytes, np.ndarray | None]]) -> None:
+    def _send_response_from_cache(self, request_batch: RequestBatch) -> None:
         batch_results: list[np.ndarray] = []
 
-        for hash, _ in request_batch:
+        request_id, requests = request_batch
+
+        for hash, _ in requests:
             policy, value = self.cache[hash]
             batch_results.append(np.concatenate((policy, [value])))
 
-        # Send back the hash as well as the result concatenated
         result = np.array(batch_results).tobytes()
-        hashes = b''.join(hash for hash, _ in request_batch)
-        data = hashes + b'\n\n\n' + result
-        self.inference_input_pipe.send_bytes(data)
+
+        # send request index and the joined bytes of all the requests
+        self.inference_input_pipe.send_bytes(request_id.to_bytes(4, 'big') + result)
