@@ -15,17 +15,25 @@ _INFERENCE_REQUESTS: list[bytes] = []
 _NUM_BOARDS_IN_INFERENCE_REQUEST = defaultdict(int)
 _REQUEST_INDEX = 0
 
+_RESULT_CACHE: dict[bytes, tuple[np.ndarray, np.ndarray]] = {}
+
 
 class InferenceClient:
     def __init__(self, server_conn: PipeConnection):
         assert server_conn.readable and server_conn.writable, 'PipeConnection must be readable and writable'
         self.server_conn = server_conn
 
+    def reset_cache(self):
+        _RESULT_CACHE.clear()
+
     async def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
         global _INFERENCE_RESPONSES, _INFERENCE_REQUESTS, _NUM_BOARDS_IN_INFERENCE_REQUEST, _REQUEST_INDEX
 
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
         encoded_bytes = np.array(encoded_boards).tobytes()
+
+        if encoded_bytes in _RESULT_CACHE:
+            return _RESULT_CACHE[encoded_bytes]
 
         my_request_index = _REQUEST_INDEX
         my_index = _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]
@@ -80,5 +88,7 @@ class InferenceClient:
 
         result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
         policy, value = result[:, :-1], result[:, -1]
+
+        _RESULT_CACHE[encoded_bytes] = policy, value
 
         return policy, value

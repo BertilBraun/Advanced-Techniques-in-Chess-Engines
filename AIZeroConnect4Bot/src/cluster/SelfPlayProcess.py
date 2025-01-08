@@ -43,5 +43,6 @@ class SelfPlayProcess:
                 elif message.startswith('START AT ITERATION:'):
                     current_iteration = int(message.split(':')[-1])
                     running = True
+                    self.self_play.client.reset_cache()
 
         log('Self play process stopped.')
