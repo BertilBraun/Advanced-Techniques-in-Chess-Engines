@@ -71,10 +71,10 @@ class InferenceClient:
                 request_id = int.from_bytes(results[:4], 'big')
                 _INFERENCE_RESPONSES[request_id] = results[4:]
 
-                if request_id - 50 in _INFERENCE_RESPONSES:
+                if request_id - 500 in _INFERENCE_RESPONSES:
                     # Clean up the memory to prevent memory leaks
-                    del _INFERENCE_RESPONSES[request_id - 50]
-                    del _NUM_BOARDS_IN_INFERENCE_REQUEST[request_id - 50]
+                    del _INFERENCE_RESPONSES[request_id - 500]
+                    del _NUM_BOARDS_IN_INFERENCE_REQUEST[request_id - 500]
             else:
                 await asyncio.sleep(0.00001)
 
