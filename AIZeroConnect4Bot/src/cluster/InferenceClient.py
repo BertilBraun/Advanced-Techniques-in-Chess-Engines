@@ -85,6 +85,11 @@ class InferenceClient:
         start = my_index * stride
         end = (my_index + len(boards)) * stride
         result = _INFERENCE_RESPONSES[my_request_index][start:end]
+        assert len(result) % stride == 0, f'{len(result)} % {stride} != 0'
+        assert end < len(
+            _INFERENCE_RESPONSES[my_request_index]
+        ), f'{end} < {len(_INFERENCE_RESPONSES[my_request_index])}'
+        assert end - start == len(boards) * stride, f'{end} - {start} != {len(boards)} * {stride}'
 
         _NUM_RESPONSES_READ[my_request_index] += end - start
         if _NUM_RESPONSES_READ[my_request_index] == _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index] * stride:
