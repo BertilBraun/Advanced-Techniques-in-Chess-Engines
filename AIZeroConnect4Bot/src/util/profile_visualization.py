@@ -23,7 +23,9 @@ def visualize():
     system_df = system_df[system_df['time_diff'] > 0]
 
     ranks = system_df['rank'].unique()
+    ranks = ranks[ranks != -1]
     gpu_ids = system_df['gpu_id'].unique()
+    gpu_ids = gpu_ids[gpu_ids != -1]
 
     axs = plt.subplots(4, 1, figsize=(15, 20), sharex=True)[1]
 

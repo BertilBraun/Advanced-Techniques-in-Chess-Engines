@@ -113,13 +113,13 @@ class InferenceServer:
                 all_hashes.update(batch_new_hashes)
 
                 if len(all_hashes) >= TRAINING_ARGS.inference.batch_size:
-                    pass  # log('Batch full, processing...')
+                    log('Batch full, processing...')
                     break
         else:
             if len(batch_requests):
-                pass  # log(
-                pass  #     f'Batch timeout, processing {len(all_hashes)} inferences from {len(batch_requests)} total requests...'
-                pass  # )
+                log(
+                    f'Batch timeout, processing {len(all_hashes)} inferences from {len(batch_requests)} total requests...'
+                )
 
         return batch_requests
 
