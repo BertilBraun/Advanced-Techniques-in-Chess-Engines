@@ -23,7 +23,6 @@ class InferenceClient:
 
     async def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
         global _INFERENCE_RESPONSES, _INFERENCE_REQUESTS, _NUM_BOARDS_IN_INFERENCE_REQUEST, _REQUEST_INDEX
-        # TODO cleanup the global memory to reduce memory leaks
 
         encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
         encoded_bytes = np.array(encoded_boards).tobytes()
@@ -45,9 +44,6 @@ class InferenceClient:
             await asyncio.sleep(0.001)
 
         if _REQUEST_INDEX == my_request_index:
-            log(
-                f'Inference request batch size: {_NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]} with average batch size: {sum(_NUM_BOARDS_IN_INFERENCE_REQUEST.values()) / len(_NUM_BOARDS_IN_INFERENCE_REQUEST):.2f}'
-            )
             # send request index and the joined bytes of all the requests
             self.server_conn.send_bytes(_REQUEST_INDEX.to_bytes(4, 'big') + b''.join(_INFERENCE_REQUESTS))
             _INFERENCE_REQUESTS = []
