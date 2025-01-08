@@ -50,7 +50,7 @@ class InferenceClient:
             and time.time() - start < 0.01
             and _REQUEST_INDEX == my_request_index
         ):
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(0)
 
         if _REQUEST_INDEX == my_request_index:
             # send request index and the joined bytes of all the requests
@@ -71,7 +71,7 @@ class InferenceClient:
                 request_id = int.from_bytes(results[:4], 'big')
                 _INFERENCE_RESPONSES[request_id] = results[4:]
             else:
-                await asyncio.sleep(0.00001)
+                await asyncio.sleep(0)
 
         inference_time += time.time() - start
 

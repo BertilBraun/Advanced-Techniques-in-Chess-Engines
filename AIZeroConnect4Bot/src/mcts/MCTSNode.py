@@ -93,7 +93,7 @@ class MCTSNode:
             # TODO self.parent.children_q_scores[child_index] = self._q_score()
             self.parent.back_propagate(-result)
 
-    def best_child(self, c_param: float) -> MCTSNode | None:
+    def best_child(self, c_param: float) -> MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
         ucb_scores = np.array([child.ucb(c_param) for child in self.children], dtype=np.float32)
 
@@ -106,12 +106,10 @@ class MCTSNode:
 
         ucb_scores = self.children_q_scores + self.children_policies * policy_score
 
-        # Select the best child which is not locked
-        for i in np.argsort(ucb_scores)[::-1]:
-            if not self.children[i].locked:
-                self.children[i].init()
-                return self.children[i]
-        return None
+        best_child_index = np.argmax(ucb_scores)
+        best_child = self.children[best_child_index]
+        # best_child.init()
+        return best_child
 
     def __repr__(self) -> str:
         return f"""AlphaMCTSNode(

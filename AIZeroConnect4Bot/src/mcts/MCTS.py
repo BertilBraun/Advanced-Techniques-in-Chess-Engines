@@ -71,8 +71,6 @@ class MCTS:
 
         while node.is_fully_expanded:
             node = node.best_child(c_param)
-            if node is None:
-                return None
 
         if node.is_terminal_node:
             result = get_board_result_score(node.board)
