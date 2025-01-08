@@ -13,6 +13,7 @@ inference_time = 0
 _INFERENCE_RESPONSES: dict[int, bytes] = defaultdict(bytes)
 _INFERENCE_REQUESTS: list[bytes] = []
 _NUM_BOARDS_IN_INFERENCE_REQUEST = defaultdict(int)
+_NUM_RESPONSES_READ = defaultdict(int)
 _REQUEST_INDEX = 0
 
 _RESULT_CACHE: dict[bytes, tuple[np.ndarray, np.ndarray]] = {}
@@ -33,7 +34,6 @@ class InferenceClient:
         encoded_bytes = np.array(encoded_boards).tobytes()
 
         if encoded_bytes in _RESULT_CACHE:
-            log('Cache hit')
             return _RESULT_CACHE[encoded_bytes]
 
         my_request_index = _REQUEST_INDEX
@@ -70,11 +70,6 @@ class InferenceClient:
                 results = self.server_conn.recv_bytes()
                 request_id = int.from_bytes(results[:4], 'big')
                 _INFERENCE_RESPONSES[request_id] = results[4:]
-
-                if request_id - 500 in _INFERENCE_RESPONSES:
-                    # Clean up the memory to prevent memory leaks
-                    del _INFERENCE_RESPONSES[request_id - 500]
-                    del _NUM_BOARDS_IN_INFERENCE_REQUEST[request_id - 500]
             else:
                 await asyncio.sleep(0.00001)
 
@@ -90,6 +85,12 @@ class InferenceClient:
         start = my_index * stride
         end = (my_index + len(boards)) * stride
         result = _INFERENCE_RESPONSES[my_request_index][start:end]
+
+        _NUM_RESPONSES_READ[my_request_index] += end - start
+        if _NUM_RESPONSES_READ[my_request_index] == _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index] * stride:
+            # Clean up the memory to prevent memory leaks
+            del _INFERENCE_RESPONSES[my_request_index]
+            del _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]
 
         result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
         policy, value = result[:, :-1], result[:, -1]
