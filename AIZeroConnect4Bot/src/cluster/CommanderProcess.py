@@ -1,23 +1,21 @@
-from multiprocessing import Queue
-import time
 import torch
-from torch.multiprocessing import Process, Pipe
+from torch.multiprocessing import Process, Pipe, Queue
 from pathlib import Path
 
 from src.settings import TRAINING_ARGS
-from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
 from src.util.save_paths import get_latest_model_iteration
 from src.cluster.EvaluationProcess import run_evaluation_process
-from src.cluster.InferenceServerProcess import run_caching_layer, run_inference_server
+from src.cluster.InferenceServerProcess import run_inference_server
+from src.cluster.CacheLayerProcess import run_caching_layer
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
 
 # setup one Trainer Process
-# setup one LoadBalancer Process
-# setup num_gpus InferenceServer Processes
-# setup num_self_play_nodes_on_cluster SelfPlay Processes
+# setup one CacheLayer Process
+# setup num_inference_nodes InferenceServer Processes
+# setup num_self_play_nodes SelfPlay Processes
 # setup command process, which notifies InferenceServers to load new models and notifies SelfPlay Processes to write to the next iteration
 
 
@@ -38,6 +36,9 @@ class CommanderProcess:
         self.self_play_processes: list[Process] = []
         self.commander_self_play_pipes: list[PipeConnection] = []
 
+        # Keep track of them to solve mutliprocessing spawn issue where they were already freed again
+        self.all_queues: list[Queue] = []
+
     def _setup_connections(self) -> None:
         # The Trainer and Commander has a Pipe connection
         # Each SelfPlay and InferenceServer has a Pipe connection to the LoadBalancer
@@ -54,6 +55,13 @@ class CommanderProcess:
         self_play_response_queues = [Queue() for _ in range(self.num_self_play_nodes)]
         inference_input_queue = Queue()
         cache_layer_response_queue = Queue()
+
+        self.all_queues = [
+            cache_layer_input_queue,
+            *self_play_response_queues,
+            inference_input_queue,
+            cache_layer_response_queue,
+        ]
 
         cache_layer_commander_pipe, self.commander_cache_layer_pipe = Pipe(duplex=False)
         self.cache_layer_process = Process(
@@ -119,42 +127,24 @@ class CommanderProcess:
                     pipe.send(f'START AT ITERATION: {iteration}')
                 log(f'All processes started at iteration {iteration}.')
 
-                time.sleep(20)
-
-                break
-
                 # Wait for Trainer to finish
                 assert self.commander_trainer_pipe.recv() == 'FINISHED'
                 log(f'Trainer finished at iteration {iteration}.')
 
                 # start EvaluationProcess
-                p = Process(
-                    target=run_evaluation_process,
-                    args=(
-                        0,  # let the evaluation process run on the trainer device
-                        iteration,
-                    ),
-                )
+                p = Process(target=run_evaluation_process, args=(iteration,))
                 p.start()
         finally:
             log('Training complete. Sending STOP to all processes.')
-            with log_exceptions('Error while stopping processes.'):
-                for pipe in self.commander_self_play_pipes:
-                    pipe.send('STOP')
+            for pipe in self._all_pipes():
+                pipe.send('STOP')
 
-                time.sleep(3)
-
-                for pipe in self.commander_inference_server_pipes:
-                    pipe.send('STOP')
-
-                # TODO time.sleep(100)
-
-                self.trainer_process.kill()
-                # self.cache_layer_process.kill()
-                # for p in self.inference_server_processes:
-                #     p.kill()
-                # for p in self.self_play_processes:
-                #     p.kill()
+            for process in (
+                self.self_play_processes
+                + self.inference_server_processes
+                + [self.trainer_process, self.cache_layer_process]
+            ):
+                process.join()
 
     def _all_pipes(self) -> list[PipeConnection]:
         return (

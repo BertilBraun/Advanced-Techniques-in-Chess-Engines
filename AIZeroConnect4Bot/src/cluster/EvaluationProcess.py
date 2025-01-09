@@ -1,25 +1,21 @@
 import asyncio
-import torch
 
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import TRAINING_ARGS, USE_GPU, log_scalar
+from src.settings import TRAINING_ARGS, log_scalar
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 
 
-def run_evaluation_process(device_id: int, iteration: int):
-    assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
-
-    evaluation_process = EvaluationProcess(TRAINING_ARGS, device_id)
+def run_evaluation_process(iteration: int):
+    evaluation_process = EvaluationProcess(TRAINING_ARGS)
     with log_exceptions('Evaluation process'):
         asyncio.run(evaluation_process.run(iteration))
 
 
 class EvaluationProcess:
-    def __init__(self, args: TrainingArgs, device_id: int) -> None:
+    def __init__(self, args: TrainingArgs) -> None:
         self.args = args
-        self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
     async def run(self, iteration: int):
         """Play two most recent models against each other."""

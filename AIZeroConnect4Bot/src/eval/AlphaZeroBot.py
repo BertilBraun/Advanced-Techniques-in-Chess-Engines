@@ -58,8 +58,8 @@ class AlphaZeroBot(Bot):
         current_node.back_propagate(result)
 
     async def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
-        policy, value = await self.inference_client.inference([board])
+        policy, value = await self.inference_client.inference(board)
 
-        moves = filter_policy_then_get_moves_and_probabilities(policy[0], board)
+        moves = filter_policy_then_get_moves_and_probabilities(policy, board)
 
-        return moves, value[0]
+        return moves, value

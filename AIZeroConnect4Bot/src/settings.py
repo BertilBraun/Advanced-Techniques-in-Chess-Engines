@@ -81,6 +81,7 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 #     c_param=4.0,  # unknown
 # )
 
+
 if True:
     from src.games.connect4.Connect4Game import Connect4Game, Connect4Move
     from src.games.connect4.Connect4Board import Connect4Board
@@ -93,7 +94,7 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 10  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 20  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
@@ -108,9 +109,7 @@ if True:
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
-        inference=InferenceParams(
-            batch_size=128,  # TODO increase a lot
-        ),
+        inference=InferenceParams(batch_size=512),
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=PARALLEL_GAMES,
@@ -141,7 +140,7 @@ if True:
         ),
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,

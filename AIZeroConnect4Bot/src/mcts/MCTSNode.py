@@ -65,8 +65,6 @@ class MCTSNode:
             for move, score in moves_with_scores
             if score > 0.0
         ]
-        for child in self.children:
-            child.init()
 
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
@@ -76,10 +74,19 @@ class MCTSNode:
     def update_virtual_losses(self, delta: int) -> None:
         self.virtual_losses += delta
         self.number_of_visits += delta
-        # TODO if self.parent:
-        # TODO     child_index = self.parent.children.index(self)
-        # TODO     self.parent.children_number_of_visits[child_index] += delta
-        # TODO     self.parent.children_q_scores[child_index] = self._q_score()
+        if self.parent:
+            child_index = self._get_my_child_index_in_parent()
+            self.parent.children_number_of_visits[child_index] += delta
+            self.parent.children_q_scores[child_index] = self._q_score()
+
+    def _get_my_child_index_in_parent(self):
+        assert self.parent is not None, 'Parent may not be none to get a child'
+
+        for i, child in enumerate(self.parent.children):
+            if child.move_to_get_here == self.move_to_get_here:
+                return i
+
+        assert False, 'Self is not child of Parent?!'
 
     def _q_score(self) -> float:
         return 1 - (((self.result_score + self.virtual_losses) / self.number_of_visits) + 1) / 2
@@ -88,27 +95,20 @@ class MCTSNode:
         self.number_of_visits += 1
         self.result_score += result
         if self.parent:
-            # TODO child_index = self.parent.children.index(self)
-            # TODO self.parent.children_number_of_visits[child_index] += 1
-            # TODO self.parent.children_q_scores[child_index] = self._q_score()
+            child_index = self._get_my_child_index_in_parent()
+            self.parent.children_number_of_visits[child_index] += 1
+            self.parent.children_q_scores[child_index] = self._q_score()
             self.parent.back_propagate(-result)
 
     def best_child(self, c_param: float) -> MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
-        ucb_scores = np.array([child.ucb(c_param) for child in self.children], dtype=np.float32)
-
-        best_child_index = np.argmax(ucb_scores)
-        best_child = self.children[best_child_index]
-        # best_child.init()
-        return best_child
-
         policy_score = c_param * np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 
         ucb_scores = self.children_q_scores + self.children_policies * policy_score
 
         best_child_index = np.argmax(ucb_scores)
         best_child = self.children[best_child_index]
-        # best_child.init()
+        best_child.init()
         return best_child
 
     def __repr__(self) -> str:

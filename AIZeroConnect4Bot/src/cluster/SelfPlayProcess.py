@@ -1,7 +1,7 @@
 import asyncio
-from multiprocessing import Queue
+import time
+from torch.multiprocessing import Queue
 
-from viztracer import VizTracer
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS
 from src.util.log import log
@@ -26,11 +26,9 @@ class SelfPlayProcess:
         self.args = args
         self.self_play = SelfPlay(client, args.self_play)
         self.commander_pipe = commander_pipe
+        self.start_generating_samples = time.time()
 
     async def run(self):
-        tracer = VizTracer(max_stack_depth=11)
-        tracer.start()
-
         current_iteration = 0
         running = False
 
@@ -39,22 +37,28 @@ class SelfPlayProcess:
                 await self.self_play.self_play()
 
                 if len(self.self_play.dataset) >= 1000:
-                    self.self_play.dataset.save(self.args.save_path, current_iteration)
-                    self.self_play.dataset = SelfPlayDataset()
+                    self._save_dataset(current_iteration)
 
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
                 assert isinstance(message, str), f'Expected message to be a string, got {message}'
                 if message == 'STOP':
-                    tracer.stop()
-                    tracer.save(f'self_play_trace_{self.self_play.client.global_id}.json')
                     break
                 elif message.startswith('START AT ITERATION:'):
                     current_iteration = int(message.split(':')[-1])
                     running = True
+                    self._save_dataset(current_iteration)
                     self.self_play.client.reset_cache()
-                    if len(self.self_play.dataset):
-                        self.self_play.dataset.save(self.args.save_path, current_iteration)
                     self.self_play.update_iteration(current_iteration)
 
         log('Self play process stopped.')
+
+    def _save_dataset(self, iteration: int):
+        if not len(self.self_play.dataset):
+            return
+
+        time_to_generate = time.time() - self.start_generating_samples
+        log(f'Generating {len(self.self_play.dataset)} samples took {time_to_generate}sec')
+        self.self_play.dataset.save(self.args.save_path, iteration)
+        self.self_play.dataset = SelfPlayDataset()
+        self.start_generating_samples = time.time()

@@ -37,15 +37,23 @@ from src.util.log import log
 
 # DONE reduce board size to 6x7
 
-# TODO parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
+# DONE parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
 
 # TODO Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
 
-# TODO remove or increase number of load balancers if that is a bottleneck
+# DONE remove or increase number of load balancers if that is a bottleneck
 # DONE batched write back from inference server
 # DONE read and write with bytes instead of numpy arrays
-# TODO profile
+# DONE profile
 # DONE system usage logger
+
+# TODO magic numbers into settings with default values
+# TODO default values in settings
+# TODO proper documentation
+# TODO proper graph representing the architecture
+# TODO run for Connect4 with new setup for 2h
+# TODO run for Checkers
+# TODO log time for each self play loop, how long for n games to finish - compare to previous
 
 
 class Trainer:
