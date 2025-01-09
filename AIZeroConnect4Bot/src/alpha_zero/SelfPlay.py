@@ -43,11 +43,20 @@ class SelfPlay:
         self.client = client
         self.args = args
 
-    async def self_play(self, iteration: int) -> SelfPlayDataset:
-        self_play_dataset = SelfPlayDataset()
-        self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self.self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self.dataset = SelfPlayDataset()
 
-        mcts = MCTS(
+        self.iteration = 0
+
+        self.mcts = self._get_mcts(self.iteration)
+
+    def update_iteration(self, iteration: int) -> None:
+        self.iteration = iteration
+        self.mcts = self._get_mcts(self.iteration)
+        self.dataset = SelfPlayDataset()
+
+    def _get_mcts(self, iteration: int) -> MCTS:
+        return MCTS(
             self.client,
             MCTSArgs(
                 num_searches_per_turn=self.args.mcts.num_searches_per_turn,
@@ -58,22 +67,22 @@ class SelfPlay:
             ),
         )
 
-        while len(self_play_games) > 0:
-            mcts_action_probabilities = await mcts.search([spg.board for spg in self_play_games])
+    async def self_play(self) -> None:
+        mcts_action_probabilities = await self.mcts.search([spg.board for spg in self.self_play_games])
 
-            for spg, action_probabilities in zip(self_play_games, mcts_action_probabilities):
-                spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
+        for spg, action_probabilities in zip(self.self_play_games, mcts_action_probabilities):
+            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
 
-                move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
-                spg.board.make_move(move)
-                spg.num_played_moves += 1
+            move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
+            spg.board.make_move(move)
+            spg.num_played_moves += 1
 
-                if spg.board.is_game_over():
-                    self_play_dataset += self._get_training_data(spg)
+            if spg.board.is_game_over():
+                self.dataset += self._get_training_data(spg)
 
-            self_play_games = [spg for spg in self_play_games if not spg.board.is_game_over()]
-
-        return self_play_dataset
+        self.self_play_games = [spg for spg in self.self_play_games if not spg.board.is_game_over()]
+        num_games_to_restart = self.args.num_parallel_games - len(self.self_play_games)
+        self.self_play_games += [SelfPlayGame() for _ in range(num_games_to_restart)]
 
     def _get_training_data(self, spg: SelfPlayGame) -> SelfPlayDataset:
         self_play_dataset = SelfPlayDataset()

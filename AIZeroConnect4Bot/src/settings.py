@@ -93,12 +93,12 @@ if True:
 
     NUM_NODES = 2
     NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 50  # Assuming 8 parallel self players per node
+    NUM_SELF_PLAYERS = NUM_NODES * 10  # Assuming 8 parallel self players per node
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 128
+    PARALLEL_GAMES = 64
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -109,7 +109,7 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=256,  # TODO increase a lot
+            batch_size=128,  # TODO increase a lot
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
@@ -150,22 +150,22 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=8,
+            batch_size=16,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=8,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=16,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 0.3,
                 c_param=2,
             ),
         ),
         cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=2,
-            num_inference_nodes_on_cluster=2,
+            num_self_play_nodes_on_cluster=5,
+            num_inference_nodes_on_cluster=1,
         ),
         training=TrainingParams(
             num_epochs=2,

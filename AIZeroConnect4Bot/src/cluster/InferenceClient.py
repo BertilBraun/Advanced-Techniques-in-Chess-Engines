@@ -1,77 +1,61 @@
-from collections import defaultdict
+from queue import Empty
 import time
 import asyncio
 import numpy as np
-from src.settings import CurrentBoard, CurrentGame
-from src.Encoding import encode_board_state
-from src.util.PipeConnection import PipeConnection
+from multiprocessing import Queue
+from collections import defaultdict
+
 from src.util.log import log
+from src.Encoding import encode_board_state
+from src.settings import CurrentBoard, CurrentGame
 
 inference_calls = -50
 inference_time = 0
 
 _INFERENCE_RESPONSES: dict[int, bytes] = defaultdict(bytes)
-_INFERENCE_REQUESTS: list[bytes] = []
-_NUM_BOARDS_IN_INFERENCE_REQUEST = defaultdict(int)
-_NUM_RESPONSES_READ = defaultdict(int)
 _REQUEST_INDEX = 0
 
-_RESULT_CACHE: dict[bytes, tuple[np.ndarray, np.ndarray]] = {}
+_RESULT_CACHE: dict[bytes, tuple[np.ndarray, float]] = {}
 
 
 class InferenceClient:
-    def __init__(self, server_conn: PipeConnection):
-        assert server_conn.readable and server_conn.writable, 'PipeConnection must be readable and writable'
-        self.server_conn = server_conn
+    def __init__(self, inference_queue: Queue, result_queue: Queue, global_id: int) -> None:
+        self.inference_queue = inference_queue
+        self.result_queue = result_queue
+        self.global_id = global_id
 
     def reset_cache(self):
         _RESULT_CACHE.clear()
 
-    async def inference(self, boards: list[CurrentBoard]) -> tuple[np.ndarray, np.ndarray]:
-        global _INFERENCE_RESPONSES, _INFERENCE_REQUESTS, _NUM_BOARDS_IN_INFERENCE_REQUEST, _REQUEST_INDEX
+    async def inference(self, board: CurrentBoard) -> tuple[np.ndarray, float]:
+        global _INFERENCE_RESPONSES, _REQUEST_INDEX
 
-        encoded_boards = [encode_board_state(CurrentGame.get_canonical_board(board)) for board in boards]
-        encoded_bytes = np.array(encoded_boards).tobytes()
+        encoded_board = encode_board_state(CurrentGame.get_canonical_board(board))
+        encoded_bytes = np.array(encoded_board).tobytes()
 
         if encoded_bytes in _RESULT_CACHE:
             return _RESULT_CACHE[encoded_bytes]
 
         my_request_index = _REQUEST_INDEX
-        my_index = _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]
-        _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index] += len(boards)
-        _INFERENCE_REQUESTS.append(encoded_bytes)
+        _REQUEST_INDEX = (_REQUEST_INDEX + 1) % (2**32)
 
         global inference_calls, inference_time
         inference_calls += 1
         start = time.time()
 
-        while (
-            _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index] < 100
-            and time.time() - start < 0.01
-            and _REQUEST_INDEX == my_request_index
-        ):
-            await asyncio.sleep(0)
-
-        if _REQUEST_INDEX == my_request_index:
-            # send request index and the joined bytes of all the requests
-            self.server_conn.send_bytes(_REQUEST_INDEX.to_bytes(4, 'big') + b''.join(_INFERENCE_REQUESTS))
-            _INFERENCE_REQUESTS = []
-            _REQUEST_INDEX += 1
-
-            if _REQUEST_INDEX % 100 == 0:
-                log(
-                    f'Inference request index: {_REQUEST_INDEX} for {_NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]} boards with on average {sum(_NUM_BOARDS_IN_INFERENCE_REQUEST.values()) / len(_NUM_BOARDS_IN_INFERENCE_REQUEST)} boards per request'
-                )
+        self.inference_queue.put(
+            my_request_index.to_bytes(4, 'big') + self.global_id.to_bytes(2, 'big') + encoded_bytes
+        )
 
         # If that is done async, then the recieved bytes could be from a different send request in another iteration of the inference loop. Somehow they will have to be matched back up
 
         while not _INFERENCE_RESPONSES[my_request_index]:
-            if self.server_conn.poll():
-                results = self.server_conn.recv_bytes()
+            try:
+                results = self.result_queue.get_nowait()
                 request_id = int.from_bytes(results[:4], 'big')
                 _INFERENCE_RESPONSES[request_id] = results[4:]
-            else:
-                await asyncio.sleep(0)
+            except Empty:
+                await asyncio.sleep(0.005)
 
         inference_time += time.time() - start
 
@@ -80,25 +64,10 @@ class InferenceClient:
         if inference_calls == 0:
             inference_time = 0
 
-        stride = (CurrentGame.action_size + 1) * 4
+        result = _INFERENCE_RESPONSES.pop(my_request_index)
 
-        start = my_index * stride
-        end = (my_index + len(boards)) * stride
-        result = _INFERENCE_RESPONSES[my_request_index][start:end]
-        assert len(result) % stride == 0, f'{len(result)} % {stride} != 0'
-        assert end <= len(
-            _INFERENCE_RESPONSES[my_request_index]
-        ), f'{end} <= {len(_INFERENCE_RESPONSES[my_request_index])}'
-        assert end - start == len(boards) * stride, f'{end} - {start} != {len(boards)} * {stride}'
-
-        _NUM_RESPONSES_READ[my_request_index] += end - start
-        if _NUM_RESPONSES_READ[my_request_index] == _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index] * stride:
-            # Clean up the memory to prevent memory leaks
-            del _INFERENCE_RESPONSES[my_request_index]
-            del _NUM_BOARDS_IN_INFERENCE_REQUEST[my_request_index]
-
-        result = np.frombuffer(result, dtype=np.float32).reshape(-1, CurrentGame.action_size + 1)
-        policy, value = result[:, :-1], result[:, -1]
+        result = np.frombuffer(result, dtype=np.float32).reshape(CurrentGame.action_size + 1)
+        policy, value = result[:-1], result[-1]
 
         _RESULT_CACHE[encoded_bytes] = policy, value
 

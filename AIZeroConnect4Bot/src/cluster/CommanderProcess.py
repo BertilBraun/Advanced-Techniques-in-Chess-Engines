@@ -1,16 +1,18 @@
+from multiprocessing import Queue
+import time
 import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.util.save_paths import get_latest_model_iteration
-from src.cluster.EvaluationProcess import run_evaluation_process
-from src.cluster.InferenceServerProcess import run_inference_server
-from src.cluster.LoadBalanceProcess import run_load_balancer_process
-from src.cluster.SelfPlayProcess import run_self_play_process
-from src.cluster.TrainerProcess import run_trainer_process
 from src.settings import TRAINING_ARGS
+from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
+from src.util.save_paths import get_latest_model_iteration
+from src.cluster.EvaluationProcess import run_evaluation_process
+from src.cluster.InferenceServerProcess import run_caching_layer, run_inference_server
+from src.cluster.SelfPlayProcess import run_self_play_process
+from src.cluster.TrainerProcess import run_trainer_process
 
 # setup one Trainer Process
 # setup one LoadBalancer Process
@@ -27,7 +29,8 @@ class CommanderProcess:
         self.trainer_process: Process
         self.commander_trainer_pipe: PipeConnection
 
-        self.load_balancer_process: Process
+        self.cache_layer_process: Process
+        self.commander_cache_layer_pipe: PipeConnection
 
         self.inference_server_processes: list[Process] = []
         self.commander_inference_server_pipes: list[PipeConnection] = []
@@ -47,26 +50,23 @@ class CommanderProcess:
         self.trainer_process = Process(target=run_trainer_process, args=(trainer_commander_pipe, trainer_device_id))
         self.trainer_process.start()
 
-        # SelfPlay and LoadBalancer
-        self_play_to_load_balancer_pipes: list[PipeConnection] = []
-        load_balancer_input_pipes: list[PipeConnection] = []
-        for _ in range(self.num_self_play_nodes):
-            self_play_pipe, load_balancer_input_pipe = Pipe(duplex=True)
-            self_play_to_load_balancer_pipes.append(self_play_pipe)
-            load_balancer_input_pipes.append(load_balancer_input_pipe)
+        cache_layer_input_queue = Queue()
+        self_play_response_queues = [Queue() for _ in range(self.num_self_play_nodes)]
+        inference_input_queue = Queue()
+        cache_layer_response_queue = Queue()
 
-        # InferenceServer and LoadBalancer
-        inference_server_to_load_balancer_pipes: list[PipeConnection] = []
-        load_balancer_output_pipes: list[PipeConnection] = []
-        for _ in range(self.num_inference_nodes):
-            inference_server_pipe, load_balancer_output_pipe = Pipe(duplex=True)
-            inference_server_to_load_balancer_pipes.append(inference_server_pipe)
-            load_balancer_output_pipes.append(load_balancer_output_pipe)
-
-        self.load_balancer_process = Process(
-            target=run_load_balancer_process, args=(load_balancer_input_pipes, load_balancer_output_pipes)
+        cache_layer_commander_pipe, self.commander_cache_layer_pipe = Pipe(duplex=False)
+        self.cache_layer_process = Process(
+            target=run_caching_layer,
+            args=(
+                cache_layer_input_queue,
+                self_play_response_queues,
+                inference_input_queue,
+                cache_layer_response_queue,
+                cache_layer_commander_pipe,
+            ),
         )
-        self.load_balancer_process.start()
+        self.cache_layer_process.start()
 
         self.commander_inference_server_pipes: list[PipeConnection] = []
         for device_id in range(self.num_inference_nodes):
@@ -76,7 +76,8 @@ class CommanderProcess:
             p = Process(
                 target=run_inference_server,
                 args=(
-                    inference_server_to_load_balancer_pipes[device_id],
+                    inference_input_queue,
+                    cache_layer_response_queue,
                     inference_server_commander_pipe,
                     1 + (device_id % max(torch.cuda.device_count() - 1, 1)),
                 ),
@@ -91,7 +92,12 @@ class CommanderProcess:
 
             p = Process(
                 target=run_self_play_process,
-                args=(self_play_commander_pipe, self_play_to_load_balancer_pipes[client_idx]),
+                args=(
+                    self_play_commander_pipe,
+                    cache_layer_input_queue,
+                    self_play_response_queues[client_idx],
+                    client_idx,
+                ),
             )
             p.start()
             self.self_play_processes.append(p)
@@ -106,30 +112,53 @@ class CommanderProcess:
         starting_iteration = get_latest_model_iteration()
         log(f'Starting training at iteration {starting_iteration}.')
 
-        for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
-            # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
-            for pipe in (
-                self.commander_inference_server_pipes + self.commander_self_play_pipes + [self.commander_trainer_pipe]
-            ):
-                pipe.send(f'START AT ITERATION: {iteration}')
-            log(f'All processes started at iteration {iteration}.')
+        try:
+            for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
+                # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
+                for pipe in self._all_pipes():
+                    pipe.send(f'START AT ITERATION: {iteration}')
+                log(f'All processes started at iteration {iteration}.')
 
-            # Wait for Trainer to finish
-            assert self.commander_trainer_pipe.recv() == 'FINISHED'
-            log(f'Trainer finished at iteration {iteration}.')
+                time.sleep(20)
 
-            # start EvaluationProcess
-            p = Process(
-                target=run_evaluation_process,
-                args=(
-                    0,  # let the evaluation process run on the trainer device
-                    iteration,
-                ),
-            )
-            p.start()
+                break
 
-        log('Training complete. Sending STOP to all processes.')
-        for pipe in (
-            self.commander_inference_server_pipes + self.commander_self_play_pipes + [self.commander_trainer_pipe]
-        ):
-            pipe.send('STOP')
+                # Wait for Trainer to finish
+                assert self.commander_trainer_pipe.recv() == 'FINISHED'
+                log(f'Trainer finished at iteration {iteration}.')
+
+                # start EvaluationProcess
+                p = Process(
+                    target=run_evaluation_process,
+                    args=(
+                        0,  # let the evaluation process run on the trainer device
+                        iteration,
+                    ),
+                )
+                p.start()
+        finally:
+            log('Training complete. Sending STOP to all processes.')
+            with log_exceptions('Error while stopping processes.'):
+                for pipe in self.commander_self_play_pipes:
+                    pipe.send('STOP')
+
+                time.sleep(3)
+
+                for pipe in self.commander_inference_server_pipes:
+                    pipe.send('STOP')
+
+                # TODO time.sleep(100)
+
+                self.trainer_process.kill()
+                # self.cache_layer_process.kill()
+                # for p in self.inference_server_processes:
+                #     p.kill()
+                # for p in self.self_play_processes:
+                #     p.kill()
+
+    def _all_pipes(self) -> list[PipeConnection]:
+        return (
+            self.commander_inference_server_pipes
+            + self.commander_self_play_pipes
+            + [self.commander_trainer_pipe, self.commander_cache_layer_pipe]
+        )

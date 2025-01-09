@@ -20,11 +20,11 @@ class MCTS:
 
         node.update_virtual_losses(1)
 
-        policies, values = await self.client.inference([node.board])
+        policy, value = await self.client.inference(node.board)
 
-        moves = filter_policy_then_get_moves_and_probabilities(policies[0], node.board)
+        moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
         node.expand(moves)
-        node.back_propagate(values[0])
+        node.back_propagate(value)
 
         node.update_virtual_losses(-1)
 
@@ -47,21 +47,23 @@ class MCTS:
         return [self._get_action_probabilities(root) for root in nodes]
 
     async def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
-        policy, _ = await self.client.inference(boards)
+        results = await asyncio.gather(*[self.client.inference(board) for board in boards])
+        policies = np.array([policy for policy, _ in results], dtype=np.float32)
 
         # Add dirichlet noise to the policy to encourage exploration
         dirichlet_noise = np.random.dirichlet(
             [self.args.dirichlet_alpha] * CurrentGame.action_size,
             size=len(boards),
         )
-        policy = lerp(policy, dirichlet_noise, self.args.dirichlet_epsilon)
-        return policy
+        policies = lerp(policies, dirichlet_noise, self.args.dirichlet_epsilon)
+        return policies
 
     def _get_action_probabilities(self, root_node: MCTSNode) -> np.ndarray:
         action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
 
         for child in root_node.children:
             action_probabilities[child.move_to_get_here] = child.number_of_visits
+
         action_probabilities /= np.sum(action_probabilities)
 
         return action_probabilities
