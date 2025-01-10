@@ -19,6 +19,7 @@ from src.util.PipeConnection import PipeConnection
 # NOT_NECESSARY remove caching from clients? Do they get the results in the correct order?
 # DONE start a new parallel game as soon as a game finishes, not when all games finish? When to check for model/iteration updates?
 # DONE optimize MCTS Node again
+# TODO batch on the cache layer already and send complete batches to the inference server
 
 # Alternative approach
 # TODO use asyncio to handle many games and search trees in parallel, assembling the requests into a batch and evaluating them locally
@@ -143,18 +144,23 @@ class InferenceServer:
         if not board_states:
             return
 
-        input_tensor = torch.tensor(np.array(board_states), dtype=TORCH_DTYPE).to(self.model.device)
+        input_tensor = torch.tensor(np.array(board_states), dtype=TORCH_DTYPE, device=self.model.device)
 
         policies, values = self.model(input_tensor)
 
         # TODO Wait for the model to finish the inference and simultaneously prefetch the next batch
 
-        policies = torch.softmax(policies, dim=1).to(dtype=torch.float32, device='cpu').numpy()
-        values = torch.mean(values, dim=1).to(dtype=torch.float32, device='cpu').numpy()
+        policies = torch.softmax(policies, dim=1)
+        values = torch.mean(values, dim=1)
 
-        for request_id, policy, value in zip(request_ids, policies, values):
-            self._send_response(request_id, policy, value)
+        results = torch.cat((policies, values.unsqueeze(1)), dim=1)  # TODO check correctness
 
-    def _send_response(self, request: RequestId, policies: np.ndarray, values: np.ndarray) -> None:
+        # Do as much as possible in parallel on the GPU before sending the results back to CPU
+        results = results.to(dtype=TORCH_DTYPE, device='cpu').numpy()
+
+        for request_id, result in zip(request_ids, results):
+            self._send_response(request_id, result)
+
+    def _send_response(self, request: RequestId, result: np.ndarray) -> None:
         request_id, sender_id = request
-        self.output_queue.put_nowait((request_id, sender_id, np.concatenate((policies, [values])).tobytes()))
+        self.output_queue.put_nowait((request_id, sender_id, result.tobytes()))

@@ -8,6 +8,7 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
+from src.util.log import log
 
 
 @dataclass
@@ -69,6 +70,8 @@ class SelfPlay:
 
     async def self_play(self) -> None:
         mcts_action_probabilities = await self.mcts.search([spg.board for spg in self.self_play_games])
+
+        log('Making Self Play Move')
 
         for spg, action_probabilities in zip(self.self_play_games, mcts_action_probabilities):
             spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))

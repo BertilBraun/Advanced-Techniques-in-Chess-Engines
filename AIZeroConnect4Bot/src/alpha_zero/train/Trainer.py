@@ -50,7 +50,8 @@ from src.util.log import log
 # TODO magic numbers into settings with default values
 # TODO default values in settings
 # TODO proper documentation
-# TODO proper graph representing the architecture
+# TODO proper graph representing the different architectures tried
+# TODO generate branches for the different architecture approaches tried
 # TODO run for Connect4 with new setup for 2h
 # TODO run for Checkers
 # TODO log time for each self play loop, how long for n games to finish - compare to previous

@@ -7,6 +7,7 @@ from src.util import lerp
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.mcts.MCTSArgs import MCTSArgs
+from src.util.log import log
 
 
 class MCTS:
@@ -30,6 +31,7 @@ class MCTS:
 
     async def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
         policies = await self._get_policy_with_noise(boards)
+        log('Got policies')
 
         nodes: list[MCTSNode] = []
         for board, spg_policy in zip(boards, policies):
@@ -40,10 +42,12 @@ class MCTS:
             nodes.append(root)
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
+            log('Next search iteration')
             await asyncio.gather(
                 *[self.iterate(root) for _ in range(self.args.num_parallel_searches) for root in nodes]
             )
 
+        log('Search done, getting action probabilities')
         return [self._get_action_probabilities(root) for root in nodes]
 
     async def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:
