@@ -156,7 +156,7 @@ class InferenceServer:
         results = torch.cat((policies, values.unsqueeze(1)), dim=1)  # TODO check correctness
 
         # Do as much as possible in parallel on the GPU before sending the results back to CPU
-        results = results.to(dtype=TORCH_DTYPE, device='cpu').numpy()
+        results = results.to(dtype=torch.float32, device='cpu').numpy()
 
         for request_id, result in zip(request_ids, results):
             self._send_response(request_id, result)
