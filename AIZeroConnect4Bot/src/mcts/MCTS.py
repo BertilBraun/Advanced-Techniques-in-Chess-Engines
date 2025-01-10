@@ -16,18 +16,23 @@ class MCTS:
         self.args = args
 
     async def iterate(self, root: MCTSNode) -> None:
+        log('Iterating')
         if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param)):
             return
 
+        log('Updating virtual losses')
         node.update_virtual_losses(1)
 
+        log('Inference')
         policy, value = await self.client.inference(node.board)
+        log('Got policy and value')
 
         moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
         node.expand(moves)
         node.back_propagate(value)
 
         node.update_virtual_losses(-1)
+        log('Done iterating')
 
     async def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
         policies = await self._get_policy_with_noise(boards)

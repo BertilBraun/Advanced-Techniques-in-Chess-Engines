@@ -56,6 +56,9 @@ class MCTSNode:
         return policy_score * self.policy + q_score
 
     def expand(self, moves_with_scores: list[tuple[CurrentGameMove, float]]) -> None:
+        if self.is_fully_expanded:
+            return  # Already expanded by another thread
+
         self.children = [
             MCTSNode(
                 policy=score,

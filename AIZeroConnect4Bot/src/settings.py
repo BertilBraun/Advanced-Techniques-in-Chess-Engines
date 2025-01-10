@@ -115,7 +115,7 @@ if True:
             num_parallel_games=PARALLEL_GAMES,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
-                num_parallel_searches=32,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 1.0,
                 c_param=4,
