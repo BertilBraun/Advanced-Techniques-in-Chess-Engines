@@ -7,7 +7,6 @@ from src.util import lerp
 from src.mcts.MCTSNode import MCTSNode
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
 from src.mcts.MCTSArgs import MCTSArgs
-from src.util.log import log
 
 
 class MCTS:
@@ -16,27 +15,21 @@ class MCTS:
         self.args = args
 
     async def iterate(self, root: MCTSNode) -> None:
-        log('Iterating')
         if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param)):
             return
 
-        log('Updating virtual losses')
         node.update_virtual_losses(1)
 
-        log('Inference')
         policy, value = await self.client.inference(node.board)
-        log('Got policy and value')
 
         moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
         node.expand(moves)
         node.back_propagate(value)
 
         node.update_virtual_losses(-1)
-        log('Done iterating')
 
     async def search(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
         policies = await self._get_policy_with_noise(boards)
-        log('Got policies')
 
         nodes: list[MCTSNode] = []
         for board, spg_policy in zip(boards, policies):
@@ -47,12 +40,10 @@ class MCTS:
             nodes.append(root)
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-            log('Next search iteration')
             await asyncio.gather(
                 *[self.iterate(root) for _ in range(self.args.num_parallel_searches) for root in nodes]
             )
 
-        log('Search done, getting action probabilities')
         return [self._get_action_probabilities(root) for root in nodes]
 
     async def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> np.ndarray:

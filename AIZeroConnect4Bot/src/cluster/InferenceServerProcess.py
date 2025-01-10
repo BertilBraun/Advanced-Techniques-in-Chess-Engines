@@ -153,7 +153,7 @@ class InferenceServer:
         policies = torch.softmax(policies, dim=1)
         values = torch.mean(values, dim=1)
 
-        results = torch.cat((policies, values.unsqueeze(1)), dim=1)  # TODO check correctness
+        results = torch.cat((policies, values.unsqueeze(1)), dim=1)
 
         # Do as much as possible in parallel on the GPU before sending the results back to CPU
         results = results.to(dtype=torch.float32, device='cpu').numpy()
