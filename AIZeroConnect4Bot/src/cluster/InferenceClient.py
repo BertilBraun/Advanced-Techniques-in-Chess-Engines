@@ -40,12 +40,18 @@ class InferenceClient:
 
         # If that is done async, then the recieved bytes could be from a different send request in another iteration of the inference loop. Somehow they will have to be matched back up
 
+        i = 0
+
         while not _INFERENCE_RESPONSES[my_request_index]:
+            i += 1
             try:
                 request_id, results = self.result_queue.get_nowait()
                 _INFERENCE_RESPONSES[request_id] = results
             except Empty:
-                await asyncio.sleep(0.005)
+                await asyncio.sleep(0.01)
+
+            if i % 1000 == 0:
+                print(f'Waiting for response for {i} iterations')
 
         result = _INFERENCE_RESPONSES.pop(my_request_index)
 
