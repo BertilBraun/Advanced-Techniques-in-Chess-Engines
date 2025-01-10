@@ -140,6 +140,45 @@ if True:
         ),
     )
     # TODO remove
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=100,
+        save_path=SAVE_PATH + '/connect4',
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+        network=NetworkParams(
+            num_layers=NN_NUM_LAYERS,
+            hidden_size=NN_HIDDEN_SIZE,
+        ),
+        inference=InferenceParams(batch_size=512),
+        self_play=SelfPlayParams(
+            temperature=1.25,
+            num_parallel_games=PARALLEL_GAMES,
+            mcts=MCTSParams(
+                num_searches_per_turn=600,
+                num_parallel_searches=4,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=lambda _: 1.0,
+                c_param=4,
+            ),
+        ),
+        cluster=ClusterParams(
+            num_self_play_nodes_on_cluster=2,
+            # All available GPUs except the one used for training
+            num_inference_nodes_on_cluster=2,
+        ),
+        training=TrainingParams(
+            num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
+            batch_size=128,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+        ),
+        evaluation=EvaluationParams(
+            num_searches_per_turn=60,
+            num_games=20,
+            every_n_iterations=10,
+        ),
+    )
+    # TODO remove
     TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
