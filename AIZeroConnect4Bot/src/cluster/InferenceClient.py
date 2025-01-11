@@ -18,7 +18,7 @@ T = TypeVar('T')
 class InferenceClient:
     def __init__(self, device_id: int, network_args: NetworkParams, inference_args: InferenceParams) -> None:
         self.model: Network = None  # type: ignore
-        self.device = torch.device(f'cuda:{device_id}') if USE_GPU else torch.device('cpu')
+        self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
         self.network_args = network_args
         self.inference_args = inference_args

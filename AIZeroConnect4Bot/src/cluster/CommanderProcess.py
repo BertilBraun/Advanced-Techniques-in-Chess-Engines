@@ -47,7 +47,7 @@ class CommanderProcess:
 
             process = Process(
                 target=run_self_play_process,
-                args=(self_play_commander_pipe, self._get_device_id(device_id, self.num_self_play_nodes)),
+                args=(self_play_commander_pipe, _get_device_id(device_id, self.num_self_play_nodes)),
             )
             process.start()
             self.self_play_processes.append(process)
@@ -90,18 +90,18 @@ class CommanderProcess:
     def _all_pipes(self) -> list[PipeConnection]:
         return self.commander_self_play_pipes + [self.commander_trainer_pipe]
 
-    def _get_device_id(self, i: int, total: int) -> int:
-        # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
-        if not USE_GPU:
-            return 0
 
-        num_devices = torch.cuda.device_count()
-        num_on_each_device = total // num_devices
-        num_on_device_0 = num_on_each_device // 2
+def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_count()) -> int:
+    # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
+    if not USE_GPU:
+        return 0
 
-        if i < num_on_device_0:
-            return 0
+    num_on_each_device = total // num_devices
+    num_on_device_0 = num_on_each_device // 2
 
-        remaining = total - num_on_device_0
-        device_id = remaining // num_on_each_device + 1
-        return device_id
+    if i < num_on_device_0:
+        return 0
+
+    remaining = total - num_on_device_0
+    device_id = remaining // num_on_each_device + 1
+    return device_id

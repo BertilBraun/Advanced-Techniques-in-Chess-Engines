@@ -16,7 +16,7 @@ def run_self_play_process(commander_pipe: PipeConnection, device_id: int):
 
     client = InferenceClient(device_id, TRAINING_ARGS.network, TRAINING_ARGS.inference)
     self_play_process = SelfPlayProcess(client, TRAINING_ARGS.self_play, TRAINING_ARGS.save_path, commander_pipe)
-    with log_exceptions('Self play process crashed.'):
+    with log_exceptions(f'Self play process {device_id} crashed.'):
         asyncio.run(self_play_process.run())
 
 
