@@ -15,7 +15,6 @@ def _log_system_usage(interval: float):
     """
     # Get the current process
     process = psutil.Process()
-    children = process.children(recursive=True)
 
     with open('usage.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -38,7 +37,7 @@ def _log_system_usage(interval: float):
             for gpu in GPUtil.getGPUs():
                 writer.writerow([timestamp, -1, 0, 0, gpu.id, gpu.load, gpu.memoryUsed, gpu.memoryTotal])
 
-            for i, proc in enumerate([process] + children):
+            for i, proc in enumerate([process] + process.children(recursive=True)):
                 cpu_percent = proc.cpu_percent(interval=None)
                 ram_usage = proc.memory_info().rss / 2**20
                 writer.writerow([timestamp, i, cpu_percent, ram_usage, -1, 0, 0, 0])

@@ -56,18 +56,6 @@ class SelfPlay:
         self.dataset = SelfPlayDataset()
         self.client.update_iteration(iteration)
 
-    def _get_mcts(self, iteration: int) -> MCTS:
-        return MCTS(
-            self.client,
-            MCTSArgs(
-                num_searches_per_turn=self.args.mcts.num_searches_per_turn,
-                num_parallel_searches=self.args.mcts.num_parallel_searches,
-                dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
-                dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
-                c_param=self.args.mcts.c_param,
-            ),
-        )
-
     async def self_play(self) -> None:
         mcts_action_probabilities = await self.mcts.search([spg.board for spg in self.self_play_games])
 
@@ -84,6 +72,18 @@ class SelfPlay:
         self.self_play_games = [spg for spg in self.self_play_games if not spg.board.is_game_over()]
         num_games_to_restart = self.args.num_parallel_games - len(self.self_play_games)
         self.self_play_games += [SelfPlayGame() for _ in range(num_games_to_restart)]
+
+    def _get_mcts(self, iteration: int) -> MCTS:
+        return MCTS(
+            self.client,
+            MCTSArgs(
+                num_searches_per_turn=self.args.mcts.num_searches_per_turn,
+                num_parallel_searches=self.args.mcts.num_parallel_searches,
+                dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
+                dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
+                c_param=self.args.mcts.c_param,
+            ),
+        )
 
     def _get_training_data(self, spg: SelfPlayGame) -> SelfPlayDataset:
         self_play_dataset = SelfPlayDataset()

@@ -68,13 +68,8 @@ class TrainerProcess:
     def _wait_for_enough_training_samples(self, iteration):
         EXPECTED_NUM_SAMPLES = self.args.num_games_per_iteration * CurrentGame.average_num_moves_per_game
 
-        def num_samples_in_current_and_previous_iteration(iteration: int) -> int:
-            current_len = len(SelfPlayDataset.load_iteration(self.args.save_path, iteration))
-            previous_len = len(SelfPlayDataset.load_iteration(self.args.save_path, iteration - 1))
-            return current_len + previous_len
-
         i = 0
-        while (samples := num_samples_in_current_and_previous_iteration(iteration)) < EXPECTED_NUM_SAMPLES:
+        while (samples := len(SelfPlayDataset.load_iteration(self.args.save_path, iteration))) < EXPECTED_NUM_SAMPLES:
             if i % 30 == 0:
                 log(f'Waiting for enough samples for iteration {iteration} ({samples} < {EXPECTED_NUM_SAMPLES})')
             i += 1

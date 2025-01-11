@@ -93,7 +93,7 @@ if True:
     CurrentGameVisuals = Connect4Visuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 12
+    SELF_PLAYERS_PER_NODE = 24
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 

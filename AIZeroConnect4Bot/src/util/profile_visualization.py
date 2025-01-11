@@ -20,7 +20,7 @@ def visualize():
     system_df['time_diff'] = system_df['timestamp'].diff().dt.total_seconds()
 
     # Remove rows with negative or unusually large gaps
-    system_df = system_df[system_df['time_diff'] > 0]
+    system_df = system_df[system_df['time_diff'] >= 0]
 
     ranks = system_df['rank'].unique()
     ranks = ranks[ranks != -1]
@@ -48,7 +48,7 @@ def visualize():
     # GPU Load
     for gpu in gpu_ids:
         df_gpu = system_df[system_df['gpu_id'] == gpu]
-        axs[2].plot(df_gpu['timestamp'], df_gpu['gpu_load'], label=f'GPU {gpu} Load')
+        axs[2].plot(df_gpu['timestamp'], df_gpu['gpu_load'] * 100, label=f'GPU {gpu} Load')
     axs[2].set_ylabel('GPU Load (%)')
     axs[2].set_title('GPU Load')
     axs[2].legend(loc='upper left')

@@ -37,7 +37,7 @@ class SelfPlayProcess:
             if running:
                 await self.self_play.self_play()
 
-                if len(self.self_play.dataset) >= 500:
+                if len(self.self_play.dataset) >= 2000:
                     self._save_dataset(current_iteration)
 
             if self.commander_pipe.poll():
