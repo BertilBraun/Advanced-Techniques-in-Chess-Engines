@@ -11,7 +11,7 @@ class MCTSParams:
     """
 
     num_parallel_searches: int
-    """This is the number of parallel searches to run the MCTS algorithm in self-play. I.e. the number of searches to run in parallel to get the next move to play. The higher the number the faster the MCTS algorithm runs but the more memory is used. Typically 1-16 for parallel searches."""
+    """This is the number of parallel searches to run the MCTS algorithm in self-play. I.e. the number of searches to run in parallel to get the next move to play. The higher the number the faster the MCTS algorithm runs but the more memory is used. Typically 8-16 (or number of cells in game board) for parallelism in the MCTS algorithm."""
 
     dirichlet_epsilon: float
     """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
@@ -34,13 +34,16 @@ class NetworkParams:
 
 @dataclass
 class SelfPlayParams:
-    temperature: float
-    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
+    mcts: MCTSParams
 
     num_parallel_games: int
     """This is the number of games to run in parallel for self-play."""
 
-    mcts: MCTSParams
+    temperature: float = 1.25
+    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
+
+    result_score_weight: float = 0.5
+    """This is the weight to use for the interpolation between final game outcome as score and the mcts result score. Weight of 0 is only the final game outcome, weight of 1 is only the mcts result score."""
 
 
 @dataclass
@@ -101,7 +104,7 @@ class EvaluationParams:
 @dataclass
 class InferenceParams:
     batch_size: int
-    """This is the size of the batch to use for inference. The higher the batch size the faster the inference but the more memory is used. Typically 32-512 for inference"""
+    """This is the size of the batch to use for inference. The higher the batch size the faster the inference but the more memory is used. Typically 32-512 (parallel_games * parallel_searches as an upper bound) for inference"""
 
 
 @dataclass

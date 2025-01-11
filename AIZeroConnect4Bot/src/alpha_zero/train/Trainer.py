@@ -33,7 +33,7 @@ from src.util.log import log
 # NOT_REQUIRED Not always reload each iteration, but only if the memory is not already loaded - only takes a second to load the memory
 # DONE single GPU for training, multiple GPUs for self-play?
 
-# TODO use both the final game result as well as the MCTS root value_sum / num_visits as the value target for the NN training. Averaging f.e.
+# DONE use both the final game result as well as the MCTS root value_sum / num_visits as the value target for the NN training. Averaging f.e.
 
 # DONE reduce board size to 6x7
 
@@ -52,11 +52,11 @@ from src.util.log import log
 # TODO proper documentation
 # TODO proper graph representing the different architectures tried
 # TODO generate branches for the different architecture approaches tried
-# TODO run for Connect4 with new setup for 2h
+# DONE run for Connect4 with new setup for 2h
 # TODO run for Checkers
-# TODO log time for each self play loop, how long for n games to finish - compare to previous
+# DONE log time for each self play loop, how long for n games to finish - compare to previous
 
-# TODO usage during training is also just 40% - let other processes use the GPU as well
+# DONE usage during training is also just 40% - let other processes use the GPU as well
 
 
 # NOTE Queue based system 2 Inference Servers on 2 GPUS with 40 clients in total
@@ -69,24 +69,27 @@ from src.util.log import log
 
 # NOTE on pipe based system still has to be recorded
 
+# NOTE new Client inference based system with 12 clients per GPU
+# Allrox 20sec for 500 samples, 40sec for 1000 samples -> approx 3x faster than old client inference based system and 12x faster than queue based system
+
 
 # DONE inference server handles with queues and is as light weight as possible
 # DONE the load balancer will manage locations of incoming requests, caches, load balancing to the inference servers and proper redistribution of requests to the callers (in the correct order?)
 # NOT_NECESSARY remove caching from clients? Do they get the results in the correct order?
 # DONE start a new parallel game as soon as a game finishes, not when all games finish? When to check for model/iteration updates?
 # DONE optimize MCTS Node again
-# TODO batch on the cache layer already and send complete batches to the inference server
+# NOT_NECESSARY batch on the cache layer already and send complete batches to the inference server
 
 # Alternative approach
-# TODO use asyncio to handle many games and search trees in parallel, assembling the requests into a batch and evaluating them locally
-# TODO use a local asyncio event to notify once the network inference was done, so that results can be processed and the next iteration can be started
+# DONE use asyncio to handle many games and search trees in parallel, assembling the requests into a batch and evaluating them locally
+# DONE use a local asyncio event to notify once the network inference was done, so that results can be processed and the next iteration can be started
 # Drawbacks:
 # - less caching possible
 # - GPU utilization based on how well the os schedules the processes
 # - multiple models per GPU loaded - less vram remaining - lower batch size
 # Benefits:
 # - simpler architecture - actually more of a drawback if the project should be shown off
-# - less communication overhead
+# - !!less communication overhead!!
 
 
 class Trainer:

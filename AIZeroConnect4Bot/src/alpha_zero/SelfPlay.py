@@ -8,12 +8,14 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
+from src.util import lerp
 
 
 @dataclass
 class SelfPlayGameMemory:
     board: CurrentBoard
     action_probabilities: np.ndarray
+    result_score: float
 
 
 class SelfPlayGame:
@@ -57,10 +59,10 @@ class SelfPlay:
         self.client.update_iteration(iteration)
 
     async def self_play(self) -> None:
-        mcts_action_probabilities = await self.mcts.search([spg.board for spg in self.self_play_games])
+        mcts_results = await self.mcts.search([spg.board for spg in self.self_play_games])
 
-        for spg, action_probabilities in zip(self.self_play_games, mcts_action_probabilities):
-            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities))
+        for spg, (action_probabilities, result_score) in zip(self.self_play_games, mcts_results):
+            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities, result_score))
 
             move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
             spg.board.make_move(move)
@@ -99,7 +101,7 @@ class SelfPlay:
                 self_play_dataset.add_sample(
                     board.copy().astype(np.int8),
                     probabilities.copy().astype(np.float32),
-                    result,
+                    lerp(result, mem.result_score, self.args.result_score_weight),
                 )
             result = -result
 
