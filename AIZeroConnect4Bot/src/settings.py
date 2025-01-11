@@ -110,7 +110,7 @@ if True:
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
-        inference=InferenceParams(batch_size=256),
+        inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             temperature=1.25,
             num_parallel_games=PARALLEL_GAMES,
@@ -137,7 +137,7 @@ if True:
         ),
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
@@ -146,14 +146,14 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=16,
+            batch_size=128,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=64,
+            num_parallel_games=128,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=4,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 0.3,
                 c_param=2,
