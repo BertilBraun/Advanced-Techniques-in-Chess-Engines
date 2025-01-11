@@ -146,14 +146,14 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=128,
+            batch_size=16,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=128,
+            num_parallel_games=64,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 0.3,
                 c_param=2,
