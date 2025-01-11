@@ -93,15 +93,14 @@ class CommanderProcess:
 
 def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_count()) -> int:
     # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
-    if not USE_GPU:
+    if not USE_GPU and False:
         return 0
 
-    num_on_each_device = total // num_devices
-    num_on_device_0 = num_on_each_device // 2
+    num_on_each_device = total / num_devices
+    num_on_device_0 = round(num_on_each_device / 2)
 
     if i < num_on_device_0:
         return 0
 
-    remaining = total - num_on_device_0
-    device_id = remaining // num_on_each_device + 1
+    device_id = 1 + (i - num_on_device_0) % (num_devices - 1)
     return device_id
