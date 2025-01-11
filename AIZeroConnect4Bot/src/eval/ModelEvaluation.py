@@ -6,10 +6,10 @@ from typing import Callable, Coroutine
 from dataclasses import dataclass
 
 from src.alpha_zero.SelfPlay import sample_move
-from src.cluster.InferenceServerProcess import start_inference_server
+from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
-from src.settings import CurrentBoard, CurrentGame
+from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame
 from src.games.Game import Player
 
 
@@ -66,7 +66,8 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        current_model, stop_current_model = start_inference_server(iteration)
+        current_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        current_model.update_iteration(iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return await MCTS(current_model, mcts_args).search(boards)
@@ -79,8 +80,6 @@ class ModelEvaluation:
 
         results += await self._play_two_models_search(model1, model2, num_games // 2)
         results -= await self._play_two_models_search(model2, model1, num_games // 2)
-
-        stop_current_model()
 
         return results
 
@@ -101,8 +100,11 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        current_model, stop_current_model = start_inference_server(current_model_iteration)
-        previous_model, stop_previous_model = start_inference_server(previous_model_iteration)
+        current_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        current_model.update_iteration(current_model_iteration)
+
+        previous_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        previous_model.update_iteration(previous_model_iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             return await MCTS(current_model, mcts_args).search(boards)
@@ -112,9 +114,6 @@ class ModelEvaluation:
 
         results += await self._play_two_models_search(model1, model2, num_games // 2)
         results -= await self._play_two_models_search(model2, model1, num_games // 2)
-
-        stop_current_model()
-        stop_previous_model()
 
         return results
 

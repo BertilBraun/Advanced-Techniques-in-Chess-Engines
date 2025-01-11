@@ -48,9 +48,6 @@ class ClusterParams:
     num_self_play_nodes_on_cluster: int
     """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with."""
 
-    num_inference_nodes_on_cluster: int
-    """This is the number of separate nodes on the cluster to use to parallelize the inference. This should most likely be the number of GPUs-1 available on the cluster. One GPU is typically used for training and the rest for inference."""
-
 
 @dataclass
 class TrainingParams:

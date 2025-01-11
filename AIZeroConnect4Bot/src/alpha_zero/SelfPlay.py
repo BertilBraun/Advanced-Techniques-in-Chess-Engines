@@ -54,6 +54,7 @@ class SelfPlay:
         self.iteration = iteration
         self.mcts = self._get_mcts(self.iteration)
         self.dataset = SelfPlayDataset()
+        self.client.update_iteration(iteration)
 
     def _get_mcts(self, iteration: int) -> MCTS:
         return MCTS(

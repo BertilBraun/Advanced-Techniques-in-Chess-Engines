@@ -9,5 +9,5 @@ class RandomPlayer(Bot):
         """Initializes the random player."""
         super().__init__('RandomPlayer', max_time_to_think=0.0)
 
-    def think(self, board: CurrentBoard) -> CurrentGameMove:
+    async def think(self, board: CurrentBoard) -> CurrentGameMove:
         return random.choice(board.get_valid_moves())

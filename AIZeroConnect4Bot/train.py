@@ -23,10 +23,7 @@ if __name__ == '__main__':
 
     start_usage_logger()
 
-    commander = CommanderProcess(
-        num_self_play_nodes=TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster,
-        num_inference_nodes=TRAINING_ARGS.cluster.num_inference_nodes_on_cluster,
-    )
+    commander = CommanderProcess(num_self_play_nodes=TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster)
 
     commander.run()
     log('Training finished')

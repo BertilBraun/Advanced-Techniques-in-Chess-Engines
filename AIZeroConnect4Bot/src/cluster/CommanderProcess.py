@@ -1,14 +1,13 @@
 import torch
-from torch.multiprocessing import Process, Pipe, Queue
+from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.settings import TRAINING_ARGS
+from src.settings import TRAINING_ARGS, USE_GPU
+from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
 from src.util.save_paths import get_latest_model_iteration
 from src.cluster.EvaluationProcess import run_evaluation_process
-from src.cluster.InferenceServerProcess import run_inference_server
-from src.cluster.CacheLayerProcess import run_caching_layer
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
 
@@ -20,24 +19,14 @@ from src.cluster.TrainerProcess import run_trainer_process
 
 
 class CommanderProcess:
-    def __init__(self, num_self_play_nodes: int, num_inference_nodes: int) -> None:
+    def __init__(self, num_self_play_nodes: int) -> None:
         self.num_self_play_nodes = num_self_play_nodes
-        self.num_inference_nodes = num_inference_nodes
 
         self.trainer_process: Process
         self.commander_trainer_pipe: PipeConnection
 
-        self.cache_layer_process: Process
-        self.commander_cache_layer_pipe: PipeConnection
-
-        self.inference_server_processes: list[Process] = []
-        self.commander_inference_server_pipes: list[PipeConnection] = []
-
         self.self_play_processes: list[Process] = []
         self.commander_self_play_pipes: list[PipeConnection] = []
-
-        # Keep track of them to solve mutliprocessing spawn issue where they were already freed again
-        self.all_queues: list[Queue] = []
 
     def _setup_connections(self) -> None:
         # The Trainer and Commander has a Pipe connection
@@ -51,64 +40,17 @@ class CommanderProcess:
         self.trainer_process = Process(target=run_trainer_process, args=(trainer_commander_pipe, trainer_device_id))
         self.trainer_process.start()
 
-        cache_layer_input_queue = Queue()
-        self_play_response_queues = [Queue() for _ in range(self.num_self_play_nodes)]
-        inference_input_queue = Queue()
-        cache_layer_response_queue = Queue()
-
-        self.all_queues = [
-            cache_layer_input_queue,
-            *self_play_response_queues,
-            inference_input_queue,
-            cache_layer_response_queue,
-        ]
-
-        cache_layer_commander_pipe, self.commander_cache_layer_pipe = Pipe(duplex=False)
-        self.cache_layer_process = Process(
-            target=run_caching_layer,
-            args=(
-                cache_layer_input_queue,
-                self_play_response_queues,
-                inference_input_queue,
-                cache_layer_response_queue,
-                cache_layer_commander_pipe,
-            ),
-        )
-        self.cache_layer_process.start()
-
-        self.commander_inference_server_pipes: list[PipeConnection] = []
-        for device_id in range(self.num_inference_nodes):
-            inference_server_commander_pipe, commander_inference_server_pipe = Pipe(duplex=False)
-            self.commander_inference_server_pipes.append(commander_inference_server_pipe)
-
-            p = Process(
-                target=run_inference_server,
-                args=(
-                    inference_input_queue,
-                    cache_layer_response_queue,
-                    inference_server_commander_pipe,
-                    1 + (device_id % max(torch.cuda.device_count() - 1, 1)),
-                ),
-            )
-            p.start()
-            self.inference_server_processes.append(p)
-
         self.commander_self_play_pipes: list[PipeConnection] = []
-        for client_idx in range(self.num_self_play_nodes):
+        for device_id in range(self.num_self_play_nodes):
             self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
             self.commander_self_play_pipes.append(commander_self_play_pipe)
 
-            p = Process(
+            process = Process(
                 target=run_self_play_process,
-                args=(
-                    self_play_commander_pipe,
-                    cache_layer_input_queue,
-                    self_play_response_queues[client_idx],
-                    client_idx,
-                ),
+                args=(self_play_commander_pipe, self._get_device_id(device_id, self.num_self_play_nodes)),
             )
-            p.start()
-            self.self_play_processes.append(p)
+            process.start()
+            self.self_play_processes.append(process)
 
     def run(self):
         Path(TRAINING_ARGS.save_path).mkdir(parents=True, exist_ok=True)
@@ -120,7 +62,7 @@ class CommanderProcess:
         starting_iteration = get_latest_model_iteration()
         log(f'Starting training at iteration {starting_iteration}.')
 
-        try:
+        with log_exceptions('Commander crashed.'):
             for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 for pipe in self._all_pipes():
@@ -134,21 +76,32 @@ class CommanderProcess:
                 # start EvaluationProcess
                 p = Process(target=run_evaluation_process, args=(iteration,))
                 p.start()
-        finally:
-            log('Training complete. Sending STOP to all processes.')
-            for pipe in self._all_pipes():
-                pipe.send('STOP')
 
-            for process in (
-                self.self_play_processes
-                + self.inference_server_processes
-                + [self.trainer_process, self.cache_layer_process]
-            ):
-                process.join()
+        log('Training complete. Sending STOP to all processes.')
+        for pipe in self._all_pipes():
+            pipe.send('STOP')
+
+        for process in self._all_processes():
+            process.kill()
+
+    def _all_processes(self) -> list[Process]:
+        return self.self_play_processes + [self.trainer_process]
 
     def _all_pipes(self) -> list[PipeConnection]:
-        return (
-            self.commander_inference_server_pipes
-            + self.commander_self_play_pipes
-            + [self.commander_trainer_pipe, self.commander_cache_layer_pipe]
-        )
+        return self.commander_self_play_pipes + [self.commander_trainer_pipe]
+
+    def _get_device_id(self, i: int, total: int) -> int:
+        # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
+        if not USE_GPU:
+            return 0
+
+        num_devices = torch.cuda.device_count()
+        num_on_each_device = total // num_devices
+        num_on_device_0 = num_on_each_device // 2
+
+        if i < num_on_device_0:
+            return 0
+
+        remaining = total - num_on_device_0
+        device_id = remaining // num_on_each_device + 1
+        return device_id

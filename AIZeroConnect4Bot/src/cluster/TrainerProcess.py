@@ -73,9 +73,12 @@ class TrainerProcess:
             previous_len = len(SelfPlayDataset.load_iteration(self.args.save_path, iteration - 1))
             return current_len + previous_len
 
-        while num_samples_in_current_and_previous_iteration(iteration) < EXPECTED_NUM_SAMPLES:
-            log('Waiting for memories...')
-            time.sleep(20)
+        i = 0
+        while (samples := num_samples_in_current_and_previous_iteration(iteration)) < EXPECTED_NUM_SAMPLES:
+            if i % 30 == 0:
+                log(f'Waiting for enough samples for iteration {iteration} ({samples} < {EXPECTED_NUM_SAMPLES})')
+            i += 1
+            time.sleep(1)
 
     def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats, dataset: SelfPlayDataset) -> None:
         log_scalar('policy_loss', train_stats.policy_loss, iteration)

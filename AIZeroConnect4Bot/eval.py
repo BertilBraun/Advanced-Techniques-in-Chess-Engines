@@ -1,14 +1,12 @@
-import src.environ_setup  # isort:skip # noqa import first to setup environment variables and other configurations
-
 import torch
 
-from src.util import load_json
 from src.util.log import log
-from src.settings import CurrentGame, CurrentGameVisuals, SAVE_PATH
+from src.settings import CurrentGame, CurrentGameVisuals
 from src.games.GUI import BaseGridGameGUI
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot
+from src.util.save_paths import get_latest_model_iteration
 
 torch.set_float32_matmul_precision('high')
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -23,17 +21,12 @@ class CommonHumanPlayer(HumanPlayer):
 
 
 if __name__ == '__main__':
-    try:
-        last_training_config = load_json(f'{SAVE_PATH}/last_training_config.json')
-        model_path = last_training_config['model']
-        log('Using model from last training:', model_path)
-    except FileNotFoundError:
-        model_path = None
+    iteration = get_latest_model_iteration()
 
     MAX_TIME_TO_THINK = 1.0
 
     game_manager = GameManager(
-        AlphaZeroBot(model_path, max_time_to_think=MAX_TIME_TO_THINK),
+        AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK),
         CommonHumanPlayer(),
     )
 

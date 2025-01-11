@@ -15,7 +15,7 @@ class HumanPlayer(Bot):
         self.game_visuals = game_visuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
-    def think(self, board: CurrentBoard) -> CurrentGameMove:
+    async def think(self, board: CurrentBoard) -> CurrentGameMove:
         # Common input loop for all games
         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
 

@@ -56,6 +56,38 @@ from src.util.log import log
 # TODO run for Checkers
 # TODO log time for each self play loop, how long for n games to finish - compare to previous
 
+# TODO usage during training is also just 40% - let other processes use the GPU as well
+
+
+# NOTE Queue based system 2 Inference Servers on 2 GPUS with 40 clients in total
+# [15.50.00] [INFO] Generating 1030 samples took 430.68sec
+
+# NOTE old Client inference based system with 12 clients per GPU
+# Self Play for 64 games in parallel: 100%|██████████| 1/1 [03:44<00:00, 224.13s/it]
+# [12.58.39] [INFO] Collected 2120 self-play memories.
+# Approx 220sec for 2120 samples, 110sec for ~1000 samples -> approx 4x faster (But more clients per GPU were used)
+
+# NOTE on pipe based system still has to be recorded
+
+
+# DONE inference server handles with queues and is as light weight as possible
+# DONE the load balancer will manage locations of incoming requests, caches, load balancing to the inference servers and proper redistribution of requests to the callers (in the correct order?)
+# NOT_NECESSARY remove caching from clients? Do they get the results in the correct order?
+# DONE start a new parallel game as soon as a game finishes, not when all games finish? When to check for model/iteration updates?
+# DONE optimize MCTS Node again
+# TODO batch on the cache layer already and send complete batches to the inference server
+
+# Alternative approach
+# TODO use asyncio to handle many games and search trees in parallel, assembling the requests into a batch and evaluating them locally
+# TODO use a local asyncio event to notify once the network inference was done, so that results can be processed and the next iteration can be started
+# Drawbacks:
+# - less caching possible
+# - GPU utilization based on how well the os schedules the processes
+# - multiple models per GPU loaded - less vram remaining - lower batch size
+# Benefits:
+# - simpler architecture - actually more of a drawback if the project should be shown off
+# - less communication overhead
+
 
 class Trainer:
     def __init__(

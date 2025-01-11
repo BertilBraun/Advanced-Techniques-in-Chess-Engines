@@ -92,14 +92,15 @@ if True:
     CurrentBoard = Connect4Board
     CurrentGameVisuals = Connect4Visuals()
 
-    NUM_NODES = 2
-    NUM_TRAINERS = 1
-    NUM_SELF_PLAYERS = NUM_NODES * 20  # Assuming 8 parallel self players per node
+    NUM_GPUS = torch.cuda.device_count()
+    SELF_PLAYERS_PER_NODE = 12
+    # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
     NN_HIDDEN_SIZE = 128
     NN_NUM_LAYERS = 9
 
-    PARALLEL_GAMES = 64
+    PARALLEL_GAMES = 128
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -115,17 +116,13 @@ if True:
             num_parallel_games=PARALLEL_GAMES,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
-                num_parallel_searches=4,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=lambda _: 1.0,
                 c_param=4,
             ),
         ),
-        cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS,
-            # All available GPUs except the one used for training
-            num_inference_nodes_on_cluster=torch.cuda.device_count() - 1,
-        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
         training=TrainingParams(
             num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
             batch_size=128,
@@ -140,7 +137,7 @@ if True:
         ),
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
@@ -149,11 +146,11 @@ if True:
             hidden_size=NN_HIDDEN_SIZE,
         ),
         inference=InferenceParams(
-            batch_size=16,
+            batch_size=128,
         ),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=8,
+            num_parallel_games=128,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
                 num_parallel_searches=8,
@@ -162,10 +159,7 @@ if True:
                 c_param=2,
             ),
         ),
-        cluster=ClusterParams(
-            num_self_play_nodes_on_cluster=5,
-            num_inference_nodes_on_cluster=1,
-        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
             num_epochs=2,
             batch_size=32,

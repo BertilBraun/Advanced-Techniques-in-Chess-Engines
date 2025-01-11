@@ -1,27 +1,39 @@
 import numpy as np
 
-from src.cluster.InferenceServerProcess import start_inference_server
+from src.alpha_zero.train.TrainingArgs import InferenceParams
+from src.cluster.InferenceClient import InferenceClient
+from src.mcts.MCTS import MCTS
+from src.mcts.MCTSArgs import MCTSArgs
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
-from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
-from src.settings import CurrentBoard, CurrentGameMove, PLAY_C_PARAM
+from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGameMove, PLAY_C_PARAM
 
 
 class AlphaZeroBot(Bot):
     def __init__(self, iteration: int, max_time_to_think: float) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        inference_client, stop_inference_server = start_inference_server(iteration)
-        self.inference_client = inference_client
-        self.stop_inference_server = stop_inference_server
+        BATCH_SIZE = 16
+
+        self.inference_client = InferenceClient(0, TRAINING_ARGS.network, InferenceParams(BATCH_SIZE))
+        self.inference_client.update_iteration(iteration)
+
+        self.mcts_args = MCTSArgs(
+            # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
+            num_searches_per_turn=2**16 - 1,
+            num_parallel_searches=BATCH_SIZE,
+            dirichlet_alpha=0.5,  # irrelevant
+            dirichlet_epsilon=0.0,
+            c_param=PLAY_C_PARAM,
+        )
+        self.mcts = MCTS(self.inference_client, self.mcts_args)
 
     async def think(self, board: CurrentBoard) -> CurrentGameMove:
         root = MCTSNode.root(board)
 
-        for _ in range(2**16 - 1):
-            # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
-            await self.iterate(root)  # TODO could these just run in parallel? Virtual loss probably
+        for _ in range(self.mcts_args.num_searches_per_turn // self.mcts_args.num_parallel_searches):
+            await self.mcts.parallel_iterate([root])
             if self.time_is_up:
                 break
 
@@ -41,25 +53,3 @@ class AlphaZeroBot(Bot):
         log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here
-
-    async def iterate(self, root: MCTSNode) -> None:
-        current_node = root
-        while not current_node.is_terminal_node and current_node.is_fully_expanded:
-            current_node = current_node.best_child(PLAY_C_PARAM)
-
-        if current_node.is_terminal_node:
-            result = get_board_result_score(current_node.board)
-            assert result is not None, 'Game is not over'
-            result = -result
-        else:
-            moves_with_scores, result = await self.evaluation(current_node.board)
-            current_node.expand(moves_with_scores)
-
-        current_node.back_propagate(result)
-
-    async def evaluation(self, board: CurrentBoard) -> tuple[list[tuple[CurrentGameMove, float]], float]:
-        policy, value = await self.inference_client.inference(board)
-
-        moves = filter_policy_then_get_moves_and_probabilities(policy, board)
-
-        return moves, value
