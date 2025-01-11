@@ -4,7 +4,8 @@ import numpy as np
 from pathlib import Path
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.settings import TRAINING_ARGS, USE_GPU, log_histogram, log_scalar, CurrentGame
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.settings import USE_GPU, log_histogram, log_scalar, CurrentGame
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
@@ -13,18 +14,18 @@ from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.PipeConnection import PipeConnection
 
 
-def run_trainer_process(commander_pipe: PipeConnection, device_id: int):
+def run_trainer_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable.'
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
-    trainer_process = TrainerProcess(device_id, commander_pipe)
+    trainer_process = TrainerProcess(args, device_id, commander_pipe)
     with log_exceptions('Trainer process'):
         trainer_process.run()
 
 
 class TrainerProcess:
-    def __init__(self, device_id: int, commander_pipe: PipeConnection) -> None:
-        self.args = TRAINING_ARGS
+    def __init__(self, args: TrainingArgs, device_id: int, commander_pipe: PipeConnection) -> None:
+        self.args = args
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
         self.commander_pipe = commander_pipe
@@ -37,14 +38,14 @@ class TrainerProcess:
                 break
             elif message.startswith('START AT ITERATION:'):
                 iteration = int(message.split(':')[-1])
-                with log_exceptions('Training'):
-                    self.train(iteration)
+                training_stats = self.train(iteration)
+                self.commander_pipe.send(training_stats)
                 self.commander_pipe.send('FINISHED')
 
         log('Training process stopped.')
 
-    def train(self, iteration: int) -> None:
-        model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device)
+    def train(self, iteration: int) -> TrainingStats:
+        model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device, self.args.save_path)
 
         trainer = Trainer(model, optimizer, self.args.training)
 
@@ -60,10 +61,10 @@ class TrainerProcess:
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
 
-        save_model_and_optimizer(model, optimizer, iteration + 1)
+        save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
-        log(f'Iteration {iteration + 1}: {train_stats}')
         self._log_to_tensorboard(iteration, train_stats, dataset)
+        return train_stats
 
     def _wait_for_enough_training_samples(self, iteration):
         EXPECTED_NUM_SAMPLES = self.args.num_games_per_iteration * CurrentGame.average_num_moves_per_game

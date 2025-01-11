@@ -47,14 +47,15 @@ from src.util.log import log
 # DONE profile
 # DONE system usage logger
 
-# TODO magic numbers into settings with default values
-# TODO default values in settings
+# DONE magic numbers into settings with default values
+# DONE default values in settings
 # TODO proper documentation
 # TODO proper graph representing the different architectures tried
 # TODO generate branches for the different architecture approaches tried
 # DONE run for Connect4 with new setup for 2h
 # TODO run for Checkers
 # DONE log time for each self play loop, how long for n games to finish - compare to previous
+# DONE fix opt.py
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
 
@@ -117,7 +118,7 @@ class Trainer:
             batch_size=self.args.batch_size,
             shuffle=True,
             drop_last=False,
-            num_workers=2,
+            num_workers=self.args.num_workers,
             pin_memory=USE_GPU,
         )
         validation_dataloader = DataLoader(

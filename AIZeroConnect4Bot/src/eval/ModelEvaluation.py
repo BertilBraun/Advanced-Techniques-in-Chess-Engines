@@ -70,7 +70,8 @@ class ModelEvaluation:
         current_model.update_iteration(iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            return await MCTS(current_model, mcts_args).search(boards)
+            results = await MCTS(current_model, mcts_args).search(boards)
+            return [result[0] for result in results]
 
         async def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
@@ -107,10 +108,12 @@ class ModelEvaluation:
         previous_model.update_iteration(previous_model_iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            return await MCTS(current_model, mcts_args).search(boards)
+            results = await MCTS(current_model, mcts_args).search(boards)
+            return [result[0] for result in results]
 
         async def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            return await MCTS(previous_model, mcts_args).search(boards)
+            results = await MCTS(previous_model, mcts_args).search(boards)
+            return [result[0] for result in results]
 
         results += await self._play_two_models_search(model1, model2, num_games // 2)
         results -= await self._play_two_models_search(model2, model1, num_games // 2)

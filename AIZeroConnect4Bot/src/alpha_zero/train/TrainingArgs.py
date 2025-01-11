@@ -45,6 +45,9 @@ class SelfPlayParams:
     result_score_weight: float = 0.5
     """This is the weight to use for the interpolation between final game outcome as score and the mcts result score. Weight of 0 is only the final game outcome, weight of 1 is only the mcts result score."""
 
+    num_samples_after_which_to_write: int = 2000
+    """This is the number of samples to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough samples are collected. Typically 1000-5000 for self-play."""
+
 
 @dataclass
 class ClusterParams:
@@ -87,6 +90,9 @@ class TrainingParams:
         min_lr = base_lr / 10
         return lerp(min_lr, base_lr, batch_percentage)
     """
+
+    num_workers: int = 2
+    """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training"""
 
 
 @dataclass

@@ -1,8 +1,11 @@
+from typing import Generator
 import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.settings import TRAINING_ARGS, USE_GPU
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.settings import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
@@ -19,8 +22,8 @@ from src.cluster.TrainerProcess import run_trainer_process
 
 
 class CommanderProcess:
-    def __init__(self, num_self_play_nodes: int) -> None:
-        self.num_self_play_nodes = num_self_play_nodes
+    def __init__(self, args: TrainingArgs) -> None:
+        self.args = args
 
         self.trainer_process: Process
         self.commander_trainer_pipe: PipeConnection
@@ -37,44 +40,54 @@ class CommanderProcess:
         trainer_device_id = 0
         trainer_commander_pipe, self.commander_trainer_pipe = Pipe(duplex=True)
 
-        self.trainer_process = Process(target=run_trainer_process, args=(trainer_commander_pipe, trainer_device_id))
+        self.trainer_process = Process(
+            target=run_trainer_process, args=(self.args, trainer_commander_pipe, trainer_device_id)
+        )
         self.trainer_process.start()
 
         self.commander_self_play_pipes: list[PipeConnection] = []
-        for device_id in range(self.num_self_play_nodes):
+        for device_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
             self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
             self.commander_self_play_pipes.append(commander_self_play_pipe)
 
             process = Process(
                 target=run_self_play_process,
-                args=(self_play_commander_pipe, _get_device_id(device_id, self.num_self_play_nodes)),
+                args=(
+                    self.args,
+                    self_play_commander_pipe,
+                    _get_device_id(device_id, self.args.cluster.num_self_play_nodes_on_cluster),
+                ),
             )
             process.start()
             self.self_play_processes.append(process)
 
-    def run(self):
-        Path(TRAINING_ARGS.save_path).mkdir(parents=True, exist_ok=True)
+    def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
+        Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
 
         log('Setting up connections...')
         self._setup_connections()
         log('Connections set up.')
 
-        starting_iteration = get_latest_model_iteration()
+        starting_iteration = get_latest_model_iteration(self.args.num_iterations, self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
 
         with log_exceptions('Commander crashed.'):
-            for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
+            for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 for pipe in self._all_pipes():
                     pipe.send(f'START AT ITERATION: {iteration}')
                 log(f'All processes started at iteration {iteration}.')
 
                 # Wait for Trainer to finish
+                train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
                 assert self.commander_trainer_pipe.recv() == 'FINISHED'
-                log(f'Trainer finished at iteration {iteration}.')
+                yield iteration, train_stats
 
                 # start EvaluationProcess
-                p = Process(target=run_evaluation_process, args=(iteration,))
+                p = Process(
+                    target=run_evaluation_process,
+                    args=(self.args.evaluation, iteration),
+                )
                 p.start()
 
         log('Training complete. Sending STOP to all processes.')

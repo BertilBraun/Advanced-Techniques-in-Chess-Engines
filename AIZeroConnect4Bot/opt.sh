@@ -14,7 +14,4 @@
 
 source setup.sh
 
-python3.11 -m src.hyperparameter_optimization.opt &
-python3.11 -m src.hyperparameter_optimization.opt &
-python3.11 -m src.hyperparameter_optimization.opt &
-python3.11 -m src.hyperparameter_optimization.opt
+python3.11 opt.py

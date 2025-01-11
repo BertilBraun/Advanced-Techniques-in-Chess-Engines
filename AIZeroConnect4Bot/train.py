@@ -23,7 +23,9 @@ if __name__ == '__main__':
 
     start_usage_logger()
 
-    commander = CommanderProcess(num_self_play_nodes=TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster)
+    commander = CommanderProcess(TRAINING_ARGS)
+    for iteration, stats in commander.run():
+        log(f'Trainer finished at iteration {iteration}.')
+        log(f'Iteration {iteration}: {stats}')
 
-    commander.run()
     log('Training finished')

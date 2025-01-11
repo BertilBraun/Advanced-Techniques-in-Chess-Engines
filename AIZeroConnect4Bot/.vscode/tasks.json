@@ -11,7 +11,7 @@
         {
             "label": "view profile",
             "type": "shell",
-            "command": "python -m src.util.profile_visualization",
+            "command": "python -m src.util.profiler_visualization",
         }
     ]
 }

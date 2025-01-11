@@ -112,7 +112,6 @@ if True:
         ),
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
-            temperature=1.25,
             num_parallel_games=PARALLEL_GAMES,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
@@ -124,7 +123,7 @@ if True:
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
         training=TrainingParams(
-            num_epochs=1,  # TODO the iteration should now be even faster, therefore lr decay and window size must be adjusted
+            num_epochs=1,
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
@@ -145,11 +144,8 @@ if True:
             num_layers=NN_NUM_LAYERS,
             hidden_size=NN_HIDDEN_SIZE,
         ),
-        inference=InferenceParams(
-            batch_size=128,
-        ),
+        inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
-            temperature=1.25,
             num_parallel_games=128,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
