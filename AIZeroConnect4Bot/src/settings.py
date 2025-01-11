@@ -159,7 +159,7 @@ if True:
                 c_param=2,
             ),
         ),
-        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=5),
         training=TrainingParams(
             num_epochs=2,
             batch_size=32,
