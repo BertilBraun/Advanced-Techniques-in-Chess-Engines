@@ -38,9 +38,12 @@ def _log_system_usage(interval: float):
                 writer.writerow([timestamp, -1, 0, 0, gpu.id, gpu.load, gpu.memoryUsed, gpu.memoryTotal])
 
             for i, proc in enumerate([process] + process.children(recursive=True)):
-                cpu_percent = proc.cpu_percent(interval=None)
-                ram_usage = proc.memory_info().rss / 2**20
-                writer.writerow([timestamp, i, cpu_percent, ram_usage, -1, 0, 0, 0])
+                try:
+                    cpu_percent = proc.cpu_percent(interval=None)
+                    ram_usage = proc.memory_info().rss / 2**20
+                    writer.writerow([timestamp, i, cpu_percent, ram_usage, -1, 0, 0, 0])
+                except psutil.NoSuchProcess:
+                    pass
 
             file.flush()  # Ensure data is written to disk
             time.sleep(interval)

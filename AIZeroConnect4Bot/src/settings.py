@@ -187,11 +187,12 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 100,
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
+            num_samples_after_which_to_write=100,
             temperature=1.0,
             mcts=MCTSParams(
                 num_searches_per_turn=800,
