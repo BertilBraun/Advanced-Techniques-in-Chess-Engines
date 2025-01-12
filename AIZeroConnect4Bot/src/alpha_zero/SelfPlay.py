@@ -1,8 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
 
-from viztracer import VizTracer
-
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
@@ -54,9 +52,6 @@ class SelfPlay:
 
         self.mcts = self._get_mcts(self.iteration)
 
-        self.tracer = VizTracer(tracer_entries=5_000_000)
-        self.tracer.start()
-
     def update_iteration(self, iteration: int) -> None:
         self.iteration = iteration
         self.mcts = self._get_mcts(self.iteration)
@@ -79,11 +74,6 @@ class SelfPlay:
         self.self_play_games = [spg for spg in self.self_play_games if not spg.board.is_game_over()]
         num_games_to_restart = self.args.num_parallel_games - len(self.self_play_games)
         self.self_play_games += [SelfPlayGame() for _ in range(num_games_to_restart)]
-
-        if spg.num_played_moves == 5:
-            self.tracer.stop()
-            self.tracer.save('self_play.json')
-            exit()
 
     def _get_mcts(self, iteration: int) -> MCTS:
         return MCTS(
