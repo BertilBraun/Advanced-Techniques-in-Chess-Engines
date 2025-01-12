@@ -56,6 +56,7 @@ from src.util.log import log
 # TODO run for Checkers
 # DONE log time for each self play loop, how long for n games to finish - compare to previous
 # DONE fix opt.py
+# TODO run viztracer on Cluster on one node for 5 self play moves and inspect the results
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
 
