@@ -116,7 +116,7 @@ class MCTSNode:
 
     def __repr__(self) -> str:
         return f"""AlphaMCTSNode(
-{self.board.board if self.board else None}
+{repr(self.board) if self.board else None}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 virtual loss: {self.virtual_losses}

@@ -57,3 +57,9 @@ class Board(ABC, Generic[_Move]):
             return
         for attr in getattr(self, 'cache_attr_names'):
             setattr(self, attr, None)
+
+    def _copy_cache(self, other: Board) -> None:
+        if not hasattr(other, 'cache_attr_names'):
+            return
+        for attr in getattr(other, 'cache_attr_names'):
+            setattr(self, attr, getattr(other, attr))

@@ -67,10 +67,6 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
 
 
-def dirichlet_alpha(iteration: int) -> float:
-    return 1.0
-
-
 # Chess training args
 # ALPHA_ZERO_TRAINING_ARGS = TrainingArgs(
 #     num_iterations=200,
@@ -104,6 +100,9 @@ if False:
     network = NetworkParams(num_layers=9, hidden_size=128)
 
     PARALLEL_GAMES = 128
+
+    def dirichlet_alpha(iteration: int) -> float:
+        return 1.0
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -174,13 +173,16 @@ elif True:
     CurrentGameVisuals = CheckersVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 24
+    SELF_PLAYERS_PER_NODE = 50
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
-    network = NetworkParams(num_layers=10, hidden_size=128)
+    network = NetworkParams(num_layers=12, hidden_size=128)
 
-    PARALLEL_GAMES = 128
+    PARALLEL_GAMES = 256
+
+    def dirichlet_alpha(iteration: int) -> float:
+        return 0.2  # Average of 50 moves possible per turn -> 10/50 = 0.2
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -190,12 +192,13 @@ elif True:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
+            temperature=1.0,
             mcts=MCTSParams(
                 num_searches_per_turn=800,
-                num_parallel_searches=16,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
-                c_param=4,
+                c_param=2,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
@@ -213,23 +216,25 @@ elif True:
         ),
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
-            num_parallel_games=128,
+            num_parallel_games=256,
+            temperature=1.0,
+            num_samples_after_which_to_write=10,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=16,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
             ),
         ),
-        cluster=ClusterParams(num_self_play_nodes_on_cluster=5),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
             num_epochs=2,
             batch_size=32,

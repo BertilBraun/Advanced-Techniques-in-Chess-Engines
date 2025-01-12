@@ -436,6 +436,7 @@ class CheckersBoard(Board[CheckersMove]):
         game.white_pieces = self.white_pieces
         game.white_kings = self.white_kings
         game.current_player = self.current_player
+        game._copy_cache(self)  # Copy cached results
         return game
 
     def _occupied(self) -> uint64:
