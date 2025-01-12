@@ -192,7 +192,7 @@ elif True:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
-            num_samples_after_which_to_write=100,
+            num_samples_after_which_to_write=10,
             temperature=1.0,
             mcts=MCTSParams(
                 num_searches_per_turn=800,
