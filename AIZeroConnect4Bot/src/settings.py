@@ -177,9 +177,9 @@ elif True:
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
-    network = NetworkParams(num_layers=12, hidden_size=128)
+    network = NetworkParams(num_layers=10, hidden_size=128)
 
-    PARALLEL_GAMES = 256
+    PARALLEL_GAMES = 64
 
     def dirichlet_alpha(iteration: int) -> float:
         return 0.2  # Average of 50 moves possible per turn -> 10/50 = 0.2
@@ -187,7 +187,7 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 100,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
@@ -195,7 +195,7 @@ elif True:
             num_samples_after_which_to_write=10,
             temperature=1.0,
             mcts=MCTSParams(
-                num_searches_per_turn=800,
+                num_searches_per_turn=600,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
@@ -205,7 +205,7 @@ elif True:
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
         training=TrainingParams(
             num_epochs=1,
-            batch_size=128,
+            batch_size=64,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,
