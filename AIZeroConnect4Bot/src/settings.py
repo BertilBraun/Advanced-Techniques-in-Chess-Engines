@@ -195,7 +195,7 @@ elif True:
             num_samples_after_which_to_write=10,
             temperature=1.0,
             mcts=MCTSParams(
-                num_searches_per_turn=512,
+                num_searches_per_turn=200,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
@@ -217,7 +217,7 @@ elif True:
         ),
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,

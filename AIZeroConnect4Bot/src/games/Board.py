@@ -32,6 +32,10 @@ class Board(ABC, Generic[_Move]):
     def copy(self) -> Board[_Move]:
         pass
 
+    @abstractmethod
+    def quick_hash(self) -> int:
+        pass
+
     def _switch_player(self) -> None:
         self.current_player = -self.current_player
 

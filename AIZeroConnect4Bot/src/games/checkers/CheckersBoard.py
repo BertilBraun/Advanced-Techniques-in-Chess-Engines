@@ -456,3 +456,6 @@ class CheckersBoard(Board[CheckersMove]):
 
     def _friendly_kings(self) -> uint64:
         return self.black_kings if self.current_player == 1 else self.white_kings
+
+    def quick_hash(self) -> int:
+        return hash((self.black_kings, self.black_pieces, self.white_kings, self.white_pieces))

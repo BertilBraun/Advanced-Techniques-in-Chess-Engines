@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import numpy as np
+from collections import Counter
 from dataclasses import dataclass
 
 from viztracer import VizTracer
@@ -11,10 +14,9 @@ from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 from src.util import lerp
-from src.util.log import log
 
 
-@dataclass
+@dataclass(frozen=True)
 class SelfPlayGameMemory:
     board: CurrentBoard
     action_probabilities: np.ndarray
@@ -27,6 +29,16 @@ class SelfPlayGame:
         self.memory: list[SelfPlayGameMemory] = []
         self.num_played_moves = 0
 
+    def copy(self) -> SelfPlayGame:
+        game = SelfPlayGame()
+        game.board = self.board.copy()
+        game.memory = self.memory[:]
+        game.num_played_moves = self.num_played_moves
+        return game
+
+    def __hash__(self) -> int:
+        return self.board.quick_hash()
+
 
 def sample_move(
     action_probabilities: np.ndarray, num_played_moves: int = 0, temperature: float = 1.0
@@ -34,10 +46,10 @@ def sample_move(
     # only use temperature for the first 30 moves, then simply use the action probabilities as they are
     if num_played_moves < 30:
         temperature_action_probabilities = action_probabilities ** (1 / temperature)
-        temperature_action_probabilities /= np.sum(temperature_action_probabilities)
     else:
         temperature_action_probabilities = action_probabilities
 
+    temperature_action_probabilities /= np.sum(temperature_action_probabilities)
     action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
     return CurrentGame.decode_move(action)
@@ -48,15 +60,13 @@ class SelfPlay:
         self.client = client
         self.args = args
 
-        self.self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self.self_play_games: Counter[SelfPlayGame] = Counter()
+        self.self_play_games[SelfPlayGame()] += self.args.num_parallel_games
         self.dataset = SelfPlayDataset()
 
         self.iteration = 0
 
         self.mcts = self._get_mcts(self.iteration)
-
-        self.tracer = VizTracer(tracer_entries=10_000_000, max_stack_depth=11)
-        self.tracer.start()
 
     def update_iteration(self, iteration: int) -> None:
         self.iteration = iteration
@@ -65,29 +75,55 @@ class SelfPlay:
         self.client.update_iteration(iteration)
 
     async def self_play(self) -> None:
-        log('Self play move:', self.self_play_games[0].num_played_moves)
         mcts_results = await self.mcts.search([spg.board for spg in self.self_play_games])
 
-        for spg, (action_probabilities, result_score) in zip(self.self_play_games, mcts_results):
-            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities, result_score))
+        current_self_play_games = list(self.self_play_games.items())
+        for (spg, count), (action_probabilities, result_score) in zip(current_self_play_games, mcts_results):
+            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities.copy(), result_score))
 
-            move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
-            spg.board.make_move(move)
-            spg.num_played_moves += 1
+            original_action_probabilities = action_probabilities.copy()
+            for _ in range(count):
+                self.self_play_games[spg] -= 1
 
-            if spg.board.is_game_over():
-                self.dataset += self._get_training_data(spg)
+                num_valid_moves = len(spg.board.get_valid_moves())
+                action_probabilities = original_action_probabilities.copy()
+                while num_valid_moves > 0 and np.sum(action_probabilities) > 0:
+                    new_spg = spg.copy()
 
-        self.self_play_games = [spg for spg in self.self_play_games if not spg.board.is_game_over()]
-        num_games_to_restart = self.args.num_parallel_games - len(self.self_play_games)
-        self.self_play_games += [SelfPlayGame() for _ in range(num_games_to_restart)]
+                    move = sample_move(action_probabilities, spg.num_played_moves, self.args.temperature)
+                    new_spg.board.make_move(move)
 
-        self.tracer.stop()
-        self.tracer.save(f'self_play_{spg.num_played_moves}.json')
-        self.tracer = VizTracer(tracer_entries=10_000_000, max_stack_depth=11)
-        self.tracer.start()
-        if spg.num_played_moves == 5:
-            exit()
+                    if self.self_play_games[new_spg] > 0:
+                        action_probabilities[CurrentGame.encode_move(move)] = 0
+                        continue
+
+                    new_spg.num_played_moves += 1
+
+                    if new_spg.board.is_game_over():
+                        self.dataset += self._get_training_data(new_spg)
+                    else:
+                        self.self_play_games[new_spg] += 1
+                    break
+                else:
+                    # No valid moves left which are not already being explored
+                    # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
+                    new_spg = spg.copy()
+
+                    move = sample_move(original_action_probabilities, spg.num_played_moves, self.args.temperature)
+                    new_spg.board.make_move(move)
+
+                    if new_spg.board.is_game_over():
+                        self.dataset += self._get_training_data(new_spg)
+                    else:
+                        self.self_play_games[new_spg] += 1
+
+        # remove spgs with count 0
+        self.self_play_games = self.self_play_games - Counter()
+        assert all(count > 0 for count in self.self_play_games.values())
+
+        num_remaining_games = sum(self.self_play_games.values())
+        if num_remaining_games < self.args.num_parallel_games:
+            self.self_play_games[SelfPlayGame()] += self.args.num_parallel_games - num_remaining_games
 
     def _get_mcts(self, iteration: int) -> MCTS:
         return MCTS(
