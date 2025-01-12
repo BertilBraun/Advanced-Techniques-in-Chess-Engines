@@ -39,7 +39,7 @@ class SelfPlayParams:
     num_parallel_games: int
     """This is the number of games to run in parallel for self-play."""
 
-    temperature: float = 1.25
+    temperature: float = 1.0
     """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
 
     result_score_weight: float = 0.5
@@ -47,6 +47,9 @@ class SelfPlayParams:
 
     num_samples_after_which_to_write: int = 2000
     """This is the number of samples to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough samples are collected. Typically 1000-5000 for self-play."""
+
+    resignation_threshold: float = -0.85
+    """This is the threshold to use for the resignation of a game. If the mcts result score is below this threshold the game is resigned. The lower the threshold the more games are resigned. The higher the threshold the less games are resigned. Typically -0.85 to -0.99 for self-play."""
 
 
 @dataclass

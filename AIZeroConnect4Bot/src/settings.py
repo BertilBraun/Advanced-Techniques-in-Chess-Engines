@@ -21,7 +21,7 @@ LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
 TESTING = True
 
-LOG_HISTOGRAMS = False  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
+LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
 PLAY_C_PARAM = 1.0
 
@@ -112,6 +112,7 @@ if False:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
+            temperature=1.25,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
                 num_parallel_searches=8,
@@ -143,6 +144,7 @@ if False:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=128,
+            temperature=1.25,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
                 num_parallel_searches=8,
@@ -179,7 +181,7 @@ elif True:
 
     network = NetworkParams(num_layers=10, hidden_size=128)
 
-    PARALLEL_GAMES = 64
+    PARALLEL_GAMES = 128
 
     def dirichlet_alpha(iteration: int) -> float:
         return 0.2  # Average of 50 moves possible per turn -> 10/50 = 0.2
@@ -187,15 +189,14 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 100,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
-            num_samples_after_which_to_write=10,
-            temperature=1.0,
+            num_samples_after_which_to_write=500,
             mcts=MCTSParams(
-                num_searches_per_turn=200,  # based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=400,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
@@ -205,7 +206,7 @@ elif True:
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
             num_epochs=1,
-            batch_size=64,
+            batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,
@@ -225,8 +226,7 @@ elif True:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=64,
-            temperature=1.0,
-            num_samples_after_which_to_write=10,
+            num_samples_after_which_to_write=500,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
                 num_parallel_searches=8,
@@ -237,8 +237,8 @@ elif True:
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
-            num_epochs=2,
-            batch_size=32,
+            num_epochs=1,
+            batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,
