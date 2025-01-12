@@ -9,6 +9,7 @@ from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 from src.util import lerp
+from src.util.log import log
 
 
 @dataclass
@@ -59,7 +60,7 @@ class SelfPlay:
         self.client.update_iteration(iteration)
 
     async def self_play(self) -> None:
-        print('Self play move:', self.self_play_games[0].num_played_moves)
+        log('Self play move:', self.self_play_games[0].num_played_moves)
         mcts_results = await self.mcts.search([spg.board for spg in self.self_play_games])
 
         for spg, (action_probabilities, result_score) in zip(self.self_play_games, mcts_results):
