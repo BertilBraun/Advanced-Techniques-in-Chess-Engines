@@ -135,7 +135,7 @@ if False:
         ),
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
@@ -151,7 +151,7 @@ if False:
                 c_param=2,
             ),
         ),
-        cluster=ClusterParams(num_self_play_nodes_on_cluster=5),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
             num_epochs=2,
             batch_size=32,
@@ -173,7 +173,7 @@ elif True:
     CurrentGameVisuals = CheckersVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 5
+    SELF_PLAYERS_PER_NODE = 25
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
@@ -187,7 +187,7 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 100,
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
@@ -195,7 +195,7 @@ elif True:
             num_samples_after_which_to_write=10,
             temperature=1.0,
             mcts=MCTSParams(
-                num_searches_per_turn=600,
+                num_searches_per_turn=512,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
@@ -224,7 +224,7 @@ elif True:
         network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
-            num_parallel_games=256,
+            num_parallel_games=64,
             temperature=1.0,
             num_samples_after_which_to_write=10,
             mcts=MCTSParams(

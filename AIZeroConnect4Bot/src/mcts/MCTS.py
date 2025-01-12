@@ -16,18 +16,18 @@ class MCTS:
     async def search(self, boards: list[CurrentBoard]) -> list[tuple[np.ndarray, float]]:
         policies = await self._get_policy_with_noise(boards)
 
-        nodes: list[MCTSNode] = []
+        roots: list[MCTSNode] = []
         for board, spg_policy in zip(boards, policies):
             moves = filter_policy_then_get_moves_and_probabilities(spg_policy, board)
 
             root = MCTSNode.root(board)
             root.expand(moves)
-            nodes.append(root)
+            roots.append(root)
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-            await self.parallel_iterate(nodes)
+            await self.parallel_iterate(roots)
 
-        return [(self._get_action_probabilities(root), root.result_score / root.number_of_visits) for root in nodes]
+        return [(self._get_action_probabilities(root), root.result_score / root.number_of_visits) for root in roots]
 
     async def parallel_iterate(self, roots: list[MCTSNode]) -> None:
         await self.client.run_batch(
