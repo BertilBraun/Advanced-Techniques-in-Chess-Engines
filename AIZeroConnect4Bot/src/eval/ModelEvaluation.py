@@ -66,7 +66,7 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        current_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        current_model = InferenceClient(0, TRAINING_ARGS)
         current_model.update_iteration(iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -101,10 +101,10 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        current_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        current_model = InferenceClient(0, TRAINING_ARGS)
         current_model.update_iteration(current_model_iteration)
 
-        previous_model = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.inference)
+        previous_model = InferenceClient(0, TRAINING_ARGS)
         previous_model.update_iteration(previous_model_iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:

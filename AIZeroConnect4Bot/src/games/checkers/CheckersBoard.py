@@ -381,6 +381,9 @@ class CheckersBoard(Board[CheckersMove]):
             elif self.black_kings & start_mask:
                 self.black_kings &= ~start_mask
                 self.black_kings |= end_mask
+
+            else:
+                assert False, 'Invalid move'
         else:
             # White to move
             if self.white_pieces & start_mask:
@@ -394,6 +397,9 @@ class CheckersBoard(Board[CheckersMove]):
             elif self.white_kings & start_mask:
                 self.white_kings &= ~start_mask
                 self.white_kings |= end_mask
+
+            else:
+                assert False, 'Invalid move'
 
         # Switch player
         self._switch_player()
@@ -449,19 +455,3 @@ class CheckersBoard(Board[CheckersMove]):
 
     def _friendly_kings(self) -> uint64:
         return self.black_kings if self.current_player == 1 else self.white_kings
-
-
-if __name__ == '__main__':
-    import time
-
-    def dfs(board, depth):
-        if depth == 0:
-            return
-        for move in board.get_valid_moves():
-            new_board = board.copy()
-            new_board.make_move(move)
-            dfs(new_board, depth - 1)
-
-    start = time.time()
-    dfs(CheckersBoard(), 6)
-    print(time.time() - start)

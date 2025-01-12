@@ -13,7 +13,7 @@ from src.util.PipeConnection import PipeConnection
 def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
-    client = InferenceClient(device_id, args.network, args.inference)
+    client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
     with log_exceptions(f'Self play process {device_id} crashed.'):
         asyncio.run(self_play_process.run())

@@ -65,7 +65,7 @@ class MCTS:
         action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
 
         for child in root_node.children:
-            action_probabilities[child.move_to_get_here] = child.number_of_visits
+            action_probabilities[CurrentGame.encode_move(child.move_to_get_here)] = child.number_of_visits
 
         action_probabilities /= np.sum(action_probabilities)
 

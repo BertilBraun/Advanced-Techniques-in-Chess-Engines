@@ -7,7 +7,7 @@ import torch
 
 from src.Encoding import encode_board_state
 from src.Network import Network
-from src.alpha_zero.train.TrainingArgs import InferenceParams, NetworkParams
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame
 from src.util.save_paths import load_model, model_save_path
 
@@ -16,19 +16,17 @@ T = TypeVar('T')
 
 
 class InferenceClient:
-    def __init__(self, device_id: int, network_args: NetworkParams, inference_args: InferenceParams) -> None:
+    def __init__(self, device_id: int, args: TrainingArgs) -> None:
+        self.args = args
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
-
-        self.network_args = network_args
-        self.inference_args = inference_args
 
         self.batch_queue: list[tuple[np.ndarray, bytes, asyncio.Future]] = []
 
         self.inference_cache: dict[bytes, tuple[np.ndarray, float]] = {}
 
     def update_iteration(self, iteration: int) -> None:
-        self.model = load_model(model_save_path(iteration), self.network_args, self.device)
+        self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
         self.model = self.model.eval()
 
         self.inference_cache.clear()
@@ -49,10 +47,10 @@ class InferenceClient:
         current_batch_size = len(self.batch_queue)
 
         # If the batch size is reached, process the batch immediately
-        if current_batch_size >= self.inference_args.batch_size:
+        if current_batch_size >= self.args.inference.batch_size:
             # Make a copy of the current batch to avoid race conditions
-            batch_to_process = self.batch_queue[: self.inference_args.batch_size]
-            self.batch_queue = self.batch_queue[self.inference_args.batch_size :]
+            batch_to_process = self.batch_queue[: self.args.inference.batch_size]
+            self.batch_queue = self.batch_queue[self.args.inference.batch_size :]
             # Schedule batch processing without waiting
             self._process_batch(batch_to_process)
 

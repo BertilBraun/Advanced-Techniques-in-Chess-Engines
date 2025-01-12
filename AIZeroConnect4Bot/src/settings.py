@@ -67,6 +67,10 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
 
 
+def dirichlet_alpha(iteration: int) -> float:
+    return 1.0
+
+
 # Chess training args
 # ALPHA_ZERO_TRAINING_ARGS = TrainingArgs(
 #     num_iterations=200,
@@ -82,7 +86,7 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 # )
 
 
-if True:
+if False:
     from src.games.connect4.Connect4Game import Connect4Game, Connect4Move
     from src.games.connect4.Connect4Board import Connect4Board
     from src.games.connect4.Connect4Visuals import Connect4Visuals
@@ -97,8 +101,7 @@ if True:
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
-    NN_HIDDEN_SIZE = 128
-    NN_NUM_LAYERS = 9
+    network = NetworkParams(num_layers=9, hidden_size=128)
 
     PARALLEL_GAMES = 128
 
@@ -106,10 +109,7 @@ if True:
         num_iterations=100,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
-        network=NetworkParams(
-            num_layers=NN_NUM_LAYERS,
-            hidden_size=NN_HIDDEN_SIZE,
-        ),
+        network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
@@ -117,7 +117,7 @@ if True:
                 num_searches_per_turn=600,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=lambda _: 1.0,
+                dirichlet_alpha=dirichlet_alpha,
                 c_param=4,
             ),
         ),
@@ -140,10 +140,7 @@ if True:
         num_iterations=25,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
-        network=NetworkParams(
-            num_layers=NN_NUM_LAYERS,
-            hidden_size=NN_HIDDEN_SIZE,
-        ),
+        network=network,
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=128,
@@ -151,7 +148,7 @@ if True:
                 num_searches_per_turn=100,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=lambda _: 0.3,
+                dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
             ),
         ),
@@ -166,17 +163,82 @@ if True:
     )
 
 
-elif False:
+elif True:
     from src.games.checkers.CheckersGame import CheckersGame, CheckersMove
     from src.games.checkers.CheckersBoard import CheckersBoard
     from src.games.checkers.CheckersVisuals import CheckersVisuals
 
     CurrentGameMove = CheckersMove
     CurrentGame = CheckersGame()
-    CurrentBoard = CheckersBoard()
+    CurrentBoard = CheckersBoard
     CurrentGameVisuals = CheckersVisuals()
-    NUM_RES_BLOCKS = 10
-    NUM_HIDDEN = 128
+
+    NUM_GPUS = torch.cuda.device_count()
+    SELF_PLAYERS_PER_NODE = 24
+    # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
+
+    network = NetworkParams(num_layers=10, hidden_size=128)
+
+    PARALLEL_GAMES = 128
+
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=100,
+        save_path=SAVE_PATH + '/checkers',
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+        network=network,
+        inference=InferenceParams(batch_size=128),
+        self_play=SelfPlayParams(
+            num_parallel_games=PARALLEL_GAMES,
+            mcts=MCTSParams(
+                num_searches_per_turn=800,
+                num_parallel_searches=16,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=dirichlet_alpha,
+                c_param=4,
+            ),
+        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
+        training=TrainingParams(
+            num_epochs=1,
+            batch_size=128,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+        ),
+        evaluation=EvaluationParams(
+            num_searches_per_turn=60,
+            num_games=20,
+            every_n_iterations=10,
+        ),
+    )
+    # TODO remove
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=25,
+        save_path=SAVE_PATH + '/checkers',
+        num_games_per_iteration=32,
+        network=network,
+        inference=InferenceParams(batch_size=128),
+        self_play=SelfPlayParams(
+            num_parallel_games=128,
+            mcts=MCTSParams(
+                num_searches_per_turn=100,
+                num_parallel_searches=16,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=dirichlet_alpha,
+                c_param=2,
+            ),
+        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=5),
+        training=TrainingParams(
+            num_epochs=2,
+            batch_size=32,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+        ),
+    )
+
 elif True:
     from src.games.tictactoe.TicTacToeGame import TicTacToeGame, TicTacToeMove
     from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard

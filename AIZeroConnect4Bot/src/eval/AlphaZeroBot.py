@@ -16,7 +16,7 @@ class AlphaZeroBot(Bot):
 
         BATCH_SIZE = 16
 
-        self.inference_client = InferenceClient(0, TRAINING_ARGS.network, InferenceParams(BATCH_SIZE))
+        self.inference_client = InferenceClient(0, TRAINING_ARGS)
         self.inference_client.update_iteration(iteration)
 
         self.mcts_args = MCTSArgs(

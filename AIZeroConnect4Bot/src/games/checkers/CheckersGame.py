@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from typing import List
 
-from src.Encoding import decode_board_state
 from src.games.Game import Game
 from src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
 from src.util.ZobristHasher import ZobristHasher
@@ -13,12 +12,14 @@ ROW_COUNT = BOARD_SIZE
 COLUMN_COUNT = BOARD_SIZE
 ENCODING_CHANNELS = 4
 
-_black_squares = []
-for r in range(BOARD_SIZE):
-    for c in range(BOARD_SIZE):
-        # Assume black square if (r + c) % 2 == 1 (typical checkers pattern)
-        if (r + c) % 2 == 1:
-            _black_squares.append(r * BOARD_SIZE + c)
+_black_squares = [
+    r * BOARD_SIZE + c
+    for r in range(BOARD_SIZE)
+    for c in range(BOARD_SIZE)
+    # Assume black square if (r + c) % 2 == 1 (typical checkers pattern)
+    if (r + c) % 2 == 1
+]
+_black_squares_np = np.array(_black_squares, dtype=np.uint64)
 
 BLACK_SQUARE_COUNT = len(_black_squares)
 assert BLACK_SQUARE_COUNT == 32
@@ -43,67 +44,52 @@ class CheckersGame(Game[CheckersMove]):
 
     @property
     def representation_shape(self) -> tuple[int, int, int]:
-        return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
+        # Since only the black squares will ever be occupied, the representation also colapses that input down to only half of the columns of the actual board
+        return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT // 2
 
     @property
     def average_num_moves_per_game(self) -> int:
-        return 30
+        return 20
 
     def get_canonical_board(self, board: CheckersBoard) -> np.ndarray:
-        # turn the 4 bitboards into a single 4x8x8 tensor
+        # turn the 4 bitboards into a single 4x4x8 tensor
 
-        def bitfield_to_tensor(bitfield: np.uint64) -> np.ndarray:
-            # turn 64 bit integer into a list of 8x 8bit integers, then use np.unpackbits to get a 8x8 tensor
-            return np.unpackbits(
-                np.frombuffer(bitfield.tobytes(), dtype=np.uint8),
-            ).reshape(ROW_COUNT, COLUMN_COUNT)
+        def encode_bitboards_to_tensor(bitboards: list[int]) -> np.ndarray:
+            """
+            Encode multiple 64-bit bitboards into a binary tensor focusing only on black squares.
+
+            Parameters:
+            - bitboards: np.ndarray of shape (C,), dtype=np.uint64
+                        C is the number of channels (e.g., 4 for black kings, black pieces, etc.)
+
+            Returns:
+            - tensor: np.ndarray of shape (C, 32), dtype=np.int8
+                    Each row corresponds to a channel, and each column corresponds to a black square.
+            """
+            # Ensure bitboards is a NumPy array with dtype uint64
+            bitboards_np = np.array(bitboards, dtype=np.uint64)  # Shape: (C,)
+
+            # Expand dimensions to broadcast during bit shifting
+            # Shape after expansion: (C, 1)
+            bitboards_expanded = bitboards_np[:, np.newaxis]  # Shape: (C, 1)
+
+            # Perform right bit-shift and bitwise AND to extract bits at _black_squares positions
+            # _black_squares has shape (32,), so the result will have shape (C, 32)
+            bits = ((bitboards_expanded >> _black_squares_np) & 1).astype(np.int8)  # Shape: (C, 32)
+
+            return bits.reshape(self.representation_shape)  # Each row is a channel, each column is a black square
 
         if board.current_player == 1:
-            res = np.stack(
-                [
-                    bitfield_to_tensor(board.black_kings),
-                    bitfield_to_tensor(board.black_pieces),
-                    bitfield_to_tensor(board.white_kings),
-                    bitfield_to_tensor(board.white_pieces),
-                ]
+            return encode_bitboards_to_tensor(
+                [board.black_kings, board.black_pieces, board.white_kings, board.white_pieces]
             )
-            assert res == decode_board_state(
-                np.array(
-                    [
-                        board.black_kings,
-                        board.black_pieces,
-                        board.white_kings,
-                        board.white_pieces,
-                    ]
-                )
-            )
-
-            return res
         else:
-            res = np.stack(
-                [
-                    np.flip(bitfield_to_tensor(board.white_kings), axis=0),
-                    np.flip(bitfield_to_tensor(board.white_pieces), axis=0),
-                    np.flip(bitfield_to_tensor(board.black_kings), axis=0),
-                    np.flip(bitfield_to_tensor(board.black_pieces), axis=0),
-                ]
-            )
-
-            assert res == np.flip(
-                decode_board_state(
-                    np.array(
-                        [
-                            board.white_kings,
-                            board.white_pieces,
-                            board.black_kings,
-                            board.black_pieces,
-                        ]
-                    )
+            return np.flip(
+                encode_bitboards_to_tensor(
+                    [board.white_kings, board.white_pieces, board.black_kings, board.black_pieces]
                 ),
                 axis=1,
             )
-
-            return res
 
     def hash_boards(self, boards: torch.Tensor) -> List[int]:
         assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
@@ -147,6 +133,7 @@ class CheckersGame(Game[CheckersMove]):
             # Vertical flip
             # 1234 -> becomes -> 4321
             # 5678               8765
+            # NOTE only valid since the board is reduced to 4x4x8 which removes the white cells, whereby the vertical flip will become a valid symmetry
             (np.flip(board, axis=2), np.flip(action_probabilities)),
             # NOTE: The following implementations DO NOT WORK. They are incorrect. This would give wrong symmetries to train on.
             # Player flip
