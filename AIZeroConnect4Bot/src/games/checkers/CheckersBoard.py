@@ -459,3 +459,24 @@ class CheckersBoard(Board[CheckersMove]):
 
     def quick_hash(self) -> int:
         return hash((self.black_kings, self.black_pieces, self.white_kings, self.white_pieces))
+
+    def __repr__(self) -> str:
+        # Print the board, with black pieces as 'b', white pieces as 'w', kings as 'B' and 'W'
+        rows = []
+        for row in range(BOARD_SIZE):
+            cells = []
+            for col in range(BOARD_SIZE):
+                piece = self.get_cell(row, col)
+                if piece is None:
+                    cells.append('.')
+                elif piece == Piece.BLACK_PIECE:
+                    cells.append('b')
+                elif piece == Piece.WHITE_PIECE:
+                    cells.append('w')
+                elif piece == Piece.BLACK_KING:
+                    cells.append('B')
+                elif piece == Piece.WHITE_KING:
+                    cells.append('W')
+            rows.append(' '.join(cells))
+
+        return '\n'.join(rows)
