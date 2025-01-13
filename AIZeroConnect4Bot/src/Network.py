@@ -26,7 +26,7 @@ class Network(nn.Module):
         action_size = CurrentGame.action_size
 
         self.startBlock = nn.Sequential(
-            nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding=1),
+            nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding='same'),
             nn.BatchNorm2d(hidden_size),
             nn.ReLU(),
         )
@@ -34,7 +34,7 @@ class Network(nn.Module):
         self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 32, kernel_size=3, padding=1),
+            nn.Conv2d(hidden_size, 32, kernel_size=3, padding='same'),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
@@ -42,7 +42,7 @@ class Network(nn.Module):
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 32, kernel_size=3, padding=1),
+            nn.Conv2d(hidden_size, 32, kernel_size=3, padding='same'),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
@@ -64,9 +64,9 @@ class Network(nn.Module):
 class ResBlock(nn.Module):
     def __init__(self, num_hidden: int) -> None:
         super().__init__()
-        self.conv1 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same')
         self.bn1 = nn.BatchNorm2d(num_hidden)
-        self.conv2 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same')
         self.bn2 = nn.BatchNorm2d(num_hidden)
 
     def forward(self, x: Tensor) -> Tensor:
