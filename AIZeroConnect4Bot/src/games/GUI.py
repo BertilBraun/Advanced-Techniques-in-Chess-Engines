@@ -28,6 +28,17 @@ class BaseGridGameGUI:
             self.cell_size // 3,
         )
 
+    def draw_text(self, row: int, col: int, text: str, color: str):
+        font = pygame.font.Font(None, 36)
+        text_render = font.render(text, True, pygame.Color(color))
+        text_rect = text_render.get_rect(
+            center=(
+                col * self.cell_size + self.cell_size // 2,
+                row * self.cell_size + self.cell_size // 2,
+            )
+        )
+        self.screen.blit(text_render, text_rect)
+
     def draw_background(self):
         # Default checkerboard pattern
         for r in range(self.rows):

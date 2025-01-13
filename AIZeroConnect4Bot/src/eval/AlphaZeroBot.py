@@ -1,6 +1,5 @@
 import numpy as np
 
-from src.alpha_zero.train.TrainingArgs import InferenceParams
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
