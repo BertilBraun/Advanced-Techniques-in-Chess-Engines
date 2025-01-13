@@ -1,9 +1,10 @@
 import torch
-import torch.nn.functional as F
 
 from torch import nn, Tensor
+import torch.ao.quantization
 
-from src.settings import CurrentGame, TORCH_DTYPE
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.settings import TRAINING_ARGS, CurrentGame, TORCH_DTYPE
 
 
 class Network(nn.Module):
@@ -51,14 +52,26 @@ class Network(nn.Module):
         )
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
+        self.quant = torch.ao.quantization.QuantStub()
+        self.dequant = torch.ao.quantization.DeQuantStub()
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        x = self.quant(x)
         x = self.startBlock(x)
         for resBlock in self.backBone:
             x = resBlock(x)
         policy = self.policyHead(x)
         value = self.valueHead(x)
+        policy = self.dequant(policy)
+        value = self.dequant(value)
         return policy, value
+
+    def fuse_model(self):
+        for m in self.modules():
+            if type(m) == nn.Sequential:
+                torch.ao.quantization.fuse_modules(m, ['0', '1', '2'], inplace=True)  # Conv2d, BatchNorm2d, ReLU
+            if type(m) == ResBlock:
+                m.fuse_model()
 
 
 class ResBlock(nn.Module):
@@ -67,12 +80,59 @@ class ResBlock(nn.Module):
         self.conv1 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(num_hidden)
         self.conv2 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
         self.bn2 = nn.BatchNorm2d(num_hidden)
+        self.relu2 = nn.ReLU()
+
+        self.add = nn.quantized.FloatFunctional()
 
     def forward(self, x: Tensor) -> Tensor:
         residual = x
-        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.relu1(self.bn1(self.conv1(x)))
         x = self.bn2(self.conv2(x))
-        x += residual
-        x = F.relu(x)
+        x = self.add.add(x, residual)
+        x = self.relu2(x)
         return x
+
+    def fuse_model(self):
+        torch.ao.quantization.fuse_modules(self, ['conv1', 'bn1', 'relu1'], inplace=True)
+        torch.ao.quantization.fuse_modules(self, ['conv2', 'bn2'], inplace=True)
+
+
+def int8_quantize_model(model: Network, dataset: SelfPlayDataset) -> Network:
+    print('Quantizing model to int8...')
+    model = model.eval()
+    print('Model in eval mode')
+    model.fuse_model()
+    print('Model fused')
+    model.qconfig = torch.ao.quantization.default_qconfig
+    # get_default_qconfig('x86')
+    print('Model qconfig set')
+
+    torch.quantization.prepare(model, inplace=True)
+    print('Model prepared')
+
+    for sample, _, _ in dataset:
+        print('Forwarding sample')
+        model(sample)
+    print('Forwarded all samples')
+
+    print('Converting model')
+    torch.quantization.convert(model, inplace=True)
+    print('Model converted')
+
+    return model
+
+
+if __name__ == '__main__':
+    from src.util.save_paths import load_model, model_save_path
+    import os
+
+    os.environ['WANDB_WATCH'] = 'false'
+
+    model = load_model(model_save_path(1, TRAINING_ARGS.save_path), TRAINING_ARGS.network, torch.device('cpu'))
+    dataset = SelfPlayDataset.load_iteration(TRAINING_ARGS.save_path, 1)
+    model = int8_quantize_model(model, dataset)
+
+    print(model)
+    print(model(dataset[0][0]))

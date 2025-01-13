@@ -32,6 +32,7 @@ class InferenceClient:
 
     def update_iteration(self, iteration: int) -> None:
         self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
+        # TODO int8 optimized model loading
         self.model = self.model.eval()
 
         if self.total_evals != 0:
