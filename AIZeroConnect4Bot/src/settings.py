@@ -218,7 +218,7 @@ elif True:
         ),
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,
