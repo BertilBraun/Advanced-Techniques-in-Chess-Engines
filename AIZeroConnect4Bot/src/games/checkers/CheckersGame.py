@@ -134,13 +134,33 @@ class CheckersGame(Game[CheckersMove]):
             # 1234 -> becomes -> 4321
             # 5678               8765
             # NOTE only valid since the board is reduced to 4x4x8 which removes the white cells, whereby the vertical flip will become a valid symmetry
-            (np.flip(board, axis=2), np.flip(action_probabilities)),
-            # NOTE: The following implementations DO NOT WORK. They are incorrect. This would give wrong symmetries to train on.
-            # Player flip
-            # yield -board, action_probabilities, -result
-            # Player flip and vertical flip
-            # yield -board[:, ::-1], action_probabilities[::-1], -result
+            # NOTE Problem: The moves are not flippable, as the move encoding is not symmetric and would result with moves from white to white squares
         ]
+
+    def _flip_black_index_4wide(self, black_idx: int) -> int:
+        row = black_idx // 4
+        subcol = black_idx % 4
+        flipped_subcol = 3 - subcol
+        flipped_idx = row * 4 + flipped_subcol
+        return flipped_idx
+
+    def _flip_move_4wide(self, move_idx: int) -> int:
+        black_from = move_idx // 32
+        black_to = move_idx % 32
+
+        flipped_from = self._flip_black_index_4wide(black_from)
+        flipped_to = self._flip_black_index_4wide(black_to)
+
+        return flipped_from * 32 + flipped_to
+
+    def _flip_action_probs(self, action_probs: np.ndarray) -> np.ndarray:
+        flipped = np.zeros_like(action_probs)
+        for move_idx, prob in enumerate(action_probs):
+            if prob == 0.0:
+                continue
+            flipped_idx = self._flip_move_4wide(move_idx)
+            flipped[flipped_idx] = prob
+        return flipped
 
     def get_initial_board(self) -> CheckersBoard:
         return CheckersBoard()

@@ -36,6 +36,8 @@ def encode_board_state(state: np.ndarray) -> np.ndarray:
 
 
 def decode_board_state(state: np.ndarray) -> np.ndarray:
+    """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
+
     # Convert to uint64 to prevent overflow
     state = state.astype(np.uint64)
 
