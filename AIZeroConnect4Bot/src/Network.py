@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 from torch import nn, Tensor
 
@@ -60,19 +59,32 @@ class Network(nn.Module):
         value = self.valueHead(x)
         return policy, value
 
+    def fuse_model(self):
+        for m in self.modules():
+            if type(m) == nn.Sequential:
+                torch.ao.quantization.fuse_modules(m, ['0', '1', '2'], inplace=True)  # Conv2d, BatchNorm2d, ReLU
+            if type(m) == ResBlock:
+                m.fuse_model()
+
 
 class ResBlock(nn.Module):
     def __init__(self, num_hidden: int) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same')
         self.bn1 = nn.BatchNorm2d(num_hidden)
+        self.relu1 = nn.ReLU()
         self.conv2 = nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same')
         self.bn2 = nn.BatchNorm2d(num_hidden)
+        self.relu2 = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:
         residual = x
-        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.relu1(self.bn1(self.conv1(x)))
         x = self.bn2(self.conv2(x))
         x += residual
-        x = F.relu(x)
+        x = self.relu2(x)
         return x
+
+    def fuse_model(self):
+        torch.ao.quantization.fuse_modules(self, ['conv1', 'bn1', 'relu1'], inplace=True)
+        torch.ao.quantization.fuse_modules(self, ['conv2', 'bn2'], inplace=True)

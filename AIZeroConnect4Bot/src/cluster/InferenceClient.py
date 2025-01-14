@@ -33,6 +33,7 @@ class InferenceClient:
     def update_iteration(self, iteration: int) -> None:
         self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
         self.model = self.model.eval()
+        self.model.fuse_model()
 
         if self.total_evals != 0:
             cache_hit_rate = (self.total_hits / self.total_evals) * 100

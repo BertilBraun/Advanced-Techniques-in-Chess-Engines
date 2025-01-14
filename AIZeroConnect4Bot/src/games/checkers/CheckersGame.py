@@ -135,6 +135,7 @@ class CheckersGame(Game[CheckersMove]):
             # 5678               8765
             # NOTE only valid since the board is reduced to 4x4x8 which removes the white cells, whereby the vertical flip will become a valid symmetry
             # NOTE Problem: The moves are not flippable, as the move encoding is not symmetric and would result with moves from white to white squares
+            (np.flip(board, axis=2), self._flip_action_probs(action_probabilities)),
         ]
 
     def _flip_black_index_4wide(self, black_idx: int) -> int:
