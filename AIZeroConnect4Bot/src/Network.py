@@ -88,3 +88,41 @@ class ResBlock(nn.Module):
     def fuse_model(self):
         torch.ao.quantization.fuse_modules(self, ['conv1', 'bn1', 'relu1'], inplace=True)
         torch.ao.quantization.fuse_modules(self, ['conv2', 'bn2'], inplace=True)
+
+
+# TODO compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
+if __name__ == '__main__':
+    import time
+    from itertools import product
+
+    sample_shape = CurrentGame.representation_shape
+
+    for device, dtype, fused, compiled, batch_size in product(
+        ['cpu', 'cuda'],
+        [torch.float32, torch.float16, torch.bfloat16],
+        [True, False],
+        ['none', 'jit', 'compile'],
+        [1, 32, 128],
+    ):
+        model = Network(num_res_blocks=10, hidden_size=256, device=torch.device(device))
+        model.to(device=device, dtype=dtype)
+        model.eval()
+
+        if fused:
+            model.fuse_model()
+
+        if compiled == 'jit':
+            model = torch.jit.script(model)
+        elif compiled == 'compile':
+            model = torch.compile(model)
+
+        num_iterations = 128 * 4
+        iterations = num_iterations // batch_size
+
+        inputs = [torch.randn((batch_size, *sample_shape), device=device, dtype=dtype) for _ in range(iterations)]
+
+        start = time.time()
+        for i in range(iterations):
+            model(inputs[i])
+        total_time = time.time() - start
+        print(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=:.2f}')
