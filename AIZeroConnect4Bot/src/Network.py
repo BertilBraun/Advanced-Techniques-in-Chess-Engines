@@ -99,7 +99,7 @@ if __name__ == '__main__':
     sample_shape = CurrentGame.representation_shape
 
     for device, dtype, fused, compiled, batch_size in product(
-        ['cpu', 'cuda'],
+        ['cuda', 'cpu'],
         [torch.float32, torch.float16, torch.bfloat16],
         [True, False],
         ['none', 'jit', 'compile'],
