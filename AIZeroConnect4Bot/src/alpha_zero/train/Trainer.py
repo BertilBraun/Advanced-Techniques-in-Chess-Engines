@@ -60,6 +60,10 @@ from src.util.log import log
 
 # TODO FSDP Data parallel model training
 # TODO maybe keep the window based on the number of samples, instead of the number of iterations
+# TODO smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
+
+
+# DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 
 # DONE resignation to not play out games until the very end which might require hundreds of moves
 # DONE deduplicate same state games in parallel play - if the game is at the same state, sample a different move

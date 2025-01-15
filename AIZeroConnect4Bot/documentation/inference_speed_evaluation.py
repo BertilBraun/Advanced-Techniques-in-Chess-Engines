@@ -9,7 +9,6 @@ from src.settings import CurrentGame
 from src.Network import Network
 
 
-# TODO compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 if __name__ == '__main__':
     sample_shape = CurrentGame.representation_shape
 
