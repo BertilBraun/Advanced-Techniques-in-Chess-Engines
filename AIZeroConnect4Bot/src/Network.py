@@ -102,11 +102,11 @@ if __name__ == '__main__':
     torch.backends.cuda.matmul.allow_tf32 = True
 
     for device, dtype, fused, compiled, batch_size in product(
-        ['cuda', 'cpu'],
+        ['cuda'],  # , 'cpu'],
         [torch.float32, torch.float16, torch.bfloat16],
         [True, False],
-        ['none', 'jit', 'compile'],
-        [1, 32, 128],
+        ['jit', 'compile'],  # , 'none'],
+        [32, 64, 128, 256],
     ):
         model = Network(num_res_blocks=10, hidden_size=256, device=torch.device(device))
         model.to(device=device, dtype=dtype)
@@ -125,7 +125,7 @@ if __name__ == '__main__':
         for warmup_input in warmup_inputs:
             model(warmup_input)
 
-        num_iterations = 128 * 4
+        num_iterations = 256 * 4
         iterations = num_iterations // batch_size
 
         inputs = [torch.randn((batch_size, *sample_shape), device=device, dtype=dtype) for _ in range(iterations)]
@@ -134,4 +134,4 @@ if __name__ == '__main__':
         for input in inputs:
             model(input)
         total_time = time.time() - start
-        log(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=:.2f}')
+        log(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=}')
