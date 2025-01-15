@@ -15,6 +15,7 @@ from src.util import lerp
 
 USE_PROFILING = True
 USE_GPU = torch.cuda.is_available()
+# Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
