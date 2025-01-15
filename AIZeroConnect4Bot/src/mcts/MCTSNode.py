@@ -81,6 +81,7 @@ class MCTSNode:
             child_index = self._get_my_child_index_in_parent()
             self.parent.children_number_of_visits[child_index] += delta
             self.parent.children_q_scores[child_index] = self._q_score()
+            self.parent.update_virtual_losses(delta)
 
     def _get_my_child_index_in_parent(self):
         assert self.parent is not None, 'Parent may not be none to get a child'
