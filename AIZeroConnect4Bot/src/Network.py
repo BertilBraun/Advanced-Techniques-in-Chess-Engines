@@ -120,13 +120,18 @@ if __name__ == '__main__':
         elif compiled == 'compile':
             model = torch.compile(model)
 
+        warmups = 5
+        warmup_inputs = [torch.randn((batch_size, *sample_shape), device=device, dtype=dtype) for _ in range(warmups)]
+        for warmup_input in warmup_inputs:
+            model(warmup_input)
+
         num_iterations = 128 * 4
         iterations = num_iterations // batch_size
 
         inputs = [torch.randn((batch_size, *sample_shape), device=device, dtype=dtype) for _ in range(iterations)]
 
         start = time.time()
-        for i in range(iterations):
-            model(inputs[i])
+        for input in inputs:
+            model(input)
         total_time = time.time() - start
         log(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=:.2f}')
