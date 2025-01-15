@@ -58,6 +58,9 @@ from src.util.log import log
 # DONE fix opt.py
 # TODO start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
+# TODO FSDP Data parallel model training
+# TODO maybe keep the window based on the number of samples, instead of the number of iterations
+
 # DONE resignation to not play out games until the very end which might require hundreds of moves
 # DONE deduplicate same state games in parallel play - if the game is at the same state, sample a different move
 

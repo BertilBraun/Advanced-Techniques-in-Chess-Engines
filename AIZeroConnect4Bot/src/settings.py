@@ -175,9 +175,10 @@ elif True:
     CurrentGameVisuals = CheckersVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 20
+    SELF_PLAYERS_PER_NODE = 12
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
+    NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     network = NetworkParams(num_layers=10, hidden_size=128)
 
@@ -194,7 +195,7 @@ elif True:
         inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
-            num_samples_after_which_to_write=500,
+            num_samples_after_which_to_write=2000,
             mcts=MCTSParams(
                 num_searches_per_turn=200,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,

@@ -21,7 +21,7 @@ class PipeConnection(Protocol):
     def poll(self, timeout: float = 0.0) -> bool:
         ...
 
-    def recv(self) -> str:
+    def recv(self) -> Any:
         ...
 
     def send(self, obj: Any) -> None:
