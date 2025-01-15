@@ -98,6 +98,9 @@ if __name__ == '__main__':
 
     sample_shape = CurrentGame.representation_shape
 
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.matmul.allow_tf32 = True
+
     for device, dtype, fused, compiled, batch_size in product(
         ['cuda', 'cpu'],
         [torch.float32, torch.float16, torch.bfloat16],
