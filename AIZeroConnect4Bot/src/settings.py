@@ -197,7 +197,7 @@ elif True:
             num_parallel_games=PARALLEL_GAMES,
             num_samples_after_which_to_write=2000,
             mcts=MCTSParams(
-                num_searches_per_turn=200,  # based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=400,  # 200, based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
