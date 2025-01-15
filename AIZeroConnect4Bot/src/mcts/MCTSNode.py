@@ -1,5 +1,4 @@
 from __future__ import annotations
-import math
 
 import numpy as np
 
@@ -9,12 +8,12 @@ from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 class MCTSNode:
     @classmethod
     def root(cls, board: CurrentBoard) -> MCTSNode:
-        instance = cls(policy=1.0, move_to_get_here=CurrentGame.null_move, parent=None)
+        instance = cls(move_to_get_here=CurrentGame.null_move, parent=None)
         instance.board = board
         instance.number_of_visits = 1
         return instance
 
-    def __init__(self, policy: float, move_to_get_here: CurrentGameMove, parent: MCTSNode | None) -> None:
+    def __init__(self, move_to_get_here: CurrentGameMove, parent: MCTSNode | None) -> None:
         self.board: CurrentBoard = None  # type: ignore
         self.parent = parent
         self.children: list[MCTSNode] = []
@@ -22,7 +21,9 @@ class MCTSNode:
         self.number_of_visits = 0
         self.result_score = 0
         self.virtual_losses = 0
-        self.policy = policy
+        self.children_number_of_visits: np.ndarray  # Initialized in expand
+        self.children_q_scores: np.ndarray  # Initialized in expand
+        self.children_policies: np.ndarray  # Initialized in expand
 
     def init(self) -> None:
         """Initializes the node by creating a board if it doesn't have one."""
@@ -42,37 +43,18 @@ class MCTSNode:
         assert self.board, 'Node must have a board'
         return self.board.is_game_over()
 
-    def ucb(self, c_param: float) -> float:
-        assert self.parent, 'Node must have a parent'
-
-        policy_score = c_param * math.sqrt(self.parent.number_of_visits) / (1 + self.number_of_visits)
-
-        if self.number_of_visits > 0:
-            # Q(s, a) - the average reward of the node's children from the perspective of the node's parent
-            q_score = self._q_score()
-        else:
-            q_score = 0
-
-        return policy_score * self.policy + q_score
-
     def expand(self, moves_with_scores: list[tuple[CurrentGameMove, float]]) -> None:
         if self.is_fully_expanded:
             return  # Already expanded by another thread
 
         self.children = [
-            MCTSNode(
-                policy=score,
-                move_to_get_here=move,
-                parent=self,
-            )
-            for move, score in moves_with_scores
-            if score > 0.0
+            MCTSNode(move_to_get_here=move, parent=self) for move, score in moves_with_scores if score > 0.0
         ]
 
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_q_scores = np.zeros(len(self.children), dtype=np.float32)
-        self.children_policies = np.array([child.policy for child in self.children], dtype=np.float32)
+        self.children_policies = np.array([score for _, score in moves_with_scores if score > 0.0], dtype=np.float32)
 
     def update_virtual_losses(self, delta: int) -> None:
         self.virtual_losses += delta
@@ -121,7 +103,6 @@ class MCTSNode:
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 virtual loss: {self.virtual_losses}
-policy: {self.policy:.2f}
 move: {self.move_to_get_here}
 children: {len(self.children)}
 )"""

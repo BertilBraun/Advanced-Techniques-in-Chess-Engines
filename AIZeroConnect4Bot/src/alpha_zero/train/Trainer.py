@@ -66,9 +66,13 @@ from src.util.log import log
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 
 # DONE resignation to not play out games until the very end which might require hundreds of moves
+# TODO automatic resignation threashold - play out ~10% of games which should have been resigned and verify, that the percentage of games that could have been won is < 5%, otherwise resign earlier
 # DONE deduplicate same state games in parallel play - if the game is at the same state, sample a different move
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
+
+# TODO Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
+# TODO Gobang https://de.wikipedia.org/wiki/Gobang
 
 
 # NOTE Queue based system 2 Inference Servers on 2 GPUS with 40 clients in total

@@ -6,11 +6,11 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
-from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGameMove, PLAY_C_PARAM
+from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, iteration: int, max_time_to_think: float) -> None:
+    def __init__(self, iteration: int, max_time_to_think: float, network_eval_only: bool) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
         BATCH_SIZE = 16
@@ -28,7 +28,13 @@ class AlphaZeroBot(Bot):
         )
         self.mcts = MCTS(self.inference_client, self.mcts_args)
 
+        self.network_eval_only = network_eval_only
+
     async def think(self, board: CurrentBoard) -> CurrentGameMove:
+        if self.network_eval_only:
+            policy, _ = self.inference_client._model_inference([CurrentGame.get_canonical_board(board)])[0]
+            return CurrentGame.decode_move(np.argmax(policy).item())
+
         root = MCTSNode.root(board)
 
         for _ in range(self.mcts_args.num_searches_per_turn // self.mcts_args.num_parallel_searches):
@@ -44,11 +50,9 @@ class AlphaZeroBot(Bot):
         log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
         log(f'Best child has {best_child.result_score:.4f} result_score')
-        log(f'Best child has {best_child.policy:.4f} policy')
         log('Child moves:', [child.move_to_get_here for child in root.children])
         log('Child visits:', [child.number_of_visits for child in root.children])
         log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
-        log('Child policies:', [round(child.policy, 2) for child in root.children])
         log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here

@@ -41,13 +41,17 @@ class SelfPlayGame:
 def sample_move(
     action_probabilities: np.ndarray, num_played_moves: int = 0, temperature: float = 1.0
 ) -> CurrentGameMove:
-    # only use temperature for the first 30 moves, then simply use the action probabilities as they are
-    if num_played_moves < 30:
-        temperature_action_probabilities = action_probabilities ** (1 / temperature)
-    else:
-        temperature_action_probabilities = action_probabilities
+    assert temperature > 0, 'Temperature must be greater than 0'
 
+    # only use temperature for the first 30 moves, then simply use the most likely move
+    # Keep exploration high for the first 30 moves, then play out as well as possible to reduce noise in the backpropagated final game results
+    if num_played_moves >= 30:
+        # infinetesimal temperature to pick the most likely move
+        temperature = 0.001
+
+    temperature_action_probabilities = action_probabilities ** (1 / temperature)
     temperature_action_probabilities /= np.sum(temperature_action_probabilities)
+
     action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
     return CurrentGame.decode_move(action)
@@ -83,7 +87,7 @@ class SelfPlay:
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
                 self.dataset += self._get_training_data(spg, result_score)
-                self.self_play_games[SelfPlayGame()] += 1
+                self.self_play_games[SelfPlayGame()] += count
                 continue
 
             original_action_probabilities = action_probabilities.copy()
@@ -96,6 +100,7 @@ class SelfPlay:
                     new_spg, move = self._sample_self_play_game(spg, action_probabilities)
 
                     if self.self_play_games[new_spg] > 0:
+                        # Already exploring this state, so remove the probability of this move and try again
                         action_probabilities[CurrentGame.encode_move(move)] = 0
                         continue
 

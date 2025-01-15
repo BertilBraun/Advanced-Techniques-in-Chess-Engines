@@ -27,9 +27,10 @@ if __name__ == '__main__':
     iteration = get_latest_model_iteration(TRAINING_ARGS.num_iterations, TRAINING_ARGS.save_path)
 
     MAX_TIME_TO_THINK = 1.0
+    NETWORK_ONLY = True
 
     game_manager = GameManager(
-        AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK),
+        AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK, network_eval_only=NETWORK_ONLY),
         CommonHumanPlayer(),
     )
 
