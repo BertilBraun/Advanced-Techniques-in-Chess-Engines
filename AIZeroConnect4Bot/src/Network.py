@@ -94,6 +94,7 @@ class ResBlock(nn.Module):
 if __name__ == '__main__':
     import time
     from itertools import product
+    from src.util.log import log
 
     sample_shape = CurrentGame.representation_shape
 
@@ -125,4 +126,4 @@ if __name__ == '__main__':
         for i in range(iterations):
             model(inputs[i])
         total_time = time.time() - start
-        print(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=:.2f}')
+        log(f'{device=} {dtype=} {fused=} {compiled=} {batch_size=} {iterations=} {total_time=:.2f}')
