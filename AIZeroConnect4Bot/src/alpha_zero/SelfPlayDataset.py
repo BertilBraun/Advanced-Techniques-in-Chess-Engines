@@ -142,8 +142,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return dataset
 
     @staticmethod
-    def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[str]:
-        return [str(file_path) for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
+    def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[Path]:
+        return [file_path for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
         if not suffix:
@@ -203,6 +203,8 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             if len(files_for_iteration) > 1:
                 dataset.deduplicate()
                 dataset.save(folder_path, iteration, suffix='deduplicated')
+                for file in files_for_iteration:
+                    file.unlink()
 
             log_scalar('num_deduplicated_samples', len(dataset), iteration)
 
