@@ -8,7 +8,6 @@ from src.games.chess.ChessGame import BOARD_LENGTH
 
 
 class ChessVisuals(GameVisuals[ChessMove]):
-    # TODO specify input of more complex moves like castling, promotion, etc.
     def draw_pieces(self, board: ChessBoard, gui: BaseGridGameGUI) -> None:
         piece_map = board.board.piece_map()
         for square, piece in piece_map.items():
@@ -35,10 +34,21 @@ class ChessVisuals(GameVisuals[ChessMove]):
         from_square = self._decode_square(from_cell)
         to_square = self._decode_square(to_cell)
 
-        move = chess.Move(from_square, to_square)
-        if move in board.get_valid_moves():
-            return move
-        assert False, f'Invalid move: {move}. Not in legal moves: {list(board.board.legal_moves)}'
+        moves = [
+            move for move in board.get_valid_moves() if move.from_square == from_square and move.to_square == to_square
+        ]
+        if len(moves) > 1:
+            print(f'Multiple moves found for {from_cell} -> {to_cell}')
+            for i, move in enumerate(moves):
+                print(f'{i}: {move}')
+            while True:
+                try:
+                    index = int(input('Enter the index of the move you want to make: '))
+                    return moves[index]
+                except ValueError | IndexError:
+                    print('Invalid input. Please enter a valid index.')
+
+        return moves[0] if moves else None
 
     def _decode_square(self, cell: tuple[int, int]) -> int:
         return (BOARD_LENGTH - 1 - cell[0]) * BOARD_LENGTH + cell[1]

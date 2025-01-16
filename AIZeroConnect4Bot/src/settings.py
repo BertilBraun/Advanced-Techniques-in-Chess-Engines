@@ -164,6 +164,84 @@ if False:
         ),
     )
 
+elif True:
+    from src.games.chess.ChessGame import ChessGame, ChessMove
+    from src.games.chess.ChessBoard import ChessBoard
+    from src.games.chess.ChessVisuals import ChessVisuals
+
+    CurrentGameMove = ChessMove
+    CurrentGame = ChessGame()
+    CurrentBoard = ChessBoard
+    CurrentGameVisuals = ChessVisuals()
+
+    NUM_GPUS = torch.cuda.device_count()
+    SELF_PLAYERS_PER_NODE = 25
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
+    NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
+
+    network = NetworkParams(num_layers=12, hidden_size=128)
+    training = TrainingParams(
+        num_epochs=2,
+        batch_size=256,
+        sampling_window=sampling_window,
+        learning_rate=learning_rate,
+        learning_rate_scheduler=learning_rate_scheduler,
+    )
+    inference = InferenceParams(batch_size=128)
+    evaluation = EvaluationParams(
+        num_searches_per_turn=60,
+        num_games=20,
+        every_n_iterations=10,
+    )
+
+    PARALLEL_GAMES = 64
+
+    def dirichlet_alpha(iteration: int) -> float:
+        return 0.3
+
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=100,
+        save_path=SAVE_PATH + '/chess',
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
+        network=network,
+        inference=inference,
+        self_play=SelfPlayParams(
+            num_parallel_games=PARALLEL_GAMES,
+            num_moves_after_which_to_play_greedy=25,
+            mcts=MCTSParams(
+                num_searches_per_turn=320,  # based on https://arxiv.org/pdf/1902.10565
+                num_parallel_searches=8,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=dirichlet_alpha,
+                c_param=2,
+            ),
+        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
+        training=training,
+        evaluation=None,  # evaluation,
+    )
+    # TODO remove
+    TEST_TRAINING_ARGS = TrainingArgs(
+        num_iterations=25,
+        save_path=SAVE_PATH + '/chess',
+        num_games_per_iteration=32,
+        network=network,
+        inference=inference,
+        self_play=SelfPlayParams(
+            num_parallel_games=64,
+            num_moves_after_which_to_play_greedy=25,
+            mcts=MCTSParams(
+                num_searches_per_turn=100,
+                num_parallel_searches=8,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=dirichlet_alpha,
+                c_param=2,
+            ),
+        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
+        training=training,
+    )
+
 
 elif True:
     from src.games.checkers.CheckersGame import CheckersGame, CheckersMove
@@ -206,7 +284,7 @@ elif True:
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
-                num_searches_per_turn=200,  # 200, based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=320,  # 200, based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,

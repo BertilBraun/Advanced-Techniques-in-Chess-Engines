@@ -57,12 +57,13 @@ from src.util.log import log
 # TODO run for Checkers
 # DONE log time for each self play loop, how long for n games to finish - compare to previous
 # DONE fix opt.py
-# TODO start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
+# TODO Future: hyperparameter optimization as in Paper: Accelerating and Improving AlphaZero Using Population Based Training
+# TODO Future: start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
 # TODO NOT_REALLY_REQUIRED use mp.Event to signal instead of mp.Pipes?
 
 # NOT_REQUIRED FSDP Data parallel model training
-# TODO maybe keep the window based on the number of samples, instead of the number of iterations
+# TODO Future: maybe keep the window based on the number of samples, instead of the number of iterations
 # DONE smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
 # Do so by: Assuming, deduplication works in memory. Then we shuffle the deduplicated dataset before writing it to disk. Then we store the data in chunks of ~1GB. Then during training we load only one chunk of each of the iterations datasets and choose the sample based on idx % num_iterations. But then the DataLoader should not shuffle but instead load the samples in order. Yes, that it does, tested.
 # DONE save to the dataset how long generating the samples/games took and print these stats while loading the dataset instead of at each save. Then also more frequent dataset saves are possible.
@@ -73,13 +74,13 @@ from src.util.log import log
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 
 # DONE resignation to not play out games until the very end which might require hundreds of moves
-# TODO automatic resignation threashold - play out ~10% of games which should have been resigned and verify, that the percentage of games that could have been won is < 5%, otherwise resign earlier
+# TODO Future: automatic resignation threashold - play out ~10% of games which should have been resigned and verify, that the percentage of games that could have been won is < 5%, otherwise resign earlier
 # DONE deduplicate same state games in parallel play - if the game is at the same state, sample a different move
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
 
-# TODO Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
-# TODO Gobang https://de.wikipedia.org/wiki/Gobang
+# TODO Future: Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
+# TODO Future: Gobang https://de.wikipedia.org/wiki/Gobang
 
 
 # NOTE Queue based system 2 Inference Servers on 2 GPUS with 40 clients in total

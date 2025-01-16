@@ -41,3 +41,15 @@ class ChessBoard(Board[ChessMove]):
 
     def quick_hash(self) -> int:
         return hash(self.board.fen())
+
+    def __repr__(self) -> str:
+        from src.games.chess.ChessGame import BOARD_LENGTH
+
+        rows = []
+        for i in range(BOARD_LENGTH):
+            row = []
+            for j in range(BOARD_LENGTH):
+                piece = self.board.piece_at(i * BOARD_LENGTH + j)
+                row.append(piece.unicode_symbol() if piece is not None else '.')
+            rows.append(' '.join(row))
+        return '\n'.join(rows)

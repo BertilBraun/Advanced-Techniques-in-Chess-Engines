@@ -214,7 +214,8 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
             self.stats += dataset.stats
 
-            # TODO write them in chunks to file, then simply keep a list of all chunks, shuffle them and load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
+            # write them in chunks to file, then simply keep a list of all chunks, shuffle them
+            # Then load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
 
             # split dataset into chunks of chunk_size
             for i in range(0, len(dataset), chunk_size):
