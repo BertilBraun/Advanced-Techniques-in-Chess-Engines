@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayTrainDataset
 from src.Network import Network
-from src.settings import USE_GPU, log_scalar
+from src.settings import log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingParams
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -133,12 +133,7 @@ class Trainer:
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.args.batch_size,
-            num_workers=self.args.num_workers,
-            pin_memory=USE_GPU,
-        )
+        dataloader = DataLoader(dataset, batch_size=self.args.batch_size, num_workers=self.args.num_workers)
 
         train_stats = TrainingStats()
         base_lr = self.args.learning_rate(iteration)
