@@ -49,11 +49,12 @@ class TrainerProcess:
 
         self._wait_for_enough_training_samples(iteration)
 
-        dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-
         train_stats = TrainingStats()
 
         for epoch in range(self.args.training.num_epochs):
+            # Only loads a light wrapper around the entire dataset
+            dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+
             epoch_train_stats = trainer.train(dataset, iteration)
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats

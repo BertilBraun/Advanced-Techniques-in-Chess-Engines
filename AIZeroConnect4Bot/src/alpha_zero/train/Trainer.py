@@ -59,7 +59,7 @@ from src.util.log import log
 # DONE fix opt.py
 # TODO start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
-# TODO use mp.Event to signal instead of mp.Pipes
+# TODO NOT_REALLY_REQUIRED use mp.Event to signal instead of mp.Pipes?
 
 # NOT_REQUIRED FSDP Data parallel model training
 # TODO maybe keep the window based on the number of samples, instead of the number of iterations

@@ -234,7 +234,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         self.total_loading_time = 0
 
-        log(f'Loaded {len(self.all_chunks)} chunks with: {self.stats}')
+        log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert idx == self.total_num_samples, 'Only sequential access is supported'
@@ -253,7 +253,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.sample_index += 1
 
         self.total_loading_time += time.time() - loading_start
-        if idx % 256 == 0:
+        if idx % 25600 == 0:
             log(f'Loading time: {self.total_loading_time}s for {idx} samples')
         return state, policy_target, value_target
 

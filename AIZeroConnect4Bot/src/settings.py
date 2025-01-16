@@ -204,6 +204,7 @@ elif True:
         inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
+            num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
                 num_searches_per_turn=200,  # 200, based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
@@ -228,9 +229,11 @@ elif True:
         network=network,
         inference=inference,
         self_play=SelfPlayParams(
-            num_parallel_games=64,
+            num_parallel_games=2,
+            num_samples_after_which_to_write=4,
+            num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
-                num_searches_per_turn=100,
+                num_searches_per_turn=64,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
