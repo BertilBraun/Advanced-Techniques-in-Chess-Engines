@@ -32,6 +32,7 @@ class InferenceClient:
 
     def update_iteration(self, iteration: int) -> None:
         self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
+        self.model.disable_auto_grad()
         self.model = self.model.eval()
         self.model.fuse_model()
 
@@ -83,7 +84,6 @@ class InferenceClient:
         if self.batch_queue:
             self._process_batch()
 
-    @torch.no_grad()
     def _process_batch(self) -> None:
         encoded_boards = [board for board, _, _ in self.batch_queue if board is not None]
         board_hashes = [hash for board, hash, _ in self.batch_queue if board is not None]
@@ -101,6 +101,7 @@ class InferenceClient:
         self.batch_queue.clear()
         self.enqueued_inferences.clear()
 
+    @torch.no_grad()
     def _model_inference(self, boards: list[np.ndarray]) -> list[tuple[np.ndarray, float]]:
         input_tensor = torch.tensor(np.array(boards), dtype=TORCH_DTYPE, device=self.device)
 

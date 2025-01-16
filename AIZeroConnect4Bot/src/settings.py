@@ -182,6 +182,14 @@ elif True:
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     network = NetworkParams(num_layers=10, hidden_size=128)
+    training = TrainingParams(
+        num_epochs=2,
+        batch_size=256,
+        sampling_window=sampling_window,
+        learning_rate=learning_rate,
+        learning_rate_scheduler=learning_rate_scheduler,
+    )
+    inference = InferenceParams(batch_size=128)
 
     PARALLEL_GAMES = 64
 
@@ -193,12 +201,11 @@ elif True:
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
         network=network,
-        inference=InferenceParams(batch_size=128),
+        inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
-            num_samples_after_which_to_write=2000,
             mcts=MCTSParams(
-                num_searches_per_turn=400,  # 200, based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=200,  # 200, based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
@@ -206,13 +213,7 @@ elif True:
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
-        training=TrainingParams(
-            num_epochs=1,
-            batch_size=64,
-            sampling_window=sampling_window,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
-        ),
+        training=training,
         evaluation=EvaluationParams(
             num_searches_per_turn=60,
             num_games=20,
@@ -225,10 +226,9 @@ elif True:
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,
         network=network,
-        inference=InferenceParams(batch_size=128),
+        inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=64,
-            num_samples_after_which_to_write=500,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
                 num_parallel_searches=8,
@@ -238,13 +238,7 @@ elif True:
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
-        training=TrainingParams(
-            num_epochs=1,
-            batch_size=128,
-            sampling_window=sampling_window,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=learning_rate_scheduler,
-        ),
+        training=training,
     )
 
 elif True:

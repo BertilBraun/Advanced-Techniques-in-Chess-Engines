@@ -2,9 +2,10 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+import torch.utils.data.dataloader
 from tqdm import tqdm
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.alpha_zero.SelfPlayDataset import SelfPlayTrainDataset
 from src.Network import Network
 from src.settings import TORCH_DTYPE, USE_GPU, log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingParams
@@ -58,9 +59,15 @@ from src.util.log import log
 # DONE fix opt.py
 # TODO start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
-# TODO FSDP Data parallel model training
+# TODO use mp.Event to signal instead of mp.Pipes
+
+# NOT_REQUIRED FSDP Data parallel model training
 # TODO maybe keep the window based on the number of samples, instead of the number of iterations
 # TODO smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
+# Do so by: Assuming, deduplication works in memory. Then we shuffle the deduplicated dataset before writing it to disk. Then we store the data in chunks of ~1GB. Then during training we load only one chunk of each of the iterations datasets and choose the sample based on idx % num_iterations. But then the DataLoader should not shuffle but instead load the samples in order. Yes, that it does, tested.
+# DONE save to the dataset how long generating the samples/games took and print these stats while loading the dataset instead of at each save. Then also more frequent dataset saves are possible.
+
+# TODO Caching based on symmetries of the board state, use the smallest key of the symmetries as the key for the cache
 
 
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
@@ -119,28 +126,17 @@ class Trainer:
         self.optimizer = optimizer
         self.args = args
 
-    def train(self, dataset: SelfPlayDataset, iteration: int) -> TrainingStats:
+    def train(self, dataset: SelfPlayTrainDataset, iteration: int) -> TrainingStats:
         """
         Train the model with the given memory.
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        train_dataset, validation_dataset = torch.utils.data.random_split(
-            dataset, [len(dataset) - self.args.batch_size, self.args.batch_size]
-        )
-        train_dataloader = DataLoader(
-            train_dataset,
+        dataloader = DataLoader(
+            dataset,
             batch_size=self.args.batch_size,
-            shuffle=True,
-            drop_last=False,
             num_workers=self.args.num_workers,
             pin_memory=USE_GPU,
-        )
-        validation_dataloader = DataLoader(
-            validation_dataset,
-            batch_size=self.args.batch_size,
-            shuffle=True,
-            drop_last=False,
         )
 
         train_stats = TrainingStats()
@@ -171,11 +167,16 @@ class Trainer:
         total_value_loss = torch.tensor(0.0, device=self.model.device)
         total_loss = torch.tensor(0.0, device=self.model.device)
 
-        for batchIdx, batch in tqdm(enumerate(train_dataloader), desc='Training batches', total=len(train_dataloader)):
+        for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
+            if batchIdx == len(dataloader) - 1:
+                # Use the last batch as validation batch
+                validation_batch = batch
+                break
+
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
             # Update learning rate before stepping the optimizer
-            batch_percentage = batchIdx / len(train_dataloader)
+            batch_percentage = batchIdx / len(dataloader)
             lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
             log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
             for param_group in self.optimizer.param_groups:
@@ -189,17 +190,16 @@ class Trainer:
             total_value_loss += value_loss
             total_loss += loss
 
-        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item(), len(train_dataloader))
+        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item(), len(dataloader))
 
         with torch.no_grad():
             validation_stats = TrainingStats()
-            for i, validation_batch in enumerate(validation_dataloader):
-                val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
+            val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
 
-                log_scalar('val_policy_loss', val_policy_loss.item(), i + (iteration * len(validation_dataloader)))
-                log_scalar('val_value_loss', val_value_loss.item(), i + (iteration * len(validation_dataloader)))
-                log_scalar('val_loss', val_loss.item(), i + (iteration * len(validation_dataloader)))
-                validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item())
+            log_scalar('val_policy_loss', val_policy_loss.item(), iteration)
+            log_scalar('val_value_loss', val_value_loss.item(), iteration)
+            log_scalar('val_loss', val_loss.item(), iteration)
+            validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item())
 
             log(f'Validation stats: {validation_stats}')
 

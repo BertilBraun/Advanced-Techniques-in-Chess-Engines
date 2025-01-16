@@ -66,6 +66,20 @@ class Network(nn.Module):
             if type(m) == ResBlock:
                 m.fuse_model()
 
+    def disable_auto_grad(self):
+        for p in self.parameters():
+            p.requires_grad = False
+
+    def print_params(self):
+        for name, param in self.named_parameters():
+            print(name, list(param.shape))
+        sum_of_params = sum(p.numel() for p in self.parameters())
+        print(f'Total number of parameters: {sum_of_params}')
+        sum_of_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print(
+            f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
+        )
+
 
 class ResBlock(nn.Module):
     def __init__(self, num_hidden: int) -> None:

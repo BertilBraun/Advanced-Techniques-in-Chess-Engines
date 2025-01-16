@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 
 import numpy as np
 from collections import Counter
@@ -26,12 +27,14 @@ class SelfPlayGame:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.num_played_moves = 0
+        self.start_generation_time = time.time()
 
     def copy(self) -> SelfPlayGame:
         game = SelfPlayGame()
         game.board = self.board.copy()
         game.memory = self.memory[:]
         game.num_played_moves = self.num_played_moves
+        game.start_generation_time = self.start_generation_time
         return game
 
     def __hash__(self) -> int:
@@ -86,7 +89,7 @@ class SelfPlay:
             if result_score < self.args.resignation_threshold:
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
-                self.dataset += self._get_training_data(spg, result_score)
+                self._add_training_data(spg, result_score)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
@@ -134,7 +137,7 @@ class SelfPlay:
         # Game is over, add the game to the dataset
         result = get_board_result_score(new_spg.board)
         assert result is not None, 'Game should not be over if result is None'
-        self.dataset += self._get_training_data(new_spg, result)
+        self._add_training_data(new_spg, result)
         return SelfPlayGame(), move
 
     def _get_mcts(self, iteration: int) -> MCTS:
@@ -149,19 +152,18 @@ class SelfPlay:
             ),
         )
 
-    def _get_training_data(self, spg: SelfPlayGame, result: float) -> SelfPlayDataset:
+    def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
-        self_play_dataset = SelfPlayDataset()
+
+        self.dataset.add_generation_stats(num_games=1, generation_time=time.time() - spg.start_generation_time)
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)
 
             for board, probabilities in CurrentGame.symmetric_variations(encoded_board, mem.action_probabilities):
-                self_play_dataset.add_sample(
+                self.dataset.add_sample(
                     board.copy().astype(np.int8),
                     probabilities.copy().astype(np.float32),
                     lerp(result, mem.result_score, self.args.result_score_weight),
                 )
             result = -result
-
-        return self_play_dataset

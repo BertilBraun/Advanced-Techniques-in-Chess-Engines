@@ -45,8 +45,8 @@ class SelfPlayParams:
     result_score_weight: float = 0.5
     """This is the weight to use for the interpolation between final game outcome as score and the mcts result score. Weight of 0 is only the final game outcome, weight of 1 is only the mcts result score."""
 
-    num_samples_after_which_to_write: int = 2000
-    """This is the number of samples to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough samples are collected. Typically 1000-5000 for self-play."""
+    num_samples_after_which_to_write: int = 100
+    """This is the number of samples to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough samples are collected. Typically 100-500 for self-play."""
 
     resignation_threshold: float = -0.85
     """This is the threshold to use for the resignation of a game. If the mcts result score is below this threshold the game is resigned. The lower the threshold the more games are resigned. The higher the threshold the less games are resigned. Typically -0.85 to -0.99 for self-play."""
@@ -96,6 +96,9 @@ class TrainingParams:
 
     num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training"""
+
+    chunk_size: int | None = None
+    """This is the chunk size to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. 200-500x batch_size is a good starting point for chunk_size. If None, it defaults to 200 * batch_size."""
 
 
 @dataclass

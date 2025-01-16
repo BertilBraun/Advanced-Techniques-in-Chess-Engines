@@ -1,4 +1,3 @@
-import time
 import asyncio
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
@@ -27,7 +26,6 @@ class SelfPlayProcess:
         self.args = args
         self.self_play = SelfPlay(client, args)
         self.commander_pipe = commander_pipe
-        self.start_time_of_generating_samples = time.time()
 
     async def run(self):
         current_iteration = 0
@@ -57,8 +55,5 @@ class SelfPlayProcess:
         if not len(self.self_play.dataset):
             return
 
-        time_to_generate = time.time() - self.start_time_of_generating_samples
-        log(f'Generating {len(self.self_play.dataset)} samples took {time_to_generate:.2f}sec')
         self.self_play.dataset.save(self.save_path, iteration)
         self.self_play.dataset = SelfPlayDataset()
-        self.start_time_of_generating_samples = time.time()

@@ -1,11 +1,9 @@
 import time
 import torch
-import numpy as np
-from pathlib import Path
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset, SelfPlayTrainDataset
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU, log_histogram, log_scalar, CurrentGame
+from src.settings import USE_GPU, log_scalar, CurrentGame
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
@@ -52,7 +50,6 @@ class TrainerProcess:
         self._wait_for_enough_training_samples(iteration)
 
         dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-        log(f'Loaded {len(dataset)} self-play memories.')
 
         train_stats = TrainingStats()
 
@@ -63,7 +60,7 @@ class TrainerProcess:
 
         save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
-        self._log_to_tensorboard(iteration, train_stats, dataset)
+        self._log_to_tensorboard(iteration, train_stats)
         return train_stats
 
     def _wait_for_enough_training_samples(self, iteration):
@@ -76,39 +73,20 @@ class TrainerProcess:
             i += 1
             time.sleep(1)
 
-    def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats, dataset: SelfPlayDataset) -> None:
+    def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats) -> None:
         log_scalar('policy_loss', train_stats.policy_loss, iteration)
         log_scalar('value_loss', train_stats.value_loss, iteration)
         log_scalar('total_loss', train_stats.total_loss, iteration)
 
-        log_scalar('num_training_samples', len(dataset), iteration)
-        log_scalar('num_deduplicated_samples', len(dataset), iteration)
-
-        spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
-        log_scalar('policy_spikiness', spikiness, iteration)
-
-        log_histogram('policy_targets', np.array(dataset.policy_targets), iteration)
-        log_histogram('value_targets', np.array(dataset.value_targets), iteration)
-
-    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayDataset:
+    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayTrainDataset:
         window_size = self.args.training.sampling_window(iteration)
 
         log(
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        dataset = SelfPlayDataset()
-        for iter in range(max(iteration - window_size, 0), iteration + 1):
-            iteration_dataset = SelfPlayDataset.load_iteration(self.args.save_path, iter)
-            file_paths = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iter)
-
-            if len(iteration_dataset) != 0 and len(file_paths) > 1:
-                iteration_dataset.deduplicate()
-                for file_path in file_paths:
-                    Path(file_path).unlink()
-                iteration_dataset.save(self.args.save_path, iter, 'deduplicated')
-                log(f'Deduplicated memory_{iter} to {len(iteration_dataset)}')
-
-            dataset += iteration_dataset
-
-        return dataset
+        return SelfPlayTrainDataset(
+            list(range(max(iteration - window_size, 0), iteration + 1)),
+            self.args.save_path,
+            self.args.training.chunk_size or self.args.training.batch_size * 200,
+        )
