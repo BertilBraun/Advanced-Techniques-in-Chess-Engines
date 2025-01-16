@@ -5,7 +5,6 @@ import numpy as np
 from typing import Callable, Coroutine
 from dataclasses import dataclass
 
-from src.alpha_zero.SelfPlay import sample_move
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
@@ -134,8 +133,8 @@ class ModelEvaluation:
                 policies = await model2(games)
 
             for game, policy in zip(games, policies):
-                # temperature=0.001 is used to get the move with the highest probability
-                game.make_move(sample_move(policy, temperature=0.001))
+                move = CurrentGame.decode_move(np.argmax(policy).item())
+                game.make_move(move)
 
                 if game.is_game_over():
                     results.update(game.check_winner(), 1)

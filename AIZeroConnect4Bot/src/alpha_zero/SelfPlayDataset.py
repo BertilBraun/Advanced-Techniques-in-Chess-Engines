@@ -10,7 +10,7 @@ from typing import Any, NamedTuple
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, encode_board_state
-from src.settings import CurrentGame, log_histogram, log_scalar
+from src.settings import TORCH_DTYPE, CurrentGame, log_histogram, log_scalar
 from src.util.log import log
 from src.util import random_id
 
@@ -122,7 +122,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         with h5py.File(file_path, 'r') as file:
             metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
             message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-            assert metadata['environment'] == SelfPlayDataset._get_current_metadata(), message
+            assert metadata == SelfPlayDataset._get_current_metadata(), message
 
             dataset = SelfPlayDataset()
             dataset.states = [state for state in file['states']]  # type: ignore
@@ -175,10 +175,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, iterations: list[int], folder_path: str | PathLike, chunk_size: int) -> None:
+    def __init__(
+        self, iterations: list[int], folder_path: str | PathLike, chunk_size: int, device: torch.device
+    ) -> None:
         self.iterations = iterations
         self.folder_path = folder_path
         self.chunk_size = chunk_size
+        self.device = device
 
         self.all_chunks: list[PathLike] = []
 
@@ -226,32 +229,63 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         random.shuffle(self.all_chunks)
         self.sample_index = 0
-        self.active_samples = self._load_samples()
+        self.active_states, self.active_policies, self.active_values = self._load_samples()
         self.total_num_samples = 0
+
+        self.total_loading_time = 0
 
         log(f'Loaded {len(self.all_chunks)} chunks with: {self.stats}')
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert idx == self.total_num_samples, 'Only sequential access is supported'
         self.total_num_samples += 1
+        import time
 
-        if self.sample_index >= len(self.active_samples):
-            self.active_samples = self._load_samples()
+        loading_start = time.time()
+
+        if self.sample_index >= len(self.active_states):
+            self.active_states, self.active_policies, self.active_values = self._load_samples()
             self.sample_index = 0
 
-        sample = self.active_samples[self.sample_index]
+        state = self.active_states[self.sample_index]
+        policy_target = self.active_policies[self.sample_index]
+        value_target = self.active_values[self.sample_index]
         self.sample_index += 1
-        return sample
 
-    def _load_samples(self) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        self.total_loading_time += time.time() - loading_start
+        if idx % 256 == 0:
+            log(f'Loading time: {self.total_loading_time}s for {idx} samples')
+        return state, policy_target, value_target
+
+    def __len__(self) -> int:
+        return self.stats.num_samples
+
+    def _load_samples(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
         chunks_to_load = self.all_chunks[:3]
         self.all_chunks = self.all_chunks[3:] + chunks_to_load
 
-        samples: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        states: list[np.ndarray] = []
+        policy_targets: list[np.ndarray] = []
+        value_targets: list[float] = []
+
         for chunk in chunks_to_load:
             dataset = SelfPlayDataset.load(chunk)
-            for i in range(len(dataset)):
-                samples.append(dataset[i])
-        random.shuffle(samples)
-        return samples
+            states += dataset.states
+            policy_targets += dataset.policy_targets
+            value_targets += dataset.value_targets
+
+        indices = np.arange(len(states))
+        np.random.shuffle(indices)
+
+        states_np = np.array([decode_board_state(states[i]) for i in indices], dtype=np.float32)
+        policy_targets_np = np.array([policy_targets[i] for i in indices], dtype=np.float32)
+        value_targets_np = np.array([value_targets[i] for i in indices], dtype=np.float32)
+
+        states_torch = torch.from_numpy(states_np).to(device=self.device, dtype=TORCH_DTYPE, non_blocking=True)
+        policies_torch = torch.from_numpy(policy_targets_np).to(
+            device=self.device, dtype=TORCH_DTYPE, non_blocking=True
+        )
+        values_torch = torch.tensor(value_targets_np, dtype=torch.float32).to(device=self.device, non_blocking=True)
+
+        return states_torch, policies_torch, values_torch

@@ -32,7 +32,8 @@ class AlphaZeroBot(Bot):
 
     async def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
-            policy, _ = self.inference_client._model_inference([CurrentGame.get_canonical_board(board)])[0]
+            results = await self.inference_client.run_batch([self.inference_client.inference(board)])
+            policy, _ = results[0]
             return CurrentGame.decode_move(np.argmax(policy).item())
 
         root = MCTSNode.root(board)

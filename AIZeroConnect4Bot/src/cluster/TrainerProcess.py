@@ -89,4 +89,5 @@ class TrainerProcess:
             list(range(max(iteration - window_size, 0), iteration + 1)),
             self.args.save_path,
             self.args.training.chunk_size or self.args.training.batch_size * 200,
+            self.device,
         )

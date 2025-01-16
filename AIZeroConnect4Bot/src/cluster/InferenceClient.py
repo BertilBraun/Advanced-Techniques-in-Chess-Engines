@@ -31,6 +31,9 @@ class InferenceClient:
         self.enqueued_inferences: set[bytes] = set()
 
     def update_iteration(self, iteration: int) -> None:
+        """Update the Inference Client to use the model for the given iteration.
+        Slighly optimizes the model for inference and resets the cache and stats."""
+
         self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
         self.model.disable_auto_grad()
         self.model = self.model.eval()
@@ -50,8 +53,13 @@ class InferenceClient:
         self.inference_cache.clear()
 
     async def inference(self, board: CurrentBoard) -> tuple[np.ndarray, float]:
+        """Enqueue an inference request and return the result when available.
+        Results are batched to optimize the inference process.
+        Results are cached to avoid redundant inferences.
+        Results will be available once either the batch size is reached or the flush method is called."""
+
         canonical_board = CurrentGame.get_canonical_board(board)
-        board_hash = encode_board_state(canonical_board).tobytes()
+        board_hash = self._get_board_hash(canonical_board)
 
         self.total_evals += 1
 
@@ -80,7 +88,15 @@ class InferenceClient:
         # Await the result
         return await future
 
+    async def run_batch(self, tasks: list[Coroutine[Any, Any, T]]) -> list[T]:
+        """Run a batch of inference requests and return the results. The order of the results is preserved."""
+        requests = [asyncio.create_task(task) for task in tasks]
+        await asyncio.sleep(0)  # Yield control to allow tasks to enqueue
+        self.flush()
+        return await asyncio.gather(*requests)
+
     def flush(self) -> None:
+        """Flush the batch queue and process all enqueued inferences."""
         if self.batch_queue:
             self._process_batch()
 
@@ -116,8 +132,8 @@ class InferenceClient:
 
         return [(result[:-1], result[-1]) for result in results]
 
-    async def run_batch(self, tasks: list[Coroutine[Any, Any, T]]) -> list[T]:
-        requests = [asyncio.create_task(task) for task in tasks]
-        await asyncio.sleep(0)  # Yield control to allow tasks to enqueue
-        self.flush()
-        return await asyncio.gather(*requests)
+    def _get_board_hash(self, board: np.ndarray) -> bytes:
+        variation_hashes: list[bytes] = []
+        for variation, _ in CurrentGame.symmetric_variations(board, np.array([])):
+            variation_hashes.append(encode_board_state(variation).tobytes())
+        return min(variation_hashes)

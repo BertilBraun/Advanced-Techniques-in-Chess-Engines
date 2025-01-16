@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayTrainDataset
 from src.Network import Network
-from src.settings import TORCH_DTYPE, USE_GPU, log_scalar
+from src.settings import USE_GPU, log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingParams
 from src.alpha_zero.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -63,11 +63,11 @@ from src.util.log import log
 
 # NOT_REQUIRED FSDP Data parallel model training
 # TODO maybe keep the window based on the number of samples, instead of the number of iterations
-# TODO smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
+# DONE smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
 # Do so by: Assuming, deduplication works in memory. Then we shuffle the deduplicated dataset before writing it to disk. Then we store the data in chunks of ~1GB. Then during training we load only one chunk of each of the iterations datasets and choose the sample based on idx % num_iterations. But then the DataLoader should not shuffle but instead load the samples in order. Yes, that it does, tested.
 # DONE save to the dataset how long generating the samples/games took and print these stats while loading the dataset instead of at each save. Then also more frequent dataset saves are possible.
 
-# TODO Caching based on symmetries of the board state, use the smallest key of the symmetries as the key for the cache
+# DONE Caching based on symmetries of the board state, use the smallest key of the symmetries as the key for the cache
 
 
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
@@ -150,9 +150,6 @@ class Trainer:
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
 
-            state = state.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
-            policy_targets = policy_targets.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
-            value_targets = value_targets.to(dtype=TORCH_DTYPE, device=self.model.device, non_blocking=True)
             value_targets = value_targets.unsqueeze(1)
 
             out_policy, out_value = self.model(state)

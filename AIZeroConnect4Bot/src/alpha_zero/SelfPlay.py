@@ -41,16 +41,8 @@ class SelfPlayGame:
         return self.board.quick_hash()
 
 
-def sample_move(
-    action_probabilities: np.ndarray, num_played_moves: int = 0, temperature: float = 1.0
-) -> CurrentGameMove:
+def sample_move(action_probabilities: np.ndarray, temperature: float = 1.0) -> CurrentGameMove:
     assert temperature > 0, 'Temperature must be greater than 0'
-
-    # only use temperature for the first 30 moves, then simply use the most likely move
-    # Keep exploration high for the first 30 moves, then play out as well as possible to reduce noise in the backpropagated final game results
-    if num_played_moves >= 30:
-        # infinetesimal temperature to pick the most likely move
-        temperature = 0.001
 
     temperature_action_probabilities = action_probabilities ** (1 / temperature)
     temperature_action_probabilities /= np.sum(temperature_action_probabilities)
@@ -93,18 +85,17 @@ class SelfPlay:
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
-            original_action_probabilities = action_probabilities.copy()
             for _ in range(count):
                 self.self_play_games[spg] -= 1
 
-                action_probabilities = original_action_probabilities.copy()
+                spg_action_probabilities = action_probabilities.copy()
 
-                while np.sum(action_probabilities) > 0:
-                    new_spg, move = self._sample_self_play_game(spg, action_probabilities)
+                while np.sum(spg_action_probabilities) > 0:
+                    new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities)
 
                     if self.self_play_games[new_spg] > 0:
                         # Already exploring this state, so remove the probability of this move and try again
-                        action_probabilities[CurrentGame.encode_move(move)] = 0
+                        spg_action_probabilities[CurrentGame.encode_move(move)] = 0
                         continue
 
                     self.self_play_games[new_spg] += 1
@@ -112,7 +103,7 @@ class SelfPlay:
                 else:
                     # No valid moves left which are not already being explored
                     # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
-                    new_spg, _ = self._sample_self_play_game(spg, original_action_probabilities)
+                    new_spg, _ = self._sample_self_play_game(spg, action_probabilities)
                     self.self_play_games[new_spg] += 1
 
         # remove spgs with count 0
@@ -127,7 +118,12 @@ class SelfPlay:
 
         new_spg = current.copy()
 
-        move = sample_move(action_probabilities, current.num_played_moves, self.args.temperature)
+        # only use temperature for the first X moves, then simply use the most likely move
+        # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
+        if current.num_played_moves >= self.args.num_moves_after_which_to_play_greedy:
+            move = CurrentGame.decode_move(np.argmax(action_probabilities).item())
+        else:
+            move = sample_move(action_probabilities, self.args.temperature)
         new_spg.board.make_move(move)
         new_spg.num_played_moves += 1
 
