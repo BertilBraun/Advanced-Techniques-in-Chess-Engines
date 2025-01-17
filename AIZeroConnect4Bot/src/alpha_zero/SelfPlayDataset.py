@@ -156,6 +156,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         if not suffix:
             suffix = random_id()
         file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
+        file_path.mkdir(parents=True, exist_ok=True)
 
         # write a h5py file with states, policy targets and value targets in it
         with h5py.File(file_path, 'w') as file:
@@ -182,9 +183,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(
-        self, iterations: list[int], folder_path: str | PathLike, chunk_size: int, device: torch.device
-    ) -> None:
+    def __init__(self, iterations: list[int], folder_path: str, chunk_size: int, device: torch.device) -> None:
         self.iterations = iterations
         self.folder_path = folder_path
         self.chunk_size = chunk_size
@@ -210,6 +209,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             if len(files_for_iteration) > 1:
                 dataset.deduplicate()
                 dataset.save(folder_path, iteration, suffix='deduplicated')
+                # Remove the original files to avoid re-deduplication
                 for file in files_for_iteration:
                     file.unlink()
 
@@ -232,7 +232,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                 chunk.states = dataset.states[i : i + chunk_size]
                 chunk.policy_targets = dataset.policy_targets[i : i + chunk_size]
                 chunk.value_targets = dataset.value_targets[i : i + chunk_size]
-                save_file = chunk.save(folder_path, iteration, suffix=f'chunk_{i // chunk_size}')
+                # Save the chunks to a different folder, to avoid mixing them with the original dataset
+                save_file = chunk.save(
+                    folder_path + f'/iteration_{iteration}', iteration, suffix=f'chunk_{i // chunk_size}'
+                )
                 self.all_chunks.append(save_file)
 
             del dataset
