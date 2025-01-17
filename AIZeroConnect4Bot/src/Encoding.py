@@ -38,9 +38,7 @@ def encode_board_state(state: npt.NDArray[np.int8]) -> npt.NDArray[np.uint64]:
 
 def decode_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
     """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
-
-    # Convert to uint64 to prevent overflow
-    state = state.astype(np.uint64)
+    assert state.dtype == np.uint64, 'The state must be encoded as uint64 to prevent overflow'
 
     encoded_array = state.reshape(-1, 1)  # shape: (channels, 1)
 
