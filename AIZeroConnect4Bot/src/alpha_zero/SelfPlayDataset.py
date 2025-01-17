@@ -121,7 +121,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return shuffled_dataset
 
     @staticmethod
-    def load(file_path: str | PathLike) -> SelfPlayDataset:
+    def load(file_path: Path) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
 
         try:
@@ -156,7 +156,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         if not suffix:
             suffix = random_id()
         file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
-        file_path.mkdir(parents=True, exist_ok=True)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # write a h5py file with states, policy targets and value targets in it
         with h5py.File(file_path, 'w') as file:
@@ -189,7 +189,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.chunk_size = chunk_size
         self.device = device
 
-        self.all_chunks: list[PathLike] = []
+        self.all_chunks: list[Path] = []
 
         self.stats = SelfPlayDatasetStats(0, 0, 0)
 

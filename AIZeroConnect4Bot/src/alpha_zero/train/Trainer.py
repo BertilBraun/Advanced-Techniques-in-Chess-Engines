@@ -60,6 +60,8 @@ from src.util.log import log
 # TODO Future: hyperparameter optimization as in Paper: Accelerating and Improving AlphaZero Using Population Based Training
 # TODO Future: start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
+# TODO use HandcraftedBotV4 or Stockfish on level 4 as baseline to compare against
+
 # TODO Future: IMO: The MCTS tree of the most visited child should be the most explored already. Why discard all of that prior work when starting the search for that child again? Why not retain that information and continue work from there. Issue with that: The noise which initially gets added to the root priors. Idea: Update that later, once the node is selected as the new root. Then ensure that each node gets an appropriate amount of fixes searches, so that the noise exploration has chance to take effect. I.e. child 2 is selcted. Then the next MCTS search starts with child 2 as the new root node and all of the accompanied expansion and search already done (might need to flip some signs of the scores, not sure). Since these moves were not expanded using a noisy policy (for exploration), we have to remedy that, by adding some noise on the priors of the children of child 2 (the new root). Then we should ensure, that each move gets an appropriate amount of fixes searches (f.e. 10) so that the noise has a chance to take effect. Afterwards, the assumption is, that the passed root node and a fully simulated root node are mostly identical, but building them is way cheaper.
 
 # TODO NOT_REALLY_REQUIRED use mp.Event to signal instead of mp.Pipes?
