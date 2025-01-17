@@ -14,15 +14,13 @@ class AlphaZeroBot(Bot):
     def __init__(self, iteration: int, max_time_to_think: float, network_eval_only: bool) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        BATCH_SIZE = 16
-
         self.inference_client = InferenceClient(0, TRAINING_ARGS)
         self.inference_client.update_iteration(iteration)
 
         self.mcts_args = MCTSArgs(
             # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
             num_searches_per_turn=2**16 - 1,
-            num_parallel_searches=BATCH_SIZE,
+            num_parallel_searches=TRAINING_ARGS.self_play.mcts.num_parallel_searches,
             dirichlet_alpha=0.5,  # irrelevant
             dirichlet_epsilon=0.0,
             c_param=PLAY_C_PARAM,

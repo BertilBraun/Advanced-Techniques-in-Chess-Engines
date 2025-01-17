@@ -58,3 +58,9 @@ class TicTacToeBoard(Board[TicTacToeMove]):
 
     def is_game_over(self) -> bool:
         return self._winner is not None or self.is_full()
+
+    def quick_hash(self) -> int:
+        return hash(tuple(self.board))
+
+    def __repr__(self) -> str:
+        return str(self.board.reshape((ROW_COUNT, COLUMN_COUNT)))

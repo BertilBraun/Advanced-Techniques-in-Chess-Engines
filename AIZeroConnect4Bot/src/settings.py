@@ -164,7 +164,7 @@ if False:
         ),
     )
 
-elif True:
+elif False:
     from src.games.chess.ChessGame import ChessGame, ChessMove
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessVisuals import ChessVisuals
@@ -210,7 +210,7 @@ elif True:
             num_moves_after_which_to_play_greedy=25,
             mcts=MCTSParams(
                 num_searches_per_turn=320,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -232,7 +232,7 @@ elif True:
             num_moves_after_which_to_play_greedy=25,
             mcts=MCTSParams(
                 num_searches_per_turn=100,
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -285,7 +285,7 @@ elif True:
             num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
                 num_searches_per_turn=320,  # 200, based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -300,7 +300,7 @@ elif True:
         ),
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,
@@ -312,7 +312,7 @@ elif True:
             num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
                 num_searches_per_turn=64,
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -347,11 +347,9 @@ elif True:
         TRAINING_ARGS = TrainingArgs(
             num_iterations=12,
             save_path=SAVE_PATH + '/tictactoe',
-            mcts=MCTSParams(
-                num_searches_per_turn=60,
-                dirichlet_epsilon=0.25,
-                dirichlet_alpha=lambda _: 0.3,
-                c_param=2,
+            num_games_per_iteration=32,
+            inference=InferenceParams(
+                batch_size=128,
             ),
             network=NetworkParams(
                 num_layers=NN_NUM_LAYERS,
@@ -360,17 +358,24 @@ elif True:
             self_play=SelfPlayParams(
                 temperature=1.25,
                 num_parallel_games=128,
-                num_games_per_iteration=128 * 4 * 2,
+                num_moves_after_which_to_play_greedy=5,
+                mcts=MCTSParams(
+                    num_searches_per_turn=60,
+                    dirichlet_epsilon=0.25,
+                    dirichlet_alpha=lambda _: 0.3,
+                    c_param=2,
+                    num_parallel_searches=2,
+                ),
             ),
             cluster=ClusterParams(
                 num_self_play_nodes_on_cluster=1,
-                num_train_nodes_on_cluster=0,
             ),
             training=TrainingParams(
                 num_epochs=4,
                 batch_size=64,
                 sampling_window=lambda _: 3,
                 learning_rate=lambda _: 0.001,
+                learning_rate_scheduler=learning_rate_scheduler,
             ),
             evaluation=EvaluationParams(
                 num_searches_per_turn=60,

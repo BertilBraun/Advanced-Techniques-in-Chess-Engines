@@ -134,6 +134,6 @@ class InferenceClient:
 
     def _get_board_hash(self, board: np.ndarray) -> bytes:
         variation_hashes: list[bytes] = []
-        for variation, _ in CurrentGame.symmetric_variations(board, np.array([])):
+        for variation, _ in CurrentGame.symmetric_variations(board, np.zeros(CurrentGame.action_size)):
             variation_hashes.append(encode_board_state(variation).tobytes())
         return min(variation_hashes)
