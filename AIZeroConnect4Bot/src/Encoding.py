@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 
 from src.games.Game import Board
 from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
@@ -10,7 +11,7 @@ assert _N_BITS <= 64, 'The state is too large to encode'
 _BIT_MASK = 1 << np.arange(_N_BITS, dtype=np.uint64)  # use uint64 to prevent overflow
 
 
-def encode_board_state(state: np.ndarray) -> np.ndarray:
+def encode_board_state(state: npt.NDArray[np.int8]) -> npt.NDArray[np.uint64]:
     """Encode the state into a tuple of integers. Each integer represents a channel of the state. This assumes that the state is a binary state.
 
     The encoding is done by setting the i-th bit of the integer to the i-th bit of the flattened state.
@@ -35,7 +36,7 @@ def encode_board_state(state: np.ndarray) -> np.ndarray:
     return encoded
 
 
-def decode_board_state(state: np.ndarray) -> np.ndarray:
+def decode_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
     """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
 
     # Convert to uint64 to prevent overflow

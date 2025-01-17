@@ -48,22 +48,23 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
     for from_square in range(BOARD_SIZE):
         row, col = square_to_index(from_square)
 
+        # Queen moves
         for dr, dc in DIRECTIONS:
-            # Queen moves
-            to_row, to_col = row + dr, col + dc
-            if 0 <= to_row < BOARD_LENGTH and 0 <= to_col < BOARD_LENGTH:
-                moves.append(DictMove(from_square, index_to_square(to_row, to_col), None))
+            for distance in range(1, 8):
+                to_row, to_col = row + dr * distance, col + dc * distance
+                if 0 <= to_row < BOARD_LENGTH and 0 <= to_col < BOARD_LENGTH:
+                    moves.append(DictMove(from_square, index_to_square(to_row, to_col), None))
 
+        # Knight moves
         for dr, dc in KNIGHT_MOVES:
-            # Knight moves
             to_row, to_col = row + dr, col + dc
             if 0 <= to_row < BOARD_LENGTH and 0 <= to_col < BOARD_LENGTH:
                 moves.append(DictMove(from_square, index_to_square(to_row, to_col), None))
 
+        # Promotion moves
         if row in (1, 6):
-            # Promotion moves
             for dc in (-1, 0, 1):
-                to_row, to_col = row + (1 if row == 1 else -1), col + dc
+                to_row, to_col = row + (-1 if row == 1 else 1), col + dc
                 if 0 <= to_row < BOARD_LENGTH and 0 <= to_col < BOARD_LENGTH:
                     for promotion_piece in PROMOTION_PIECES:
                         moves.append(DictMove(from_square, index_to_square(to_row, to_col), promotion_piece))

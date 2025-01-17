@@ -4,6 +4,7 @@ import h5py
 import torch
 import random
 import numpy as np
+import numpy.typing as npt
 from os import PathLike
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -52,15 +53,17 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     """
 
     def __init__(self) -> None:
-        self.states: list[np.ndarray] = []
-        self.policy_targets: list[np.ndarray] = []
+        self.states: list[npt.NDArray[np.uint64]] = []
+        self.policy_targets: list[npt.NDArray[np.float32]] = []
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats(0, 0, 0)
 
     def add_generation_stats(self, num_games: int, generation_time: float) -> None:
         self.stats += SelfPlayDatasetStats(0, num_games, generation_time)
 
-    def add_sample(self, state: np.ndarray, policy_target: np.ndarray, value_target: float) -> None:
+    def add_sample(
+        self, state: npt.NDArray[np.int8], policy_target: npt.NDArray[np.float32], value_target: float
+    ) -> None:
         self.states.append(encode_board_state(state))
         self.policy_targets.append(policy_target)
         self.value_targets.append(value_target)
@@ -86,7 +89,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[tuple[int, ...], tuple[int, tuple[np.ndarray, float]]] = {}
+        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.float32], float]]] = {}
 
         for state, policy_target, value_target in zip(self.states, self.policy_targets, self.value_targets):
             state = tuple(state)
