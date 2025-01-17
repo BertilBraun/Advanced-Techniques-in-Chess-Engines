@@ -33,19 +33,19 @@ class Network(nn.Module):
         self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 32, kernel_size=3, padding='same'),
+            nn.Conv2d(hidden_size, 32, kernel_size=3),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(32 * row_count * column_count, action_size),
+            nn.Linear(32 * (row_count - 2) * (column_count - 2), action_size),
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 32, kernel_size=3, padding='same'),
+            nn.Conv2d(hidden_size, 32, kernel_size=3),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(32 * row_count * column_count, 1),
+            nn.Linear(32 * (row_count - 2) * (column_count - 2), 1),
             nn.Tanh(),
         )
 
