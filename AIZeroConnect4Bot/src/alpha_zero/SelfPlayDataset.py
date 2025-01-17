@@ -213,6 +213,8 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                 for file in files_for_iteration:
                     file.unlink()
 
+            dataset = dataset.shuffle()
+
             log_scalar('num_deduplicated_samples', len(dataset), iteration)
 
             spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
