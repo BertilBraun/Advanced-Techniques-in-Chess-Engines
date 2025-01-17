@@ -71,7 +71,7 @@ class CommanderProcess:
         starting_iteration = get_latest_model_iteration(self.args.num_iterations, self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
 
-        with log_exceptions('Commander crashed.'):
+        with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 for pipe in self._all_pipes():

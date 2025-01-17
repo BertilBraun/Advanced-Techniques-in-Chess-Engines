@@ -11,4 +11,3 @@ def log_exceptions(name: str):
     except Exception as e:
         log(f'Exception in {name}: {e}')
         traceback.print_exc()
-        exit()
