@@ -292,6 +292,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         policies_torch = torch.from_numpy(policy_targets_np).to(
             device=self.device, dtype=TORCH_DTYPE, non_blocking=True
         )
-        values_torch = torch.tensor(value_targets_np, dtype=torch.float32).to(device=self.device, non_blocking=True)
+        values_torch = torch.tensor(value_targets_np, dtype=TORCH_DTYPE, device=self.device)
 
         return states_torch, policies_torch, values_torch
