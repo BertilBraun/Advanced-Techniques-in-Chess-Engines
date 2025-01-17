@@ -122,18 +122,22 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
-        with h5py.File(file_path, 'r') as file:
-            metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
-            message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-            assert metadata == SelfPlayDataset._get_current_metadata(), message
+        dataset = SelfPlayDataset()
 
-            dataset = SelfPlayDataset()
-            dataset.states = [state for state in file['states']]  # type: ignore
-            dataset.policy_targets = [policy_target for policy_target in file['policy_targets']]  # type: ignore
-            dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
+        try:
+            with h5py.File(file_path, 'r') as file:
+                metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
+                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
+                assert metadata == SelfPlayDataset._get_current_metadata(), message
 
-            stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
-            dataset.stats = SelfPlayDatasetStats(**stats)
+                dataset.states = [state for state in file['states']]  # type: ignore
+                dataset.policy_targets = [policy_target for policy_target in file['policy_targets']]  # type: ignore
+                dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
+
+                stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
+                dataset.stats = SelfPlayDatasetStats(**stats)
+        except Exception as e:
+            log(f'Error loading dataset from {file_path}: {e}')
 
         return dataset
 
