@@ -1,3 +1,4 @@
+import src.environ_setup  # noqa: F401
 import pygame
 
 
@@ -28,8 +29,8 @@ class BaseGridGameGUI:
             self.cell_size // 3,
         )
 
-    def draw_text(self, row: int, col: int, text: str, color: str):
-        font = pygame.font.Font(None, 36)
+    def draw_text(self, row: int, col: int, text: str, color: str = 'black'):
+        font = pygame.font.Font('src/eval/Segoe-UI-Symbol.ttf', 64)
         text_render = font.render(text, True, pygame.Color(color))
         text_rect = text_render.get_rect(
             center=(

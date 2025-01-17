@@ -1,12 +1,13 @@
 import numpy as np
 
+from src.Encoding import filter_policy_then_get_moves_and_probabilities
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
-from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM
+from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGameMove, PLAY_C_PARAM
 
 
 class AlphaZeroBot(Bot):
@@ -34,7 +35,8 @@ class AlphaZeroBot(Bot):
         if self.network_eval_only:
             results = await self.inference_client.run_batch([self.inference_client.inference(board)])
             policy, _ = results[0]
-            return CurrentGame.decode_move(np.argmax(policy).item())
+            moves = filter_policy_then_get_moves_and_probabilities(policy, board)
+            return max(moves, key=lambda move: move[1])[0]
 
         root = MCTSNode.root(board)
 

@@ -2,7 +2,7 @@ import time
 from typing import Optional, Tuple
 
 from src.eval.Bot import Bot
-from src.games.GUI import BaseGridGameGUI
+from src.eval.GUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.settings import CurrentGameMove, CurrentBoard
 

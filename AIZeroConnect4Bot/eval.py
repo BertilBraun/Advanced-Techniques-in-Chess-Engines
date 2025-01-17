@@ -3,7 +3,7 @@ import torch
 
 from src.util.log import log
 from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals
-from src.games.GUI import BaseGridGameGUI
+from src.eval.GUI import BaseGridGameGUI
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot

@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 
 from src.games.Game import Board
-from src.games.GUI import BaseGridGameGUI
+from src.eval.GUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.games.connect4.Connect4Board import Connect4Board
 from src.games.connect4.Connect4Game import Connect4Move

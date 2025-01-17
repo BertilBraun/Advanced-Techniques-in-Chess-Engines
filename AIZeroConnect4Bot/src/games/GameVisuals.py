@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, List, Optional, Tuple, TypeVar
 
 from src.games.Game import Board
-from src.games.GUI import BaseGridGameGUI
+from src.eval.GUI import BaseGridGameGUI
 
 _Move = TypeVar('_Move')
 

@@ -1,6 +1,6 @@
 from typing import List, Optional, Tuple
 
-from src.games.GUI import BaseGridGameGUI
+from src.eval.GUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.games.checkers.CheckersBoard import CheckersBoard, CheckersMove, Piece
 
