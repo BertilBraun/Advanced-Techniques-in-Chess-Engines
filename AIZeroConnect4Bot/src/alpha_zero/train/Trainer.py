@@ -70,6 +70,8 @@ from src.util.log import log
 
 # DONE Caching based on symmetries of the board state, use the smallest key of the symmetries as the key for the cache
 
+# TODO Future: Path Consistency https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf - seems to be more sample efficient by using the information of the mcts search tree for value targets (5 most recent history states, argmax path in mcst search tree, 2x the mse(v-mean(v of paths)) and 1x the mse(f_v-mean(f_v of history states)) i.e. the feature vector before mapping to the value head)
+
 
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 
