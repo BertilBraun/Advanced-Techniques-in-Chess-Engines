@@ -27,7 +27,7 @@ class MCTS:
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
             await self.parallel_iterate(roots)
 
-        return [(self._get_action_probabilities(root), root.result_score / root.number_of_visits) for root in roots]
+        return [(self._get_action_probabilities(root), root.result_score) for root in roots]
 
     async def parallel_iterate(self, roots: list[MCTSNode]) -> None:
         await self.client.run_batch(

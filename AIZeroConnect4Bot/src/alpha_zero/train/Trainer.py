@@ -87,6 +87,8 @@ from src.util.log import log
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
 
+# TODO log played games to file, including their moves, scores, resignations, etc. for later analysis
+
 # FUTURE: Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
 # FUTURE: Gobang https://de.wikipedia.org/wiki/Gobang
 
@@ -102,7 +104,7 @@ from src.util.log import log
 # NOTE on pipe based system still has to be recorded
 
 # NOTE new Client inference based system with 12 clients per GPU
-# Allrox 20sec for 500 samples, 40sec for 1000 samples -> approx 3x faster than old client inference based system and 12x faster than queue based system
+# Approx 20sec for 500 samples, 40sec for 1000 samples -> approx 3x faster than old client inference based system and 12x faster than queue based system
 
 
 # DONE inference server handles with queues and is as light weight as possible
