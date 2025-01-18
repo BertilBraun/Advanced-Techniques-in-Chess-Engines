@@ -1,3 +1,4 @@
+import multiprocessing
 import numpy as np
 import torch
 from tensorboardX import SummaryWriter
@@ -26,7 +27,7 @@ LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be 
 
 PLAY_C_PARAM = 1.0
 
-_TB_SUMMARY = SummaryWriter(LOG_FOLDER)
+_TB_SUMMARY = SummaryWriter(LOG_FOLDER + f'/{multiprocessing.current_process().pid}')
 
 
 def log_scalar(name: str, value: float, iteration: int) -> None:
