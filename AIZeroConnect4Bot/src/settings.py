@@ -277,7 +277,6 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 10,
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=network,
         inference=inference,
