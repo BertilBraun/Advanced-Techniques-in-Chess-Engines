@@ -164,7 +164,7 @@ if False:
         ),
     )
 
-elif False:
+elif True:
     from src.games.chess.ChessGame import ChessGame, ChessMove
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessVisuals import ChessVisuals
@@ -190,7 +190,7 @@ elif False:
     inference = InferenceParams(batch_size=128)
     evaluation = EvaluationParams(
         num_searches_per_turn=60,
-        num_games=20,
+        num_games=30,
         every_n_iterations=10,
     )
 
@@ -218,7 +218,7 @@ elif False:
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
         training=training,
-        evaluation=None,  # evaluation,
+        evaluation=evaluation,
     )
     # TODO remove
     TEST_TRAINING_ARGS = TrainingArgs(
@@ -243,7 +243,7 @@ elif False:
     )
 
 
-elif True:
+elif False:
     from src.games.checkers.CheckersGame import CheckersGame, CheckersMove
     from src.games.checkers.CheckersBoard import CheckersBoard
     from src.games.checkers.CheckersVisuals import CheckersVisuals
@@ -335,6 +335,12 @@ elif True:
     NN_HIDDEN_SIZE = 64
     NN_NUM_LAYERS = 4
 
+    def dirichlet_alpha(iteration: int) -> float:
+        return 0.3
+
+    def sampling_window(current_iteration: int) -> int:
+        return 3
+
     # Test training args to verify the implementation
     if torch.cuda.is_available() and not TESTING:
         NUM_NODES = 8
@@ -362,7 +368,7 @@ elif True:
                 mcts=MCTSParams(
                     num_searches_per_turn=60,
                     dirichlet_epsilon=0.25,
-                    dirichlet_alpha=lambda _: 0.3,
+                    dirichlet_alpha=dirichlet_alpha,
                     c_param=2,
                     num_parallel_searches=2,
                 ),
@@ -373,8 +379,8 @@ elif True:
             training=TrainingParams(
                 num_epochs=4,
                 batch_size=64,
-                sampling_window=lambda _: 3,
-                learning_rate=lambda _: 0.001,
+                sampling_window=sampling_window,
+                learning_rate=learning_rate,
                 learning_rate_scheduler=learning_rate_scheduler,
             ),
             evaluation=EvaluationParams(
