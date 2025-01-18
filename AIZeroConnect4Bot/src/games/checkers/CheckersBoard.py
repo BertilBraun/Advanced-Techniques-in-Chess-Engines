@@ -307,6 +307,7 @@ class CheckersBoard(Board[CheckersMove]):
         self.black_kings: uint64 = 0
         self.white_pieces: uint64 = WHITE_MEN_START
         self.white_kings: uint64 = 0
+        self.num_games_with_no_capture_or_king = 0
 
     @property
     def board_dimensions(self) -> Tuple[int, int]:
@@ -352,6 +353,8 @@ class CheckersBoard(Board[CheckersMove]):
         start, end = move
         assert 0 <= start < BOARD_SQUARES and 0 <= end < BOARD_SQUARES, 'Invalid move'
 
+        self.num_games_with_no_capture_or_king += 1
+
         # Remove captured piece if any:
         # Do this first, before moving the piece, to get the correct valid moves
         for s, e, captures in self._get_valid_moves():
@@ -362,6 +365,7 @@ class CheckersBoard(Board[CheckersMove]):
                     self.white_kings &= ~capture_mask
                     self.black_pieces &= ~capture_mask
                     self.black_kings &= ~capture_mask
+                    self.num_games_with_no_capture_or_king = 0
                 break
 
         start_mask = 1 << start
@@ -377,6 +381,7 @@ class CheckersBoard(Board[CheckersMove]):
                 if end_mask & BLACK_PROMOTION_ROW:
                     self.black_pieces &= ~end_mask
                     self.black_kings |= end_mask
+                    self.num_games_with_no_capture_or_king = 0
 
             elif self.black_kings & start_mask:
                 self.black_kings &= ~start_mask
@@ -393,6 +398,7 @@ class CheckersBoard(Board[CheckersMove]):
                 if end_mask & WHITE_PROMOTION_ROW:
                     self.white_pieces &= ~end_mask
                     self.white_kings |= end_mask
+                    self.num_games_with_no_capture_or_king = 0
 
             elif self.white_kings & start_mask:
                 self.white_kings &= ~start_mask
@@ -409,6 +415,9 @@ class CheckersBoard(Board[CheckersMove]):
 
     @Board._cache()
     def check_winner(self) -> Optional[Player]:
+        if self.num_games_with_no_capture_or_king >= 20:
+            return None  # Draw
+
         black_pieces = self.black_pieces | self.black_kings
         white_pieces = self.white_pieces | self.white_kings
 
@@ -427,7 +436,7 @@ class CheckersBoard(Board[CheckersMove]):
         return None
 
     def is_game_over(self) -> bool:
-        return self.check_winner() is not None
+        return self.check_winner() is not None or self.num_games_with_no_capture_or_king >= 20
 
     def copy(self) -> CheckersBoard:
         game = CheckersBoard()
