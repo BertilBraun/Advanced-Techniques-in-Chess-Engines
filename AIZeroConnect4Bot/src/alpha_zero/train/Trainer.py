@@ -40,7 +40,7 @@ from src.util.log import log
 
 # DONE parallel MCTS search? - searching multiple states at once by blocking nodes: https://dke.maastrichtuniversity.nl/m.winands/documents/multithreadedMCTS2.pdf
 
-# TODO Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
+# FUTURE: Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference. https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization
 
 # DONE remove or increase number of load balancers if that is a bottleneck
 # DONE batched write back from inference server
@@ -57,36 +57,38 @@ from src.util.log import log
 # TODO run for Checkers
 # DONE log time for each self play loop, how long for n games to finish - compare to previous
 # DONE fix opt.py
-# TODO Future: hyperparameter optimization as in Paper: Accelerating and Improving AlphaZero Using Population Based Training
-# TODO Future: start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
+# FUTURE: hyperparameter optimization as in Paper: Accelerating and Improving AlphaZero Using Population Based Training
+# FUTURE: start with a small model, then increase the size of the model after some iterations and retrain that model on the old data until the loss is lower than the previous model
 
-# TODO use HandcraftedBotV4 or Stockfish on level 4 as baseline to compare against
+# DONEISCH use HandcraftedBotV4 or Stockfish on level 4 as baseline to compare against
 
-# TODO Future: IMO: The MCTS tree of the most visited child should be the most explored already. Why discard all of that prior work when starting the search for that child again? Why not retain that information and continue work from there. Issue with that: The noise which initially gets added to the root priors. Idea: Update that later, once the node is selected as the new root. Then ensure that each node gets an appropriate amount of fixes searches, so that the noise exploration has chance to take effect. I.e. child 2 is selcted. Then the next MCTS search starts with child 2 as the new root node and all of the accompanied expansion and search already done (might need to flip some signs of the scores, not sure). Since these moves were not expanded using a noisy policy (for exploration), we have to remedy that, by adding some noise on the priors of the children of child 2 (the new root). Then we should ensure, that each move gets an appropriate amount of fixes searches (f.e. 10) so that the noise has a chance to take effect. Afterwards, the assumption is, that the passed root node and a fully simulated root node are mostly identical, but building them is way cheaper.
+# FUTURE: IMO: The MCTS tree of the most visited child should be the most explored already. Why discard all of that prior work when starting the search for that child again? Why not retain that information and continue work from there. Issue with that: The noise which initially gets added to the root priors. Idea: Update that later, once the node is selected as the new root. Then ensure that each node gets an appropriate amount of fixes searches, so that the noise exploration has chance to take effect. I.e. child 2 is selcted. Then the next MCTS search starts with child 2 as the new root node and all of the accompanied expansion and search already done (might need to flip some signs of the scores, not sure). Since these moves were not expanded using a noisy policy (for exploration), we have to remedy that, by adding some noise on the priors of the children of child 2 (the new root). Then we should ensure, that each move gets an appropriate amount of fixes searches (f.e. 10) so that the noise has a chance to take effect. Afterwards, the assumption is, that the passed root node and a fully simulated root node are mostly identical, but building them is way cheaper.
 
 # TODO NOT_REALLY_REQUIRED use mp.Event to signal instead of mp.Pipes?
 
 # NOT_REQUIRED FSDP Data parallel model training
-# TODO Future: maybe keep the window based on the number of samples, instead of the number of iterations
+# FUTURE: maybe keep the window based on the number of samples, instead of the number of iterations
 # DONE smarter data loading for training, not loading everything in memory at once. How to shuffle that? How to do so with DataLoader and DataParallel?
 # Do so by: Assuming, deduplication works in memory. Then we shuffle the deduplicated dataset before writing it to disk. Then we store the data in chunks of ~1GB. Then during training we load only one chunk of each of the iterations datasets and choose the sample based on idx % num_iterations. But then the DataLoader should not shuffle but instead load the samples in order. Yes, that it does, tested.
 # DONE save to the dataset how long generating the samples/games took and print these stats while loading the dataset instead of at each save. Then also more frequent dataset saves are possible.
 
 # DONE Caching based on symmetries of the board state, use the smallest key of the symmetries as the key for the cache
 
-# TODO Future: Path Consistency https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf - seems to be more sample efficient by using the information of the mcts search tree for value targets (5 most recent history states, argmax path in mcst search tree, 2x the mse(v-mean(v of paths)) and 1x the mse(f_v-mean(f_v of history states)) i.e. the feature vector before mapping to the value head)
+# FUTURE: Path Consistency https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf - seems to be more sample efficient by using the information of the mcts search tree for value targets (5 most recent history states, argmax path in mcst search tree, 2x the mse(v-mean(v of paths)) and 1x the mse(f_v-mean(f_v of history states)) i.e. the feature vector before mapping to the value head)
 
 
 # DONE compare inference speed with and without fusing on both cpu as well as gpu compiled as well as not compiled
 
 # DONE resignation to not play out games until the very end which might require hundreds of moves
-# TODO Future: automatic resignation threashold - play out ~10% of games which should have been resigned and verify, that the percentage of games that could have been won is < 5%, otherwise resign earlier
+# FUTURE: automatic resignation threashold - play out ~10% of games which should have been resigned and verify, that the percentage of games that could have been won is < 5%, otherwise resign earlier
+# TODO the endgame currently sucks because no samples will be collected there at all, since one player will always have resigned and the game wont be played out.
+
 # DONE deduplicate same state games in parallel play - if the game is at the same state, sample a different move
 
 # DONE usage during training is also just 40% - let other processes use the GPU as well
 
-# TODO Future: Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
-# TODO Future: Gobang https://de.wikipedia.org/wiki/Gobang
+# FUTURE: Othello https://de.wikipedia.org/wiki/Othello_(Spiel)
+# FUTURE: Gobang https://de.wikipedia.org/wiki/Gobang
 
 
 # NOTE Queue based system 2 Inference Servers on 2 GPUS with 40 clients in total
