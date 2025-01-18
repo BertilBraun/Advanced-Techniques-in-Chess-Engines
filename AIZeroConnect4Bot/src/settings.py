@@ -203,14 +203,14 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2,
         network=network,
         inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
             mcts=MCTSParams(
-                num_searches_per_turn=320,  # based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=240,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,

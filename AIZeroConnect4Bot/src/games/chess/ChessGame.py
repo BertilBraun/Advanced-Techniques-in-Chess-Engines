@@ -92,7 +92,7 @@ class ChessGame(Game[ChessMove]):
 
     @property
     def average_num_moves_per_game(self) -> int:
-        return 40
+        return 30
 
     def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
         from src.Encoding import decode_board_state
