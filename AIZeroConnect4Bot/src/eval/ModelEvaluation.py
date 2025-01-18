@@ -53,11 +53,12 @@ EvaluationModel = Callable[[list[CurrentBoard]], Coroutine[None, None, list[np.n
 class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
-    async def play_vs_random(self, iteration: int, num_games: int = 64, num_searches_per_turn: int = 20) -> Results:
-        # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
-        results = Results(0, 0, 0)
+    def __init__(self, iteration: int, num_games: int = 64, num_searches_per_turn: int = 20) -> None:
+        self.iteration = iteration
+        self.num_games = num_games
+        self.num_searches_per_turn = num_searches_per_turn
 
-        mcts_args = MCTSArgs(
+        self.mcts_args = MCTSArgs(
             num_searches_per_turn=num_searches_per_turn,
             num_parallel_searches=8,
             c_param=2,
@@ -65,57 +66,39 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
         )
 
-        current_model = InferenceClient(0, TRAINING_ARGS)
-        current_model.update_iteration(iteration)
+    async def play_vs_random(self) -> Results:
+        # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
 
-        async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(current_model, mcts_args).search(boards)
-            return [result[0] for result in results]
-
-        async def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
+        async def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
                 return CurrentGame.encode_moves([random.choice(board.get_valid_moves())])
 
             return [get_random_policy(board) for board in boards]
 
-        results += await self._play_two_models_search(model1, model2, num_games // 2)
-        results -= await self._play_two_models_search(model2, model1, num_games // 2)
+        return await self.play_vs_evaluation_model(random_evaluator)
 
-        return results
-
-    async def play_two_models_search(
-        self,
-        current_model_iteration: int,
-        previous_model_iteration: int,
-        num_games: int = 64,
-        num_searches_per_turn: int = 20,
-    ) -> Results:
-        results = Results(0, 0, 0)
-
-        mcts_args = MCTSArgs(
-            num_searches_per_turn=num_searches_per_turn,
-            num_parallel_searches=8,
-            c_param=2,
-            dirichlet_epsilon=0.0,
-            dirichlet_alpha=1.0,
-        )
-
-        current_model = InferenceClient(0, TRAINING_ARGS)
-        current_model.update_iteration(current_model_iteration)
-
+    async def play_two_models_search(self, previous_model_iteration: int) -> Results:
         previous_model = InferenceClient(0, TRAINING_ARGS)
         previous_model.update_iteration(previous_model_iteration)
 
+        async def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = await MCTS(previous_model, self.mcts_args).search(boards)
+            return [result[0] for result in results]
+
+        return await self.play_vs_evaluation_model(previous_model_evaluator)
+
+    async def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
+        results = Results(0, 0, 0)
+
+        current_model = InferenceClient(0, TRAINING_ARGS)
+        current_model.update_iteration(self.iteration)
+
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(current_model, mcts_args).search(boards)
+            results = await MCTS(current_model, self.mcts_args).search(boards)
             return [result[0] for result in results]
 
-        async def model2(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(previous_model, mcts_args).search(boards)
-            return [result[0] for result in results]
-
-        results += await self._play_two_models_search(model1, model2, num_games // 2)
-        results -= await self._play_two_models_search(model2, model1, num_games // 2)
+        results += await self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
+        results -= await self._play_two_models_search(evaluation_model, model1, self.num_games // 2)
 
         return results
 

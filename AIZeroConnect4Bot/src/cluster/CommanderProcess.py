@@ -84,11 +84,11 @@ class CommanderProcess:
                 yield iteration, train_stats
 
                 # start EvaluationProcess
-                p = Process(
+                Process(
                     target=run_evaluation_process,
                     args=(self.args.evaluation, iteration),
-                )
-                p.start()
+                    daemon=True,
+                ).start()
 
         log('Training complete. Sending STOP to all processes.')
         for pipe in self._all_pipes():
