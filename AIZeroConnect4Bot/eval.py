@@ -1,6 +1,7 @@
 import asyncio
 import torch
 
+from src.eval.TournamentManager import TournamentManager
 from src.util.log import log
 from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals
 from src.eval.GUI import BaseGridGameGUI
@@ -26,15 +27,27 @@ if __name__ == '__main__':
 
     iteration = get_latest_model_iteration(TRAINING_ARGS.num_iterations, TRAINING_ARGS.save_path)
 
-    MAX_TIME_TO_THINK = 1.0
-    NETWORK_ONLY = True
+    HUMAN_PLAY = True
 
-    game_manager = GameManager(
-        AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK, network_eval_only=NETWORK_ONLY),
-        CommonHumanPlayer(),
-    )
+    if HUMAN_PLAY:
+        MAX_TIME_TO_THINK = 1.0
+        NETWORK_ONLY = True
 
-    result = asyncio.run(game_manager.play_game())
-    log('Final Result - Winner:', result)
-    log('Board:')
-    log(repr(game_manager.board))
+        game_manager = GameManager(
+            CommonHumanPlayer(),
+            AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK, network_eval_only=NETWORK_ONLY),
+        )
+
+        result = asyncio.run(game_manager.play_game())
+        log('Game over. Result:', result)
+        log(game_manager.board)
+    else:
+        tournament_manager = TournamentManager(
+            AlphaZeroBot(iteration, max_time_to_think=0.1),
+            AlphaZeroBot(iteration, network_eval_only=True),
+            num_games=10,
+        )
+
+        log('Playing game...')
+        results = asyncio.run(tournament_manager.play_games())
+        log('Results:', results)

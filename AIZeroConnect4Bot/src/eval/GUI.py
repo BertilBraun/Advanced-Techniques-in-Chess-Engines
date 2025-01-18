@@ -1,9 +1,18 @@
 import src.environ_setup  # noqa: F401
 import pygame
+from dataclasses import dataclass
+
+
+@dataclass
+class Events:
+    clicked: bool
+    quit: bool
+    left: bool
+    right: bool
 
 
 class BaseGridGameGUI:
-    def __init__(self, rows: int, cols: int, cell_size: int = 60, title: str = 'Board Game', checkered: bool = True):
+    def __init__(self, rows: int, cols: int, cell_size: int = 100, title: str = 'Board Game', checkered: bool = True):
         pygame.init()
         self.rows = rows
         self.cols = cols
@@ -77,18 +86,22 @@ class BaseGridGameGUI:
     def update_display(self):
         pygame.display.flip()
 
-    def events_occurred(self) -> tuple[bool, bool]:
-        # Poll for events and returns if (clicked, quit) occurred
-        clicked = False
-        quit = False
+    def events_occurred(self) -> Events:
+        # Poll for events
+        events = Events(False, False, False, False)
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
-                clicked = True
+                events.clicked = True
             if event.type == pygame.QUIT:
                 pygame.quit()
-                quit = True
+                events.quit = True
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_LEFT:
+                    events.left = True
+                if event.key == pygame.K_RIGHT:
+                    events.right = True
 
-        return clicked, quit
+        return events
 
     def clear_highlights_and_redraw(self, draw_pieces_func):
         # Redraw the board and pieces:

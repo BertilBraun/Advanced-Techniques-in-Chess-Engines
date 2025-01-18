@@ -11,7 +11,7 @@ from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGameMove, PLAY_C_PA
 
 
 class AlphaZeroBot(Bot):
-    def __init__(self, iteration: int, max_time_to_think: float, network_eval_only: bool) -> None:
+    def __init__(self, iteration: int, max_time_to_think: float = 1.0, network_eval_only: bool = False) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
         self.inference_client = InferenceClient(0, TRAINING_ARGS)

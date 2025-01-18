@@ -191,8 +191,8 @@ elif True:
     inference = InferenceParams(batch_size=128)
     evaluation = EvaluationParams(
         num_searches_per_turn=60,
-        num_games=30,
-        every_n_iterations=10,
+        num_games=40,
+        every_n_iterations=5,
     )
 
     PARALLEL_GAMES = 64

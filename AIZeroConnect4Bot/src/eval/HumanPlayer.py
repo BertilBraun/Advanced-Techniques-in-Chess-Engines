@@ -15,17 +15,29 @@ class HumanPlayer(Bot):
         self.game_visuals = game_visuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
+        self.board_history: list[CurrentBoard] = []
+
     async def think(self, board: CurrentBoard) -> CurrentGameMove:
         # Common input loop for all games
-        self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
+
+        self.display_board(board)
+
+        self.board_history.append(board.copy())
+        current_displayed_board = len(self.board_history) - 1
 
         while True:
-            clicked, quit = self.gui.events_occurred()
-            if quit:
+            events = self.gui.events_occurred()
+            if events.quit:
                 exit()
 
             # We check for mouse events:
-            if clicked:
+            if events.clicked:
+                if current_displayed_board < len(self.board_history) - 1:
+                    # If we are not displaying the most recent board, we go back to it
+                    current_displayed_board = len(self.board_history) - 1
+                    self.display_board(self.board_history[current_displayed_board])
+                    continue
+
                 cell = self.gui.get_cell_from_click()
                 if cell is not None:
                     move = self.handle_click(board, cell)
@@ -34,10 +46,27 @@ class HumanPlayer(Bot):
                         # Show the move on the GUI before returning
                         new_board = board.copy()
                         new_board.make_move(move)
-                        self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(new_board, self.gui))
+                        self.display_board(new_board)
+                        self.board_history.append(new_board.copy())
                         return move
 
+            if events.left:
+                # Go back in history
+                if current_displayed_board > 0:
+                    current_displayed_board -= 1
+                    self.display_board(self.board_history[current_displayed_board])
+
+            if events.right:
+                # Go forward in history
+                if current_displayed_board < len(self.board_history) - 1:
+                    current_displayed_board += 1
+                    self.display_board(self.board_history[current_displayed_board])
+
             time.sleep(0.2)
+
+    def display_board(self, board: CurrentBoard):
+        self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
+        self.gui.update_display()
 
     def handle_click(self, board: CurrentBoard, cell: Tuple[int, int]) -> Optional[CurrentGameMove]:
         # If game is one-click move (like Connect4), we try to form a move immediately
@@ -52,7 +81,7 @@ class HumanPlayer(Bot):
             if moves_from_cell:
                 # Highlight selection and possible moves
                 self.selected_cell = cell
-                self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
+                self.display_board(board)
                 self.gui.highlight_cell(cell[0], cell[1], 'green')
                 for to_row, to_col in moves_from_cell:
                     self.gui.highlight_cell(to_row, to_col, 'yellow')
@@ -68,5 +97,5 @@ class HumanPlayer(Bot):
                 return move
             else:
                 # Invalid move, reset and redraw
-                self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
+                self.display_board(board)
                 return None

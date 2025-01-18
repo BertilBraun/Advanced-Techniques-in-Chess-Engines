@@ -41,17 +41,6 @@ class SelfPlayGame:
         return self.board.quick_hash()
 
 
-def sample_move(action_probabilities: np.ndarray, temperature: float = 1.0) -> CurrentGameMove:
-    assert temperature > 0, 'Temperature must be greater than 0'
-
-    temperature_action_probabilities = action_probabilities ** (1 / temperature)
-    temperature_action_probabilities /= np.sum(temperature_action_probabilities)
-
-    action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
-
-    return CurrentGame.decode_move(action)
-
-
 class SelfPlay:
     def __init__(self, client: InferenceClient, args: SelfPlayParams) -> None:
         self.client = client
@@ -123,7 +112,7 @@ class SelfPlay:
         if current.num_played_moves >= self.args.num_moves_after_which_to_play_greedy:
             move = CurrentGame.decode_move(np.argmax(action_probabilities).item())
         else:
-            move = sample_move(action_probabilities, self.args.temperature)
+            move = self._sample_move(action_probabilities, self.args.temperature)
         new_spg.board.make_move(move)
         new_spg.num_played_moves += 1
 
@@ -147,6 +136,16 @@ class SelfPlay:
                 c_param=self.args.mcts.c_param,
             ),
         )
+
+    def _sample_move(self, action_probabilities: np.ndarray, temperature: float = 1.0) -> CurrentGameMove:
+        assert temperature > 0, 'Temperature must be greater than 0'
+
+        temperature_action_probabilities = action_probabilities ** (1 / temperature)
+        temperature_action_probabilities /= np.sum(temperature_action_probabilities)
+
+        action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
+
+        return CurrentGame.decode_move(action)
 
     def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw

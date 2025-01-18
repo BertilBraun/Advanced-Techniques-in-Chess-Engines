@@ -54,7 +54,7 @@ from src.util.log import log
 # TODO proper graph representing the different architectures tried
 # TODO generate branches for the different architecture approaches tried
 # DONE run for Connect4 with new setup for 2h
-# TODO run for Checkers
+# DONE run for Checkers
 # DONE log time for each self play loop, how long for n games to finish - compare to previous
 # DONE fix opt.py
 # FUTURE: hyperparameter optimization as in Paper: Accelerating and Improving AlphaZero Using Population Based Training
