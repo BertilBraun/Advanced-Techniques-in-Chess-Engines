@@ -28,13 +28,25 @@ def create_optimizer(model: Network) -> torch.optim.Optimizer:
 
 
 def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) -> Network:
+    model = create_model(args, device)
     try:
-        model = create_model(args, device)
-        model.load_state_dict(torch.load(path, map_location=device, weights_only=True))
-        return model
+        data = torch.load(path, map_location=device, weights_only=True)
     except FileNotFoundError:
         log(f'No model found for: {path}')
-        return create_model(args, device)
+        return model
+
+    try:
+        model.load_state_dict(data)
+    except RuntimeError:
+        log(f'Could not load model from: {path}, trying to load without compilation')
+        # replace all key prefixes or "_orig_mod." with ""
+        try:
+            data = {key.replace('_orig_mod.', ''): value for key, value in data.items()}
+            model.load_state_dict(data)
+        except RuntimeError:
+            log(f'Could not load model from: {path}')
+            raise
+    return model
 
 
 def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimizer:
