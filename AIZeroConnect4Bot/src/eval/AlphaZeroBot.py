@@ -32,9 +32,18 @@ class AlphaZeroBot(Bot):
     async def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
             results = await self.inference_client.run_batch([self.inference_client.inference(board)])
-            policy, _ = results[0]
+            policy, value = results[0]
             moves = filter_policy_then_get_moves_and_probabilities(policy, board)
-            return max(moves, key=lambda move: move[1])[0]
+            move = max(moves, key=lambda move: move[1])
+
+            log('---------------------- Alpha Zero Best Move ----------------------')
+            log('Best move:', move[0])
+            log('Best move probability:', move[1])
+            log('Move probabilities:', moves)
+            log('Result value:', value)
+            log('------------------------------------------------------------------')
+
+            return move[0]
 
         root = MCTSNode.root(board)
 
@@ -50,7 +59,9 @@ class AlphaZeroBot(Bot):
         log('Best child index:', best_move_index)
         log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
-        log(f'Best child has {best_child.result_score:.4f} result_score')
+        log(
+            f'Best child has {best_child.result_score:.4f} ({best_child.result_score / best_child.number_of_visits:.2f}) result_score'
+        )
         log('Child moves:', [child.move_to_get_here for child in root.children])
         log('Child visits:', [child.number_of_visits for child in root.children])
         log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
