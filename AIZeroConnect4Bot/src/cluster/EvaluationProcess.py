@@ -44,10 +44,10 @@ class EvaluationProcess:
         log_scalar('win_loss_draw_vs_random/draws', results.draws, iteration)
 
         from src.games.chess.ChessGame import ChessGame
-        from src.games.chess.ComparisonBot import ComparisonChessBot
+        from src.games.chess.ChessComparisonBot import ChessComparisonBot
 
         if isinstance(CurrentGame, ChessGame):
-            comparison_bot = ComparisonChessBot()
+            comparison_bot = ChessComparisonBot()
 
             async def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
                 return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]  # type: ignore

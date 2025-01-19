@@ -9,7 +9,7 @@ def get_board_hash(board: Board) -> int:
 PIECE_VALUES = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 5, QUEEN: 9, KING: 0}
 
 
-class ComparisonChessBot:
+class ChessComparisonBot:
     def __init__(self) -> None:
         self.transposition_table: list[float | None] = [None] * 2**16
         self.start_time = time.time()

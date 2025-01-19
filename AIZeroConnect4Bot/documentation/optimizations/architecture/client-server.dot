@@ -1,0 +1,64 @@
+digraph ClientBasedInferenceServer {
+    rankdir=LR; // Left-to-right layout
+    node [shape=box, style=rounded, fontsize=10, fontname="Helvetica"];
+    
+    // Define main components
+    Evaluation [label="Evaluation"];
+    Trainer [label="Trainer"];
+    Commander [label="Commander"];
+    
+    // Define SelfPlay Processes grouped by GPU
+    subgraph cluster_SelfPlay {
+        label="SelfPlay Processes";
+        style=filled;
+        color=lightgrey;
+        
+        
+        // Define GPU 1 Cluster
+        subgraph cluster_GPU1 {
+            label="GPU 1";
+            style=filled;
+            color=lightblue;
+            SelfPlay0 [label="SelfPlay 0\n(Inference Client)"];
+        }
+        
+        // Define GPU 2 Cluster
+        subgraph cluster_GPU2 {
+            label="GPU 2";
+            style=filled;
+            color=lightblue;
+            SelfPlay1 [label="SelfPlay 1\n(Inference Client)"];
+            SelfPlay2 [label="SelfPlay 2\n(Inference Client)"];
+        }
+        
+        // Define GPU 3 Cluster
+        subgraph cluster_GPU3 {
+            label="GPU 3";
+            style=filled;
+            color=lightblue;
+            SelfPlay3 [label="SelfPlay 3\n(Inference Client)"];
+            SelfPlay4 [label="SelfPlay 4\n(Inference Client)"];
+        }
+    }
+
+    subgraph cluster_GPU1 {
+        label="GPU 1";
+        style=filled;
+        color=lightblue;
+        Trainer [label="Trainer"];
+        Evaluation [label="Evaluation"];
+    }
+    
+    // Edges (Trainer and Commander - Duplex Connection)
+    Trainer -> Commander [dir=both];
+    
+    // Edges (Commander and SelfPlay Processes)
+    Commander -> SelfPlay0;
+    Commander -> SelfPlay1;
+    Commander -> SelfPlay2;
+    Commander -> SelfPlay3;
+    Commander -> SelfPlay4;
+    
+    // Edges (Commander and Evaluation)
+    Commander -> Evaluation;
+}

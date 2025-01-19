@@ -1,77 +1,150 @@
-# Project: AI-ZeroConnect4Bot
+# AlphaZero-Clone: Deep Reinforcement Learning for Board Games
 
-An implementation of the AlphaZero algorithm for learning Connect4. This project aims to test the implementation of AlphaZero on a simpler game before applying it to more complex games like Chess.
+Welcome to the **AlphaZero-Clone** repository! This project replicates the deep reinforcement learning approaches pioneered by AlphaZero, focusing initially on Chess and extending to other classic board games. The goal is to create an optimized, scalable, and maintainable framework for training AI agents capable of mastering complex games through self-play and iterative learning.
 
-## Features
+## Table of Contents
 
-- **Monte Carlo Tree Search (MCTS)**: Integrated MCTS for decision making during self-play.
-- **Iterative Self-Play and Training**: The model improves through cycles of self-play and training iterations.
-- **Batching of Self-Play Games**: Efficiently runs multiple games in parallel to accelerate data generation.
-- **Multi-Node Cluster Setup**: Supports training and self-play across multiple GPUs for scalability.
-- **Neural Network Model**: Utilizes a 10-layer deep Residual Neural Network (ResNet) for function approximation.
-- **Dirichlet Noise**: Adds exploration noise to the prior probabilities to encourage exploration of the action space.
-- **Temperature Parameter**: Controls exploration by adjusting the temperature parameter for the first 30 moves.
-- **Symmetric Variations for Data Augmentation**: Employs board symmetry to augment training data.
-- **Neural Network Evaluation Caching**: Caches evaluations to avoid redundant computations of board positions.
-- **Torch Compilation**: Compiles the PyTorch model and certain functions for faster execution.
-- **Optimized Datatype**: Uses bfloat16 for faster computation and reduced memory usage.
-- **Zobrist Hashing**: Implements Zobrist hashing to efficiently detect duplicate board positions.
-- **Deduplication of Positions in Evaluations and Training Data**: Avoids duplicate computations and data by averaging priors and result values for identical positions.
-- **1-Cycle Learning Rate Policy**: Adjusts the learning rate cyclically to facilitate efficient training.
-- **Adaptive Sampling Window**: Gradually increases the sampling window to phase out early data and stabilize training.
+- [AlphaZero-Clone: Deep Reinforcement Learning for Board Games](#alphazero-clone-deep-reinforcement-learning-for-board-games)
+  - [Table of Contents](#table-of-contents)
+  - [Project Overview](#project-overview)
+    - [Training Pipeline](#training-pipeline)
+  - [Supported Games](#supported-games)
+  - [Implementation Details](#implementation-details)
+  - [Optimizations](#optimizations)
+  - [Future Work](#future-work)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [Usage](#usage)
+  - [Contributing](#contributing)
+  - [References](#references)
+  - [License](#license)
+  - [Acknowledgements](#acknowledgements)
 
-## Future Work
+## Project Overview
 
-- **Optimized Inference**: Implement quantization to reduce the model size and improve inference speed as well as using TensorRT for optimized inference.
-- **Evaluation of Model Performance**: Evaluate the model against a baseline agent to assess its performance. Evaluate how much of the model's strength comes from the neural network and how much from the MCTS. Do so by comparing the model's performance with 1 NN evaluation per move and 800 NN evaluations per move.
+**AlphaZero-Clone** is a Python-based project inspired by the AlphaZero algorithm, aiming to replicate its success in mastering games like Go, Chess, and Shogi. Starting with simpler implementations of Tic-Tac-Toe, Connect Four, and Checkers, the project incrementally scales up to Chess, ensuring correctness and optimization at each step.
 
-## Installation
+Key objectives include:
 
-```bash
-# Clone the repository
-git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git
+- Implementing self-play mechanisms using Monte Carlo Tree Search (MCTS).
+- Facilitating iterative training with continuous model updates.
+- Optimizing performance through parallel processing and efficient algorithms.
+- Maintaining code readability and modularity for ease of understanding and extension.
 
-# Navigate to the project directory
-cd Advanced-Techniques-in-Chess-Engines
+### Training Pipeline
 
-# Install required dependencies
-pip install -r requirements.txt
-pip install -r AIZeroConnect4Bot/requirements.txt
-```
+The training pipeline follows these steps:
 
-## Usage
+1. **Self-Play Generation:**
+   - Multiple workers generate self-play games using the current neural network model.
+   - MCTS guides the move selection during self-play.
 
-```bash
-# Train the model
-python -m AIZeroConnect4Bot.train
+2. **Data Collection:**
+   - Game states, move probabilities, and game outcomes are stored for training.
 
-# Evaluate the model
-python -m AIZeroConnect4Bot.eval
-```
+3. **Training:**
+   - The neural network is trained on the collected data to predict move probabilities (policy) and game outcomes (value).
+   - Training is performed in parallel across multiple nodes to accelerate learning.
+
+4. **Model Evaluation:**
+   - Periodically, new models are evaluated against previous versions to ensure improvement.
+   - Best-performing models are promoted for continued training and self-play.
+
+## Supported Games
+
+- **Tic-Tac-Toe:** Basic implementation for initial testing and verification.
+- **Connect Four:** Intermediate complexity to ensure correct game state handling.
+- **Checkers:** Transitioning to more complex game mechanics and strategies.
+- **Chess:** The primary focus for deploying the AlphaZero-like algorithms.
 
 ## Implementation Details
 
-### Monte Carlo Tree Search (MCTS)
+For a detailed overview of the project's implementation, refer to the following section: [Implementation Details](documentation/implementation.md).
 
-Uses MCTS for exploring possible moves during self-play, balancing exploration and exploitation to improve policy and value estimates.
+## Optimizations
 
-### Neural Network Architecture
+Several optimizations have been implemented to enhance performance and scalability. Refer to the following sections for more details:
 
-- **Input**: Board state represented as a tensor.
-- **Architecture**: 10-layer ResNet to approximate the policy and value function.
-- **Output**: Policy vector over possible moves and a scalar value estimating the probability of winning.
+- [Inference Optimization](documentation/optimizations/inference.md)
+- [Inference Architecture Optimization](documentation/optimizations/architecture.md)
+- [Training Optimization](documentation/optimizations/training.md)
+- [Evaluation](documentation/optimizations/evaluation.md)
+- [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
 
-### Training Process
+## Future Work
 
-- **Self-Play**: The current model plays against itself to generate training data.
-- **Data Augmentation**: Applies symmetric transformations to the board to augment the dataset.
-- **Caching and Deduplication**: Caches neural network evaluations and deduplicates positions to optimize performance.
-- **Learning Rate Schedule**: Implements a 1-cycle learning rate policy for efficient convergence.
-- **Sampling Window**: Adaptively adjusts the sampling window size to improve training stability.
+For a list of planned enhancements and future work, refer to the following section: [Future Work](documentation/future.md).
+
+## Getting Started
+
+### Prerequisites
+
+Ensure you have the following installed:
+
+- **Python 3.11+**
+- **PyTorch 2.0+** (or another compatible deep learning framework)
+- **NumPy**
+- **Other Dependencies:** Listed in `requirements.txt`
+
+### Installation
+
+1. **Clone the Repository:**
+
+   ```bash
+   git clone https://github.com/yourusername/AlphaZero-Clone.git
+   cd AlphaZero-Clone
+   ```
+
+2. **Install Dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Usage
+
+1. **Configure the Environment:**
+
+   Edit the `src/settings.py` file to set parameters such as the game, search and train settings.
+
+2. **Start Self-Play and Training:**
+
+   ```bash
+   python train.py
+   ```
+
+## Contributing
+
+Contributions are welcome! Whether you're fixing bugs, improving documentation, or adding new features, your help is appreciated.
+
+1. **Fork the Repository**
+2. **Create a Feature Branch**
+
+   ```bash
+   git checkout -b feature/YourFeature
+   ```
+
+3. **Commit Your Changes**
+
+   ```bash
+   git commit -m "Add your feature"
+   ```
+
+4. **Push to the Branch**
+
+   ```bash
+   git push origin feature/YourFeature
+   ```
+
+5. **Open a Pull Request**
+
+Please ensure your code follows the project's coding standards and includes appropriate tests.
 
 ## References
 
 - [Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm](https://arxiv.org/pdf/1712.01815)
+- [Minigo: A Case Study in Reproducing Reinforcement Learning Research](https://openreview.net/pdf?id=H1eerhIpLV)
 - [Lessons from AlphaZero: Connect Four](https://medium.com/oracledevs/lessons-from-alphazero-connect-four-e4a0ae82af68)
 - [Lessons from AlphaZero Part 3: Parameter Tweaking](https://medium.com/oracledevs/lessons-from-alphazero-part-3-parameter-tweaking-4dceb78ed1e5)
 - [Lessons from AlphaZero Part 4: Improving the Training Target](https://medium.com/oracledevs/lessons-from-alphazero-part-4-improving-the-training-target-6efba2e71628)
@@ -79,6 +152,16 @@ Uses MCTS for exploring possible moves during self-play, balancing exploration a
 - [Lessons from AlphaZero Part 6: Hyperparameter Tuning](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a)
 - [AlphaZero Explained](https://www.youtube.com/watch?v=wuSQpLinRB4)
 
-## Results
+## License
 
-Results will be added here after completion of training and evaluation.
+This project is licensed under the [MIT License](./LICENSE).
+
+## Acknowledgements
+
+- Inspired by [DeepMind's AlphaZero](https://deepmind.com/research/case-studies/alphazero-the-story-so-far)
+- Utilizes [PyTorch](https://pytorch.org/) for deep learning implementations
+- Contributions from the open-source community
+
+---
+
+Stay tuned for more updates! If you have any questions or suggestions, feel free to open an issue or contact the maintainer.

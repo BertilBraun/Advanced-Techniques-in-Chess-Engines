@@ -94,8 +94,9 @@ class CommanderProcess:
         for pipe in self._all_pipes():
             pipe.send('STOP')
 
-        for process in self._all_processes():
-            process.kill()
+        self.trainer_process.kill()
+        for process in self.self_play_processes:
+            process.join(timeout=10)
 
     def _all_processes(self) -> list[Process]:
         return self.self_play_processes + [self.trainer_process]

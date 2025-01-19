@@ -1,0 +1,89 @@
+digraph PipeBasedInferenceServer {
+    rankdir=LR; // Left-to-right layout
+    node [shape=box, style=rounded, fontsize=10, fontname="Helvetica"];
+    
+    subgraph cluster_GPU1 {
+        label="GPU 1";
+        style=filled;
+        color=lightblue;
+        Trainer [label="Trainer"];
+        Evaluation [label="Evaluation"];
+    }
+    
+    // Define main components
+    Commander [label="Commander"];
+    LoadBalancer [label="LoadBalancer"];
+
+    // Define SelfPlay Processes
+    subgraph cluster_SelfPlay {
+        label="SelfPlay Processes";
+        style=filled;
+        color=lightgrey;
+        SelfPlay0 [label="SelfPlay 0"];
+        SelfPlay1 [label="SelfPlay 1"];
+        SelfPlay2 [label="SelfPlay 2"];
+        SelfPlay3 [label="SelfPlay 3"];
+        SelfPlay4 [label="SelfPlay 4"];
+    }
+    
+    // Define Inference Servers
+    subgraph cluster_InferenceServer {
+        label="Inference Servers";
+        style=filled;
+        color=lightgrey;
+
+        subgraph cluster_GPU1 {
+            label="GPU 1";
+            style=filled;
+            color=lightblue;
+            
+            InferenceServer1 [label="InferenceServer 1"];
+        }
+
+        subgraph cluster_GPU2 {
+            label="GPU 2";
+            style=filled;
+            color=lightblue;
+            
+            InferenceServer2 [label="InferenceServer 1"];
+        }
+
+        subgraph cluster_GPU3 {
+            label="GPU 3";
+            style=filled;
+            color=lightblue;
+            
+            InferenceServer3 [label="InferenceServer 2"];
+        }
+    }
+    
+    // Edges (Trainer and Commander - Duplex Connection)
+    Trainer -> Commander [dir=both];
+    
+    // Edges (SelfPlay and LoadBalancer)
+    SelfPlay0 -> LoadBalancer;
+    SelfPlay1 -> LoadBalancer;
+    SelfPlay2 -> LoadBalancer;
+    SelfPlay3 -> LoadBalancer;
+    SelfPlay4 -> LoadBalancer;
+    
+    // Edges (LoadBalancer and InferenceServers)
+    LoadBalancer -> InferenceServer1;
+    LoadBalancer -> InferenceServer2;
+    LoadBalancer -> InferenceServer3;
+    
+    // Edges (Commander and InferenceServers)
+    // Commander -> InferenceServer1;
+    // Commander -> InferenceServer2;
+    // Commander -> InferenceServer3;
+    
+    // Edges (Commander and SelfPlay)
+    Commander -> SelfPlay0;
+    Commander -> SelfPlay1;
+    Commander -> SelfPlay2;
+    Commander -> SelfPlay3;
+    Commander -> SelfPlay4;
+    
+    // Edges (Commander and Evaluation)
+    Commander -> Evaluation;
+}

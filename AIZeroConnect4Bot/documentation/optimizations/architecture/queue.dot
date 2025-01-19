@@ -1,0 +1,109 @@
+digraph QueueBasedInferenceServer {
+    node [shape=box, style=rounded, fontsize=10, fontname="Helvetica"];
+    
+    // Define main components
+    subgraph cluster_GPU1 {
+        label="GPU 1";
+        style=filled;
+        color=lightblue;
+
+        Trainer [label="Trainer"];
+        Evaluation [label="Evaluation"];
+    }
+
+
+    // Define Inference Servers
+    subgraph cluster_Hidden {
+        style=invis;
+
+        subgraph cluster_InferenceServer {
+            label="Inference Servers";
+            style=filled;
+            color=lightgrey;
+
+            subgraph cluster_GPU1 {
+                label="GPU 1";
+                style=filled;
+                color=lightblue;
+                
+                InferenceServer1 [label="InferenceServer 1"];
+            }
+
+            subgraph cluster_GPU2 {
+                label="GPU 2";
+                style=filled;
+                color=lightblue;
+                
+                InferenceServer2 [label="InferenceServer 2"];
+            }
+
+            subgraph cluster_GPU3 {
+                label="GPU 3";
+                style=filled;
+                color=lightblue;
+                
+                InferenceServer3 [label="InferenceServer 3"];
+            }
+
+        }
+        
+        // Define Queues
+        InferenceQueue [label="Inference Queue", shape=diamond];
+        ResponseQueue [label="Response Queue", shape=diamond];
+    
+        { rank=same; InferenceQueue; ResponseQueue; }
+    }
+
+    // Define SelfPlay Processes
+    subgraph cluster_SelfPlay {
+        label="SelfPlay Processes";
+        style=filled;
+        color=lightgrey;
+
+        SelfPlay0 [label="SelfPlay 0"];
+        SelfPlay1 [label="SelfPlay 1"];
+        SelfPlay2 [label="SelfPlay 2"];
+        SelfPlay3 [label="SelfPlay 3"];
+        SelfPlay4 [label="SelfPlay 4"];
+    }
+
+
+    Commander [label="Commander"];
+    CacheManager [label="CacheManager"];
+    
+    // Edges (Trainer and Commander - Duplex Connection)
+    Trainer -> Commander [dir=both];
+    
+    // Edges (SelfPlay and Queues)
+    SelfPlay0 -> CacheManager;
+    SelfPlay1 -> CacheManager;
+    SelfPlay2 -> CacheManager;
+    SelfPlay3 -> CacheManager;
+    SelfPlay4 -> CacheManager;
+
+    CacheManager -> SelfPlay0;
+    CacheManager -> SelfPlay1;
+    CacheManager -> SelfPlay2;
+    CacheManager -> SelfPlay3;
+    CacheManager -> SelfPlay4;
+    
+    // Edges (Commander and Queues)
+    Commander -> CacheManager;
+    Commander -> Evaluation;
+    
+    // Edges (CacheManager to Queues)
+    CacheManager -> InferenceQueue;
+    
+    // Edges (Queues to Inference Servers)
+    InferenceQueue -> InferenceServer1;
+    InferenceQueue -> InferenceServer2;
+    InferenceQueue -> InferenceServer3;
+    
+    // Edges (Inference Servers to Response Queue)
+    InferenceServer1 -> ResponseQueue;
+    InferenceServer2 -> ResponseQueue;
+    InferenceServer3 -> ResponseQueue;
+    
+    // Edges (Response Queue to CacheManager)
+    ResponseQueue -> CacheManager;
+}
