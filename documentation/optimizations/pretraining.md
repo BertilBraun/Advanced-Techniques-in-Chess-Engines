@@ -1,8 +1,6 @@
 # Self-Play Pre-Training System
 
-## **Current Model Problems:**
-
-We currently have a problem, that the self-play games at the beginning are not very good. This is because the model is not trained yet and therefore predicts bad moves as well as bad evaluations. This means, that many of the expanded nodes in the MCTS are evaluated by the model instead of the endgame score. This means, that we are training the model with random data, which is not very useful. AlphaZero solves this problem by simply searching more iterations per move, which more often leads to the endgame score being used. However, this is not viable for us, because we are using way less computational resources than AlphaZero.
+Self-Play games at the beginning of a training run are only marginally better than noise. This is because the model is not trained yet and therefore predicts bad moves as well as bad evaluations. This mostly fixes itself after a few iterations, but it can be sped up by using grandmaster games and stockfish evaluations to generate the training data for the first few iterations. This is not realy in the spirit of AlphaZero, but it is a good way to bootstrap the training process with less computational resource requirements.
 
 ## **Solution:**
 

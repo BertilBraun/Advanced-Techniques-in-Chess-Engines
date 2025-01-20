@@ -4,7 +4,7 @@ This document provides an overview of a chess encoding scheme designed for neura
 
 ## Board Encoding
 
-The `encodeBoard` function translates a chess board into a 12x8x8 tensor representation. Each of the first dimension's 12 layers corresponds to one of the 12 distinct chess piece types, split evenly between each color. A value of 1 in the tensor indicates the presence of a piece type at that cell, and 0 indicates absence. The encoding orients the current player's pieces at the bottom and the opponent's at the top, regardless of the actual game orientation.
+The `encodeBoard` function translates a chess board into a 13x8x8 tensor representation. Each of the first dimension's 12 layers corresponds to one of the 12 distinct chess piece types, split evenly between each color. A value of 1 in the tensor indicates the presence of a piece type at that cell, and 0 indicates absence. The encoding orients the current player's pieces at the bottom and the opponent's at the top, regardless of the actual game orientation. In this way, the neural network can learn to differentiate between the two players' pieces without needing to consider the current player's color. In addition, the 13th layer represents available castling rights of the current position for both players. This encoding scheme is designed to provide a comprehensive representation of the board state, enabling the neural network to learn the game's intricacies effectively.
 
 ## Move Encoding
 
@@ -16,18 +16,19 @@ The function `encodeMoves` encodes a list of moves along with their correspondin
 
 ## Data Augmentation
 
-To enhance training data diversity and volume, we generate four variations of each board state:
+To enhance training data diversity and volume, we generate two variations of each board state:
 
 1. **Normal**: The original board orientation.
 2. **Flipped around column d/e**: Mirrors the board horizontally.
-3. **Flipped around row 4/5**: Mirrors the board vertically. Scores are negated as the position benefits the other player, with the current player still positioned at the bottom.
-4. **Flipped around both column d/e and row 4/5**: Combines the above flips and also negates scores.
 
 While these augmentations do not fully account for chess's non-symmetric aspects, such as the first-move advantage and differences between the king and queen sides, they aim to effectively expand the dataset. By quadrupling the self-play data through these transformations, we hope the model can still learn effectively without the need for as many self-play games.
 
-## Warning on Move Encoding
+In addition two more augmentation variations can be imagined:
 
-Move encoding may sometimes yield unexpected indices, necessitating the use of `flipMoveIndexHorizontal`/`flipMoveIndexVertical` for correction. A Python script, `check.py`, provides a basic verification of move correctness, though manual verification is recommended. The encoding scheme is tailored for the current setup and should function correctly within these parameters.
+1. **Flipped around row 4/5**: Mirrors the board vertically. Scores are negated as the position benefits the other player, with the current player still positioned at the bottom.
+2. **Flipped around both column d/e and row 4/5**: Combines the above flips and also negates scores.
+
+These augmentations are wrong though, since the moves would then be based on the wrong perspective.
 
 ## Sample Data Input
 
@@ -63,38 +64,4 @@ g2g3
 Policy: 2 moves
 a2a3
 b2b3
-```
-
-**Flipped around row 4/5**:
-
-```text
-⭘ ⭘ ⭘ ⭘ ⭘ ⭘ ♔ ⭘
-⭘ ♙ ⭘ ⭘ ⭘ ♙ ♙ ♙
-⭘ ⭘ ⭘ ⭘ ♙ ♘ ⭘ ⭘
-⭘ ⭘ ⭘ ♕ ⭘ ⭘ ⭘ ⭘
-♟ ⭘ ♜ ⭘ ⭘ ⭘ ⭘ ⭘
-⭘ ⭘ ⭘ ⭘ ♟ ♞ ⭘ ⭘
-⭘ ⭘ ⭘ ⭘ ⭘ ♟ ♟ ♟
-⭘ ⭘ ♜ ⭘ ⭘ ⭘ ♚ ⭘
-
-Policy: 2 moves
-h7h6
-g7g6
-```
-
-**Flipped around both column d/e and row 4/5**:
-
-```text
-⭘ ♔ ⭘ ⭘ ⭘ ⭘ ⭘ ⭘
-♙ ♙ ♙ ⭘ ⭘ ⭘ ♙ ⭘
-⭘ ⭘ ♘ ♙ ⭘ ⭘ ⭘ ⭘
-⭘ ⭘ ⭘ ⭘ ♕ ⭘ ⭘ ⭘
-⭘ ⭘ ⭘ ⭘ ⭘ ♜ ⭘ ♟
-⭘ ⭘ ♞ ♟ ⭘ ⭘ ⭘ ⭘
-♟ ♟ ♟ ⭘ ⭘ ⭘ ⭘ ⭘
-⭘ ♚ ⭘ ⭘ ⭘ ♜ ⭘ ⭘
-
-Policy: 2 moves
-a7a6
-b7b6
 ```

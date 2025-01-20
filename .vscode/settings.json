@@ -1,25 +1,28 @@
 {
     "cSpell.words": [
         "argmax",
+        "bestmove",
         "Bitboards",
         "dtype",
+        "Evals",
         "foersterrober",
         "fullmove",
         "halfmove",
         "lerp",
+        "Lichess",
         "optim",
         "overfit",
         "Queenside",
         "seventyfive",
         "softmax",
         "Stockfish",
+        "timeit",
         "TPUs",
         "Zobrist"
     ],
     "cmake.configureOnOpen": true,
     "C_Cpp.default.compilerPath": "cl.exe",
     "files.associations": {
-        "*.et": "c",
         "vector": "cpp",
         "algorithm": "cpp",
         "array": "cpp",
@@ -108,13 +111,12 @@
         "xtr1common": "cpp",
         "xtree": "cpp",
         "xutility": "cpp",
-        "filesystem": "cpp",
-        "any": "cpp",
-        "codecvt": "cpp",
         "csignal": "cpp",
-        "execution": "cpp",
+        "filesystem": "cpp",
         "coroutine": "cpp",
-        "resumable": "cpp"
+        "resumable": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp"
     },
     "cmake.sourceDirectory": "C:/Projects/ChessBot/AIZeroChessBot-C++"
 }

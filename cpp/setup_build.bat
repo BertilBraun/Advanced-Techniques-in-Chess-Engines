@@ -2,7 +2,7 @@
 setlocal
 
 rem Set LibTorch download URL
-set LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.2.0%2Bcpu.zip
+set LIBTORCH_URL=https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.5.1%2Bcpu.zip
 set LIBTORCH_ZIP=libtorch.zip
 
 rem Create a directory for LibTorch if it doesn't exist

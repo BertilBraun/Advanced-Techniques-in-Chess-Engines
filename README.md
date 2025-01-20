@@ -62,6 +62,7 @@ Several optimizations have been implemented to enhance performance and scalabili
 - [Training Optimization](documentation/optimizations/training.md)
 - [Evaluation](documentation/optimizations/evaluation.md)
 - [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
+- Optional [Pretraining](documentation/optimizations/pretraining.md) using grandmaster games and Stockfish evaluations.
 
 ## Implementation Details
 
@@ -139,7 +140,11 @@ Contributions are welcome! Whether you're fixing bugs, improving documentation, 
 - [Lessons from AlphaZero Part 4: Improving the Training Target](https://medium.com/oracledevs/lessons-from-alphazero-part-4-improving-the-training-target-6efba2e71628)
 - [Lessons from AlphaZero Part 5: Performance Optimization](https://medium.com/oracledevs/lessons-from-alpha-zero-part-5-performance-optimization-664b38dc509e)
 - [Lessons from AlphaZero Part 6: Hyperparameter Tuning](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a)
-- [AlphaZero Explained](https://www.youtube.com/watch?v=wuSQpLinRB4)
+- [AlphaZero Chess: How It Works, What Sets It Apart, and What It Can Tell Us](https://towardsdatascience.com/alphazero-chess-how-it-works-what-sets-it-apart-and-what-it-can-tell-us-4ab3d2d08867)
+- [AlphaZero Explained](https://nikcheerla.github.io/deeplearningschool/2018/01/01/AlphaZero-Explained/)
+- [AlphaGo Zero Cheat Sheet](https://medium.com/applied-data-science/alphago-zero-explained-in-one-diagram-365f5abf67e0)
+- [AlphaZero from Scratch](https://www.youtube.com/watch?v=wuSQpLinRB4&ab_channel=freeCodeCamp.org)
+- [AlphaZero General](https://github.com/suragnair/alpha-zero-general)
 
 ## License
 

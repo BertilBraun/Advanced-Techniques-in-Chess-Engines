@@ -6,12 +6,37 @@
         {
             "label": "profile",
             "type": "shell",
-            "command": "viztracer --max_stack_depth 11 --tracer_entries 1000000 train.py",
+            "command": "cd py && viztracer --max_stack_depth 11 --tracer_entries 1000000 train.py",
         },
         {
             "label": "view profile",
             "type": "shell",
-            "command": "python -m src.util.profiler_visualization",
+            "command": "cd py && python -m src.util.profiler_visualization",
+        },
+        {
+            "label": "Build and Run",
+            "type": "shell",
+            "command": "cd cpp/build && cmake --build . --config Release && cd Release && AIZeroChessBot.exe ${input:execType}",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build and Debug",
+            "type": "shell",
+            "command": "cd cpp/build && cmake --build . --config Debug && cd Debug && AIZeroChessBot.exe ${input:execType}",
+            "problemMatcher": []
         }
+    ],
+    "inputs": [
+        {
+            "id": "execType",
+            "description": "Exec Type:",
+            "default": "train 1",
+            "type": "pickString",
+            "options": [
+                "train 1",
+                "generate 1",
+                "analyzeSample random"
+            ]
+        },
     ]
 }

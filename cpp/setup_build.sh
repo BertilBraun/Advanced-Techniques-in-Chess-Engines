@@ -28,8 +28,8 @@ source ~/miniconda3/bin/activate chess
 
 
 # Set LibTorch download URL
-LIBTORCH_URL_CUDA="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcu116.zip"
-LIBTORCH_URL_CPU="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.12.1%2Bcpu.zip"
+LIBTORCH_URL_CUDA="https://download.pytorch.org/libtorch/cu116/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip"
+LIBTORCH_URL_CPU="https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip"
 LIBTORCH_ZIP="libtorch.zip"
 
 # Create a directory for LibTorch if it doesn't exist

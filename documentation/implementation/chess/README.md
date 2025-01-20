@@ -10,10 +10,6 @@ The initiative to reimplement our chess framework in C++ emerged from the antici
 
 In the original Python implementation, the performance of the MCTS algorithm was notably hindered by its slow execution speed. This was particularly problematic when paired with a neural network for board state evaluation, where the MCTS steps, instead of the neural network evaluation, consumed a disproportionate amount of computational time.
 
-![MCTS Performance](/AIZeroChessBot/documentation/performance_analysis.png)
-
-Only the small pink section in the performance analysis graph is the time taken to evaluate the board state using the neural network. The rest of the time is spent on the other steps of the MCTS algorithm.
-
 ## Simplified Chess Framework Requirements
 
 The chess framework was streamlined to include only essential functionalities needed by the MCTS algorithm. This approach not only facilitated performance improvements but also established a flexible foundation for adapting the framework to other board games. The engine's requirements are as follows:
@@ -34,8 +30,4 @@ The chess framework ported to C++ was based on the Python chess package, essenti
 
 ## GPU Utilization and Parallelization
 
-A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 20% GPU usage, a significant improvement from the Python version. Moreover, by employing 5 threads per GPU, we managed to maximize CPU usage, ensuring nearly 100% utilization. This parallelization strategy is detailed in our parallelization [README](/AIZeroChessBot-C++/documentation/parallelization/README.md), offering insights into achieving optimal performance.
-
-## Conclusion
-
-The strategic shift to C++ and the refinement of the chess framework have significantly improved the performance and adaptability of our MCTS algorithm. For a comprehensive analysis of the performance gains and more detailed insights, refer to our [benchmark documentation](/AIZeroChessBot/documentation/benchmark_documentation.md).
+A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 20% GPU usage, a significant improvement from the Python version. Moreover, by employing 5 threads per GPU, we managed to maximize CPU usage, ensuring nearly 100% utilization. This parallelization strategy is detailed in our parallelization [README](../parallelization/README.md), offering insights into achieving optimal performance.
