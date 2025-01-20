@@ -88,6 +88,8 @@ For a list of planned enhancements and future work, refer to the following secti
 
 ## Getting Started
 
+To get started with the Python implementation, follow the steps below:
+
 ### Prerequisites
 
 Ensure you have the following installed:
@@ -103,6 +105,7 @@ Ensure you have the following installed:
    ```bash
    git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git
    cd Advanced-Techniques-in-Chess-Engines
+   cd py # Navigate to the Python implementation
    ```
 
 2. **Install Dependencies:**
