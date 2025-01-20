@@ -1,6 +1,6 @@
 # AlphaZero-Clone: Deep Reinforcement Learning for Board Games
 
-Welcome to the **AlphaZero-Clone** repository! This project replicates the deep reinforcement learning approaches pioneered by AlphaZero, focusing initially on Chess and extending to other classic board games. The goal is to create an optimized, scalable, and maintainable framework for training AI agents capable of mastering complex games through self-play and iterative learning. This implementation is optimized for distributed medium-to-large scale training on multi-node multi-GPU clusters.
+Welcome to the **AlphaZero-Clone** repository! This project replicates the deep reinforcement learning approaches pioneered by AlphaZero, focusing initially on Chess and extending to other classic board games. The goal is to create an optimized, scalable, and maintainable framework for training AI agents capable of mastering complex games through self-play and iterative learning. This implementation is **optimized for distributed medium-to-large scale training** on multi-node multi-GPU clusters.
 
 ## Table of Contents
 
@@ -8,9 +8,9 @@ Welcome to the **AlphaZero-Clone** repository! This project replicates the deep 
   - [Table of Contents](#table-of-contents)
   - [Project Overview](#project-overview)
     - [Training Pipeline](#training-pipeline)
-  - [Supported Games](#supported-games)
-  - [Implementation Details](#implementation-details)
   - [Optimizations](#optimizations)
+  - [Implementation Details](#implementation-details)
+    - [Supported Games](#supported-games)
   - [Future Work](#future-work)
   - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
@@ -53,12 +53,15 @@ The training pipeline follows these steps:
    - Periodically, new models are evaluated against previous versions to ensure improvement.
    - Best-performing models are promoted for continued training and self-play.
 
-## Supported Games
+## Optimizations
 
-- **Tic-Tac-Toe:** Basic implementation for initial testing and verification.
-- **Connect Four:** Intermediate complexity to ensure correct game state handling.
-- **Checkers:** Transitioning to more complex game mechanics and strategies.
-- **Chess:** The primary focus for deploying the AlphaZero-like algorithms.
+Several optimizations have been implemented to enhance performance and scalability and to scale the training process across multiple nodes and GPUs. Refer to the following sections for more details:
+
+- [Inference Optimization](documentation/optimizations/inference.md)
+- [Inference Architecture Optimization](documentation/optimizations/architecture.md)
+- [Training Optimization](documentation/optimizations/training.md)
+- [Evaluation](documentation/optimizations/evaluation.md)
+- [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
 
 ## Implementation Details
 
@@ -72,15 +75,12 @@ The main implementation is currently written in Python and can be found in the `
 
 A rewrite in C++ is planned for at least the Self-Play part to improve performance and scalability. The work in progress can be found in the `cpp` directory.
 
-## Optimizations
+### Supported Games
 
-Several optimizations have been implemented to enhance performance and scalability. Refer to the following sections for more details:
-
-- [Inference Optimization](documentation/optimizations/inference.md)
-- [Inference Architecture Optimization](documentation/optimizations/architecture.md)
-- [Training Optimization](documentation/optimizations/training.md)
-- [Evaluation](documentation/optimizations/evaluation.md)
-- [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
+- **Tic-Tac-Toe:** Basic implementation for initial testing and verification.
+- **Connect Four:** Intermediate complexity to ensure correct game state handling.
+- **Checkers:** Transitioning to more complex game mechanics and strategies.
+- **Chess:** The primary focus for deploying the AlphaZero-like algorithms.
 
 ## Future Work
 
@@ -126,29 +126,6 @@ Ensure you have the following installed:
 ## Contributing
 
 Contributions are welcome! Whether you're fixing bugs, improving documentation, or adding new features, your help is appreciated.
-
-1. **Fork the Repository**
-2. **Create a Feature Branch**
-
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-
-3. **Commit Your Changes**
-
-   ```bash
-   git commit -m "Add your feature"
-   ```
-
-4. **Push to the Branch**
-
-   ```bash
-   git push origin feature/YourFeature
-   ```
-
-5. **Open a Pull Request**
-
-Please ensure your code follows the project's coding standards and includes appropriate tests.
 
 ## References
 
