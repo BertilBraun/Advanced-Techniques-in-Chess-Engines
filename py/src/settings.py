@@ -222,7 +222,7 @@ elif True:
         evaluation=evaluation,
     )
     # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
+    TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/chess',
         num_games_per_iteration=32,
@@ -236,7 +236,7 @@ elif True:
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
-                c_param=2,
+                c_param=4,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),

@@ -65,6 +65,7 @@ def start_usage_logger():
 
 # Global variables to accumulate times
 function_times = {}
+global_function_times = {}
 call_stack = []
 
 
@@ -95,9 +96,15 @@ def reset_times():
     log('=' * 80)
     log('Resetting function times')
     total_time = sum(function_times.values())
+    for key, value in function_times.items():
+        global_function_times[key] = global_function_times.get(key, 0.0) + value
+    global_total_time = sum(global_function_times.values())
     for key in sorted(function_times.keys(), key=lambda x: function_times[x], reverse=True):
-        log(f'{function_times[key] / total_time:.2%} {key}')
-    # function_times = {}
+        log(
+            f'{function_times[key] / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%}) {key}'
+        )
+
+    function_times = {}
 
 
 if __name__ == '__main__':
