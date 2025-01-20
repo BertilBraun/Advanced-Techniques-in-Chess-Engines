@@ -6,6 +6,9 @@ import GPUtil
 from datetime import datetime
 
 from src.settings import USE_PROFILING
+from functools import wraps
+
+from src.util.log import log
 
 
 # Usage Logger
@@ -58,3 +61,58 @@ def start_usage_logger():
 
     logger_thread = threading.Thread(target=_log_system_usage, args=(1.0,), daemon=True)
     logger_thread.start()
+
+
+# Global variables to accumulate times
+function_times = {}
+call_stack = []
+
+
+def timeit(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        global call_stack, function_times
+        start_time = time.time()
+        call_stack.append(func.__name__)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end_time = time.time()
+            elapsed = end_time - start_time
+            call_stack.pop()
+            # Accumulate time
+            function_times[func.__name__] = function_times.get(func.__name__, 0.0) + elapsed
+            # Subtract from parent function
+            if call_stack:
+                parent = call_stack[-1]
+                function_times[parent] = function_times.get(parent, 0.0) - elapsed
+
+    return wrapper
+
+
+def reset_times():
+    global function_times
+    log('=' * 80)
+    log('Resetting function times')
+    total_time = sum(function_times.values())
+    for key in sorted(function_times.keys(), key=lambda x: function_times[x], reverse=True):
+        log(f'{function_times[key] / total_time:.2%} {key}')
+    # function_times = {}
+
+
+if __name__ == '__main__':
+
+    @timeit
+    def test1():
+        time.sleep(1)
+
+    @timeit
+    def test2():
+        time.sleep(1)
+        test1()
+        time.sleep(1)
+
+    for _ in range(2):
+        test2()
+
+    print(function_times)

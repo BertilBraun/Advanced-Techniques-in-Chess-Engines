@@ -13,6 +13,7 @@ from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 from src.util import lerp
+from src.util.profiler import reset_times, timeit
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class SelfPlay:
         self.dataset = SelfPlayDataset()
         self.client.update_iteration(iteration)
 
+    @timeit
     async def self_play(self) -> None:
         mcts_results = await self.mcts.search([spg.board for spg in self.self_play_games])
 
@@ -99,6 +101,9 @@ class SelfPlay:
         self.self_play_games = self.self_play_games - Counter()
         assert all(count > 0 for count in self.self_play_games.values())
 
+        reset_times()
+
+    @timeit
     def _sample_self_play_game(
         self, current: SelfPlayGame, action_probabilities: np.ndarray
     ) -> tuple[SelfPlayGame, CurrentGameMove]:

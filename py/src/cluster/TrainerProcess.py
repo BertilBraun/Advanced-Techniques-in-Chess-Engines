@@ -59,6 +59,8 @@ class TrainerProcess:
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
 
+            dataset.cleanup()
+
         save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
         self._log_to_tensorboard(iteration, train_stats)

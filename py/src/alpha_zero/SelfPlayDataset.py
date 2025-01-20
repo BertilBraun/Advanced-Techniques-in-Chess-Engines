@@ -249,6 +249,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
+    def cleanup(self) -> None:
+        for chunk in self.all_chunks:
+            chunk.unlink()
+
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.sample_index >= len(self.active_states):
             self.active_states, self.active_policies, self.active_values = self._load_samples()

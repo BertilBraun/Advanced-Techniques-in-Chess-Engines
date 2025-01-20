@@ -6,6 +6,7 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.util.profiler import timeit
 
 
 class MCTS:
@@ -13,6 +14,7 @@ class MCTS:
         self.client = client
         self.args = args
 
+    @timeit
     async def search(self, boards: list[CurrentBoard]) -> list[tuple[np.ndarray, float]]:
         policies = await self._get_policy_with_noise(boards)
 
@@ -29,11 +31,13 @@ class MCTS:
 
         return [(self._get_action_probabilities(root), root.result_score) for root in roots]
 
+    @timeit
     async def parallel_iterate(self, roots: list[MCTSNode]) -> None:
         await self.client.run_batch(
             [self.iterate(root) for root in roots for _ in range(self.args.num_parallel_searches)]
         )
 
+    @timeit
     async def iterate(self, root: MCTSNode) -> None:
         if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param)):
             return

@@ -12,3 +12,10 @@ graph*
 **.csv
 **.hdf5
 **.prof
+
+**/models/memory/**
+**/data/**
+
+cpp/src/json.hpp
+cpp/build/**
+cpp/libtorch**/**

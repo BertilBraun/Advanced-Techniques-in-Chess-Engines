@@ -10,6 +10,7 @@ from src.Network import Network
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.log import log
+from src.util.profiler import timeit
 from src.util.save_paths import load_model, model_save_path
 
 
@@ -52,6 +53,7 @@ class InferenceClient:
             log(f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)}')
         self.inference_cache.clear()
 
+    @timeit
     async def inference(self, board: CurrentBoard) -> tuple[np.ndarray, float]:
         """Enqueue an inference request and return the result when available.
         Results are batched to optimize the inference process.
@@ -100,6 +102,7 @@ class InferenceClient:
         if self.batch_queue:
             self._process_batch()
 
+    @timeit
     def _process_batch(self) -> None:
         encoded_boards = [board for board, _, _ in self.batch_queue if board is not None]
         board_hashes = [hash for board, hash, _ in self.batch_queue if board is not None]
@@ -117,6 +120,7 @@ class InferenceClient:
         self.batch_queue.clear()
         self.enqueued_inferences.clear()
 
+    @timeit
     @torch.no_grad()
     def _model_inference(self, boards: list[np.ndarray]) -> list[tuple[np.ndarray, float]]:
         input_tensor = torch.tensor(np.array(boards), dtype=TORCH_DTYPE, device=self.device)
@@ -132,6 +136,7 @@ class InferenceClient:
 
         return [(result[:-1], result[-1]) for result in results]
 
+    @timeit
     def _get_board_hash(self, board: np.ndarray) -> bytes:
         variation_hashes: list[bytes] = []
         for variation in (board, np.flip(board, axis=2)):  # TODO assuming, that a vertical flip is a valid symmetry

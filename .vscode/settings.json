@@ -118,5 +118,5 @@
         "any": "cpp",
         "codecvt": "cpp"
     },
-    "cmake.sourceDirectory": "C:/Projects/ChessBot/AIZeroChessBot-C++"
+    "cmake.sourceDirectory": "C:/Projects/ChessBot/cpp"
 }
