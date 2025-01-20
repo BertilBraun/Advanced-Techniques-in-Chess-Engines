@@ -4,34 +4,14 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Eval",
+            "label": "profile",
             "type": "shell",
-            "command": "python -m AIZeroConnect4Bot.src.eval",
-            "problemMatcher": []
+            "command": "viztracer --max_stack_depth 11 --tracer_entries 1000000 train.py",
         },
         {
-            "label": "Train",
+            "label": "view profile",
             "type": "shell",
-            "command": "python -m AIZeroConnect4Bot.src",
-            "problemMatcher": []
-        },
-        {
-            "label": "Play",
-            "type": "shell",
-            "command": "python -m HandcraftedChessBot --play",
-            "problemMatcher": []
-        },
-        {
-            "label": "Compete two most recent Bots",
-            "type": "shell",
-            "command": "python -m HandcraftedChessBot --compete",
-            "problemMatcher": []
-        },
-        {
-            "label": "Complete Tournament",
-            "type": "shell",
-            "command": "python -m HandcraftedChessBot --complete",
-            "problemMatcher": []
+            "command": "python -m src.util.profiler_visualization",
         }
     ]
 }

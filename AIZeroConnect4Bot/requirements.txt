@@ -1,6 +1,0 @@
-h5py
-torch
-numpy
-optuna
-tensorboardX
-chess

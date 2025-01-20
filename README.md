@@ -1,89 +1,176 @@
-# Chess Bot Projects Repository
+# AlphaZero-Clone: Deep Reinforcement Learning for Board Games
 
-## Overview
+Welcome to the **AlphaZero-Clone** repository! This project replicates the deep reinforcement learning approaches pioneered by AlphaZero, focusing initially on Chess and extending to other classic board games. The goal is to create an optimized, scalable, and maintainable framework for training AI agents capable of mastering complex games through self-play and iterative learning. This implementation is optimized for distributed medium-to-large scale training on multi-node multi-GPU clusters.
 
-This repository hosts a collection of four distinct chess bot projects, each exploring different approaches to chess AI development, ranging from handcrafted algorithms to advanced machine learning and beyond. The addition of the AI-ZeroChessBot-C++ project marks a significant milestone in our exploration, representing the most developed and sophisticated chess engine in our collection. It is a direct port of the AI-ZeroChessBot to C++, further developed to leverage the performance benefits of the language. From foundational frameworks to cutting-edge techniques, these projects aim to cover a comprehensive spectrum of AI strategies in the domain of chess. Each project is contained within its own subfolder, allowing for focused development and exploration.
+## Table of Contents
 
-## Projects
+- [AlphaZero-Clone: Deep Reinforcement Learning for Board Games](#alphazero-clone-deep-reinforcement-learning-for-board-games)
+  - [Table of Contents](#table-of-contents)
+  - [Project Overview](#project-overview)
+    - [Training Pipeline](#training-pipeline)
+  - [Supported Games](#supported-games)
+  - [Implementation Details](#implementation-details)
+  - [Optimizations](#optimizations)
+  - [Future Work](#future-work)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [Usage](#usage)
+  - [Contributing](#contributing)
+  - [References](#references)
+  - [License](#license)
+  - [Acknowledgements](#acknowledgements)
 
-### 0. [Framework](/Framework/README.md) (Subfolder: `Framework`)
+## Project Overview
 
-Provides the basic infrastructure for evaluating and playing chess games, serving as the foundation for the other projects. Includes essential classes such as `ChessBot`, `GameManager`, `HumanPlayer`, and `Tournament`.
+**AlphaZero-Clone** is a Python-based project inspired by the AlphaZero algorithm, aiming to replicate its success in mastering games like Go, Chess, and Shogi. Starting with simpler implementations of Tic-Tac-Toe, Connect Four, and Checkers, the project incrementally scales up to Chess, ensuring correctness and optimization at each step.
 
-### 1. [HandcraftedChessBot](/HandcraftedChessBot/README.md) (Subfolder: `HandcraftedChessBot`)
+Key objectives include:
 
-Focuses on traditional chess bot design principles, employing handcrafted evaluation functions and optimization techniques without machine learning.
+- Implementing self-play mechanisms using Monte Carlo Tree Search (MCTS).
+- Facilitating iterative training with continuous model updates.
+- Optimizing performance through parallel processing and efficient algorithms.
+- Maintaining code readability and modularity for ease of understanding and extension.
+- Supporting multiple games with varying complexities and rule sets.
+- Scalability for distributed training across multiple nodes and GPUs.
 
-**Key Features**:
+### Training Pipeline
 
-- Alpha-beta pruning and iterative deepening.
-- Handcrafted evaluation functions focusing on material count, piece-square tables, and pawn structure.
+The training pipeline follows these steps:
 
-### 2. [NeuralNetChessBot](/NeuralNetChessBot/README.md) (Subfolder: `NeuralNetChessBot`)
+1. **Self-Play Generation:**
+   - Multiple workers generate self-play games using the current neural network model.
+   - MCTS guides the move selection during self-play.
 
-Explores the integration of a neural network-based evaluator within a chess bot framework, aiming to assess chess positions dynamically through machine learning.
+2. **Data Collection:**
+   - Game states, move probabilities, and game outcomes are stored for training.
 
-**Key Features**:
+3. **Training:**
+   - The neural network is trained on the collected data to predict move probabilities (policy) and game outcomes (value).
+   - Training is performed in parallel across multiple nodes to accelerate learning.
 
-- Neural network for position evaluation.
-- Training of the neural network with chess game datasets.
+4. **Model Evaluation:**
+   - Periodically, new models are evaluated against previous versions to ensure improvement.
+   - Best-performing models are promoted for continued training and self-play.
 
-### 3. [AI-ZeroChessBot](/AIZeroChessBot/README.md) (Subfolder: `AI-ZeroChessBot`)
+## Supported Games
 
-Inspired by AlphaZero, this project combines deep neural networks with Monte Carlo Tree Search (MCTS) for move selection and position evaluation, learning from self-play.
+- **Tic-Tac-Toe:** Basic implementation for initial testing and verification.
+- **Connect Four:** Intermediate complexity to ensure correct game state handling.
+- **Checkers:** Transitioning to more complex game mechanics and strategies.
+- **Chess:** The primary focus for deploying the AlphaZero-like algorithms.
 
-**Key Features**:
+## Implementation Details
 
-- Deep neural network with policy and value heads.
-- MCTS for strategic move selection.
-- Self-play for continuous learning.
+For a detailed overview of the project's implementation, refer to the following section: [Implementation Details](documentation/implementation.md).
 
-### 4. [AI-ZeroChessBot-C++](/AIZeroChessBot-C++/README.md) (Subfolder: `AI-ZeroChessBot-C++`)
+The main implementation is currently written in Python and can be found in the `py` directory. The main 3 scripts are:
 
-A significant evolution of the AI-ZeroChessBot, ported to C++ and further developed to harness the language's performance capabilities. This project represents the pinnacle of our chess engine development, emphasizing efficiency, advanced strategies, and self-improvement through deep learning and MCTS.
+- `train.py`: The main training script that orchestrates the self-play, training, and evaluation processes.
+- `eval.py`: A script to play against the trained model or evaluate the model against itself.
+- `opt.py`: A script to optimize the hyperparameters and architecture of the model.
 
-**Key Features**:
+A rewrite in C++ is planned for at least the Self-Play part to improve performance and scalability. The work in progress can be found in the `cpp` directory.
 
-- Ported to C++ for enhanced performance and efficiency.
-- Advanced integration of deep learning and MCTS for superior strategic depth.
-- Focus on self-improvement through extensive self-play and continuous learning.
+## Optimizations
 
-### 5. [AI-ZeroConnect4Bot](/AIZeroConnect4Bot/README.md) (Subfolder: `AI-ZeroConnect4Bot`)
+Several optimizations have been implemented to enhance performance and scalability. Refer to the following sections for more details:
 
-This project simplifies the game to Connect 4 and applies the AI-Zero approach to develop a Connect 4 bot. The project aims to verify the correctness and effectiveness of the AI-Zero approach in a simpler game setting. Once the Connect 4 bot is successfully developed, the project will be extended to attempt the same approach in more complex games like Chess.
+- [Inference Optimization](documentation/optimizations/inference.md)
+- [Inference Architecture Optimization](documentation/optimizations/architecture.md)
+- [Training Optimization](documentation/optimizations/training.md)
+- [Evaluation](documentation/optimizations/evaluation.md)
+- [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
 
-**Key Features**:
+## Future Work
 
-- Connect 4 game environment.
-- Optimizations for Inference like Batch Inference and Caching.
-- Optimized Hyperparameters and actual good achieved performance.
-
-## Repository Structure
-
-```text
-ChessBot/
-│
-├── Framework/
-│   └── README.md
-│
-├── HandcraftedChessBot/
-│   └── README.md
-│
-├── NeuralNetChessBot/
-│   └── README.md
-│
-├── AI-ZeroChessBot/
-│   └── README.md
-│
-└── AI-ZeroChessBot-C++/
-    └── README.md
-```
+For a list of planned enhancements and future work, refer to the following section: [Future Work](documentation/future.md).
 
 ## Getting Started
 
-To get started with any of the projects:
+### Prerequisites
 
-1. Clone this repository to your local machine.
-2. Navigate to the project subfolder of interest (`HandcraftedChessBot`, `NeuralNetChessBot`, `AI-ZeroChessBot`, or `AI-ZeroChessBot-C++`).
-3. Follow the instructions in the project-specific README.md for setup and running the bot.
-4. To explore the basic chess bot framework, refer to the `Framework` subfolder and try it out via `python -m Framework`.
+Ensure you have the following installed:
+
+- **Python 3.11+**
+- **PyTorch 2.0+** (or another compatible deep learning framework)
+- **Dependencies:** Listed in `requirements.txt`
+
+### Installation
+
+1. **Clone the Repository:**
+
+   ```bash
+   git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git
+   cd Advanced-Techniques-in-Chess-Engines
+   ```
+
+2. **Install Dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Usage
+
+1. **Configure the Environment:**
+
+   Edit the `src/settings.py` file to set parameters such as the game, search and train settings.
+
+2. **Start Self-Play and Training:**
+
+   ```bash
+   python train.py
+   ```
+
+## Contributing
+
+Contributions are welcome! Whether you're fixing bugs, improving documentation, or adding new features, your help is appreciated.
+
+1. **Fork the Repository**
+2. **Create a Feature Branch**
+
+   ```bash
+   git checkout -b feature/YourFeature
+   ```
+
+3. **Commit Your Changes**
+
+   ```bash
+   git commit -m "Add your feature"
+   ```
+
+4. **Push to the Branch**
+
+   ```bash
+   git push origin feature/YourFeature
+   ```
+
+5. **Open a Pull Request**
+
+Please ensure your code follows the project's coding standards and includes appropriate tests.
+
+## References
+
+- [Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm](https://arxiv.org/pdf/1712.01815)
+- [Minigo: A Case Study in Reproducing Reinforcement Learning Research](https://openreview.net/pdf?id=H1eerhIpLV)
+- [Lessons from AlphaZero: Connect Four](https://medium.com/oracledevs/lessons-from-alphazero-connect-four-e4a0ae82af68)
+- [Lessons from AlphaZero Part 3: Parameter Tweaking](https://medium.com/oracledevs/lessons-from-alphazero-part-3-parameter-tweaking-4dceb78ed1e5)
+- [Lessons from AlphaZero Part 4: Improving the Training Target](https://medium.com/oracledevs/lessons-from-alphazero-part-4-improving-the-training-target-6efba2e71628)
+- [Lessons from AlphaZero Part 5: Performance Optimization](https://medium.com/oracledevs/lessons-from-alpha-zero-part-5-performance-optimization-664b38dc509e)
+- [Lessons from AlphaZero Part 6: Hyperparameter Tuning](https://medium.com/oracledevs/lessons-from-alpha-zero-part-6-hyperparameter-tuning-b1cfcbe4ca9a)
+- [AlphaZero Explained](https://www.youtube.com/watch?v=wuSQpLinRB4)
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+
+## Acknowledgements
+
+- Inspired by [DeepMind's AlphaZero](https://deepmind.com/research/case-studies/alphazero-the-story-so-far)
+- Utilizes [PyTorch](https://pytorch.org/) for deep learning implementations
+- Contributions from the open-source community
+
+---
+
+Stay tuned for more updates! If you have any questions or suggestions, feel free to open an issue or contact the maintainer.
