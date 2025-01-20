@@ -108,8 +108,6 @@ class InferenceClient:
         board_hashes = [hash for board, hash, _ in self.batch_queue if board is not None]
 
         if encoded_boards:
-            log(f'Processing batch of {len(encoded_boards)} inferences')
-            log('Cache hit rate:', self.total_hits / self.total_evals, 'on', self.total_evals, 'evaluations')
             results = self._model_inference(encoded_boards)
 
             for hash, (policy, value) in zip(board_hashes, results):

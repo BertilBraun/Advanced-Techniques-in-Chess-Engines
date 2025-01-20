@@ -13,6 +13,7 @@ from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 from src.util import lerp
+from src.util.log import log
 from src.util.profiler import reset_times, timeit
 
 
@@ -27,13 +28,22 @@ class SelfPlayGame:
     def __init__(self) -> None:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
+        self.played_moves: list[CurrentGameMove] = []
         self.num_played_moves = 0
         self.start_generation_time = time.time()
+
+    def expand(self, move: CurrentGameMove) -> SelfPlayGame:
+        new_game = self.copy()
+        new_game.board.make_move(move)
+        new_game.num_played_moves += 1
+        new_game.played_moves.append(move)
+        return new_game
 
     def copy(self) -> SelfPlayGame:
         game = SelfPlayGame()
         game.board = self.board.copy()
-        game.memory = self.memory[:]
+        game.memory = self.memory.copy()
+        game.played_moves = self.played_moves.copy()
         game.num_played_moves = self.num_played_moves
         game.start_generation_time = self.start_generation_time
         return game
@@ -102,6 +112,13 @@ class SelfPlay:
         assert all(count > 0 for count in self.self_play_games.values())
 
         reset_times()
+        log(
+            'Cache hit rate:',
+            self.client.total_hits / self.client.total_evals,
+            'on',
+            self.client.total_evals,
+            'evaluations',
+        )
 
     @timeit
     def _sample_self_play_game(
@@ -110,16 +127,14 @@ class SelfPlay:
         # Sample a move from the action probabilities then create a new game state with that move
         # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
 
-        new_spg = current.copy()
-
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
         if current.num_played_moves >= self.args.num_moves_after_which_to_play_greedy:
             move = CurrentGame.decode_move(np.argmax(action_probabilities).item())
         else:
             move = self._sample_move(action_probabilities, self.args.temperature)
-        new_spg.board.make_move(move)
-        new_spg.num_played_moves += 1
+
+        new_spg = current.expand(move)
 
         if not new_spg.board.is_game_over():
             return new_spg, move
@@ -154,6 +169,9 @@ class SelfPlay:
 
     def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
+
+        log(f'Adding training data for game with result {result}')
+        log(f'Game moves: {spg.played_moves}')
 
         self.dataset.add_generation_stats(num_games=1, generation_time=time.time() - spg.start_generation_time)
 

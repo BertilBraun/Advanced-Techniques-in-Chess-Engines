@@ -3,6 +3,7 @@ import numpy.typing as npt
 
 from src.games.Game import Board
 from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
+from src.util.profiler import timeit
 
 
 _N_BITS = CurrentGame.representation_shape[1] * CurrentGame.representation_shape[2]
@@ -11,6 +12,7 @@ assert _N_BITS <= 64, 'The state is too large to encode'
 _BIT_MASK = 1 << np.arange(_N_BITS, dtype=np.uint64)  # use uint64 to prevent overflow
 
 
+@timeit
 def encode_board_state(state: npt.NDArray[np.int8]) -> npt.NDArray[np.uint64]:
     """Encode the state into a tuple of integers. Each integer represents a channel of the state. This assumes that the state is a binary state.
 
