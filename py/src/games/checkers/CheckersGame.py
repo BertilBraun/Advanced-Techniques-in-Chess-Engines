@@ -47,10 +47,6 @@ class CheckersGame(Game[CheckersMove]):
         # Since only the black squares will ever be occupied, the representation also colapses that input down to only half of the columns of the actual board
         return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT // 2
 
-    @property
-    def average_num_moves_per_game(self) -> int:
-        return 20
-
     def get_canonical_board(self, board: CheckersBoard) -> np.ndarray:
         # turn the 4 bitboards into a single 4x4x8 tensor
 

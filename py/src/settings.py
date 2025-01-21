@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import multiprocessing
 import numpy as np
 import torch
@@ -27,10 +28,11 @@ LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be 
 
 PLAY_C_PARAM = 1.0
 
-_TB_SUMMARY = SummaryWriter(LOG_FOLDER + f'/{multiprocessing.current_process().pid}')
+_TB_SUMMARY: SummaryWriter | None = None
 
 
 def log_scalar(name: str, value: float, iteration: int) -> None:
+    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
@@ -40,7 +42,20 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
     values = values.reshape(-1)
     if isinstance(values, torch.Tensor):
         values = values.cpu().numpy()
+    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_histogram(name, values, iteration)
+
+
+@contextmanager
+def tensorboard_writer():
+    global _TB_SUMMARY
+    assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
+    _TB_SUMMARY = SummaryWriter(LOG_FOLDER + f'/{multiprocessing.current_process().pid}')
+    try:
+        yield
+    finally:
+        _TB_SUMMARY.close()
+        _TB_SUMMARY = None
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -52,8 +67,8 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     base_lr = 0.025
-    lr_decay = 0.95
-    return base_lr * (lr_decay ** (current_iteration / 4))
+    lr_decay = 0.92
+    return base_lr * (lr_decay ** (current_iteration / 5))
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
@@ -61,6 +76,7 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
     Ramp up from lr/10 to lr over 50% of the batches, then ramp down to lr/10 over the remaining 50% of the batches.
     Do this for each epoch separately.
     """
+    return base_lr  # NOTE from some small scale testing, the one cycle policy seems to be detrimental to the training process
     min_lr = base_lr / 10
 
     if batch_percentage < 0.5:
@@ -165,7 +181,7 @@ if False:
         ),
     )
 
-elif True:
+elif False:
     from src.games.chess.ChessGame import ChessGame, ChessMove
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessVisuals import ChessVisuals
@@ -333,80 +349,69 @@ elif True:
     CurrentBoard = TicTacToeBoard
     CurrentGameVisuals = TicTacToeVisuals()
 
-    NN_HIDDEN_SIZE = 64
-    NN_NUM_LAYERS = 4
+    NN_HIDDEN_SIZE = 32
+    NN_NUM_LAYERS = 8
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.3
+        return 1
 
     def sampling_window(current_iteration: int) -> int:
         return 3
 
     # Test training args to verify the implementation
-    if torch.cuda.is_available() and not TESTING:
-        NUM_NODES = 8
-        NUM_TRAINERS = 1
-        NUM_SELF_PLAYERS = NUM_NODES - NUM_TRAINERS
-        PARALLEL_GAMES = 128  # Approximately 5min for 128 games
-        TRAINING_ARGS = None
-    else:
-        # Test training args to verify the implementation
-        TRAINING_ARGS = TrainingArgs(
-            num_iterations=12,
-            save_path=SAVE_PATH + '/tictactoe',
-            num_games_per_iteration=32,
-            inference=InferenceParams(
-                batch_size=128,
-            ),
-            network=NetworkParams(
-                num_layers=NN_NUM_LAYERS,
-                hidden_size=NN_HIDDEN_SIZE,
-            ),
-            self_play=SelfPlayParams(
-                temperature=1.25,
-                num_parallel_games=128,
-                num_moves_after_which_to_play_greedy=5,
-                mcts=MCTSParams(
-                    num_searches_per_turn=60,
-                    dirichlet_epsilon=0.25,
-                    dirichlet_alpha=dirichlet_alpha,
-                    c_param=2,
-                    num_parallel_searches=2,
-                ),
-            ),
-            cluster=ClusterParams(
-                num_self_play_nodes_on_cluster=1,
-            ),
-            training=TrainingParams(
-                num_epochs=4,
-                batch_size=64,
-                sampling_window=sampling_window,
-                learning_rate=learning_rate,
-                learning_rate_scheduler=learning_rate_scheduler,
-            ),
-            evaluation=EvaluationParams(
+    TRAINING_ARGS = TrainingArgs(
+        num_iterations=12,
+        save_path=SAVE_PATH + '/tictactoe',
+        num_games_per_iteration=300,
+        inference=InferenceParams(batch_size=128),
+        network=NetworkParams(
+            num_layers=NN_NUM_LAYERS,
+            hidden_size=NN_HIDDEN_SIZE,
+        ),
+        self_play=SelfPlayParams(
+            temperature=1.25,
+            num_parallel_games=1,
+            num_moves_after_which_to_play_greedy=5,
+            mcts=MCTSParams(
                 num_searches_per_turn=60,
-                num_games=30,
-                every_n_iterations=3,
+                dirichlet_epsilon=0.25,
+                dirichlet_alpha=dirichlet_alpha,
+                c_param=2,
+                num_parallel_searches=1,
             ),
-        )
-        # TEST_TRAINING_ARGS = TrainingArgs(
-        #     num_iterations=50,
-        #     num_self_play_games_per_iteration=2,
-        #     num_parallel_games=1,
-        #     num_epochs=3,
-        #     batch_size=16,
-        #     temperature=1.25,
-        #     mcts_num_searches_per_turn=200,
-        #     mcts_dirichlet_epsilon=0.25,
-        #     mcts_dirichlet_alpha=lambda _: 0.3,
-        #     mcts_c_param=2,
-        #     nn_hidden_size=NN_HIDDEN_SIZE,
-        #     nn_num_layers=NN_NUM_LAYERS,
-        #     sampling_window=sampling_window,
-        #     learning_rate=learning_rate,
-        #     learning_rate_scheduler=learning_rate_scheduler,
-        #     save_path=SAVE_PATH,
-        #     num_self_play_nodes_on_cluster=1,
-        #     num_train_nodes_on_cluster=0,
-        # )
+        ),
+        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
+        training=TrainingParams(
+            num_epochs=2,
+            batch_size=128,
+            sampling_window=sampling_window,
+            learning_rate=learning_rate,
+            learning_rate_scheduler=learning_rate_scheduler,
+        ),
+        evaluation=EvaluationParams(
+            num_searches_per_turn=60,
+            num_games=30,
+            every_n_iterations=1,
+            dataset_path='reference/memory_0_tictactoe_database.hdf5',
+        ),
+    )
+    # TEST_TRAINING_ARGS = TrainingArgs(
+    #     num_iterations=50,
+    #     num_self_play_games_per_iteration=2,
+    #     num_parallel_games=1,
+    #     num_epochs=3,
+    #     batch_size=16,
+    #     temperature=1.25,
+    #     mcts_num_searches_per_turn=200,
+    #     mcts_dirichlet_epsilon=0.25,
+    #     mcts_dirichlet_alpha=lambda _: 0.3,
+    #     mcts_c_param=2,
+    #     nn_hidden_size=NN_HIDDEN_SIZE,
+    #     nn_num_layers=NN_NUM_LAYERS,
+    #     sampling_window=sampling_window,
+    #     learning_rate=learning_rate,
+    #     learning_rate_scheduler=learning_rate_scheduler,
+    #     save_path=SAVE_PATH,
+    #     num_self_play_nodes_on_cluster=1,
+    #     num_train_nodes_on_cluster=0,
+    # )

@@ -90,10 +90,6 @@ class ChessGame(Game[ChessMove]):
     def representation_shape(self) -> tuple[int, int, int]:
         return (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
-    @property
-    def average_num_moves_per_game(self) -> int:
-        return 30
-
     def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
         from src.Encoding import decode_board_state
 

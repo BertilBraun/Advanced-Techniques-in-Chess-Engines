@@ -66,14 +66,20 @@ def start_usage_logger():
 # Global variables to accumulate times
 function_times = {}
 global_function_times = {}
+global_function_invocations = {}
+start_timing_time = -1
 call_stack = []
 
 
 def timeit(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        global call_stack, function_times
+        global call_stack, function_times, start_timing_time, global_function_invocations
         start_time = time.time()
+
+        if start_timing_time == -1:
+            start_timing_time = start_time
+
         call_stack.append(func.__name__)
         try:
             return func(*args, **kwargs)
@@ -83,6 +89,7 @@ def timeit(func):
             call_stack.pop()
             # Accumulate time
             function_times[func.__name__] = function_times.get(func.__name__, 0.0) + elapsed
+            global_function_invocations[func.__name__] = global_function_invocations.get(func.__name__, 0) + 1
             # Subtract from parent function
             if call_stack:
                 parent = call_stack[-1]
@@ -99,10 +106,14 @@ def reset_times():
     for key, value in function_times.items():
         global_function_times[key] = global_function_times.get(key, 0.0) + value
     global_total_time = sum(global_function_times.values())
-    for key in sorted(function_times.keys(), key=lambda x: function_times[x], reverse=True):
-        log(
-            f'{function_times[key] / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%}) {key}'
-        )
+
+    if total_time > 0:
+        for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
+            log(
+                f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}'
+            )
+
+        log(f'In total: {global_total_time / (time.time() - start_timing_time):.2%} recorded')
 
     function_times = {}
 

@@ -1,12 +1,14 @@
 import asyncio
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.settings import tensorboard_writer
 from src.util.log import log
 from src.alpha_zero.SelfPlay import SelfPlay
 from src.cluster.InferenceClient import InferenceClient
 from src.util.exceptions import log_exceptions
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
+from src.util.profiler import timeit
 
 
 def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
@@ -14,7 +16,7 @@ def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, de
 
     client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
-    with log_exceptions(f'Self play process {device_id} crashed.'):
+    with log_exceptions(f'Self play process {device_id} crashed.'), tensorboard_writer():
         asyncio.run(self_play_process.run())
 
 
@@ -27,6 +29,7 @@ class SelfPlayProcess:
         self.self_play = SelfPlay(client, args)
         self.commander_pipe = commander_pipe
 
+    @timeit
     async def run(self):
         current_iteration = 0
         running = False

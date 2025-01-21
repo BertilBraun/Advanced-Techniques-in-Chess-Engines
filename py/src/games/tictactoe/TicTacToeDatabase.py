@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, Tuple, List
+
+import numpy as np
 
 
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.games.tictactoe.TicTacToeGame import TicTacToeGame
 
 
 # Type aliases for memoization
@@ -83,63 +88,51 @@ def get_best_moves(board: TicTacToeBoard) -> Tuple[List[int], int]:
     return counter[outcome], outcome
 
 
-def generate_memory_line(board: TicTacToeBoard, moves: List[int], outcome: int) -> str:
-    """
-    Generates a line for the database file in the format:
-    (board_state);(move1, move2, ...);outcome
-    """
-
-    board_state = tuple(board.board.tolist())
-    moves_tuple = tuple(moves)
-    return f'{board_state};{moves_tuple};{outcome}\n'
-
-
-def generate_database(output_file: str):
-    """
-    Generate the TicTacToe database and save it to the specified output file.
-    Each line in the file has the format:
-    (board_state);(move1, move2, ...);outcome
-    """
-    initial_board = TicTacToeBoard()
+def generate_database() -> Path:
+    game = TicTacToeGame()
 
     # To keep track of all states to process
-    states_to_process: List[TicTacToeBoard] = [initial_board]
+    states_to_process: List[TicTacToeBoard] = [TicTacToeBoard()]
     generated_states: set[MemoKey] = set()  # Initialize as empty
 
-    with open(output_file, 'w') as f:
-        while states_to_process:
-            current_board = states_to_process.pop()
-            key = board_to_key(current_board)
+    dataset = SelfPlayDataset()
 
-            if key in generated_states or current_board.is_game_over():
-                # Already processed and written to file
-                continue
+    while states_to_process:
+        current_board = states_to_process.pop()
+        key = board_to_key(current_board)
 
-            move_list, outcome = get_best_moves(current_board)
+        if key in generated_states or current_board.is_game_over():
+            # Already processed and written to file
+            continue
 
-            if move_list:
-                # Store the memory
-                if current_board.current_player == 1:
-                    f.write(generate_memory_line(current_board, move_list, outcome))
-                else:
-                    current_board.board *= -1  # Switch perspective
-                    f.write(generate_memory_line(current_board, move_list, -outcome))
-                    current_board.board *= -1  # Switch back
-                generated_states.add(key)
+        move_list, outcome = get_best_moves(current_board)
 
-                # Recurse on all valid moves to ensure all states are processed
-                for move in current_board.get_valid_moves():
-                    new_board = current_board.copy()
-                    new_board.make_move(move)
+        if move_list:
+            # Store the memory
+            policy = np.array([1 if move in move_list else 0 for move in range(9)], dtype=np.float32)
+            policy /= np.sum(policy)
 
-                    if board_to_key(new_board) not in generated_states:
-                        states_to_process.append(new_board)
-            else:
-                assert False
+            dataset.add_sample(
+                game.get_canonical_board(current_board),
+                policy,
+                outcome if current_board.current_player == 1 else -outcome,
+            )
+            generated_states.add(key)
+
+            # Recurse on all valid moves to ensure all states are processed
+            for move in current_board.get_valid_moves():
+                new_board = current_board.copy()
+                new_board.make_move(move)
+
+                if board_to_key(new_board) not in generated_states:
+                    states_to_process.append(new_board)
+        else:
+            assert False
+
+    return dataset.save('reference', 0, 'tictactoe_database')
 
 
 if __name__ == '__main__':
-    output_file = 'tictactoe_database.txt'
     print('Generating TicTacToe database...')
-    generate_database(output_file)
+    output_file = generate_database()
     print(f'Database saved to {output_file}')

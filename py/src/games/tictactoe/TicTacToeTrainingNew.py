@@ -1,7 +1,6 @@
-import ast
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -19,38 +18,6 @@ from src.alpha_zero.train.Trainer import Trainer
 NUM_EPOCHS = 30
 BATCH_SIZE = 256
 DATASET_PERCENTAGE = 0.8
-
-
-class TicTacToeDataset(Dataset):
-    def __init__(self, file_path: str):
-        self.data = []
-        with open(file_path, 'r') as f:
-            for line in f:
-                board_str, moves_str, outcome_str = line.strip().split(';')
-
-                # Convert board string to list of integers
-                board = TicTacToeBoard()
-                board.board = np.array(ast.literal_eval(board_str))
-                board_tensor = torch.from_numpy(TicTacToeGame().get_canonical_board(board)).to(dtype=torch.float32)
-
-                # Convert moves string to list of integers and then to multi-hot encoding
-                moves = ast.literal_eval(moves_str)
-                moves_tensor = torch.zeros(9, dtype=torch.float32)
-                for move in moves:
-                    moves_tensor[move] = 1.0  # Multi-hot encoding
-
-                moves_tensor /= moves_tensor.sum()  # Normalize
-
-                # Convert outcome to float (-1, 0, 1)
-                outcome = torch.tensor(float(outcome_str), dtype=torch.float32)
-
-                self.data.append((board_tensor, moves_tensor, outcome))
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx]
 
 
 # --------------------------
@@ -249,7 +216,7 @@ if __name__ == '__main__':
     # python -m AIZeroConnect4Bot.src.games.tictactoe.TicTacToeTraining
 
     # Instantiate the dataset
-    dataset = TicTacToeDataset('tictactoe_database.txt')
+    dataset = SelfPlayDataset.load('reference/memory_0_tictactoe_database.hdf5')
     train, test = torch.utils.data.random_split(
         dataset, [int(DATASET_PERCENTAGE * len(dataset)), len(dataset) - int(DATASET_PERCENTAGE * len(dataset))]
     )

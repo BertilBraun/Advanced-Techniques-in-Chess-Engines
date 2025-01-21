@@ -57,12 +57,11 @@ class AlphaZeroBot(Bot):
 
         log('---------------------- Alpha Zero Best Move ----------------------')
         log('Best child index:', best_move_index)
-        log('Child number of visits:', root.children_number_of_visits)
         log(f'Best child has {best_child.number_of_visits} visits')
         log(f'Best child has {best_child.result_score:.4f} result_score')
         log('Child moves:', [child.move_to_get_here for child in root.children])
-        log('Child visits:', [child.number_of_visits for child in root.children])
-        log('Child result_scores:', [round(child.result_score, 2) for child in root.children])
+        log('Child visits:', root.children_number_of_visits)
+        log('Child result_scores:', np.round(root.children_result_scores, 2))
         log('------------------------------------------------------------------')
 
         return best_child.move_to_get_here

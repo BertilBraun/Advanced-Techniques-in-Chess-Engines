@@ -74,8 +74,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return (
-            torch.from_numpy(decode_board_state(self.states[idx])),
-            torch.from_numpy(self.policy_targets[idx]),
+            torch.from_numpy(decode_board_state(self.states[idx])).to(dtype=TORCH_DTYPE, non_blocking=True),
+            torch.from_numpy(self.policy_targets[idx]).to(dtype=TORCH_DTYPE, non_blocking=True),
             torch.tensor(self.value_targets[idx], dtype=torch.float32),
         )
 
@@ -121,7 +121,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return shuffled_dataset
 
     @staticmethod
-    def load(file_path: Path) -> SelfPlayDataset:
+    def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
 
         try:
@@ -208,10 +208,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
             if len(files_for_iteration) > 1:
                 dataset.deduplicate()
-                dataset.save(folder_path, iteration, suffix='deduplicated')
                 # Remove the original files to avoid re-deduplication
                 for file in files_for_iteration:
                     file.unlink()
+                dataset.save(folder_path, iteration, suffix='deduplicated')
 
             dataset = dataset.shuffle()
 
@@ -249,9 +249,24 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
+    def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            drop_last=True,
+        )
+
     def cleanup(self) -> None:
         for chunk in self.all_chunks:
             chunk.unlink()
+
+        # remove the folder with the chunks
+        for chunk in self.all_chunks:
+            try:
+                chunk.parent.rmdir()
+            except Exception:
+                pass
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.sample_index >= len(self.active_states):

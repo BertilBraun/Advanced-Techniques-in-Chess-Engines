@@ -10,7 +10,6 @@ from src.util.ZobristHasher import ZobristHasher
 
 ENCODING_CHANNELS = 3
 ACTION_SIZE = COLUMN_COUNT
-AVERAGE_NUM_MOVES_PER_GAME = 20
 
 
 class Connect4Game(Game[Connect4Move]):
@@ -27,10 +26,6 @@ class Connect4Game(Game[Connect4Move]):
     @property
     def representation_shape(self) -> tuple[int, int, int]:
         return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
-
-    @property
-    def average_num_moves_per_game(self) -> int:
-        return AVERAGE_NUM_MOVES_PER_GAME
 
     def get_canonical_board(self, board: Connect4Board) -> np.ndarray:
         canonical_board = board.board * board.current_player

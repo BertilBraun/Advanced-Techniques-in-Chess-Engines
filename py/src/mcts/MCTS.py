@@ -6,6 +6,8 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.util.log import log
+from src.util.mcts_graph import draw_mcts_graph
 from src.util.profiler import timeit
 
 
@@ -28,6 +30,11 @@ class MCTS:
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
             await self.parallel_iterate(roots)
+
+        # for root in roots:
+        #     log(repr(root))
+        #     num_placed_stones = np.sum(root.board.board != 0)
+        #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
 
         return [(self._get_action_probabilities(root), root.result_score) for root in roots]
 

@@ -1,34 +1,46 @@
 import asyncio
 import numpy as np
 
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import log_scalar, CurrentGame, CurrentBoard
+from src.settings import log_scalar, CurrentGame, CurrentBoard, tensorboard_writer
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.alpha_zero.train.TrainingArgs import EvaluationParams
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
 
 
-def run_evaluation_process(args: EvaluationParams, iteration: int):
+def run_evaluation_process(args: TrainingArgs, iteration: int):
     evaluation_process = EvaluationProcess(args)
-    with log_exceptions('Evaluation process'):
+    with log_exceptions('Evaluation process'), tensorboard_writer():
         asyncio.run(evaluation_process.run(iteration))
 
 
 class EvaluationProcess:
-    def __init__(self, args: EvaluationParams) -> None:
+    def __init__(self, args: TrainingArgs) -> None:
+        assert args.evaluation, 'Evaluation parameters must be set.'
         self.args = args
+        self.eval_args = args.evaluation
 
     async def run(self, iteration: int):
         """Play two most recent models against each other."""
-        if not self.args or iteration % self.args.every_n_iterations != 0 or iteration == 0:
+        if not self.args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
             return
 
         model_evaluation = ModelEvaluation(
             iteration,
-            self.args.num_games,
-            self.args.num_searches_per_turn,
+            self.args,
+            self.eval_args.num_games,
+            self.eval_args.num_searches_per_turn,
         )
-        results = await model_evaluation.play_two_models_search(iteration - self.args.every_n_iterations)
+
+        dataset = SelfPlayDataset.load(self.eval_args.dataset_path)
+        policy_accuracy, avg_value_loss = model_evaluation.evaluate_model_vs_dataset(dataset)
+        log(f'Policy Accuracy: {policy_accuracy*100:.2f}%, Value MSE Loss: {avg_value_loss:.4f}')
+
+        log_scalar('policy_accuracy', policy_accuracy, iteration)
+        log_scalar('value_mse_loss', avg_value_loss, iteration)
+
+        results = await model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
@@ -46,7 +58,7 @@ class EvaluationProcess:
         from src.games.chess.ChessGame import ChessGame
 
         if isinstance(CurrentGame, ChessGame):
-            from py.src.games.chess.comparison_bots.HandcraftedBotV3 import HandcraftedBotV3
+            from src.games.chess.comparison_bots.HandcraftedBotV3 import HandcraftedBotV3
 
             comparison_bot = HandcraftedBotV3()
 

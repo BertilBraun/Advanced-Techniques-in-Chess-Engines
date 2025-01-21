@@ -5,11 +5,17 @@ import numpy as np
 from typing import Callable, Coroutine
 from dataclasses import dataclass
 
+import torch
+import torch.nn.functional as F
+
+from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
-from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame
+from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
+from src.util.save_paths import load_model, model_save_path
 
 
 @dataclass
@@ -53,10 +59,13 @@ EvaluationModel = Callable[[list[CurrentBoard]], Coroutine[None, None, list[np.n
 class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
-    def __init__(self, iteration: int, num_games: int = 64, num_searches_per_turn: int = 20) -> None:
+    def __init__(
+        self, iteration: int, args: TrainingArgs, num_games: int = 64, num_searches_per_turn: int = 20
+    ) -> None:
         self.iteration = iteration
         self.num_games = num_games
         self.num_searches_per_turn = num_searches_per_turn
+        self.args = args
 
         self.mcts_args = MCTSArgs(
             num_searches_per_turn=num_searches_per_turn,
@@ -65,6 +74,46 @@ class ModelEvaluation:
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
         )
+
+    def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float]:
+        device = torch.device('cuda' if USE_GPU else 'cpu')
+        model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
+        model.eval()
+
+        total_policy_correct = 0
+        total_policy_total = 0
+        total_value_loss = 0.0
+
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True)
+
+        with torch.no_grad():
+            for batch in dataloader:
+                board, moves, outcome = batch
+                board = board.to(device)
+                moves = moves.to(device)
+                outcome = outcome.to(device).unsqueeze(1)
+
+                policy_output, value_output = model(board)
+
+                # Policy evaluation
+                policy_pred = torch.softmax(policy_output, dim=1)
+                # get number (k) of moves in each batch
+                # check the top k moves in the policy_pred
+                # sum up how many of the top k probabilities are in the moves
+
+                for i in range(len(moves)):
+                    k = moves[i].sum().to(dtype=torch.int).item()
+                    top_k = policy_pred[i].topk(k).indices
+                    total_policy_correct += (top_k == moves[i].nonzero().squeeze()).sum().item()
+                    total_policy_total += k
+
+                # Value evaluation
+                total_value_loss += F.mse_loss(value_output, outcome).item()
+
+        policy_accuracy = total_policy_correct / total_policy_total
+        avg_value_loss = total_value_loss / len(dataset)
+
+        return policy_accuracy, avg_value_loss
 
     async def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
@@ -78,7 +127,7 @@ class ModelEvaluation:
         return await self.play_vs_evaluation_model(random_evaluator)
 
     async def play_two_models_search(self, previous_model_iteration: int) -> Results:
-        previous_model = InferenceClient(0, TRAINING_ARGS)
+        previous_model = InferenceClient(0, self.args)
         previous_model.update_iteration(previous_model_iteration)
 
         async def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -90,7 +139,7 @@ class ModelEvaluation:
     async def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(0, TRAINING_ARGS)
+        current_model = InferenceClient(0, self.args)
         current_model.update_iteration(self.iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:

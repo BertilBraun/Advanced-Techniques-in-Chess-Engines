@@ -32,11 +32,6 @@ class TicTacToeGame(Game[TicTacToeMove]):
     def representation_shape(self) -> tuple[int, int, int]:
         return ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT
 
-    @property
-    def average_num_moves_per_game(self) -> int:
-        AVERAGE_NUM_MOVES_PER_GAME = 5
-        return AVERAGE_NUM_MOVES_PER_GAME
-
     def get_canonical_board(self, board: TicTacToeBoard) -> np.ndarray:
         canonical_board = board.board * board.current_player
         return (
@@ -66,6 +61,9 @@ class TicTacToeGame(Game[TicTacToeMove]):
     def symmetric_variations(
         self, board: np.ndarray, action_probabilities: np.ndarray
     ) -> list[tuple[np.ndarray, np.ndarray]]:
+        # Return all 90 degree rotations of the board and action probabilities
+        # In addition a flip + all 90 degree rotations of the board and action probabilities
+        return [(board, action_probabilities)]
         return [
             (  # 90*k degree rotation
                 np.rot90(board, k=k, axes=(1, 2)),

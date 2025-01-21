@@ -51,7 +51,13 @@ class MCTSNode:
 
     @property
     def result_score(self) -> float:
-        return self.parent.children_result_scores[self.my_child_index] / self.number_of_visits if self.parent else 0.0
+        if self.number_of_visits == 0:
+            return -float('inf')
+        return (
+            self.parent.children_result_scores[self.my_child_index]
+            if self.parent
+            else np.sum(self.children_result_scores)
+        ) / self.number_of_visits
 
     def expand(self, moves_with_scores: list[tuple[CurrentGameMove, float]]) -> None:
         if self.is_fully_expanded:
@@ -94,7 +100,7 @@ class MCTSNode:
         number_of_visits = self.children_number_of_visits[positive_visits_mask]
 
         q_score = np.zeros(len(self.children), dtype=np.float32)
-        q_score[positive_visits_mask] = 1 + ((result_scores + virtual_losses) / number_of_visits + 1) / 2
+        q_score[positive_visits_mask] = 1 - ((result_scores + virtual_losses) / number_of_visits + 1) / 2
 
         visits_quotient = np.sqrt(self.number_of_visits) / (1 + self.children_number_of_visits)
 
@@ -108,13 +114,15 @@ class MCTSNode:
         return best_child
 
     def __repr__(self) -> str:
-        if not self.parent:
-            return 'MCTSRootNode'
+        if not self.is_fully_expanded:
+            return 'MCTSNode(not expanded)'
         return f"""AlphaMCTSNode(
 {repr(self.board) if self.board else None}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
-virtual loss: {self.parent.children_virtual_losses[self.my_child_index]}
-move: {self.move_to_get_here}
-children: {len(self.children)}
+child visits: {self.children_number_of_visits}
+child policy: {np.round(self.children_policies, 2)}
+child moves: {[child.move_to_get_here for child in self.children]}
+child scores: {np.round(self.children_result_scores, 2)}
+best_move: {self.children[np.argmax(self.children_number_of_visits)].move_to_get_here if self.children else None}
 )"""

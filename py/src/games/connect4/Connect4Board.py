@@ -62,3 +62,10 @@ class Connect4Board(Board[Connect4Move]):
 
     def is_game_over(self) -> bool:
         return self._winner is not None or self.is_full()
+
+    def quick_hash(self) -> int:
+        return hash(self.board.tobytes())
+
+    def __repr__(self) -> str:
+        rows = [f'|{"|".join(" XO"[cell] for cell in row)}|' for row in self.board]
+        return '\n'.join(rows)

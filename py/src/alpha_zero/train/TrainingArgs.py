@@ -115,6 +115,9 @@ class EvaluationParams:
     every_n_iterations: int
     """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
 
+    dataset_path: str
+    """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""
+
 
 @dataclass
 class InferenceParams:

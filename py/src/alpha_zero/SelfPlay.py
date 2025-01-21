@@ -111,14 +111,14 @@ class SelfPlay:
         self.self_play_games = self.self_play_games - Counter()
         assert all(count > 0 for count in self.self_play_games.values())
 
-        reset_times()
-        log(
-            'Cache hit rate:',
-            self.client.total_hits / self.client.total_evals,
-            'on',
-            self.client.total_evals,
-            'evaluations',
-        )
+        # TODO reset_times()
+        # TODO log(
+        # TODO     'Cache hit rate:',
+        # TODO     self.client.total_hits / self.client.total_evals,
+        # TODO     'on',
+        # TODO     self.client.total_evals,
+        # TODO     'evaluations',
+        # TODO )
 
     @timeit
     def _sample_self_play_game(
@@ -170,8 +170,8 @@ class SelfPlay:
     def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
-        log(f'Adding training data for game with result {result}')
-        log(f'Game moves: {spg.played_moves}')
+        # log(f'Adding training data for game with result {result}')
+        # log(f'Game moves: {spg.played_moves}')
 
         self.dataset.add_generation_stats(num_games=1, generation_time=time.time() - spg.start_generation_time)
 

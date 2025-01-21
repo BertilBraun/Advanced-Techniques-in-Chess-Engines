@@ -16,7 +16,7 @@ class CommonHumanPlayer(HumanPlayer):
         """Initializes the human player."""
         _, rows, cols = CurrentGame.representation_shape
         if hasattr(CurrentBoard(), 'board_dimensions'):
-            rows, cols = CurrentBoard().board_dimensions
+            rows, cols = CurrentBoard().board_dimensions  # type: ignore
         gui = BaseGridGameGUI(rows, cols)
         super().__init__(gui, CurrentGameVisuals)
 
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     if HUMAN_PLAY:
         MAX_TIME_TO_THINK = 1.0
-        NETWORK_ONLY = True
+        NETWORK_ONLY = False
 
         game_manager = GameManager(
             CommonHumanPlayer(),

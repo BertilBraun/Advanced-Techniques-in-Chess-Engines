@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop'
+USAGE_FOLDER = R'C:\Users\berti\OneDrive\Desktop\zip6\zip'
 
 
 def load_usage(folder_path: str) -> pd.DataFrame:

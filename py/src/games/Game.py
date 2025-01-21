@@ -29,11 +29,6 @@ class Game(ABC, Generic[_Move]):
         """(num_channels, height, width)"""
         pass
 
-    @property
-    @abstractmethod
-    def average_num_moves_per_game(self) -> int:
-        pass
-
     @abstractmethod
     def get_canonical_board(self, board: Board[_Move]) -> np.ndarray:
         """Returns a canonical representation of the board from the perspective of the current player.

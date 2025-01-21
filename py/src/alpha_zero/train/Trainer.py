@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader
 import torch.utils.data.dataloader
 from tqdm import tqdm
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayTrainDataset
 from src.Network import Network
 from src.settings import log_scalar
 from src.alpha_zero.train.TrainingArgs import TrainingParams
@@ -137,14 +136,12 @@ class Trainer:
         self.optimizer = optimizer
         self.args = args
 
-    def train(self, dataset: SelfPlayTrainDataset, iteration: int) -> TrainingStats:
+    def train(self, dataloader: DataLoader, iteration: int) -> TrainingStats:
         """
         Train the model with the given memory.
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        dataloader = DataLoader(dataset, batch_size=self.args.batch_size, num_workers=self.args.num_workers)
-
         train_stats = TrainingStats()
         base_lr = self.args.learning_rate(iteration)
         log_scalar('learning_rate', base_lr, iteration)
@@ -160,7 +157,8 @@ class Trainer:
 
             out_policy, out_value = self.model(state)
 
-            policy_loss = F.cross_entropy(out_policy, policy_targets)
+            # policy_loss = F.cross_entropy(out_policy, policy_targets)
+            policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
 

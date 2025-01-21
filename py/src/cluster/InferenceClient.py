@@ -36,6 +36,7 @@ class InferenceClient:
         Slighly optimizes the model for inference and resets the cache and stats."""
 
         self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
+        # self.model = load_model(R'C:\Users\berti\OneDrive\Desktop\zip6\zip\model_64.pt', self.args.network, self.device)
         self.model.disable_auto_grad()
         self.model = self.model.eval()
         self.model.fuse_model()
@@ -134,6 +135,10 @@ class InferenceClient:
 
         results = results.to(dtype=torch.float32, device='cpu').numpy()
 
+        return [
+            (np.full_like(result[:-1], 1 / CurrentGame.action_size), 0.0)  # TODO
+            for result in results
+        ]
         return [(result[:-1], result[-1]) for result in results]
 
     @timeit

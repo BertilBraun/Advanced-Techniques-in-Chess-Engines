@@ -3,7 +3,7 @@ import torch
 
 from src.alpha_zero.SelfPlayDataset import SelfPlayDataset, SelfPlayTrainDataset
 from src.alpha_zero.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU, log_scalar, CurrentGame
+from src.settings import USE_GPU, log_scalar, tensorboard_writer
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
@@ -17,7 +17,7 @@ def run_trainer_process(args: TrainingArgs, commander_pipe: PipeConnection, devi
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     trainer_process = TrainerProcess(args, device_id, commander_pipe)
-    with log_exceptions('Trainer process'):
+    with log_exceptions('Trainer process'), tensorboard_writer():
         trainer_process.run()
 
 
@@ -54,8 +54,9 @@ class TrainerProcess:
         for epoch in range(self.args.training.num_epochs):
             # Only loads a light wrapper around the entire dataset
             dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+            dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
 
-            epoch_train_stats = trainer.train(dataset, iteration)
+            epoch_train_stats = trainer.train(dataloader, iteration)
             log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
 
@@ -67,12 +68,16 @@ class TrainerProcess:
         return train_stats
 
     def _wait_for_enough_training_samples(self, iteration):
-        EXPECTED_NUM_SAMPLES = self.args.num_games_per_iteration * CurrentGame.average_num_moves_per_game
-
         i = 0
-        while (samples := len(SelfPlayDataset.load_iteration(self.args.save_path, iteration))) < EXPECTED_NUM_SAMPLES:
+        while True:
+            num_games = SelfPlayDataset.load_iteration(self.args.save_path, iteration).stats.num_games
+            if num_games >= self.args.num_games_per_iteration:
+                break
+
             if i % 30 == 0:
-                log(f'Waiting for enough samples for iteration {iteration} ({samples} < {EXPECTED_NUM_SAMPLES})')
+                log(
+                    f'Waiting for enough samples for iteration {iteration} ({num_games} < {self.args.num_games_per_iteration})'
+                )
             i += 1
             time.sleep(1)
 
