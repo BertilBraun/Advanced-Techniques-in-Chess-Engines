@@ -173,7 +173,7 @@ elif True:
         num_searches_per_turn=60,
         num_games=40,
         every_n_iterations=5,
-        dataset_path='reference/memory_0_chess_database.hdf5',
+        dataset_path='reference/memory_1_chess_database.hdf5',
     )
 
     PARALLEL_GAMES = 64

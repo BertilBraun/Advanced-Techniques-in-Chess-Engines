@@ -8,7 +8,6 @@ from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter
 from src.train.Trainer import Trainer
-from src.util.save_paths import save_model_and_optimizer
 
 NUM_EPOCHS = 20
 BATCH_SIZE = 256
@@ -42,6 +41,8 @@ if __name__ == '__main__':
     dataset = SelfPlayDataset()
     for dataset_path in dataset_paths:
         dataset += SelfPlayDataset.load(dataset_path)
+    dataset.deduplicate()
+
     train, test = torch.utils.data.random_split(
         dataset, [int(DATASET_PERCENTAGE * len(dataset)), len(dataset) - int(DATASET_PERCENTAGE * len(dataset))]
     )

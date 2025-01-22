@@ -46,7 +46,7 @@ def process_month(year: int, month: int):
         content = zip_ref.read(zip_ref.namelist()[0]).decode('utf-8')
 
     content = io.StringIO(content)
-    for _ in trange(500):
+    for _ in trange(2000):
         if not (game := chess.pgn.read_game(content)):
             break
         winner = eval(game.headers['Result'])
