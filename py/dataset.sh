@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=dataset              # job name
-#SBATCH --partition=cpuonly            # mby GPU queue for the resource allocation.
+#SBATCH --partition=dev_cpuonly            # mby GPU queue for the resource allocation.
 #SBATCH --time=00:30:00                    # wall-clock time limit
 #SBATCH --mem=100000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used

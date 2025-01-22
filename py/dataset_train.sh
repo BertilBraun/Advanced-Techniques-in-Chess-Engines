@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=dataset_train              # job name
-#SBATCH --partition=accelerated-h100            # mby GPU queue for the resource allocation.
+#SBATCH --partition=dev_accelerated-h100            # mby GPU queue for the resource allocation.
 #SBATCH --time=01:00:00                    # wall-clock time limit
 #SBATCH --mem=200000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
