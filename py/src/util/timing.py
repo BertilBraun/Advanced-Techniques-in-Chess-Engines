@@ -54,8 +54,9 @@ def reset_times():
             log_scalars(
                 f'function_time/{key}',
                 {
-                    'time': global_function_times[key] / global_total_time,
-                    'invocations': global_function_invocations[key] / global_total_time,
+                    'time_percent': global_function_times[key] / global_total_time * 100,
+                    'time_total': global_function_times[key],
+                    'invocations': global_function_invocations[key],
                 },
                 id,
             )

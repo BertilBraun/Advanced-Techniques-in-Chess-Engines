@@ -35,7 +35,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             dataset = SelfPlayDataset.load_iteration(folder_path, iteration)
             log_scalar('num_games', dataset.stats.num_games, iteration)
             log_scalar('num_resignations', dataset.stats.resignations, iteration)
-            log_scalar('average_resignations', dataset.stats.resignations / dataset.stats.num_games, iteration)
+            log_scalar(
+                'average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, iteration
+            )
             log_scalar('num_samples', len(dataset), iteration)
             log_scalar('total_generation_time', dataset.stats.total_generation_time, iteration)
             log_scalar(

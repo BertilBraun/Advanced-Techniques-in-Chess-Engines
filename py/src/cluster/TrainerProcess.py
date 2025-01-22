@@ -75,17 +75,10 @@ class TrainerProcess:
 
     @timeit
     def _wait_for_enough_training_samples(self, iteration):
-        i = 0
-        while True:
-            num_games = SelfPlayDataset.load_iteration(self.args.save_path, iteration).stats.num_games
-            if num_games >= self.args.num_games_per_iteration:
-                break
-
-            if i % 30 == 0:
-                log(
-                    f'Waiting for enough samples for iteration {iteration} ({num_games} < {self.args.num_games_per_iteration})'
-                )
-            i += 1
+        while (
+            SelfPlayDataset.load_iteration(self.args.save_path, iteration).stats.num_games
+            < self.args.num_games_per_iteration
+        ):
             time.sleep(1)
 
     def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats) -> None:
