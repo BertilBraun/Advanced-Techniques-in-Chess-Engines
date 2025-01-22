@@ -1,12 +1,12 @@
 import asyncio
 import numpy as np
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.settings import log_scalar, CurrentGame, CurrentBoard, tensorboard_writer
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.self_play.train.TrainingArgs import TrainingArgs
 
 
 def run_evaluation_process(args: TrainingArgs, iteration: int):

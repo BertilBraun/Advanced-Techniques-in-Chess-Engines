@@ -91,11 +91,12 @@ class MCTSNode:
             result = -result
             node = node.parent
 
-    def best_child(self, c_param: float) -> MCTSNode:
+    def best_child(self, c_param: float, min_visit_count: int) -> MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
         # NOTE moving the calculations into seperate functions slowed this down by 2x, so it's all in here
         best_child_index = _best_child_index(
             c_param,
+            min_visit_count,
             self.children_number_of_visits,
             self.children_result_scores,
             self.children_virtual_losses,
@@ -124,12 +125,18 @@ best_move: {self.children[np.argmax(self.children_number_of_visits)].move_to_get
 @njit
 def _best_child_index(
     c_param: float,
+    min_visit_count: int,
     children_number_of_visits: np.ndarray,
     children_result_scores: np.ndarray,
     children_virtual_losses: np.ndarray,
     children_policies: np.ndarray,
     own_number_of_visits: int,
 ) -> int:
+    # if a child has < min_visit_count visits, it should be selected first
+    low_visits_mask = children_number_of_visits < min_visit_count
+    if np.any(low_visits_mask):
+        return np.argmax(low_visits_mask).item()
+
     positive_visits_mask = children_number_of_visits > 0
 
     result_scores = children_result_scores[positive_visits_mask]

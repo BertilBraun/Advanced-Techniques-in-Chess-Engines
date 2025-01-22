@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 from src.Network import Network
-from src.alpha_zero.train.TrainingArgs import NetworkParams
+from src.train.TrainingArgs import NetworkParams
 from src.util.compile import try_compile
 from src.util.log import log
 

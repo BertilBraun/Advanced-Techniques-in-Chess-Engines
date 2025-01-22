@@ -7,10 +7,10 @@ from tqdm import tqdm
 
 from src.Network import Network
 from src.settings import log_scalar
-from src.alpha_zero.train.TrainingArgs import TrainingParams
-from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.train.TrainingArgs import TrainingParams
+from src.train.TrainingStats import TrainingStats
 from src.util.log import log
-from src.util.profiler import timeit
+from src.util.timing import timeit
 
 # DONE AlphaZero simply maintains a single neural network that is updated continually, rather than waiting for an iteration to complete
 # DONE do so, save model after each epoch, use smaller num_parallel_games

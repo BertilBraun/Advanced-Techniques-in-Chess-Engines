@@ -58,6 +58,7 @@ The training pipeline follows these steps:
 Several optimizations have been implemented to enhance performance and scalability and to scale the training process across multiple nodes and GPUs. Refer to the following sections for more details:
 
 - [Inference Optimization](documentation/optimizations/inference.md)
+- [MCTS Optimization](documentation/optimizations/mcts.md)
 - [Inference Architecture Optimization](documentation/optimizations/architecture.md)
 - [Training Optimization](documentation/optimizations/training.md)
 - [Evaluation](documentation/optimizations/evaluation.md)

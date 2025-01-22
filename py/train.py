@@ -27,7 +27,7 @@ if __name__ == '__main__':
     with tensorboard_writer():
         import pprint
 
-        log_text('Training args:', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
+        log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
     commander = CommanderProcess(TRAINING_ARGS)
     for iteration, stats in commander.run():

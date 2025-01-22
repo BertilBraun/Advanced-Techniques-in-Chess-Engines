@@ -19,14 +19,16 @@ DONE evaluate against a database of "pro-Moves" !!! High prio
 DONE continue to save all These logs which are now produced
 
 DONE log everything to tensorboard, also stuff like the Timings, game gen times, generated games, generated samples etc
+DONE time more of the entire project
+
 
 
 TODO build up a database of pro-Moves for Chess automatically
 
-TODO build in the reuse of the search trees for the next Iteration
+DONE build in the reuse of the search trees for the next Iteration
+DONE document that
 
 
-DONE time more of the entire project
 
 
 

@@ -4,6 +4,10 @@
 
 We developed a system usage logger, which logs the CPU and RAM usage of each process and the GPU usage of all GPUs. This way, we can monitor the system usage during training and optimize the system usage. The system usage logger logs the system usage to a file and the data can be visualized in a graph. This way, we can monitor the system usage during training and optimize the system usage.
 
+## Statistics Gathering and Monitoring
+
+Keeping statistics about the training process, like the win rate against different opponents, the loss of the model, the training speed, the inference speed, the system usage, resigantion rate, log the played games so that they can be analyzed later, win rate vs stronger baselines (f.e. Stockfish on different levels (4)) etc. This way, the training process can be monitored and optimized.
+
 ## Profiling
 
 Using `viztracer`, the code was profiled to find bottlenecks and optimize the code. Especially the MCTS search is a constant bottleneck and was optimized to be faster. The parallelization techniques applicable to the MCTS search were applied but the Python GIL was a constant bottleneck which does not allow for full parallelization. A `Cython` implementation of the MCTS search could be a possible optimization, but was not pursued in this project. A `C++` implementation of the MCTS search stands to be the most promising optimization, and might be pursued in the future (see [Self-Play Problem](inference.md#torch-optimizations)).

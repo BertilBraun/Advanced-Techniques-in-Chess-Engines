@@ -5,16 +5,16 @@ import numpy as np
 from collections import Counter
 from dataclasses import dataclass
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.cluster.InferenceClient import InferenceClient
+from src.util import lerp
 from src.mcts.MCTS import MCTS
+from src.mcts.MCTSNode import MCTSNode
 from src.mcts.MCTSArgs import MCTSArgs
+from src.cluster.InferenceClient import InferenceClient
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
-from src.alpha_zero.train.TrainingArgs import SelfPlayParams
-from src.util import lerp
-from src.util.log import log
-from src.util.profiler import reset_times, timeit
+from src.train.TrainingArgs import SelfPlayParams
+from src.util.timing import reset_times, timeit
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ class SelfPlayGame:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
+        self.already_expanded_node: MCTSNode | None = None
         self.num_played_moves = 0
         self.start_generation_time = time.time()
 
@@ -73,26 +74,28 @@ class SelfPlay:
 
     @timeit
     async def self_play(self) -> None:
-        mcts_results = await self.mcts.search([spg.board for spg in self.self_play_games])
+        mcts_results = await self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
 
         current_self_play_games = list(self.self_play_games.items())
-        for (spg, count), (action_probabilities, result_score) in zip(current_self_play_games, mcts_results):
-            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), action_probabilities.copy(), result_score))
+        for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
+            spg.memory.append(
+                SelfPlayGameMemory(spg.board.copy(), mcts_result.action_probabilities.copy(), mcts_result.result_score)
+            )
 
-            if result_score < self.args.resignation_threshold:
+            if mcts_result.result_score < self.args.resignation_threshold:
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
-                self._add_training_data(spg, result_score)
+                self._add_training_data(spg, mcts_result.result_score, resignation=True)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
             for _ in range(count):
                 self.self_play_games[spg] -= 1
 
-                spg_action_probabilities = action_probabilities.copy()
+                spg_action_probabilities = mcts_result.action_probabilities.copy()
 
                 while np.sum(spg_action_probabilities) > 0:
-                    new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities)
+                    new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
                     if self.self_play_games[new_spg] > 0:
                         # Already exploring this state, so remove the probability of this move and try again
@@ -104,7 +107,9 @@ class SelfPlay:
                 else:
                     # No valid moves left which are not already being explored
                     # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
-                    new_spg, _ = self._sample_self_play_game(spg, action_probabilities)
+                    new_spg, _ = self._sample_self_play_game(
+                        spg, mcts_result.action_probabilities, mcts_result.children
+                    )
                     self.self_play_games[new_spg] += 1
 
         # remove spgs with count 0
@@ -115,7 +120,7 @@ class SelfPlay:
 
     @timeit
     def _sample_self_play_game(
-        self, current: SelfPlayGame, action_probabilities: np.ndarray
+        self, current: SelfPlayGame, action_probabilities: np.ndarray, children: list[MCTSNode]
     ) -> tuple[SelfPlayGame, CurrentGameMove]:
         # Sample a move from the action probabilities then create a new game state with that move
         # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
@@ -128,6 +133,7 @@ class SelfPlay:
             move = self._sample_move(action_probabilities, self.args.temperature)
 
         new_spg = current.expand(move)
+        new_spg.already_expanded_node = next(child for child in children if child.move_to_get_here == move)
 
         if not new_spg.board.is_game_over():
             return new_spg, move
@@ -135,7 +141,7 @@ class SelfPlay:
         # Game is over, add the game to the dataset
         result = get_board_result_score(new_spg.board)
         assert result is not None, 'Game should not be over if result is None'
-        self._add_training_data(new_spg, result)
+        self._add_training_data(new_spg, result, resignation=False)
         return SelfPlayGame(), move
 
     def _get_mcts(self, iteration: int) -> MCTS:
@@ -147,6 +153,7 @@ class SelfPlay:
                 dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
                 dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
                 c_param=self.args.mcts.c_param,
+                min_visit_count=self.args.mcts.min_visit_count,
             ),
         )
 
@@ -160,12 +167,16 @@ class SelfPlay:
 
         return CurrentGame.decode_move(action)
 
-    def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
+    def _add_training_data(self, spg: SelfPlayGame, result: float, resignation: bool) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
         self._log_game(spg, result)
 
-        self.dataset.add_generation_stats(num_games=1, generation_time=time.time() - spg.start_generation_time)
+        self.dataset.add_generation_stats(
+            num_games=1,
+            generation_time=time.time() - spg.start_generation_time,
+            resignation=resignation,
+        )
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)

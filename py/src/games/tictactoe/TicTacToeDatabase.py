@@ -8,7 +8,7 @@ from collections import defaultdict
 
 
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.games.tictactoe.TicTacToeGame import TicTacToeGame
 
 

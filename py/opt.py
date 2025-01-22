@@ -3,7 +3,7 @@ import optuna
 from multiprocessing import Process
 
 from src.util.log import log
-from src.alpha_zero.train.TrainingArgs import (
+from src.self_play.train.TrainingArgs import (
     ClusterParams,
     InferenceParams,
     TrainingArgs,

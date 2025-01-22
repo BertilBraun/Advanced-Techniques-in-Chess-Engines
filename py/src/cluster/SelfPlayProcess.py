@@ -1,14 +1,14 @@
 import asyncio
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import tensorboard_writer
 from src.util.log import log
-from src.alpha_zero.SelfPlay import SelfPlay
+from src.self_play.SelfPlay import SelfPlay
 from src.cluster.InferenceClient import InferenceClient
 from src.util.exceptions import log_exceptions
-from src.alpha_zero.train.TrainingArgs import SelfPlayParams, TrainingArgs
+from src.self_play.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
-from src.util.profiler import timeit
+from src.util.timing import timeit
 
 
 def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):

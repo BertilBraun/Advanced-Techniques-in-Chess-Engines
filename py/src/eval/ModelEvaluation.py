@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
@@ -69,10 +69,11 @@ class ModelEvaluation:
 
         self.mcts_args = MCTSArgs(
             num_searches_per_turn=num_searches_per_turn,
-            num_parallel_searches=8,
+            num_parallel_searches=args.self_play.mcts.num_parallel_searches,
             c_param=2,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
+            min_visit_count=0,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float]:
@@ -131,8 +132,8 @@ class ModelEvaluation:
         previous_model.update_iteration(previous_model_iteration)
 
         async def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(previous_model, self.mcts_args).search(boards)
-            return [result[0] for result in results]
+            results = await MCTS(previous_model, self.mcts_args).search([(board, None) for board in boards])
+            return [result.action_probabilities for result in results]
 
         return await self.play_vs_evaluation_model(previous_model_evaluator)
 
@@ -143,8 +144,8 @@ class ModelEvaluation:
         current_model.update_iteration(self.iteration)
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(current_model, self.mcts_args).search(boards)
-            return [result[0] for result in results]
+            results = await MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
+            return [result.action_probabilities for result in results]
 
         results += await self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
         results -= await self._play_two_models_search(evaluation_model, model1, self.num_games // 2)

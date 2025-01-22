@@ -1,15 +1,15 @@
 import time
 import torch
 
-from src.alpha_zero.SelfPlayDataset import SelfPlayDataset, SelfPlayTrainDataset
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.self_play.SelfPlayDataset import SelfPlayDataset, SelfPlayTrainDataset
+from src.self_play.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, log_scalar, tensorboard_writer
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.util.profiler import reset_times, timeit
+from src.util.timing import reset_times, timeit
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
-from src.alpha_zero.train.Trainer import Trainer
-from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.self_play.train.Trainer import Trainer
+from src.self_play.train.TrainingStats import TrainingStats
 from src.util.PipeConnection import PipeConnection
 
 

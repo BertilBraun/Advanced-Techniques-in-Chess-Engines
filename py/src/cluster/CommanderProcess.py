@@ -3,8 +3,8 @@ import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
-from src.alpha_zero.train.TrainingStats import TrainingStats
+from src.self_play.train.TrainingArgs import TrainingArgs
+from src.self_play.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log

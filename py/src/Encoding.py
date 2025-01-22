@@ -5,7 +5,7 @@ from numba import njit
 
 from src.games.Game import Board
 from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
-from src.util.profiler import timeit
+from src.util.timing import timeit
 
 
 _BOARD_SHAPE = CurrentGame.representation_shape

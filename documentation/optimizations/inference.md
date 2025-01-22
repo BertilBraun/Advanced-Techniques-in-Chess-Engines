@@ -35,7 +35,3 @@ As can be seen in the graph, the self-play games are not able to fully utilize t
 ## Multiple GPUs for Self-Play
 
 Because the demand for training samples is so high and the generation of samples still takes a considerable amount of time, multiple GPUs are used in parallel with duplicated setups of many self-players per GPU. This way, the demand for training samples can be met and the training can be performed on a large dataset. The amount of GPUs used is based on the demand for training samples and the time it takes to generate the samples and the time it takes to train the model.
-
-## Early Resignation
-
-To speed up the self-play games, the games are not played out until the very end, but rather a resignation threshold is used. If the model is certain that it will lose the game, the model resigns and the game is not played out until the very end. This way, the self-play games are faster and the training samples are generated faster.

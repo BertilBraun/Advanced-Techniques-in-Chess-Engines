@@ -1,9 +1,5 @@
-from contextlib import contextmanager
-import multiprocessing
-import numpy as np
 import torch
-from tensorboardX import SummaryWriter
-from src.alpha_zero.train.TrainingArgs import (
+from src.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
     InferenceParams,
@@ -14,58 +10,16 @@ from src.alpha_zero.train.TrainingArgs import (
     TrainingParams,
 )
 from src.util import lerp
+from src.util.tensorboard import *
 
-USE_PROFILING = True
 USE_GPU = torch.cuda.is_available()
 # Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 LOG_FOLDER = 'AIZeroConnect4Bot/logs'
 SAVE_PATH = 'AIZeroConnect4Bot/training_data'
-TESTING = True
-
-LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
 PLAY_C_PARAM = 1.0
-
-_TB_SUMMARY: SummaryWriter | None = None
-
-
-def log_scalar(name: str, value: float, iteration: int) -> None:
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
-    _TB_SUMMARY.add_scalar(name, value, iteration)
-
-
-def log_scalars(name: str, values: dict[str, float], iteration: int) -> None:
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
-    _TB_SUMMARY.add_scalars(name, values, iteration)
-
-
-def log_text(name: str, text: str, iteration: int | None = None) -> None:
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
-    _TB_SUMMARY.add_text(name, text, iteration)
-
-
-def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) -> None:
-    if not LOG_HISTOGRAMS:
-        return
-    values = values.reshape(-1)
-    if isinstance(values, torch.Tensor):
-        values = values.cpu().numpy()
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
-    _TB_SUMMARY.add_histogram(name, values, iteration)
-
-
-@contextmanager
-def tensorboard_writer():
-    global _TB_SUMMARY
-    assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
-    _TB_SUMMARY = SummaryWriter(LOG_FOLDER + f'/{multiprocessing.current_process().pid}')
-    try:
-        yield
-    finally:
-        _TB_SUMMARY.close()
-        _TB_SUMMARY = None
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -382,6 +336,7 @@ elif True:
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
                 num_parallel_searches=2,
+                min_visit_count=2,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),

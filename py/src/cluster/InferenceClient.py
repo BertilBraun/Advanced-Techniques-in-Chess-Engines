@@ -7,10 +7,10 @@ from typing import Any, Coroutine, TypeVar
 
 from src.Encoding import encode_board_state
 from src.Network import Network
-from src.alpha_zero.train.TrainingArgs import TrainingArgs
+from src.self_play.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.log import log
-from src.util.profiler import timeit
+from src.util.timing import timeit
 from src.util.save_paths import load_model, model_save_path
 
 

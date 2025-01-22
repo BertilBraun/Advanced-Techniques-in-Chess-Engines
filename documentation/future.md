@@ -1,9 +1,5 @@
 # Future Work
 
-## Faster MCTS Search
-
-In my opinion the MCTS tree of the most visited child should be the most explored already. Why discard all of that prior work when starting the search for that child again? Why not retain that information and continue work from there. Issue with that: The noise which initially gets added to the root priors. Idea: Update that later, once the node is selected as the new root. Then ensure that each node gets an appropriate amount of fixes searches, so that the noise exploration has chance to take effect. I.e. child 2 is selcted. Then the next MCTS search starts with child 2 as the new root node and all of the accompanied expansion and search already done (might need to flip some signs of the scores, not sure). Since these moves were not expanded using a noisy policy (for exploration), we have to remedy that, by adding some noise on the priors of the children of child 2 (the new root). Then we should ensure, that each move gets an appropriate amount of fixes searches (f.e. 10) so that the noise has a chance to take effect. Afterwards, the assumption is, that the passed root node and a fully simulated root node are mostly identical, but building them is way cheaper.
-
 ## Model Quantization for Inference
 
 Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference [docs](https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization).
@@ -15,10 +11,6 @@ Path Consistency ([paper](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf
 ## Better Hyperparameter Optimization using Population Based Training
 
 Population Based Training ([paper](https://arxiv.org/abs/2003.06212)) - seems to be a better hyperparameter optimization technique than bayesian optimization based on their paper. Apparently they only require a single training run instead of the multiple runs for bayesian optimization.
-
-## Statistics Gathering and Monitoring
-
-Keep more statistics about the training process, like the win rate against different opponents, the loss of the model, the training speed, the inference speed, the system usage, resigantion rate, log the played games so that they can be analyzed later, win rate vs stronger baselines (f.e. Stockfish on different levels (4)) etc. This way, the training process can be monitored and optimized.
 
 ## Faster Initial learning
 
