@@ -3,8 +3,8 @@ import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.self_play.train.TrainingArgs import TrainingArgs
-from src.self_play.train.TrainingStats import TrainingStats
+from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
@@ -14,14 +14,17 @@ from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
 
-# setup one Trainer Process
-# setup one CacheLayer Process
-# setup num_inference_nodes InferenceServer Processes
-# setup num_self_play_nodes SelfPlay Processes
-# setup command process, which notifies InferenceServers to load new models and notifies SelfPlay Processes to write to the next iteration
-
 
 class CommanderProcess:
+    """The CommanderProcess is the main process that manages the communication between the Trainer, SelfPlay and InferenceServer processes.
+
+    It starts the Trainer and SelfPlay processes and sends them the current iteration number.
+    Once the Trainer is finished, it receives the training stats from the Trainer.
+    It then starts the EvaluationProcess and sends the new iteration number to the Trainer and SelfPlay processes.
+
+    Once all iterations are done, it sends a STOP message to all processes and waits for them to finish.
+    """
+
     def __init__(self, args: TrainingArgs) -> None:
         self.args = args
 
@@ -62,6 +65,8 @@ class CommanderProcess:
             self.self_play_processes.append(process)
 
     def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
+        """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
+
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
 
         log('Setting up connections...')

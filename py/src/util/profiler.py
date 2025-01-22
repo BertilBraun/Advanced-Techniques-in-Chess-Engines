@@ -1,13 +1,13 @@
 import csv
-import threading
 import time
 import psutil
 import GPUtil
 from datetime import datetime
+from multiprocessing import Process
 
 from src.settings import log_scalar
 
-from src.util.tensorboard import tensorboard_writer
+from src.util.tensorboard import TensorboardWriter
 
 
 # Usage Logger
@@ -18,7 +18,7 @@ def _log_system_usage(interval: float):
     # Get the current process
     process = psutil.Process()
 
-    with open('usage.csv', mode='w', newline='') as file, tensorboard_writer():
+    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter('usage'):
         writer = csv.writer(file)
         # Write header
         writer.writerow(
@@ -59,5 +59,5 @@ def start_usage_logger():
     """
     Starts the system usage logger in a separate daemon thread.
     """
-    logger_thread = threading.Thread(target=_log_system_usage, args=(1.0,), daemon=True)
-    logger_thread.start()
+    logger_process = Process(target=_log_system_usage, args=(1.0,))
+    logger_process.start()

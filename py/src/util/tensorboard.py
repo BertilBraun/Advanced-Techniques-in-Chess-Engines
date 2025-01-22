@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import multiprocessing
-from contextlib import contextmanager
 from tensorboardX import SummaryWriter
 
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
@@ -34,15 +33,19 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
     _TB_SUMMARY.add_histogram(name, values, iteration)
 
 
-@contextmanager
-def tensorboard_writer():
-    from src.settings import LOG_FOLDER
+class TensorboardWriter:
+    def __init__(self, suffix: str = '') -> None:
+        self.suffix = suffix
 
-    global _TB_SUMMARY
-    assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
-    _TB_SUMMARY = SummaryWriter(LOG_FOLDER + f'/{multiprocessing.current_process().pid}')
-    try:
-        yield
-    finally:
+    def __enter__(self):
+        from src.settings import LOG_FOLDER
+
+        global _TB_SUMMARY
+        assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
+        _TB_SUMMARY = SummaryWriter(f'{LOG_FOLDER}/{self.suffix}_{multiprocessing.current_process().pid}')
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        global _TB_SUMMARY
+        assert _TB_SUMMARY is not None, 'No tensorboard writer active'
         _TB_SUMMARY.close()
         _TB_SUMMARY = None

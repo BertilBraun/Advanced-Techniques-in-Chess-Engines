@@ -3,19 +3,21 @@ import numpy as np
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import log_scalar, CurrentGame, CurrentBoard, tensorboard_writer
+from src.settings import log_scalar, CurrentGame, CurrentBoard, TensorboardWriter
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.self_play.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import TrainingArgs
 
 
 def run_evaluation_process(args: TrainingArgs, iteration: int):
     evaluation_process = EvaluationProcess(args)
-    with log_exceptions('Evaluation process'), tensorboard_writer():
+    with log_exceptions('Evaluation process'), TensorboardWriter('evaluation'):
         asyncio.run(evaluation_process.run(iteration))
 
 
 class EvaluationProcess:
+    """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
+
     def __init__(self, args: TrainingArgs) -> None:
         assert args.evaluation, 'Evaluation parameters must be set.'
         self.args = args

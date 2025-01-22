@@ -8,7 +8,7 @@ from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
 from src.games.tictactoe.TicTacToeGame import TicTacToeGame
-from src.settings import TRAINING_ARGS, tensorboard_writer
+from src.settings import TRAINING_ARGS, TensorboardWriter
 from src.train.Trainer import Trainer
 
 # --------------------------
@@ -71,7 +71,7 @@ def train_model(model, dataloader, device, num_epochs, iteration):
 
     print('Training with lr:', TRAINING_ARGS.training.learning_rate(iteration))
 
-    with tensorboard_writer():
+    with TensorboardWriter():
         for epoch in range(num_epochs):
             trainer.train(dataloader, iteration)
             print(f'Epoch {epoch+1}/{num_epochs} done')

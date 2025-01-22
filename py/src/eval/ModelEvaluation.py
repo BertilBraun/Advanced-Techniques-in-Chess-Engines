@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs

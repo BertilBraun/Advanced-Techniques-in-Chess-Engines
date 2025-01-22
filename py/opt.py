@@ -3,7 +3,7 @@ import optuna
 from multiprocessing import Process
 
 from src.util.log import log
-from src.self_play.train.TrainingArgs import (
+from src.train.TrainingArgs import (
     ClusterParams,
     InferenceParams,
     TrainingArgs,
@@ -67,6 +67,7 @@ def objective(trial: optuna.Trial) -> float:
         dirichlet_alpha=lambda _: mcts_dirichlet_alpha,
         c_param=mcts_c_param,
         num_parallel_searches=8,
+        min_visit_count=mcts_num_searches_per_turn // 50,
     )
 
     network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size)
@@ -75,6 +76,7 @@ def objective(trial: optuna.Trial) -> float:
         num_parallel_games=128,
         result_score_weight=self_play_weighting,
         mcts=mcts_params,
+        num_moves_after_which_to_play_greedy=10,
     )
 
     training_params = TrainingParams(

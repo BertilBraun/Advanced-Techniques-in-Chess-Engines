@@ -1,14 +1,13 @@
 import asyncio
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import tensorboard_writer
+from src.settings import TensorboardWriter
 from src.util.log import log
 from src.self_play.SelfPlay import SelfPlay
 from src.cluster.InferenceClient import InferenceClient
 from src.util.exceptions import log_exceptions
-from src.self_play.train.TrainingArgs import SelfPlayParams, TrainingArgs
+from src.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
-from src.util.timing import timeit
 
 
 def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
@@ -16,11 +15,13 @@ def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, de
 
     client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
-    with log_exceptions(f'Self play process {device_id} crashed.'), tensorboard_writer():
+    with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter('self_play'):
         asyncio.run(self_play_process.run())
 
 
 class SelfPlayProcess:
+    """This class provides functionality to run the self play process. It runs self play games and saves the dataset to disk. It listens to the commander for messages to start and stop the self play process."""
+
     def __init__(
         self, client: InferenceClient, args: SelfPlayParams, save_path: str, commander_pipe: PipeConnection
     ) -> None:
@@ -29,7 +30,6 @@ class SelfPlayProcess:
         self.self_play = SelfPlay(client, args)
         self.commander_pipe = commander_pipe
 
-    @timeit
     async def run(self):
         current_iteration = 0
         running = False

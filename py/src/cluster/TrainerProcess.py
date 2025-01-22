@@ -1,15 +1,16 @@
 import time
 import torch
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset, SelfPlayTrainDataset
-from src.self_play.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU, log_scalar, tensorboard_writer
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
+from src.train.TrainingArgs import TrainingArgs
+from src.settings import USE_GPU, log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.timing import reset_times, timeit
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
-from src.self_play.train.Trainer import Trainer
-from src.self_play.train.TrainingStats import TrainingStats
+from src.train.Trainer import Trainer
+from src.train.TrainingStats import TrainingStats
 from src.util.PipeConnection import PipeConnection
 
 
@@ -18,11 +19,13 @@ def run_trainer_process(args: TrainingArgs, commander_pipe: PipeConnection, devi
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     trainer_process = TrainerProcess(args, device_id, commander_pipe)
-    with log_exceptions('Trainer process'), tensorboard_writer():
+    with log_exceptions('Trainer process'), TensorboardWriter('trainer'):
         trainer_process.run()
 
 
 class TrainerProcess:
+    """This class provides functionality to train the model on the self play data. It listens to the commander for messages to start and stop the training process. Once it receives a start message, it waits for enough samples to be available for the current iteration and then trains the model for the specified number of epochs. The training stats are sent back to the commander once training is finished."""
+
     def __init__(self, args: TrainingArgs, device_id: int, commander_pipe: PipeConnection) -> None:
         self.args = args
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')

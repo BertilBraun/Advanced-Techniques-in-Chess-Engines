@@ -7,7 +7,7 @@ from typing import Any, Coroutine, TypeVar
 
 from src.Encoding import encode_board_state
 from src.Network import Network
-from src.self_play.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.log import log
 from src.util.timing import timeit
@@ -18,6 +18,8 @@ T = TypeVar('T')
 
 
 class InferenceClient:
+    """The Inference Client is responsible for batching and caching inference requests. It uses a model to directly infer the policy and value for a given board state on the provided device."""
+
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.args = args
         self.model: Network = None  # type: ignore
