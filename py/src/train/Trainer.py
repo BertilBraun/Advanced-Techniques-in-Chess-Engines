@@ -5,7 +5,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.settings import log_scalar
+from src.settings import TORCH_DTYPE, log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import TrainingStats
 from src.util.log import log
@@ -40,6 +40,10 @@ class Trainer:
             batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
+
+            state = state.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
+            policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
+            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
 
             value_targets = value_targets.unsqueeze(1)
 

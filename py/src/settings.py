@@ -172,11 +172,11 @@ elif True:
     evaluation = EvaluationParams(
         num_searches_per_turn=60,
         num_games=40,
-        every_n_iterations=5,
+        every_n_iterations=2,
         dataset_path='reference/memory_1_chess_database.hdf5',
     )
 
-    PARALLEL_GAMES = 64
+    PARALLEL_GAMES = 32
 
     def dirichlet_alpha(iteration: int) -> float:
         return 0.3
@@ -204,7 +204,7 @@ elif True:
         evaluation=evaluation,
     )
     # TODO remove
-    TRAINING_ARGS = TrainingArgs(
+    TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/chess',
         num_games_per_iteration=32,
