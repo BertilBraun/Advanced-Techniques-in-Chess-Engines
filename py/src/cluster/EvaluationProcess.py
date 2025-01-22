@@ -36,10 +36,21 @@ class EvaluationProcess:
         )
 
         dataset = SelfPlayDataset.load(self.eval_args.dataset_path)
-        policy_accuracy, avg_value_loss = model_evaluation.evaluate_model_vs_dataset(dataset)
-        log(f'Policy Accuracy: {policy_accuracy*100:.2f}%, Value MSE Loss: {avg_value_loss:.4f}')
+        (
+            policy_accuracy_at_1,
+            policy_accuracy_at_5,
+            policy_accuracy_at_10,
+            avg_value_loss,
+        ) = model_evaluation.evaluate_model_vs_dataset(dataset)
+        log(f'Evaluation results at iteration {iteration}:')
+        log(f'    Policy accuracy @1: {policy_accuracy_at_1}')
+        log(f'    Policy accuracy @5: {policy_accuracy_at_5}')
+        log(f'    Policy accuracy @10: {policy_accuracy_at_10}')
+        log(f'    Avg value loss: {avg_value_loss}')
 
-        log_scalar('policy_accuracy', policy_accuracy, iteration)
+        log_scalar('policy_accuracy@1', policy_accuracy_at_1, iteration)
+        log_scalar('policy_accuracy@5', policy_accuracy_at_5, iteration)
+        log_scalar('policy_accuracy@10', policy_accuracy_at_10, iteration)
         log_scalar('value_mse_loss', avg_value_loss, iteration)
 
         results = await model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)

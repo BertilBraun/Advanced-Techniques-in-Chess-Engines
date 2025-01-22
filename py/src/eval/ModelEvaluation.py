@@ -78,7 +78,7 @@ class ModelEvaluation:
             min_visit_count=0,
         )
 
-    def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float]:
+    def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
         device = torch.device('cuda' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
@@ -86,10 +86,12 @@ class ModelEvaluation:
         return self._evaluate_model_vs_dataset(model, dataloader)
 
     @staticmethod
-    def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float]:
+    def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float, float, float]:
         model.eval()
 
-        total_policy_correct = 0
+        total_top1_correct = 0
+        total_top5_correct = 0
+        total_top10_correct = 0
         total_policy_total = 0
         total_value_loss = 0.0
 
@@ -102,25 +104,31 @@ class ModelEvaluation:
 
                 policy_output, value_output = model(board)
 
-                # Policy evaluation
                 policy_pred = torch.softmax(policy_output, dim=1)
-                # get number (k) of moves in each batch
-                # check the top k moves in the policy_pred
-                # sum up how many of the top k probabilities are in the moves
 
                 for i in range(len(moves)):
-                    k = moves[i].sum().to(dtype=torch.int).item()
-                    top_k = policy_pred[i].topk(k).indices
-                    total_policy_correct += (top_k == moves[i].nonzero().squeeze()).sum().item()
-                    total_policy_total += k
+                    top1 = policy_pred[i].topk(1).indices
+                    top5 = policy_pred[i].topk(5).indices
+                    top10 = policy_pred[i].topk(10).indices
+                    true_moves = moves[i].nonzero().squeeze()
 
-                # Value evaluation
+                    if torch.any(top1 == true_moves):
+                        total_top1_correct += 1
+                    if torch.any(top5.unsqueeze(1) == true_moves):
+                        total_top5_correct += 1
+                    if torch.any(top10.unsqueeze(1) == true_moves):
+                        total_top10_correct += 1
+
+                    total_policy_total += 1
+
                 total_value_loss += F.mse_loss(value_output, outcome).item()
 
-        policy_accuracy = total_policy_correct / total_policy_total
+        top1_accuracy = total_top1_correct / total_policy_total
+        top5_accuracy = total_top5_correct / total_policy_total
+        top10_accuracy = total_top10_correct / total_policy_total
         avg_value_loss = total_value_loss / len(dataloader)
 
-        return policy_accuracy, avg_value_loss
+        return top1_accuracy, top5_accuracy, top10_accuracy, avg_value_loss
 
     async def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws

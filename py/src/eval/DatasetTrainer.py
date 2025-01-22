@@ -70,7 +70,13 @@ if __name__ == '__main__':
         train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 
         # Evaluate the model
-        policy_accuracy, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(model, test_dataloader)
-        print(f'Policy Accuracy: {policy_accuracy*100:.2f}%, Avg Value Loss: {avg_value_loss}')
+        policy_at_1, policy_at_5, policy_at_10, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(
+            model, test_dataloader
+        )
+        print(f'Evaluation results at iteration {iter}:')
+        print(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
+        print(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
+        print(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
+        print(f'    Avg value loss: {avg_value_loss}')
 
         torch.save(model.state_dict(), f'reference/model_{iter}.pt')
