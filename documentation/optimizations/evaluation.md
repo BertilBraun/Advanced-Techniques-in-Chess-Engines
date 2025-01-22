@@ -27,3 +27,9 @@ A handcrafted bot or Stockfish is used as a baseline to evaluate the performance
 ### Model vs Previous Iteration
 
 The model is played against the previous evaluation iteration to evaluate the performance of the model. Initially, the model should start out by learning a lot each iteration and the win rate should increase with each iteration. After a certain number of iterations, the win rate should stabilize and as each model plays well, the win rate should be around 50%. A continuous decrease in the win rate might indicate that the model is overfitting or that the training data is not diverse enough.
+
+### Model vs Pro-Database
+
+The model is evaluated without search against a database of (near)-optimal moves. The model should achieve a policy accuracy in the high 90s. This is a good indicator of the model's performance.
+
+As a baseline performance reference, you can use the `src.eval.DatasetTrainer` to train a model on the Pro-Database and evaluate it against the Pro-Database. This way, you can see how well the model trained on perfect data performs. This way, you can see wheather the self-play games even come close to the Pro-Database in terms of policy accuracy.

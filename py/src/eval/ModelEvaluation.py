@@ -7,7 +7,9 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
+from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
@@ -79,20 +81,24 @@ class ModelEvaluation:
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float]:
         device = torch.device('cuda' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
+
+        dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
+        return self._evaluate_model_vs_dataset(model, dataloader)
+
+    @staticmethod
+    def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float]:
         model.eval()
 
         total_policy_correct = 0
         total_policy_total = 0
         total_value_loss = 0.0
 
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True)
-
         with torch.no_grad():
             for batch in dataloader:
                 board, moves, outcome = batch
-                board = board.to(device)
-                moves = moves.to(device)
-                outcome = outcome.to(device).unsqueeze(1)
+                board = board.to(model.device)
+                moves = moves.to(model.device)
+                outcome = outcome.to(model.device).unsqueeze(1)
 
                 policy_output, value_output = model(board)
 
@@ -112,7 +118,7 @@ class ModelEvaluation:
                 total_value_loss += F.mse_loss(value_output, outcome).item()
 
         policy_accuracy = total_policy_correct / total_policy_total
-        avg_value_loss = total_value_loss / len(dataset)
+        avg_value_loss = total_value_loss / len(dataloader)
 
         return policy_accuracy, avg_value_loss
 

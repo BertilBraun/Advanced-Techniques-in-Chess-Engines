@@ -145,7 +145,7 @@ if False:
         ),
     )
 
-elif False:
+elif True:
     from src.games.chess.ChessGame import ChessGame, ChessMove
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessVisuals import ChessVisuals
@@ -160,7 +160,7 @@ elif False:
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    network = NetworkParams(num_layers=12, hidden_size=128)
+    network = NetworkParams(num_layers=12, hidden_size=64)
     training = TrainingParams(
         num_epochs=2,
         batch_size=256,
@@ -173,6 +173,7 @@ elif False:
         num_searches_per_turn=60,
         num_games=40,
         every_n_iterations=5,
+        dataset_path='reference/memory_0_chess_database.hdf5',
     )
 
     PARALLEL_GAMES = 64
@@ -195,6 +196,7 @@ elif False:
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
+                min_visit_count=3,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
@@ -217,6 +219,7 @@ elif False:
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=4,
+                min_visit_count=2,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),

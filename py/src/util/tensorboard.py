@@ -3,28 +3,48 @@ import numpy as np
 import multiprocessing
 from tensorboardX import SummaryWriter
 
+
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
 _TB_SUMMARY: SummaryWriter | None = None
+_HAS_PROMPTED = False
+
+
+def _tb_check_active() -> bool:
+    if _TB_SUMMARY is None:
+        global _HAS_PROMPTED
+        if not _HAS_PROMPTED:
+            from src.util.log import LogLevel, log
+
+            log('Warning: No tensorboard writer active', level=LogLevel.WARNING)
+            _HAS_PROMPTED = True
+        return False
+    return True
 
 
 def log_scalar(name: str, value: float, iteration: int) -> None:
+    if not _tb_check_active():
+        return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
 def log_scalars(name: str, values: dict[str, float], iteration: int) -> None:
+    if not _tb_check_active():
+        return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_scalars(name, values, iteration)
 
 
 def log_text(name: str, text: str, iteration: int | None = None) -> None:
+    if not _tb_check_active():
+        return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_text(name, text, iteration)
 
 
 def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) -> None:
-    if not LOG_HISTOGRAMS:
+    if not LOG_HISTOGRAMS or not _tb_check_active():
         return
     values = values.reshape(-1)
     if isinstance(values, torch.Tensor):

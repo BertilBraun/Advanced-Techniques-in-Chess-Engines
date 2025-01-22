@@ -16,17 +16,6 @@ My idea to overcome this problem is to use grandmaster games and stockfish evalu
 
 With parallelization, we can generate the training data for the model in a reasonable amount of time. We can use the cluster to generate the training data for the model. We generated about 28mil samples from mainly the lichess evaluations over 2h on 32 threads of the cluster.
 
-To generate the training data, we use the following steps:
-
-```bash
-cd train
-./data_generator.sh
-or
-sbatch data_generator.sh
-```
-
-The hope is, that the teacher like initialization for the model, will also counteract the problem of the collapsed value head as the model is initially trained on good data with diverse evaluations.
-
 ## **Results:**
 
 TBD
