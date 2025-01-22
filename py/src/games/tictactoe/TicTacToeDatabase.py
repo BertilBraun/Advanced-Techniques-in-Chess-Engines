@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections import defaultdict
+import numpy as np
+
 from pathlib import Path
 from typing import Dict, Tuple, List
-
-import numpy as np
+from collections import defaultdict
 
 
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard

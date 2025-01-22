@@ -14,6 +14,7 @@ from src.Encoding import decode_board_state, encode_board_state
 from src.settings import TORCH_DTYPE, CurrentGame, log_histogram, log_scalar
 from src.util.log import log
 from src.util import random_id
+from src.util.profiler import timeit
 
 
 class SelfPlayDatasetStats(NamedTuple):
@@ -87,6 +88,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         new_dataset.stats = self.stats + other.stats
         return new_dataset
 
+    @timeit
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
         mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.float32], float]]] = {}
@@ -109,6 +111,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.policy_targets = [policy_target / count for count, (policy_target, _) in mp.values()]
         self.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
 
+    @timeit
     def shuffle(self) -> SelfPlayDataset:
         indices = np.arange(len(self))
         np.random.shuffle(indices)
@@ -120,6 +123,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         shuffled_dataset.stats = self.stats
         return shuffled_dataset
 
+    @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
@@ -153,9 +157,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return [file_path for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
-        if not suffix:
-            suffix = random_id()
-        file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
+        if suffix:
+            file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
+        else:
+            while True:
+                file_path = Path(folder_path) / f'memory_{iteration}_{random_id()}.hdf5'
+                if not file_path.exists():
+                    break
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # write a h5py file with states, policy targets and value targets in it
@@ -268,6 +276,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             except Exception:
                 pass
 
+    @timeit
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.sample_index >= len(self.active_states):
             self.active_states, self.active_policies, self.active_values = self._load_samples()
@@ -283,6 +292,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
     def __len__(self) -> int:
         return self.stats.num_samples
 
+    @timeit
     def _load_samples(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
         chunks_to_load = self.all_chunks[:3]

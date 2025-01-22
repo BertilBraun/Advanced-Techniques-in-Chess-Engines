@@ -63,11 +63,16 @@ class TicTacToeGame(Game[TicTacToeMove]):
     ) -> list[tuple[np.ndarray, np.ndarray]]:
         # Return all 90 degree rotations of the board and action probabilities
         # In addition a flip + all 90 degree rotations of the board and action probabilities
-        return [(board, action_probabilities)]
         return [
             (  # 90*k degree rotation
                 np.rot90(board, k=k, axes=(1, 2)),
                 np.rot90(action_probabilities.reshape(ROW_COUNT, COLUMN_COUNT), k=k).flatten(),
+            )
+            for k in range(4)
+        ] + [
+            (  # 90*k degree rotation + flip
+                np.rot90(np.flip(board, axis=2), k=k, axes=(1, 2)),
+                np.rot90(np.flip(action_probabilities.reshape(ROW_COUNT, COLUMN_COUNT), axis=1), k=k).flatten(),
             )
             for k in range(4)
         ]

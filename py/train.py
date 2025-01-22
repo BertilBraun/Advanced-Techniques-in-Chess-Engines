@@ -14,6 +14,7 @@ if __name__ == '__main__':
     from src.util.log import log
     from src.settings import TRAINING_ARGS, USE_GPU
     from src.util.profiler import start_usage_logger
+    from src.settings import tensorboard_writer, log_text
     from src.cluster.CommanderProcess import CommanderProcess
 
     log('Starting training')
@@ -22,6 +23,11 @@ if __name__ == '__main__':
     log(TRAINING_ARGS, use_pprint=True)
 
     start_usage_logger()
+
+    with tensorboard_writer():
+        import pprint
+
+        log_text('Training args:', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
     commander = CommanderProcess(TRAINING_ARGS)
     for iteration, stats in commander.run():

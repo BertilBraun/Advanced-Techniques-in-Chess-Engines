@@ -5,10 +5,10 @@ import psutil
 import GPUtil
 from datetime import datetime
 
-from src.settings import USE_PROFILING
+from src.settings import USE_PROFILING, log_scalar, log_scalars
 from functools import wraps
 
-from src.util.log import log
+from src.util.log import LogLevel, log
 
 
 # Usage Logger
@@ -100,18 +100,29 @@ def timeit(func):
 
 def reset_times():
     global function_times
-    log('=' * 80)
-    log('Resetting function times')
     total_time = sum(function_times.values())
     for key, value in function_times.items():
         global_function_times[key] = global_function_times.get(key, 0.0) + value
     global_total_time = sum(global_function_times.values())
 
     if total_time > 0:
+        id = int((time.time() - start_timing_time) * 1000)
         for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
-            log(
-                f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}'
+            log_scalars(
+                f'function_time/{key}',
+                {
+                    'time': global_function_times[key] / global_total_time,
+                    'invocations': global_function_invocations[key] / global_total_time,
+                },
+                id,
             )
+            log(
+                f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}',
+                level=LogLevel.DEBUG,
+            )
+
+        log_scalar('function_time/total', global_total_time / (time.time() - start_timing_time), id)
+        log(f'In total: {global_total_time / (time.time() - start_timing_time):.2%} recorded', level=LogLevel.DEBUG)
 
         log(f'In total: {global_total_time / (time.time() - start_timing_time):.2%} recorded')
 

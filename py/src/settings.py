@@ -36,6 +36,16 @@ def log_scalar(name: str, value: float, iteration: int) -> None:
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
+def log_scalars(name: str, values: dict[str, float], iteration: int) -> None:
+    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    _TB_SUMMARY.add_scalars(name, values, iteration)
+
+
+def log_text(name: str, text: str, iteration: int | None = None) -> None:
+    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    _TB_SUMMARY.add_text(name, text, iteration)
+
+
 def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) -> None:
     if not LOG_HISTOGRAMS:
         return
@@ -349,9 +359,6 @@ elif True:
     CurrentBoard = TicTacToeBoard
     CurrentGameVisuals = TicTacToeVisuals()
 
-    NN_HIDDEN_SIZE = 32
-    NN_NUM_LAYERS = 8
-
     def dirichlet_alpha(iteration: int) -> float:
         return 1
 
@@ -364,20 +371,17 @@ elif True:
         save_path=SAVE_PATH + '/tictactoe',
         num_games_per_iteration=300,
         inference=InferenceParams(batch_size=128),
-        network=NetworkParams(
-            num_layers=NN_NUM_LAYERS,
-            hidden_size=NN_HIDDEN_SIZE,
-        ),
+        network=NetworkParams(num_layers=8, hidden_size=16),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=1,
+            num_parallel_games=5,
             num_moves_after_which_to_play_greedy=5,
             mcts=MCTSParams(
                 num_searches_per_turn=60,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
-                num_parallel_searches=1,
+                num_parallel_searches=2,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),

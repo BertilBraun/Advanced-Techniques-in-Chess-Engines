@@ -9,7 +9,7 @@ from src.alpha_zero.SelfPlayDataset import SelfPlayDataset
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.alpha_zero.train.TrainingArgs import SelfPlayParams
 from src.util import lerp
@@ -111,14 +111,7 @@ class SelfPlay:
         self.self_play_games = self.self_play_games - Counter()
         assert all(count > 0 for count in self.self_play_games.values())
 
-        # TODO reset_times()
-        # TODO log(
-        # TODO     'Cache hit rate:',
-        # TODO     self.client.total_hits / self.client.total_evals,
-        # TODO     'on',
-        # TODO     self.client.total_evals,
-        # TODO     'evaluations',
-        # TODO )
+        reset_times()
 
     @timeit
     def _sample_self_play_game(
@@ -170,8 +163,7 @@ class SelfPlay:
     def _add_training_data(self, spg: SelfPlayGame, result: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
-        # log(f'Adding training data for game with result {result}')
-        # log(f'Game moves: {spg.played_moves}')
+        self._log_game(spg, result)
 
         self.dataset.add_generation_stats(num_games=1, generation_time=time.time() - spg.start_generation_time)
 
@@ -185,3 +177,7 @@ class SelfPlay:
                     lerp(result, mem.result_score, self.args.result_score_weight),
                 )
             result = -result
+
+    def _log_game(self, spg: SelfPlayGame, result: float) -> None:
+        moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])
+        log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')

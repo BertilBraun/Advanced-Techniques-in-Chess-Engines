@@ -4,6 +4,8 @@
 
 Using torch optimization techniques like `torch.compile`, model fusing of Conv2d, BatchNorm2d and ReLU, as well as the use of `bfloat16` for the entire inference pipeline greatly improved the inference speed. The model was compiled with `torch.compile` and the model was fused with `torch.quantization.fuse_modules`. The model was then inferenced using `bfloat16`, which is a 16-bit floating point number with 8 bits of exponent and 7 bits of mantissa. This greatly reduced the memory footprint and increased the inference speed.
 
+Additionally, parts of the MCTS search and data handling were compiled using `numba` and `njit`. This greatly improved the inference speed of the MCTS search and the data handling up to 30x.
+
 ![Fuse Compile Inference Speed](../fuse_compile_inference_speed.png)
 
 ## Caching

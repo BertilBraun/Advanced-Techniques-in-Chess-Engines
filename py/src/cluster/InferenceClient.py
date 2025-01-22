@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Coroutine, TypeVar
-import numpy as np
 import torch
+import asyncio
+import numpy as np
+from typing import Any, Coroutine, TypeVar
 
 from src.Encoding import encode_board_state
 from src.Network import Network
@@ -62,7 +62,7 @@ class InferenceClient:
         Results will be available once either the batch size is reached or the flush method is called."""
 
         canonical_board = CurrentGame.get_canonical_board(board)
-        board_hash = self._get_board_hash(canonical_board)
+        board_hash = _get_board_hash(canonical_board)
 
         self.total_evals += 1
 
@@ -141,9 +141,11 @@ class InferenceClient:
         ]
         return [(result[:-1], result[-1]) for result in results]
 
-    @timeit
-    def _get_board_hash(self, board: np.ndarray) -> bytes:
-        variation_hashes: list[bytes] = []
-        for variation in (board, np.flip(board, axis=2)):  # TODO assuming, that a vertical flip is a valid symmetry
-            variation_hashes.append(encode_board_state(variation).tobytes())
-        return min(variation_hashes)
+
+@timeit
+def _get_board_hash(board: np.ndarray) -> bytes:
+    variation_hashes: list[bytes] = []
+    # TODO assuming, that a vertical flip is a valid symmetry
+    for variation in (board, np.flip(board, axis=2)):
+        variation_hashes.append(encode_board_state(variation).tobytes())
+    return min(variation_hashes)

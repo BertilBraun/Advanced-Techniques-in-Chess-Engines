@@ -88,7 +88,10 @@ class CommanderProcess:
 
         log('Training complete. Sending STOP to all processes.')
         for pipe in self._all_pipes():
-            pipe.send('STOP')
+            try:
+                pipe.send('STOP')
+            except BrokenPipeError:
+                pass
 
         self.trainer_process.kill()
         for process in self.self_play_processes:

@@ -2,6 +2,7 @@ tqdm
 h5py
 torch
 numpy
+numba
 optuna
 tensorboardX
 chess

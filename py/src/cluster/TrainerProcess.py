@@ -6,6 +6,7 @@ from src.alpha_zero.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, log_scalar, tensorboard_writer
 from src.util.exceptions import log_exceptions
 from src.util.log import log
+from src.util.profiler import reset_times, timeit
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
 from src.alpha_zero.train.Trainer import Trainer
 from src.alpha_zero.train.TrainingStats import TrainingStats
@@ -37,11 +38,13 @@ class TrainerProcess:
             elif message.startswith('START AT ITERATION:'):
                 iteration = int(message.split(':')[-1])
                 training_stats = self.train(iteration)
+                reset_times()
                 self.commander_pipe.send(training_stats)
                 self.commander_pipe.send('FINISHED')
 
         log('Training process stopped.')
 
+    @timeit
     def train(self, iteration: int) -> TrainingStats:
         model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device, self.args.save_path)
 
@@ -67,6 +70,7 @@ class TrainerProcess:
         self._log_to_tensorboard(iteration, train_stats)
         return train_stats
 
+    @timeit
     def _wait_for_enough_training_samples(self, iteration):
         i = 0
         while True:
@@ -86,6 +90,7 @@ class TrainerProcess:
         log_scalar('value_loss', train_stats.value_loss, iteration)
         log_scalar('total_loss', train_stats.total_loss, iteration)
 
+    @timeit
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayTrainDataset:
         window_size = self.args.training.sampling_window(iteration)
 
