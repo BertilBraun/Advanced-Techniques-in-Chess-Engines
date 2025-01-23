@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import TRAINING_ARGS, TensorboardWriter
+from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame
 from src.train.Trainer import Trainer
 
 NUM_EPOCHS = 20
@@ -60,9 +60,12 @@ if __name__ == '__main__':
     model.print_params()
     print('Number of training samples:', len(train))
 
+    save_folder = f'reference/{CurrentGame.__class__.__name__}'
+    os.makedirs(save_folder, exist_ok=True)
+
     for iter in range(NUM_EPOCHS - 1, -1, -1):
-        if os.path.exists(f'reference/model_{iter}.pt'):
-            model.load_state_dict(torch.load(f'reference/model_{iter}.pt', weights_only=True, map_location=device))
+        if os.path.exists(f'{save_folder}/model_{iter}.pt'):
+            model.load_state_dict(torch.load(f'{save_folder}/model_{iter}.pt', weights_only=True, map_location=device))
             print(f'Loaded model_{iter}.pt')
             break
 
@@ -79,4 +82,4 @@ if __name__ == '__main__':
         print(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
         print(f'    Avg value loss: {avg_value_loss}')
 
-        torch.save(model.state_dict(), f'reference/model_{iter}.pt')
+        torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')

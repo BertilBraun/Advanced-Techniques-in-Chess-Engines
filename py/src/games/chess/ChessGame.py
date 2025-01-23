@@ -157,8 +157,8 @@ class ChessGame(Game[ChessMove]):
             move = self.decode_move(i)
             move_from_row, move_from_col = square_to_index(move.from_square)
             move_to_row, move_to_col = square_to_index(move.to_square)
-            flipped_move_from = index_to_square(BOARD_LENGTH - 1 - move_from_row, move_from_col)
-            flipped_move_to = index_to_square(BOARD_LENGTH - 1 - move_to_row, move_to_col)
+            flipped_move_from = index_to_square(move_from_row, BOARD_LENGTH - 1 - move_from_col)
+            flipped_move_to = index_to_square(move_to_row, BOARD_LENGTH - 1 - move_to_col)
             flipped_index = self.encode_move(chess.Move(flipped_move_from, flipped_move_to, promotion=move.promotion))
             flipped[flipped_index] = prob
         return flipped

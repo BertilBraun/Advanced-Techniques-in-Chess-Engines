@@ -160,7 +160,7 @@ elif True:
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    network = NetworkParams(num_layers=12, hidden_size=64)
+    network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
         num_epochs=2,
         batch_size=256,

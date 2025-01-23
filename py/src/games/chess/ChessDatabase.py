@@ -80,12 +80,10 @@ if __name__ == '__main__':
     month_start = int(sys.argv[2])
     month_end = int(sys.argv[3])
 
-    processes: list[Process] = []
-    for month in range(month_start, month_end + 1):
-        p = Process(target=process_month, args=(year, month))
-        p.start()
+    processes = [Process(target=process_month, args=(year, month)) for month in range(month_start, month_end + 1)]
 
-        processes.append(p)
+    for p in processes:
+        p.start()
 
     for p in processes:
         p.join()
