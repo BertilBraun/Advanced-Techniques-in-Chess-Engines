@@ -46,16 +46,9 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         print(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
 
 
-if __name__ == '__main__':
-    # read in the dataset_path from sys.argv
-    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print('Usage: python -m src.eval.DatasetTrainer <dataset_path1> <dataset_path2> ...')
-        sys.exit(1)
-
+def main(dataset_paths: list[str]):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     save_folder = f'reference/{CurrentGame.__class__.__name__}'
-
-    dataset_paths = sys.argv[1:]
 
     for dataset_path in dataset_paths:
         assert os.path.exists(dataset_path), f'Dataset path does not exist: {dataset_path}'
@@ -111,3 +104,14 @@ if __name__ == '__main__':
             print(f'    Avg value loss: {avg_value_loss}')
 
             torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')
+
+
+if __name__ == '__main__':
+    # read in the dataset_path from sys.argv
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print('Usage: python -m src.eval.DatasetTrainer <dataset_path1> <dataset_path2> ...')
+        sys.exit(1)
+
+    dataset_paths = sys.argv[1:]
+
+    main(dataset_paths)
