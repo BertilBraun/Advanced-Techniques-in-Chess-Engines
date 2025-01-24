@@ -11,7 +11,6 @@ from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, encode_board_state
 from src.settings import TORCH_DTYPE, CurrentGame
-from src.util.log import log
 from src.util import random_id
 from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
@@ -126,7 +125,9 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
                 dataset.stats = SelfPlayDatasetStats(**stats)
         except Exception as e:
-            log(f'Error loading dataset from {file_path}: {e}')
+            from src.util.log import log, LogLevel
+
+            log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.WARNING)
 
         return dataset
 

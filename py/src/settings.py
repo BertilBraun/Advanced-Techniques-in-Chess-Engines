@@ -147,6 +147,15 @@ if False:
     )
 
 elif True:
+
+    def ensure_eval_dataset_exists(dataset_path: str) -> None:
+        if not os.path.exists(dataset_path):
+            from src.games.chess import ChessDatabase
+
+            out_paths = ChessDatabase.process_month(2024, 10, num_games_per_month=50)
+            assert len(out_paths) == 1
+            out_paths[0].rename(dataset_path)
+
     from src.games.chess.ChessGame import ChessGame, ChessMove
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessVisuals import ChessVisuals
@@ -176,12 +185,7 @@ elif True:
         every_n_iterations=2,
         dataset_path='reference/memory_0_chess_database.hdf5',
     )
-    if not os.path.exists(evaluation.dataset_path):
-        from src.games.chess import ChessDatabase
-
-        out_paths = ChessDatabase.process_month(2024, 10, num_games_per_month=50)
-        assert len(out_paths) == 1
-        out_paths[0].rename(evaluation.dataset_path)
+    ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 32
 
