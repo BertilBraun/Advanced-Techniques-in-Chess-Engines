@@ -62,22 +62,23 @@ class Trainer:
             out_value_std += out_value.std()
             num_batches += 1
 
-            print('Value mean:', out_value_mean.item() / num_batches)
-            print('Value std:', out_value_std.item() / num_batches)
-            # I think the value is converging towards 0, I'd like to log some counts for how many values are in (-1, -0.9), (-0.9, -0.8)...
-            for i in range(-10, 11):
-                count = torch.sum((out_value > i / 10) & (out_value < (i + 1) / 10)).item()
-                print(f'Value count in range ({i / 10}, {(i + 1) / 10}):', count)
+            if num_batches % 10 == 0:
+                print('Value mean:', out_value_mean.item() / num_batches)
+                print('Value std:', out_value_std.item() / num_batches)
+                # I think the value is converging towards 0, I'd like to log some counts for how many values are in (-1, -0.9), (-0.9, -0.8)...
+                for i in range(-10, 11):
+                    count = torch.sum((out_value > i / 10) & (out_value < (i + 1) / 10)).item()
+                    print(f'Value count in range ({i / 10}, {(i + 1) / 10}):', count)
 
-            print('Value Loss:', value_loss, 'For:')
-            # for i in range(10):
-            #     print(out_value[i].item(), value_targets[i].item())
-            #     print('---' * 10)
-            print('Policy Loss:', policy_loss, 'For:')
-            # for i in range(10):
-            #     for j in range(10):
-            #         print(out_policy[i][j].item(), policy_targets[i][j].item())
-            #     print('---' * 10)
+                print('Value Loss:', value_loss, 'For:')
+                # for i in range(10):
+                #     print(out_value[i].item(), value_targets[i].item())
+                #     print('---' * 10)
+                print('Policy Loss:', policy_loss, 'For:')
+                # for i in range(10):
+                #     for j in range(10):
+                #         print(out_policy[i][j].item(), policy_targets[i][j].item())
+                #     print('---' * 10)
 
             loss = policy_loss + value_loss
 

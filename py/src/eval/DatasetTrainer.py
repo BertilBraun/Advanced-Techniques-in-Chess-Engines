@@ -1,5 +1,6 @@
 from collections import defaultdict
 import os
+from pathlib import Path
 import sys
 import torch
 from torch.utils.data import DataLoader
@@ -60,7 +61,7 @@ def main(dataset_paths: list[str]):
         grouped_paths = defaultdict(list)
         for dataset_path in dataset_paths:
             iteration = int(dataset_path.split('/')[-1].split('_')[1])
-            grouped_paths[iteration].append(dataset_path)
+            grouped_paths[iteration].append(Path(dataset_path))
 
         # Instantiate the dataset
         dataset = SelfPlayTrainDataset(chunk_size=BATCH_SIZE * 2000, device=device)
