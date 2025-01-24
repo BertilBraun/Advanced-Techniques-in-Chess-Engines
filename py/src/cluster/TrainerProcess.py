@@ -94,9 +94,17 @@ class TrainerProcess:
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        return SelfPlayTrainDataset(
-            list(range(max(iteration - window_size, 0), iteration + 1)),
-            self.args.save_path,
+        dataset = SelfPlayTrainDataset(
             self.args.training.chunk_size or self.args.training.batch_size * 200,
             self.device,
         )
+
+        dataset.load_from_files(
+            self.args.save_path,
+            [
+                SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
+                for iteration in range(max(iteration - window_size, 0), iteration + 1)
+            ],
+        )
+
+        return dataset

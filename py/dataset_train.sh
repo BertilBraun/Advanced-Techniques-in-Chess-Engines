@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #SBATCH --job-name=dataset_train              # job name
-#SBATCH --partition=dev_accelerated-h100            # mby GPU queue for the resource allocation.
-#SBATCH --time=01:00:00                    # wall-clock time limit
+#SBATCH --partition=accelerated            # mby GPU queue for the resource allocation.
+#SBATCH --time=02:00:00                    # wall-clock time limit
 #SBATCH --mem=200000                       # memory per node
 #SBATCH --nodes=1                          # number of nodes to be used
 #SBATCH --cpus-per-task=2                # number of CPUs required per MPI task
@@ -14,4 +14,4 @@
 
 source setup.sh
 
-python -m src.eval.DatasetTrainer reference/memory_*_chess_database.hdf5 
+python -m src.eval.DatasetTrainer reference/chess_database/memory_*.hdf5 

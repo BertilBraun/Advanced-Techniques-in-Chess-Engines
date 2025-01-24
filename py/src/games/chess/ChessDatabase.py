@@ -30,25 +30,29 @@ def download(year: int, month: int, folder: str) -> str:
     return file
 
 
-def process_month(year: int, month: int):
-    chess_game = ChessGame()
-    dataset = SelfPlayDataset()
-
-    file = download(year, month, 'reference/data')
+def games_iterator(year: int, month: int):
     # unzip file in memory
     # then process the pgn file
     # for each game in the pgn file
     #     parse the game
-    #     add the game to the dataset
-    # write the dataset
+    #     yield the game
 
+    file = download(year, month, 'reference/data/chess_database')
     with ZipFile(file, 'r') as zip_ref:
         content = zip_ref.read(zip_ref.namelist()[0]).decode('utf-8')
 
     content = io.StringIO(content)
-    for _ in trange(2000):
+    for _ in trange(200000):
         if not (game := chess.pgn.read_game(content)):
             break
+        yield game
+
+
+def process_month(year: int, month: int):
+    chess_game = ChessGame()
+    dataset = SelfPlayDataset()
+
+    for game in games_iterator(year, month):
         winner = eval(game.headers['Result'])
 
         board = ChessBoard()
@@ -65,22 +69,46 @@ def process_month(year: int, month: int):
 
             board.make_move(move)
 
-    dataset.save('reference', month, 'chess_database')
+        dataset.add_generation_stats(
+            num_games=1,
+            generation_time=0.0,
+            resignation=False,
+        )
+
+        if dataset.stats.num_samples >= 20000:
+            dataset.save('reference/chess_database', year * 100 + month)
+            dataset = SelfPlayDataset()
+
+    dataset.save('reference/chess_database', year * 100 + month)
+
+
+def retrieve_month_year_pairs(num_months: int) -> list[tuple[int, int]]:
+    params: list[tuple[int, int]] = []
+    year = 2024
+    month = 10
+    for _ in range(num_months):
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+        params.append((year, month))
+    return params
 
 
 if __name__ == '__main__':
     # load year and months from sys.argv
-    if len(sys.argv) < 4 or sys.argv[1] in ('-h', '--help'):
-        print('Usage: python -m src.games.chess.ChessDatabase <year> <month_start> <month_end>')
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print('Usage: python -m src.games.chess.ChessDatabase <number_of_months>')
         print('Games are downloaded from https://database.nikonoel.fr/.')
         print('Make sure to check that the games are available for the year and months you are interested in.')
         sys.exit(1)
 
-    year = int(sys.argv[1])
-    month_start = int(sys.argv[2])
-    month_end = int(sys.argv[3])
+    num_months = int(sys.argv[1])
 
-    processes = [Process(target=process_month, args=(year, month)) for month in range(month_start, month_end + 1)]
+    # starting from 2024-10 go back in time by num_months
+    params = retrieve_month_year_pairs(num_months)
+
+    processes = [Process(target=process_month, args=(year, month)) for year, month in params]
 
     for p in processes:
         p.start()

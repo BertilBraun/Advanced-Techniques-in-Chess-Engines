@@ -59,6 +59,7 @@ Several optimizations have been implemented to enhance performance and scalabili
 
 - [Inference Optimization](documentation/optimizations/inference.md)
 - [MCTS Optimization](documentation/optimizations/mcts.md)
+- [Game Optimization](documentation/optimizations/games.md)
 - [Inference Architecture Optimization](documentation/optimizations/architecture.md)
 - [Training Optimization](documentation/optimizations/training.md)
 - [Evaluation](documentation/optimizations/evaluation.md)

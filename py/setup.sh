@@ -36,13 +36,18 @@ else
     echo "module load compiler/intel/2024.0_llvm" >> ~/.bashrc
     echo "module load devel/cuda/12.4" >> ~/.bashrc
     echo "export OMP_NUM_THREADS=8" >> ~/.bashrc
+    
     echo "alias q='squeue --long'" >> ~/.bashrc
     echo "alias qs='watch \"squeue --start\"'" >> ~/.bashrc
-    echo "alias qi='watch \"squeue && ls\"'" >> ~/.bashrc
+    echo "alias qi='watch \"sinfo_t_idle && squeue && ls\"'" >> ~/.bashrc
     echo "alias b='sbatch'" >> ~/.bashrc
     echo "alias c='scancel'" >> ~/.bashrc
     echo "alias info='sinfo_t_idle'" >> ~/.bashrc
-    echo "alias tail='tail -f -n 1000'" >> ~/.bashrc
+    echo "alias python='python3.11'" >> ~/.bashrc
+    echo "alias pip='pip3.11'" >> ~/.bashrc
+    echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
+    echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
+
     echo "conda activate Chess" >> ~/.bashrc
 fi
 

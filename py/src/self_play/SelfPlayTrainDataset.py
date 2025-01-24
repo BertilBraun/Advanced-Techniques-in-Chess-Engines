@@ -17,9 +17,7 @@ from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, iterations: list[int], folder_path: str, chunk_size: int, device: torch.device) -> None:
-        self.iterations = iterations
-        self.folder_path = folder_path
+    def __init__(self, chunk_size: int, device: torch.device) -> None:
         self.chunk_size = chunk_size
         self.device = device
 
@@ -27,39 +25,43 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         self.stats = SelfPlayDatasetStats()
 
-        for iteration in self.iterations:
-            files_for_iteration = SelfPlayDataset.get_files_to_load_for_iteration(folder_path, iteration)
-            if len(files_for_iteration) == 0:
+        self.sample_index = 0
+        self.active_states = torch.zeros(0)
+        self.active_policies = torch.zeros(0)
+        self.active_values = torch.zeros(0)
+
+    def load_from_files(self, folder_path: str, origins: list[list[Path]]) -> None:
+        for i, files in enumerate(origins):
+            if len(files) == 0:
                 continue
 
-            dataset = SelfPlayDataset.load_iteration(folder_path, iteration)
-            log_scalar('num_games', dataset.stats.num_games, iteration)
-            log_scalar('num_resignations', dataset.stats.resignations, iteration)
-            log_scalar(
-                'average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, iteration
-            )
-            log_scalar('num_samples', len(dataset), iteration)
-            log_scalar('total_generation_time', dataset.stats.total_generation_time, iteration)
-            log_scalar(
-                'average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, iteration
-            )
+            dataset = SelfPlayDataset()
+            for file in files:
+                dataset += SelfPlayDataset.load(file)
 
-            if len(files_for_iteration) > 1:
+            log_scalar('num_games', dataset.stats.num_games, i)
+            log_scalar('num_resignations', dataset.stats.resignations, i)
+            log_scalar('average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i)
+            log_scalar('num_samples', len(dataset), i)
+            log_scalar('total_generation_time', dataset.stats.total_generation_time, i)
+            log_scalar('average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i)
+
+            if len(files) > 1:
                 dataset.deduplicate()
                 # Remove the original files to avoid re-deduplication
-                for file in files_for_iteration:
+                for file in files:
                     file.unlink()
-                dataset.save(folder_path, iteration, suffix='deduplicated')
+                dataset.save(folder_path, i, suffix='deduplicated')
 
             dataset = dataset.shuffle()
 
-            log_scalar('num_deduplicated_samples', len(dataset), iteration)
+            log_scalar('num_deduplicated_samples', len(dataset), i)
 
             spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
-            log_scalar('policy_spikiness', spikiness, iteration)
+            log_scalar('policy_spikiness', spikiness, i)
 
-            log_histogram('policy_targets', np.array(dataset.policy_targets), iteration)
-            log_histogram('value_targets', np.array(dataset.value_targets), iteration)
+            log_histogram('policy_targets', np.array(dataset.policy_targets), i)
+            log_histogram('value_targets', np.array(dataset.value_targets), i)
 
             self.stats += dataset.stats
 
@@ -67,24 +69,18 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             # Then load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
 
             # split dataset into chunks of chunk_size
-            for i in range(0, len(dataset), chunk_size):
+            for i in range(0, len(dataset), self.chunk_size):
                 chunk = SelfPlayDataset()
-                chunk.states = dataset.states[i : i + chunk_size]
-                chunk.policy_targets = dataset.policy_targets[i : i + chunk_size]
-                chunk.value_targets = dataset.value_targets[i : i + chunk_size]
+                chunk.states = dataset.states[i : i + self.chunk_size]
+                chunk.policy_targets = dataset.policy_targets[i : i + self.chunk_size]
+                chunk.value_targets = dataset.value_targets[i : i + self.chunk_size]
                 # Save the chunks to a different folder, to avoid mixing them with the original dataset
-                save_file = chunk.save(
-                    folder_path + f'/iteration_{iteration}', iteration, suffix=f'chunk_{i // chunk_size}'
-                )
+                save_file = chunk.save(folder_path + f'/iteration_{i}', i, suffix=f'chunk_{i // self.chunk_size}')
                 self.all_chunks.append(save_file)
 
             del dataset
 
         random.shuffle(self.all_chunks)
-        self.sample_index = 0
-        self.active_states, self.active_policies, self.active_values = self._load_samples()
-        self.total_num_samples = 0
-
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:

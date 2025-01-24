@@ -11,7 +11,7 @@ from src.util.ZobristHasher import ZobristHasher
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-ENCODING_CHANNELS = 13  # 12 for pieces + 1 for castling rights
+ENCODING_CHANNELS = 13 + 1  # 12 for pieces + 1 for castling rights
 
 
 def square_to_index(square: int) -> tuple[int, int]:
@@ -122,8 +122,11 @@ class ChessGame(Game[ChessMove]):
             + (castling_rights[2] << (BOARD_SIZE - BOARD_LENGTH))
             + (castling_rights[3] << (BOARD_SIZE - 1))
         )
+        color = 0xFFFFFFFF if board.current_player == 1 else 0
 
-        canonical_board = decode_board_state(np.array(encoded_pieces + [encoded_castling_rights], dtype=np.uint64))
+        canonical_board = decode_board_state(
+            np.array(encoded_pieces + [encoded_castling_rights, color], dtype=np.uint64)
+        )
         if board.current_player == -1:
             canonical_board = np.flip(canonical_board, axis=1)
         return canonical_board
