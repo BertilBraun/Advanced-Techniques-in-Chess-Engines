@@ -7,3 +7,4 @@ optuna
 tensorboardX
 chess
 pygame
+GPUtil

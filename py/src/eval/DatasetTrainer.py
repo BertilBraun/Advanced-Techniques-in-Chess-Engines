@@ -17,7 +17,7 @@ BATCH_SIZE = 512
 
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
-    lr = 0.025
+    lr = 0.05
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4, amsgrad=True)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.09, weight_decay=1e-4, nesterov=True)
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -30,10 +30,10 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         model,
         optimizer,
         TrainingParams(
-            num_epochs=1,
+            num_epochs=num_epochs,
             batch_size=BATCH_SIZE,
             sampling_window=lambda _: 1,
-            learning_rate=lambda _: lr,
+            learning_rate=lambda i: lr * 0.9 ** (i + 1),
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=0,
         ),
