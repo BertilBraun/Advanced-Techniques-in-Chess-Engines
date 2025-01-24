@@ -11,7 +11,7 @@ from src.util.ZobristHasher import ZobristHasher
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-ENCODING_CHANNELS = 13 + 1  # 12 for pieces + 1 for castling rights
+ENCODING_CHANNELS = 13 + 1  # 12 for pieces + 1 for castling rights + 1 for color
 
 
 def square_to_index(square: int) -> tuple[int, int]:

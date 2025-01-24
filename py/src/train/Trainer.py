@@ -53,10 +53,10 @@ class Trainer:
 
             out_policy, out_value = self.model(state)
 
-            # policy_loss = F.binary_cross_entropy_with_logits(out_policy, policy_targets)
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
 
+            # TODO remove
             nonlocal out_value_mean, out_value_std, num_batches
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()

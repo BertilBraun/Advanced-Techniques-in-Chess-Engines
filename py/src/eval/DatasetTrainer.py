@@ -23,10 +23,6 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.09, weight_decay=1e-4, nesterov=True)
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    # IDK_DIDNT_FIX_IT other optimizer?
-    # IDK_DIDNT_FIX_IT way lower learning rate?
-    # Value loss just explodes into oblivion
-    # DONE Does it learn on different samples - Yes, all samples are unique and properly loaded
     trainer = Trainer(
         model,
         optimizer,
