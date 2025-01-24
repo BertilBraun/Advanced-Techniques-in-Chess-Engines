@@ -1,9 +1,6 @@
 import time
 
-from src.settings import log_scalar, log_scalars
 from functools import wraps
-
-from src.util.log import LogLevel, log
 
 
 # Global variables to accumulate times
@@ -42,7 +39,11 @@ def timeit(func):
 
 
 def reset_times():
+    from src.util.log import LogLevel, log
+    from src.settings import log_scalar, log_scalars
+
     global function_times
+
     total_time = sum(function_times.values())
     for key, value in function_times.items():
         global_function_times[key] = global_function_times.get(key, 0.0) + value
