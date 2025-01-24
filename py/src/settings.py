@@ -1,3 +1,4 @@
+import os
 import torch
 from src.train.TrainingArgs import (
     ClusterParams,
@@ -30,7 +31,7 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
-    base_lr = 0.025
+    base_lr = 0.05
     lr_decay = 0.92
     return base_lr * (lr_decay ** (current_iteration / 5))
 
@@ -173,8 +174,14 @@ elif True:
         num_searches_per_turn=60,
         num_games=40,
         every_n_iterations=2,
-        dataset_path='reference/memory_1_chess_database.hdf5',
+        dataset_path='reference/memory_0_chess_database.hdf5',
     )
+    if not os.path.exists(evaluation.dataset_path):
+        from src.games.chess import ChessDatabase
+
+        out_paths = ChessDatabase.process_month(2024, 10, num_games_per_month=50)
+        assert len(out_paths) == 1
+        out_paths[0].rename(evaluation.dataset_path)
 
     PARALLEL_GAMES = 32
 

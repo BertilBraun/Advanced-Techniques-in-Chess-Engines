@@ -85,6 +85,8 @@ class TrainerProcess:
         log_scalar('policy_loss', train_stats.policy_loss, iteration)
         log_scalar('value_loss', train_stats.value_loss, iteration)
         log_scalar('total_loss', train_stats.total_loss, iteration)
+        log_scalar('value_mean', train_stats.value_mean, iteration)
+        log_scalar('value_std', train_stats.value_std, iteration)
 
     @timeit
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayTrainDataset:

@@ -1,7 +1,8 @@
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
 
-from py.src.games.chess.comparison_bots.util import *
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.comparison_bots.util import *
 
 
 class HandcraftedBotV1(Bot):
@@ -12,7 +13,7 @@ class HandcraftedBotV1(Bot):
     def __init__(self) -> None:
         super().__init__('HandcraftedBotV1', max_time_to_think=MAX_TIME_TO_THINK)
 
-    def think(self, board: Board) -> Move:
+    async def think(self, board: ChessBoard) -> Move:
         """
         Determine the best move given the current board state.
 
@@ -21,7 +22,7 @@ class HandcraftedBotV1(Bot):
         """
         self.best_move = Move.null()
 
-        self.negamax(board, 3, -float('inf'), float('inf'), board.turn)
+        self.negamax(board.board, 3, -float('inf'), float('inf'), board.board.turn)
 
         return self.best_move
 

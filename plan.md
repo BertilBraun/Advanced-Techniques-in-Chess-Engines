@@ -20,15 +20,28 @@ DONE continue to save all These logs which are now produced
 
 DONE log everything to tensorboard, also stuff like the Timings, game gen times, generated games, generated samples etc
 DONE time more of the entire project
-
-
-
-TODO build up a database of pro-Moves for Chess automatically
-
 DONE build in the reuse of the search trees for the next Iteration
 DONE document that
 
 
+
+
+DONE build up a database of pro-Moves for Chess automatically
+DONE Train on that for a baseline Policy and value accuracy
+
+[18.53.33] [INFO] Validation stats: Policy Loss: 1.8125, Value Loss: 0.6758, Total Loss: 2.4844
+Epoch 1/1 done: Policy Loss: 1.8466, Value Loss: 0.7082, Total Loss: 2.5548
+Evaluation results at iteration 8:
+    Policy accuracy @1: 43.42%
+    Policy accuracy @5: 82.51%
+    Policy accuracy @10: 92.10%
+    Avg value loss: 0.7229457942768931
+Training with lr: 0.02151582968791256
+Training batches: 100%|█████████▉| 29570/29571 [12:51<00:00, 38.31it/s]
+Value mean: -0.002927398681640625
+Value std: 0.3470703125
+
+Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/master/DeepCrazyhouse/src/experiments/html/train_all_games_over_2000_elo/SGD
 
 
 

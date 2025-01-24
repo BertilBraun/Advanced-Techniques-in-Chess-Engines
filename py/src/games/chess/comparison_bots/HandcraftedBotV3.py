@@ -6,7 +6,8 @@ import numpy as np
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
 
-from py.src.games.chess.comparison_bots.util import *
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.comparison_bots.util import *
 
 
 class HandcraftedBotV3(Bot):
@@ -16,9 +17,9 @@ class HandcraftedBotV3(Bot):
         self.transposition_table = [TranspositionEntry()] * 2**16
         self.best_root_move = Move.null()
 
-    def think(self, board: Board) -> Move:
+    async def think(self, board: ChessBoard) -> Move:
         self.initialize_search_parameters()
-        self.iterative_deepening_search(board)
+        self.iterative_deepening_search(board.board)
         return self.best_root_move
 
     def initialize_search_parameters(self) -> None:

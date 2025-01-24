@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import torch
 import numpy as np
 from typing import List
 
 from src.games.Game import Game
 from src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
-from src.util.ZobristHasher import ZobristHasher
 
 ROW_COUNT = BOARD_SIZE
 COLUMN_COUNT = BOARD_SIZE
@@ -31,8 +29,6 @@ for i, sq in enumerate(_black_squares):
 
 
 class CheckersGame(Game[CheckersMove]):
-    Hasher = ZobristHasher(ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT)
-
     @property
     def null_move(self) -> CheckersMove:
         return -1, -1
@@ -86,10 +82,6 @@ class CheckersGame(Game[CheckersMove]):
                 ),
                 axis=1,
             )
-
-    def hash_boards(self, boards: torch.Tensor) -> List[int]:
-        assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
-        return self.Hasher.zobrist_hash_boards(boards)
 
     def encode_move(self, move: CheckersMove) -> int:
         move_from, move_to = move

@@ -21,11 +21,6 @@ class Game(ABC, Generic[_Move]):
         """(num_channels, height, width)"""
         pass
 
-    @property
-    @abstractmethod
-    def average_num_moves_per_game(self) -> int:
-        pass
-
     @abstractmethod
     def get_canonical_board(self, board: Board[_Move]) -> np.ndarray:
         """Returns a canonical representation of the board from the perspective of the current player.
@@ -41,12 +36,6 @@ class Game(ABC, Generic[_Move]):
     @abstractmethod
     def decode_move(self, move: int) -> _Move:
         """Decodes an action index into a move."""
-        pass
-
-    @abstractmethod
-    def hash_boards(self, boards: torch.Tensor) -> list[int]:
-        """Hashes a batch of encoded canonical boards.
-        The input tensor has shape (batch_size, num_channels, height, width) also (batch_size, *representation_shape)."""
         pass
 
     @abstractmethod

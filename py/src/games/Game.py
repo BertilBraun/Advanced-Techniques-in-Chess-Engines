@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
 import numpy as np
-import torch
 
 from src.games.Board import Board, Player  # noqa: F401
 
@@ -54,12 +53,6 @@ class Game(ABC, Generic[_Move]):
 
     def decode_moves(self, moves: np.ndarray) -> list[_Move]:
         return [self.decode_move(i) for i in moves]
-
-    @abstractmethod
-    def hash_boards(self, boards: torch.Tensor) -> list[int]:
-        """Hashes a batch of encoded canonical boards.
-        The input tensor has shape (batch_size, num_channels, height, width) also (batch_size, *representation_shape)."""
-        pass
 
     @abstractmethod
     def symmetric_variations(

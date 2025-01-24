@@ -137,10 +137,10 @@ class InferenceClient:
 
         results = results.to(dtype=torch.float32, device='cpu').numpy()
 
-        return [
-            (np.full_like(result[:-1], 1 / CurrentGame.action_size), 0.0)  # TODO
-            for result in results
-        ]
+        # return [
+        #     (np.full_like(result[:-1], 1 / CurrentGame.action_size), 0.0)  # TODO
+        #     for result in results
+        # ]
         return [(result[:-1], result[-1]) for result in results]
 
 

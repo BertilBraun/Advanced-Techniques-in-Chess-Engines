@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 import numpy as np
 
 from src.games.Game import Game
@@ -11,15 +10,12 @@ from src.games.tictactoe.TicTacToeBoard import (
     TicTacToeBoard,
     TicTacToeMove,
 )
-from src.util.ZobristHasher import ZobristHasher
 
 ENCODING_CHANNELS = 3
 ACTION_SIZE = BOARD_SIZE
 
 
 class TicTacToeGame(Game[TicTacToeMove]):
-    Hasher = ZobristHasher(ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT)
-
     @property
     def null_move(self) -> TicTacToeMove:
         return -1
@@ -45,10 +41,6 @@ class TicTacToeGame(Game[TicTacToeMove]):
             .astype(np.float32)
             .reshape(self.representation_shape)
         )
-
-    def hash_boards(self, boards: torch.Tensor) -> list[int]:
-        assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
-        return self.Hasher.zobrist_hash_boards(boards)
 
     def encode_move(self, move: TicTacToeMove) -> int:
         assert 0 <= move < BOARD_SIZE, f'Invalid move: {move}'

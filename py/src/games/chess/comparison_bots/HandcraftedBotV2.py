@@ -1,7 +1,8 @@
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
 
-from py.src.games.chess.comparison_bots.util import *
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.comparison_bots.util import *
 
 
 class HandcraftedBotV2(Bot):
@@ -9,7 +10,7 @@ class HandcraftedBotV2(Bot):
         super().__init__('HandcraftedBotV2', max_time_to_think=MAX_TIME_TO_THINK)
         self.transposition_table: list[float | None] = [None] * 2**16
 
-    def think(self, board: Board) -> Move:
+    async def think(self, board: ChessBoard) -> Move:
         """
         Determine the best move given the current board state, using iterative deepening.
 
@@ -20,7 +21,7 @@ class HandcraftedBotV2(Bot):
         depth = 1
 
         while not self.time_is_up:
-            self.negamax(board, depth, -float('inf'), float('inf'), board.turn)
+            self.negamax(board.board, depth, -float('inf'), float('inf'), board.board.turn)
             depth += 1
 
         return self.best_move

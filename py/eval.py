@@ -2,6 +2,7 @@ import asyncio
 import torch
 
 from src.eval.TournamentManager import TournamentManager
+from src.games.chess.comparison_bots.StockfishBot import ChessStockfishBot
 from src.util.log import log
 from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals
 from src.eval.GUI import BaseGridGameGUI
@@ -43,8 +44,9 @@ if __name__ == '__main__':
         log(game_manager.board)
     else:
         tournament_manager = TournamentManager(
-            AlphaZeroBot(iteration, max_time_to_think=0.1),
-            AlphaZeroBot(iteration, network_eval_only=True),
+            AlphaZeroBot(iteration, max_time_to_think=0.2),
+            ChessStockfishBot(skill_level=4, max_time_to_think=0.2),
+            # AlphaZeroBot(iteration, network_eval_only=True),
             num_games=10,
         )
 

@@ -38,7 +38,6 @@ class Trainer:
 
         out_value_mean = torch.tensor(0.0, device=self.model.device)
         out_value_std = torch.tensor(0.0, device=self.model.device)
-        num_batches = 0
 
         def calculate_loss_for_batch(
             batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -56,29 +55,9 @@ class Trainer:
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
 
-            # TODO remove
-            nonlocal out_value_mean, out_value_std, num_batches
+            nonlocal out_value_mean, out_value_std
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()
-            num_batches += 1
-
-            if num_batches % 10 == 0:
-                print('Value mean:', out_value_mean.item() / num_batches)
-                print('Value std:', out_value_std.item() / num_batches)
-                # I think the value is converging towards 0, I'd like to log some counts for how many values are in (-1, -0.9), (-0.9, -0.8)...
-                for i in range(-10, 11):
-                    count = torch.sum((out_value > i / 10) & (out_value < (i + 1) / 10)).item()
-                    print(f'Value count in range ({i / 10}, {(i + 1) / 10}):', count)
-
-                print('Value Loss:', value_loss, 'For:')
-                # for i in range(10):
-                #     print(out_value[i].item(), value_targets[i].item())
-                #     print('---' * 10)
-                print('Policy Loss:', policy_loss, 'For:')
-                # for i in range(10):
-                #     for j in range(10):
-                #         print(out_policy[i][j].item(), policy_targets[i][j].item())
-                #     print('---' * 10)
 
             loss = policy_loss + value_loss
 
@@ -111,7 +90,14 @@ class Trainer:
             total_value_loss += value_loss
             total_loss += loss
 
-        train_stats.update(total_policy_loss.item(), total_value_loss.item(), total_loss.item(), len(dataloader))
+        train_stats.update(
+            total_policy_loss.item(),
+            total_value_loss.item(),
+            total_loss.item(),
+            out_value_mean.item(),
+            out_value_std.item(),
+            len(dataloader),
+        )
 
         with torch.no_grad():
             validation_stats = TrainingStats()
@@ -120,7 +106,7 @@ class Trainer:
             log_scalar('val_policy_loss', val_policy_loss.item(), iteration)
             log_scalar('val_value_loss', val_value_loss.item(), iteration)
             log_scalar('val_loss', val_loss.item(), iteration)
-            validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item())
+            validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item(), 0, 0)
 
             log(f'Validation stats: {validation_stats}')
 

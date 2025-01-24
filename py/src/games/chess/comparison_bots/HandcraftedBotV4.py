@@ -5,7 +5,8 @@ from math import log
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
 
-from py.src.games.chess.comparison_bots.util import *
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.comparison_bots.util import *
 
 
 GAME_PHASE_WEIGHTS = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 4, QUEEN: 5, KING: 0}
@@ -147,9 +148,9 @@ class HandcraftedBotV4(Bot):
         self.transposition_table = [TranspositionEntry()] * 0x10_0000  # 0x80_0000 in the original bot
         self.best_root_move = Move.null()
 
-    def think(self, board: Board) -> Move:
+    async def think(self, board: ChessBoard) -> Move:
         self.initialize_search_parameters()
-        self.iterative_deepening_search(board)
+        self.iterative_deepening_search(board.board)
         return self.best_root_move
 
     def initialize_search_parameters(self) -> None:

@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-import torch
 import numpy as np
 from typing import List
 
 from src.games.Game import Game
 from src.games.connect4.Connect4Board import Connect4Board, Connect4Move, ROW_COUNT, COLUMN_COUNT
-from src.util.ZobristHasher import ZobristHasher
 
 ENCODING_CHANNELS = 3
 ACTION_SIZE = COLUMN_COUNT
 
 
 class Connect4Game(Game[Connect4Move]):
-    Hasher = ZobristHasher(ENCODING_CHANNELS, ROW_COUNT, COLUMN_COUNT)
-
     @property
     def null_move(self) -> Connect4Move:
         return -1
@@ -40,10 +36,6 @@ class Connect4Game(Game[Connect4Move]):
             .astype(np.float32)
             .reshape(self.representation_shape)
         )
-
-    def hash_boards(self, boards: torch.Tensor) -> List[int]:
-        assert boards.shape[1:] == self.representation_shape, f'Invalid shape: {boards.shape}'
-        return self.Hasher.zobrist_hash_boards(boards)
 
     def encode_move(self, move: Connect4Move) -> int:
         assert 0 <= move < COLUMN_COUNT, f'Invalid move: {move}'

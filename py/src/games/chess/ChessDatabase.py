@@ -1,5 +1,6 @@
 import os
 import io
+from pathlib import Path
 import sys
 import chess.pgn
 import requests
@@ -13,6 +14,7 @@ from src.settings import *
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import ChessGame
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.util.log import log
 
 
 def download(year: int, month: int, folder: str) -> str:
@@ -23,14 +25,14 @@ def download(year: int, month: int, folder: str) -> str:
 
     os.makedirs(folder, exist_ok=True)
     url = f'https://database.nikonoel.fr/{name}'
-    print(f'Downloading {url}')
+    log(f'Downloading {url}')
     r = requests.get(url)
     with open(file, 'wb') as f:
         f.write(r.content)
     return file
 
 
-def games_iterator(year: int, month: int):
+def games_iterator(year: int, month: int, num_games_per_month: int):
     # unzip file in memory
     # then process the pgn file
     # for each game in the pgn file
@@ -42,44 +44,53 @@ def games_iterator(year: int, month: int):
         content = zip_ref.read(zip_ref.namelist()[0]).decode('utf-8')
 
     content = io.StringIO(content)
-    for _ in trange(200000):
+    for _ in trange(num_games_per_month):
         if not (game := chess.pgn.read_game(content)):
             break
         yield game
 
 
-def process_month(year: int, month: int):
+def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     chess_game = ChessGame()
     dataset = SelfPlayDataset()
 
-    for game in games_iterator(year, month):
-        winner = eval(game.headers['Result'])
+    output_paths: list[Path] = []
 
-        board = ChessBoard()
-        for move in game.mainline_moves():
-            encoded_board = chess_game.get_canonical_board(board)
-            probabilities = chess_game.encode_moves([move])
+    for game in games_iterator(year, month, num_games_per_month):
+        try:
+            winner = eval(game.headers['Result'])
 
-            for board_variation, probability_variation in chess_game.symmetric_variations(encoded_board, probabilities):
-                dataset.add_sample(
-                    board_variation.copy().astype(np.int8),
-                    probability_variation.copy().astype(np.float32),
-                    winner * board.current_player,
-                )
+            board = ChessBoard()
+            for move in game.mainline_moves():
+                encoded_board = chess_game.get_canonical_board(board)
+                probabilities = chess_game.encode_moves([move])
 
-            board.make_move(move)
+                for board_variation, probability_variation in chess_game.symmetric_variations(
+                    encoded_board, probabilities
+                ):
+                    dataset.add_sample(
+                        board_variation.copy().astype(np.int8),
+                        probability_variation.copy().astype(np.float32),
+                        winner * board.current_player,
+                    )
 
-        dataset.add_generation_stats(
-            num_games=1,
-            generation_time=0.0,
-            resignation=False,
-        )
+                board.make_move(move)
+
+            dataset.add_generation_stats(
+                num_games=1,
+                generation_time=0.0,
+                resignation=False,
+            )
+        except Exception as e:
+            log(f'Error in game: {game}')
+            log(e)
 
         if dataset.stats.num_samples >= 20000:
-            dataset.save('reference/chess_database', year * 100 + month)
+            output_paths.append(dataset.save('reference/chess_database', year * 100 + month))
             dataset = SelfPlayDataset()
 
-    dataset.save('reference/chess_database', year * 100 + month)
+    output_paths.append(dataset.save('reference/chess_database', year * 100 + month))
+    return output_paths
 
 
 def retrieve_month_year_pairs(num_months: int) -> list[tuple[int, int]]:
@@ -97,18 +108,19 @@ def retrieve_month_year_pairs(num_months: int) -> list[tuple[int, int]]:
 
 if __name__ == '__main__':
     # load year and months from sys.argv
-    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print('Usage: python -m src.games.chess.ChessDatabase <number_of_months>')
-        print('Games are downloaded from https://database.nikonoel.fr/.')
-        print('Make sure to check that the games are available for the year and months you are interested in.')
+    if len(sys.argv) < 3 or sys.argv[1] in ('-h', '--help'):
+        log('Usage: python -m src.games.chess.ChessDatabase <number_of_months> <number_of_games_per_month>')
+        log('Games are downloaded from https://database.nikonoel.fr/.')
+        log('Make sure to check that the games are available for the year and months you are interested in.')
         sys.exit(1)
 
     num_months = int(sys.argv[1])
+    num_games_per_month = int(sys.argv[2])
 
     # starting from 2024-10 go back in time by num_months
     params = retrieve_month_year_pairs(num_months)
 
-    processes = [Process(target=process_month, args=(year, month)) for year, month in params]
+    processes = [Process(target=process_month, args=(year, month, num_games_per_month)) for year, month in params]
 
     for p in processes:
         p.start()

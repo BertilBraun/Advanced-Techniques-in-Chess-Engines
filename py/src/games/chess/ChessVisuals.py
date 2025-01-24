@@ -49,7 +49,7 @@ class ChessVisuals(GameVisuals[ChessMove]):
         return moves[0] if moves else None
 
     def _decode_square(self, cell: tuple[int, int]) -> int:
-        return cell[0] * BOARD_LENGTH + cell[1]
+        return (BOARD_LENGTH - 1 - cell[0]) * BOARD_LENGTH + cell[1]
 
     def _encode_square(self, square: int) -> tuple[int, int]:
-        return ((square // BOARD_LENGTH), square % BOARD_LENGTH)
+        return (BOARD_LENGTH - 1 - (square // BOARD_LENGTH), square % BOARD_LENGTH)

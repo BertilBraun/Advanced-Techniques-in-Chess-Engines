@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import torch
 import chess
 import numpy as np
 from typing import NamedTuple
 
 from src.games.Game import Game
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
-from src.util.ZobristHasher import ZobristHasher
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
@@ -75,7 +73,6 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
 
 
 class ChessGame(Game[ChessMove]):
-    Hasher = ZobristHasher(ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
     move2index, index2move = _build_action_dicts()
 
     @property
@@ -130,10 +127,6 @@ class ChessGame(Game[ChessMove]):
         if board.current_player == -1:
             canonical_board = np.flip(canonical_board, axis=1)
         return canonical_board
-
-    def hash_boards(self, boards: torch.Tensor) -> list[int]:
-        # Implement an efficient hashing mechanism
-        return self.Hasher.zobrist_hash_boards(boards)
 
     def encode_move(self, move: ChessMove) -> int:
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]

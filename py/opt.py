@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
     log()
     log('Most relevant hyperparameters:')
-    print(optuna.importance.get_param_importances(study))
+    log(optuna.importance.get_param_importances(study))
 
 """After Optimizing for TicTacToe:
 

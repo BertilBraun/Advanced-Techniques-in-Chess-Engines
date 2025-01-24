@@ -12,6 +12,7 @@ from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
+from src.util.log import log
 
 NUM_EPOCHS = 10
 BATCH_SIZE = 512
@@ -36,11 +37,11 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         ),
     )
 
-    print('Training with lr:', TRAINING_ARGS.training.learning_rate(iteration))
+    log('Training with lr:', trainer.args.learning_rate(iteration))
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, iteration)
-        print(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
+        log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
 
 
 def main(dataset_paths: list[str]):
@@ -71,34 +72,34 @@ def main(dataset_paths: list[str]):
         model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=device)
 
         # Train the model
-        print('Starting training...')
+        log('Starting training...')
         model.print_params()
-        print('Number of training samples:', dataset.stats.num_samples, 'on', dataset.stats.num_games, 'games')
-        print('Evaluating on', test_dataset.stats.num_samples, 'samples on', test_dataset.stats.num_games, 'games')
-        print('Training for', NUM_EPOCHS, 'epochs')
+        log('Number of training samples:', dataset.stats.num_samples, 'on', dataset.stats.num_games, 'games')
+        log('Evaluating on', test_dataset.stats.num_samples, 'samples on', test_dataset.stats.num_games, 'games')
+        log('Training for', NUM_EPOCHS, 'epochs')
 
         os.makedirs(save_folder, exist_ok=True)
 
-        for iter in range(NUM_EPOCHS - 1, -1, -1):
-            if os.path.exists(f'{save_folder}/model_{iter}.pt'):
+        for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
+            if os.path.exists(f'{save_folder}/model_{pre_iter}.pt'):
                 model.load_state_dict(
-                    torch.load(f'{save_folder}/model_{iter}.pt', weights_only=True, map_location=device)
+                    torch.load(f'{save_folder}/model_{pre_iter}.pt', weights_only=True, map_location=device)
                 )
-                print(f'Loaded model_{iter}.pt')
+                log(f'Loaded model_{pre_iter}.pt')
                 break
 
-        for iter in range(NUM_EPOCHS):
+        for iter in range(pre_iter, NUM_EPOCHS):
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 
             # Evaluate the model
             policy_at_1, policy_at_5, policy_at_10, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(
                 model, test_dataloader
             )
-            print(f'Evaluation results at iteration {iter}:')
-            print(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
-            print(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
-            print(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
-            print(f'    Avg value loss: {avg_value_loss}')
+            log(f'Evaluation results at iteration {iter}:')
+            log(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
+            log(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
+            log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
+            log(f'    Avg value loss: {avg_value_loss}')
 
             torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')
 

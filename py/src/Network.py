@@ -3,6 +3,7 @@ import torch
 from torch import nn, Tensor
 
 from src.settings import CurrentGame, TORCH_DTYPE
+from src.util.log import log
 
 
 class Network(nn.Module):
@@ -72,11 +73,11 @@ class Network(nn.Module):
 
     def print_params(self):
         for name, param in self.named_parameters():
-            print(name, list(param.shape))
+            log(name, list(param.shape))
         sum_of_params = sum(p.numel() for p in self.parameters())
-        print(f'Total number of parameters: {sum_of_params}')
+        log(f'Total number of parameters: {sum_of_params}')
         sum_of_trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        print(
+        log(
             f'Total number of trainable parameters: {sum_of_trainable_params} ({sum_of_trainable_params / sum_of_params * 100:.2f}%)'
         )
 

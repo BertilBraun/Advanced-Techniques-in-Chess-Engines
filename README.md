@@ -68,7 +68,7 @@ Several optimizations have been implemented to enhance performance and scalabili
 
 ## Implementation Details
 
-For a detailed overview of the project's implementation, refer to the following section: [Implementation Details](documentation/implementation.md).
+For a detailed overview of the project's implementation, refer to the following section: [Implementation Details](documentation/implementation/implementation.md).
 
 The main implementation is currently written in Python and can be found in the `py` directory. The main 3 scripts are:
 
