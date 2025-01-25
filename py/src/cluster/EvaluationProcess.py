@@ -20,13 +20,12 @@ class EvaluationProcess:
     """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
 
     def __init__(self, args: TrainingArgs) -> None:
-        assert args.evaluation, 'Evaluation parameters must be set.'
         self.args = args
         self.eval_args = args.evaluation
 
     async def run(self, iteration: int):
         """Play two most recent models against each other."""
-        if not self.args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
+        if not self.eval_args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
             return
 
         model_evaluation = ModelEvaluation(

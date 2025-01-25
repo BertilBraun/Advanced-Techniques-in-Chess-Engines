@@ -10,6 +10,7 @@ from typing import Any
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, encode_board_state
+from src.mcts.MCTS import action_probabilities
 from src.settings import TORCH_DTYPE, CurrentGame
 from src.util import random_id
 from src.util.timing import timeit
@@ -34,8 +35,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     """
 
     def __init__(self) -> None:
-        self.states: list[npt.NDArray[np.uint64]] = []
-        self.policy_targets: list[npt.NDArray[np.float32]] = []
+        self.encoded_states: list[npt.NDArray[np.uint64]] = []
+        self.visit_counts: list[list[tuple[int, int]]] = []
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats()
 
@@ -46,28 +47,28 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             resignations=int(resignation),
         )
 
-    def add_sample(
-        self, state: npt.NDArray[np.int8], policy_target: npt.NDArray[np.float32], value_target: float
-    ) -> None:
-        self.states.append(encode_board_state(state))
-        self.policy_targets.append(policy_target)
+    def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:
+        self.encoded_states.append(encode_board_state(state))
+        self.visit_counts.append(visit_counts)
         self.value_targets.append(value_target)
         self.stats += SelfPlayDatasetStats(num_samples=1)
 
     def __len__(self) -> int:
-        return len(self.states)
+        return len(self.encoded_states)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        state = decode_board_state(self.encoded_states[idx])
+        probabilities = action_probabilities(self.visit_counts[idx])
         return (
-            torch.from_numpy(decode_board_state(self.states[idx])).to(dtype=TORCH_DTYPE, non_blocking=True),
-            torch.from_numpy(self.policy_targets[idx]).to(dtype=TORCH_DTYPE, non_blocking=True),
+            torch.from_numpy(state).to(dtype=TORCH_DTYPE, non_blocking=True),
+            torch.from_numpy(probabilities).to(dtype=TORCH_DTYPE, non_blocking=True),
             torch.tensor(self.value_targets[idx], dtype=torch.float32),
         )
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
         new_dataset = SelfPlayDataset()
-        new_dataset.states = self.states + other.states
-        new_dataset.policy_targets = self.policy_targets + other.policy_targets
+        new_dataset.encoded_states = self.encoded_states + other.encoded_states
+        new_dataset.visit_counts = self.visit_counts + other.visit_counts
         new_dataset.value_targets = self.value_targets + other.value_targets
         new_dataset.stats = self.stats + other.stats
         return new_dataset
@@ -75,24 +76,34 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @timeit
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.float32], float]]] = {}
+        mp: dict[tuple[int, ...], tuple[int, tuple[list[tuple[int, int]], float]]] = {}
 
-        for state, policy_target, value_target in zip(self.states, self.policy_targets, self.value_targets):
+        for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             state = tuple(state)
             if state in mp:
-                count, (policy_target_sum, value_target_sum) = mp[state]
+                count, (visit_count_sum, value_target_sum) = mp[state]
+                new_visit_counts = []
+                for move, visit_count in visit_counts:
+                    # find the move in the existing visit counts and add the visit count
+                    for existing_move, existing_visit_count in visit_count_sum:
+                        if move == existing_move:
+                            new_visit_counts.append((move, visit_count + existing_visit_count))
+                            break
+                    else:
+                        new_visit_counts.append((move, visit_count))
+
                 mp[state] = (
                     count + 1,
-                    (policy_target_sum + policy_target, value_target_sum + value_target),
+                    (new_visit_counts, value_target_sum + value_target),
                 )
             else:
                 mp[state] = (
                     1,
-                    (policy_target, value_target),
+                    (visit_counts, value_target),
                 )
 
-        self.states = [np.array(state) for state in mp.keys()]
-        self.policy_targets = [policy_target / count for count, (policy_target, _) in mp.values()]
+        self.encoded_states = [np.array(state) for state in mp.keys()]
+        self.visit_counts = [policy_target for _, (policy_target, _) in mp.values()]
         self.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
 
     @timeit
@@ -101,8 +112,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         np.random.shuffle(indices)
 
         shuffled_dataset = SelfPlayDataset()
-        shuffled_dataset.states = [self.states[i] for i in indices]
-        shuffled_dataset.policy_targets = [self.policy_targets[i] for i in indices]
+        shuffled_dataset.encoded_states = [self.encoded_states[i] for i in indices]
+        shuffled_dataset.visit_counts = [self.visit_counts[i] for i in indices]
         shuffled_dataset.value_targets = [self.value_targets[i] for i in indices]
         shuffled_dataset.stats = self.stats
         return shuffled_dataset
@@ -118,8 +129,12 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
                 assert metadata == SelfPlayDataset._get_current_metadata(), message
 
-                dataset.states = [state for state in file['states']]  # type: ignore
-                dataset.policy_targets = [policy_target for policy_target in file['policy_targets']]  # type: ignore
+                dataset.encoded_states = [state for state in file['states']]  # type: ignore
+                # parse out the visit counts but only the non-zero ones
+                dataset.visit_counts = [
+                    [(move, count) for move, count in visit_count if count > 0]
+                    for visit_count in file['visit_counts']  # type: ignore
+                ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
 
                 stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
@@ -154,8 +169,14 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         # write a h5py file with states, policy targets and value targets in it
         with h5py.File(file_path, 'w') as file:
-            file.create_dataset('states', data=np.array(self.states))
-            file.create_dataset('policy_targets', data=np.array(self.policy_targets))
+            file.create_dataset('states', data=np.array(self.encoded_states))
+            max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
+            # padd all visit counts to the same length
+            padded_visit_counts = np.zeros((len(self.visit_counts), max_visit_num, 2), dtype=np.int32)
+            for i, visit_count in enumerate(self.visit_counts):
+                for j, (move, count) in enumerate(visit_count):
+                    padded_visit_counts[i, j] = [move, count]
+            file.create_dataset('visit_counts', data=padded_visit_counts)
             file.create_dataset('value_targets', data=np.array(self.value_targets))
             # write the metadata information about the current game, action size, representation shape, etc.
             file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())

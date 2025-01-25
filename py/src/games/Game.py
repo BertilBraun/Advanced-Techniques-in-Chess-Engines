@@ -56,11 +56,11 @@ class Game(ABC, Generic[_Move]):
 
     @abstractmethod
     def symmetric_variations(
-        self, board: np.ndarray, action_probabilities: np.ndarray
-    ) -> list[tuple[np.ndarray, np.ndarray]]:
-        """Returns a list of symetric variations of the board and the corresponding action probabilities.
+        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+    ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
+        """Returns a list of symetric variations of the board and the corresponding visit counts.
         The board is a numpy array with shape (num_channels, height, width) as returned by the `representation_shape` property.
-        The action_probabilities is a numpy array with shape (action_size)."""
+        The visit counts are a list of tuples where the first element is the action index and the second element is the visit count."""
         pass
 
     @abstractmethod

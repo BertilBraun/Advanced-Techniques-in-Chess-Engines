@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from src.util import lerp
-from src.mcts.MCTS import MCTS
+from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.mcts.MCTSArgs import MCTSArgs
 from src.cluster.InferenceClient import InferenceClient
@@ -20,7 +20,7 @@ from src.util.timing import reset_times, timeit
 @dataclass(frozen=True)
 class SelfPlayGameMemory:
     board: CurrentBoard
-    action_probabilities: np.ndarray
+    visit_counts: list[tuple[int, int]]
     result_score: float
 
 
@@ -78,9 +78,7 @@ class SelfPlay:
 
         current_self_play_games = list(self.self_play_games.items())
         for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
-            spg.memory.append(
-                SelfPlayGameMemory(spg.board.copy(), mcts_result.action_probabilities.copy(), mcts_result.result_score)
-            )
+            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score))
 
             if mcts_result.result_score < self.args.resignation_threshold:
                 # Resignation if most of the mcts searches result in a loss
@@ -92,7 +90,7 @@ class SelfPlay:
             for _ in range(count):
                 self.self_play_games[spg] -= 1
 
-                spg_action_probabilities = mcts_result.action_probabilities.copy()
+                spg_action_probabilities = action_probabilities(mcts_result.visit_counts)
 
                 while np.sum(spg_action_probabilities) > 0:
                     new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
@@ -108,7 +106,7 @@ class SelfPlay:
                     # No valid moves left which are not already being explored
                     # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
                     new_spg, _ = self._sample_self_play_game(
-                        spg, mcts_result.action_probabilities, mcts_result.children
+                        spg, action_probabilities(mcts_result.visit_counts), mcts_result.children
                     )
                     self.self_play_games[new_spg] += 1
 
@@ -181,10 +179,10 @@ class SelfPlay:
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)
 
-            for board, probabilities in CurrentGame.symmetric_variations(encoded_board, mem.action_probabilities):
+            for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
                 self.dataset.add_sample(
                     board.copy().astype(np.int8),
-                    probabilities.copy().astype(np.float32),
+                    visit_counts.copy(),
                     lerp(result, mem.result_score, self.args.result_score_weight),
                 )
             result = -result

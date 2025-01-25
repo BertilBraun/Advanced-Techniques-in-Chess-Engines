@@ -12,9 +12,17 @@ from src.util.timing import timeit
 
 @dataclass
 class MCTSResult:
-    action_probabilities: np.ndarray
     result_score: float
+    visit_counts: list[tuple[int, int]]
     children: list[MCTSNode]
+
+
+def action_probabilities(visit_counts: list[tuple[int, int]]) -> np.ndarray:
+    action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
+    for move, visit_count in visit_counts:
+        action_probabilities[move] = visit_count
+    action_probabilities /= np.sum(action_probabilities)
+    return action_probabilities
 
 
 class MCTS:
@@ -51,7 +59,14 @@ class MCTS:
         #     num_placed_stones = np.sum(root.board.board != 0)
         #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
 
-        return [MCTSResult(self._get_action_probabilities(root), root.result_score, root.children) for root in roots]
+        return [
+            MCTSResult(
+                root.result_score,
+                [(CurrentGame.encode_move(child.move_to_get_here), child.number_of_visits) for child in root.children],
+                root.children,
+            )
+            for root in roots
+        ]
 
     @timeit
     async def parallel_iterate(self, roots: list[MCTSNode]) -> None:
@@ -82,16 +97,6 @@ class MCTS:
     def _add_noise(self, policy: np.ndarray) -> np.ndarray:
         noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(policy))
         return lerp(policy, noise, self.args.dirichlet_epsilon)
-
-    def _get_action_probabilities(self, root_node: MCTSNode) -> np.ndarray:
-        action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
-
-        for child in root_node.children:
-            action_probabilities[CurrentGame.encode_move(child.move_to_get_here)] = child.number_of_visits
-
-        action_probabilities /= np.sum(action_probabilities)
-
-        return action_probabilities
 
     def _get_best_child_or_back_propagate(
         self, root: MCTSNode, c_param: float, min_visit_count: int

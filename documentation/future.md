@@ -4,6 +4,10 @@
 
 Int8 for inference. In that case the trainer and self play nodes need different models and after training the model needs to be quantized but apparently up to 4x faster inference [docs](https://pytorch.org/docs/stable/quantization.html#post-training-static-quantization).
 
+## Better Network Architecture
+
+[Deep Reinforcement Learning for Crazyhouse](https://ml-research.github.io/papers/czech2019deep.pdf#page=16) introduced RISEv2 and later apparently RISEv3 which have almost twice the inference speed and significantly less parameters while having the same performance.
+
 ## Possibly better Value Targets using Path Consistency
 
 Path Consistency ([paper](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf)) - seems to be more sample efficient by using the information of the mcts search tree for value targets (5 most recent history states, argmax path in mcst search tree, 2x the mse(v-mean(v of paths)) and 1x the mse(f_v-mean(f_v of history states)) i.e. the feature vector before mapping to the value head)

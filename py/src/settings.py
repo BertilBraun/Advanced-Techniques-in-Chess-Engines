@@ -166,13 +166,13 @@ elif True:
     CurrentGameVisuals = ChessVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 15
+    SELF_PLAYERS_PER_NODE = 8
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
-        num_epochs=2,
+        num_epochs=1,
         batch_size=256,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
@@ -219,14 +219,14 @@ elif True:
     TEST_TRAINING_ARGS = TrainingArgs(
         num_iterations=25,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=32,
+        num_games_per_iteration=2,
         network=network,
         inference=inference,
         self_play=SelfPlayParams(
-            num_parallel_games=64,
+            num_parallel_games=4,
             num_moves_after_which_to_play_greedy=25,
             mcts=MCTSParams(
-                num_searches_per_turn=100,
+                num_searches_per_turn=40,
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,

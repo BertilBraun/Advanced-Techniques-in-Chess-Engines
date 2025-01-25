@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 import asyncio
 import numpy as np
+from sys import getsizeof
 from typing import Any, Coroutine, TypeVar
 
 from src.Encoding import encode_board_state
@@ -45,15 +46,19 @@ class InferenceClient:
 
         if self.total_evals != 0:
             cache_hit_rate = (self.total_hits / self.total_evals) * 100
-            log_scalar('cache_hit_rate', cache_hit_rate, iteration)
-            log_scalar('unique_positions_in_cache', len(self.inference_cache), iteration)
+            log_scalar('cache/hit_rate', cache_hit_rate, iteration)
+            log_scalar('cache/unique_positions', len(self.inference_cache), iteration)
             log_histogram(
                 'nn_output_value_distribution',
                 np.array([round(v, 1) for _, v in self.inference_cache.values()]),
                 iteration,
             )
 
-            log(f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)}')
+            size_in_mb = getsizeof(self.inference_cache) / 1024 / 1024
+            log_scalar('cache/size_mb', size_in_mb, iteration)
+            log(
+                f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)} ({size_in_mb:.2f} MB)'
+            )
         self.inference_cache.clear()
 
     @timeit

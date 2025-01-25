@@ -7,8 +7,10 @@ from pathlib import Path
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state
+from src.mcts.MCTS import action_probabilities
 from src.settings import TORCH_DTYPE, TRAINING_ARGS, log_histogram, log_scalar
-from src.util.log import LogLevel, log
+from src.util import random_id
+from src.util.log import log
 from src.util.timing import timeit
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
@@ -32,7 +34,14 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.active_values = torch.zeros(0)
 
     def load_from_files(self, folder_path: str, origins: list[list[Path]]) -> None:
-        self.all_chunks = [Path(file) for sublist in origins for file in sublist]
+        self.all_chunks = []
+        for i, sublist in enumerate(origins):
+            for j, file in enumerate(sublist):
+                # keep the original file
+                # copy the file to the folder_path
+                chunk_file = Path(folder_path) / f'iteration_{i}_chunk_{j}_{random_id()}.hdf5'
+                chunk_file.hardlink_to(file)
+                self.all_chunks.append(chunk_file)
         random.shuffle(self.all_chunks)
         self.stats = SelfPlayDatasetStats(
             TRAINING_ARGS.self_play.num_games_after_which_to_write * 2 * 100 * len(self.all_chunks),
@@ -89,10 +98,12 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         log_scalar('dataset/total_generation_time', dataset.stats.total_generation_time, i)
         log_scalar('dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i)
 
-        spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
+        policies = [action_probabilities(visits) for visits in dataset.visit_counts]
+
+        spikiness = sum(policy.max() for policy in policies) / len(dataset)
         log_scalar('dataset/policy_spikiness', spikiness, i)
 
-        log_histogram('dataset/policy_targets', np.array(dataset.policy_targets), i)
+        log_histogram('dataset/policy_targets', np.array(policies), i)
         log_histogram('dataset/value_targets', np.array(dataset.value_targets), i)
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
@@ -137,25 +148,22 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.all_chunks = self.all_chunks[num_chunks:] + chunks_to_load
 
         states: list[np.ndarray] = []
-        policy_targets: list[np.ndarray] = []
+        visit_counts: list[list[tuple[int, int]]] = []
         value_targets: list[float] = []
 
         for chunk in chunks_to_load:
             dataset = SelfPlayDataset.load(chunk)
             self._log_dataset_stats(dataset, self.num_chunks_processed)
             self.num_chunks_processed += 1
-            states += dataset.states
-            policy_targets += dataset.policy_targets
+            states += dataset.encoded_states
+            visit_counts += dataset.visit_counts
             value_targets += dataset.value_targets
-
-        if self.num_chunks_processed >= len(self.all_chunks):
-            log('All chunks have been processed. Restarting from the beginning.', LogLevel.WARNING)
 
         indices = np.arange(len(states))
         np.random.shuffle(indices)
 
         states_np = np.array([decode_board_state(states[i]) for i in indices], dtype=np.float32)
-        policy_targets_np = np.array([policy_targets[i] for i in indices], dtype=np.float32)
+        policy_targets_np = np.array([action_probabilities(visit_counts[i]) for i in indices], dtype=np.float32)
         value_targets_np = np.array([value_targets[i] for i in indices], dtype=np.float32)
 
         states_torch = torch.from_numpy(states_np).to(device=self.device, dtype=TORCH_DTYPE, non_blocking=True)

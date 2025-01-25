@@ -62,14 +62,12 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
             board = ChessBoard()
             for move in game.mainline_moves():
                 encoded_board = chess_game.get_canonical_board(board)
-                probabilities = chess_game.encode_moves([move])
+                visit_counts = [(chess_game.encode_move(move), 1)]
 
-                for board_variation, probability_variation in chess_game.symmetric_variations(
-                    encoded_board, probabilities
-                ):
+                for board_variation, visits in chess_game.symmetric_variations(encoded_board, visit_counts):
                     dataset.add_sample(
                         board_variation.copy().astype(np.int8),
-                        probability_variation.copy().astype(np.float32),
+                        visits,
                         winner * board.current_player,
                     )
 

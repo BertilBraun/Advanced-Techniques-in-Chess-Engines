@@ -110,4 +110,6 @@ class TrainerProcess:
             ],
         )
 
+        log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
+
         return dataset

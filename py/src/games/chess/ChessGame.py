@@ -136,28 +136,30 @@ class ChessGame(Game[ChessMove]):
         return ChessMove(dict_move.from_square, dict_move.to_square, dict_move.promotion)
 
     def symmetric_variations(
-        self, board: np.ndarray, action_probabilities: np.ndarray
-    ) -> list[tuple[np.ndarray, np.ndarray]]:
+        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+    ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         return [
             # Original board
-            (board, action_probabilities),
+            (board, visit_counts),
             # Vertical flip
             # 1234 -> becomes -> 4321
             # 5678               8765
-            (np.flip(board, axis=2), self._flip_action_probs(action_probabilities)),
+            (np.flip(board, axis=2), self._flip_action_probs(visit_counts)),
         ]
 
-    def _flip_action_probs(self, action_probs: np.ndarray) -> np.ndarray:
-        flipped = np.zeros_like(action_probs)
-        for i, prob in enumerate(action_probs):
-            move = self.decode_move(i)
-            move_from_row, move_from_col = square_to_index(move.from_square)
-            move_to_row, move_to_col = square_to_index(move.to_square)
+    def _flip_action_probs(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        flipped_visit_counts: list[tuple[int, int]] = []
+        for move, count in visit_counts:
+            flipped_move = self.decode_move(move)
+            move_from_row, move_from_col = square_to_index(flipped_move.from_square)
+            move_to_row, move_to_col = square_to_index(flipped_move.to_square)
             flipped_move_from = index_to_square(move_from_row, BOARD_LENGTH - 1 - move_from_col)
             flipped_move_to = index_to_square(move_to_row, BOARD_LENGTH - 1 - move_to_col)
-            flipped_index = self.encode_move(chess.Move(flipped_move_from, flipped_move_to, promotion=move.promotion))
-            flipped[flipped_index] = prob
-        return flipped
+            flipped_index = self.encode_move(
+                chess.Move(flipped_move_from, flipped_move_to, promotion=flipped_move.promotion)
+            )
+            flipped_visit_counts.append((flipped_index, count))
+        return flipped_visit_counts
 
     def get_initial_board(self) -> ChessBoard:
         return ChessBoard()

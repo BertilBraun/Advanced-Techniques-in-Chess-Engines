@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-from typing import List
 
 from src.games.Game import Game
 from src.games.checkers.CheckersBoard import BOARD_SIZE, BOARD_SQUARES, CheckersBoard, CheckersMove
@@ -113,17 +112,17 @@ class CheckersGame(Game[CheckersMove]):
         return move_from, move_to
 
     def symmetric_variations(
-        self, board: np.ndarray, action_probabilities: np.ndarray
-    ) -> List[tuple[np.ndarray, np.ndarray]]:
+        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+    ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         return [
             # Original board
-            (board, action_probabilities),
+            (board, visit_counts),
             # Vertical flip
             # 1234 -> becomes -> 4321
             # 5678               8765
             # NOTE only valid since the board is reduced to 4x4x8 which removes the white cells, whereby the vertical flip will become a valid symmetry
             # NOTE Problem: The moves are not flippable, as the move encoding is not symmetric and would result with moves from white to white squares
-            (np.flip(board, axis=2), self._flip_action_probs(action_probabilities)),
+            (np.flip(board, axis=2), self._flip_action_probs(visit_counts)),
         ]
 
     def _flip_black_index_4wide(self, black_idx: int) -> int:
@@ -142,14 +141,12 @@ class CheckersGame(Game[CheckersMove]):
 
         return flipped_from * 32 + flipped_to
 
-    def _flip_action_probs(self, action_probs: np.ndarray) -> np.ndarray:
-        flipped = np.zeros_like(action_probs)
-        for move_idx, prob in enumerate(action_probs):
-            if prob == 0.0:
-                continue
-            flipped_idx = self._flip_move_4wide(move_idx)
-            flipped[flipped_idx] = prob
-        return flipped
+    def _flip_action_probs(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        flipped_visit_counts: list[tuple[int, int]] = []
+        for move, count in visit_counts:
+            flipped_move = self._flip_move_4wide(move)
+            flipped_visit_counts.append((flipped_move, count))
+        return flipped_visit_counts
 
     def get_initial_board(self) -> CheckersBoard:
         return CheckersBoard()
