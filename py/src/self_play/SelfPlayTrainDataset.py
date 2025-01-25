@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state
 from src.settings import TORCH_DTYPE, TRAINING_ARGS, log_histogram, log_scalar
-from src.util.log import log
+from src.util.log import LogLevel, log
 from src.util.timing import timeit
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
@@ -22,6 +22,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.device = device
 
         self.all_chunks: list[Path] = []
+        self.num_chunks_processed = 0
 
         self.stats = SelfPlayDatasetStats()
 
@@ -47,16 +48,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             for file in files:
                 dataset += SelfPlayDataset.load(file)
 
-            log_scalar('dataset/num_games', dataset.stats.num_games, i)
-            log_scalar('dataset/num_resignations', dataset.stats.resignations, i)
-            log_scalar(
-                'dataset/average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i
-            )
-            log_scalar('dataset/num_samples', len(dataset), i)
-            log_scalar('dataset/total_generation_time', dataset.stats.total_generation_time, i)
-            log_scalar(
-                'dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i
-            )
+            self._log_dataset_stats(dataset, i)
 
             if len(files) > 1:
                 dataset.deduplicate()
@@ -68,12 +60,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             dataset = dataset.shuffle()
 
             log_scalar('dataset/num_deduplicated_samples', len(dataset), i)
-
-            spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
-            log_scalar('dataset/policy_spikiness', spikiness, i)
-
-            log_histogram('dataset/policy_targets', np.array(dataset.policy_targets), i)
-            log_histogram('dataset/value_targets', np.array(dataset.value_targets), i)
 
             self.stats += dataset.stats
 
@@ -94,6 +80,20 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         random.shuffle(self.all_chunks)
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
+
+    def _log_dataset_stats(self, dataset: SelfPlayDataset, i: int) -> None:
+        log_scalar('dataset/num_games', dataset.stats.num_games, i)
+        log_scalar('dataset/num_resignations', dataset.stats.resignations, i)
+        log_scalar('dataset/average_resignation_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i)
+        log_scalar('dataset/num_samples', len(dataset), i)
+        log_scalar('dataset/total_generation_time', dataset.stats.total_generation_time, i)
+        log_scalar('dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i)
+
+        spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
+        log_scalar('dataset/policy_spikiness', spikiness, i)
+
+        log_histogram('dataset/policy_targets', np.array(dataset.policy_targets), i)
+        log_histogram('dataset/value_targets', np.array(dataset.value_targets), i)
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
@@ -142,9 +142,14 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         for chunk in chunks_to_load:
             dataset = SelfPlayDataset.load(chunk)
+            self._log_dataset_stats(dataset, self.num_chunks_processed)
+            self.num_chunks_processed += 1
             states += dataset.states
             policy_targets += dataset.policy_targets
             value_targets += dataset.value_targets
+
+        if self.num_chunks_processed >= len(self.all_chunks):
+            log('All chunks have been processed. Restarting from the beginning.', LogLevel.WARNING)
 
         indices = np.arange(len(states))
         np.random.shuffle(indices)
