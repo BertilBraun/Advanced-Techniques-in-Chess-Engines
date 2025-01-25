@@ -7,7 +7,7 @@ from pathlib import Path
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state
-from src.settings import TORCH_DTYPE, log_histogram, log_scalar
+from src.settings import TORCH_DTYPE, TRAINING_ARGS, log_histogram, log_scalar
 from src.util.log import log
 from src.util.timing import timeit
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -31,6 +31,14 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.active_values = torch.zeros(0)
 
     def load_from_files(self, folder_path: str, origins: list[list[Path]]) -> None:
+        self.all_chunks = [Path(file) for sublist in origins for file in sublist]
+        random.shuffle(self.all_chunks)
+        self.stats = SelfPlayDatasetStats(
+            TRAINING_ARGS.self_play.num_games_after_which_to_write * 2 * 100 * len(self.all_chunks),
+            TRAINING_ARGS.self_play.num_games_after_which_to_write * len(self.all_chunks),
+        )
+        return
+
         for i, files in enumerate(origins):
             if len(files) == 0:
                 continue
@@ -119,10 +127,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         return self.stats.num_samples
 
     @timeit
-    def _load_samples(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
-        chunks_to_load = self.all_chunks[:3]
-        self.all_chunks = self.all_chunks[3:] + chunks_to_load
+    def _load_samples(self, num_chunks: int = 8) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # load them in order, always num_chunks at a time, shuffling the values of these three chunks in memory and repeating once all values of these num_chunks chunks are used
+        chunks_to_load = self.all_chunks[:num_chunks]
+        self.all_chunks = self.all_chunks[num_chunks:] + chunks_to_load
 
         states: list[np.ndarray] = []
         policy_targets: list[np.ndarray] = []

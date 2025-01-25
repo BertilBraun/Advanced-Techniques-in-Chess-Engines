@@ -303,7 +303,7 @@ elif False:
         inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=2,
-            num_samples_after_which_to_write=4,
+            num_games_after_which_to_write=4,
             num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
                 num_searches_per_turn=64,

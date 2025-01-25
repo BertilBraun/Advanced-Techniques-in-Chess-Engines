@@ -38,7 +38,7 @@ class SelfPlayProcess:
             if running:
                 await self.self_play.self_play()
 
-                if len(self.self_play.dataset) >= self.args.num_samples_after_which_to_write:
+                if self.self_play.dataset.stats.num_games >= self.args.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)
 
             if self.commander_pipe.poll():

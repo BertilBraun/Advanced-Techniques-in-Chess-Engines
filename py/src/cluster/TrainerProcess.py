@@ -104,8 +104,9 @@ class TrainerProcess:
         dataset.load_from_files(
             self.args.save_path,
             [
-                SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
+                [file]  # Each file seperately, sine loading all would OOM
                 for iteration in range(max(iteration - window_size, 0), iteration + 1)
+                for file in SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
             ],
         )
 

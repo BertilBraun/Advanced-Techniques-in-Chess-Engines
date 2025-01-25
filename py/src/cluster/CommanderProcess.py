@@ -101,6 +101,7 @@ class CommanderProcess:
         self.trainer_process.kill()
         for process in self.self_play_processes:
             process.join(timeout=10)
+        exit()
 
     def _all_processes(self) -> list[Process]:
         return self.self_play_processes + [self.trainer_process]

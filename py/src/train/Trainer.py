@@ -59,6 +59,7 @@ class Trainer:
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()
 
+            # loss = torch.lerp(value_loss, policy_loss, 0.01)
             loss = policy_loss + value_loss
 
             return policy_loss, value_loss, loss

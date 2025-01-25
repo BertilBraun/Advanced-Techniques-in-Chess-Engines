@@ -7,7 +7,7 @@ First:
 - [ ] Keep Branches of the architectures tried in python
 - [x] Keep a readme why the architecture was tried and what the results were
 - [x] Make a list of all remaining tasks
-- [ ] Actually time the executions of the different parts of the project in code (decorator?)
+- [x] Actually time the executions of the different parts of the project in code (decorator?)
 - [ ] Then start by moving the current project to a py/ folder and start the new project in a cpp/ folder
 - [ ] Move settings into games folders? In src.settings just import the settings from the games?
 
