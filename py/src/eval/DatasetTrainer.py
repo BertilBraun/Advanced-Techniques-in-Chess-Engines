@@ -9,7 +9,7 @@ from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
-from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame
+from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
@@ -51,7 +51,7 @@ def main(dataset_paths: list[str]):
     for dataset_path in dataset_paths:
         assert os.path.exists(dataset_path), f'Dataset path does not exist: {dataset_path}'
 
-    with TensorboardWriter('dataset_trainer'):
+    with TensorboardWriter(get_run_id(), 'dataset_trainer'):
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
 
         # group the datasets by the iteration id. These are of the form 'memory_ITERATIONNUMBER_*.hdf5'

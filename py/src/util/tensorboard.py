@@ -54,8 +54,8 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
 
 
 class TensorboardWriter:
-    def __init__(self, suffix: str = '', postfix_pid: bool = True) -> None:
-        self.suffix = f'{suffix}_{multiprocessing.current_process().pid}' if postfix_pid else suffix
+    def __init__(self, run: int, suffix: str = '', postfix_pid: bool = True) -> None:
+        self.suffix = f'{run}/{suffix}_{multiprocessing.current_process().pid}' if postfix_pid else suffix
 
     def __enter__(self):
         from src.settings import LOG_FOLDER

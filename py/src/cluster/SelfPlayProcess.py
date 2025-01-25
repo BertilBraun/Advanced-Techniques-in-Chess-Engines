@@ -10,12 +10,12 @@ from src.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
 
 
-def run_self_play_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
+def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
     client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
-    with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter('self_play'):
+    with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter(run, 'self_play'):
         asyncio.run(self_play_process.run())
 
 

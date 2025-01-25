@@ -27,10 +27,9 @@ class LogLevel(Enum):
     CRITICAL = 50
 
 
-DATE_LOG_FOLDER = f'{LOG_FOLDER}/{date_str()}'
-LOG_FILE = DATE_LOG_FOLDER + f'/log_{time_str()}.log'
+LOG_FILE = LOG_FOLDER + f'/log_{time_str()}.log'
 LOG_LEVEL = LogLevel.INFO
-os.makedirs(DATE_LOG_FOLDER, exist_ok=True)
+os.makedirs(LOG_FOLDER, exist_ok=True)
 GLOBAL_LOG_FILE = open(LOG_FILE, 'w')
 
 

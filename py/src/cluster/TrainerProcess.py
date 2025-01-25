@@ -14,12 +14,12 @@ from src.train.TrainingStats import TrainingStats
 from src.util.PipeConnection import PipeConnection
 
 
-def run_trainer_process(args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
+def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable.'
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     trainer_process = TrainerProcess(args, device_id, commander_pipe)
-    with log_exceptions('Trainer process'), TensorboardWriter('trainer', postfix_pid=False):
+    with log_exceptions('Trainer process'), TensorboardWriter(run, 'trainer', postfix_pid=False):
         trainer_process.run()
 
 

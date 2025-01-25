@@ -101,7 +101,7 @@ def objective(trial: optuna.Trial) -> float:
     log(f'Running trial {trial.number} with the following hyperparameters:')
     log(trial.params, use_pprint=True)
 
-    commander = CommanderProcess(training_args)
+    commander = CommanderProcess(trial.number, training_args)
     for iteration, stats in commander.run():
         trial.report(stats.total_loss, step=iteration)
 

@@ -11,14 +11,14 @@ from src.util.tensorboard import TensorboardWriter
 
 
 # Usage Logger
-def _log_system_usage(interval: float):
+def _log_system_usage(run: int, interval: float):
     """
     Logs CPU, RAM, GPU, and VRAM usage every 'interval' seconds to a CSV file.
     """
     # Get the current process
     process = psutil.Process()
 
-    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter('usage', postfix_pid=False):
+    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter(run, 'usage', postfix_pid=False):
         writer = csv.writer(file)
         # Write header
         writer.writerow(
@@ -55,9 +55,15 @@ def _log_system_usage(interval: float):
             time.sleep(interval)
 
 
-def start_usage_logger():
+def start_usage_logger(run: int):
     """
     Starts the system usage logger in a separate daemon thread.
     """
-    logger_process = Process(target=_log_system_usage, args=(1.0,))
+    logger_process = Process(
+        target=_log_system_usage,
+        args=(
+            run,
+            1.0,
+        ),
+    )
     logger_process.start()

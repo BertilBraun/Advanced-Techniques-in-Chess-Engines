@@ -18,17 +18,17 @@ USE_GPU = torch.cuda.is_available()
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 
-def find_log_folder():
+def get_run_id():
     for run in range(10000):
         log_folder = f'logs/{run}'
         if not os.path.exists(log_folder):
             os.makedirs(log_folder)
-            return log_folder
+            return run
 
     raise Exception('Could not find a free log folder')
 
 
-LOG_FOLDER = find_log_folder()
+LOG_FOLDER = 'logs'
 SAVE_PATH = 'training_data'
 
 PLAY_C_PARAM = 1.0

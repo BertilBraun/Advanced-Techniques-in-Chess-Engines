@@ -11,7 +11,7 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.settings import TRAINING_ARGS, USE_GPU
+    from src.settings import TRAINING_ARGS, USE_GPU, get_run_id
     from src.util.log import log
     from src.util.profiler import start_usage_logger
     from src.settings import TensorboardWriter, log_text
@@ -22,14 +22,16 @@ if __name__ == '__main__':
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
 
-    start_usage_logger()
+    run = get_run_id()
 
-    with TensorboardWriter('training_args'):
+    start_usage_logger(run)
+
+    with TensorboardWriter(run, 'training_args', postfix_pid=False):
         import pprint
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
-    commander = CommanderProcess(TRAINING_ARGS)
+    commander = CommanderProcess(run, TRAINING_ARGS)
     for iteration, stats in commander.run():
         log(f'Trainer finished at iteration {iteration}.')
         log(f'Iteration {iteration}: {stats}')

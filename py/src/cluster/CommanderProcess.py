@@ -25,7 +25,8 @@ class CommanderProcess:
     Once all iterations are done, it sends a STOP message to all processes and waits for them to finish.
     """
 
-    def __init__(self, args: TrainingArgs) -> None:
+    def __init__(self, run: int, args: TrainingArgs) -> None:
+        self.run_id = run
         self.args = args
 
         self.trainer_process: Process
@@ -44,7 +45,7 @@ class CommanderProcess:
         trainer_commander_pipe, self.commander_trainer_pipe = Pipe(duplex=True)
 
         self.trainer_process = Process(
-            target=run_trainer_process, args=(self.args, trainer_commander_pipe, trainer_device_id)
+            target=run_trainer_process, args=(self.run_id, self.args, trainer_commander_pipe, trainer_device_id)
         )
         self.trainer_process.start()
 
@@ -56,6 +57,7 @@ class CommanderProcess:
             process = Process(
                 target=run_self_play_process,
                 args=(
+                    self.run_id,
                     self.args,
                     self_play_commander_pipe,
                     _get_device_id(device_id, self.args.cluster.num_self_play_nodes_on_cluster),
@@ -89,7 +91,7 @@ class CommanderProcess:
                 yield iteration, train_stats
 
                 # start EvaluationProcess
-                Process(target=run_evaluation_process, args=(self.args, iteration), daemon=True).start()
+                Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration), daemon=True).start()
 
         log('Training complete. Sending STOP to all processes.')
         for pipe in self._all_pipes():
