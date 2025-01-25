@@ -11,8 +11,8 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.util.log import log
     from src.settings import TRAINING_ARGS, USE_GPU
+    from src.util.log import log
     from src.util.profiler import start_usage_logger
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
