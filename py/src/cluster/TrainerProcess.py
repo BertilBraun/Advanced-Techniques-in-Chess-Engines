@@ -97,7 +97,7 @@ class TrainerProcess:
         )
 
         dataset = SelfPlayTrainDataset(
-            self.args.training.chunk_size or self.args.training.batch_size * 200,
+            self.args.training.chunk_size or self.args.training.batch_size * 20,
             self.device,
         )
 
