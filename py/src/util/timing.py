@@ -50,7 +50,7 @@ def reset_times():
     global_total_time = sum(global_function_times.values())
 
     if total_time > 0:
-        id = int((time.time() - start_timing_time) * 1000)
+        id = int(time.time() - start_timing_time)
         for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
             log_scalar(f'function_time/{key}/time_percent', global_function_times[key] / global_total_time * 100, id)
             log_scalar(f'function_time/{key}/time_total', global_function_times[key], id)
@@ -60,7 +60,9 @@ def reset_times():
                 level=LogLevel.DEBUG,
             )
 
-        log_scalar('function_time/total', global_total_time / (time.time() - start_timing_time), id)
+        log_scalar(
+            'function_time/total_traced_percent', global_total_time / (time.time() - start_timing_time) * 100, id
+        )
         log(f'In total: {global_total_time / (time.time() - start_timing_time):.2%} recorded', level=LogLevel.DEBUG)
 
     function_times = {}
