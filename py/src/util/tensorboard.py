@@ -59,7 +59,7 @@ class TensorboardWriter:
 
         self.log_folder = f'{LOG_FOLDER}/{run}/{suffix}'
         if postfix_pid:
-            self.log_folder += f'_{multiprocessing.current_process().pid}'
+            self.log_folder += f'/{multiprocessing.current_process().pid}'
 
     def __enter__(self):
         global _TB_SUMMARY
