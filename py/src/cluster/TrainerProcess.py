@@ -7,6 +7,7 @@ from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions
 from src.util.log import log
+from src.util.profiler import start_cpu_usage_logger
 from src.util.timing import reset_times, timeit
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
 from src.train.Trainer import Trainer
@@ -17,6 +18,8 @@ from src.util.PipeConnection import PipeConnection
 def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and commander_pipe.writable, 'Commander pipe must be readable and writable.'
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
+
+    start_cpu_usage_logger(run, 'trainer')
 
     trainer_process = TrainerProcess(args, device_id, commander_pipe)
     with log_exceptions('Trainer process'), TensorboardWriter(run, 'trainer', postfix_pid=False):

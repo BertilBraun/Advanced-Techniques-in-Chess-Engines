@@ -8,10 +8,13 @@ from src.cluster.InferenceClient import InferenceClient
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
+from src.util.profiler import start_cpu_usage_logger
 
 
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
+
+    start_cpu_usage_logger(run, f'self_play_{device_id}')
 
     client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)

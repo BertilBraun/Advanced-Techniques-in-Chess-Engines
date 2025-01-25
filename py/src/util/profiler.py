@@ -1,8 +1,6 @@
-import csv
 import time
 import psutil
 import GPUtil
-from datetime import datetime
 from multiprocessing import Process
 
 from src.settings import log_scalar
@@ -10,60 +8,45 @@ from src.settings import log_scalar
 from src.util.tensorboard import TensorboardWriter
 
 
-# Usage Logger
-def _log_system_usage(run: int, interval: float):
-    """
-    Logs CPU, RAM, GPU, and VRAM usage every 'interval' seconds to a CSV file.
-    """
-    # Get the current process
-    process = psutil.Process()
+def _tensorboard_gpu_usage(run: int, interval: float):
+    """Logs GPU usage every 'interval' seconds to tensorboard."""
 
-    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter(run, 'usage', postfix_pid=False):
-        writer = csv.writer(file)
-        # Write header
-        writer.writerow(
-            [
-                'timestamp',
-                'rank',
-                'cpu_percent',
-                'ram_usage',
-                'gpu_id',
-                'gpu_load',
-                'gpu_memory_used',
-                'gpu_memory_total',
-            ]
-        )
-
+    with TensorboardWriter(run, 'gpu_usage', postfix_pid=False):
         while True:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             for gpu in GPUtil.getGPUs():
-                writer.writerow([timestamp, -1, 0, 0, gpu.id, gpu.load, gpu.memoryUsed, gpu.memoryTotal])
-                log_scalar(f'gpu/{gpu.id}/load', gpu.load, int(time.time() * 1000))
-                log_scalar(f'gpu/{gpu.id}/memory_used', gpu.memoryUsed, int(time.time() * 1000))
-
-            for i, proc in enumerate([process] + process.children(recursive=True)):
-                try:
-                    cpu_percent = proc.cpu_percent(interval=None)
-                    ram_usage = proc.memory_info().rss / 2**20
-                    writer.writerow([timestamp, i, cpu_percent, ram_usage, -1, 0, 0, 0])
-                    log_scalar(f'cpu/{proc.pid}/percent', cpu_percent, int(time.time() * 1000))
-                    log_scalar(f'cpu/{proc.pid}/ram_usage', ram_usage, int(time.time() * 1000))
-                except psutil.NoSuchProcess:
-                    pass
-
-            file.flush()  # Ensure data is written to disk
+                log_scalar(f'gpu/{gpu.id}/load', gpu.load, int(time.time() / interval))
+                log_scalar(f'gpu/{gpu.id}/memory_used', gpu.memoryUsed, int(time.time() / interval))
             time.sleep(interval)
 
 
-def start_usage_logger(run: int):
-    """
-    Starts the system usage logger in a separate daemon thread.
-    """
-    logger_process = Process(
-        target=_log_system_usage,
-        args=(
-            run,
-            1.0,
-        ),
-    )
-    logger_process.start()
+def _tensorboard_cpu_usage(run: int, interval: float, title: str):
+    """Logs CPU usage every 'interval' seconds to tensorboard."""
+
+    with TensorboardWriter(run, f'cpu_usage_{title}', postfix_pid=True):
+        while True:
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=None)
+            ram_usage = process.memory_info().rss / 2**20
+            log_scalar(f'cpu/{title}_{process.pid}/percent', cpu_percent, int(time.time() / interval))
+            log_scalar(f'cpu/{title}_{process.pid}/ram (MB)', ram_usage, int(time.time() / interval))
+            time.sleep(interval)
+
+
+def start_gpu_usage_logger(run: int):
+    """Starts the GPU usage logger in a separate daemon thread."""
+
+    Process(
+        target=_tensorboard_gpu_usage,
+        args=(run, 1.0),
+        daemon=True,
+    ).start()
+
+
+def start_cpu_usage_logger(run: int, title: str):
+    """Starts the CPU usage logger in a separate daemon thread."""
+
+    Process(
+        target=_tensorboard_cpu_usage,
+        args=(run, 1.0, title),
+        daemon=True,
+    ).start()

@@ -55,14 +55,16 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) 
 
 class TensorboardWriter:
     def __init__(self, run: int, suffix: str = '', postfix_pid: bool = True) -> None:
-        self.suffix = f'{run}/{suffix}_{multiprocessing.current_process().pid}' if postfix_pid else suffix
-
-    def __enter__(self):
         from src.settings import LOG_FOLDER
 
+        self.log_folder = f'{LOG_FOLDER}/{run}/{suffix}'
+        if postfix_pid:
+            self.log_folder += f'_{multiprocessing.current_process().pid}'
+
+    def __enter__(self):
         global _TB_SUMMARY
         assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
-        _TB_SUMMARY = SummaryWriter(f'{LOG_FOLDER}/{self.suffix}')
+        _TB_SUMMARY = SummaryWriter(self.log_folder)
 
     def __exit__(self, exc_type, exc_value, traceback):
         global _TB_SUMMARY

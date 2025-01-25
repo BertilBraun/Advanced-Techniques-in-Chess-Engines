@@ -13,7 +13,7 @@ if __name__ == '__main__':
 
     from src.settings import TRAINING_ARGS, USE_GPU, get_run_id
     from src.util.log import log
-    from src.util.profiler import start_usage_logger
+    from src.util.profiler import start_gpu_usage_logger
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
 
@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     run = get_run_id()
 
-    start_usage_logger(run)
+    start_gpu_usage_logger(run)
 
     with TensorboardWriter(run, 'training_args', postfix_pid=False):
         import pprint
