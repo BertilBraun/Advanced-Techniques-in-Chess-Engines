@@ -47,12 +47,16 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             for file in files:
                 dataset += SelfPlayDataset.load(file)
 
-            log_scalar('num_games', dataset.stats.num_games, i)
-            log_scalar('num_resignations', dataset.stats.resignations, i)
-            log_scalar('average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i)
-            log_scalar('num_samples', len(dataset), i)
-            log_scalar('total_generation_time', dataset.stats.total_generation_time, i)
-            log_scalar('average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i)
+            log_scalar('dataset/num_games', dataset.stats.num_games, i)
+            log_scalar('dataset/num_resignations', dataset.stats.resignations, i)
+            log_scalar(
+                'dataset/average_resignations_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i
+            )
+            log_scalar('dataset/num_samples', len(dataset), i)
+            log_scalar('dataset/total_generation_time', dataset.stats.total_generation_time, i)
+            log_scalar(
+                'dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i
+            )
 
             if len(files) > 1:
                 dataset.deduplicate()
@@ -63,13 +67,13 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
             dataset = dataset.shuffle()
 
-            log_scalar('num_deduplicated_samples', len(dataset), i)
+            log_scalar('dataset/num_deduplicated_samples', len(dataset), i)
 
             spikiness = sum(policy_target.max() for policy_target in dataset.policy_targets) / len(dataset)
-            log_scalar('policy_spikiness', spikiness, i)
+            log_scalar('dataset/policy_spikiness', spikiness, i)
 
-            log_histogram('policy_targets', np.array(dataset.policy_targets), i)
-            log_histogram('value_targets', np.array(dataset.value_targets), i)
+            log_histogram('dataset/policy_targets', np.array(dataset.policy_targets), i)
+            log_histogram('dataset/value_targets', np.array(dataset.value_targets), i)
 
             self.stats += dataset.stats
 

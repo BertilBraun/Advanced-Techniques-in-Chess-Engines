@@ -46,6 +46,7 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
         except RuntimeError:
             log(f'Could not load model from: {path}')
             raise
+    log(f'Model loaded from: {path}')
     return model
 
 

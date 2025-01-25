@@ -104,9 +104,9 @@ class Trainer:
             validation_stats = TrainingStats()
             val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
 
-            log_scalar('val_policy_loss', val_policy_loss.item(), iteration)
-            log_scalar('val_value_loss', val_value_loss.item(), iteration)
-            log_scalar('val_loss', val_loss.item(), iteration)
+            log_scalar('validation/policy_loss', val_policy_loss.item(), iteration)
+            log_scalar('validation/value_loss', val_value_loss.item(), iteration)
+            log_scalar('validation/loss', val_loss.item(), iteration)
             validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item(), 0, 0)
 
             log(f'Validation stats: {validation_stats}')

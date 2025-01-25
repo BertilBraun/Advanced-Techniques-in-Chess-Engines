@@ -82,11 +82,11 @@ class TrainerProcess:
             time.sleep(1)
 
     def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats) -> None:
-        log_scalar('policy_loss', train_stats.policy_loss, iteration)
-        log_scalar('value_loss', train_stats.value_loss, iteration)
-        log_scalar('total_loss', train_stats.total_loss, iteration)
-        log_scalar('value_mean', train_stats.value_mean, iteration)
-        log_scalar('value_std', train_stats.value_std, iteration)
+        log_scalar('train/policy_loss', train_stats.policy_loss, iteration)
+        log_scalar('train/value_loss', train_stats.value_loss, iteration)
+        log_scalar('train/total_loss', train_stats.total_loss, iteration)
+        log_scalar('train/value_mean', train_stats.value_mean, iteration)
+        log_scalar('train/value_std', train_stats.value_std, iteration)
 
     @timeit
     def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayTrainDataset:

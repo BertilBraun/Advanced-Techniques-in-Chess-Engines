@@ -40,7 +40,7 @@ def timeit(func):
 
 def reset_times():
     from src.util.log import LogLevel, log
-    from src.settings import log_scalar, log_scalars
+    from src.settings import log_scalar
 
     global function_times
 
@@ -52,15 +52,9 @@ def reset_times():
     if total_time > 0:
         id = int((time.time() - start_timing_time) * 1000)
         for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
-            log_scalars(
-                f'function_time/{key}',
-                {
-                    'time_percent': global_function_times[key] / global_total_time * 100,
-                    'time_total': global_function_times[key],
-                    'invocations': global_function_invocations[key],
-                },
-                id,
-            )
+            log_scalar(f'function_time/{key}/time_percent', global_function_times[key] / global_total_time * 100, id)
+            log_scalar(f'function_time/{key}/time_total', global_function_times[key], id)
+            log_scalar(f'function_time/{key}/invocations', global_function_invocations[key], id)
             log(
                 f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}',
                 level=LogLevel.DEBUG,

@@ -29,7 +29,7 @@ def log_scalar(name: str, value: float, iteration: int) -> None:
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
-def log_scalars(name: str, values: dict[str, float], iteration: int) -> None:
+def log_scalars(name: str, values: dict[str, float | int], iteration: int) -> None:
     if not _tb_check_active():
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'

@@ -7,6 +7,7 @@ from src.settings import log_scalar, CurrentGame, CurrentBoard, TensorboardWrite
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import TrainingArgs
+from src.util.tensorboard import log_scalars
 
 
 def run_evaluation_process(args: TrainingArgs, iteration: int):
@@ -48,25 +49,37 @@ class EvaluationProcess:
         log(f'    Policy accuracy @10: {policy_accuracy_at_10}')
         log(f'    Avg value loss: {avg_value_loss}')
 
-        log_scalar('policy_accuracy@1', policy_accuracy_at_1, iteration)
-        log_scalar('policy_accuracy@5', policy_accuracy_at_5, iteration)
-        log_scalar('policy_accuracy@10', policy_accuracy_at_10, iteration)
-        log_scalar('value_mse_loss', avg_value_loss, iteration)
+        log_scalar('evaluation/policy_accuracy@1', policy_accuracy_at_1, iteration)
+        log_scalar('evaluation/policy_accuracy@5', policy_accuracy_at_5, iteration)
+        log_scalar('evaluation/policy_accuracy@10', policy_accuracy_at_10, iteration)
+        log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
         results = await model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
-        log_scalar('win_loss_draw_vs_previous_model/wins', results.wins, iteration)
-        log_scalar('win_loss_draw_vs_previous_model/losses', results.losses, iteration)
-        log_scalar('win_loss_draw_vs_previous_model/draws', results.draws, iteration)
+        log_scalars(
+            'evaluation/vs_previous_model',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
 
         results = await model_evaluation.play_vs_random()
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
-        log_scalar('win_loss_draw_vs_random/wins', results.wins, iteration)
-        log_scalar('win_loss_draw_vs_random/losses', results.losses, iteration)
-        log_scalar('win_loss_draw_vs_random/draws', results.draws, iteration)
+        log_scalars(
+            'evaluation/vs_random',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
 
         from src.games.chess.ChessGame import ChessGame
 
@@ -83,6 +96,12 @@ class EvaluationProcess:
 
             # TODO for StockfishBot you have to call .cleanup() before quitting the process
 
-            log_scalar('win_loss_draw_vs_comparison_bot/wins', results.wins, iteration)
-            log_scalar('win_loss_draw_vs_comparison_bot/losses', results.losses, iteration)
-            log_scalar('win_loss_draw_vs_comparison_bot/draws', results.draws, iteration)
+            log_scalars(
+                'evaluation/vs_comparison_bot',
+                {
+                    'wins': results.wins,
+                    'losses': results.losses,
+                    'draws': results.draws,
+                },
+                iteration,
+            )
