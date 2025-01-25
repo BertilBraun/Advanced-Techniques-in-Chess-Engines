@@ -19,7 +19,7 @@ def run_trainer_process(args: TrainingArgs, commander_pipe: PipeConnection, devi
     assert 0 <= device_id < torch.cuda.device_count() or not USE_GPU, f'Invalid device ID ({device_id})'
 
     trainer_process = TrainerProcess(args, device_id, commander_pipe)
-    with log_exceptions('Trainer process'), TensorboardWriter('trainer'):
+    with log_exceptions('Trainer process'), TensorboardWriter('trainer', postfix_pid=False):
         trainer_process.run()
 
 

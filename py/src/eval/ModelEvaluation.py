@@ -13,7 +13,7 @@ from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
-from src.mcts.MCTS import MCTS
+from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
@@ -147,7 +147,7 @@ class ModelEvaluation:
 
         async def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             results = await MCTS(previous_model, self.mcts_args).search([(board, None) for board in boards])
-            return [result.action_probabilities for result in results]
+            return [action_probabilities(result.visit_counts) for result in results]
 
         return await self.play_vs_evaluation_model(previous_model_evaluator)
 
@@ -159,7 +159,7 @@ class ModelEvaluation:
 
         async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             results = await MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
-            return [result.action_probabilities for result in results]
+            return [action_probabilities(result.visit_counts) for result in results]
 
         results += await self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
         results -= await self._play_two_models_search(evaluation_model, model1, self.num_games // 2)

@@ -18,7 +18,7 @@ def _log_system_usage(interval: float):
     # Get the current process
     process = psutil.Process()
 
-    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter('usage'):
+    with open('usage.csv', mode='w', newline='') as file, TensorboardWriter('usage', postfix_pid=False):
         writer = csv.writer(file)
         # Write header
         writer.writerow(

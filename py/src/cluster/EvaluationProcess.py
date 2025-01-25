@@ -12,7 +12,7 @@ from src.util.tensorboard import log_scalars
 
 def run_evaluation_process(args: TrainingArgs, iteration: int):
     evaluation_process = EvaluationProcess(args)
-    with log_exceptions('Evaluation process'), TensorboardWriter('evaluation'):
+    with log_exceptions('Evaluation process'), TensorboardWriter('evaluation', postfix_pid=False):
         asyncio.run(evaluation_process.run(iteration))
 
 

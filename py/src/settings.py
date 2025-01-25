@@ -17,8 +17,19 @@ USE_GPU = torch.cuda.is_available()
 # Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
-LOG_FOLDER = 'AIZeroConnect4Bot/logs'
-SAVE_PATH = 'AIZeroConnect4Bot/training_data'
+
+def find_log_folder():
+    for run in range(10000):
+        log_folder = f'logs/{run}'
+        if not os.path.exists(log_folder):
+            os.makedirs(log_folder)
+            return log_folder
+
+    raise Exception('Could not find a free log folder')
+
+
+LOG_FOLDER = find_log_folder()
+SAVE_PATH = 'training_data'
 
 PLAY_C_PARAM = 1.0
 
