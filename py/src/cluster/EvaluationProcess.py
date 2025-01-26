@@ -107,7 +107,7 @@ class EvaluationProcess:
                 comparison_bot.restart_clock()
                 return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]
 
-            results = model_evaluation.play_vs_evaluation_model(comparison_bot_evaluator)
+            results = model_evaluation.play_vs_evaluation_model(comparison_bot_evaluator, self.eval_args.num_games // 2)
             log(f'Results after playing vs comparison bot at iteration {iteration}:', results)
 
             # TODO for StockfishBot you have to call .cleanup() before quitting the process

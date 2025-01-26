@@ -52,6 +52,8 @@ class Trainer:
 
             out_policy, out_value = self.model(state)
 
+            # Binary cross entropy loss for the policy is definitely not correct, as the policy has multiple classes
+            # torch.cross_entropy applies softmax internally, so we don't need to apply it to the output
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
 

@@ -1,7 +1,6 @@
 # This bot is heavily based on the King Gambot IV by toanth (https://github.com/SebLague/Tiny-Chess-Bot-Challenge-Results/blob/main/Bots/Bot_628.cs)
 
 from math import log
-import random
 
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
@@ -152,9 +151,6 @@ class HandcraftedBotV4(Bot):
     def think(self, board: ChessBoard) -> Move:
         self.initialize_search_parameters()
         self.iterative_deepening_search(board.board)
-        if self.best_root_move == Move.null():
-            print('WARNING: No move found, returning random move')
-            return random.choice(board.get_valid_moves())
         return self.best_root_move
 
     def initialize_search_parameters(self) -> None:
@@ -165,7 +161,7 @@ class HandcraftedBotV4(Bot):
     def iterative_deepening_search(self, board: Board) -> None:
         alpha, beta = -30000, 30000
         depth = 1
-        while not self.time_is_up and depth < 64:
+        while (not self.time_is_up or self.best_root_move == Move.null()) and depth < 64:
             score = self.negamax(board, depth, alpha, beta, 0, False)
             if score == alpha and score == beta:
                 depth += 1

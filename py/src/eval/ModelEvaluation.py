@@ -152,7 +152,7 @@ class ModelEvaluation:
 
         return self.play_vs_evaluation_model(opponent_evaluator)
 
-    def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
+    def play_vs_evaluation_model(self, evaluation_model: EvaluationModel, num_games: int | None = None) -> Results:
         results = Results(0, 0, 0)
 
         current_model = InferenceClient(0, self.args)
@@ -162,8 +162,10 @@ class ModelEvaluation:
             results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
-        results += self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
-        results -= self._play_two_models_search(evaluation_model, model1, self.num_games // 2)
+        num_games = num_games or self.num_games
+
+        results += self._play_two_models_search(model1, evaluation_model, num_games // 2)
+        results -= self._play_two_models_search(evaluation_model, model1, num_games // 2)
 
         return results
 
