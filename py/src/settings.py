@@ -212,7 +212,7 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.85,
+            result_score_weight=0.15,
             mcts=MCTSParams(
                 num_searches_per_turn=240,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=4,

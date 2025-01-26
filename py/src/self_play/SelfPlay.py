@@ -14,6 +14,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import SelfPlayParams
+from src.util.log import log
 from src.util.timing import reset_times, timeit
 
 
@@ -30,13 +31,11 @@ class SelfPlayGame:
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.already_expanded_node: MCTSNode | None = None
-        self.num_played_moves = 0
         self.start_generation_time = time.time()
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
         new_game.board.make_move(move)
-        new_game.num_played_moves += 1
         new_game.played_moves.append(move)
         return new_game
 
@@ -45,7 +44,6 @@ class SelfPlayGame:
         game.board = self.board.copy()
         game.memory = self.memory.copy()
         game.played_moves = self.played_moves.copy()
-        game.num_played_moves = self.num_played_moves
         game.start_generation_time = self.start_generation_time
         return game
 
@@ -67,6 +65,8 @@ class SelfPlay:
         self.mcts = self._get_mcts(self.iteration)
 
     def update_iteration(self, iteration: int) -> None:
+        if len(self.dataset) > 0:
+            log(f'Warning: Dataset should be empty when updating iteration. Discarding {len(self.dataset)} samples.')
         self.iteration = iteration
         self.mcts = self._get_mcts(self.iteration)
         self.dataset = SelfPlayDataset()
@@ -125,13 +125,14 @@ class SelfPlay:
 
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
-        if current.num_played_moves >= self.args.num_moves_after_which_to_play_greedy:
+        if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
             move = CurrentGame.decode_move(np.argmax(action_probabilities).item())
         else:
             move = self._sample_move(action_probabilities, self.args.temperature)
 
         new_spg = current.expand(move)
         new_spg.already_expanded_node = next(child for child in children if child.move_to_get_here == move)
+        new_spg.already_expanded_node.parent = None  # remove the parent to avoid memory leak
 
         if not new_spg.board.is_game_over():
             return new_spg, move

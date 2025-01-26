@@ -23,13 +23,13 @@ def _tensorboard_cpu_usage(run: int, interval: float, title: str, pid: int):
     """Logs CPU usage every 'interval' seconds to tensorboard."""
 
     with TensorboardWriter(run, f'cpu_usage_{title}', postfix_pid=True):
+        process = psutil.Process(pid)
         while True:
             try:
-                process = psutil.Process(pid)
                 cpu_percent = process.cpu_percent(interval=None)
                 ram_usage = process.memory_info().rss / 2**20
                 log_scalar(f'cpu/{title}_{process.pid}/percent', cpu_percent, int(time.time() / interval))
-                log_scalar(f'cpu/{title}_{process.pid}/ram (MB)', ram_usage, int(time.time() / interval))
+                log_scalar(f'cpu/{title}_{process.pid}/ram_MB', ram_usage, int(time.time() / interval))
             except psutil.NoSuchProcess:
                 break
             time.sleep(interval)

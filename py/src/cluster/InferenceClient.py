@@ -54,7 +54,11 @@ class InferenceClient:
                 iteration,
             )
 
-            size_in_mb = getsizeof(self.inference_cache) / 1024 / 1024
+            size_in_mb = 0
+            for key, (policy, value) in self.inference_cache.items():
+                size_in_mb += getsizeof(key) + getsizeof(value) + policy.nbytes
+
+            size_in_mb /= 1024 * 1024
             log_scalar('cache/size_mb', size_in_mb, iteration)
             log(
                 f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)} ({size_in_mb:.2f} MB)'

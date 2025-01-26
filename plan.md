@@ -45,6 +45,16 @@ Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/mast
 
 
 
+TODO completely remove asyncio from the project
+TODO document the asyncio test
+
+DONE fix the OOM issue
+
+TODO Think about, training with the pretrained model or from scratch?
+    Value seems stuck on my machine right now
+    Another bug?
+
+
 TODO I think too many positions are duplicated, i.e. searched again, that is why:
 - the Cache hit rate is so high
 - the model does not learn much (because it only sees a very limited set of positions)
