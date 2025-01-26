@@ -1,7 +1,7 @@
 # This bot is heavily based on the King Gambot IV by toanth (https://github.com/SebLague/Tiny-Chess-Bot-Challenge-Results/blob/main/Bots/Bot_628.cs)
 
 from math import log
-from random import random
+import random
 
 from chess import *  # type: ignore
 from src.eval.Bot import Bot
