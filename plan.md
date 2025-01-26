@@ -46,7 +46,24 @@ Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/mast
 
 
 TODO completely remove asyncio from the project
-TODO document the asyncio test
+DONE document the asyncio test
+
+Baseline performance:
+Two GPUs were exclusively used for selfplay game generation and one GPU was used
+both for game generation and updating the neural network as soon as sufficiently many
+samples have been acquired. On a single GPU about 45 games were generated per minute
+which corresponded to 1,000 training samples per minute. Each training sample was
+produced by an average of 800 MCTS rollouts with a batch-size of 8.
+
+Not all of the game moves were exported as training samples and exported as further
+described in Section 5.2.1. A new neural network was generated every 819,200 (= 640 ·
+128 · 10) newly generated samples. After the 10th model update, the number of required
+samples was increased to 1,228,800 (= 640 · 128 · 15) samples. 81,920 (= 640 · 128) of
+these samples were used for validation and the rest for training. Furthermore, 409,600
+(= 640 · 128 · 5) samples were added and randomly chosen from 5 % of the most recent
+replay memory data. The training proceeded for one epoch and afterwards, all samples,
+except validation samples, were added to the replay memory.
+
 
 DONE fix the OOM issue
 

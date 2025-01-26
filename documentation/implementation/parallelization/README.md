@@ -8,6 +8,8 @@ The self-play parallelization approach focuses on distributing the self-play pha
 
 For more details on how self-play parallelization is implemented and optimized, please refer to the [self-play documentation](SelfPlay.md).
 
+For more details on our experiments with asyncio, see the [asyncio documentation](asyncio.md).
+
 ## Training Parallelization
 
 Training parallelization takes advantage of multiple GPUs to expedite the neural network training process. This approach involves distributing the training workload across several GPUs and synchronizing the gradients among the models to ensure consistency and convergence. By parallelizing the training process, we hope to significantly reduce training time and enhance the learning efficiency of the neural network.
