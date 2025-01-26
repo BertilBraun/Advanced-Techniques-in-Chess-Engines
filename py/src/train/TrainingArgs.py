@@ -123,12 +123,6 @@ class EvaluationParams:
 
 
 @dataclass
-class InferenceParams:
-    batch_size: int
-    """This is the size of the batch to use for inference. The higher the batch size the faster the inference but the more memory is used. Typically 32-512 (parallel_games * parallel_searches as an upper bound) for inference"""
-
-
-@dataclass
 class TrainingArgs:
     save_path: str
     """This is the path to save the model, datasamples, training logs, etc. to after each iteration"""
@@ -143,5 +137,4 @@ class TrainingArgs:
     self_play: SelfPlayParams
     training: TrainingParams
     cluster: ClusterParams
-    inference: InferenceParams
     evaluation: Optional[EvaluationParams] = None

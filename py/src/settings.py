@@ -3,7 +3,6 @@ import torch
 from src.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
-    InferenceParams,
     MCTSParams,
     NetworkParams,
     SelfPlayParams,
@@ -103,7 +102,6 @@ if False:
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=network,
-        inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             temperature=1.25,
@@ -135,7 +133,6 @@ if False:
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=32,
         network=network,
-        inference=InferenceParams(batch_size=128),
         self_play=SelfPlayParams(
             num_parallel_games=128,
             temperature=1.25,
@@ -189,7 +186,6 @@ elif True:
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
     )
-    inference = InferenceParams(batch_size=128)
     evaluation = EvaluationParams(
         num_searches_per_turn=60,
         num_games=40,
@@ -215,7 +211,6 @@ elif True:
         save_path=SAVE_PATH + '/chess',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2,
         network=network,
-        inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
@@ -260,7 +255,6 @@ elif False:
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
     )
-    inference = InferenceParams(batch_size=128)
 
     PARALLEL_GAMES = 64
 
@@ -272,7 +266,6 @@ elif False:
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=network,
-        inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=10,
@@ -298,7 +291,6 @@ elif False:
         save_path=SAVE_PATH + '/checkers',
         num_games_per_iteration=32,
         network=network,
-        inference=inference,
         self_play=SelfPlayParams(
             num_parallel_games=2,
             num_games_after_which_to_write=4,
@@ -336,7 +328,6 @@ elif True:
         num_iterations=12,
         save_path=SAVE_PATH + '/tictactoe',
         num_games_per_iteration=300,
-        inference=InferenceParams(batch_size=128),
         network=NetworkParams(num_layers=8, hidden_size=16),
         self_play=SelfPlayParams(
             temperature=1.25,

@@ -5,7 +5,6 @@ from multiprocessing import Process
 from src.util.log import log
 from src.train.TrainingArgs import (
     ClusterParams,
-    InferenceParams,
     TrainingArgs,
     MCTSParams,
     NetworkParams,
@@ -94,7 +93,6 @@ def objective(trial: optuna.Trial) -> float:
         network=network_params,
         self_play=self_play_params,
         training=training_params,
-        inference=InferenceParams(batch_size=128),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=2),
     )
 
