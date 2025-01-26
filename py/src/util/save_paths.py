@@ -38,11 +38,26 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
     try:
         model.load_state_dict(data)
     except RuntimeError:
-        log(f'Could not load model from: {path}, trying to load without compilation')
-        # replace all key prefixes or "_orig_mod." with ""
+        # check if any key contains "_orig_mod." if so, try to load without it, else try to load
+        contains_org = any('_orig_mod.' in key for key in data.keys())
+
         try:
-            data = {key.replace('_orig_mod.', ''): value for key, value in data.items()}
-            model.load_state_dict(data)
+            if contains_org:
+                assert all('_orig_mod.' in key for key in data.keys()), 'Some keys contain "_orig_mod." and some do not'
+
+                log(f'Could not load model from: {path}, trying to load without compilation')
+                # replace all key prefixes or "_orig_mod." with ""
+
+                data = {key.replace('_orig_mod.', ''): value for key, value in data.items()}
+                model.load_state_dict(data)
+            else:
+                assert all(
+                    '_orig_mod.' not in key for key in data.keys()
+                ), 'Some keys contain "_orig_mod." and some do not'
+                log(f'Could not load model from: {path}, trying to load with compilation')
+
+                data = {f'_orig_mod.{key}': value for key, value in data.items()}
+                model.load_state_dict(data)
         except RuntimeError:
             log(f'Could not load model from: {path}')
             raise
