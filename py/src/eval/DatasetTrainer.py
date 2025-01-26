@@ -13,6 +13,7 @@ from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
+from src.util.save_paths import create_model
 
 NUM_EPOCHS = 10
 BATCH_SIZE = 512
@@ -69,7 +70,7 @@ def main(dataset_paths: list[str]):
         test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
         # Instantiate the model
-        model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, device=device)
+        model = create_model(TRAINING_ARGS.network, device=device)
 
         # Train the model
         log('Starting training...')

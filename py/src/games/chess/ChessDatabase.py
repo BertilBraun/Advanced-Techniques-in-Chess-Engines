@@ -1,7 +1,5 @@
-import os
 import io
 import sys
-import requests
 import chess.pgn
 import numpy as np
 from pathlib import Path
@@ -10,19 +8,15 @@ from multiprocessing import Process
 
 from tqdm import trange
 
+from src.util.download import download
 
-def download(year: int, month: int, folder: str) -> str:
+
+def load_content(year: int, month: int, folder: str) -> str:
     name = f'lichess_elite_{year}-{month:02}.zip'
     file = f'{folder}/{name}'
-    if os.path.exists(file):
-        return file
 
-    os.makedirs(folder, exist_ok=True)
-    url = f'https://database.nikonoel.fr/{name}'
-    print(f'Downloading {url}')
-    r = requests.get(url)
-    with open(file, 'wb') as f:
-        f.write(r.content)
+    download(f'https://database.nikonoel.fr/{name}', file)
+
     return file
 
 
@@ -33,7 +27,7 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
     #     parse the game
     #     yield the game
 
-    file = download(year, month, 'reference/data/chess_database')
+    file = load_content(year, month, 'reference/data/chess_database')
     with ZipFile(file, 'r') as zip_ref:
         content = zip_ref.read(zip_ref.namelist()[0]).decode('utf-8')
 
