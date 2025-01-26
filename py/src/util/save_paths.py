@@ -6,7 +6,7 @@ from pathlib import Path
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
 from src.util.compile import try_compile
-from src.util.log import log
+from src.util.log import LogLevel, log
 
 
 def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
@@ -46,7 +46,7 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
         except RuntimeError:
             log(f'Could not load model from: {path}')
             raise
-    log(f'Model loaded from: {path}')
+    log(f'Model loaded from: {path}', level=LogLevel.DEBUG)
     return model
 
 

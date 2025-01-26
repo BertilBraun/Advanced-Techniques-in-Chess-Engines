@@ -1,4 +1,5 @@
 from __future__ import annotations
+from os import PathLike
 import random
 
 import numpy as np
@@ -141,15 +142,15 @@ class ModelEvaluation:
 
         return self.play_vs_evaluation_model(random_evaluator)
 
-    def play_two_models_search(self, previous_model_iteration: int) -> Results:
-        previous_model = InferenceClient(0, self.args)
-        previous_model.update_iteration(previous_model_iteration)
+    def play_two_models_search(self, model_path: str | PathLike) -> Results:
+        opponent = InferenceClient(0, self.args)
+        opponent.load_model(model_path)
 
-        def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = MCTS(previous_model, self.mcts_args).search([(board, None) for board in boards])
+        def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
-        return self.play_vs_evaluation_model(previous_model_evaluator)
+        return self.play_vs_evaluation_model(opponent_evaluator)
 
     def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
         results = Results(0, 0, 0)

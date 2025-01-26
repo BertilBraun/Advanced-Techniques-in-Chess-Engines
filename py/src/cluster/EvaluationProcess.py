@@ -6,6 +6,7 @@ from src.settings import log_scalar, CurrentGame, CurrentBoard, TensorboardWrite
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import TrainingArgs
+from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_scalars
 
 
@@ -52,12 +53,28 @@ class EvaluationProcess:
         log_scalar('evaluation/policy_accuracy@10', policy_accuracy_at_10, iteration)
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
-        results = model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)
+        previous_model_path = model_save_path(iteration - self.eval_args.every_n_iterations, self.args.save_path)
+        results = model_evaluation.play_two_models_search(previous_model_path)
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
         log_scalars(
             'evaluation/vs_previous_model',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
+
+        first_model_path = model_save_path(0, self.args.save_path)
+        results = model_evaluation.play_two_models_search(first_model_path)
+
+        log(f'Results after playing the current vs the first at iteration {iteration}:', results)
+
+        log_scalars(
+            'evaluation/vs_first_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,
@@ -82,9 +99,9 @@ class EvaluationProcess:
         from src.games.chess.ChessGame import ChessGame
 
         if isinstance(CurrentGame, ChessGame):
-            from src.games.chess.comparison_bots.HandcraftedBotV3 import HandcraftedBotV3
+            from src.games.chess.comparison_bots.HandcraftedBotV4 import HandcraftedBotV4
 
-            comparison_bot = HandcraftedBotV3()
+            comparison_bot = HandcraftedBotV4()
 
             def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
                 return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]

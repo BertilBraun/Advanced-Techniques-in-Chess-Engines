@@ -1,4 +1,5 @@
 from __future__ import annotations
+from os import PathLike
 
 import torch
 import numpy as np
@@ -9,7 +10,7 @@ from src.Network import Network
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.ZobristHasherNumpy import ZobristHasherNumpy
-from src.util.log import log
+from src.util.log import LogLevel, log
 from src.util.timing import timeit
 from src.util.save_paths import load_model, model_save_path
 
@@ -32,15 +33,17 @@ class InferenceClient:
         channels, rows, cols = CurrentGame.representation_shape
         self.hasher = ZobristHasherNumpy(channels, rows, cols)
 
+    def load_model(self, model_path: str | PathLike) -> None:
+        self.model = load_model(model_path, self.args.network, self.device)
+        self.model.disable_auto_grad()
+        self.model = self.model.eval()
+        self.model.fuse_model()
+
     def update_iteration(self, iteration: int) -> None:
         """Update the Inference Client to use the model for the given iteration.
         Slighly optimizes the model for inference and resets the cache and stats."""
 
-        self.model = load_model(model_save_path(iteration, self.args.save_path), self.args.network, self.device)
-        # self.model = load_model(R'C:\Users\berti\OneDrive\Desktop\zip6\zip\model_64.pt', self.args.network, self.device)
-        self.model.disable_auto_grad()
-        self.model = self.model.eval()
-        self.model.fuse_model()
+        self.load_model(model_save_path(iteration, self.args.save_path))
 
         if self.total_evals != 0:
             cache_hit_rate = (self.total_hits / self.total_evals) * 100
@@ -59,7 +62,8 @@ class InferenceClient:
             size_in_mb /= 1024 * 1024
             log_scalar('cache/size_mb', size_in_mb, iteration)
             log(
-                f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)} ({size_in_mb:.2f} MB)'
+                f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)} ({size_in_mb:.2f} MB)',
+                level=LogLevel.DEBUG,
             )
         self.inference_cache.clear()
 
