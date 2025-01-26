@@ -104,6 +104,7 @@ class EvaluationProcess:
             comparison_bot = HandcraftedBotV4()
 
             def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+                comparison_bot.restart_clock()
                 return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]
 
             results = model_evaluation.play_vs_evaluation_model(comparison_bot_evaluator)

@@ -50,21 +50,18 @@ def reset_times():
     global_total_time = sum(global_function_times.values())
 
     if total_time > 0:
-        id = int(time.time() - start_timing_time)
         for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
             log_scalar(
-                f'function_percent_of_execution_time/{key}', global_function_times[key] / global_total_time * 100, id
+                f'function_percent_of_execution_time/{key}', global_function_times[key] / global_total_time * 100
             )
-            log_scalar(f'function_total_time/{key}', global_function_times[key], id)
-            log_scalar(f'function_total_invocations/{key}', global_function_invocations[key], id)
+            log_scalar(f'function_total_time/{key}', global_function_times[key])
+            log_scalar(f'function_total_invocations/{key}', global_function_invocations[key])
             log(
                 f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}',
                 level=LogLevel.DEBUG,
             )
 
-        log_scalar(
-            'function_time/total_traced_percent', global_total_time / (time.time() - start_timing_time) * 100, id
-        )
+        log_scalar('function_time_total_traced_percent', global_total_time / (time.time() - start_timing_time) * 100)
         log(f'In total: {global_total_time / (time.time() - start_timing_time):.2%} recorded', level=LogLevel.DEBUG)
 
     function_times = {}

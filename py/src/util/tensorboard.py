@@ -8,12 +8,11 @@ from tensorboardX import SummaryWriter
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
 _TB_SUMMARY: SummaryWriter | None = None
-_STARTING_TIME = -1
 _HAS_PROMPTED = False
 
 
 def _tb_check_active() -> bool:
-    if _TB_SUMMARY is None or _STARTING_TIME == -1:
+    if _TB_SUMMARY is None:
         global _HAS_PROMPTED
         if not _HAS_PROMPTED:
             from src.util.log import LogLevel, log
@@ -29,7 +28,7 @@ def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
-        iteration = int(time.time() - _STARTING_TIME)
+        iteration = int(time.time() * 1000)
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
@@ -38,7 +37,7 @@ def log_scalars(name: str, values: dict[str, float | int], iteration: int | None
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
-        iteration = int(time.time() - _STARTING_TIME)
+        iteration = int(time.time() * 1000)
     _TB_SUMMARY.add_scalars(name, values, iteration)
 
 
@@ -47,7 +46,7 @@ def log_text(name: str, text: str, iteration: int | None = None) -> None:
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
-        iteration = int(time.time() - _STARTING_TIME)
+        iteration = int(time.time() * 1000)
     _TB_SUMMARY.add_text(name, text, iteration)
 
 
@@ -59,7 +58,7 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int |
         values = values.cpu().numpy()
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
-        iteration = int(time.time() - _STARTING_TIME)
+        iteration = int(time.time() * 1000)
     _TB_SUMMARY.add_histogram(name, values, iteration)
 
 
@@ -72,10 +71,9 @@ class TensorboardWriter:
             self.log_folder += f'/{multiprocessing.current_process().pid}'
 
     def __enter__(self):
-        global _TB_SUMMARY, _STARTING_TIME
+        global _TB_SUMMARY
         assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
         _TB_SUMMARY = SummaryWriter(self.log_folder)
-        _STARTING_TIME = int(time.time())
 
     def __exit__(self, exc_type, exc_value, traceback):
         global _TB_SUMMARY
