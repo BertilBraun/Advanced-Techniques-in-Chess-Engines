@@ -199,6 +199,13 @@ elif True:
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 32
+    NUM_SEARCHES_PER_TURN = 240
+    MIN_VISIT_COUNT = 3
+
+    if False:  # TODO remove
+        PARALLEL_GAMES = 2
+        NUM_SEARCHES_PER_TURN = 40
+        MIN_VISIT_COUNT = 2
 
     def dirichlet_alpha(iteration: int) -> float:
         return 0.3
@@ -213,40 +220,19 @@ elif True:
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
             result_score_weight=0.15,
+            resignation_threshold=-0.95,
             mcts=MCTSParams(
-                num_searches_per_turn=240,  # based on https://arxiv.org/pdf/1902.10565
+                num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
-                min_visit_count=3,
+                min_visit_count=MIN_VISIT_COUNT,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
         training=training,
         evaluation=evaluation,
-    )
-    # TODO remove
-    TEST_TRAINING_ARGS = TrainingArgs(
-        num_iterations=25,
-        save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=2,
-        network=network,
-        inference=inference,
-        self_play=SelfPlayParams(
-            num_parallel_games=4,
-            num_moves_after_which_to_play_greedy=25,
-            mcts=MCTSParams(
-                num_searches_per_turn=40,
-                num_parallel_searches=4,
-                dirichlet_epsilon=0.25,
-                dirichlet_alpha=dirichlet_alpha,
-                c_param=4,
-                min_visit_count=2,
-            ),
-        ),
-        cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
-        training=training,
     )
 
 

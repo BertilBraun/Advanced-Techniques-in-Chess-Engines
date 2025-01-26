@@ -17,7 +17,7 @@ class HumanPlayer(Bot):
 
         self.board_history: list[CurrentBoard] = []
 
-    async def think(self, board: CurrentBoard) -> CurrentGameMove:
+    def think(self, board: CurrentBoard) -> CurrentGameMove:
         # Common input loop for all games
 
         self.display_board(board)

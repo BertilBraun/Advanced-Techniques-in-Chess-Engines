@@ -8,7 +8,7 @@ def _node_repr(node: MCTSNode) -> str:
     return f"""{repr(node.board) if node.board else None}
 visits: {node.number_of_visits}
 score: {node.result_score:.2f}
-move: {node.move_to_get_here}
+move: {node.encoded_move_to_get_here}
 policy: {node.parent.children_policies[node.my_child_index] if node.parent else 0.0:.2f}"""
 
 

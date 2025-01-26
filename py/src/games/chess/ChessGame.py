@@ -76,10 +76,6 @@ class ChessGame(Game[ChessMove]):
     move2index, index2move = _build_action_dicts()
 
     @property
-    def null_move(self) -> ChessMove:
-        return chess.Move.null()
-
-    @property
     def action_size(self) -> int:
         return len(self.move2index)
 

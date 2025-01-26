@@ -22,14 +22,14 @@ def _tb_check_active() -> bool:
     return True
 
 
-def log_scalar(name: str, value: float, iteration: int) -> None:
+def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
-def log_scalars(name: str, values: dict[str, float | int], iteration: int) -> None:
+def log_scalars(name: str, values: dict[str, float | int], iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
@@ -43,7 +43,7 @@ def log_text(name: str, text: str, iteration: int | None = None) -> None:
     _TB_SUMMARY.add_text(name, text, iteration)
 
 
-def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int) -> None:
+def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int | None = None) -> None:
     if not LOG_HISTOGRAMS or not _tb_check_active():
         return
     values = values.reshape(-1)

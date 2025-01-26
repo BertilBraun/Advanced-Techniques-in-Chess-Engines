@@ -17,13 +17,13 @@ class HandcraftedBotV3(Bot):
         self.transposition_table = [TranspositionEntry()] * 2**16
         self.best_root_move = Move.null()
 
-    async def think(self, board: ChessBoard) -> Move:
-        self.initialize_search_parameters()
+    def think(self, board: ChessBoard) -> Move:
+        self.initialize_search_parameters(board.board)
         self.iterative_deepening_search(board.board)
         return self.best_root_move
 
-    def initialize_search_parameters(self) -> None:
-        self.best_root_move = Move.null()
+    def initialize_search_parameters(self, board: Board) -> None:
+        self.best_root_move = next(iter(board.legal_moves))
         self.history = np.zeros((2, 7, 64), dtype=int)
         self.killers = [ExtendedMove.null() for _ in range(256)]
 

@@ -73,8 +73,8 @@ class SelfPlay:
         self.client.update_iteration(iteration)
 
     @timeit
-    async def self_play(self) -> None:
-        mcts_results = await self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
+    def self_play(self) -> None:
+        mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
 
         current_self_play_games = list(self.self_play_games.items())
         for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
@@ -131,8 +131,9 @@ class SelfPlay:
             move = self._sample_move(action_probabilities, self.args.temperature)
 
         new_spg = current.expand(move)
-        new_spg.already_expanded_node = next(child for child in children if child.move_to_get_here == move)
-        new_spg.already_expanded_node.parent = None  # remove the parent to avoid memory leak
+        new_spg.already_expanded_node = next(
+            child for child in children if CurrentGame.decode_move(child.encoded_move_to_get_here) == move
+        ).copy(parent=None)  # remove parent to avoid memory leaks
 
         if not new_spg.board.is_game_over():
             return new_spg, move
@@ -166,6 +167,7 @@ class SelfPlay:
 
         return CurrentGame.decode_move(action)
 
+    @timeit
     def _add_training_data(self, spg: SelfPlayGame, result: float, resignation: bool) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 

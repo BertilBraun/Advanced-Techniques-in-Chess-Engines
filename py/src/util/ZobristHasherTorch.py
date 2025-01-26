@@ -3,7 +3,7 @@ import torch
 from src.util.compile import try_compile
 
 
-class ZobristHasher:
+class ZobristHasherTorch:
     def __init__(self, planes: int, rows: int, cols: int):
         self.planes = planes
         self.rows = rows

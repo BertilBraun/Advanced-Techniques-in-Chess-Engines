@@ -148,7 +148,7 @@ class HandcraftedBotV4(Bot):
         self.transposition_table = [TranspositionEntry()] * 0x10_0000  # 0x80_0000 in the original bot
         self.best_root_move = Move.null()
 
-    async def think(self, board: ChessBoard) -> Move:
+    def think(self, board: ChessBoard) -> Move:
         self.initialize_search_parameters()
         self.iterative_deepening_search(board.board)
         return self.best_root_move

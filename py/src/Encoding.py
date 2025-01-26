@@ -4,7 +4,7 @@ import numpy.typing as npt
 from numba import njit
 
 from src.games.Game import Board
-from src.settings import CurrentGame, CurrentGameMove, CurrentBoard
+from src.settings import CurrentGame, CurrentBoard
 from src.util.timing import timeit
 
 
@@ -84,9 +84,7 @@ def get_board_result_score(board: Board) -> float | None:
     return None
 
 
-def filter_policy_then_get_moves_and_probabilities(
-    policy: np.ndarray, board: CurrentBoard
-) -> list[tuple[CurrentGameMove, float]]:
+def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[tuple[int, float]]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
 
@@ -126,7 +124,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
     return filtered_policy
 
 
-def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CurrentGameMove, float]]:
+def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[int, float]]:
     """
     Maps a filtered policy to a list of moves with their corresponding probabilities.
 
@@ -135,15 +133,12 @@ def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[CurrentGameMove, flo
     a move and its corresponding probability.
 
     :param policy: The policy to map.
-    :return: The list of moves with their corresponding probabilities.
+    :return: The list of encoded moves with their corresponding probabilities.
     """
     # Find indices where probability > 0
     nonzero_indices = np.nonzero(policy > 0)[0]
 
-    # Decode the indices to moves
-    moves = CurrentGame.decode_moves(nonzero_indices)
-
     # Pair up moves with their probabilities
-    moves_with_probabilities = list(zip(moves, policy[nonzero_indices]))
+    moves_with_probabilities = list(zip(nonzero_indices, policy[nonzero_indices]))
 
     return moves_with_probabilities

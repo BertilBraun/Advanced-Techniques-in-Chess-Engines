@@ -31,14 +31,15 @@ class MCTS:
         self.args = args
 
     @timeit
-    async def search(self, inputs: list[tuple[CurrentBoard, MCTSNode | None]]) -> list[MCTSResult]:
-        policies = await self._get_policy_with_noise([board for board, node in inputs if node is None])
+    def search(self, inputs: list[tuple[CurrentBoard, MCTSNode | None]]) -> list[MCTSResult]:
+        policies = self._get_policy_with_noise([board for board, node in inputs if node is None])
 
         roots: list[MCTSNode] = []
         policies_index = 0
 
         for board, node in inputs:
             if node is not None:
+                assert node.parent is None, 'Node must be a root node (be careful with memory leaks)'
                 # Add noise to the children policies, then reuse the node
                 node.children_policies = self._add_noise(node.children_policies)
                 roots.append(node)
@@ -52,7 +53,7 @@ class MCTS:
             roots.append(root)
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-            await self.parallel_iterate(roots)
+            self.parallel_iterate(roots)
 
         # for root in roots:
         #     log(repr(root))
@@ -62,35 +63,46 @@ class MCTS:
         return [
             MCTSResult(
                 root.result_score,
-                [(CurrentGame.encode_move(child.move_to_get_here), child.number_of_visits) for child in root.children],
+                [(child.encoded_move_to_get_here, child.number_of_visits) for child in root.children],
                 root.children,
             )
             for root in roots
         ]
 
     @timeit
-    async def parallel_iterate(self, roots: list[MCTSNode]) -> None:
-        await self.client.run_batch(
-            [self.iterate(root) for root in roots for _ in range(self.args.num_parallel_searches)]
-        )
+    def parallel_iterate(self, roots: list[MCTSNode]) -> None:
+        nodes = self._get_nodes_to_expand(roots)
 
-    @timeit
-    async def iterate(self, root: MCTSNode) -> None:
-        if not (node := self._get_best_child_or_back_propagate(root, self.args.c_param, self.args.min_visit_count)):
+        if not nodes:
             return
 
-        node.update_virtual_losses(1)
+        results = self.client.inference_batch([node.board for node in nodes])
 
-        policy, value = await self.client.inference(node.board)
+        self._apply_results(nodes, results)
 
-        moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
-        node.expand(moves)
-        node.back_propagate(value)
+    @timeit
+    def _get_nodes_to_expand(self, roots: list[MCTSNode]) -> list[MCTSNode]:
+        nodes: list[MCTSNode] = []
 
-        node.update_virtual_losses(-1)
+        for root in roots:
+            node = self._get_best_child_or_back_propagate(root, self.args.c_param, self.args.min_visit_count)
+            if node is not None:
+                node.update_virtual_losses(1)
+                nodes.append(node)
 
-    async def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
-        results = await self.client.run_batch([self.client.inference(board) for board in boards])
+        return nodes
+
+    @timeit
+    def _apply_results(self, nodes: list[MCTSNode], results: list[tuple[np.ndarray, float]]) -> None:
+        for node, (policy, value) in zip(nodes, results):
+            moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
+            node.expand(moves)
+            node.back_propagate(value)
+
+            node.update_virtual_losses(-1)
+
+    def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
+        results = self.client.inference_batch(boards)
 
         return [self._add_noise(policy) for policy, _ in results]
 

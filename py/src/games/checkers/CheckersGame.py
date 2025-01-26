@@ -29,10 +29,6 @@ for i, sq in enumerate(_black_squares):
 
 class CheckersGame(Game[CheckersMove]):
     @property
-    def null_move(self) -> CheckersMove:
-        return -1, -1
-
-    @property
     def action_size(self) -> int:
         # Only from black squares to black squares possible -> (BOARD_SQUARES // 2) * (BOARD_SQUARES // 2) = 32 * 32 = 1024 instead of 64 * 64 = 4096
         return BLACK_SQUARE_COUNT * BLACK_SQUARE_COUNT

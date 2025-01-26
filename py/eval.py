@@ -1,4 +1,3 @@
-import asyncio
 import torch
 
 from src.eval.TournamentManager import TournamentManager
@@ -39,7 +38,7 @@ if __name__ == '__main__':
             AlphaZeroBot(iteration, max_time_to_think=MAX_TIME_TO_THINK, network_eval_only=NETWORK_ONLY),
         )
 
-        result = asyncio.run(game_manager.play_game())
+        result = game_manager.play_game()
         log('Game over. Result:', result)
         log(game_manager.board)
     else:
@@ -51,5 +50,5 @@ if __name__ == '__main__':
         )
 
         log('Playing game...')
-        results = asyncio.run(tournament_manager.play_games())
+        results = tournament_manager.play_games()
         log('Results:', results)

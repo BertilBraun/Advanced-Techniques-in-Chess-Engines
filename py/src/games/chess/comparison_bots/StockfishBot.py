@@ -21,7 +21,7 @@ class ChessStockfishBot(Bot):
         """Cleans up the Stockfish player."""
         self.engine.quit()
 
-    async def think(self, board: ChessBoard) -> Move:
+    def think(self, board: ChessBoard) -> Move:
         """Selects a move based on stockfish's evaluation."""
 
         result = self.engine.play(board.board, self.limit)

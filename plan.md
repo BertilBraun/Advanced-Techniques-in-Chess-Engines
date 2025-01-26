@@ -44,8 +44,9 @@ Value std: 0.3470703125
 Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/master/DeepCrazyhouse/src/experiments/html/train_all_games_over_2000_elo/SGD
 
 
+DONE faster board hashes - Zobrist Hashing
 
-TODO completely remove asyncio from the project
+DONE completely remove asyncio from the project
 DONE document the asyncio test
 
 Baseline performance:

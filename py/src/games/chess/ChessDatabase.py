@@ -1,19 +1,14 @@
 import os
 import io
-from pathlib import Path
 import sys
-import chess.pgn
 import requests
+import chess.pgn
+import numpy as np
+from pathlib import Path
 from zipfile import ZipFile
 from multiprocessing import Process
 
 from tqdm import trange
-
-from src.settings import *
-
-from src.games.chess.ChessBoard import ChessBoard
-from src.games.chess.ChessGame import ChessGame
-from src.self_play.SelfPlayDataset import SelfPlayDataset
 
 
 def download(year: int, month: int, folder: str) -> str:
@@ -50,6 +45,10 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 
 
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
+    from src.games.chess.ChessBoard import ChessBoard
+    from src.games.chess.ChessGame import ChessGame
+    from src.self_play.SelfPlayDataset import SelfPlayDataset
+
     chess_game = ChessGame()
     dataset = SelfPlayDataset()
 

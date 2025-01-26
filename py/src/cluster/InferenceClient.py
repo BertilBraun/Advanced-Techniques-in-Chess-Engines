@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import torch
-import asyncio
 import numpy as np
 from sys import getsizeof
-from typing import Any, Coroutine, TypeVar
+from typing import TypeVar
 
-from src.Encoding import encode_board_state
 from src.Network import Network
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
+from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 from src.util.log import log
 from src.util.timing import timeit
 from src.util.save_paths import load_model, model_save_path
@@ -26,13 +25,12 @@ class InferenceClient:
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        self.batch_queue: list[tuple[np.ndarray | None, bytes, asyncio.Future]] = []
-
-        self.inference_cache: dict[bytes, tuple[np.ndarray, float]] = {}
+        self.inference_cache: dict[int, tuple[np.ndarray, float]] = {}
         self.total_hits = 0
         self.total_evals = 0
 
-        self.enqueued_inferences: set[bytes] = set()
+        channels, rows, cols = CurrentGame.representation_shape
+        self.hasher = ZobristHasherNumpy(channels, rows, cols)
 
     def update_iteration(self, iteration: int) -> None:
         """Update the Inference Client to use the model for the given iteration.
@@ -66,71 +64,34 @@ class InferenceClient:
         self.inference_cache.clear()
 
     @timeit
-    async def inference(self, board: CurrentBoard) -> tuple[np.ndarray, float]:
-        """Enqueue an inference request and return the result when available.
-        Results are batched to optimize the inference process.
-        Results are cached to avoid redundant inferences.
-        Results will be available once either the batch size is reached or the flush method is called."""
+    def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[np.ndarray, float]]:
+        if not boards:
+            return []
 
-        canonical_board = CurrentGame.get_canonical_board(board)
-        board_hash = _get_board_hash(canonical_board)
+        encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
+        board_hashes = self._get_board_hashes(encoded_boards)
 
-        self.total_evals += 1
+        boards_to_infer: list[np.ndarray] = []
+        boards_to_infer_hashes: list[int] = []
 
-        if board_hash in self.inference_cache:
-            self.total_hits += 1
-            return self.inference_cache[board_hash]
+        enqueued_hashes: set[int] = set()  # for O(1) lookup of enqueued hashes
 
-        # Create a Future to wait for the result
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
+        for board, hash in zip(encoded_boards, board_hashes):
+            if hash not in enqueued_hashes and hash not in self.inference_cache:
+                enqueued_hashes.add(hash)
+                boards_to_infer.append(board)
+                boards_to_infer_hashes.append(hash)
+            else:
+                self.total_hits += 1
 
-        # Enqueue the request
-        if board_hash not in self.enqueued_inferences:
-            self.enqueued_inferences.add(board_hash)
-            self.batch_queue.append((canonical_board, board_hash, future))
-        else:
-            self.total_hits += 1
-            self.batch_queue.append((None, board_hash, future))
+        self.total_evals += len(boards)
 
-        # If the batch size is reached, process the batch immediately
-        current_batch_size = len(self.enqueued_inferences)
-        if current_batch_size >= self.args.inference.batch_size:
-            # Make a copy of the current batch to avoid race conditions
-            self._process_batch()
-
-        # Await the result
-        return await future
-
-    async def run_batch(self, tasks: list[Coroutine[Any, Any, T]]) -> list[T]:
-        """Run a batch of inference requests and return the results. The order of the results is preserved."""
-        requests = [asyncio.create_task(task) for task in tasks]
-        await asyncio.sleep(0)  # Yield control to allow tasks to enqueue
-        self.flush()
-        return await asyncio.gather(*requests)
-
-    def flush(self) -> None:
-        """Flush the batch queue and process all enqueued inferences."""
-        if self.batch_queue:
-            self._process_batch()
-
-    @timeit
-    def _process_batch(self) -> None:
-        encoded_boards = [board for board, _, _ in self.batch_queue if board is not None]
-        board_hashes = [hash for board, hash, _ in self.batch_queue if board is not None]
-
-        if encoded_boards:
-            results = self._model_inference(encoded_boards)
-
-            for hash, (policy, value) in zip(board_hashes, results):
+        if boards_to_infer:
+            results = self._model_inference(boards_to_infer)
+            for hash, (policy, value) in zip(boards_to_infer_hashes, results):
                 self.inference_cache[hash] = policy, value
 
-        for _, hash, future in self.batch_queue:
-            assert not future.cancelled() and not future.done(), 'Future is already done'
-            future.set_result(self.inference_cache[hash])
-
-        self.batch_queue.clear()
-        self.enqueued_inferences.clear()
+        return [self.inference_cache[hash] for hash in board_hashes]
 
     @timeit
     @torch.no_grad()
@@ -146,17 +107,19 @@ class InferenceClient:
 
         results = results.to(dtype=torch.float32, device='cpu').numpy()
 
-        # return [
-        #     (np.full_like(result[:-1], 1 / CurrentGame.action_size), 0.0)  # TODO
-        #     for result in results
-        # ]
+        # if INFERENCE_UNIFORM_TEST:
+        #     return [
+        #         (np.full_like(result[:-1], 1 / CurrentGame.action_size), 0.0)
+        #         for result in results
+        #     ]
         return [(result[:-1], result[-1]) for result in results]
 
+    @timeit
+    def _get_board_hashes(self, boards: list[np.ndarray]) -> list[int]:
+        boards_np = np.array(boards)
 
-@timeit
-def _get_board_hash(board: np.ndarray) -> bytes:
-    variation_hashes: list[bytes] = []
-    # TODO assuming, that a vertical flip is a valid symmetry
-    for variation in (board, np.flip(board, axis=2)):
-        variation_hashes.append(encode_board_state(variation).tobytes())
-    return min(variation_hashes)
+        default_hashes = self.hasher.zobrist_hash_boards(boards_np)
+        # TODO assuming, that a vertical flip is a valid symmetry
+        flipped_hashes = self.hasher.zobrist_hash_boards(np.flip(boards_np, axis=3))
+
+        return [min(default_hash, flipped_hash) for default_hash, flipped_hash in zip(default_hashes, flipped_hashes)]

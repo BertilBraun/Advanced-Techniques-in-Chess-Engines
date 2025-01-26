@@ -17,10 +17,6 @@ ACTION_SIZE = BOARD_SIZE
 
 class TicTacToeGame(Game[TicTacToeMove]):
     @property
-    def null_move(self) -> TicTacToeMove:
-        return -1
-
-    @property
     def action_size(self) -> int:
         return ACTION_SIZE
 

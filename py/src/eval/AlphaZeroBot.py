@@ -36,26 +36,26 @@ class AlphaZeroBot(Bot):
             self.inference_client._model_inference([CurrentGame.get_canonical_board(board)])
             board.make_move(board.get_valid_moves()[0])
 
-    async def think(self, board: CurrentBoard) -> CurrentGameMove:
+    def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
-            results = await self.inference_client.run_batch([self.inference_client.inference(board)])
-            policy, value = results[0]
-            moves = filter_policy_then_get_moves_and_probabilities(policy, board)
-            move = max(moves, key=lambda move: move[1])
+            policy, value = self.inference_client.inference_batch([board])[0]
+            encoded_moves = filter_policy_then_get_moves_and_probabilities(policy, board)
+            encoded_move, policy = max(encoded_moves, key=lambda move: move[1])
+            move = CurrentGame.decode_move(encoded_move)
 
             log('---------------------- Alpha Zero Best Move ----------------------')
-            log('Best move:', move[0])
-            log('Best move probability:', move[1])
-            log('Move probabilities:', moves)
+            log('Best move:', move)
+            log('Best move probability:', policy)
+            log('Move probabilities:', encoded_moves)
             log('Result value:', value)
             log('------------------------------------------------------------------')
 
-            return move[0]
+            return move
 
         root = MCTSNode.root(board)
 
         for _ in range(self.mcts_args.num_searches_per_turn // self.mcts_args.num_parallel_searches):
-            await self.mcts.parallel_iterate([root])
+            self.mcts.parallel_iterate([root])
             if self.time_is_up:
                 break
 
@@ -73,10 +73,10 @@ class AlphaZeroBot(Bot):
         log('Best child index:', best_move_index)
         log(f'Best child has {best_child.number_of_visits} visits')
         log(f'Best child has {best_child.result_score:.4f} result_score')
-        log('Child moves:', [child.move_to_get_here for child in root.children])
+        log('Child moves:', [child.encoded_move_to_get_here for child in root.children])
         log('Child visits:', root.children_number_of_visits)
         log('Child result_scores:', np.round(root.children_result_scores, 2))
         log('Child priors:', np.round(root.children_policies, 2))
         log('------------------------------------------------------------------')
 
-        return best_child.move_to_get_here
+        return CurrentGame.decode_move(best_child.encoded_move_to_get_here)

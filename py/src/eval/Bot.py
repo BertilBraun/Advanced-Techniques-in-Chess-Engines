@@ -12,7 +12,7 @@ class Bot(ABC):
         self.max_time_to_think = max_time_to_think
 
     @abstractmethod
-    async def think(self, board: CurrentBoard) -> CurrentGameMove:
+    def think(self, board: CurrentBoard) -> CurrentGameMove:
         """This method is called when it's the bot's turn to move. It should return the move that the bot wants to make."""
         raise NotImplementedError('Subclasses must implement this method')
 

@@ -11,10 +11,6 @@ ACTION_SIZE = COLUMN_COUNT
 
 class Connect4Game(Game[Connect4Move]):
     @property
-    def null_move(self) -> Connect4Move:
-        return -1
-
-    @property
     def action_size(self) -> int:
         return ACTION_SIZE
 

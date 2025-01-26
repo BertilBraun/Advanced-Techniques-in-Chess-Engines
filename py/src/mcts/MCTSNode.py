@@ -3,26 +3,45 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove
+from src.settings import CurrentBoard, CurrentGame
 
 
 class MCTSNode:
     @classmethod
     def root(cls, board: CurrentBoard) -> MCTSNode:
-        instance = cls(move_to_get_here=CurrentGame.null_move, parent=None, my_child_index=-1)
+        instance = cls(encoded_move_to_get_here=-1, parent=None, my_child_index=-1)
         instance.board = board
         return instance
 
-    def __init__(self, move_to_get_here: CurrentGameMove, parent: MCTSNode | None, my_child_index: int) -> None:
+    def __init__(self, encoded_move_to_get_here: int, parent: MCTSNode | None, my_child_index: int) -> None:
         self.board: CurrentBoard = None  # type: ignore
         self.parent = parent
-        self.move_to_get_here = move_to_get_here
+        self.encoded_move_to_get_here = encoded_move_to_get_here
         self.my_child_index = my_child_index
         self.children: list[MCTSNode] = []
         self.children_number_of_visits: np.ndarray  # Initialized in expand
         self.children_result_scores: np.ndarray  # Initialized in expand
         self.children_virtual_losses: np.ndarray  # Initialized in expand
         self.children_policies: np.ndarray  # Initialized in expand
+
+    def copy(self, parent: MCTSNode | None) -> MCTSNode:
+        node = MCTSNode(
+            encoded_move_to_get_here=self.encoded_move_to_get_here,
+            parent=parent,
+            my_child_index=self.my_child_index,
+        )
+
+        if self.board is not None:
+            node.board = self.board.copy()
+
+        if self.is_fully_expanded:
+            node.children = [child.copy(node) for child in self.children]
+            node.children_number_of_visits = self.children_number_of_visits.copy()
+            node.children_result_scores = self.children_result_scores.copy()
+            node.children_virtual_losses = self.children_virtual_losses.copy()
+            node.children_policies = self.children_policies.copy()
+
+        return node
 
     def _maybe_init_board(self) -> None:
         """Initializes the node by creating a board if it doesn't have one."""
@@ -31,7 +50,7 @@ class MCTSNode:
                 raise ValueError('Parent node must have a board')
 
             self.board = self.parent.board.copy()
-            self.board.make_move(self.move_to_get_here)
+            self.board.make_move(CurrentGame.decode_move(self.encoded_move_to_get_here))
 
     @property
     def is_fully_expanded(self) -> bool:
@@ -60,19 +79,24 @@ class MCTSNode:
             else np.sum(self.children_result_scores)
         ) / self.number_of_visits
 
-    def expand(self, moves_with_scores: list[tuple[CurrentGameMove, float]]) -> None:
+    def expand(self, encoded_moves_with_scores: list[tuple[int, float]]) -> None:
         if self.is_fully_expanded:
             return  # Already expanded by another thread
 
-        for move, score in moves_with_scores:
-            if score > 0.0:
-                self.children.append(MCTSNode(move_to_get_here=move, parent=self, my_child_index=len(self.children)))
+        assert all(score > 0.0 for _, score in encoded_moves_with_scores), 'Scores must be positive'
+
+        for encoded_move, _ in encoded_moves_with_scores:
+            self.children.append(
+                MCTSNode(encoded_move_to_get_here=encoded_move, parent=self, my_child_index=len(self.children))
+            )
 
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
-        self.children_policies = np.array([score for _, score in moves_with_scores if score > 0.0], dtype=np.float32)
+        self.children_policies = np.array(
+            [score for _, score in encoded_moves_with_scores if score > 0.0], dtype=np.float32
+        )
 
     def update_virtual_losses(self, delta: int) -> None:
         node = self
@@ -116,9 +140,9 @@ visits: {self.number_of_visits}
 score: {self.result_score:.2f}
 child visits: {self.children_number_of_visits}
 child policy: {np.round(self.children_policies, 2)}
-child moves: {[child.move_to_get_here for child in self.children]}
+child moves: {[child.encoded_move_to_get_here for child in self.children]}
 child scores: {np.round(self.children_result_scores, 2)}
-best_move: {self.children[np.argmax(self.children_number_of_visits)].move_to_get_here if self.children else None}
+best_move: {self.children[np.argmax(self.children_number_of_visits)].encoded_move_to_get_here if self.children else None}
 )"""
 
 

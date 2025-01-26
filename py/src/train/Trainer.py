@@ -59,8 +59,9 @@ class Trainer:
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()
 
-            # loss = torch.lerp(value_loss, policy_loss, 0.01)
-            loss = policy_loss + value_loss
+            # Apparently just as in AZ Paper, give more weight to the policy loss
+            loss = torch.lerp(value_loss, policy_loss, 0.66)
+            # loss = policy_loss + value_loss
 
             return policy_loss, value_loss, loss
 
@@ -79,7 +80,6 @@ class Trainer:
             # Update learning rate before stepping the optimizer
             batch_percentage = batchIdx / len(dataloader)
             lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
-            log_scalar(f'learning_rate/iteration_{iteration}', lr, batchIdx)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 

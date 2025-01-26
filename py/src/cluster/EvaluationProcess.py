@@ -1,4 +1,3 @@
-import asyncio
 import numpy as np
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -13,7 +12,7 @@ from src.util.tensorboard import log_scalars
 def run_evaluation_process(run: int, args: TrainingArgs, iteration: int):
     evaluation_process = EvaluationProcess(args)
     with log_exceptions('Evaluation process'), TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        asyncio.run(evaluation_process.run(iteration))
+        evaluation_process.run(iteration)
 
 
 class EvaluationProcess:
@@ -23,7 +22,7 @@ class EvaluationProcess:
         self.args = args
         self.eval_args = args.evaluation
 
-    async def run(self, iteration: int):
+    def run(self, iteration: int):
         """Play two most recent models against each other."""
         if not self.eval_args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
             return
@@ -43,9 +42,9 @@ class EvaluationProcess:
             avg_value_loss,
         ) = model_evaluation.evaluate_model_vs_dataset(dataset)
         log(f'Evaluation results at iteration {iteration}:')
-        log(f'    Policy accuracy @1: {policy_accuracy_at_1}')
-        log(f'    Policy accuracy @5: {policy_accuracy_at_5}')
-        log(f'    Policy accuracy @10: {policy_accuracy_at_10}')
+        log(f'    Policy accuracy @1: {policy_accuracy_at_1:.2%}')
+        log(f'    Policy accuracy @5: {policy_accuracy_at_5:.2%}')
+        log(f'    Policy accuracy @10: {policy_accuracy_at_10:.2%}')
         log(f'    Avg value loss: {avg_value_loss}')
 
         log_scalar('evaluation/policy_accuracy@1', policy_accuracy_at_1, iteration)
@@ -53,7 +52,7 @@ class EvaluationProcess:
         log_scalar('evaluation/policy_accuracy@10', policy_accuracy_at_10, iteration)
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
-        results = await model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)
+        results = model_evaluation.play_two_models_search(iteration - self.eval_args.every_n_iterations)
 
         log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
@@ -67,7 +66,7 @@ class EvaluationProcess:
             iteration,
         )
 
-        results = await model_evaluation.play_vs_random()
+        results = model_evaluation.play_vs_random()
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
         log_scalars(
@@ -87,10 +86,10 @@ class EvaluationProcess:
 
             comparison_bot = HandcraftedBotV3()
 
-            async def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-                return [CurrentGame.encode_moves([comparison_bot.think(board.board)]) for board in boards]  # type: ignore
+            def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+                return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]
 
-            results = await model_evaluation.play_vs_evaluation_model(comparison_bot_evaluator)
+            results = model_evaluation.play_vs_evaluation_model(comparison_bot_evaluator)
             log(f'Results after playing vs comparison bot at iteration {iteration}:', results)
 
             # TODO for StockfishBot you have to call .cleanup() before quitting the process

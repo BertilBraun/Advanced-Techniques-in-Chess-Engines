@@ -2,7 +2,7 @@ from __future__ import annotations
 import random
 
 import numpy as np
-from typing import Callable, Coroutine
+from typing import Callable
 from dataclasses import dataclass
 
 import torch
@@ -55,7 +55,7 @@ class Results:
         return f'Wins: {self.wins}, Losses: {self.losses}, Draws: {self.draws}'
 
 
-EvaluationModel = Callable[[list[CurrentBoard]], Coroutine[None, None, list[np.ndarray]]]
+EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 
 
 class ModelEvaluation:
@@ -130,54 +130,52 @@ class ModelEvaluation:
 
         return top1_accuracy, top5_accuracy, top10_accuracy, avg_value_loss
 
-    async def play_vs_random(self) -> Results:
+    def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
 
-        async def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
                 return CurrentGame.encode_moves([random.choice(board.get_valid_moves())])
 
             return [get_random_policy(board) for board in boards]
 
-        return await self.play_vs_evaluation_model(random_evaluator)
+        return self.play_vs_evaluation_model(random_evaluator)
 
-    async def play_two_models_search(self, previous_model_iteration: int) -> Results:
+    def play_two_models_search(self, previous_model_iteration: int) -> Results:
         previous_model = InferenceClient(0, self.args)
         previous_model.update_iteration(previous_model_iteration)
 
-        async def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(previous_model, self.mcts_args).search([(board, None) for board in boards])
+        def previous_model_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(previous_model, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
-        return await self.play_vs_evaluation_model(previous_model_evaluator)
+        return self.play_vs_evaluation_model(previous_model_evaluator)
 
-    async def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
+    def play_vs_evaluation_model(self, evaluation_model: EvaluationModel) -> Results:
         results = Results(0, 0, 0)
 
         current_model = InferenceClient(0, self.args)
         current_model.update_iteration(self.iteration)
 
-        async def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = await MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
+        def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
-        results += await self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
-        results -= await self._play_two_models_search(evaluation_model, model1, self.num_games // 2)
+        results += self._play_two_models_search(model1, evaluation_model, self.num_games // 2)
+        results -= self._play_two_models_search(evaluation_model, model1, self.num_games // 2)
 
         return results
 
-    async def _play_two_models_search(
-        self, model1: EvaluationModel, model2: EvaluationModel, num_games: int
-    ) -> Results:
+    def _play_two_models_search(self, model1: EvaluationModel, model2: EvaluationModel, num_games: int) -> Results:
         results = Results(0, 0, 0)
 
         games = [CurrentBoard() for _ in range(num_games)]
         while games:
             assert all(game.current_player == games[0].current_player for game in games)
             if games[0].current_player == 1:
-                policies = await model1(games)
+                policies = model1(games)
             else:
-                policies = await model2(games)
+                policies = model2(games)
 
             for game, policy in zip(games, policies):
                 move = CurrentGame.decode_move(np.argmax(policy).item())

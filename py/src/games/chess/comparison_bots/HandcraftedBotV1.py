@@ -13,7 +13,7 @@ class HandcraftedBotV1(Bot):
     def __init__(self) -> None:
         super().__init__('HandcraftedBotV1', max_time_to_think=MAX_TIME_TO_THINK)
 
-    async def think(self, board: ChessBoard) -> Move:
+    def think(self, board: ChessBoard) -> Move:
         """
         Determine the best move given the current board state.
 

@@ -12,6 +12,8 @@ Additionally, parts of the MCTS search and data handling were compiled using `nu
 
 Lots of the evaluated states are initially the same, as the same board state can be reached by different move sequences as well as symmetries of the board or simply by parallel self-play games. By caching the results of the inference, the same state does not have to be evaluated multiple times. The cache is based on the canonical board state, which is the board representation from the perspective of the current player. To further improve the cache hit rate, the cache is also based on the symmetries of the board state, using the smallest key of the symmetries as the key for the cache. This has a cache hit rate of 50-90% depending on the game and the number of parallel self-play games. The more parallel self-play games use the same inference server, the higher the cache hit rate, which is the main reason for the architectural approaches tried.
 
+Using Zobrist hashing, these board states can be hashed efficiently with small memory footprint and fast hashing. This greatly improved the cache hit rate and the inference speed.
+
 ## Batched Inference
 
 To improve the inference throughput, the inference requests are batched and sent to the inference server. The inference server then performs the inference on the batched requests and returns the results. This greatly improves the inference throughput, as the GPU can perform the inference on multiple requests at once.

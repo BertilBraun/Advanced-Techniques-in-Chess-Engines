@@ -1,5 +1,3 @@
-import asyncio
-
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter
 from src.util.log import log
@@ -19,7 +17,7 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
     client = InferenceClient(device_id, args)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
     with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter(run, 'self_play'):
-        asyncio.run(self_play_process.run())
+        self_play_process.run()
 
 
 class SelfPlayProcess:
@@ -33,13 +31,13 @@ class SelfPlayProcess:
         self.self_play = SelfPlay(client, args)
         self.commander_pipe = commander_pipe
 
-    async def run(self):
+    def run(self):
         current_iteration = 0
         running = False
 
         while True:
             if running:
-                await self.self_play.self_play()
+                self.self_play.self_play()
 
                 if self.self_play.dataset.stats.num_games >= self.args.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)

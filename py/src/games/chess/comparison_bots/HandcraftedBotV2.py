@@ -10,7 +10,7 @@ class HandcraftedBotV2(Bot):
         super().__init__('HandcraftedBotV2', max_time_to_think=MAX_TIME_TO_THINK)
         self.transposition_table: list[float | None] = [None] * 2**16
 
-    async def think(self, board: ChessBoard) -> Move:
+    def think(self, board: ChessBoard) -> Move:
         """
         Determine the best move given the current board state, using iterative deepening.
 

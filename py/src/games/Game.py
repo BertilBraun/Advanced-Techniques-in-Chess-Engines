@@ -13,11 +13,6 @@ _Move = TypeVar('_Move')
 class Game(ABC, Generic[_Move]):
     @property
     @abstractmethod
-    def null_move(self) -> _Move:
-        pass
-
-    @property
-    @abstractmethod
     def action_size(self) -> int:
         """The number of possible moves in the game."""
         pass

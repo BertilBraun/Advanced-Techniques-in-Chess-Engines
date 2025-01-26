@@ -14,7 +14,7 @@ class TournamentManager:
         self.players = [main, opponent]
         self.num_games = num_games
 
-    async def play_games(self, verify_moves=True) -> Results:
+    def play_games(self, verify_moves=True) -> Results:
         """Manages the gameplay loop until the game is over or a player quits."""
         results = Results(0, 0, 0)
 
@@ -27,7 +27,7 @@ class TournamentManager:
                 black = self.players[0]
 
             game_manager = GameManager(white, black)
-            result = await game_manager.play_game(verify_moves)
+            result = game_manager.play_game(verify_moves)
             results.update(result, 1 if white == self.players[0] else -1)
 
         return results

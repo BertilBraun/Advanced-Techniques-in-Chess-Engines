@@ -24,7 +24,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.device = device
 
         self.all_chunks: list[Path] = []
-        self.num_chunks_processed = 0
 
         self.stats = SelfPlayDatasetStats()
 
@@ -39,7 +38,8 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             for j, file in enumerate(sublist):
                 # keep the original file
                 # copy the file to the folder_path
-                chunk_file = Path(folder_path) / f'iteration_{i}_chunk_{j}_{random_id()}.hdf5'
+                chunk_file = Path(folder_path) / f'iteration_{i}/chunk_{j}_{random_id()}.hdf5'
+                chunk_file.parent.mkdir(parents=True, exist_ok=True)
                 chunk_file.hardlink_to(file)
                 self.all_chunks.append(chunk_file)
         random.shuffle(self.all_chunks)
@@ -57,7 +57,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             for file in files:
                 dataset += SelfPlayDataset.load(file)
 
-            self._log_dataset_stats(dataset, i)
+            self._log_dataset_stats(dataset)
 
             if len(files) > 1:
                 dataset.deduplicate()
@@ -90,21 +90,20 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         random.shuffle(self.all_chunks)
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
-    def _log_dataset_stats(self, dataset: SelfPlayDataset, i: int) -> None:
-        log_scalar('dataset/num_games', dataset.stats.num_games, i)
-        log_scalar('dataset/num_resignations', dataset.stats.resignations, i)
-        log_scalar('dataset/average_resignation_percent', dataset.stats.resignations / dataset.stats.num_games * 100, i)
-        log_scalar('dataset/num_samples', len(dataset), i)
-        log_scalar('dataset/total_generation_time', dataset.stats.total_generation_time, i)
-        log_scalar('dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games, i)
+    def _log_dataset_stats(self, dataset: SelfPlayDataset) -> None:
+        log_scalar('dataset/num_games', dataset.stats.num_games)
+        log_scalar('dataset/num_resignations', dataset.stats.resignations)
+        log_scalar('dataset/average_resignation_percent', dataset.stats.resignations / dataset.stats.num_games * 100)
+        log_scalar('dataset/num_samples', len(dataset))
+        log_scalar('dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games)
 
         policies = [action_probabilities(visits) for visits in dataset.visit_counts]
 
         spikiness = sum(policy.max() for policy in policies) / len(dataset)
-        log_scalar('dataset/policy_spikiness', spikiness, i)
+        log_scalar('dataset/policy_spikiness', spikiness)
 
-        log_histogram('dataset/policy_targets', np.array(policies), i)
-        log_histogram('dataset/value_targets', np.array(dataset.value_targets), i)
+        log_histogram('dataset/policy_targets', np.array(policies))
+        log_histogram('dataset/value_targets', np.array(dataset.value_targets))
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
@@ -125,7 +124,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             except Exception:
                 pass
 
-    @timeit
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.sample_index >= len(self.active_states):
             self.active_states, self.active_policies, self.active_values = self._load_samples()
@@ -153,8 +151,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         for chunk in chunks_to_load:
             dataset = SelfPlayDataset.load(chunk)
-            self._log_dataset_stats(dataset, self.num_chunks_processed)
-            self.num_chunks_processed += 1
+            self._log_dataset_stats(dataset)
             states += dataset.encoded_states
             visit_counts += dataset.visit_counts
             value_targets += dataset.value_targets
