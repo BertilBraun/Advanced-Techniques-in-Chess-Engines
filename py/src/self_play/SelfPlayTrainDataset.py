@@ -140,7 +140,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         return self.stats.num_samples
 
     @timeit
-    def _load_samples(self, num_chunks: int = 8) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _load_samples(self, num_chunks: int = 50) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # load them in order, always num_chunks at a time, shuffling the values of these three chunks in memory and repeating once all values of these num_chunks chunks are used
         chunks_to_load = self.all_chunks[:num_chunks]
         self.all_chunks = self.all_chunks[num_chunks:] + chunks_to_load
