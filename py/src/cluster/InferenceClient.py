@@ -63,7 +63,6 @@ class InferenceClient:
             )
         self.inference_cache.clear()
 
-    @timeit
     def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[np.ndarray, float]]:
         if not boards:
             return []
@@ -114,7 +113,6 @@ class InferenceClient:
         #     ]
         return [(result[:-1], result[-1]) for result in results]
 
-    @timeit
     def _get_board_hashes(self, boards: list[np.ndarray]) -> list[int]:
         boards_np = np.array(boards)
 

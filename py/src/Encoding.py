@@ -15,7 +15,6 @@ assert _N_BITS <= 64, 'The state is too large to encode'
 _BIT_MASK = 1 << np.arange(_N_BITS, dtype=np.uint64)  # use uint64 to prevent overflow
 
 
-@timeit
 def encode_board_state(state: npt.NDArray[np.int8]) -> npt.NDArray[np.uint64]:
     """Encode the state into a tuple of integers. Each integer represents a channel of the state. This assumes that the state is a binary state.
 
@@ -50,7 +49,6 @@ def _encode_board_state(state: npt.NDArray[np.int8]) -> npt.NDArray[np.uint64]:
     return encoded
 
 
-@timeit
 def decode_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
     """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
     assert state.dtype == np.uint64, 'The state must be encoded as uint64 to prevent overflow'
@@ -84,6 +82,7 @@ def get_board_result_score(board: Board) -> float | None:
     return None
 
 
+@timeit
 def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[tuple[int, float]]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
