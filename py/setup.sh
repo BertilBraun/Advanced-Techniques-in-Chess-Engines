@@ -47,6 +47,9 @@ else
     echo "alias pip='pip3.11'" >> ~/.bashrc
     echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
+    echo "alias tb='tensorboard --logdir'" >> ~/.bashrc
+    echo "alias gp='git pull'" >> ~/.bashrc
+    echo "alias proj='cd Advanced-Techniques-in-Chess-Engines/py'" >> ~/.bashrc
 
     echo "conda activate Chess" >> ~/.bashrc
 fi

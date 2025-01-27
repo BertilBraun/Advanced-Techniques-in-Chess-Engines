@@ -186,6 +186,30 @@ class SelfPlay:
             resignation=resignation,
         )
 
+        if result == 0.0:
+            # if the outcome is 0.0 (draw), detect the largest repeated suffix that appears consecutively at the end and remove all but the first occurrence.
+            n = len(spg.played_moves)
+
+            for length in range(n // 2, 0, -1):
+                candidate = spg.played_moves[-length:]
+                idx = n - length
+                repeat_count = 1  # we know at least the end is 'candidate'
+
+                # While there's room to check another block of `length` behind
+                # and it matches, increase repeat_count.
+                while idx >= length:
+                    if spg.played_moves[idx - length : idx] == candidate:
+                        repeat_count += 1
+                        idx -= length
+                    else:
+                        break
+
+                if repeat_count > 1:
+                    # Remove all but the first occurrence of the repeated suffix
+                    spg.played_moves = spg.played_moves[: idx + length]
+                    spg.memory = spg.memory[: len(spg.played_moves)]
+                    break
+
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)
 
