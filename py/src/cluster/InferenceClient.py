@@ -51,7 +51,7 @@ class InferenceClient:
             log_scalar('cache/unique_positions', len(self.inference_cache), iteration)
             log_histogram(
                 'nn_output_value_distribution',
-                np.array([round(v, 1) for _, v in self.inference_cache.values()]),
+                np.array([v for _, v in self.inference_cache.values()]),
                 iteration,
             )
 
@@ -92,6 +92,7 @@ class InferenceClient:
         if boards_to_infer:
             results = self._model_inference(boards_to_infer)
             for hash, (policy, value) in zip(boards_to_infer_hashes, results):
+                # TODO save memory and computation time by filter_policy_then_get_moves_and_probabilities here
                 self.inference_cache[hash] = policy, value
 
         return [self.inference_cache[hash] for hash in board_hashes]
