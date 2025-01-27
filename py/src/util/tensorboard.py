@@ -66,7 +66,7 @@ class TensorboardWriter:
     def __init__(self, run: int, suffix: str = '', postfix_pid: bool = True) -> None:
         from src.settings import LOG_FOLDER
 
-        self.log_folder = f'{LOG_FOLDER}/{run}/{suffix}'
+        self.log_folder = f'{LOG_FOLDER}/run_{run}/{suffix}'
         if postfix_pid:
             self.log_folder += f'/{multiprocessing.current_process().pid}'
 

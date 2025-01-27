@@ -187,28 +187,9 @@ class SelfPlay:
         )
 
         if result == 0.0:
-            # if the outcome is 0.0 (draw), detect the largest repeated suffix that appears consecutively at the end and remove all but the first occurrence.
-            n = len(spg.played_moves)
-
-            for length in range(n // 2, 0, -1):
-                candidate = spg.played_moves[-length:]
-                idx = n - length
-                repeat_count = 1  # we know at least the end is 'candidate'
-
-                # While there's room to check another block of `length` behind
-                # and it matches, increase repeat_count.
-                while idx >= length:
-                    if spg.played_moves[idx - length : idx] == candidate:
-                        repeat_count += 1
-                        idx -= length
-                    else:
-                        break
-
-                if repeat_count > 1:
-                    # Remove all but the first occurrence of the repeated suffix
-                    spg.played_moves = spg.played_moves[: idx + length]
-                    spg.memory = spg.memory[: len(spg.played_moves)]
-                    break
+            # if the outcome is 0.0 (draw), remove repetitions from the moves
+            spg.played_moves = remove_repetitions(spg.played_moves)
+            spg.memory = spg.memory[: len(spg.played_moves)]
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)
@@ -224,3 +205,42 @@ class SelfPlay:
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])
         log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')
+
+
+def remove_repetitions(moves: list[CurrentGameMove]) -> list[CurrentGameMove]:
+    """
+    moves: a list of moves.
+    Returns a new list where any sub-block of length >= 4
+    that occurs >= 3 times in a row is collapsed into a
+    single occurrence of that block.
+    """
+    filtered_moves: list[CurrentGameMove] = []
+    i = 0
+    n = len(moves)
+
+    while i < n:
+        found_repeat = False
+        # The longest block we can repeat 3x from position i is at most (n - i) // 3
+        max_len = (n - i) // 3
+        # Try from the largest possible block down to 4
+        for length in range(max_len, 3, -1):
+            block = moves[i : i + length]
+            # Check if block repeats 3 times consecutively
+            if moves[i + length : i + 2 * length] == block and moves[i + 2 * length : i + 3 * length] == block:
+                # Count how many times it actually repeats
+                times = 3
+                while i + times * length < n and moves[i + times * length : i + (times + 1) * length] == block:
+                    times += 1
+                # Keep exactly one occurrence of that block
+                filtered_moves.extend(block)
+                # Skip over all the repeated blocks
+                i += times * length
+                found_repeat = True
+                break
+
+        # If no repeated block found at position i, just take one move
+        if not found_repeat:
+            filtered_moves.append(moves[i])
+            i += 1
+
+    return filtered_moves
