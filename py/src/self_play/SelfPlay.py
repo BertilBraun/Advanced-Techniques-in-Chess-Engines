@@ -94,13 +94,13 @@ class SelfPlay:
                 while np.sum(spg_action_probabilities) > 0:
                     new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
-                    if self.self_play_games[new_spg] > 0:
+                    if self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-5:]:
+                        self.self_play_games[new_spg] += 1
+                        break
+                    else:
                         # Already exploring this state, so remove the probability of this move and try again
                         spg_action_probabilities[CurrentGame.encode_move(move)] = 0
-                        continue
 
-                    self.self_play_games[new_spg] += 1
-                    break
                 else:
                     # No valid moves left which are not already being explored
                     # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
@@ -129,9 +129,10 @@ class SelfPlay:
         else:
             move = self._sample_move(action_probabilities, self.args.temperature)
 
+        encoded_move = CurrentGame.encode_move(move)
         new_spg = current.expand(move)
         new_spg.already_expanded_node = next(
-            child for child in children if CurrentGame.decode_move(child.encoded_move_to_get_here) == move
+            child for child in children if child.encoded_move_to_get_here == encoded_move
         ).copy(parent=None)  # remove parent to avoid memory leaks
 
         if not new_spg.board.is_game_over():

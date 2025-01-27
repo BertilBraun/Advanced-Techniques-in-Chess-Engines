@@ -71,7 +71,7 @@ class Trainer:
         total_value_loss = torch.tensor(0.0, device=self.model.device)
         total_loss = torch.tensor(0.0, device=self.model.device)
 
-        for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
+        for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches', total=len(dataloader) - 1)):
             if batchIdx == len(dataloader) - 1:
                 # Use the last batch as validation batch
                 validation_batch = batch
@@ -102,6 +102,10 @@ class Trainer:
             len(dataloader),
         )
 
+        # Reset the mean and std for the validation batch
+        out_value_mean = torch.tensor(0.0, device=self.model.device)
+        out_value_std = torch.tensor(0.0, device=self.model.device)
+
         with torch.no_grad():
             validation_stats = TrainingStats()
             val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
@@ -109,7 +113,14 @@ class Trainer:
             log_scalar('validation/policy_loss', val_policy_loss.item(), iteration)
             log_scalar('validation/value_loss', val_value_loss.item(), iteration)
             log_scalar('validation/loss', val_loss.item(), iteration)
-            validation_stats.update(val_policy_loss.item(), val_value_loss.item(), val_loss.item(), 0, 0)
+            validation_stats.update(
+                val_policy_loss.item(),
+                val_value_loss.item(),
+                val_loss.item(),
+                out_value_mean.item(),
+                out_value_std.item(),
+                1,
+            )
 
             log(f'Validation stats: {validation_stats}')
 
