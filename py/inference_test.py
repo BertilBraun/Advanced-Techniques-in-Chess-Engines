@@ -197,8 +197,8 @@ if __name__ == '__main__':
 
         policies, values = model(input_tensor)
 
-        policies = torch.softmax(policies, dim=1).numpy()
-        values = torch.mean(values, dim=1).numpy()
+        policies = torch.softmax(policies, dim=1).to(torch.float32).cpu().numpy()
+        values = torch.mean(values, dim=1).to(torch.float32).cpu().numpy()
 
         policy = policies[0]
         value = values[0]
