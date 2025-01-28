@@ -12,12 +12,12 @@ error() {
     exit 1
 }
 
-# Function to print the current state of tmux
+# Function to print the current tmux state
 print_tmux_state() {
     echo "---- Tmux Session State ----"
     tmux list-windows -t "$SESSION" -F 'Window #I: #W'
-    tmux list-panes -t "${SESSION}:main" -F 'Pane #I in main: #{pane_id}'
-    tmux list-panes -t "${SESSION}:tensorboard" -F 'Pane #I in tensorboard: #{pane_id}'
+    tmux list-panes -t "${SESSION}:main" -F 'Pane #I: #{pane_id}'
+    tmux list-panes -t "${SESSION}:tensorboard" -F 'Pane #I: #{pane_id}'
     echo "----------------------------"
 }
 
@@ -59,11 +59,11 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
 
     echo "Sent 'tb logs' command to window 'tensorboard'."
 
-    # Optional: Wait a moment to ensure the command is sent
-    sleep 0.5
+    # Explicitly select the 'main' window and pane0 to set focus
+    tmux select-window -t "${SESSION}:main" || error "Failed to select window 'main'."
+    tmux select-pane -t "${SESSION}:main.0" || error "Failed to select pane 'main.0'."
 
-    # Focus on the 'main.1' pane
-    tmux select-pane -t "${SESSION}:main.1" || error "Failed to focus on pane1 of window 'main'."
+    echo "Set focus to pane0 of window 'main'."
 
     # Print the current state of the tmux session for debugging
     print_tmux_state
