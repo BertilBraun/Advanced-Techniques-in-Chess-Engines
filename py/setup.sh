@@ -49,7 +49,15 @@ else
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='tensorboard --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
-    echo "alias proj='cd Advanced-Techniques-in-Chess-Engines/py'" >> ~/.bashrc
+    
+
+    echo "set -g mouse on #For tmux version 2.1 and up" >> ~/.tmux.conf
+    echo "unbind C-b # Unbind the default prefix" >> ~/.tmux.conf
+    echo "set -g prefix C-a # Set new prefix to Ctrl+a" >> ~/.tmux.conf
+    echo "bind C-a send-prefix # Bind the new prefix key" >> ~/.tmux.conf
+
+
+    echo "cd Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
 
     echo "conda activate Chess" >> ~/.bashrc
 fi
