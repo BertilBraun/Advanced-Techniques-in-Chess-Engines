@@ -26,6 +26,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.all_chunks: list[Path] = []
 
         self.stats = SelfPlayDatasetStats()
+        self.accumulated_stats = SelfPlayDatasetStats()
 
         self.sample_index = 0
         self.active_states = torch.zeros(0)
@@ -91,11 +92,18 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
 
     def _log_dataset_stats(self, dataset: SelfPlayDataset) -> None:
-        log_scalar('dataset/num_games', dataset.stats.num_games)
-        log_scalar('dataset/num_resignations', dataset.stats.resignations)
-        log_scalar('dataset/average_resignation_percent', dataset.stats.resignations / dataset.stats.num_games * 100)
+        self.accumulated_stats += dataset.stats
+        log_scalar('dataset/num_games', self.accumulated_stats.num_games)
+        log_scalar('dataset/num_resignations', self.accumulated_stats.resignations)
+        log_scalar(
+            'dataset/average_resignation_percent',
+            self.accumulated_stats.resignations / self.accumulated_stats.num_games * 100,
+        )
         log_scalar('dataset/num_samples', len(dataset))
-        log_scalar('dataset/average_generation_time', dataset.stats.total_generation_time / dataset.stats.num_games)
+        log_scalar(
+            'dataset/average_generation_time',
+            self.accumulated_stats.total_generation_time / self.accumulated_stats.num_games,
+        )
 
         policies = [action_probabilities(visits) for visits in dataset.visit_counts]
 
