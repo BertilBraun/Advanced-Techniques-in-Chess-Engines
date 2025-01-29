@@ -1,5 +1,6 @@
 from __future__ import annotations
 import time
+from typing import Any
 
 import numpy as np
 from collections import Counter
@@ -188,8 +189,9 @@ class SelfPlay:
 
         if result == 0.0:
             # if the outcome is 0.0 (draw), remove repetitions from the moves
-            spg.played_moves = remove_repetitions(spg.played_moves)
-            spg.memory = spg.memory[: len(spg.played_moves)]
+            indices_to_keep = remove_repetitions(spg.played_moves)
+            spg.played_moves = [spg.played_moves[i] for i in indices_to_keep]
+            spg.memory = [spg.memory[i] for i in indices_to_keep]
 
         for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
             encoded_board = CurrentGame.get_canonical_board(mem.board)
@@ -207,14 +209,14 @@ class SelfPlay:
         log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')
 
 
-def remove_repetitions(moves: list[CurrentGameMove]) -> list[CurrentGameMove]:
+def remove_repetitions(moves: list[Any]) -> list[int]:
     """
-    moves: a list of moves.
+    moves: a list of indices which should be keept
     Returns a new list where any sub-block of length >= 4
     that occurs >= 3 times in a row is collapsed into a
     single occurrence of that block.
     """
-    filtered_moves: list[CurrentGameMove] = []
+    filtered_moves: list[int] = []
     i = 0
     n = len(moves)
 
@@ -232,7 +234,7 @@ def remove_repetitions(moves: list[CurrentGameMove]) -> list[CurrentGameMove]:
                 while i + times * length < n and moves[i + times * length : i + (times + 1) * length] == block:
                     times += 1
                 # Keep exactly one occurrence of that block
-                filtered_moves.extend(block)
+                filtered_moves.extend(list(range(i, i + length)))
                 # Skip over all the repeated blocks
                 i += times * length
                 found_repeat = True
@@ -240,7 +242,7 @@ def remove_repetitions(moves: list[CurrentGameMove]) -> list[CurrentGameMove]:
 
         # If no repeated block found at position i, just take one move
         if not found_repeat:
-            filtered_moves.append(moves[i])
+            filtered_moves.append(i)
             i += 1
 
     return filtered_moves
