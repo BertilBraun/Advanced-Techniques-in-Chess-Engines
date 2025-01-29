@@ -44,13 +44,15 @@ class Trainer:
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
             state, policy_targets, value_targets = batch
 
-            state = state.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
-            policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
-            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE, non_blocking=True)
+            state = state.to(device=self.model.device, dtype=TORCH_DTYPE)
+            policy_targets = policy_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
+            value_targets = value_targets.to(device=self.model.device, dtype=TORCH_DTYPE)
 
             value_targets = value_targets.unsqueeze(1)
 
             out_policy, out_value = self.model(state)
+            assert isinstance(out_policy, torch.Tensor)
+            assert isinstance(out_value, torch.Tensor)
 
             # Binary cross entropy loss for the policy is definitely not correct, as the policy has multiple classes
             # torch.cross_entropy applies softmax internally, so we don't need to apply it to the output
@@ -60,6 +62,10 @@ class Trainer:
             nonlocal out_value_mean, out_value_std
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()
+
+            log(
+                f'Policy loss: {policy_loss.item()}, Value loss: {value_loss.item()}, Value mean: {out_value_mean.item()}, Value std: {out_value_std.item()}'
+            )
 
             # Apparently just as in AZ Paper, give more weight to the policy loss
             # loss = torch.lerp(value_loss, policy_loss, 0.66)
