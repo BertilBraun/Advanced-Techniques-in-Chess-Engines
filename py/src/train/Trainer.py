@@ -63,10 +63,6 @@ class Trainer:
             out_value_mean += out_value.mean()
             out_value_std += out_value.std()
 
-            log(
-                f'Policy loss: {policy_loss.item()}, Value loss: {value_loss.item()}, Value mean: {out_value_mean.item()}, Value std: {out_value_std.item()}'
-            )
-
             # Apparently just as in AZ Paper, give more weight to the policy loss
             # loss = torch.lerp(value_loss, policy_loss, 0.66)
             loss = policy_loss + value_loss
