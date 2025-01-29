@@ -48,9 +48,16 @@ class EvaluationProcess:
         log(f'    Policy accuracy @10: {policy_accuracy_at_10:.2%}')
         log(f'    Avg value loss: {avg_value_loss}')
 
-        log_scalar('evaluation/policy_accuracy@1', policy_accuracy_at_1, iteration)
-        log_scalar('evaluation/policy_accuracy@5', policy_accuracy_at_5, iteration)
-        log_scalar('evaluation/policy_accuracy@10', policy_accuracy_at_10, iteration)
+        log_scalars(
+            'evaluation/policy_accuracy',
+            {
+                '1': policy_accuracy_at_1,
+                '5': policy_accuracy_at_5,
+                '10': policy_accuracy_at_10,
+            },
+            iteration,
+        )
+
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
         previous_model_path = model_save_path(iteration - self.eval_args.every_n_iterations, self.args.save_path)

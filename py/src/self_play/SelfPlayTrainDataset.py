@@ -99,7 +99,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             'dataset/average_resignation_percent',
             self.accumulated_stats.resignations / self.accumulated_stats.num_games * 100,
         )
-        log_scalar('dataset/num_samples', len(dataset))
+        log_scalar('dataset/num_samples', self.accumulated_stats.num_samples)
         log_scalar(
             'dataset/average_generation_time',
             self.accumulated_stats.total_generation_time / self.accumulated_stats.num_games,
