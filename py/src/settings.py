@@ -42,8 +42,8 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     base_lr = 0.05
-    lr_decay = 0.92
-    return base_lr * (lr_decay ** (current_iteration / 5))
+    lr_decay = 0.9
+    return base_lr * (lr_decay ** (current_iteration / 4))
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
@@ -174,7 +174,7 @@ elif True:
     CurrentGameVisuals = ChessVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 15
+    SELF_PLAYERS_PER_NODE = 12
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
@@ -195,7 +195,7 @@ elif True:
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 16
-    NUM_SEARCHES_PER_TURN = 240
+    NUM_SEARCHES_PER_TURN = 640
     MIN_VISIT_COUNT = 3
 
     if False:  # TODO remove
@@ -204,7 +204,7 @@ elif True:
         MIN_VISIT_COUNT = 2
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.3
+        return 0.3  # Based on AZ Paper
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
