@@ -457,7 +457,7 @@ class HandcraftedBotV4(Bot):
         pawns = board.pieces_mask(PAWN, color)
         num_doubled_pawns = get_number_of_set_bits(pawns & pawns << 8)
 
-        if 0x0101_0101_0101_0101 << self.get_king_file(board, color) & pawns:  # TODO what is this
+        if 0x0101_0101_0101_0101 << self.get_king_file(board, color) & pawns:
             mid_game_increment -= 40
 
         return num_doubled_pawns, game_phase_increment, mid_game_increment, end_game_increment

@@ -122,13 +122,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
+        dataset.stats = SelfPlayDataset.load_stats(file_path)
 
         try:
             with h5py.File(file_path, 'r') as file:
-                metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
-                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-                assert metadata == SelfPlayDataset._get_current_metadata(), message
-
                 dataset.encoded_states = [state for state in file['states']]  # type: ignore
                 # parse out the visit counts but only the non-zero ones
                 dataset.visit_counts = [
@@ -136,15 +133,28 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                     for visit_count in file['visit_counts']  # type: ignore
                 ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
-
-                stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
-                dataset.stats = SelfPlayDatasetStats(**stats)
         except Exception as e:
             from src.util.log import log, LogLevel
 
             log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.WARNING)
 
         return dataset
+
+    @staticmethod
+    def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:
+        try:
+            with h5py.File(file_path, 'r') as file:
+                metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
+                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
+                assert metadata == SelfPlayDataset._get_current_metadata(), message
+
+                stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
+                return SelfPlayDatasetStats(**stats)
+        except Exception as e:
+            from src.util.log import log, LogLevel
+
+            log(f'Error loading dataset stats from {file_path}: {e}', level=LogLevel.WARNING)
+            return SelfPlayDatasetStats()
 
     @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int) -> SelfPlayDataset:
@@ -157,14 +167,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[Path]:
         return [file_path for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
 
-    def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
-        if suffix:
-            file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
-        else:
-            while True:
-                file_path = Path(folder_path) / f'memory_{iteration}_{random_id()}.hdf5'
-                if not file_path.exists():
-                    break
+    def save_to_path(self, file_path: Path) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # write a h5py file with states, policy targets and value targets in it
@@ -182,6 +185,17 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
             # write the stats information about the dataset, num_games, total_generation_time
             file.attrs['stats'] = str(self.stats._asdict())
+
+    def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
+        if suffix:
+            file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
+        else:
+            while True:
+                file_path = Path(folder_path) / f'memory_{iteration}_{random_id()}.hdf5'
+                if not file_path.exists():
+                    break
+
+        self.save_to_path(file_path)
 
         return file_path
 

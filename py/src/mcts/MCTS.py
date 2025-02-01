@@ -56,8 +56,10 @@ class MCTS:
             self.parallel_iterate(roots)
 
         # for root in roots:
-        #     log(repr(root))
+        #     print(repr(root))
         #     num_placed_stones = np.sum(root.board.board != 0)
+        #     from src.util.mcts_graph import draw_mcts_graph
+        #
         #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
 
         return [

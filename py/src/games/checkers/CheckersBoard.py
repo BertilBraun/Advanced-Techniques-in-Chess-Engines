@@ -8,8 +8,6 @@ from src.games.Game import Board, Player
 CheckersMove = Tuple[int, int]
 _CheckersMove = Tuple[int, int, List[int]]  # start, end, captures
 
-# TODO far from 100% Core usage during move generation - why?
-
 uint64 = int
 
 BOARD_SIZE = 8

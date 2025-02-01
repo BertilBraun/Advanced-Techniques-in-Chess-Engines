@@ -105,9 +105,8 @@ class InferenceClient:
         policies, values = self.model(input_tensor)
 
         policies = torch.softmax(policies, dim=1)
-        values = torch.mean(values, dim=1)
 
-        results = torch.cat((policies, values.unsqueeze(1)), dim=1)
+        results = torch.cat((policies, values), dim=1)
 
         results = results.to(dtype=torch.float32, device='cpu').numpy()
 

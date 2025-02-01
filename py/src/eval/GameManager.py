@@ -26,5 +26,6 @@ class GameManager:
                 raise ValueError(f'Invalid move {move} for player {current_player.name}')
 
             self.board.make_move(move)
+            print(repr(self.board))
 
         return self.board.check_winner()

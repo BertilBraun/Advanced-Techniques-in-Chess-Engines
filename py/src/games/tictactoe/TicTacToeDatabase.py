@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
-
 from pathlib import Path
 from typing import Dict, Tuple, List
 from collections import defaultdict
@@ -88,7 +86,7 @@ def get_best_moves(board: TicTacToeBoard) -> Tuple[List[int], int]:
     return counter[outcome], outcome
 
 
-def generate_database() -> Path:
+def generate_database(path: Path):
     game = TicTacToeGame()
 
     # To keep track of all states to process
@@ -109,14 +107,15 @@ def generate_database() -> Path:
 
         if move_list:
             # Store the memory
-            policy = np.array([1 if move in move_list else 0 for move in range(9)], dtype=np.float32)
-            policy /= np.sum(policy)
+
+            visit_counts = [(move, 1) for move in move_list]
 
             dataset.add_sample(
                 game.get_canonical_board(current_board),
-                policy,
+                visit_counts,
                 outcome if current_board.current_player == 1 else -outcome,
             )
+            dataset.add_generation_stats(1, 0.0, False)
             generated_states.add(key)
 
             # Recurse on all valid moves to ensure all states are processed
@@ -129,10 +128,11 @@ def generate_database() -> Path:
         else:
             assert False
 
-    return dataset.save('reference', 0, 'tictactoe_database')
+    dataset.save_to_path(path)
 
 
 if __name__ == '__main__':
     print('Generating TicTacToe database...')
-    output_file = generate_database()
+    output_file = Path('reference/tictactoe.hdf5')
+    generate_database(output_file)
     print(f'Database saved to {output_file}')

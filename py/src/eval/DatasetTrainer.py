@@ -1,8 +1,7 @@
-from collections import defaultdict
 import os
-from pathlib import Path
 import sys
 import torch
+from pathlib import Path
 from torch.utils.data import DataLoader
 
 from src.Network import Network
@@ -13,7 +12,7 @@ from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
-from src.util.save_paths import create_model
+from src.util.save_paths import create_model, load_model
 
 NUM_EPOCHS = 10
 BATCH_SIZE = 512
@@ -52,21 +51,16 @@ def main(dataset_paths: list[str]):
     for dataset_path in dataset_paths:
         assert os.path.exists(dataset_path), f'Dataset path does not exist: {dataset_path}'
 
-    with TensorboardWriter(get_run_id(), 'dataset_trainer'):
+    run_id = get_run_id()
+    with TensorboardWriter(run_id, 'dataset_trainer'):
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
 
-        # group the datasets by the iteration id. These are of the form 'memory_ITERATIONNUMBER_*.hdf5'
-        grouped_paths = defaultdict(list)
-        for dataset_path in dataset_paths:
-            iteration = int(dataset_path.split('/')[-1].split('_')[1])
-            grouped_paths[iteration].append(Path(dataset_path))
-
         # Instantiate the dataset
-        dataset = SelfPlayTrainDataset(chunk_size=BATCH_SIZE * 2000, device=device)
-        dataset.load_from_files(save_folder, list(grouped_paths.values()))
+        dataset = SelfPlayTrainDataset(run_id, chunk_size=BATCH_SIZE * 2000, device=device)
+        dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
 
         # Create a DataLoader
-        train_dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+        train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=1)
         test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
         # Instantiate the model
@@ -74,7 +68,7 @@ def main(dataset_paths: list[str]):
 
         # Train the model
         log('Starting training...')
-        model.print_params()
+        # model.print_params()
         log('Number of training samples:', dataset.stats.num_samples, 'on', dataset.stats.num_games, 'games')
         log('Evaluating on', test_dataset.stats.num_samples, 'samples on', test_dataset.stats.num_games, 'games')
         log('Training for', NUM_EPOCHS, 'epochs')
@@ -83,9 +77,7 @@ def main(dataset_paths: list[str]):
 
         for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
             if os.path.exists(f'{save_folder}/model_{pre_iter}.pt'):
-                model.load_state_dict(
-                    torch.load(f'{save_folder}/model_{pre_iter}.pt', weights_only=True, map_location=device)
-                )
+                model = load_model(f'{save_folder}/model_{pre_iter}.pt', TRAINING_ARGS.network, device)
                 log(f'Loaded model_{pre_iter}.pt')
                 break
 
@@ -103,6 +95,9 @@ def main(dataset_paths: list[str]):
             log(f'    Avg value loss: {avg_value_loss}')
 
             torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')
+
+        dataset.cleanup()
+        log('Training finished')
 
 
 if __name__ == '__main__':

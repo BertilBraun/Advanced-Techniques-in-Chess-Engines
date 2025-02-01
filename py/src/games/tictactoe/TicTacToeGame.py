@@ -47,23 +47,38 @@ class TicTacToeGame(Game[TicTacToeMove]):
         return move
 
     def symmetric_variations(
-        self, board: np.ndarray, action_probabilities: np.ndarray
-    ) -> list[tuple[np.ndarray, np.ndarray]]:
+        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+    ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         # Return all 90 degree rotations of the board and action probabilities
         # In addition a flip + all 90 degree rotations of the board and action probabilities
+
         return [
             (  # 90*k degree rotation
                 np.rot90(board, k=k, axes=(1, 2)),
-                np.rot90(action_probabilities.reshape(ROW_COUNT, COLUMN_COUNT), k=k).flatten(),
+                self._flip_and_rotate_visit_counts(visit_counts, k, flip=False),
             )
             for k in range(4)
         ] + [
             (  # 90*k degree rotation + flip
                 np.rot90(np.flip(board, axis=2), k=k, axes=(1, 2)),
-                np.rot90(np.flip(action_probabilities.reshape(ROW_COUNT, COLUMN_COUNT), axis=1), k=k).flatten(),
+                self._flip_and_rotate_visit_counts(visit_counts, k, flip=True),
             )
             for k in range(4)
         ]
+
+    def _flip_and_rotate_visit_counts(
+        self, visit_counts: list[tuple[int, int]], k: int, flip: bool
+    ) -> list[tuple[int, int]]:
+        updated_visit_counts: list[tuple[int, int]] = []
+        for move, count in visit_counts:
+            row, col = move // ROW_COUNT, move % COLUMN_COUNT
+            if flip:
+                col = COLUMN_COUNT - col - 1
+            for _ in range(k):
+                row, col = ROW_COUNT - col - 1, row
+            updated_move = row * ROW_COUNT + col
+            updated_visit_counts.append((updated_move, count))
+        return updated_visit_counts
 
     def get_initial_board(self) -> TicTacToeBoard:
         return TicTacToeBoard()

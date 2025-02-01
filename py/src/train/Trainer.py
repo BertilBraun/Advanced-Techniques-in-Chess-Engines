@@ -82,10 +82,11 @@ class Trainer:
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
             # Update learning rate before stepping the optimizer
-            batch_percentage = batchIdx / len(dataloader)
-            lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
+            if batchIdx % 100 == 0:
+                batch_percentage = batchIdx / len(dataloader)
+                lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = lr
 
             self.optimizer.zero_grad()
             loss.backward()

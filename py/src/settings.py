@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import torch
 from src.train.TrainingArgs import (
     ClusterParams,
@@ -90,7 +91,7 @@ if False:
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
-    network = NetworkParams(num_layers=9, hidden_size=128)
+    network = NetworkParams(num_layers=9, hidden_size=32)
 
     PARALLEL_GAMES = 128
 
@@ -105,12 +106,14 @@ if False:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             temperature=1.25,
+            num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
                 num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=4,
+                min_visit_count=2,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
@@ -125,29 +128,33 @@ if False:
             num_searches_per_turn=60,
             num_games=20,
             every_n_iterations=10,
+            dataset_path='reference/memory_0_connect4_database.hdf5',
         ),
     )
     # TODO remove
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=25,
+        num_iterations=8,
         save_path=SAVE_PATH + '/connect4',
-        num_games_per_iteration=32,
+        num_games_per_iteration=200,
         network=network,
         self_play=SelfPlayParams(
-            num_parallel_games=128,
+            num_parallel_games=32,
             temperature=1.25,
+            result_score_weight=0.15,
+            num_moves_after_which_to_play_greedy=10,
             mcts=MCTSParams(
-                num_searches_per_turn=100,
-                num_parallel_searches=8,
+                num_searches_per_turn=600,
+                num_parallel_searches=2,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
+                min_visit_count=1,
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
-            num_epochs=2,
-            batch_size=32,
+            num_epochs=1,
+            batch_size=256,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
             learning_rate_scheduler=learning_rate_scheduler,
@@ -308,6 +315,13 @@ elif False:
     )
 
 elif True:
+
+    def ensure_eval_dataset_exists(dataset_path: str) -> None:
+        if not os.path.exists(dataset_path):
+            from src.games.tictactoe.TicTacToeDatabase import generate_database
+
+            generate_database(Path(dataset_path))
+
     from src.games.tictactoe.TicTacToeGame import TicTacToeGame, TicTacToeMove
     from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
     from src.games.tictactoe.TicTacToeVisuals import TicTacToeVisuals
@@ -333,8 +347,9 @@ elif True:
             temperature=1.25,
             num_parallel_games=5,
             num_moves_after_which_to_play_greedy=5,
+            result_score_weight=0.15,
             mcts=MCTSParams(
-                num_searches_per_turn=60,
+                num_searches_per_turn=200,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -344,7 +359,7 @@ elif True:
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=1),
         training=TrainingParams(
-            num_epochs=2,
+            num_epochs=1,
             batch_size=128,
             sampling_window=sampling_window,
             learning_rate=learning_rate,
@@ -357,6 +372,9 @@ elif True:
             dataset_path='reference/memory_0_tictactoe_database.hdf5',
         ),
     )
+
+    if TRAINING_ARGS.evaluation is not None:
+        ensure_eval_dataset_exists(TRAINING_ARGS.evaluation.dataset_path)
     # TEST_TRAINING_ARGS = TrainingArgs(
     #     num_iterations=50,
     #     num_self_play_games_per_iteration=2,

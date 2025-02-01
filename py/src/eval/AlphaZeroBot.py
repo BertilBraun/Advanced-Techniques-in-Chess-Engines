@@ -32,7 +32,7 @@ class AlphaZeroBot(Bot):
 
         # run some inferences to compile and warm up the model
         board = CurrentBoard()
-        for _ in range(10):
+        for _ in range(5):
             self.inference_client._model_inference([CurrentGame.get_canonical_board(board)])
             board.make_move(board.get_valid_moves()[0])
 

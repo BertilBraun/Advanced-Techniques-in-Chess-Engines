@@ -21,7 +21,7 @@ def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnec
 
     start_cpu_usage_logger(run, 'trainer')
 
-    trainer_process = TrainerProcess(args, device_id, commander_pipe)
+    trainer_process = TrainerProcess(args, run, device_id, commander_pipe)
     with log_exceptions('Trainer process'), TensorboardWriter(run, 'trainer', postfix_pid=False):
         trainer_process.run()
 
@@ -29,8 +29,9 @@ def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnec
 class TrainerProcess:
     """This class provides functionality to train the model on the self play data. It listens to the commander for messages to start and stop the training process. Once it receives a start message, it waits for enough samples to be available for the current iteration and then trains the model for the specified number of epochs. The training stats are sent back to the commander once training is finished."""
 
-    def __init__(self, args: TrainingArgs, device_id: int, commander_pipe: PipeConnection) -> None:
+    def __init__(self, args: TrainingArgs, run_id: int, device_id: int, commander_pipe: PipeConnection) -> None:
         self.args = args
+        self.run_id = run_id
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
         self.commander_pipe = commander_pipe
@@ -100,6 +101,7 @@ class TrainerProcess:
         )
 
         dataset = SelfPlayTrainDataset(
+            self.run_id,
             self.args.training.chunk_size or self.args.training.batch_size * 20,
             self.device,
         )

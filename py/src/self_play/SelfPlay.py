@@ -1,12 +1,12 @@
 from __future__ import annotations
 import time
-from typing import Any
 
 import numpy as np
 from collections import Counter
 from dataclasses import dataclass
 
 from src.util import lerp
+from src.util.remove_repetitions import remove_repetitions
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.mcts.MCTSArgs import MCTSArgs
@@ -176,10 +176,10 @@ class SelfPlay:
         return CurrentGame.decode_move(action)
 
     @timeit
-    def _add_training_data(self, spg: SelfPlayGame, result: float, resignation: bool) -> None:
+    def _add_training_data(self, spg: SelfPlayGame, game_outcome: float, resignation: bool) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
-        self._log_game(spg, result)
+        self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
             num_games=1,
@@ -187,62 +187,23 @@ class SelfPlay:
             resignation=resignation,
         )
 
-        if result == 0.0:
+        if game_outcome == 0.0:
             # if the outcome is 0.0 (draw), remove repetitions from the moves
             indices_to_keep = remove_repetitions(spg.played_moves)
             spg.played_moves = [spg.played_moves[i] for i in indices_to_keep]
             spg.memory = [spg.memory[i] for i in indices_to_keep]
 
-        for mem in spg.memory[::-1]:  # reverse to flip the result for the other player
+        for mem in spg.memory:
             encoded_board = CurrentGame.get_canonical_board(mem.board)
+            turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
 
             for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
                 self.dataset.add_sample(
-                    board.copy().astype(np.int8),
+                    board.astype(np.int8).copy(),
                     visit_counts.copy(),
-                    lerp(result, mem.result_score, self.args.result_score_weight),
+                    lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
-            result = -result
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])
         log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')
-
-
-def remove_repetitions(moves: list[Any]) -> list[int]:
-    """
-    moves: a list of indices which should be keept
-    Returns a new list where any sub-block of length >= 4
-    that occurs >= 3 times in a row is collapsed into a
-    single occurrence of that block.
-    """
-    filtered_moves: list[int] = []
-    i = 0
-    n = len(moves)
-
-    while i < n:
-        found_repeat = False
-        # The longest block we can repeat 3x from position i is at most (n - i) // 3
-        max_len = (n - i) // 3
-        # Try from the largest possible block down to 4
-        for length in range(max_len, 3, -1):
-            block = moves[i : i + length]
-            # Check if block repeats 3 times consecutively
-            if moves[i + length : i + 2 * length] == block and moves[i + 2 * length : i + 3 * length] == block:
-                # Count how many times it actually repeats
-                times = 3
-                while i + times * length < n and moves[i + times * length : i + (times + 1) * length] == block:
-                    times += 1
-                # Keep exactly one occurrence of that block
-                filtered_moves.extend(list(range(i, i + length)))
-                # Skip over all the repeated blocks
-                i += times * length
-                found_repeat = True
-                break
-
-        # If no repeated block found at position i, just take one move
-        if not found_repeat:
-            filtered_moves.append(i)
-            i += 1
-
-    return filtered_moves
