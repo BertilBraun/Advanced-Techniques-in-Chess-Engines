@@ -100,7 +100,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         spikiness = sum(policy.max() for policy in policies) / len(dataset)
 
-        with TensorboardWriter(self.run, 'dataset/'):
+        with TensorboardWriter(self.run, 'dataset', postfix_pid=False):
             log_scalar('dataset/num_games', self.accumulated_stats.num_games)
             log_scalar('dataset/num_resignations', self.accumulated_stats.resignations)
             log_scalar(

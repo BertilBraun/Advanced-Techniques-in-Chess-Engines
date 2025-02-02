@@ -91,7 +91,7 @@ if False:
     # Assuming 12 parallel self players per node and 6 additional self players on the training GPU
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
 
-    network = NetworkParams(num_layers=9, hidden_size=32)
+    network = NetworkParams(num_layers=9, hidden_size=64)
 
     PARALLEL_GAMES = 128
 
@@ -133,7 +133,7 @@ if False:
     )
     # TODO remove
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=8,
+        num_iterations=9,
         save_path=SAVE_PATH + '/connect4',
         num_games_per_iteration=200,
         network=network,
@@ -141,7 +141,7 @@ if False:
             num_parallel_games=32,
             temperature=1.25,
             result_score_weight=0.15,
-            num_moves_after_which_to_play_greedy=10,
+            num_moves_after_which_to_play_greedy=15,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
                 num_parallel_searches=2,
@@ -202,7 +202,7 @@ elif True:
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 16
-    NUM_SEARCHES_PER_TURN = 640
+    NUM_SEARCHES_PER_TURN = 400
     MIN_VISIT_COUNT = 3
 
     if False:  # TODO remove

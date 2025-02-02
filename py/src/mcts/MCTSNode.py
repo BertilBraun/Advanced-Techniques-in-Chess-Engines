@@ -73,11 +73,13 @@ class MCTSNode:
     def result_score(self) -> float:
         if self.number_of_visits == 0:
             return -float('inf')
-        return (
-            self.parent.children_result_scores[self.my_child_index]
-            if self.parent
-            else np.sum(self.children_result_scores)
-        ) / self.number_of_visits
+
+        if self.parent:
+            score = self.parent.children_result_scores[self.my_child_index]
+        else:
+            score = np.sum(self.children_result_scores)
+
+        return -score / self.number_of_visits
 
     def expand(self, encoded_moves_with_scores: list[tuple[int, float]]) -> None:
         if self.is_fully_expanded:

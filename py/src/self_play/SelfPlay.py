@@ -100,9 +100,8 @@ class SelfPlay:
                 while np.sum(spg_action_probabilities) > 0:
                     new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
-                    if (
-                        self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-5:]
-                    ):  # don't play the same move twice in a row
+                    if self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-5:]:
+                        # don't play the same move twice in a row
                         self.self_play_games[new_spg] += 1
                         break
                     else:
@@ -195,7 +194,7 @@ class SelfPlay:
 
         for mem in spg.memory:
             encoded_board = CurrentGame.get_canonical_board(mem.board)
-            turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
+            turn_game_outcome = -game_outcome if mem.board.current_player == spg.board.current_player else game_outcome
 
             for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
                 self.dataset.add_sample(
