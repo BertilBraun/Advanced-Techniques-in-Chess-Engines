@@ -140,7 +140,7 @@ if False:
         self_play=SelfPlayParams(
             num_parallel_games=32,
             temperature=1.25,
-            result_score_weight=0.15,
+            result_score_weight=0,  # 0.15,
             num_moves_after_which_to_play_greedy=15,
             mcts=MCTSParams(
                 num_searches_per_turn=600,
@@ -196,13 +196,13 @@ elif True:
     evaluation = EvaluationParams(
         num_searches_per_turn=60,
         num_games=40,
-        every_n_iterations=2,
+        every_n_iterations=1,
         dataset_path='reference/memory_0_chess_database.hdf5',
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 16
-    NUM_SEARCHES_PER_TURN = 400
+    NUM_SEARCHES_PER_TURN = 800
     MIN_VISIT_COUNT = 3
 
     if False:  # TODO remove
@@ -221,11 +221,11 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.15,
+            result_score_weight=0,  # TODO 0.15,
             resignation_threshold=-0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=4,
+                num_parallel_searches=2,  # TODO 4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
@@ -345,7 +345,7 @@ elif True:
         network=NetworkParams(num_layers=8, hidden_size=16),
         self_play=SelfPlayParams(
             temperature=1.25,
-            num_parallel_games=5,
+            num_parallel_games=1,  # TODO 5,
             num_moves_after_which_to_play_greedy=5,
             result_score_weight=0.15,
             mcts=MCTSParams(
@@ -353,7 +353,7 @@ elif True:
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
-                num_parallel_searches=2,
+                num_parallel_searches=1,  # TODO 2,
                 min_visit_count=2,
             ),
         ),
