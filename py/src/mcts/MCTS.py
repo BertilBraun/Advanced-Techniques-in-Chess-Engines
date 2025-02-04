@@ -78,7 +78,7 @@ class MCTS:
             # calculate the entropy of the nodes visit counts
             node_number_of_visits = node.number_of_visits
             return -sum(
-                visit_count / node_number_of_visits * np.log(visit_count / node_number_of_visits)
+                visit_count / node_number_of_visits * np.log2(visit_count / node_number_of_visits)
                 for visit_count in node.children_number_of_visits
                 if visit_count > 0
             )
@@ -87,6 +87,8 @@ class MCTS:
         average_entropy = sum(entropies) / len(entropies)
 
         log_scalar('dataset/average_search_entropy', average_entropy)
+
+        print(repr(roots[0]))
 
         return [
             MCTSResult(
