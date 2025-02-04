@@ -65,7 +65,7 @@ class MCTSNode:
     def number_of_visits(self) -> int:
         return (
             self.parent.children_number_of_visits[self.my_child_index]
-            if self.parent
+            if self.parent is not None
             else self.children_number_of_visits.sum() + 1
         )
 
@@ -74,7 +74,7 @@ class MCTSNode:
         if self.number_of_visits == 0:
             return -float('inf')
 
-        if self.parent:
+        if self.parent is not None:
             score = self.parent.children_result_scores[self.my_child_index]
         else:
             score = np.sum(self.children_result_scores)

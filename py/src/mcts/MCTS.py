@@ -77,6 +77,9 @@ class MCTS:
         def entropy(node: MCTSNode) -> float:
             # calculate the entropy of the nodes visit counts
             node_number_of_visits = node.number_of_visits
+            if node_number_of_visits == 0:
+                print(f'Warning: node_number_of_visits == 0 for {repr(node)}')
+                return 0.0
             return -sum(
                 visit_count / node_number_of_visits * np.log(visit_count / node_number_of_visits)
                 for visit_count in node.children_number_of_visits
