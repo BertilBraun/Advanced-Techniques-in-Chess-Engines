@@ -140,11 +140,11 @@ class MCTSNode:
 {repr(self.board) if self.board else None}
 visits: {self.number_of_visits}
 score: {self.result_score:.2f}
-child visits: {self.children_number_of_visits}
-child policy: {np.round(self.children_policies, 2)}
-child moves: {[child.encoded_move_to_get_here for child in self.children]}
-child scores: {np.round(self.children_result_scores, 2)}
-best_move: {self.children[np.argmax(self.children_number_of_visits)].encoded_move_to_get_here if self.children else None}
+child visits: {self.children_number_of_visits.tolist()}
+child policy: {np.round(self.children_policies, 2).tolist()}
+child moves: {[CurrentGame.decode_move(child.encoded_move_to_get_here) for child in self.children]}
+child scores: {np.round(self.children_result_scores, 2).tolist()}
+best_move: {CurrentGame.decode_move(self.children[np.argmax(self.children_number_of_visits)].encoded_move_to_get_here) if self.children else None}
 )"""
 
 
