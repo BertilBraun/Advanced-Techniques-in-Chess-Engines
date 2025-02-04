@@ -80,7 +80,7 @@ class TrainerProcess:
     @timeit
     def _wait_for_enough_training_samples(self, iteration):
         while (
-            SelfPlayDataset.load_iteration(self.args.save_path, iteration).stats.num_games
+            SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games
             < self.args.num_games_per_iteration
         ):
             time.sleep(1)

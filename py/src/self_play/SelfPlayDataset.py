@@ -164,6 +164,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return dataset
 
     @staticmethod
+    def load_iteration_stats(folder_path: str | PathLike, iteration: int) -> SelfPlayDatasetStats:
+        stats = SelfPlayDatasetStats()
+        for file_path in SelfPlayDataset.get_files_to_load_for_iteration(folder_path, iteration):
+            stats += SelfPlayDataset.load_stats(file_path)
+        return stats
+
+    @staticmethod
     def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[Path]:
         return [file_path for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
 
