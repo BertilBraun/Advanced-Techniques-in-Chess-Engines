@@ -136,6 +136,28 @@ class MCTSNode:
     def __repr__(self) -> str:
         if not self.is_fully_expanded:
             return 'MCTSNode(not expanded)'
+
+        # sort children by policy
+        children = list(
+            sorted(self.children, key=lambda child: self.children_policies[child.my_child_index], reverse=True)
+        )
+
+        visits = ', '.join(str(round(child.number_of_visits, 2)) for child in children)
+        policies = ', '.join(str(round(self.children_policies[child.my_child_index], 2)) for child in children)
+        moves = ', '.join(CurrentGame.decode_move(child.encoded_move_to_get_here).uci() for child in children)
+        scores = ', '.join(str(round(self.children_result_scores[child.my_child_index], 2)) for child in children)
+
+        return f"""MCTSNode(
+{repr(self.board) if self.board else None}
+visits: {self.number_of_visits}
+score: {self.result_score:.2f}
+child visits: {visits}
+child policy: {policies}
+child moves: {moves}
+child scores: {scores}
+best_move: {CurrentGame.decode_move(children[0].encoded_move_to_get_here).uci() if children else None}
+)"""
+
         return f"""AlphaMCTSNode(
 {repr(self.board) if self.board else None}
 visits: {self.number_of_visits}
