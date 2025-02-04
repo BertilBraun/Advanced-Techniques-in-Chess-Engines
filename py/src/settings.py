@@ -201,7 +201,7 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 16
+    PARALLEL_GAMES = 8
     NUM_SEARCHES_PER_TURN = 800
     MIN_VISIT_COUNT = 1
 
