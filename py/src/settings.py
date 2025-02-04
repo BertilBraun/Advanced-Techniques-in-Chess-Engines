@@ -20,7 +20,7 @@ TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
 def get_run_id():
     for run in range(10000):
-        log_folder = f'logs/{run}'
+        log_folder = f'logs/run_{run}'
         if not os.path.exists(log_folder):
             os.makedirs(log_folder)
             return run

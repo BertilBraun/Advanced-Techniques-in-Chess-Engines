@@ -7,6 +7,7 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
 
 
@@ -61,6 +62,30 @@ class MCTS:
         #     from src.util.mcts_graph import draw_mcts_graph
         #
         #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
+
+        def dfs(node: MCTSNode) -> int:
+            # depth dfs
+            if not node or not node.is_fully_expanded:
+                return 0
+            return 1 + max(dfs(child) for child in node.children)
+
+        depths = [dfs(root) for root in roots]
+        average_depth = sum(depths) / len(depths)
+
+        log_scalar('dataset/average_search_depth', average_depth)
+
+        def entropy(node: MCTSNode) -> float:
+            # calculate the entropy of the nodes visit counts
+            node_number_of_visits = node.number_of_visits
+            return -sum(
+                visit_count / node_number_of_visits * np.log(visit_count / node_number_of_visits)
+                for visit_count in node.children_number_of_visits
+            )
+
+        entropies = [entropy(root) for root in roots]
+        average_entropy = sum(entropies) / len(entropies)
+
+        log_scalar('dataset/average_search_entropy', average_entropy)
 
         return [
             MCTSResult(
