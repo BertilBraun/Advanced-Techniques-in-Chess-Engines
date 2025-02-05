@@ -1,7 +1,9 @@
 from __future__ import annotations
+from itertools import chain
 from os import PathLike
 import random
 
+from chess import WHITE
 import numpy as np
 from typing import Callable
 from dataclasses import dataclass
@@ -173,14 +175,49 @@ class ModelEvaluation:
         results = Results(0, 0, 0)
 
         games = [CurrentBoard() for _ in range(num_games)]
-        while games:
-            assert all(game.current_player == games[0].current_player for game in games)
-            if games[0].current_player == 1:
-                policies = model1(games)
-            else:
-                policies = model2(games)
 
-            for game, policy in zip(games, policies):
+        # start from different starting positions, as the players are deterministic
+        if 'Chess' in CurrentGame.__class__.__name__:
+            opening_fens = [
+                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
+                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game
+                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 3 3',  # Scotch Game
+                'rnbqkb1r/pp1ppppp/5n2/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 2 2',  # Sicilian Defense
+                'rnbqkb1r/pppp1ppp/4pn2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 3',  # French Defense
+                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Caro-Kann Defense
+                'rnbqkb1r/ppp1pppp/3p4/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Pirc Defense
+                'rnbqkb1r/ppp1pppp/3p4/8/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Modern Defense
+                'rnbqkb1r/pppp1ppp/8/4p3/3Pn3/5N2/PPP2PPP/RNBQKB1R w KQkq - 3 3',  # Alekhine’s Defense
+                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # King's Indian Defense
+                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 2 3',  # Grünfeld Defense
+                'rnbqkb1r/pp1ppppp/5n2/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Queen’s Gambit Declined
+                'rnbqkb1r/pp1ppppp/5n2/8/2pPP3/8/PP3PPP/RNBQKBNR w KQkq - 0 3',  # Queen’s Gambit Accepted
+                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Slav Defense
+                'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
+                'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
+                'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
+                'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
+                'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
+                'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
+            ]
+
+            for game, fen in zip(games, opening_fens):
+                game.board.set_board_fen(fen)
+                game.current_player = 1 if game.board.turn == WHITE else -1
+        else:
+            for game in games:
+                for _ in range(3):
+                    move = random.choice(game.get_valid_moves())
+                    game.make_move(move)
+
+        while games:
+            games_for_player1 = [game for game in games if game.current_player == 1]
+            games_for_player2 = [game for game in games if game.current_player == -1]
+
+            policies1 = model1(games_for_player1)
+            policies2 = model2(games_for_player2)
+
+            for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 move = CurrentGame.decode_move(np.argmax(policy).item())
                 game.make_move(move)
 
