@@ -202,7 +202,7 @@ class ModelEvaluation:
             ]
 
             for game, fen in zip(games, opening_fens):
-                game.board.set_board_fen(fen)
+                game.board.set_fen(fen)
                 game.current_player = 1 if game.board.turn == WHITE else -1
         else:
             for game in games:
