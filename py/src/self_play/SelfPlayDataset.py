@@ -133,12 +133,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                     for visit_count in file['visit_counts']  # type: ignore
                 ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
+
+                return dataset
         except Exception as e:
             from src.util.log import log, LogLevel
 
-            log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.WARNING)
-
-        return dataset
+            log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.DEBUG)
+            return SelfPlayDataset()
 
     @staticmethod
     def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:
@@ -153,7 +154,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         except Exception as e:
             from src.util.log import log, LogLevel
 
-            log(f'Error loading dataset stats from {file_path}: {e}', level=LogLevel.WARNING)
+            log(f'Error loading dataset stats from {file_path}: {e}', level=LogLevel.DEBUG)
             return SelfPlayDatasetStats()
 
     @staticmethod
