@@ -211,7 +211,7 @@ elif True:
         MIN_VISIT_COUNT = 2
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.03  # Based on AZ Paper
+        return 0.3  # Based on AZ Paper
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -221,14 +221,14 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.15,
+            result_score_weight=0.1,
             resignation_threshold=-0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=2,  # TODO 4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
-                c_param=1,  # TODO 2,
+                c_param=2,
                 min_visit_count=MIN_VISIT_COUNT,
             ),
         ),
