@@ -33,6 +33,9 @@ class MCTS:
 
     @timeit
     def search(self, inputs: list[tuple[CurrentBoard, MCTSNode | None]]) -> list[MCTSResult]:
+        if not inputs:
+            return []
+
         # TODO Already expanded nodes currently dont properly work. Issues:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
         #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times
