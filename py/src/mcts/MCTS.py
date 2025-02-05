@@ -33,6 +33,10 @@ class MCTS:
 
     @timeit
     def search(self, inputs: list[tuple[CurrentBoard, MCTSNode | None]]) -> list[MCTSResult]:
+        # TODO Already expanded nodes currently dont properly work. Issues:
+        #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
+        #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times
+
         policies = self._get_policy_with_noise([board for board, node in inputs if node is None])
 
         roots: list[MCTSNode] = []
@@ -88,7 +92,7 @@ class MCTS:
 
         log_scalar('dataset/average_search_entropy', average_entropy)
 
-        print(repr(roots[0]))
+        # print(repr(roots[0]))
 
         return [
             MCTSResult(
