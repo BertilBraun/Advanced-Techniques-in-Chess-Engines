@@ -211,7 +211,7 @@ elif True:
         MIN_VISIT_COUNT = 2
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.3  # Based on AZ Paper
+        return 0.1  # TODO 0.3  # Based on AZ Paper
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -228,7 +228,7 @@ elif True:
                 num_parallel_searches=2,  # TODO 4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
-                c_param=2,
+                c_param=1.5,  # TODO 2,
                 min_visit_count=MIN_VISIT_COUNT,
             ),
         ),
