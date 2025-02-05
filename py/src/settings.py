@@ -201,9 +201,9 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 8
+    PARALLEL_GAMES = 16
     NUM_SEARCHES_PER_TURN = 800
-    MIN_VISIT_COUNT = 1
+    MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
     if False:  # TODO remove
         PARALLEL_GAMES = 2
@@ -211,21 +211,21 @@ elif True:
         MIN_VISIT_COUNT = 2
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.03  # TODO 0.3  # Based on AZ Paper
+        return 0.03  # Based on AZ Paper
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2 + 1,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0,  # TODO 0.15,
-            resignation_threshold=-1.0,  # TODO -0.9,
+            result_score_weight=0.15,
+            resignation_threshold=-0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=1,  # TODO 2,  # TODO 4,
+                num_parallel_searches=2,  # TODO 4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=1,  # TODO 2,

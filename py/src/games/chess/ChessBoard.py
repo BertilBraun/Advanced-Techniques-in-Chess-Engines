@@ -46,10 +46,13 @@ class ChessBoard(Board[ChessMove]):
         from src.games.chess.ChessGame import BOARD_LENGTH
 
         rows = []
+        rows.append('  a b c d e f g h')
         for i in range(BOARD_LENGTH):
-            row = []
+            row = [str(i + 1)]
             for j in range(BOARD_LENGTH):
                 piece = self.board.piece_at(i * BOARD_LENGTH + j)
                 row.append(piece.unicode_symbol() if piece is not None else '.')
+            row.append(f' {i + 1}')
             rows.append(' '.join(row))
+        rows.append('  a b c d e f g h')
         return '\n'.join(rows)

@@ -138,9 +138,9 @@ class SelfPlay:
 
         encoded_move = CurrentGame.encode_move(move)
         new_spg = current.expand(move)
-        new_spg.already_expanded_node = next(
-            child for child in children if child.encoded_move_to_get_here == encoded_move
-        ).copy(parent=None)  # remove parent to avoid memory leaks
+        # TODO new_spg.already_expanded_node = next(
+        # TODO     child for child in children if child.encoded_move_to_get_here == encoded_move
+        # TODO ).copy(parent=None)  # remove parent to avoid memory leaks
 
         if not new_spg.board.is_game_over():
             return new_spg, move
