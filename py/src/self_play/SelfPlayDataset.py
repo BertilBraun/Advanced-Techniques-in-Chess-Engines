@@ -173,7 +173,11 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     @staticmethod
     def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[Path]:
-        return [file_path for file_path in Path(folder_path).glob(f'memory_{iteration}_*.hdf5')]
+        old_save_format = list(Path(folder_path).glob(f'memory_{iteration}*.hdf5'))
+        new_save_path = Path(folder_path) / f'memory_{iteration}'
+        if new_save_path.exists():
+            return list(new_save_path.glob('*.hdf5')) + list(old_save_format)
+        return old_save_format
 
     def save_to_path(self, file_path: Path) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -196,10 +200,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
         if suffix:
-            file_path = Path(folder_path) / f'memory_{iteration}_{suffix}.hdf5'
+            file_path = Path(folder_path) / f'memory_{iteration}/{suffix}.hdf5'
         else:
             while True:
-                file_path = Path(folder_path) / f'memory_{iteration}_{random_id()}.hdf5'
+                file_path = Path(folder_path) / f'memory_{iteration}/{random_id()}.hdf5'
                 if not file_path.exists():
                     break
 

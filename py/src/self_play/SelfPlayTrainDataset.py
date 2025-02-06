@@ -43,7 +43,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             for j, file in enumerate(sublist):
                 # keep the original file
                 # copy the file to the folder_path
-                chunk_file = Path(folder_path) / f'iteration_{i}/chunk_{j}_{random_id()}.hdf5'
+                chunk_file = Path(folder_path) / f'training_chunks/origin_{i}/chunk_{j}_{random_id()}.hdf5'
                 chunk_file.parent.mkdir(parents=True, exist_ok=True)
                 chunk_file.hardlink_to(file)
                 self.all_chunks.append(chunk_file)
