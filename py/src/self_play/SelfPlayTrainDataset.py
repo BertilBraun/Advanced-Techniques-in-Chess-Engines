@@ -65,6 +65,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         with TensorboardWriter(run, 'dataset', postfix_pid=False):
             for file in files:
                 dataset = SelfPlayDataset.load(file)
+                if len(dataset) == 0:
+                    continue
+
                 accumulated_stats += dataset.stats
 
                 policies = [action_probabilities(visits) for visits in dataset.visit_counts]
