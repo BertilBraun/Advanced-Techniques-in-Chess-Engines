@@ -92,9 +92,15 @@ class MCTSNode:
 
         legal_moves = ChessGame().encode_moves(self.board.get_valid_moves())
 
+        valid_encoded_moves_with_scores = [
+            (encoded_move, score) for encoded_move, score in encoded_moves_with_scores if legal_moves[encoded_move] != 0
+        ]
         for encoded_move, _ in encoded_moves_with_scores:
-            if not legal_moves[encoded_move]:
-                continue
+            if legal_moves[encoded_move] == 0:
+                print('Illegal move:', CurrentGame.decode_move(encoded_move).uci(), 'for board:')
+                print(repr(self.board))
+
+        for encoded_move, _ in valid_encoded_moves_with_scores:
             self.children.append(
                 MCTSNode(encoded_move_to_get_here=encoded_move, parent=self, my_child_index=len(self.children))
             )
@@ -103,10 +109,7 @@ class MCTSNode:
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
-        self.children_policies = np.array(
-            [score for _, score in encoded_moves_with_scores if score > 0.0 and legal_moves[encoded_move] != 0],
-            dtype=np.float32,
-        )
+        self.children_policies = np.array([score for _, score in valid_encoded_moves_with_scores], dtype=np.float32)
 
     def update_virtual_losses(self, delta: int) -> None:
         node = self
