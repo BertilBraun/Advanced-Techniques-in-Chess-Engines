@@ -201,7 +201,7 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 32
+    PARALLEL_GAMES = 128
     NUM_SEARCHES_PER_TURN = 800
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
@@ -221,11 +221,11 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0,  # TODO 0.1,
+            result_score_weight=0.1,
             resignation_threshold=-1.0,  # TODO -0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=2,  # TODO 4,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=dirichlet_alpha,
                 c_param=2,
