@@ -6,6 +6,7 @@ import numpy as np
 from sys import getsizeof
 from typing import TypeVar
 
+from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
 from src.Network import Network
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
@@ -26,7 +27,7 @@ class InferenceClient:
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        self.inference_cache: dict[int, tuple[np.ndarray, float]] = {}
+        self.inference_cache: dict[int, tuple[list[MoveScore], float]] = {}
         self.total_hits = 0
         self.total_evals = 0
 
@@ -57,7 +58,7 @@ class InferenceClient:
 
             size_in_mb = 0
             for key, (policy, value) in self.inference_cache.items():
-                size_in_mb += getsizeof(key) + getsizeof(value) + policy.nbytes
+                size_in_mb += getsizeof(key) + getsizeof(value) + getsizeof(policy)
 
             size_in_mb /= 1024 * 1024
             log_scalar('cache/size_mb', size_in_mb, iteration)
@@ -67,7 +68,7 @@ class InferenceClient:
             )
         self.inference_cache.clear()
 
-    def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[np.ndarray, float]]:
+    def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[list[MoveScore], float]]:
         if not boards:
             return []
 
@@ -75,15 +76,15 @@ class InferenceClient:
         board_hashes = self._get_board_hashes(encoded_boards)
 
         boards_to_infer: list[np.ndarray] = []
-        boards_to_infer_hashes: list[int] = []
+        inference_hashes_and_boards: list[tuple[int, CurrentBoard]] = []
 
         enqueued_hashes: set[int] = set()  # for O(1) lookup of enqueued hashes
 
-        for board, hash in zip(encoded_boards, board_hashes):
+        for board, encoded_board, hash in zip(boards, encoded_boards, board_hashes):
             if hash not in enqueued_hashes and hash not in self.inference_cache:
                 enqueued_hashes.add(hash)
-                boards_to_infer.append(board)
-                boards_to_infer_hashes.append(hash)
+                boards_to_infer.append(encoded_board)
+                inference_hashes_and_boards.append((hash, board))
             else:
                 self.total_hits += 1
 
@@ -91,9 +92,9 @@ class InferenceClient:
 
         if boards_to_infer:
             results = self._model_inference(boards_to_infer)
-            for hash, (policy, value) in zip(boards_to_infer_hashes, results):
-                # TODO save memory and computation time by filter_policy_then_get_moves_and_probabilities here
-                self.inference_cache[hash] = policy, value
+            for (hash, board), (policy, value) in zip(inference_hashes_and_boards, results):
+                moves = filter_policy_then_get_moves_and_probabilities(policy, board)
+                self.inference_cache[hash] = moves, value
 
         return [self.inference_cache[hash] for hash in board_hashes]
 

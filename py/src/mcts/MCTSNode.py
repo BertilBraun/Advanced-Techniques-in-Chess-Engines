@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
+from src.Encoding import MoveScore
 from src.settings import CurrentBoard, CurrentGame
 
 
@@ -81,7 +82,7 @@ class MCTSNode:
 
         return -score / self.number_of_visits
 
-    def expand(self, encoded_moves_with_scores: list[tuple[int, float]]) -> None:
+    def expand(self, encoded_moves_with_scores: list[MoveScore]) -> None:
         if self.is_fully_expanded:
             return  # Already expanded by another thread
 

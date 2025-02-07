@@ -6,7 +6,7 @@ from src.mcts.MCTSNode import MCTSNode
 from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
-from src.Encoding import filter_policy_then_get_moves_and_probabilities, get_board_result_score
+from src.Encoding import MoveScore, get_board_result_score
 from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
 
@@ -40,25 +40,28 @@ class MCTS:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
         #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times
 
-        policies = self._get_policy_with_noise([board for board, node in inputs if node is None])
+        moves = self._get_policy_with_noise([board for board, node in inputs if node is None])
 
         roots: list[MCTSNode] = []
-        policies_index = 0
+        moves_index = 0
 
         for board, node in inputs:
             if node is not None:
                 assert node.parent is None, 'Node must be a root node (be careful with memory leaks)'
                 # Add noise to the children policies, then reuse the node
-                node.children_policies = self._add_noise(node.children_policies)
+                node.children_policies = lerp(
+                    node.children_policies,
+                    np.random.dirichlet([self.args.dirichlet_alpha] * len(node.children_policies)),
+                    self.args.dirichlet_epsilon,
+                )
                 roots.append(node)
                 continue
 
-            moves = filter_policy_then_get_moves_and_probabilities(policies[policies_index], board)
-            policies_index += 1
-
             root = MCTSNode.root(board)
-            root.expand(moves)
+            root.expand(moves[moves_index])
             roots.append(root)
+
+            moves_index += 1
 
         for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
             self.parallel_iterate(roots)
@@ -108,17 +111,6 @@ class MCTS:
 
     @timeit
     def parallel_iterate(self, roots: list[MCTSNode]) -> None:
-        nodes = self._get_nodes_to_expand(roots)
-
-        if not nodes:
-            return
-
-        results = self.client.inference_batch([node.board for node in nodes])
-
-        self._apply_results(nodes, results)
-
-    @timeit
-    def _get_nodes_to_expand(self, roots: list[MCTSNode]) -> list[MCTSNode]:
         nodes: list[MCTSNode] = []
 
         for root in roots:
@@ -127,25 +119,25 @@ class MCTS:
                 node.update_virtual_losses(1)
                 nodes.append(node)
 
-        return nodes
+        if not nodes:
+            return
 
-    @timeit
-    def _apply_results(self, nodes: list[MCTSNode], results: list[tuple[np.ndarray, float]]) -> None:
-        for node, (policy, value) in zip(nodes, results):
-            moves = filter_policy_then_get_moves_and_probabilities(policy, node.board)
+        results = self.client.inference_batch([node.board for node in nodes])
+
+        for node, (moves, value) in zip(nodes, results):
             node.expand(moves)
             node.back_propagate(value)
 
             node.update_virtual_losses(-1)
 
-    def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> list[np.ndarray]:
+    def _get_policy_with_noise(self, boards: list[CurrentBoard]) -> list[list[MoveScore]]:
         results = self.client.inference_batch(boards)
 
-        return [self._add_noise(policy) for policy, _ in results]
+        return [self._add_noise(moves) for moves, _ in results]
 
-    def _add_noise(self, policy: np.ndarray) -> np.ndarray:
-        noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(policy))
-        return lerp(policy, noise, self.args.dirichlet_epsilon)
+    def _add_noise(self, moves: list[MoveScore]) -> list[MoveScore]:
+        noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(moves))
+        return [(move, lerp(policy, noise, self.args.dirichlet_epsilon)) for (move, policy), noise in zip(moves, noise)]
 
     def _get_best_child_or_back_propagate(
         self, root: MCTSNode, c_param: float, min_visit_count: int

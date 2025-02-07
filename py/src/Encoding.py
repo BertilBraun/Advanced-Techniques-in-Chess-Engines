@@ -82,8 +82,11 @@ def get_board_result_score(board: Board) -> float | None:
     return None
 
 
+MoveScore = tuple[int, float]
+
+
 @timeit
-def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[tuple[int, float]]:
+def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[MoveScore]:
     """
     Gets a list of moves with their corresponding probabilities from a policy.
 
@@ -123,7 +126,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
     return filtered_policy
 
 
-def __map_policy_to_moves(policy: np.ndarray) -> list[tuple[int, float]]:
+def __map_policy_to_moves(policy: np.ndarray) -> list[MoveScore]:
     """
     Maps a filtered policy to a list of moves with their corresponding probabilities.
 

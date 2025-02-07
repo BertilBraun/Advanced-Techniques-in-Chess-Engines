@@ -1,6 +1,5 @@
 import numpy as np
 
-from src.Encoding import filter_policy_then_get_moves_and_probabilities
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
 from src.mcts.MCTSArgs import MCTSArgs
@@ -38,8 +37,7 @@ class AlphaZeroBot(Bot):
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
-            policy, value = self.inference_client.inference_batch([board])[0]
-            encoded_moves = filter_policy_then_get_moves_and_probabilities(policy, board)
+            encoded_moves, value = self.inference_client.inference_batch([board])[0]
             encoded_move, policy = max(encoded_moves, key=lambda move: move[1])
             move = CurrentGame.decode_move(encoded_move)
 
