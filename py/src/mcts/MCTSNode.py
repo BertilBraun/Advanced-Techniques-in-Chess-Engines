@@ -104,7 +104,8 @@ class MCTSNode:
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
         self.children_policies = np.array(
-            [score for _, score in encoded_moves_with_scores if score > 0.0], dtype=np.float32
+            [score for _, score in encoded_moves_with_scores if score > 0.0 and legal_moves[encoded_move] != 0],
+            dtype=np.float32,
         )
 
     def update_virtual_losses(self, delta: int) -> None:
