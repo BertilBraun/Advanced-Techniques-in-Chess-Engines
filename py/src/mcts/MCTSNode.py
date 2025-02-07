@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-from src.Encoding import MoveScore
+from src.Encoding import MoveScore, filter_moves
 from src.settings import CurrentBoard, CurrentGame
 
 
@@ -86,19 +86,9 @@ class MCTSNode:
         if self.is_fully_expanded:
             return  # Already expanded by another thread
 
-        from src.games.chess.ChessGame import ChessGame
-
         assert all(score > 0.0 for _, score in encoded_moves_with_scores), 'Scores must be positive'
 
-        legal_moves = ChessGame().encode_moves(self.board.get_valid_moves())
-
-        valid_encoded_moves_with_scores = [
-            (encoded_move, score) for encoded_move, score in encoded_moves_with_scores if legal_moves[encoded_move] != 0
-        ]
-        for encoded_move, _ in encoded_moves_with_scores:
-            if legal_moves[encoded_move] == 0:
-                print('Illegal move:', CurrentGame.decode_move(encoded_move).uci(), 'for board:')
-                print(repr(self.board))
+        valid_encoded_moves_with_scores = filter_moves(encoded_moves_with_scores, self.board)
 
         for encoded_move, _ in valid_encoded_moves_with_scores:
             self.children.append(

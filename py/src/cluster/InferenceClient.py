@@ -6,7 +6,7 @@ import numpy as np
 from sys import getsizeof
 from typing import TypeVar
 
-from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
+from src.Encoding import MoveScore, filter_policy_with_en_passant_moves_then_get_moves_and_probabilities
 from src.Network import Network
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
@@ -73,7 +73,7 @@ class InferenceClient:
             return []
 
         encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
-        board_hashes = self._get_board_hashes(encoded_boards)
+        board_hashes = self.hasher.zobrist_hash_boards(np.array(encoded_boards))
 
         boards_to_infer: list[np.ndarray] = []
         inference_hashes_and_boards: list[tuple[int, CurrentBoard]] = []
@@ -93,7 +93,7 @@ class InferenceClient:
         if boards_to_infer:
             results = self._model_inference(boards_to_infer)
             for (hash, board), (policy, value) in zip(inference_hashes_and_boards, results):
-                moves = filter_policy_then_get_moves_and_probabilities(policy, board)
+                # Dont filter out the en passant moves here, because the policy is already fixed, but the en passant moves are dependent on the board state
                 self.inference_cache[hash] = moves, value
 
         return [self.inference_cache[hash] for hash in board_hashes]
@@ -117,15 +117,4 @@ class InferenceClient:
         #         for result in results
         #     ]
         return [(result[:-1], result[-1]) for result in results]
-
-    def _get_board_hashes(self, boards: list[np.ndarray]) -> list[int]:
-        boards_np = np.array(boards)
-
-        default_hashes = self.hasher.zobrist_hash_boards(boards_np)
-
-        return default_hashes
-
-        # TODO assuming, that a vertical flip is a valid symmetry
-        flipped_hashes = self.hasher.zobrist_hash_boards(np.flip(boards_np, axis=3))
-
         return [min(default_hash, flipped_hash) for default_hash, flipped_hash in zip(default_hashes, flipped_hashes)]
