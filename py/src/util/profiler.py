@@ -40,7 +40,7 @@ def start_gpu_usage_logger(run: int):
 
     Process(
         target=_tensorboard_gpu_usage,
-        args=(run, 1.0),
+        args=(run, 10.0),
         daemon=True,
     ).start()
 
@@ -50,6 +50,6 @@ def start_cpu_usage_logger(run: int, title: str):
 
     Process(
         target=_tensorboard_cpu_usage,
-        args=(run, 1.0, title, psutil.Process().pid),
+        args=(run, 10.0, title, psutil.Process().pid),
         daemon=True,
     ).start()
