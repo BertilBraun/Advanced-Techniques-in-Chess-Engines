@@ -122,6 +122,9 @@ class InferenceClient:
         boards_np = np.array(boards)
 
         default_hashes = self.hasher.zobrist_hash_boards(boards_np)
+
+        return default_hashes
+
         # TODO assuming, that a vertical flip is a valid symmetry
         flipped_hashes = self.hasher.zobrist_hash_boards(np.flip(boards_np, axis=3))
 
