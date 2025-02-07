@@ -126,13 +126,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         try:
             with h5py.File(file_path, 'r') as file:
-                dataset.encoded_states = file['states'][:]  # type: ignore
+                dataset.encoded_states = [state for state in file['states']]  # type: ignore
                 # parse out the visit counts but only the non-zero ones
                 dataset.visit_counts = [
                     [(move, count) for move, count in visit_count if count > 0]
                     for visit_count in file['visit_counts']  # type: ignore
                 ]
-                dataset.value_targets = file['value_targets'][:]  # type: ignore
+                dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
 
                 return dataset
         except Exception as e:
