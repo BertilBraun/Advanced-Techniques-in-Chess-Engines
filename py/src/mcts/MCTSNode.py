@@ -86,9 +86,15 @@ class MCTSNode:
         if self.is_fully_expanded:
             return  # Already expanded by another thread
 
+        from src.games.chess.ChessGame import ChessGame
+
         assert all(score > 0.0 for _, score in encoded_moves_with_scores), 'Scores must be positive'
 
+        legal_moves = ChessGame().encode_moves(self.board.get_valid_moves())
+
         for encoded_move, _ in encoded_moves_with_scores:
+            if not legal_moves[encoded_move]:
+                continue
             self.children.append(
                 MCTSNode(encoded_move_to_get_here=encoded_move, parent=self, my_child_index=len(self.children))
             )
