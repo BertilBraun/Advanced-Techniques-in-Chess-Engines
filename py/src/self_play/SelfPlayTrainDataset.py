@@ -5,12 +5,12 @@ import random
 import numpy as np
 from pathlib import Path
 from torch.utils.data import Dataset
+from torch.multiprocessing import Process
 
 from src.Encoding import decode_board_state
 from src.mcts.MCTS import action_probabilities
 from src.settings import TORCH_DTYPE, log_histogram, log_scalar
 from src.util import random_id
-from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
 from src.util.timing import timeit
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -50,75 +50,45 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                 self.stats += SelfPlayDataset.load_stats(file)
 
         random.shuffle(self.all_chunks)
-        return
 
-        for i, files in enumerate(origins):
-            if len(files) == 0:
-                continue
+        thread = Process(
+            target=self._log_all_dataset_stats,
+            args=(self.all_chunks, self.run),
+            daemon=True,
+        )
+        thread.start()
 
-            dataset = SelfPlayDataset()
+    @staticmethod
+    def _log_all_dataset_stats(files: list[Path], run: int) -> None:
+        accumulated_stats = SelfPlayDatasetStats()
+
+        with TensorboardWriter(run, 'dataset', postfix_pid=False):
             for file in files:
-                dataset += SelfPlayDataset.load(file)
+                dataset = SelfPlayDataset.load(file)
+                accumulated_stats += dataset.stats
 
-            self._log_dataset_stats(dataset)
+                policies = [action_probabilities(visits) for visits in dataset.visit_counts]
 
-            if len(files) > 1:
+                spikiness = sum(policy.max() for policy in policies) / len(dataset)
+
+                log_scalar('dataset/policy_spikiness', spikiness)
+
+                log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
+                log_histogram('dataset/value_targets', np.array(dataset.value_targets))
+
                 dataset.deduplicate()
-                # Remove the original files to avoid re-deduplication
-                for file in files:
-                    file.unlink()
-                dataset.save(folder_path, i, suffix='deduplicated')
+                log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))
 
-            dataset = dataset.shuffle()
-
-            log_scalar('dataset/num_deduplicated_samples', len(dataset), i)
-
-            self.stats += dataset.stats
-
-            # write them in chunks to file, then simply keep a list of all chunks, shuffle them
-            # Then load them in order, always 3 at a time, shuffling the values of these three chunks in memory and repeating once all values of these 3 chunks are used
-
-            # split dataset into chunks of chunk_size
-            for i in range(0, len(dataset), self.chunk_size):
-                chunk = SelfPlayDataset()
-                chunk.states = dataset.states[i : i + self.chunk_size]
-                chunk.policy_targets = dataset.policy_targets[i : i + self.chunk_size]
-                chunk.value_targets = dataset.value_targets[i : i + self.chunk_size]
-                # Save the chunks to a different folder, to avoid mixing them with the original dataset
-                save_file = chunk.save(folder_path + f'/iteration_{i}', i, suffix=f'chunk_{i // self.chunk_size}')
-                self.all_chunks.append(save_file)
-
-            del dataset
-
-        random.shuffle(self.all_chunks)
-        log(f'Loaded {len(self.all_chunks)} chunks with:\n{self.stats}')
-
-    def _log_dataset_stats(self, dataset: SelfPlayDataset) -> None:
-        self.accumulated_stats += dataset.stats
-
-        policies = [action_probabilities(visits) for visits in dataset.visit_counts]
-
-        spikiness = sum(policy.max() for policy in policies) / len(dataset)
-
-        with TensorboardWriter(self.run, 'dataset', postfix_pid=False):
-            log_scalar('dataset/num_games', self.accumulated_stats.num_games)
-            log_scalar('dataset/num_resignations', self.accumulated_stats.resignations)
+            log_scalar('dataset/num_games', accumulated_stats.num_games)
+            log_scalar('dataset/num_resignations', accumulated_stats.resignations)
             log_scalar(
                 'dataset/average_resignation_percent',
-                self.accumulated_stats.resignations / self.accumulated_stats.num_games * 100,
+                accumulated_stats.resignations / accumulated_stats.num_games * 100,
             )
-            log_scalar('dataset/num_samples', self.accumulated_stats.num_samples)
+            log_scalar('dataset/num_samples', accumulated_stats.num_samples)
             log_scalar(
-                'dataset/average_generation_time',
-                self.accumulated_stats.total_generation_time / self.accumulated_stats.num_games,
+                'dataset/average_generation_time', accumulated_stats.total_generation_time / accumulated_stats.num_games
             )
-            log_scalar('dataset/policy_spikiness', spikiness)
-
-            log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
-            log_histogram('dataset/value_targets', np.array(dataset.value_targets))
-
-            dataset.deduplicate()
-            log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
@@ -168,7 +138,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         for chunk in chunks_to_load:
             dataset = SelfPlayDataset.load(chunk)
-            self._log_dataset_stats(dataset)
             states += dataset.encoded_states
             visit_counts += dataset.visit_counts
             value_targets += dataset.value_targets
@@ -184,6 +153,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         policies_torch = torch.from_numpy(policy_targets_np).to(
             device=self.device, dtype=TORCH_DTYPE, non_blocking=True
         )
-        values_torch = torch.tensor(value_targets_np, dtype=TORCH_DTYPE, device=self.device)
+        values_torch = torch.tensor(value_targets_np).to(dtype=TORCH_DTYPE, device=self.device, non_blocking=True)
 
         return states_torch, policies_torch, values_torch
