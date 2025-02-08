@@ -103,7 +103,7 @@ class InferenceClient:
         responses: list[tuple[list[MoveScore], float]] = []
         for hash in board_hashes:
             moves_np, value = self.inference_cache[hash]
-            moves = [(move, prob) for move, prob in moves_np]
+            moves = [(int(move), float(prob)) for move, prob in moves_np]
             responses.append((moves, value))
 
         return responses
