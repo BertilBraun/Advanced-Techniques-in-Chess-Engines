@@ -100,7 +100,13 @@ class InferenceClient:
                 moves = filter_policy_with_en_passant_moves_then_get_moves_and_probabilities(policy, board)
                 self.inference_cache[hash] = np.array(moves), value
 
-        return [(self.inference_cache[hash][0].tolist(), self.inference_cache[hash][1]) for hash in board_hashes]
+        responses: list[tuple[list[MoveScore], float]] = []
+        for hash in board_hashes:
+            moves_np, value = self.inference_cache[hash]
+            moves = [(move, prob) for move, prob in moves_np]
+            responses.append((moves, value))
+
+        return responses
 
     @timeit
     @torch.no_grad()
