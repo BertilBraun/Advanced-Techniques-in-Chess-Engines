@@ -94,6 +94,7 @@ class InferenceClient:
             results = self._model_inference(boards_to_infer)
             for (hash, board), (policy, value) in zip(inference_hashes_and_boards, results):
                 # Dont filter out the en passant moves here, because the policy is already fixed, but the en passant moves are dependent on the board state
+                moves = filter_policy_with_en_passant_moves_then_get_moves_and_probabilities(policy, board)
                 self.inference_cache[hash] = moves, value
 
         return [self.inference_cache[hash] for hash in board_hashes]
