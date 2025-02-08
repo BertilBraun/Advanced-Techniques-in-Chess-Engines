@@ -19,6 +19,9 @@ from src.util.save_paths import load_model, model_save_path
 T = TypeVar('T')
 
 
+MoveList = np.ndarray  #  list[MoveScore]
+
+
 class InferenceClient:
     """The Inference Client is responsible for batching and caching inference requests. It uses a model to directly infer the policy and value for a given board state on the provided device."""
 
@@ -27,7 +30,7 @@ class InferenceClient:
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        self.inference_cache: dict[int, tuple[list[MoveScore], float]] = {}
+        self.inference_cache: dict[int, tuple[MoveList, float]] = {}
         self.total_hits = 0
         self.total_evals = 0
 
@@ -58,7 +61,7 @@ class InferenceClient:
 
             size_in_mb = 0
             for key, (policy, value) in self.inference_cache.items():
-                size_in_mb += getsizeof(key) + getsizeof(value) + getsizeof(policy)
+                size_in_mb += getsizeof(key) + getsizeof(value) + getsizeof(policy) + getsizeof(policy[0]) * len(policy)
 
             size_in_mb /= 1024 * 1024
             log_scalar('cache/size_mb', size_in_mb, iteration)
@@ -95,9 +98,9 @@ class InferenceClient:
             for (hash, board), (policy, value) in zip(inference_hashes_and_boards, results):
                 # Dont filter out the en passant moves here, because the policy is already fixed, but the en passant moves are dependent on the board state
                 moves = filter_policy_with_en_passant_moves_then_get_moves_and_probabilities(policy, board)
-                self.inference_cache[hash] = moves, value
+                self.inference_cache[hash] = np.array(moves), value
 
-        return [self.inference_cache[hash] for hash in board_hashes]
+        return [(self.inference_cache[hash][0].tolist(), self.inference_cache[hash][1]) for hash in board_hashes]
 
     @timeit
     @torch.no_grad()
@@ -118,4 +121,3 @@ class InferenceClient:
         #         for result in results
         #     ]
         return [(result[:-1], result[-1]) for result in results]
-        return [min(default_hash, flipped_hash) for default_hash, flipped_hash in zip(default_hashes, flipped_hashes)]
