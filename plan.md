@@ -44,6 +44,19 @@ Value std: 0.3470703125
 Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/master/DeepCrazyhouse/src/experiments/html/train_all_games_over_2000_elo/SGD
 
 
+
+TODO:
+- [ ] Not really improving at all... why?
+- [ ] GPU usage < 40% 
+  - 70% Cache hits, but the search tree reuse does not seem to work
+  - Faster MCTS search would help
+  - More self players not possible, since the Cache size cannot fit into memory
+  - Centralized Inference server and faster Search both possible in C++
+- [ ] Trainer usage drops to zero while loading the next batch
+  - Loader thread which loads the next batch while the trainer is still training, possible in C++, also possible in python? prefetch_factor in DataLoader?
+
+
+
 DONE faster board hashes - Zobrist Hashing
 
 DONE completely remove asyncio from the project
