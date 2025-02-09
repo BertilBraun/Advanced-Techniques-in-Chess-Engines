@@ -23,6 +23,7 @@ if __name__ == '__main__':
     log(TRAINING_ARGS, use_pprint=True)
 
     run = get_run_id()
+    log(f'Run ID: {run}')
 
     start_gpu_usage_logger(run)
 
