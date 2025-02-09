@@ -38,7 +38,7 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 5
-    return min(5 + (current_iteration - 5) // 6, 15)
+    return min(5 + (current_iteration - 5) // 7, 15)
 
 
 def learning_rate(current_iteration: int) -> float:
@@ -182,9 +182,7 @@ elif True:
 
     NUM_GPUS = torch.cuda.device_count()
     SELF_PLAYERS_PER_NODE = 12
-    NUM_SELF_PLAYERS = (
-        NUM_GPUS - 1
-    ) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 4  # TODO SELF_PLAYERS_PER_NODE // 2
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     network = NetworkParams(num_layers=12, hidden_size=128)

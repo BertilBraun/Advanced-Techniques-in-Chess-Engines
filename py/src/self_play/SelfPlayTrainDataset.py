@@ -100,7 +100,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             num_workers=num_workers,
             drop_last=True,
             persistent_workers=True,
-            prefetch_factor=512,
+            prefetch_factor=1024,
         )
 
     def cleanup(self) -> None:
