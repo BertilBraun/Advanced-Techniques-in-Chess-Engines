@@ -1,6 +1,7 @@
 from __future__ import annotations
 from itertools import chain
 from os import PathLike
+import os
 import random
 
 from chess import WHITE
@@ -21,6 +22,7 @@ from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
 from src.util.save_paths import load_model, model_save_path
+from src.util.tensorboard import log_text
 
 
 @dataclass
@@ -142,7 +144,7 @@ class ModelEvaluation:
 
             return [get_random_policy(board) for board in boards]
 
-        return self.play_vs_evaluation_model(random_evaluator)
+        return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
         opponent = InferenceClient(0, self.args)
@@ -152,9 +154,11 @@ class ModelEvaluation:
             results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
-        return self.play_vs_evaluation_model(opponent_evaluator)
+        return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
 
-    def play_vs_evaluation_model(self, evaluation_model: EvaluationModel, num_games: int | None = None) -> Results:
+    def play_vs_evaluation_model(
+        self, evaluation_model: EvaluationModel, name: str, num_games: int | None = None
+    ) -> Results:
         results = Results(0, 0, 0)
 
         current_model = InferenceClient(0, self.args)
@@ -166,13 +170,17 @@ class ModelEvaluation:
 
         num_games = num_games or self.num_games
 
-        results += self._play_two_models_search(model1, evaluation_model, num_games // 2)
-        results -= self._play_two_models_search(evaluation_model, model1, num_games // 2)
+        results += self._play_two_models_search(model1, evaluation_model, num_games // 2, name + '_vs_current')
+        results -= self._play_two_models_search(evaluation_model, model1, num_games // 2, 'current_vs_' + name)
 
         return results
 
-    def _play_two_models_search(self, model1: EvaluationModel, model2: EvaluationModel, num_games: int) -> Results:
+    def _play_two_models_search(
+        self, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str
+    ) -> Results:
         results = Results(0, 0, 0)
+
+        game_move_histories: list[list[int]] = [[] for _ in range(num_games)]
 
         games = [CurrentBoard() for _ in range(num_games)]
 
@@ -205,10 +213,11 @@ class ModelEvaluation:
                 game.board.set_fen(fen)
                 game.current_player = 1 if game.board.turn == WHITE else -1
         else:
-            for game in games:
+            for i, game in enumerate(games):
                 for _ in range(3):
                     move = random.choice(game.get_valid_moves())
                     game.make_move(move)
+                    game_move_histories[i].append(CurrentGame.encode_move(move))
 
         while games:
             games_for_player1 = [game for game in games if game.current_player == 1]
@@ -220,10 +229,15 @@ class ModelEvaluation:
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 move = CurrentGame.decode_move(np.argmax(policy).item())
                 game.make_move(move)
+                game_move_histories[games.index(game)].append(CurrentGame.encode_move(move))
 
                 if game.is_game_over():
                     results.update(game.check_winner(), 1)
 
             games = [game for game in games if not game.is_game_over()]
+
+        for history in game_move_histories:
+            moves = ','.join([str(move) for move in history])
+            log_text(f'evaluation_moves/{self.iteration}/{name}/{hash(moves)}', moves)
 
         return results
