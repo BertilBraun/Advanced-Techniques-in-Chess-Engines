@@ -180,7 +180,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        game_move_histories: list[list[int]] = [[] for _ in range(num_games)]
+        game_move_histories: list[list[str]] = [[] for _ in range(num_games)]
 
         games = [CurrentBoard() for _ in range(num_games)]
 
@@ -209,15 +209,16 @@ class ModelEvaluation:
                 'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
             ]
 
-            for game, fen in zip(games, opening_fens):
+            for i, (game, fen) in enumerate(zip(games, opening_fens)):
                 game.board.set_fen(fen)
                 game.current_player = 1 if game.board.turn == WHITE else -1
+                game_move_histories[i].append(f'FEN"{fen}"')
         else:
             for i, game in enumerate(games):
                 for _ in range(3):
                     move = random.choice(game.get_valid_moves())
                     game.make_move(move)
-                    game_move_histories[i].append(CurrentGame.encode_move(move))
+                    game_move_histories[i].append(str(CurrentGame.encode_move(move)))
 
         while games:
             games_for_player1 = [game for game in games if game.current_player == 1]
@@ -229,7 +230,7 @@ class ModelEvaluation:
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 move = CurrentGame.decode_move(np.argmax(policy).item())
                 game.make_move(move)
-                game_move_histories[games.index(game)].append(CurrentGame.encode_move(move))
+                game_move_histories[games.index(game)].append(str(CurrentGame.encode_move(move)))
 
                 if game.is_game_over():
                     results.update(game.check_winner(), 1)
@@ -237,7 +238,7 @@ class ModelEvaluation:
             games = [game for game in games if not game.is_game_over()]
 
         for history in game_move_histories:
-            moves = ','.join([str(move) for move in history])
-            log_text(f'evaluation_moves/{self.iteration}/{name}/{hash(moves)}', moves)
+            moves = ','.join(history)
+            log_text(f'evaluation_moves/{self.iteration}/{name}/{hash(moves)}', 'unknown:' + moves)
 
         return results
