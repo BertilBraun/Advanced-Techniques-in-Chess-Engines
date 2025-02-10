@@ -42,6 +42,10 @@ class ChessBoard(Board[ChessMove]):
     def quick_hash(self) -> int:
         return hash(self.board.fen())
 
+    def set_fen(self, fen: str) -> None:
+        self.board.set_fen(fen)
+        self.current_player = 1 if self.board.turn == chess.WHITE else -1
+
     def __repr__(self) -> str:
         from src.games.chess.ChessGame import BOARD_LENGTH
 

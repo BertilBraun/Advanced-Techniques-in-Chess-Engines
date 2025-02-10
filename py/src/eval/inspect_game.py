@@ -13,7 +13,11 @@ moves = moves.split(',')
 def display_board(move_index: int, gui: BaseGridGameGUI):
     board = CurrentGame.get_initial_board()
     for move in moves[:move_index]:
-        board.make_move(CurrentGame.decode_move(int(move)))
+        if move.startswith('FEN'):
+            board = CurrentGame.get_initial_board()
+            board.set_fen(move[4:-1])
+        else:
+            board.make_move(CurrentGame.decode_move(int(move)))
 
     gui.clear_highlights_and_redraw(lambda: CurrentGameVisuals.draw_pieces(board, gui))
     gui.update_display()
