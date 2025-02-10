@@ -185,7 +185,7 @@ elif True:
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    network = NetworkParams(num_layers=12, hidden_size=128)
+    network = NetworkParams(num_layers=9, hidden_size=32)
     training = TrainingParams(
         num_epochs=1,
         batch_size=256,
@@ -201,8 +201,8 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 64
-    NUM_SEARCHES_PER_TURN = 800
+    PARALLEL_GAMES = 32
+    NUM_SEARCHES_PER_TURN = 500
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove
@@ -211,7 +211,7 @@ elif True:
         MIN_VISIT_COUNT = 0
 
     def dirichlet_alpha(iteration: int) -> float:
-        return 0.3  # Based on AZ Paper
+        return 0.03  # Based on AZ Paper
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
