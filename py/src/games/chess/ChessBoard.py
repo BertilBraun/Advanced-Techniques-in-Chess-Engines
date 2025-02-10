@@ -13,6 +13,7 @@ PIECE_VALUE = {
     chess.BISHOP: 3,
     chess.ROOK: 5,
     chess.QUEEN: 9,
+    chess.KING: 0,
 }
 MAX_MATERIAL_VALUE = (
     PIECE_VALUE[chess.PAWN] * 8
@@ -63,7 +64,7 @@ class ChessBoard(Board[ChessMove]):
             mat_value += len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]
             mat_value -= len(self.board.pieces(piece, chess.BLACK)) * PIECE_VALUE[piece]
 
-        return self.current_player * (mat_value / MAX_MATERIAL_VALUE)
+        return mat_value / MAX_MATERIAL_VALUE
 
     def set_fen(self, fen: str) -> None:
         self.board.set_fen(fen)
@@ -78,7 +79,7 @@ class ChessBoard(Board[ChessMove]):
             row = [str(i + 1)]
             for j in range(BOARD_LENGTH):
                 piece = self.board.piece_at(i * BOARD_LENGTH + j)
-                row.append(piece.unicode_symbol() if piece is not None else '.')
+                row.append(piece.unicode_symbol(invert_color=True) if piece is not None else '.')
             row.append(f' {i + 1}')
             rows.append(' '.join(row))
         rows.append('  a b c d e f g h')

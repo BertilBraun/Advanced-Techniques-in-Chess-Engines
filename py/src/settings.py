@@ -201,14 +201,14 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 128
+    PARALLEL_GAMES = 64
     NUM_SEARCHES_PER_TURN = 800
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
-    if False:  # TODO remove
-        PARALLEL_GAMES = 2
+    if not USE_GPU:  # TODO remove
+        PARALLEL_GAMES = 4
         NUM_SEARCHES_PER_TURN = 40
-        MIN_VISIT_COUNT = 2
+        MIN_VISIT_COUNT = 0
 
     def dirichlet_alpha(iteration: int) -> float:
         return 0.3  # Based on AZ Paper
@@ -216,7 +216,7 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2 + 1,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 4 + 1,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,

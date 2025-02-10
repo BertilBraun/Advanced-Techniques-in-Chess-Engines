@@ -194,7 +194,7 @@ class SelfPlay:
 
         for mem in spg.memory[::-1]:
             encoded_board = CurrentGame.get_canonical_board(mem.board)
-            turn_game_outcome = -game_outcome if mem.board.current_player == spg.board.current_player else game_outcome
+            turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
 
             for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
                 self.dataset.add_sample(
@@ -203,7 +203,7 @@ class SelfPlay:
                     lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
-            game_outcome *= 0.95  # discount the game outcome for each move
+            # TODO? game_outcome *= 0.98  # discount the game outcome for each move
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])

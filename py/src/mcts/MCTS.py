@@ -151,7 +151,7 @@ class MCTS:
         if node.is_terminal_node:
             result = get_board_result_score(node.board)
             assert result is not None
-            node.back_propagate(-result)
+            node.back_propagate(result)
             return None
 
         return node
