@@ -241,7 +241,7 @@ class ModelEvaluation:
 
                     moves = ','.join(game_move_histories[game_to_index[game]])
                     log_text(
-                        f'evaluation_moves/{self.iteration}/{name}/{hash(moves)}',
+                        f'evaluation_moves/{self.iteration}/{name}',
                         str(game.check_winner()) + ':' + moves,
                     )
 
