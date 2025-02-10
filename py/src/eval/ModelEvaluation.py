@@ -229,7 +229,10 @@ class ModelEvaluation:
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
                 for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
-                    policy[int(move)] /= i + 1
+                    try:
+                        policy[int(move)] /= i + 1
+                    except:
+                        pass
 
                 policy /= policy.sum()
 
