@@ -192,7 +192,7 @@ class SelfPlay:
             spg.played_moves = [spg.played_moves[i] for i in indices_to_keep]
             spg.memory = [spg.memory[i] for i in indices_to_keep]
 
-        for mem in spg.memory:
+        for mem in spg.memory[::-1]:
             encoded_board = CurrentGame.get_canonical_board(mem.board)
             turn_game_outcome = -game_outcome if mem.board.current_player == spg.board.current_player else game_outcome
 
@@ -202,6 +202,8 @@ class SelfPlay:
                     visit_counts.copy(),
                     lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
+
+            game_outcome *= 0.95  # discount the game outcome for each move
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])

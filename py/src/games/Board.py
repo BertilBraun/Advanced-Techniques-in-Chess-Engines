@@ -36,6 +36,9 @@ class Board(ABC, Generic[_Move]):
     def quick_hash(self) -> int:
         pass
 
+    def get_approximate_result_score(self) -> float:
+        return 0.0
+
     def _switch_player(self) -> None:
         self.current_player = -self.current_player
 

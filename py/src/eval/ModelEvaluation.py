@@ -227,9 +227,14 @@ class ModelEvaluation:
             policies2 = model2(games_for_player2)
 
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
-                move = CurrentGame.decode_move(np.argmax(policy).item())
-                game.make_move(move)
-                game_move_histories[game_to_index[game]].append(str(CurrentGame.encode_move(move)))
+                while True:
+                    move = np.argmax(policy).item()
+                    if move in game_move_histories[game_to_index[game]][-5:]:
+                        policy[move] = 0
+                    else:
+                        break
+                game.make_move(CurrentGame.decode_move(move))
+                game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():
                     results.update(game.check_winner(), 1)

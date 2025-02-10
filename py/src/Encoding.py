@@ -128,13 +128,14 @@ def get_board_result_score(board: Board) -> float | None:
     :param board: The board to get the result score for.
     :return: The result score for the given board. 1 if the current player won, -1 if the current player lost, and 0 if the game is a draw.
     """
+    if not board.is_game_over():
+        return None
+
     if winner := board.check_winner():
-        return winner * -board.current_player  # 1 if current player won, -1 if current player lost
+        assert winner == board.current_player, 'The winner must be the current player'
+        return 1.0
 
-    if board.is_game_over():
-        return 0.0
-
-    return None
+    return 0.5 * board.get_approximate_result_score()
 
 
 MoveScore = tuple[int, float]
