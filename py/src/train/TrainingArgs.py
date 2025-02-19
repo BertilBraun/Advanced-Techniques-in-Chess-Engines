@@ -103,9 +103,6 @@ class TrainingParams:
     num_workers: int = 1
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
 
-    chunk_size: int | None = None
-    """This is the chunk size to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. 200-500x batch_size is a good starting point for chunk_size. If None, it defaults to 200 * batch_size."""
-
 
 @dataclass
 class EvaluationParams:

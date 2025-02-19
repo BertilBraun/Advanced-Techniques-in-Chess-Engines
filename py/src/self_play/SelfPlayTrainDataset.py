@@ -20,9 +20,8 @@ from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, run: int, chunk_size: int, device: torch.device) -> None:
+    def __init__(self, run: int, device: torch.device) -> None:
         self.run = run
-        self.chunk_size = chunk_size
         self.device = device
 
         self.all_chunks: list[Path] = []

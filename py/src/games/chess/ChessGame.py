@@ -102,7 +102,7 @@ class ChessGame(Game[ChessMove]):
 
         castling_rights = [
             right
-            for co in (chess.WHITE, chess.BLACK)
+            for co in colors
             for right in (
                 board.board.has_kingside_castling_rights(co),
                 board.board.has_queenside_castling_rights(co),
@@ -115,7 +115,7 @@ class ChessGame(Game[ChessMove]):
             + (castling_rights[2] << (BOARD_SIZE - BOARD_LENGTH))
             + (castling_rights[3] << (BOARD_SIZE - 1))
         )
-        color = 0xFFFFFFFF if board.current_player == 1 else 0
+        color = 0xFFFFFFFFFFFFFFFF if board.current_player == 1 else 0
 
         canonical_board = decode_board_state(
             np.array(encoded_pieces + [encoded_castling_rights, color], dtype=np.uint64)
@@ -123,6 +123,24 @@ class ChessGame(Game[ChessMove]):
         if board.current_player == -1:
             canonical_board = np.flip(canonical_board, axis=1)
         return canonical_board
+
+    def decode_canonical_board(self, canonical_board: np.ndarray) -> ChessBoard:
+        board = self.get_initial_board()
+        board.board.clear()
+
+        if canonical_board[13, 0, 0] == 0:
+            canonical_board = np.flip(canonical_board, axis=1)
+
+        colors = (chess.WHITE, chess.BLACK) if canonical_board[13, 0, 0] == 1 else (chess.BLACK, chess.WHITE)
+
+        for i, color in enumerate(colors):
+            for j, piece in enumerate((chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING)):
+                for row in range(8):
+                    for col in range(8):
+                        if canonical_board[i * 6 + j, row, col] == 1:
+                            board.board.set_piece_at(chess.square(col, row), chess.Piece(piece, color))
+
+        return board
 
     def encode_move(self, move: ChessMove) -> int:
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]

@@ -67,7 +67,6 @@ class TrainerProcess:
             dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
 
             epoch_train_stats = trainer.train(dataloader, iteration)
-            log(f'Epoch {epoch + 1}: {epoch_train_stats}')
             train_stats += epoch_train_stats
 
             dataset.cleanup()
@@ -100,11 +99,7 @@ class TrainerProcess:
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        dataset = SelfPlayTrainDataset(
-            self.run_id,
-            self.args.training.chunk_size or self.args.training.batch_size * 20,
-            self.device,
-        )
+        dataset = SelfPlayTrainDataset(self.run_id, self.device)
 
         dataset.load_from_files(
             self.args.save_path,

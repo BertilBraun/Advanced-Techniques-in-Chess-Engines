@@ -173,39 +173,42 @@ def __filter_policy_with_legal_moves_and_en_passant_moves(policy: np.ndarray, bo
     :param board: The chess board to filter the policy with.
     :return: The filtered policy.
     """
-    en_passant_moves = [
-        # White en passant moves
-        Move(A5, B6),
-        Move(B5, A6),
-        Move(B5, C6),
-        Move(C5, B6),
-        Move(C5, D6),
-        Move(D5, C6),
-        Move(D5, E6),
-        Move(E5, D6),
-        Move(E5, F6),
-        Move(F5, E6),
-        Move(F5, G6),
-        Move(G5, F6),
-        Move(G5, H6),
-        Move(H5, G6),
-        # Black en passant moves
-        Move(A4, B3),
-        Move(B4, A3),
-        Move(B4, C3),
-        Move(C4, B3),
-        Move(C4, D3),
-        Move(D4, C3),
-        Move(D4, E3),
-        Move(E4, D3),
-        Move(E4, F3),
-        Move(F4, E3),
-        Move(F4, G3),
-        Move(G4, F3),
-        Move(G4, H3),
-        Move(H4, G3),
-    ]
-    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves() + en_passant_moves)
+    if 'Chess' in CurrentGame.__class__.__name__:
+        en_passant_moves = [
+            # White en passant moves
+            Move(A5, B6),
+            Move(B5, A6),
+            Move(B5, C6),
+            Move(C5, B6),
+            Move(C5, D6),
+            Move(D5, C6),
+            Move(D5, E6),
+            Move(E5, D6),
+            Move(E5, F6),
+            Move(F5, E6),
+            Move(F5, G6),
+            Move(G5, F6),
+            Move(G5, H6),
+            Move(H5, G6),
+            # Black en passant moves
+            Move(A4, B3),
+            Move(B4, A3),
+            Move(B4, C3),
+            Move(C4, B3),
+            Move(C4, D3),
+            Move(D4, C3),
+            Move(D4, E3),
+            Move(E4, D3),
+            Move(E4, F3),
+            Move(F4, E3),
+            Move(F4, G3),
+            Move(G4, F3),
+            Move(G4, H3),
+            Move(H4, G3),
+        ]
+        legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves() + en_passant_moves)  # type: ignore
+    else:
+        legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
     filtered_policy = policy * legal_moves_encoded
     policy_sum = np.sum(filtered_policy)
     if policy_sum == 0:
