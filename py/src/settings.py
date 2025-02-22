@@ -42,7 +42,13 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
-    base_lr = 0.05
+    if current_iteration < 8:
+        return 0.2
+    if current_iteration < 16:
+        return 0.02
+    return 0.002
+
+    base_lr = 0.2
     lr_decay = 0.9
     return base_lr * (lr_decay ** (current_iteration / 4))
 
@@ -200,7 +206,7 @@ elif True:
 
     PARALLEL_GAMES = 32
     NUM_SEARCHES_PER_TURN = 500
-    MIN_VISIT_COUNT = 0  # TODO 1 or 2?
+    MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove
         PARALLEL_GAMES = 4
