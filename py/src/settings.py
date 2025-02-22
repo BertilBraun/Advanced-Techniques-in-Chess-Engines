@@ -38,13 +38,13 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 5
-    return min(5 + (current_iteration - 5) // 7, 15)
+    return min(5 + (current_iteration - 5) // 5, 15)
 
 
 def learning_rate(current_iteration: int) -> float:
-    if current_iteration < 8:
+    if current_iteration < 30:
         return 0.2
-    if current_iteration < 16:
+    if current_iteration < 60:
         return 0.02
     return 0.002
 
@@ -216,7 +216,7 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 4 + 1,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS // 2 + 1,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
