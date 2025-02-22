@@ -62,7 +62,7 @@ class Trainer:
             value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
             # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
 
-            if batchIdx % 50 == 49:
+            if False and batchIdx % 50 == 49:
                 for value, target in zip(out_value, value_targets[:10]):
                     print('Value:', value.item(), 'Target:', target.item())
 
