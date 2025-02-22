@@ -14,7 +14,7 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
 
     start_cpu_usage_logger(run, f'self_play_{device_id}')
 
-    client = InferenceClient(device_id, args)
+    client = InferenceClient(device_id, args.network, args.save_path)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
     with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter(run, 'self_play'):
         self_play_process.run()

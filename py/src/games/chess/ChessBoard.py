@@ -70,6 +70,12 @@ class ChessBoard(Board[ChessMove]):
         self.board.set_fen(fen)
         self.current_player = 1 if self.board.turn == chess.WHITE else -1
 
+    @staticmethod
+    def from_fen(fen: str) -> ChessBoard:
+        board = ChessBoard()
+        board.set_fen(fen)
+        return board
+
     def __repr__(self) -> str:
         from src.games.chess.ChessGame import BOARD_LENGTH
 

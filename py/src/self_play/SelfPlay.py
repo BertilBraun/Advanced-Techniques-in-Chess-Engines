@@ -9,7 +9,6 @@ from src.util import lerp
 from src.util.remove_repetitions import remove_repetitions
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
-from src.mcts.MCTSArgs import MCTSArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
@@ -63,13 +62,12 @@ class SelfPlay:
 
         self.iteration = 0
 
-        self.mcts = self._get_mcts(self.iteration)
+        self.mcts = MCTS(self.client, self.args.mcts)
 
     def update_iteration(self, iteration: int) -> None:
         if len(self.dataset) > 0:
             log(f'Warning: Dataset should be empty when updating iteration. Discarding {len(self.dataset)} samples.')
         self.iteration = iteration
-        self.mcts = self._get_mcts(self.iteration)
         self.dataset = SelfPlayDataset()
         self.client.update_iteration(iteration)
 
@@ -136,8 +134,8 @@ class SelfPlay:
         else:
             move = self._sample_move(action_probabilities, self.args.temperature)
 
-        encoded_move = CurrentGame.encode_move(move)
         new_spg = current.expand(move)
+        # TODO encoded_move = CurrentGame.encode_move(move)
         # TODO new_spg.already_expanded_node = next(
         # TODO     child for child in children if child.encoded_move_to_get_here == encoded_move
         # TODO ).copy(parent=None)  # remove parent to avoid memory leaks
@@ -150,19 +148,6 @@ class SelfPlay:
         assert result is not None, 'Game should not be over if result is None'
         self._add_training_data(new_spg, result, resignation=False)
         return SelfPlayGame(), move
-
-    def _get_mcts(self, iteration: int) -> MCTS:
-        return MCTS(
-            self.client,
-            MCTSArgs(
-                num_searches_per_turn=self.args.mcts.num_searches_per_turn,
-                num_parallel_searches=self.args.mcts.num_parallel_searches,
-                dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
-                dirichlet_alpha=self.args.mcts.dirichlet_alpha(iteration),
-                c_param=self.args.mcts.c_param,
-                min_visit_count=self.args.mcts.min_visit_count,
-            ),
-        )
 
     def _sample_move(self, action_probabilities: np.ndarray, temperature: float = 1.0) -> CurrentGameMove:
         assert temperature > 0, 'Temperature must be greater than 0'

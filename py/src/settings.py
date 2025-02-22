@@ -95,9 +95,6 @@ if False:
 
     PARALLEL_GAMES = 128
 
-    def dirichlet_alpha(iteration: int) -> float:
-        return 1.0
-
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/connect4',
@@ -146,7 +143,7 @@ if False:
                 num_searches_per_turn=600,
                 num_parallel_searches=2,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=dirichlet_alpha,
+                dirichlet_alpha=1.0,
                 c_param=2,
                 min_visit_count=1,
             ),
@@ -185,7 +182,7 @@ elif True:
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    network = NetworkParams(num_layers=9, hidden_size=64)
+    network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
         num_epochs=1,
         batch_size=256,
@@ -207,11 +204,8 @@ elif True:
 
     if not USE_GPU:  # TODO remove
         PARALLEL_GAMES = 4
-        NUM_SEARCHES_PER_TURN = 40
-        MIN_VISIT_COUNT = 0
-
-    def dirichlet_alpha(iteration: int) -> float:
-        return 0.03  # Based on AZ Paper
+        NUM_SEARCHES_PER_TURN = 500
+        MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
@@ -221,13 +215,13 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.1,
+            result_score_weight=0.05,
             resignation_threshold=-1.0,  # TODO -0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=dirichlet_alpha,
+                dirichlet_alpha=0.03,  # Based on AZ Paper
                 c_param=2,
                 min_visit_count=MIN_VISIT_COUNT,
             ),
@@ -265,9 +259,6 @@ elif False:
 
     PARALLEL_GAMES = 64
 
-    def dirichlet_alpha(iteration: int) -> float:
-        return 0.2  # Average of 50 moves possible per turn -> 10/50 = 0.2
-
     TRAINING_ARGS = TrainingArgs(
         num_iterations=100,
         save_path=SAVE_PATH + '/checkers',
@@ -280,7 +271,7 @@ elif False:
                 num_searches_per_turn=320,  # 200, based on https://arxiv.org/pdf/1902.10565
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=dirichlet_alpha,
+                dirichlet_alpha=0.2,  # Average of 50 moves possible per turn -> 10/50 = 0.2
                 c_param=2,
             ),
         ),
@@ -331,9 +322,6 @@ elif True:
     CurrentBoard = TicTacToeBoard
     CurrentGameVisuals = TicTacToeVisuals()
 
-    def dirichlet_alpha(iteration: int) -> float:
-        return 1
-
     def sampling_window(current_iteration: int) -> int:
         return 3
 
@@ -351,7 +339,7 @@ elif True:
             mcts=MCTSParams(
                 num_searches_per_turn=200,
                 dirichlet_epsilon=0.25,
-                dirichlet_alpha=dirichlet_alpha,
+                dirichlet_alpha=1.0,
                 c_param=2,
                 num_parallel_searches=1,  # TODO 2,
                 min_visit_count=2,

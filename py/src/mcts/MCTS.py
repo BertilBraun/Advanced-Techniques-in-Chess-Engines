@@ -1,9 +1,9 @@
 import numpy as np
 from dataclasses import dataclass
 
+from src.train.TrainingArgs import MCTSParams
 from src.util import lerp
 from src.mcts.MCTSNode import MCTSNode
-from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import MoveScore, get_board_result_score
@@ -21,13 +21,21 @@ class MCTSResult:
 def action_probabilities(visit_counts: list[tuple[int, int]]) -> np.ndarray:
     action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
     for move, visit_count in visit_counts:
-        action_probabilities[move] = visit_count
+        if visit_count > 4:
+            action_probabilities[move] = visit_count
     action_probabilities /= np.sum(action_probabilities)
+
+    # Set 0 probabilities to -inf to mask them out in the softmax
+    action_probabilities[action_probabilities == 0] = -1e10
+
+    # Multiply by X to make the softmax more peaky, which makes the Training Targets more peaky
+    action_probabilities *= 8
+    action_probabilities = np.exp(action_probabilities) / np.sum(np.exp(action_probabilities))
     return action_probabilities
 
 
 class MCTS:
-    def __init__(self, client: InferenceClient, args: MCTSArgs) -> None:
+    def __init__(self, client: InferenceClient, args: MCTSParams) -> None:
         self.client = client
         self.args = args
 
@@ -39,6 +47,7 @@ class MCTS:
         # TODO Already expanded nodes currently dont properly work. Issues:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
         #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times
+        assert all(node is None for _, node in inputs), 'Already expanded nodes are not supported anymore'
 
         moves = self._get_policy_with_noise([board for board, node in inputs if node is None])
 
@@ -113,11 +122,12 @@ class MCTS:
     def parallel_iterate(self, roots: list[MCTSNode]) -> None:
         nodes: list[MCTSNode] = []
 
-        for root in roots:
-            node = self._get_best_child_or_back_propagate(root, self.args.c_param, self.args.min_visit_count)
-            if node is not None:
-                node.update_virtual_losses(1)
-                nodes.append(node)
+        for _ in range(self.args.num_parallel_searches):
+            for root in roots:
+                node = self._get_best_child_or_back_propagate(root, self.args.c_param, self.args.min_visit_count)
+                if node is not None:
+                    node.update_virtual_losses(1)
+                    nodes.append(node)
 
         if not nodes:
             return

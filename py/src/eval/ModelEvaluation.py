@@ -14,10 +14,9 @@ from torch.utils.data import DataLoader
 
 from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import MCTSParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
-from src.mcts.MCTSArgs import MCTSArgs
 from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
 from src.util.save_paths import load_model, model_save_path
@@ -73,7 +72,7 @@ class ModelEvaluation:
         self.num_searches_per_turn = num_searches_per_turn
         self.args = args
 
-        self.mcts_args = MCTSArgs(
+        self.mcts_args = MCTSParams(
             num_searches_per_turn=num_searches_per_turn,
             num_parallel_searches=args.self_play.mcts.num_parallel_searches,
             c_param=2,
@@ -146,7 +145,7 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        opponent = InferenceClient(0, self.args)
+        opponent = InferenceClient(0, self.args.network, self.args.save_path)
         opponent.load_model(model_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -160,7 +159,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(0, self.args)
+        current_model = InferenceClient(0, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -231,7 +230,7 @@ class ModelEvaluation:
                 for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
                     try:
                         policy[int(move)] /= i + 1
-                    except:
+                    except IndexError:
                         pass
 
                 policy /= policy.sum()

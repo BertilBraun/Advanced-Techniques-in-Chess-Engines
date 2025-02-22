@@ -31,7 +31,7 @@ class Network(nn.Module):
             nn.ReLU(),
         )
 
-        self.backBone = nn.Sequential(*[ResBlock(hidden_size) for _ in range(num_res_blocks)])
+        self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
             nn.Conv2d(hidden_size, 16, kernel_size=3, bias=False),
@@ -54,15 +54,15 @@ class Network(nn.Module):
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
-        x = self.backBone(x)
+        for block in self.backBone:
+            x = block(x)
         return self.policyHead(x), self.valueHead(x)
 
     def fuse_model(self):
         for m in self.modules():
             if type(m) == nn.Sequential:
-                torch.ao.quantization.fuse_modules(m, ['0', '1', '2'], inplace=True)  # Conv2d, BatchNorm2d, ReLU
-            if type(m) == ResBlock:
-                m.fuse_model()
+                modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
+                torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
 
     def disable_auto_grad(self):
         for p in self.parameters():
@@ -100,7 +100,3 @@ class ResBlock(nn.Module):
         x += residual
         x = self.relu2(x)
         return x
-
-    def fuse_model(self):
-        torch.ao.quantization.fuse_modules(self.conv_block1, ['0', '1', '2'], inplace=True)
-        torch.ao.quantization.fuse_modules(self.conv_block2, ['0', '1'], inplace=True)

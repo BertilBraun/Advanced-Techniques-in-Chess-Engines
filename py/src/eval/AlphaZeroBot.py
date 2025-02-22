@@ -2,7 +2,7 @@ import numpy as np
 
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS
-from src.mcts.MCTSArgs import MCTSArgs
+from src.train.TrainingArgs import MCTSParams
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.mcts.MCTSNode import MCTSNode
@@ -13,10 +13,10 @@ class AlphaZeroBot(Bot):
     def __init__(self, iteration: int, max_time_to_think: float = 1.0, network_eval_only: bool = False) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        self.inference_client = InferenceClient(0, TRAINING_ARGS)
+        self.inference_client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
         self.inference_client.update_iteration(iteration)
 
-        self.mcts_args = MCTSArgs(
+        self.mcts_args = MCTSParams(
             # ensure, that the max number of visits of a node does not exceed the capacity of an uint16
             num_searches_per_turn=2**16 - 1,
             num_parallel_searches=TRAINING_ARGS.self_play.mcts.num_parallel_searches,
