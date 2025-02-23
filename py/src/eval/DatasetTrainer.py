@@ -115,6 +115,9 @@ if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print('Usage: python -m src.eval.DatasetTrainer <dataset_path1> <dataset_path2> ...')
         sys.exit(1)
+    import torch.multiprocessing as mp
+
+    mp.set_start_method('spawn')
 
     dataset_paths = sys.argv[1:]
 
