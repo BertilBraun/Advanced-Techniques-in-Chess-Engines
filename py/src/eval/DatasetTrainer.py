@@ -15,7 +15,6 @@ from src.util.log import log
 from src.util.save_paths import create_model, create_optimizer, load_model
 
 NUM_EPOCHS = 50
-BATCH_SIZE = 512
 
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
@@ -34,7 +33,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         create_optimizer(model),
         TrainingParams(
             num_epochs=num_epochs,
-            batch_size=BATCH_SIZE,
+            batch_size=TRAINING_ARGS.training.batch_size,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
@@ -60,7 +59,7 @@ def main(dataset_paths: list[str]):
     with TensorboardWriter(run_id, 'dataset_trainer'):
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
         test_dataset.deduplicate()
-        test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+        test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
         tmp_dataset = SelfPlayTrainDataset(run_id, device=device)
         tmp_dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
@@ -79,7 +78,7 @@ def main(dataset_paths: list[str]):
         os.makedirs(save_folder, exist_ok=True)
 
         for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
-            if os.path.exists(f'{save_folder}/model_{pre_iter}.pt'):  # and False:  # TODO remove
+            if os.path.exists(f'{save_folder}/model_{pre_iter}.pt'):
                 model = load_model(f'{save_folder}/model_{pre_iter}.pt', TRAINING_ARGS.network, device)
                 log(f'Loaded model_{pre_iter}.pt')
                 break
@@ -90,7 +89,7 @@ def main(dataset_paths: list[str]):
             dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
 
             # Create a DataLoader
-            train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=1)
+            train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
 
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 
@@ -119,4 +118,4 @@ if __name__ == '__main__':
 
     dataset_paths = sys.argv[1:]
 
-    main(dataset_paths * 5)
+    main(dataset_paths)
