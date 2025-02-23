@@ -19,11 +19,11 @@ NUM_EPOCHS = 50
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
     def learning_rate(iteration: int) -> float:
-        if iteration < 10:
+        if iteration < 5:
             return 0.2
-        elif iteration < 20:
+        elif iteration < 8:
             return 0.02
-        elif iteration < 30:
+        elif iteration < 10:
             return 0.002
         else:
             return 0.0002
@@ -106,7 +106,6 @@ def main(dataset_paths: list[str]):
             torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')
             dataset.cleanup()
 
-        dataset.cleanup()
         log('Training finished')
 
 
