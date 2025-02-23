@@ -84,7 +84,10 @@ def load_model_and_optimizer(
     else:
         try:
             model = load_model(model_save_path(iteration, save_folder), args, device)
-            optimizer = load_optimizer(optimizer_save_path(iteration, save_folder), model)
+            try:
+                optimizer = load_optimizer(optimizer_save_path(iteration, save_folder), model)
+            except FileNotFoundError:
+                optimizer = create_optimizer(model)
         except FileNotFoundError:
             return load_model_and_optimizer(iteration - 1, args, device, save_folder)
 
