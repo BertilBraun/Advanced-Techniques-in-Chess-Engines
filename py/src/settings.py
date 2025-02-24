@@ -46,7 +46,9 @@ def learning_rate(current_iteration: int) -> float:
         return 0.2
     if current_iteration < 60:
         return 0.02
-    return 0.002
+    if current_iteration < 90:
+        return 0.002
+    return 0.0002
 
     base_lr = 0.2
     lr_decay = 0.9
@@ -221,7 +223,7 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.05,
+            result_score_weight=0.15,
             resignation_threshold=-1.0,  # TODO -0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
