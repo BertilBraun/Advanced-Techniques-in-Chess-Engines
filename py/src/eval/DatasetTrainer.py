@@ -12,12 +12,20 @@ from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
-from src.util.save_paths import create_model, create_optimizer, load_model
+from src.util.save_paths import (
+    create_model,
+    create_optimizer,
+    load_model_and_optimizer,
+    model_save_path,
+    save_model_and_optimizer,
+)
 
 NUM_EPOCHS = 50
 
 
-def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
+def train_model(
+    model: Network, optimizer: torch.optim.Optimizer, dataloader: DataLoader, num_epochs: int, iteration: int
+) -> None:
     def learning_rate(iteration: int) -> float:
         if iteration < 5:
             return 0.2
@@ -30,7 +38,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
 
     trainer = Trainer(
         model,
-        create_optimizer(model),
+        optimizer,
         TrainingParams(
             num_epochs=num_epochs,
             batch_size=TRAINING_ARGS.training.batch_size,
@@ -67,6 +75,7 @@ def main(dataset_paths: list[str]):
 
         # Instantiate the model
         model = create_model(TRAINING_ARGS.network, device=device)
+        optimizer = create_optimizer(model)
 
         # Train the model
         log('Starting training...')
@@ -78,8 +87,8 @@ def main(dataset_paths: list[str]):
         os.makedirs(save_folder, exist_ok=True)
 
         for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
-            if os.path.exists(f'{save_folder}/model_{pre_iter}.pt'):
-                model = load_model(f'{save_folder}/model_{pre_iter}.pt', TRAINING_ARGS.network, device)
+            if model_save_path(pre_iter, save_folder).exists():
+                model, optimizer = load_model_and_optimizer(pre_iter, TRAINING_ARGS.network, device, save_folder)
                 log(f'Loaded model_{pre_iter}.pt')
                 break
 
@@ -91,7 +100,7 @@ def main(dataset_paths: list[str]):
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
 
-            train_model(model, train_dataloader, num_epochs=1, iteration=iter)
+            train_model(model, optimizer, train_dataloader, num_epochs=1, iteration=iter)
 
             # Evaluate the model
             policy_at_1, policy_at_5, policy_at_10, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(
@@ -103,7 +112,7 @@ def main(dataset_paths: list[str]):
             log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
             log(f'    Avg value loss: {avg_value_loss}')
 
-            torch.save(model.state_dict(), f'{save_folder}/model_{iter}.pt')
+            save_model_and_optimizer(model, optimizer, iter, save_folder)
             dataset.cleanup()
 
         log('Training finished')
