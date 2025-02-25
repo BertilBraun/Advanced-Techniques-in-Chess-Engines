@@ -41,6 +41,18 @@ Training batches: 100%|█████████▉| 29570/29571 [12:51<00:00,
 Value mean: -0.002927398681640625
 Value std: 0.3470703125
 
+
+New Baseline:
+
+[17.10.26] [INFO] Validation stats: Policy Loss: 1.9141, Value Loss: 0.6484, Total Loss: 2.5625, Value Mean: 0.0164, Value Std: 0.3730
+[17.10.26] [INFO] Epoch 1/1 done: Policy Loss: 1.8101, Value Loss: 0.6959, Total Loss: 2.5060, Value Mean: 0.0049, Value Std: 0.3431
+[17.10.31] [INFO] Evaluation results at iteration 15:
+[17.10.31] [INFO]     Policy accuracy @1: 46.83%
+[17.10.31] [INFO]     Policy accuracy @5: 83.47%
+[17.10.31] [INFO]     Policy accuracy @10: 92.22%
+[17.10.31] [INFO]     Avg value loss: 0.6676838734262699
+[17.10.36] [INFO] Training with lr: 0.0002
+
 Which seems reasonable given: https://github.com/QueensGambit/CrazyAra/tree/master/DeepCrazyhouse/src/experiments/html/train_all_games_over_2000_elo/SGD
 
 

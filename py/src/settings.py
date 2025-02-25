@@ -38,15 +38,15 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 5
-    return min(5 + (current_iteration - 5) // 5, 15)
+    return min(5 + (current_iteration - 5) // 5, 8)
 
 
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 30:
         return 0.2
-    if current_iteration < 60:
+    if current_iteration < 50:
         return 0.02
-    if current_iteration < 90:
+    if current_iteration < 65:
         return 0.002
     return 0.0002
 
@@ -192,7 +192,7 @@ elif True:
 
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
-        num_epochs=1,
+        num_epochs=2,
         batch_size=256,
         sampling_window=sampling_window,
         learning_rate=learning_rate,

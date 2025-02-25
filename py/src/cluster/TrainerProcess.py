@@ -71,7 +71,7 @@ class TrainerProcess:
 
             dataset.cleanup()
 
-        save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
+            save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
         self._log_to_tensorboard(iteration, train_stats)
         return train_stats

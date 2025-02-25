@@ -25,9 +25,13 @@ MoveList = np.ndarray  #  list[MoveScore]
 class InferenceClient:
     """The Inference Client is responsible for batching and caching inference requests. It uses a model to directly infer the policy and value for a given board state on the provided device."""
 
-    def __init__(self, device_id: int, network_args: NetworkParams, save_path: str) -> None:
+    def __init__(
+        self, device_id: int, network_args: NetworkParams, save_path: str, auto_update_iteration: bool = True
+    ) -> None:
         self.network_args = network_args
         self.save_path = save_path
+        self.iteration = -1
+        self.auto_update_iteration = auto_update_iteration
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
@@ -48,6 +52,7 @@ class InferenceClient:
         """Update the Inference Client to use the model for the given iteration.
         Slighly optimizes the model for inference and resets the cache and stats."""
 
+        self.iteration = iteration
         self.load_model(model_save_path(iteration, self.save_path))
 
         if self.total_evals != 0:
@@ -75,6 +80,8 @@ class InferenceClient:
     def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[list[MoveScore], float]]:
         if not boards:
             return []
+
+        self._check_for_iteration_update()
 
         encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
         board_hashes = self.hasher.zobrist_hash_boards(np.array(encoded_boards))
@@ -108,6 +115,14 @@ class InferenceClient:
             responses.append((moves, value))
 
         return responses
+
+    @timeit
+    def _check_for_iteration_update(self) -> None:
+        if not self.model or not self.auto_update_iteration:
+            return
+
+        if model_save_path(self.iteration + 1, self.save_path).exists():
+            self.update_iteration(self.iteration + 1)
 
     @timeit
     @torch.no_grad()
