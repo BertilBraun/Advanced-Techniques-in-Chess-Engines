@@ -98,7 +98,8 @@ class MCTSNode:
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
-        self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
+        # self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
+        self.children_virtual_losses = np.full(len(self.children), 1, dtype=np.int32)  # Try out init to loss
         self.children_policies = np.array([score for _, score in valid_encoded_moves_with_scores], dtype=np.float32)
 
     def update_virtual_losses(self, delta: int) -> None:

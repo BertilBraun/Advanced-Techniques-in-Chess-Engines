@@ -46,7 +46,20 @@ class MCTS:
 
         # TODO Already expanded nodes currently dont properly work. Issues:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
-        #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times
+        #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times // "Playout Cap Oscillation" as per the KataGo paper.
+        # If fastplay_frequency > 0, tree search is modified as follows:
+        #   - Each move is either a "low-readout" fast move, or a full, slow move.
+        #   The percent of fast moves corresponds to "fastplay_frequency"
+        #   - A "fast" move will:
+        #     - Reuse the tree
+        #     - Not mix noise in at root
+        #     - Only perform 'fastplay_readouts' readouts.
+        #     - Not be used as a training target.
+        #   - A "slow" move will:
+        #     - Clear the tree (*not* the cache).
+        #     - Mix in dirichlet noise
+        #     - Perform 'num_readouts' readouts.
+        #     - Be noted in the Game object, to be written as a training example.
         assert all(node is None for _, node in inputs), 'Already expanded nodes are not supported anymore'
 
         moves = self._get_policy_with_noise([board for board, node in inputs if node is None])

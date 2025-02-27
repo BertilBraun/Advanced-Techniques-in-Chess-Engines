@@ -1,4 +1,5 @@
 from __future__ import annotations
+import random
 import time
 
 import numpy as np
@@ -78,15 +79,13 @@ class SelfPlay:
         for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
             spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score))
 
-            if mcts_result.result_score < self.args.resignation_threshold:
+            if (
+                mcts_result.result_score < self.args.resignation_threshold
+                or len(spg.played_moves) >= 250  # some max game length
+            ):
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
                 self._add_training_data(spg, mcts_result.result_score, resignation=True)
-                self.self_play_games[SelfPlayGame()] += count
-                continue
-
-            if len(spg.played_moves) >= 250:  # some max game length
-                self.self_play_games[spg] = 0
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
@@ -163,7 +162,9 @@ class SelfPlay:
     def _add_training_data(self, spg: SelfPlayGame, game_outcome: float, resignation: bool) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
-        self._log_game(spg, game_outcome)
+        if random.random() < 0.01:
+            # log a game every 1% of the time
+            self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
             num_games=1,

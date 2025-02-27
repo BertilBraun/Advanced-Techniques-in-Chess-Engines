@@ -50,17 +50,14 @@ def run_mate_puzzle_regression():
         if 'mateIn1' in puzzle['Themes']:  # or 'mateIn2' in puzzle['Themes']:
             mate_puzzles.append(puzzle)
 
-            if len(mate_puzzles) == 64:  # Break early, to avoid iterating over 4Mil puzzles.
+            if len(mate_puzzles) == 200:  # Break early, to avoid iterating over 4Mil puzzles.
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
-
-    # Select 64 puzzles for batch testing.
-    sample_puzzles = mate_puzzles[:64]
 
     inputs: list[tuple[CurrentBoard, MCTSNode | None]] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
-    for puzzle in sample_puzzles:
+    for puzzle in mate_puzzles:
         puzzle_id = puzzle['PuzzleId']
         fen = puzzle['FEN']
         moves_str = puzzle['Moves']
@@ -98,24 +95,41 @@ def run_mate_puzzle_regression():
         best_move_encoded, best_visits, _ = max(moves, key=lambda mv: mv[1])
         best_move_uci = CurrentGame.decode_move(best_move_encoded).uci()
 
+        expected = next(
+            (prob, count) for move, prob, count in moves if CurrentGame.decode_move(move).uci() == expected_move
+        )
+
         sorted_moves = list(sorted(moves, key=lambda x: -x[1]))
-        moves = []
+        moves_str_list = []
         for i, (mv, visits, count) in enumerate(sorted_moves):
             if visits < 0.01:
                 number_of_remaining_moves = len(sorted_moves) - i
-                moves.append(f'... {number_of_remaining_moves} more moves with <1% visits ...')
+                moves_str_list.append(f'... {number_of_remaining_moves} more moves with <1% visits ...')
                 break
-            moves.append(f'{CurrentGame.decode_move(mv).uci()}: {visits:.4f} ({count})')
-        moves_str = '\n\t'.join(moves)
-        ratio_str = f'\n(visit policy: {best_visits:.4f}) with all moves:\n\t{moves_str}\nFor Board with FEN:\n{board.board.fen()}\n{"==="*20}'
+            moves_str_list.append(f'{CurrentGame.decode_move(mv).uci()}: {visits:.4f} ({count})')
+        moves_str = '\n\t'.join(moves_str_list)
+        ratio_str = f'(visit policy: {best_visits:.4f}) with all moves:\n\t{moves_str}\nFor Board with FEN:\n{board.board.fen()}\n{"==="*20}'
 
-        if best_move_uci != expected_move:
+        def mates(move: chess.Move):
+            b = board.copy()
+            b.make_move(move)
+            return b.is_game_over()
+
+        if result.result_score < 0.85:
             failures.append(
-                f"Puzzle {puzzle_id}: Expected mate move '{expected_move}', but got '{best_move_uci}' {ratio_str}."
+                f"Puzzle {puzzle_id}: Expected mate move '{expected_move}' {expected} has low score {result.result_score:.2f}."
             )
-        elif 'mateIn1' in puzzle['Themes'] and best_visits < 0.8:
+        elif best_move_uci != expected_move and not mates(chess.Move.from_uci(best_move_uci)):
             failures.append(
-                f"Puzzle {puzzle_id}: Mate in 1 expected move '{expected_move}' has low visit ratio {ratio_str}."
+                f"Puzzle {puzzle_id}: Expected mate move '{expected_move}' {expected}, but got '{best_move_uci}' {ratio_str}."
+            )
+        elif (
+            'mateIn1' in puzzle['Themes']
+            and best_visits < 0.8
+            and not all(mates(CurrentGame.decode_move(move)) for move, policy, _ in moves if policy > 0.3)
+        ):
+            failures.append(
+                f"Puzzle {puzzle_id}: Mate in 1 expected move '{expected_move}' {expected} has low visit ratio {ratio_str}."
             )
 
     if failures:

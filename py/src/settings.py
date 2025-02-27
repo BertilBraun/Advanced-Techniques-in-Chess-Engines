@@ -38,7 +38,7 @@ def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
     if current_iteration < 5:
         return 5
-    return min(5 + (current_iteration - 5) // 5, 8)
+    return min(5 + (current_iteration - 5) // 5, 5)
 
 
 def learning_rate(current_iteration: int) -> float:
@@ -193,7 +193,7 @@ elif True:
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
         num_epochs=2,
-        batch_size=512,
+        batch_size=1024,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
@@ -206,13 +206,13 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 32
-    NUM_SEARCHES_PER_TURN = 500
-    MIN_VISIT_COUNT = 1  # TODO 1 or 2?
+    PARALLEL_GAMES = 64
+    NUM_SEARCHES_PER_TURN = 512
+    MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove
         PARALLEL_GAMES = 2
-        NUM_SEARCHES_PER_TURN = 50
+        NUM_SEARCHES_PER_TURN = 640
         MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
@@ -223,11 +223,11 @@ elif True:
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.15,
+            result_score_weight=0.10,
             resignation_threshold=-1.0,  # TODO -0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=4,
+                num_parallel_searches=8,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=0.03,  # Based on AZ Paper
                 c_param=1.7,  # Based on MiniGO Paper
