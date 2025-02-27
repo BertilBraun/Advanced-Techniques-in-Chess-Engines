@@ -16,9 +16,7 @@ def get_testing_inference_client() -> InferenceClient:
         InferenceClient: A client with a well-trained model.
     """
     # Load the model from the default path.
-    client = InferenceClient(
-        0, TRAINING_ARGS.network, f'reference/{CurrentGame.__class__.__name__}', auto_update_iteration=False
-    )
+    client = InferenceClient(0, TRAINING_ARGS.network, f'reference/{CurrentGame.__class__.__name__}')
     # TODO client.load_model('reference/sft_chess.pt')
     return client
 

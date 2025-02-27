@@ -47,7 +47,7 @@ class SelfPlayParams:
     num_moves_after_which_to_play_greedy: int
     """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
 
-    temperature: float = 1.0
+    temperature: float = 1.25
     """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
 
     result_score_weight: float = 0.5

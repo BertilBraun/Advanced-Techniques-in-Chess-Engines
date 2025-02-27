@@ -13,9 +13,7 @@ class AlphaZeroBot(Bot):
     def __init__(self, iteration: int, max_time_to_think: float = 1.0, network_eval_only: bool = False) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        self.inference_client = InferenceClient(
-            0, TRAINING_ARGS.network, TRAINING_ARGS.save_path, auto_update_iteration=False
-        )
+        self.inference_client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
         self.inference_client.update_iteration(iteration)
 
         self.mcts_args = MCTSParams(

@@ -184,11 +184,18 @@ class SelfPlay:
             for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
-                    visit_counts.copy(),
+                    self._preprocess_visit_counts(visit_counts),
                     lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
             # TODO? game_outcome *= 0.98  # discount the game outcome for each move
+
+    def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        total_visits = sum(visit_count for _, visit_count in visit_counts)
+        # Remove moves with less than 1% of the total visits
+        visit_counts = [(move, count) for move, count in visit_counts if count >= total_visits * 0.01]
+
+        return visit_counts
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])

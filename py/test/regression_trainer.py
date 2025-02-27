@@ -66,7 +66,7 @@ def main(dataset_paths: list[str]):
         for iter in range(NUM_EPOCHS):
             # Instantiate the dataset
             dataset = SelfPlayTrainDataset(run_id, device=device)
-            dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
+            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
 
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
@@ -82,8 +82,6 @@ def main(dataset_paths: list[str]):
             log(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
             log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
             log(f'    Avg value loss: {avg_value_loss}')
-
-            dataset.cleanup()
 
         log('Training finished')
 

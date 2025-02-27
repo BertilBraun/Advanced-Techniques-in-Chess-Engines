@@ -36,7 +36,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def __init__(self) -> None:
         self.encoded_states: list[npt.NDArray[np.uint64]] = []
-        self.visit_counts: list[list[tuple[int, int]]] = []
+        self.visit_counts: list[npt.NDArray[np.uint16]] = []
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats()
 
@@ -49,7 +49,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:
         self.encoded_states.append(encode_board_state(state))
-        self.visit_counts.append(visit_counts)
+        self.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
         self.value_targets.append(value_target)
         self.stats += SelfPlayDatasetStats(num_samples=1)
 
@@ -76,7 +76,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @timeit
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[tuple[int, ...], tuple[int, tuple[list[tuple[int, int]], float]]] = {}
+        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             state = tuple(state)
@@ -94,7 +94,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
                 mp[state] = (
                     count + 1,
-                    (new_visit_counts, value_target_sum + value_target),
+                    (np.array(new_visit_counts, dtype=np.uint16), value_target_sum + value_target),
                 )
             else:
                 mp[state] = (
@@ -129,7 +129,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 dataset.encoded_states = [state for state in file['states']]  # type: ignore
                 # parse out the visit counts but only the non-zero ones
                 dataset.visit_counts = [
-                    [(move, count) for move, count in visit_count if count > 0]
+                    visit_count[visit_count[:, 1] > 0]
                     for visit_count in file['visit_counts']  # type: ignore
                 ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
@@ -210,6 +210,19 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.save_to_path(file_path)
 
         return file_path
+
+    def chunked_save(self, folder_path: str | PathLike, iteration: int, chunk_size: int) -> list[Path]:
+        chunked_files = []
+        for i in range(0, len(self), chunk_size):
+            chunk = SelfPlayDataset()
+            chunk.encoded_states = self.encoded_states[i : i + chunk_size]
+            chunk.visit_counts = self.visit_counts[i : i + chunk_size]
+            chunk.value_targets = self.value_targets[i : i + chunk_size]
+            chunk.stats = self.stats
+
+            chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}'))
+
+        return chunked_files
 
     @staticmethod
     def _get_current_metadata() -> dict[str, Any]:

@@ -1,3 +1,4 @@
+from typing import Iterable
 import numpy as np
 from dataclasses import dataclass
 
@@ -18,12 +19,10 @@ class MCTSResult:
     children: list[MCTSNode]
 
 
-def action_probabilities(visit_counts: list[tuple[int, int]]) -> np.ndarray:
+def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
     action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
     for move, visit_count in visit_counts:
         action_probabilities[move] = visit_count
-    total_visits = np.sum(action_probabilities)
-    action_probabilities[action_probabilities < total_visits * 0.01] = 0
     action_probabilities /= np.sum(action_probabilities)
 
     # Set 0 probabilities to -inf to mask them out in the softmax

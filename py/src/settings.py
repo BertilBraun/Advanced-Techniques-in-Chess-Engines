@@ -46,7 +46,7 @@ def learning_rate(current_iteration: int) -> float:
         return 0.2
     if current_iteration < 50:
         return 0.02
-    if current_iteration < 65:
+    if current_iteration < 70:
         return 0.002
     return 0.0002
 
@@ -193,7 +193,7 @@ elif True:
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
         num_epochs=2,
-        batch_size=256,
+        batch_size=512,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
@@ -211,8 +211,8 @@ elif True:
     MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove
-        PARALLEL_GAMES = 4
-        NUM_SEARCHES_PER_TURN = 500
+        PARALLEL_GAMES = 2
+        NUM_SEARCHES_PER_TURN = 50
         MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
@@ -230,7 +230,7 @@ elif True:
                 num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=0.03,  # Based on AZ Paper
-                c_param=2,
+                c_param=1.7,  # Based on MiniGO Paper
                 min_visit_count=MIN_VISIT_COUNT,
             ),
         ),

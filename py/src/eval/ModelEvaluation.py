@@ -145,7 +145,7 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        opponent = InferenceClient(0, self.args.network, self.args.save_path, auto_update_iteration=False)
+        opponent = InferenceClient(0, self.args.network, self.args.save_path)
         opponent.load_model(model_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -159,7 +159,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(0, self.args.network, self.args.save_path, auto_update_iteration=False)
+        current_model = InferenceClient(0, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:

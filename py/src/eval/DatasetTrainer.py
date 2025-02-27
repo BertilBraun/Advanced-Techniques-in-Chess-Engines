@@ -70,7 +70,7 @@ def main(dataset_paths: list[str]):
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
         tmp_dataset = SelfPlayTrainDataset(run_id, device=device)
-        tmp_dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
+        tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
         train_stats = tmp_dataset.stats
 
         # Instantiate the model
@@ -95,7 +95,7 @@ def main(dataset_paths: list[str]):
         for iter in range(pre_iter, NUM_EPOCHS):
             # Instantiate the dataset
             dataset = SelfPlayTrainDataset(run_id, device=device)
-            dataset.load_from_files(save_folder, [[Path(p)] for p in dataset_paths])
+            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
 
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
@@ -113,7 +113,6 @@ def main(dataset_paths: list[str]):
             log(f'    Avg value loss: {avg_value_loss}')
 
             save_model_and_optimizer(model, optimizer, iter, save_folder)
-            dataset.cleanup()
 
         log('Training finished')
 

@@ -69,8 +69,6 @@ class TrainerProcess:
             epoch_train_stats = trainer.train(dataloader, iteration)
             train_stats += epoch_train_stats
 
-            dataset.cleanup()
-
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
         self._log_to_tensorboard(iteration, train_stats)
@@ -104,9 +102,8 @@ class TrainerProcess:
         dataset.load_from_files(
             self.args.save_path,
             [
-                [file]  # Each file seperately, sine loading all would OOM
+                (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
                 for iteration in range(max(iteration - window_size, 0), iteration + 1)
-                for file in SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
             ],
         )
 

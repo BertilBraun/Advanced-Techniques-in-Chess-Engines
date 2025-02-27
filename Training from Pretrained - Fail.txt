@@ -1,0 +1,588 @@
+[11.10.42] [INFO] Starting training
+[11.10.42] [INFO] Training on: GPU
+[11.10.42] [INFO] Training args:
+TrainingArgs(save_path='training_data/chess',
+             num_iterations=100,
+             num_games_per_iteration=673,
+             network=NetworkParams(num_layers=12, hidden_size=128),
+             self_play=SelfPlayParams(mcts=MCTSParams(num_searches_per_turn=500, num_parallel_searches=4, dirichlet_epsilon=0.25, dirichlet_alpha=0.03, c_param=2, min_visit_count=1),
+                                      num_parallel_games=32,
+                                      num_moves_after_which_to_play_greedy=25,
+                                      temperature=1.0,
+                                      result_score_weight=0.15,
+                                      num_games_after_which_to_write=5,
+                                      resignation_threshold=-1.0),
+             training=TrainingParams(num_epochs=2,
+                                     batch_size=256,
+                                     sampling_window=<function sampling_window at 0x1519aedf9800>,
+                                     learning_rate=<function learning_rate at 0x1519aeea2980>,
+                                     learning_rate_scheduler=<function learning_rate_scheduler at 0x1519aebb0f40>,
+                                     num_workers=1),
+             cluster=ClusterParams(num_self_play_nodes_on_cluster=42),
+             evaluation=EvaluationParams(num_searches_per_turn=60, num_games=40, every_n_iterations=1, dataset_path='reference/memory_0_chess_database.hdf5'))
+[11.10.42] [INFO] Run ID: 0
+[11.10.42] [INFO] Setting up connections...
+[11.10.42] [INFO] Connections set up.
+[11.10.42] [INFO] Starting training at iteration 60.
+[11.10.42] [INFO] All processes started at iteration 60.
+[11.11.19] [INFO] Model and optimizer loaded from iteration 60
+[11.26.08] [INFO] Loading memories for iteration 60 with window size 8 (52-60)
+[11.26.08] [INFO] Loaded 106132 samples from 677 games
+Training batches: 100%|██████████| 413/413 [00:36<00:00, 11.20it/s]
+Total norm: 1.3463974090459445
+[11.26.50] [INFO] Validation stats: Policy Loss: 1.6719, Value Loss: 0.4785, Total Loss: 2.1562, Value Mean: -0.0366, Value Std: 0.4766
+[11.26.50] [INFO] Loading memories for iteration 60 with window size 8 (52-60)
+[11.26.51] [INFO] Loaded 133966 samples from 804 games
+Training batches: 100%|██████████| 522/522 [00:23<00:00, 22.49it/s]
+Total norm: 1.0359518484557466
+[11.27.15] [INFO] Validation stats: Policy Loss: 1.5469, Value Loss: 0.4844, Total Loss: 2.0312, Value Mean: 0.0173, Value Std: 0.4766
+[11.27.15] [INFO] Trainer finished at iteration 60.
+[11.27.15] [INFO] Iteration 60: Policy Loss: 1.6181, Value Loss: 0.4625, Total Loss: 2.0804, Value Mean: 0.0035, Value Std: 0.4813
+[11.27.15] [INFO] All processes started at iteration 61.
+[11.27.16] [INFO] Model and optimizer loaded from iteration 61
+[11.27.36] [INFO] Evaluation results at iteration 60:
+[11.27.36] [INFO]     Policy accuracy @1: 36.91%
+[11.27.36] [INFO]     Policy accuracy @5: 71.76%
+[11.27.36] [INFO]     Policy accuracy @10: 81.78%
+[11.27.36] [INFO]     Avg value loss: 0.7747741063435872
+[11.27.36] [INFO] No model found for: training_data/chess/model_59.pt
+[11.28.34] [INFO] Results after playing two most recent models at iteration 60: Wins: 40, Losses: 0, Draws: 0
+[11.30.10] [INFO] Results after playing the current vs the first at iteration 60: Wins: 17, Losses: 17, Draws: 6
+[11.30.38] [INFO] Results after playing vs random at iteration 60: Wins: 40, Losses: 0, Draws: 0
+[11.33.52] [INFO] Loading memories for iteration 61 with window size 8 (53-61)
+[11.33.52] [INFO] Loaded 299126 samples from 1516 games
+Training batches: 100%|██████████| 1167/1167 [00:41<00:00, 28.31it/s]
+Total norm: 1.2542680236292403
+[11.34.33] [INFO] Validation stats: Policy Loss: 1.5391, Value Loss: 0.4492, Total Loss: 1.9844, Value Mean: -0.0156, Value Std: 0.5352
+[11.34.33] [INFO] Loading memories for iteration 61 with window size 8 (53-61)
+[11.34.34] [INFO] Loaded 324064 samples from 1635 games
+Training batches: 100%|██████████| 1264/1264 [00:41<00:00, 30.49it/s]
+Total norm: 1.2134976242597797
+[11.35.16] [INFO] Validation stats: Policy Loss: 1.5938, Value Loss: 0.4160, Total Loss: 2.0156, Value Mean: 0.0292, Value Std: 0.5312
+[11.35.17] [INFO] Trainer finished at iteration 61.
+[11.35.17] [INFO] Iteration 61: Policy Loss: 1.5915, Value Loss: 0.4264, Total Loss: 2.0179, Value Mean: 0.0025, Value Std: 0.5179
+[11.35.17] [INFO] All processes started at iteration 62.
+[11.35.17] [INFO] Model and optimizer loaded from iteration 62
+[11.35.33] [INFO] Evaluation results at iteration 61:
+[11.35.33] [INFO]     Policy accuracy @1: 37.07%
+[11.35.33] [INFO]     Policy accuracy @5: 72.04%
+[11.35.33] [INFO]     Policy accuracy @10: 81.82%
+[11.35.33] [INFO]     Avg value loss: 0.7777577886978785
+[11.37.37] [INFO] Results after playing two most recent models at iteration 61: Wins: 17, Losses: 16, Draws: 7
+[11.39.37] [INFO] Results after playing the current vs the first at iteration 61: Wins: 17, Losses: 16, Draws: 7
+[11.40.04] [INFO] Results after playing vs random at iteration 61: Wins: 40, Losses: 0, Draws: 0
+[11.41.39] [INFO] Loading memories for iteration 62 with window size 8 (54-62)
+[11.41.39] [INFO] Loaded 480104 samples from 2361 games
+Training batches: 100%|██████████| 1874/1874 [00:58<00:00, 31.92it/s]
+Total norm: 1.0661797335325223
+[11.42.38] [INFO] Validation stats: Policy Loss: 1.5234, Value Loss: 0.3848, Total Loss: 1.9062, Value Mean: -0.0518, Value Std: 0.5234
+[11.42.38] [INFO] Loading memories for iteration 62 with window size 8 (54-62)
+[11.42.38] [INFO] Loaded 503552 samples from 2462 games
+Training batches: 100%|██████████| 1966/1966 [01:01<00:00, 31.87it/s]
+Total norm: 1.0641718011474315
+[11.43.41] [INFO] Validation stats: Policy Loss: 1.6250, Value Loss: 0.4082, Total Loss: 2.0312, Value Mean: -0.0115, Value Std: 0.5469
+[11.43.42] [INFO] Trainer finished at iteration 62.
+[11.43.42] [INFO] Iteration 62: Policy Loss: 1.5878, Value Loss: 0.4152, Total Loss: 2.0030, Value Mean: 0.0029, Value Std: 0.5292
+[11.43.42] [INFO] All processes started at iteration 63.
+[11.43.42] [INFO] Model and optimizer loaded from iteration 63
+[11.43.58] [INFO] Evaluation results at iteration 62:
+[11.43.58] [INFO]     Policy accuracy @1: 36.63%
+[11.43.58] [INFO]     Policy accuracy @5: 70.99%
+[11.43.58] [INFO]     Policy accuracy @10: 80.79%
+[11.43.58] [INFO]     Avg value loss: 0.7850171824296316
+[11.46.01] [INFO] Results after playing two most recent models at iteration 62: Wins: 15, Losses: 22, Draws: 3
+[11.47.50] [INFO] Results after playing the current vs the first at iteration 62: Wins: 12, Losses: 16, Draws: 12
+[11.48.16] [INFO] Results after playing vs random at iteration 62: Wins: 40, Losses: 0, Draws: 0
+[11.50.33] [INFO] Loading memories for iteration 63 with window size 8 (55-63)
+[11.50.34] [INFO] Loaded 677818 samples from 3254 games
+Training batches: 100%|██████████| 2646/2646 [01:20<00:00, 32.91it/s]
+Total norm: 1.1397725342537142
+[11.51.54] [INFO] Validation stats: Policy Loss: 1.5625, Value Loss: 0.4688, Total Loss: 2.0312, Value Mean: 0.0198, Value Std: 0.4863
+[11.51.54] [INFO] Loading memories for iteration 63 with window size 8 (55-63)
+[11.51.55] [INFO] Loaded 705430 samples from 3385 games
+Training batches: 100%|██████████| 2754/2754 [01:24<00:00, 32.53it/s]
+Total norm: 1.0796645064051635
+[11.53.20] [INFO] Validation stats: Policy Loss: 1.5703, Value Loss: 0.3965, Total Loss: 1.9688, Value Mean: -0.0728, Value Std: 0.5234
+[11.53.21] [INFO] Trainer finished at iteration 63.
+[11.53.21] [INFO] Iteration 63: Policy Loss: 1.5694, Value Loss: 0.4091, Total Loss: 1.9784, Value Mean: 0.0027, Value Std: 0.5349
+[11.53.21] [INFO] All processes started at iteration 64.
+[11.53.21] [INFO] Model and optimizer loaded from iteration 64
+[11.53.37] [INFO] Evaluation results at iteration 63:
+[11.53.37] [INFO]     Policy accuracy @1: 36.95%
+[11.53.37] [INFO]     Policy accuracy @5: 71.64%
+[11.53.37] [INFO]     Policy accuracy @10: 81.58%
+[11.53.37] [INFO]     Avg value loss: 0.7826881339152654
+[11.55.30] [INFO] Results after playing two most recent models at iteration 63: Wins: 12, Losses: 21, Draws: 7
+[11.57.23] [INFO] Results after playing the current vs the first at iteration 63: Wins: 17, Losses: 20, Draws: 3
+[11.57.50] [INFO] Results after playing vs random at iteration 63: Wins: 40, Losses: 0, Draws: 0
+[11.59.54] [INFO] Loading memories for iteration 64 with window size 8 (56-64)
+[11.59.55] [INFO] Loaded 890908 samples from 4217 games
+Training batches: 100%|██████████| 3479/3479 [01:42<00:00, 34.06it/s]
+Total norm: 1.1509341152642698
+[12.01.37] [INFO] Validation stats: Policy Loss: 1.5938, Value Loss: 0.4219, Total Loss: 2.0156, Value Mean: 0.0294, Value Std: 0.5273
+[12.01.37] [INFO] Loading memories for iteration 64 with window size 8 (56-64)
+[12.01.38] [INFO] Loaded 930262 samples from 4394 games
+Training batches: 100%|██████████| 3632/3632 [01:52<00:00, 32.42it/s]
+Total norm: 1.0884588938671484
+[12.03.31] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.3828, Total Loss: 1.8984, Value Mean: 0.0099, Value Std: 0.5625
+[12.03.32] [INFO] Trainer finished at iteration 64.
+[12.03.32] [INFO] Iteration 64: Policy Loss: 1.5555, Value Loss: 0.4058, Total Loss: 1.9613, Value Mean: 0.0028, Value Std: 0.5428
+[12.03.32] [INFO] All processes started at iteration 65.
+[12.03.32] [INFO] Model and optimizer loaded from iteration 65
+[12.03.49] [INFO] Evaluation results at iteration 64:
+[12.03.49] [INFO]     Policy accuracy @1: 36.98%
+[12.03.49] [INFO]     Policy accuracy @5: 71.81%
+[12.03.49] [INFO]     Policy accuracy @10: 81.19%
+[12.03.49] [INFO]     Avg value loss: 0.7893537004788717
+[12.05.38] [INFO] Results after playing two most recent models at iteration 64: Wins: 17, Losses: 17, Draws: 6
+[12.07.23] [INFO] Results after playing the current vs the first at iteration 64: Wins: 12, Losses: 21, Draws: 7
+[12.07.48] [INFO] Results after playing vs random at iteration 64: Wins: 40, Losses: 0, Draws: 0
+[12.10.01] [INFO] Loading memories for iteration 65 with window size 8 (57-65)
+[12.10.02] [INFO] Loaded 1121724 samples from 5257 games
+Training batches: 100%|██████████| 4380/4380 [02:11<00:00, 33.25it/s]
+Total norm: 1.1392348518850357
+[12.12.14] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.3828, Total Loss: 1.8984, Value Mean: 0.0474, Value Std: 0.5508
+[12.12.14] [INFO] Loading memories for iteration 65 with window size 8 (57-65)
+[12.12.15] [INFO] Loaded 1166574 samples from 5465 games
+Training batches: 100%|██████████| 4555/4555 [02:10<00:00, 34.95it/s]
+Total norm: 1.1803424750625655
+[12.14.26] [INFO] Validation stats: Policy Loss: 1.6719, Value Loss: 0.4277, Total Loss: 2.0938, Value Mean: 0.0141, Value Std: 0.5508
+[12.14.27] [INFO] Trainer finished at iteration 65.
+[12.14.27] [INFO] Iteration 65: Policy Loss: 1.5432, Value Loss: 0.4047, Total Loss: 1.9478, Value Mean: 0.0022, Value Std: 0.5455
+[12.14.27] [INFO] All processes started at iteration 66.
+[12.14.27] [INFO] Model and optimizer loaded from iteration 66
+[12.14.46] [INFO] Evaluation results at iteration 65:
+[12.14.46] [INFO]     Policy accuracy @1: 37.19%
+[12.14.46] [INFO]     Policy accuracy @5: 71.79%
+[12.14.46] [INFO]     Policy accuracy @10: 81.37%
+[12.14.46] [INFO]     Avg value loss: 0.7952213883399963
+[12.16.35] [INFO] Results after playing two most recent models at iteration 65: Wins: 15, Losses: 21, Draws: 4
+[12.18.25] [INFO] Results after playing the current vs the first at iteration 65: Wins: 14, Losses: 20, Draws: 6
+[12.18.50] [INFO] Results after playing vs random at iteration 65: Wins: 39, Losses: 0, Draws: 1
+[12.21.29] [INFO] Loading memories for iteration 66 with window size 8 (58-66)
+[12.21.31] [INFO] Loaded 1370208 samples from 6407 games
+Training batches: 100%|██████████| 5351/5351 [02:32<00:00, 35.08it/s]
+Total norm: 1.024037903130209
+[12.24.03] [INFO] Validation stats: Policy Loss: 1.5703, Value Loss: 0.3906, Total Loss: 1.9609, Value Mean: 0.0422, Value Std: 0.5430
+[12.24.03] [INFO] Loading memories for iteration 66 with window size 8 (58-66)
+[12.24.08] [INFO] Loaded 1430350 samples from 6679 games
+Training batches: 100%|██████████| 5586/5586 [02:46<00:00, 33.48it/s]
+Total norm: 1.1296038204874157
+[12.26.55] [INFO] Validation stats: Policy Loss: 1.5859, Value Loss: 0.3809, Total Loss: 1.9688, Value Mean: -0.0449, Value Std: 0.5586
+[12.26.56] [INFO] Trainer finished at iteration 66.
+[12.26.56] [INFO] Iteration 66: Policy Loss: 1.5356, Value Loss: 0.4051, Total Loss: 1.9406, Value Mean: 0.0024, Value Std: 0.5464
+[12.26.56] [INFO] All processes started at iteration 67.
+[12.26.57] [INFO] Model and optimizer loaded from iteration 67
+[12.27.15] [INFO] Evaluation results at iteration 66:
+[12.27.15] [INFO]     Policy accuracy @1: 36.85%
+[12.27.15] [INFO]     Policy accuracy @5: 71.44%
+[12.27.15] [INFO]     Policy accuracy @10: 80.91%
+[12.27.15] [INFO]     Avg value loss: 0.794301430384318
+[12.29.21] [INFO] Results after playing two most recent models at iteration 66: Wins: 13, Losses: 20, Draws: 7
+[12.31.06] [INFO] Results after playing the current vs the first at iteration 66: Wins: 17, Losses: 17, Draws: 6
+[12.31.32] [INFO] Results after playing vs random at iteration 66: Wins: 40, Losses: 0, Draws: 0
+[12.33.55] [INFO] Loading memories for iteration 67 with window size 8 (59-67)
+[12.34.01] [INFO] Loaded 1656334 samples from 7700 games
+Training batches: 100%|██████████| 6469/6469 [03:09<00:00, 34.10it/s]
+Total norm: 1.0458772434204793
+[12.37.11] [INFO] Validation stats: Policy Loss: 1.4766, Value Loss: 0.3672, Total Loss: 1.8438, Value Mean: -0.0312, Value Std: 0.5391
+[12.37.11] [INFO] Loading memories for iteration 67 with window size 8 (59-67)
+[12.37.16] [INFO] Loaded 1725916 samples from 8023 games
+Training batches: 100%|██████████| 6740/6740 [03:10<00:00, 35.30it/s]
+Total norm: 1.0858828716122308
+[12.40.28] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.4238, Total Loss: 1.9375, Value Mean: -0.0063, Value Std: 0.5547
+[12.40.29] [INFO] Trainer finished at iteration 67.
+[12.40.29] [INFO] Iteration 67: Policy Loss: 1.5280, Value Loss: 0.4035, Total Loss: 1.9314, Value Mean: 0.0034, Value Std: 0.5468
+[12.40.29] [INFO] All processes started at iteration 68.
+[12.40.29] [INFO] Model and optimizer loaded from iteration 68
+[12.40.48] [INFO] Evaluation results at iteration 67:
+[12.40.48] [INFO]     Policy accuracy @1: 37.31%
+[12.40.48] [INFO]     Policy accuracy @5: 72.25%
+[12.40.48] [INFO]     Policy accuracy @10: 81.98%
+[12.40.48] [INFO]     Avg value loss: 0.788648784160614
+[12.42.45] [INFO] Results after playing two most recent models at iteration 67: Wins: 12, Losses: 20, Draws: 8
+[12.44.41] [INFO] Results after playing the current vs the first at iteration 67: Wins: 17, Losses: 16, Draws: 7
+[12.45.06] [INFO] Results after playing vs random at iteration 67: Wins: 39, Losses: 0, Draws: 1
+[12.47.05] [INFO] Loading memories for iteration 68 with window size 8 (60-68)
+[12.47.11] [INFO] Loaded 1957632 samples from 9060 games
+Training batches: 100%|██████████| 7646/7646 [03:45<00:00, 33.90it/s]
+Total norm: 1.223912267671969
+[12.50.57] [INFO] Validation stats: Policy Loss: 1.4922, Value Loss: 0.3848, Total Loss: 1.8750, Value Mean: -0.0449, Value Std: 0.5664
+[12.50.57] [INFO] Loading memories for iteration 68 with window size 8 (60-68)
+[12.51.03] [INFO] Loaded 2035126 samples from 9414 games
+Training batches: 100%|██████████| 7948/7948 [03:42<00:00, 35.75it/s]
+Total norm: 1.1130305430391598
+[12.54.46] [INFO] Validation stats: Policy Loss: 1.4609, Value Loss: 0.3809, Total Loss: 1.8438, Value Mean: 0.0544, Value Std: 0.5625
+[12.54.47] [INFO] Trainer finished at iteration 68.
+[12.54.47] [INFO] Iteration 68: Policy Loss: 1.5236, Value Loss: 0.4021, Total Loss: 1.9256, Value Mean: 0.0026, Value Std: 0.5472
+[12.54.47] [INFO] All processes started at iteration 69.
+[12.54.47] [INFO] Model and optimizer loaded from iteration 69
+[12.55.06] [INFO] Evaluation results at iteration 68:
+[12.55.06] [INFO]     Policy accuracy @1: 36.66%
+[12.55.06] [INFO]     Policy accuracy @5: 71.30%
+[12.55.06] [INFO]     Policy accuracy @10: 80.87%
+[12.55.06] [INFO]     Avg value loss: 0.7891230344772339
+[12.56.55] [INFO] Results after playing two most recent models at iteration 68: Wins: 19, Losses: 16, Draws: 5
+[12.58.33] [INFO] Results after playing the current vs the first at iteration 68: Wins: 13, Losses: 21, Draws: 6
+[12.58.57] [INFO] Results after playing vs random at iteration 68: Wins: 39, Losses: 0, Draws: 1
+[13.01.08] [INFO] Loading memories for iteration 69 with window size 8 (61-69)
+[13.01.15] [INFO] Loaded 2131582 samples from 9630 games
+Training batches: 100%|██████████| 8325/8325 [03:58<00:00, 34.84it/s]
+Total norm: 1.1554931059592728
+[13.05.14] [INFO] Validation stats: Policy Loss: 1.3984, Value Loss: 0.3320, Total Loss: 1.7344, Value Mean: -0.0234, Value Std: 0.5586
+[13.05.14] [INFO] Loading memories for iteration 69 with window size 8 (61-69)
+[13.05.20] [INFO] Loaded 2212024 samples from 10003 games
+Training batches: 100%|██████████| 8639/8639 [04:03<00:00, 35.41it/s]
+Total norm: 1.1740052379973827
+[13.09.25] [INFO] Validation stats: Policy Loss: 1.5000, Value Loss: 0.3906, Total Loss: 1.8906, Value Mean: 0.0417, Value Std: 0.5586
+[13.09.26] [INFO] Trainer finished at iteration 69.
+[13.09.26] [INFO] Iteration 69: Policy Loss: 1.5146, Value Loss: 0.3996, Total Loss: 1.9141, Value Mean: 0.0023, Value Std: 0.5481
+[13.09.26] [INFO] All processes started at iteration 70.
+[13.09.26] [INFO] Model and optimizer loaded from iteration 70
+[13.09.44] [INFO] Evaluation results at iteration 69:
+[13.09.44] [INFO]     Policy accuracy @1: 37.32%
+[13.09.44] [INFO]     Policy accuracy @5: 72.32%
+[13.09.44] [INFO]     Policy accuracy @10: 82.06%
+[13.09.44] [INFO]     Avg value loss: 0.7859106808900833
+[13.11.34] [INFO] Results after playing two most recent models at iteration 69: Wins: 22, Losses: 14, Draws: 4
+[13.13.26] [INFO] Results after playing the current vs the first at iteration 69: Wins: 11, Losses: 20, Draws: 9
+[13.13.51] [INFO] Results after playing vs random at iteration 69: Wins: 40, Losses: 0, Draws: 0
+[13.15.58] [INFO] Loading memories for iteration 70 with window size 8 (62-70)
+[13.16.05] [INFO] Loaded 2267286 samples from 10262 games
+Training batches: 100%|██████████| 8855/8855 [04:13<00:00, 34.91it/s]
+Total norm: 1.071910029650793
+[13.20.19] [INFO] Validation stats: Policy Loss: 1.4297, Value Loss: 0.3809, Total Loss: 1.8125, Value Mean: -0.0042, Value Std: 0.5664
+[13.20.19] [INFO] Loading memories for iteration 70 with window size 8 (62-70)
+[13.20.25] [INFO] Loaded 2352504 samples from 10653 games
+Training batches: 100%|██████████| 9188/9188 [04:21<00:00, 35.18it/s]
+Total norm: 1.1334213396513206
+[13.24.47] [INFO] Validation stats: Policy Loss: 1.4453, Value Loss: 0.3906, Total Loss: 1.8359, Value Mean: -0.0369, Value Std: 0.5547
+[13.24.48] [INFO] Trainer finished at iteration 70.
+[13.24.48] [INFO] Iteration 70: Policy Loss: 1.5049, Value Loss: 0.3993, Total Loss: 1.9042, Value Mean: 0.0022, Value Std: 0.5487
+[13.24.48] [INFO] All processes started at iteration 71.
+[13.24.48] [INFO] Model and optimizer loaded from iteration 71
+[13.25.08] [INFO] Evaluation results at iteration 70:
+[13.25.08] [INFO]     Policy accuracy @1: 36.55%
+[13.25.08] [INFO]     Policy accuracy @5: 71.13%
+[13.25.08] [INFO]     Policy accuracy @10: 80.94%
+[13.25.08] [INFO]     Avg value loss: 0.7878133674462636
+[13.27.15] [INFO] Results after playing two most recent models at iteration 70: Wins: 20, Losses: 8, Draws: 12
+[13.29.02] [INFO] Results after playing the current vs the first at iteration 70: Wins: 15, Losses: 15, Draws: 10
+[13.29.28] [INFO] Results after playing vs random at iteration 70: Wins: 40, Losses: 0, Draws: 0
+[13.31.31] [INFO] Loading memories for iteration 71 with window size 8 (63-71)
+[13.31.40] [INFO] Loaded 2418284 samples from 10908 games
+Training batches: 100%|██████████| 9445/9445 [04:27<00:00, 35.28it/s]
+Total norm: 1.1686567302451631
+[13.36.07] [INFO] Validation stats: Policy Loss: 1.5469, Value Loss: 0.3945, Total Loss: 1.9375, Value Mean: 0.0067, Value Std: 0.5352
+[13.36.08] [INFO] Loading memories for iteration 71 with window size 8 (63-71)
+[13.36.14] [INFO] Loaded 2519820 samples from 11365 games
+Training batches: 100%|██████████| 9842/9842 [04:39<00:00, 35.21it/s]
+Total norm: 1.230937675500182
+[13.40.54] [INFO] Validation stats: Policy Loss: 1.4219, Value Loss: 0.3926, Total Loss: 1.8125, Value Mean: 0.0085, Value Std: 0.5312
+[13.40.55] [INFO] Trainer finished at iteration 71.
+[13.40.55] [INFO] Iteration 71: Policy Loss: 1.4964, Value Loss: 0.3989, Total Loss: 1.8953, Value Mean: 0.0029, Value Std: 0.5495
+[13.40.55] [INFO] All processes started at iteration 72.
+[13.40.55] [INFO] Model and optimizer loaded from iteration 72
+[13.41.13] [INFO] Evaluation results at iteration 71:
+[13.41.13] [INFO]     Policy accuracy @1: 36.90%
+[13.41.13] [INFO]     Policy accuracy @5: 71.38%
+[13.41.13] [INFO]     Policy accuracy @10: 80.83%
+[13.41.13] [INFO]     Avg value loss: 0.7848736117283504
+[13.43.19] [INFO] Results after playing two most recent models at iteration 71: Wins: 10, Losses: 19, Draws: 11
+[13.45.07] [INFO] Results after playing the current vs the first at iteration 71: Wins: 17, Losses: 14, Draws: 9
+[13.45.35] [INFO] Results after playing vs random at iteration 71: Wins: 40, Losses: 0, Draws: 0
+[13.47.51] [INFO] Loading memories for iteration 72 with window size 8 (64-72)
+[13.48.00] [INFO] Loaded 2567802 samples from 11575 games
+Training batches: 100%|██████████| 10029/10029 [04:51<00:00, 34.46it/s]
+Total norm: 1.153777378352575
+[13.52.51] [INFO] Validation stats: Policy Loss: 1.4141, Value Loss: 0.3848, Total Loss: 1.7969, Value Mean: -0.0339, Value Std: 0.5156
+[13.52.51] [INFO] Loading memories for iteration 72 with window size 8 (64-72)
+[13.52.57] [INFO] Loaded 2669096 samples from 12015 games
+Training batches: 100%|██████████| 10425/10425 [04:58<00:00, 34.95it/s]
+Total norm: 1.1754244890626957
+[13.57.56] [INFO] Validation stats: Policy Loss: 1.5781, Value Loss: 0.4297, Total Loss: 2.0000, Value Mean: 0.0309, Value Std: 0.5469
+[13.57.57] [INFO] Trainer finished at iteration 72.
+[13.57.57] [INFO] Iteration 72: Policy Loss: 1.4921, Value Loss: 0.3990, Total Loss: 1.8911, Value Mean: 0.0029, Value Std: 0.5498
+[13.57.57] [INFO] All processes started at iteration 73.
+[13.57.58] [INFO] Model and optimizer loaded from iteration 73
+[13.58.18] [INFO] Evaluation results at iteration 72:
+[13.58.18] [INFO]     Policy accuracy @1: 36.92%
+[13.58.18] [INFO]     Policy accuracy @5: 71.59%
+[13.58.18] [INFO]     Policy accuracy @10: 81.27%
+[13.58.18] [INFO]     Avg value loss: 0.7855861047903697
+[13.59.59] [INFO] Results after playing two most recent models at iteration 72: Wins: 15, Losses: 17, Draws: 8
+[14.02.01] [INFO] Results after playing the current vs the first at iteration 72: Wins: 19, Losses: 14, Draws: 7
+[14.02.28] [INFO] Results after playing vs random at iteration 72: Wins: 40, Losses: 0, Draws: 0
+[14.04.41] [INFO] Loading memories for iteration 73 with window size 8 (65-73)
+[14.04.50] [INFO] Loaded 2707524 samples from 12185 games
+Training batches: 100%|██████████| 10575/10575 [05:15<00:00, 33.57it/s]
+Total norm: 1.083168196777061
+[14.10.05] [INFO] Validation stats: Policy Loss: 1.4062, Value Loss: 0.4277, Total Loss: 1.8359, Value Mean: -0.0549, Value Std: 0.4980
+[14.10.05] [INFO] Loading memories for iteration 73 with window size 8 (65-73)
+[14.10.13] [INFO] Loaded 2819076 samples from 12684 games
+Training batches: 100%|██████████| 11011/11011 [05:20<00:00, 34.34it/s]
+Total norm: 1.072133931687168
+[14.15.35] [INFO] Validation stats: Policy Loss: 1.5469, Value Loss: 0.3770, Total Loss: 1.9219, Value Mean: -0.0075, Value Std: 0.5625
+[14.15.36] [INFO] Trainer finished at iteration 73.
+[14.15.36] [INFO] Iteration 73: Policy Loss: 1.4909, Value Loss: 0.3994, Total Loss: 1.8902, Value Mean: 0.0023, Value Std: 0.5495
+[14.15.36] [INFO] All processes started at iteration 74.
+[14.15.36] [INFO] Model and optimizer loaded from iteration 74
+[14.15.59] [INFO] Evaluation results at iteration 73:
+[14.15.59] [INFO]     Policy accuracy @1: 37.15%
+[14.15.59] [INFO]     Policy accuracy @5: 71.85%
+[14.15.59] [INFO]     Policy accuracy @10: 81.43%
+[14.15.59] [INFO]     Avg value loss: 0.7879653185606003
+[14.17.55] [INFO] Results after playing two most recent models at iteration 73: Wins: 14, Losses: 15, Draws: 11
+[14.20.05] [INFO] Results after playing the current vs the first at iteration 73: Wins: 13, Losses: 20, Draws: 7
+[14.20.37] [INFO] Results after playing vs random at iteration 73: Wins: 40, Losses: 0, Draws: 0
+[14.22.27] [INFO] Loading memories for iteration 74 with window size 8 (66-74)
+[14.22.36] [INFO] Loaded 2836612 samples from 12759 games
+Training batches: 100%|██████████| 11079/11079 [05:32<00:00, 33.32it/s]
+Total norm: 1.170004032217381
+[14.28.08] [INFO] Validation stats: Policy Loss: 1.4766, Value Loss: 0.4258, Total Loss: 1.9062, Value Mean: -0.0025, Value Std: 0.5664
+[14.28.09] [INFO] Loading memories for iteration 74 with window size 8 (66-74)
+[14.28.16] [INFO] Loaded 2964234 samples from 13343 games
+Training batches: 100%|██████████| 11578/11578 [05:39<00:00, 34.07it/s]
+Total norm: 1.0203008998661247
+[14.33.57] [INFO] Validation stats: Policy Loss: 1.4141, Value Loss: 0.3984, Total Loss: 1.8125, Value Mean: -0.0439, Value Std: 0.5586
+[14.33.58] [INFO] Trainer finished at iteration 74.
+[14.33.58] [INFO] Iteration 74: Policy Loss: 1.4890, Value Loss: 0.4002, Total Loss: 1.8892, Value Mean: 0.0024, Value Std: 0.5495
+[14.33.58] [INFO] All processes started at iteration 75.
+[14.33.58] [INFO] Model and optimizer loaded from iteration 75
+[14.34.21] [INFO] Evaluation results at iteration 74:
+[14.34.21] [INFO]     Policy accuracy @1: 37.10%
+[14.34.21] [INFO]     Policy accuracy @5: 72.28%
+[14.34.21] [INFO]     Policy accuracy @10: 81.98%
+[14.34.21] [INFO]     Avg value loss: 0.7886903246243795
+[14.36.26] [INFO] Results after playing two most recent models at iteration 74: Wins: 9, Losses: 18, Draws: 13
+[14.38.23] [INFO] Results after playing the current vs the first at iteration 74: Wins: 15, Losses: 19, Draws: 6
+[14.38.54] [INFO] Results after playing vs random at iteration 74: Wins: 39, Losses: 0, Draws: 1
+[14.40.51] [INFO] Loading memories for iteration 75 with window size 8 (67-75)
+[14.41.00] [INFO] Loaded 2952864 samples from 13275 games
+Training batches: 100%|██████████| 11533/11533 [05:30<00:00, 34.86it/s]
+Total norm: 1.2760931127907917
+[14.46.31] [INFO] Validation stats: Policy Loss: 1.5078, Value Loss: 0.3750, Total Loss: 1.8828, Value Mean: 0.0371, Value Std: 0.5664
+[14.46.31] [INFO] Loading memories for iteration 75 with window size 8 (67-75)
+[14.46.39] [INFO] Loaded 3085360 samples from 13875 games
+Training batches: 100%|██████████| 12051/12051 [05:50<00:00, 34.36it/s]
+Total norm: 1.1403389222509466
+[14.52.31] [INFO] Validation stats: Policy Loss: 1.3516, Value Loss: 0.3652, Total Loss: 1.7188, Value Mean: -0.0364, Value Std: 0.5273
+[14.52.32] [INFO] Trainer finished at iteration 75.
+[14.52.32] [INFO] Iteration 75: Policy Loss: 1.4881, Value Loss: 0.4010, Total Loss: 1.8891, Value Mean: 0.0026, Value Std: 0.5496
+[14.52.32] [INFO] All processes started at iteration 76.
+[14.52.32] [INFO] Model and optimizer loaded from iteration 76
+[14.52.55] [INFO] Evaluation results at iteration 75:
+[14.52.55] [INFO]     Policy accuracy @1: 36.46%
+[14.52.55] [INFO]     Policy accuracy @5: 71.01%
+[14.52.55] [INFO]     Policy accuracy @10: 80.80%
+[14.52.55] [INFO]     Avg value loss: 0.791616893808047
+[14.54.52] [INFO] Results after playing two most recent models at iteration 75: Wins: 19, Losses: 14, Draws: 7
+[14.56.49] [INFO] Results after playing the current vs the first at iteration 75: Wins: 15, Losses: 19, Draws: 6
+[14.57.13] [INFO] Results after playing vs random at iteration 75: Wins: 40, Losses: 0, Draws: 0
+[14.59.05] [INFO] Loading memories for iteration 76 with window size 8 (68-76)
+[14.59.14] [INFO] Loaded 3058822 samples from 13767 games
+Training batches: 100%|██████████| 11947/11947 [06:28<00:00, 30.79it/s]
+Total norm: 1.1052243769076444
+[15.05.42] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.3926, Total Loss: 1.9062, Value Mean: -0.0320, Value Std: 0.5273
+[15.05.42] [INFO] Loading memories for iteration 76 with window size 8 (68-76)
+[15.05.51] [INFO] Loaded 3194120 samples from 14377 games
+Training batches: 100%|██████████| 12476/12476 [06:35<00:00, 31.51it/s]
+Total norm: 1.0875725893377517
+[15.12.28] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.4023, Total Loss: 1.9219, Value Mean: -0.0366, Value Std: 0.5547
+[15.12.29] [INFO] Trainer finished at iteration 76.
+[15.12.29] [INFO] Iteration 76: Policy Loss: 1.4872, Value Loss: 0.4014, Total Loss: 1.8885, Value Mean: 0.0022, Value Std: 0.5493
+[15.12.29] [INFO] All processes started at iteration 77.
+[15.12.29] [INFO] Model and optimizer loaded from iteration 77
+[15.12.52] [INFO] Evaluation results at iteration 76:
+[15.12.52] [INFO]     Policy accuracy @1: 36.63%
+[15.12.52] [INFO]     Policy accuracy @5: 71.14%
+[15.12.52] [INFO]     Policy accuracy @10: 80.68%
+[15.12.52] [INFO]     Avg value loss: 0.7889514148235321
+[15.14.45] [INFO] Results after playing two most recent models at iteration 76: Wins: 15, Losses: 16, Draws: 9
+[15.16.43] [INFO] Results after playing the current vs the first at iteration 76: Wins: 17, Losses: 12, Draws: 11
+[15.17.10] [INFO] Results after playing vs random at iteration 76: Wins: 40, Losses: 0, Draws: 0
+[15.19.20] [INFO] Loading memories for iteration 77 with window size 8 (69-77)
+[15.19.30] [INFO] Loaded 3181930 samples from 14328 games
+Training batches: 100%|██████████| 12428/12428 [06:45<00:00, 30.65it/s]
+Total norm: 1.153181534443512
+[15.26.15] [INFO] Validation stats: Policy Loss: 1.5859, Value Loss: 0.3965, Total Loss: 1.9844, Value Mean: 0.0031, Value Std: 0.5234
+[15.26.16] [INFO] Loading memories for iteration 77 with window size 8 (69-77)
+[15.26.24] [INFO] Loaded 3323230 samples from 14973 games
+Training batches: 100%|██████████| 12980/12980 [07:08<00:00, 30.27it/s]
+Total norm: 1.1176950612203047
+[15.33.34] [INFO] Validation stats: Policy Loss: 1.4375, Value Loss: 0.3848, Total Loss: 1.8203, Value Mean: 0.0115, Value Std: 0.5859
+[15.33.35] [INFO] Trainer finished at iteration 77.
+[15.33.35] [INFO] Iteration 77: Policy Loss: 1.4869, Value Loss: 0.4019, Total Loss: 1.8888, Value Mean: 0.0019, Value Std: 0.5497
+[15.33.35] [INFO] All processes started at iteration 78.
+[15.33.35] [INFO] Model and optimizer loaded from iteration 78
+[15.33.58] [INFO] Evaluation results at iteration 77:
+[15.33.58] [INFO]     Policy accuracy @1: 36.79%
+[15.33.58] [INFO]     Policy accuracy @5: 72.26%
+[15.33.58] [INFO]     Policy accuracy @10: 81.72%
+[15.33.58] [INFO]     Avg value loss: 0.7900480250517528
+[15.36.35] [INFO] Results after playing two most recent models at iteration 77: Wins: 18, Losses: 11, Draws: 11
+[15.38.41] [INFO] Results after playing the current vs the first at iteration 77: Wins: 14, Losses: 13, Draws: 13
+[15.39.11] [INFO] Results after playing vs random at iteration 77: Wins: 40, Losses: 0, Draws: 0
+[15.40.19] [INFO] Loading memories for iteration 78 with window size 8 (70-78)
+[15.40.29] [INFO] Loaded 3299738 samples from 14869 games
+Training batches: 100%|██████████| 12888/12888 [07:45<00:00, 27.67it/s]
+Total norm: 1.0351101127275348
+[15.48.15] [INFO] Validation stats: Policy Loss: 1.5625, Value Loss: 0.3789, Total Loss: 1.9375, Value Mean: 0.0250, Value Std: 0.5703
+[15.48.17] [INFO] Loading memories for iteration 78 with window size 8 (70-78)
+[15.48.25] [INFO] Loaded 3456992 samples from 15563 games
+Training batches: 100%|██████████| 13502/13502 [07:45<00:00, 29.03it/s]
+Total norm: 1.19202905385691
+[15.56.11] [INFO] Validation stats: Policy Loss: 1.4375, Value Loss: 0.3867, Total Loss: 1.8281, Value Mean: -0.0422, Value Std: 0.5312
+[15.56.13] [INFO] Trainer finished at iteration 78.
+[15.56.13] [INFO] Iteration 78: Policy Loss: 1.4857, Value Loss: 0.4008, Total Loss: 1.8865, Value Mean: 0.0027, Value Std: 0.5489
+[15.56.13] [INFO] All processes started at iteration 79.
+[15.56.13] [INFO] Model and optimizer loaded from iteration 79
+[15.56.39] [INFO] Evaluation results at iteration 78:
+[15.56.39] [INFO]     Policy accuracy @1: 36.94%
+[15.56.39] [INFO]     Policy accuracy @5: 71.23%
+[15.56.39] [INFO]     Policy accuracy @10: 80.90%
+[15.56.39] [INFO]     Avg value loss: 0.790407266219457
+[15.58.38] [INFO] Results after playing two most recent models at iteration 78: Wins: 17, Losses: 15, Draws: 8
+[16.00.43] [INFO] Results after playing the current vs the first at iteration 78: Wins: 16, Losses: 18, Draws: 6
+[16.01.09] [INFO] Results after playing vs random at iteration 78: Wins: 40, Losses: 0, Draws: 0
+[16.02.42] [INFO] Loading memories for iteration 79 with window size 8 (71-79)
+[16.02.53] [INFO] Loaded 3439886 samples from 15477 games
+Training batches: 100%|██████████| 13436/13436 [08:50<00:00, 25.34it/s]
+Total norm: 1.0950377074869322
+[16.11.43] [INFO] Validation stats: Policy Loss: 1.3672, Value Loss: 0.3906, Total Loss: 1.7578, Value Mean: -0.0398, Value Std: 0.5742
+[16.11.44] [INFO] Loading memories for iteration 79 with window size 8 (71-79)
+[16.11.52] [INFO] Loaded 3616910 samples from 16284 games
+Training batches: 100%|██████████| 14127/14127 [08:11<00:00, 28.72it/s]
+Total norm: 1.4033698947246542
+[16.20.05] [INFO] Validation stats: Policy Loss: 1.4062, Value Loss: 0.3711, Total Loss: 1.7812, Value Mean: -0.0208, Value Std: 0.5508
+[16.20.07] [INFO] Trainer finished at iteration 79.
+[16.20.07] [INFO] Iteration 79: Policy Loss: 1.4859, Value Loss: 0.4022, Total Loss: 1.8881, Value Mean: 0.0024, Value Std: 0.5480
+[16.20.07] [INFO] All processes started at iteration 80.
+[16.20.07] [INFO] Model and optimizer loaded from iteration 80
+[16.20.30] [INFO] Evaluation results at iteration 79:
+[16.20.30] [INFO]     Policy accuracy @1: 36.17%
+[16.20.30] [INFO]     Policy accuracy @5: 70.36%
+[16.20.30] [INFO]     Policy accuracy @10: 80.20%
+[16.20.30] [INFO]     Avg value loss: 0.7926989118258159
+[16.22.47] [INFO] Results after playing two most recent models at iteration 79: Wins: 11, Losses: 23, Draws: 6
+[16.24.44] [INFO] Results after playing the current vs the first at iteration 79: Wins: 15, Losses: 13, Draws: 12
+[16.25.18] [INFO] Results after playing vs random at iteration 79: Wins: 40, Losses: 0, Draws: 0
+[16.27.20] [INFO] Loading memories for iteration 80 with window size 8 (72-80)
+[16.27.31] [INFO] Loaded 3581434 samples from 16139 games
+Training batches: 100%|██████████| 13988/13988 [08:38<00:00, 26.99it/s]
+Total norm: 1.2085673671473887
+[16.36.09] [INFO] Validation stats: Policy Loss: 1.5078, Value Loss: 0.4121, Total Loss: 1.9219, Value Mean: -0.0718, Value Std: 0.5195
+[16.36.09] [INFO] Loading memories for iteration 80 with window size 8 (72-80)
+[16.36.19] [INFO] Loaded 3759170 samples from 16922 games
+Training batches: 100%|██████████| 14683/14683 [09:45<00:00, 25.08it/s]
+Total norm: 1.2176310846843228
+[16.46.05] [INFO] Validation stats: Policy Loss: 1.5312, Value Loss: 0.3633, Total Loss: 1.8906, Value Mean: -0.0021, Value Std: 0.5469
+[16.46.07] [INFO] Trainer finished at iteration 80.
+[16.46.07] [INFO] Iteration 80: Policy Loss: 1.4870, Value Loss: 0.4012, Total Loss: 1.8882, Value Mean: 0.0028, Value Std: 0.5484
+[16.46.07] [INFO] All processes started at iteration 81.
+[16.46.07] [INFO] Model and optimizer loaded from iteration 81
+[16.46.34] [INFO] Evaluation results at iteration 80:
+[16.46.34] [INFO]     Policy accuracy @1: 36.74%
+[16.46.34] [INFO]     Policy accuracy @5: 71.58%
+[16.46.34] [INFO]     Policy accuracy @10: 81.24%
+[16.46.34] [INFO]     Avg value loss: 0.7910760035117467
+[16.48.50] [INFO] Results after playing two most recent models at iteration 80: Wins: 12, Losses: 19, Draws: 9
+[16.50.51] [INFO] Results after playing the current vs the first at iteration 80: Wins: 14, Losses: 21, Draws: 5
+[16.51.23] [INFO] Results after playing vs random at iteration 80: Wins: 40, Losses: 0, Draws: 0
+[16.52.59] [INFO] Loading memories for iteration 81 with window size 8 (73-81)
+[16.53.11] [INFO] Loaded 3742424 samples from 16888 games
+Training batches: 100%|██████████| 14617/14617 [09:45<00:00, 24.95it/s]
+Total norm: 1.2293693490206377
+[17.02.57] [INFO] Validation stats: Policy Loss: 1.5156, Value Loss: 0.4121, Total Loss: 1.9297, Value Mean: 0.0126, Value Std: 0.5664
+[17.02.57] [INFO] Loading memories for iteration 81 with window size 8 (73-81)
+[17.03.08] [INFO] Loaded 3932552 samples from 17734 games
+Training batches: 100%|██████████| 15360/15360 [09:33<00:00, 26.77it/s]
+Total norm: 1.1203136554483284
+[17.12.43] [INFO] Validation stats: Policy Loss: 1.4922, Value Loss: 0.4375, Total Loss: 1.9297, Value Mean: 0.0703, Value Std: 0.5352
+[17.12.44] [INFO] Trainer finished at iteration 81.
+[17.12.44] [INFO] Iteration 81: Policy Loss: 1.4862, Value Loss: 0.4014, Total Loss: 1.8875, Value Mean: 0.0025, Value Std: 0.5489
+[17.12.44] [INFO] All processes started at iteration 82.
+[17.12.45] [INFO] Model and optimizer loaded from iteration 82
+[17.13.17] [INFO] Evaluation results at iteration 81:
+[17.13.17] [INFO]     Policy accuracy @1: 36.81%
+[17.13.17] [INFO]     Policy accuracy @5: 71.75%
+[17.13.17] [INFO]     Policy accuracy @10: 81.40%
+[17.13.17] [INFO]     Avg value loss: 0.7902612268924714
+[17.15.55] [INFO] Results after playing two most recent models at iteration 81: Wins: 15, Losses: 18, Draws: 7
+[17.18.12] [INFO] Results after playing the current vs the first at iteration 81: Wins: 12, Losses: 18, Draws: 10
+[17.18.59] [INFO] Results after playing vs random at iteration 81: Wins: 40, Losses: 0, Draws: 0
+[17.20.12] [INFO] Loading memories for iteration 82 with window size 8 (74-82)
+[17.20.23] [INFO] Loaded 3909168 samples from 17614 games
+Training batches: 100%|██████████| 15269/15269 [10:30<00:00, 24.20it/s]
+Total norm: 1.1820802044359242
+[17.30.54] [INFO] Validation stats: Policy Loss: 1.5547, Value Loss: 0.3711, Total Loss: 1.9219, Value Mean: -0.0275, Value Std: 0.5508
+[17.30.55] [INFO] Loading memories for iteration 82 with window size 8 (74-82)
+[17.31.05] [INFO] Loaded 4111514 samples from 18509 games
+Training batches: 100%|██████████| 16059/16059 [10:52<00:00, 24.61it/s]
+Total norm: 1.0400835985847585
+[17.41.59] [INFO] Validation stats: Policy Loss: 1.4609, Value Loss: 0.3848, Total Loss: 1.8438, Value Mean: -0.0027, Value Std: 0.5703
+[17.42.00] [INFO] Trainer finished at iteration 82.
+[17.42.00] [INFO] Iteration 82: Policy Loss: 1.4846, Value Loss: 0.4004, Total Loss: 1.8850, Value Mean: 0.0023, Value Std: 0.5489
+[17.42.00] [INFO] All processes started at iteration 83.
+[17.42.00] [INFO] Model and optimizer loaded from iteration 83
+[17.42.32] [INFO] Evaluation results at iteration 82:
+[17.42.32] [INFO]     Policy accuracy @1: 36.99%
+[17.42.32] [INFO]     Policy accuracy @5: 71.54%
+[17.42.32] [INFO]     Policy accuracy @10: 81.52%
+[17.42.32] [INFO]     Avg value loss: 0.7928540289402009
+[17.44.48] [INFO] Results after playing two most recent models at iteration 82: Wins: 14, Losses: 17, Draws: 9
+[17.47.05] [INFO] Results after playing the current vs the first at iteration 82: Wins: 17, Losses: 18, Draws: 5
+[17.47.47] [INFO] Results after playing vs random at iteration 82: Wins: 40, Losses: 0, Draws: 0
+[17.49.06] [INFO] Loading memories for iteration 83 with window size 8 (75-83)
+[17.49.17] [INFO] Loaded 4093930 samples from 18407 games
+Training batches: 100%|██████████| 15990/15990 [11:17<00:00, 23.62it/s]
+Total norm: 1.2366271734521264
+[18.00.34] [INFO] Validation stats: Policy Loss: 1.5234, Value Loss: 0.4160, Total Loss: 1.9375, Value Mean: -0.0084, Value Std: 0.5078
+[18.00.38] [INFO] Loading memories for iteration 83 with window size 8 (75-83)
+[18.00.50] [INFO] Loaded 4321170 samples from 19430 games
+Training batches: 100%|██████████| 16878/16878 [11:44<00:00, 23.96it/s]
+Total norm: 1.211059588768852
+[18.12.35] [INFO] Validation stats: Policy Loss: 1.6328, Value Loss: 0.4199, Total Loss: 2.0469, Value Mean: -0.0225, Value Std: 0.5391
+[18.12.37] [INFO] Trainer finished at iteration 83.
+[18.12.37] [INFO] Iteration 83: Policy Loss: 1.4842, Value Loss: 0.3985, Total Loss: 1.8827, Value Mean: 0.0030, Value Std: 0.5491
+[18.12.37] [INFO] All processes started at iteration 84.
+[18.12.37] [INFO] Model and optimizer loaded from iteration 84
+[18.13.05] [INFO] Evaluation results at iteration 83:
+[18.13.05] [INFO]     Policy accuracy @1: 36.79%
+[18.13.05] [INFO]     Policy accuracy @5: 71.51%
+[18.13.05] [INFO]     Policy accuracy @10: 81.15%
+[18.13.05] [INFO]     Avg value loss: 0.7864868854482968
+[18.15.17] [INFO] Results after playing two most recent models at iteration 83: Wins: 18, Losses: 17, Draws: 5
+[18.17.09] [INFO] Results after playing the current vs the first at iteration 83: Wins: 15, Losses: 19, Draws: 6
+[18.17.45] [INFO] Results after playing vs random at iteration 83: Wins: 40, Losses: 0, Draws: 0
+[18.19.31] [INFO] Loading memories for iteration 84 with window size 8 (76-84)
+[18.19.46] [INFO] Loaded 4290098 samples from 19279 games
+Training batches: 100%|██████████| 16757/16757 [11:25<00:00, 24.45it/s]
+Total norm: 1.2118855756837874
+[18.31.11] [INFO] Validation stats: Policy Loss: 1.4375, Value Loss: 0.4141, Total Loss: 1.8516, Value Mean: -0.0270, Value Std: 0.5430
+[18.31.12] [INFO] Loading memories for iteration 84 with window size 8 (76-84)
+[18.31.23] [INFO] Loaded 4504892 samples from 20253 games
+Training batches: 100%|██████████| 17596/17596 [11:59<00:00, 24.46it/s]
+Total norm: 1.0315565264192887
+[18.43.24] [INFO] Validation stats: Policy Loss: 1.3672, Value Loss: 0.3730, Total Loss: 1.7422, Value Mean: -0.0454, Value Std: 0.5586
+[18.43.25] [INFO] Trainer finished at iteration 84.
+[18.43.25] [INFO] Iteration 84: Policy Loss: 1.4837, Value Loss: 0.3983, Total Loss: 1.8819, Value Mean: 0.0028, Value Std: 0.5489
+[18.43.25] [INFO] All processes started at iteration 85.
+[18.43.25] [INFO] Model and optimizer loaded from iteration 85
+[18.43.55] [INFO] Evaluation results at iteration 84:
+[18.43.55] [INFO]     Policy accuracy @1: 36.44%
+[18.43.55] [INFO]     Policy accuracy @5: 70.93%
+[18.43.55] [INFO]     Policy accuracy @10: 80.80%
+[18.43.55] [INFO]     Avg value loss: 0.7896765013535817
+[18.46.34] [INFO] Results after playing two most recent models at iteration 84: Wins: 10, Losses: 14, Draws: 16
+[18.48.51] [INFO] Results after playing the current vs the first at iteration 84: Wins: 12, Losses: 19, Draws: 9
+[18.49.22] [INFO] Results after playing vs random at iteration 84: Wins: 40, Losses: 0, Draws: 0
+[18.51.06] [INFO] Loading memories for iteration 85 with window size 8 (77-85)
+[18.51.18] [INFO] Loaded 4460838 samples from 20055 games
+Training batches: 100%|██████████| 17424/17424 [13:00<00:00, 22.33it/s]
+Total norm: 1.1048973278098964
+[19.04.18] [INFO] Validation stats: Policy Loss: 1.4453, Value Loss: 0.3867, Total Loss: 1.8281, Value Mean: 0.0376, Value Std: 0.5742
+[19.04.19] [INFO] Loading memories for iteration 85 with window size 8 (77-85)
+[19.04.31] [INFO] Loaded 4711980 samples from 21188 games
+Training batches:  36%|███▌      | 6645/18405 [05:15<04:27, 43.99it/s]slurmstepd: error: *** JOB 2953241 ON hkn0609 CANCELLED AT 2025-02-25T19:09:51 DUE TO TIME LIMIT ***
+Training batches:  40%|████      | 7377/18405 [05:48<04:52, 37.70it/s]

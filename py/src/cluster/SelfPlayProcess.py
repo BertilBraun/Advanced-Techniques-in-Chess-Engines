@@ -7,6 +7,7 @@ from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
 from src.util.profiler import start_cpu_usage_logger
+from src.util.save_paths import model_save_path
 
 
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
@@ -32,7 +33,7 @@ class SelfPlayProcess:
         self.commander_pipe = commander_pipe
 
     def run(self):
-        current_iteration = 0
+        current_iteration = -1
         running = False
 
         while True:
@@ -42,16 +43,23 @@ class SelfPlayProcess:
                 if self.self_play.dataset.stats.num_games >= self.args.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)
 
+                if model_save_path(current_iteration + 1, self.save_path).exists():
+                    self._save_dataset(current_iteration)
+                    self.self_play.update_iteration(current_iteration + 1)
+                    current_iteration += 1
+
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
                 assert isinstance(message, str), f'Expected message to be a string, got {message}'
                 if message == 'STOP':
                     break
                 elif message.startswith('START AT ITERATION:'):
+                    old_current_iteration = current_iteration
                     current_iteration = int(message.split(':')[-1])
                     running = True
-                    self._save_dataset(current_iteration)
-                    self.self_play.update_iteration(current_iteration)
+                    if old_current_iteration != current_iteration:
+                        self._save_dataset(current_iteration)
+                        self.self_play.update_iteration(current_iteration)
 
         log('Self play process stopped.')
 

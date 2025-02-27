@@ -12,6 +12,7 @@ graph*
 **.csv
 **.hdf5
 **.prof
+**.processed
 
 **/models/memory/**
 **/data/**
