@@ -32,6 +32,8 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.active_values: list[torch.Tensor] = []
 
     def load_from_files(self, folder_path: str, origins: list[tuple[int, list[Path]]]) -> None:
+        origins = [(iteration, files) for iteration, files in origins if len(files) > 0]
+
         self.all_chunks = [[] for _ in range(len(origins))]
         self.sample_index = [0 for _ in range(len(origins))]
         self.active_states = [torch.zeros(0) for _ in range(len(origins))]
