@@ -43,6 +43,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                 iteration_dataset += SelfPlayDataset.load(file)
                 processed_indicator.touch()
 
+            iteration_dataset.deduplicate()
             iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 5000)
 
             chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
