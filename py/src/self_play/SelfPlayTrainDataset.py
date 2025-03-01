@@ -42,7 +42,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
         self.stats = SelfPlayDatasetStats()
 
-        for i, (iteration, sublist) in enumerate(origins):
+        for i, (iteration, sublist) in enumerate(origins[::-1]):
             iteration_dataset = SelfPlayDataset()
             for file in sublist:
                 processed_indicator = file.parent / (file.stem + '.processed')
@@ -57,6 +57,12 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
             for file in self.all_chunks[i]:
                 self.stats += SelfPlayDataset.load_stats(file)
+
+            if self.stats.num_samples > 1_000_000:
+                print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
+                print(f'Originally loaded from {len(origins)} iterations.')
+                print(f'Loaded from {i + 1} iterations.')
+                break
 
         thread = Process(
             target=self._log_all_dataset_stats,

@@ -81,11 +81,17 @@ class SelfPlay:
 
             if (
                 mcts_result.result_score < self.args.resignation_threshold
-                or len(spg.played_moves) >= 250  # some max game length
+                # TODO or len(spg.played_moves) >= 250  # some max game length
             ):
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
                 self._add_training_data(spg, mcts_result.result_score, resignation=True)
+                self.self_play_games[SelfPlayGame()] += count
+                continue
+
+            if len(spg.played_moves) >= 300:
+                # If the game is too long, end it and add it to the dataset
+                self.self_play_games[spg] = 0
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
