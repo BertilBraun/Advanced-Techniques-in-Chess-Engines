@@ -32,17 +32,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.active_values: list[torch.Tensor] = []
 
     def load_from_files(self, folder_path: str, origins: list[tuple[int, list[Path]]]) -> None:
-        origins = [(iteration, files) for iteration, files in origins if len(files) > 0]
-
-        self.all_chunks = [[] for _ in range(len(origins))]
-        self.sample_index = [0 for _ in range(len(origins))]
-        self.active_states = [torch.zeros(0) for _ in range(len(origins))]
-        self.active_policies = [torch.zeros(0) for _ in range(len(origins))]
-        self.active_values = [torch.zeros(0) for _ in range(len(origins))]
-
         self.stats = SelfPlayDatasetStats()
 
-        for i, (iteration, sublist) in enumerate(origins[::-1]):
+        for iteration, sublist in origins[::-1]:
             iteration_dataset = SelfPlayDataset()
             for file in sublist:
                 processed_indicator = file.parent / (file.stem + '.processed')
@@ -53,15 +45,20 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
             iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 5000)
 
-            self.all_chunks[i] = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
+            chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
+            for chunk in chunks:
+                self.stats += SelfPlayDataset.load_stats(chunk)
 
-            for file in self.all_chunks[i]:
-                self.stats += SelfPlayDataset.load_stats(file)
+            self.all_chunks.append(chunks)
+            self.sample_index.append(0)
+            self.active_states.append(torch.zeros(0))
+            self.active_policies.append(torch.zeros(0))
+            self.active_values.append(torch.zeros(0))
 
             if self.stats.num_samples > 1_000_000:
                 print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
                 print(f'Originally loaded from {len(origins)} iterations.')
-                print(f'Loaded from {i + 1} iterations.')
+                print(f'Loaded from {len(self.all_chunks)} iterations.')
                 break
 
         thread = Process(
