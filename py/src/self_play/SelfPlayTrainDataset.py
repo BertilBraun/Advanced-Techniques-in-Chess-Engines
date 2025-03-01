@@ -56,7 +56,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             self.active_policies.append(torch.zeros(0))
             self.active_values.append(torch.zeros(0))
 
-            if self.stats.num_samples > 1_000_000:
+            if self.stats.num_samples > 10_000_000:
                 print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
                 print(f'Originally loaded from {len(origins)} iterations.')
                 print(f'Loaded from {len(self.all_chunks)} iterations.')
