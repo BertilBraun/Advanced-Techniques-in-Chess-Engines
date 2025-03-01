@@ -80,7 +80,10 @@ class TrainerProcess:
         last_iter = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration - 1).num_games
 
         while current_iter + last_iter < self.args.num_games_per_iteration:
-            time.sleep(1)
+            print(
+                f'Waiting for enough samples for iteration {iteration} ({current_iter + last_iter}/{self.args.num_games_per_iteration})'
+            )
+            time.sleep(10)
 
     def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats) -> None:
         log_scalar('train/policy_loss', train_stats.policy_loss, iteration)
