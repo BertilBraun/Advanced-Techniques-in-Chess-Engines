@@ -77,7 +77,7 @@ class TrainerProcess:
     @timeit
     def _wait_for_enough_training_samples(self, iteration):
         current_iter = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games
-        last_iter = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration - 1).num_games
+        last_iter = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration - 1).num_games * 0.5
 
         while current_iter + last_iter < self.args.num_games_per_iteration:
             print(
