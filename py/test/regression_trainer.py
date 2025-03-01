@@ -1,6 +1,5 @@
 import os
 import torch
-from pathlib import Path
 from torch.utils.data import DataLoader
 
 from src.Network import Network
@@ -13,15 +12,16 @@ from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
 from src.util.save_paths import create_model, create_optimizer
 
-NUM_EPOCHS = 10
-BATCH_SIZE = 512
+NUM_EPOCHS = 20
 
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
     def learning_rate(iteration: int) -> float:
         if iteration < 8:
             return 0.2
-        return 0.02
+        if iteration < 12:
+            return 0.02
+        return 0.002
 
     trainer = Trainer(
         model,
@@ -43,15 +43,23 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
 
 
-def main(dataset_paths: list[str]):
+def get_regression_dataset(path: str) -> SelfPlayDataset:
+    dataset = SelfPlayDataset.load(path)
+    dataset.deduplicate()
+    dataset.value_targets = dataset.value_targets[: TRAINING_ARGS.training.batch_size * 2]
+    dataset.encoded_states = dataset.encoded_states[: TRAINING_ARGS.training.batch_size * 2]
+    dataset.visit_counts = dataset.visit_counts[: TRAINING_ARGS.training.batch_size * 2]
+    return dataset
+
+
+def main(dataset_path: str):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    save_folder = f'reference/{CurrentGame.__class__.__name__}'
+    save_folder = f'reference/{CurrentGame.__class__.__name__}/temp_dataset'
 
     run_id = get_run_id()
     with TensorboardWriter(run_id, 'dataset_trainer'):
         # Use the same dataset for training and testing, to test whether the model can overfit
-        test_dataset = SelfPlayDataset.load(dataset_paths.pop())
-        test_dataset.deduplicate()
+        test_dataset = get_regression_dataset(dataset_path)
 
         # Instantiate the model
         model = create_model(TRAINING_ARGS.network, device=device)
@@ -65,11 +73,15 @@ def main(dataset_paths: list[str]):
 
         for iter in range(NUM_EPOCHS):
             # Instantiate the dataset
+            dataset_content = get_regression_dataset(dataset_path)
+            iter_dataset_path = dataset_content.save(save_folder, iter)
             dataset = SelfPlayTrainDataset(run_id, device=device)
-            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
+            dataset.load_from_files(save_folder, [(iter, [iter_dataset_path])])
 
             # Create a DataLoader
-            train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
+            train_dataloader = dataset.as_dataloader(
+                TRAINING_ARGS.training.batch_size, num_workers=TRAINING_ARGS.training.num_workers
+            )
 
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 
@@ -85,6 +97,9 @@ def main(dataset_paths: list[str]):
 
         log('Training finished')
 
+        # remove the save_folder and its contents
+        os.system(f'rm -rf {save_folder}')
+
         assert policy_at_1 > 0.95, 'Policy accuracy @1 is too low'
         assert policy_at_5 > 0.95, 'Policy accuracy @5 is too low'
         assert policy_at_10 > 0.95, 'Policy accuracy @10 is too low'
@@ -98,6 +113,4 @@ if __name__ == '__main__':
     assert TRAINING_ARGS.evaluation is not None, 'Evaluation args not set'
     assert os.path.exists(TRAINING_ARGS.evaluation.dataset_path), 'Dataset path does not exist'
 
-    dataset_paths = [TRAINING_ARGS.evaluation.dataset_path] * 5
-
-    main(dataset_paths)
+    main(TRAINING_ARGS.evaluation.dataset_path)
