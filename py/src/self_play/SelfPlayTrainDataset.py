@@ -35,6 +35,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         self.stats = SelfPlayDatasetStats()
 
         for iteration, sublist in origins[::-1]:
+            if len(sublist) == 0:
+                continue
+
             iteration_dataset = SelfPlayDataset()
             for file in sublist:
                 processed_indicator = file.parent / (file.stem + '.processed')
