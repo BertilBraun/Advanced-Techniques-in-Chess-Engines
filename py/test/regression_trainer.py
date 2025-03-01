@@ -12,7 +12,7 @@ from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
 from src.util.save_paths import create_model, create_optimizer
 
-NUM_EPOCHS = 20
+NUM_EPOCHS = 25
 BATCH_SIZE = 64
 
 
