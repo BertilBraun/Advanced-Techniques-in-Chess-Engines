@@ -80,7 +80,7 @@ class TrainerProcess:
         last_iter = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration - 1).num_games * 0.5
 
         while current_iter + last_iter < self.args.num_games_per_iteration:
-            print(
+            log(
                 f'Waiting for enough samples for iteration {iteration} ({current_iter + last_iter}/{self.args.num_games_per_iteration})'
             )
             time.sleep(10)

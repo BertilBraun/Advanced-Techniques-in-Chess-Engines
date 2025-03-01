@@ -13,6 +13,7 @@ from src.util.log import log
 from src.util.save_paths import create_model, create_optimizer
 
 NUM_EPOCHS = 20
+BATCH_SIZE = 64
 
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
@@ -28,7 +29,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         create_optimizer(model),
         TrainingParams(
             num_epochs=num_epochs,
-            batch_size=TRAINING_ARGS.training.batch_size,
+            batch_size=BATCH_SIZE,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
@@ -46,9 +47,13 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
 def get_regression_dataset(path: str) -> SelfPlayDataset:
     dataset = SelfPlayDataset.load(path)
     dataset.deduplicate()
-    dataset.value_targets = dataset.value_targets[: TRAINING_ARGS.training.batch_size * 2]
-    dataset.encoded_states = dataset.encoded_states[: TRAINING_ARGS.training.batch_size * 2]
-    dataset.visit_counts = dataset.visit_counts[: TRAINING_ARGS.training.batch_size * 2]
+    dataset.value_targets = dataset.value_targets[:BATCH_SIZE]
+    dataset.encoded_states = dataset.encoded_states[:BATCH_SIZE]
+    dataset.visit_counts = dataset.visit_counts[:BATCH_SIZE]
+
+    for _ in range(5):
+        dataset += dataset
+
     return dataset
 
 
@@ -69,6 +74,7 @@ def main(dataset_path: str):
         model.print_params()
         log('Training for', NUM_EPOCHS, 'epochs')
 
+        os.system(f'rm -rf {save_folder}')
         os.makedirs(save_folder, exist_ok=True)
 
         for iter in range(NUM_EPOCHS):
@@ -79,15 +85,13 @@ def main(dataset_path: str):
             dataset.load_from_files(save_folder, [(iter, [iter_dataset_path])])
 
             # Create a DataLoader
-            train_dataloader = dataset.as_dataloader(
-                TRAINING_ARGS.training.batch_size, num_workers=TRAINING_ARGS.training.num_workers
-            )
+            train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=TRAINING_ARGS.training.num_workers)
 
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 
             # Evaluate the model
             policy_at_1, policy_at_5, policy_at_10, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(
-                model, DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
+                model, DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
             )
             log(f'Evaluation results at iteration {iter}:')
             log(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')

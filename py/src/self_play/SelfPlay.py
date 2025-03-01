@@ -92,7 +92,7 @@ class SelfPlay:
             if len(spg.played_moves) >= 300:
                 # If the game is too long, end it and add it to the dataset
                 self.self_play_games[spg] = 0
-                print('Game too long:', len(spg.played_moves), spg.played_moves)
+                log('Game too long:', len(spg.played_moves), spg.played_moves)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
