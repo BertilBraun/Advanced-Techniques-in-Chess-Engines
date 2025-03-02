@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import time
 
+import chess
 import numpy as np
 from collections import Counter
 from dataclasses import dataclass
@@ -92,7 +93,27 @@ class SelfPlay:
             if len(spg.played_moves) >= 250:
                 # If the game is too long, end it and add it to the dataset
                 self.self_play_games[spg] = 0
-                log('Game too long:', len(spg.played_moves), spg.played_moves)
+                log('Game too long:', len(spg.played_moves))
+                pieces = list(spg.board.board.piece_map().values())
+                white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
+                black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
+                if white_pieces + black_pieces < 5:
+                    # If there are only a few pieces left, the game is a win for the player with more pieces
+                    winner = 1 if white_pieces > black_pieces else -1
+                    log(
+                        'Adding game to dataset: Winner:',
+                        winner,
+                        'Current player:',
+                        spg.board.current_player,
+                        'Pieces:',
+                        white_pieces,
+                        black_pieces,
+                        'Score recorded:',
+                        winner * spg.board.current_player,
+                        'Score calculated:',
+                        mcts_result.result_score,
+                    )
+                    self._add_training_data(spg, winner * spg.board.current_player, resignation=False)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
