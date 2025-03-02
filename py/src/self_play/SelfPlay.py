@@ -89,7 +89,7 @@ class SelfPlay:
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
-            if len(spg.played_moves) >= 300:
+            if len(spg.played_moves) >= 250:
                 # If the game is too long, end it and add it to the dataset
                 self.self_play_games[spg] = 0
                 log('Game too long:', len(spg.played_moves), spg.played_moves)
@@ -104,7 +104,7 @@ class SelfPlay:
                 while np.sum(spg_action_probabilities) > 0:
                     new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
-                    if self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-10:]:
+                    if self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-16:]:
                         # don't play the same move twice in a row
                         self.self_play_games[new_spg] += 1
                         break
