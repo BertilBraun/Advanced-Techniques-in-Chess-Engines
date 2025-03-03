@@ -97,9 +97,9 @@ class SelfPlay:
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if white_pieces + black_pieces < 5:
+                if white_pieces < 3 or black_pieces < 3:
                     # If there are only a few pieces left, the game is a win for the player with more pieces
-                    winner = 1 if white_pieces > black_pieces else -1
+                    winner = 1 if white_pieces > black_pieces else -1 if black_pieces > white_pieces else 0
                     log(
                         'Adding game to dataset: Winner:',
                         winner,
