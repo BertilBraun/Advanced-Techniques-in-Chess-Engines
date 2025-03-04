@@ -34,43 +34,48 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
     def load_from_files(self, folder_path: str, origins: list[tuple[int, list[Path]]]) -> None:
         self.stats = SelfPlayDatasetStats()
 
-        for iteration, sublist in origins[::-1]:
-            if len(sublist) == 0:
-                continue
-
-            iteration_dataset = SelfPlayDataset()
-            for file in sublist:
-                processed_indicator = file.parent / (file.stem + '.processed')
-                if processed_indicator.exists():
+        for i in range(5):
+            for iteration, sublist in origins[::-1]:
+                if len(sublist) == 0:
                     continue
-                iteration_dataset += SelfPlayDataset.load(file)
-                processed_indicator.touch()
 
-            # iteration_dataset.deduplicate()
-            iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 5000)
+                iteration_dataset = SelfPlayDataset()
+                for file in sublist:
+                    processed_indicator = file.parent / (file.stem + '.processed')
+                    if processed_indicator.exists():
+                        continue
+                    iteration_dataset += SelfPlayDataset.load(file)
+                    processed_indicator.touch()
 
-            chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
-            for chunk in chunks:
-                self.stats += SelfPlayDataset.load_stats(chunk)
+                # iteration_dataset.deduplicate()
+                iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 5000)
 
-            self.all_chunks.append(chunks)
-            self.sample_index.append(0)
-            self.active_states.append(torch.zeros(0))
-            self.active_policies.append(torch.zeros(0))
-            self.active_values.append(torch.zeros(0))
+                chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
+                for chunk in chunks:
+                    self.stats += SelfPlayDataset.load_stats(chunk)
 
-            if self.stats.num_samples > 10_000_000:
-                print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
-                print(f'Originally loaded from {len(origins)} iterations.')
-                print(f'Loaded from {len(self.all_chunks)} iterations.')
+                self.all_chunks.append(chunks)
+                self.sample_index.append(0)
+                self.active_states.append(torch.zeros(0))
+                self.active_policies.append(torch.zeros(0))
+                self.active_values.append(torch.zeros(0))
+
+                if self.stats.num_samples > 10_000_000:
+                    print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
+                    print(f'Originally loaded from {len(origins)} iterations.')
+                    print(f'Loaded from {len(self.all_chunks)} iterations.')
+                    break
+
+            if i == 0:
+                thread = Process(
+                    target=self._log_all_dataset_stats,
+                    args=(self.all_chunks, self.run),
+                    daemon=True,
+                )
+                thread.start()
+
+            if self.stats.num_samples > 5_000_000:
                 break
-
-        thread = Process(
-            target=self._log_all_dataset_stats,
-            args=(self.all_chunks, self.run),
-            daemon=True,
-        )
-        thread.start()
 
     @staticmethod
     def _log_all_dataset_stats(iterations: list[list[Path]], run: int) -> None:
