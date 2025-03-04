@@ -1,6 +1,5 @@
 import chess
 from datasets import load_dataset
-import numpy as np
 
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
