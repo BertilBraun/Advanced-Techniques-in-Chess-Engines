@@ -98,6 +98,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                     # log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))
 
             log_scalar('dataset/num_games', accumulated_stats.num_games)
+            log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
             log_scalar('dataset/num_resignations', accumulated_stats.resignations)
             log_scalar(
                 'dataset/average_resignation_percent',

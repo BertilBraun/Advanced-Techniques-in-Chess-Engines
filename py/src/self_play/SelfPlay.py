@@ -7,6 +7,7 @@ import numpy as np
 from collections import Counter
 from dataclasses import dataclass
 
+from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import lerp
 from src.util.remove_repetitions import remove_repetitions
 from src.mcts.MCTS import MCTS, action_probabilities
@@ -93,27 +94,18 @@ class SelfPlay:
             if len(spg.played_moves) >= 250:
                 # If the game is too long, end it and add it to the dataset
                 self.self_play_games[spg] = 0
-                log('Game too long:', len(spg.played_moves))
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if white_pieces < 3 or black_pieces < 3:
+                if white_pieces < 4 or black_pieces < 4:
                     # If there are only a few pieces left, the game is a win for the player with more pieces
-                    winner = 1 if white_pieces > black_pieces else -1 if black_pieces > white_pieces else 0
-                    log(
-                        'Adding game to dataset: Winner:',
-                        winner,
-                        'Current player:',
-                        spg.board.current_player,
-                        'Pieces:',
-                        white_pieces,
-                        black_pieces,
-                        'Score recorded:',
-                        winner * spg.board.current_player,
-                        'Score calculated:',
-                        mcts_result.result_score,
-                    )
+                    value_map = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
+                    white_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
+                    black_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
+                    winner = 1 if white_value > black_value else -1 if black_value > white_value else 0
+
                     self._add_training_data(spg, winner * spg.board.current_player, resignation=False)
+                self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
 
