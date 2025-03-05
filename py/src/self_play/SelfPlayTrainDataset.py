@@ -73,6 +73,14 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                     daemon=True,
                 )
                 thread.start()
+            else:
+                n = len(self.all_chunks)
+                assert n % 2 == 0, 'Number of chunks must be even'
+                self.all_chunks = [self.all_chunks[i] + self.all_chunks[i + n // 2] for i in range(n // 2)]
+                self.sample_index = [0] * (n // 2)
+                self.active_states = [torch.zeros(0)] * (n // 2)
+                self.active_policies = [torch.zeros(0)] * (n // 2)
+                self.active_values = [torch.zeros(0)] * (n // 2)
 
             if self.stats.num_samples > 5_000_000:
                 break
