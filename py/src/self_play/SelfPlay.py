@@ -99,7 +99,14 @@ class SelfPlay:
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
                 if white_pieces < 4 or black_pieces < 4:
                     # If there are only a few pieces left, the game is a win for the player with more pieces
-                    value_map = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
+                    value_map = {
+                        chess.PAWN: 1,
+                        chess.KNIGHT: 3,
+                        chess.BISHOP: 3,
+                        chess.ROOK: 5,
+                        chess.QUEEN: 9,
+                        chess.KING: 0,
+                    }
                     white_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
                     black_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
                     winner = 1 if white_value > black_value else -1 if black_value > white_value else 0
