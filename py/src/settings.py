@@ -46,7 +46,7 @@ def learning_rate(current_iteration: int) -> float:
         return 0.2
     if current_iteration < 40:
         return 0.02
-    if current_iteration < 70:
+    if current_iteration < 100:
         return 0.002
     return 0.0002
 
@@ -216,14 +216,14 @@ elif True:
         MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=100,
+        num_iterations=150,
         save_path=SAVE_PATH + '/chess',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
             num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.10,
+            result_score_weight=0.15,
             resignation_threshold=-1.0,  # TODO -0.9,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
