@@ -97,7 +97,7 @@ class Trainer:
         total_value_loss = torch.tensor(0.0, device=self.model.device)
         total_loss = torch.tensor(0.0, device=self.model.device)
 
-        for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches', total=len(dataloader) - 1)):
+        for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
             # Update learning rate before stepping the optimizer
