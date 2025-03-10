@@ -109,7 +109,7 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 3.0)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.5)
             # TODO magic hyperparameter and sensible like this?
 
             self.optimizer.step()
