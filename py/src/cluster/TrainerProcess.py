@@ -74,6 +74,9 @@ class TrainerProcess:
             train_stats += epoch_train_stats
             valid_stats += epoch_valid_stats
 
+            if train_stats.value_std < 0.01:
+                exit()
+
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
         train_stats.log_to_tensorboard(iteration, 'train')
