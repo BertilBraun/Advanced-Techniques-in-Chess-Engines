@@ -118,7 +118,7 @@ def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_coun
         return 0
 
     num_on_each_device = total / num_devices
-    num_on_device_0 = round(num_on_each_device / 6)
+    num_on_device_0 = round(num_on_each_device / 16)
 
     if i < num_on_device_0:
         return 0
