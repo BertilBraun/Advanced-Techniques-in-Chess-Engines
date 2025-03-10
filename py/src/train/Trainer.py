@@ -24,7 +24,9 @@ class Trainer:
         self.args = args
 
     @timeit
-    def train(self, dataloader: DataLoader, iteration: int) -> TrainingStats:
+    def train(
+        self, dataloader: DataLoader, validation_dataloader: DataLoader, iteration: int
+    ) -> tuple[TrainingStats, TrainingStats]:
         """
         Train the model with the given memory.
         The target is the policy and value targets from the self-play memory.
@@ -96,11 +98,6 @@ class Trainer:
         total_loss = torch.tensor(0.0, device=self.model.device)
 
         for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches', total=len(dataloader) - 1)):
-            if batchIdx == len(dataloader) - 1:
-                # Use the last batch as validation batch
-                validation_batch = batch
-                break
-
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
             # Update learning rate before stepping the optimizer
@@ -148,22 +145,28 @@ class Trainer:
 
         self.model.eval()
 
+        validation_total_policy_loss = torch.tensor(0.0, device=self.model.device)
+        validation_total_value_loss = torch.tensor(0.0, device=self.model.device)
+        validation_total_loss = torch.tensor(0.0, device=self.model.device)
+
         with torch.no_grad():
-            validation_stats = TrainingStats()
-            val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
+            for validation_batch in validation_dataloader:
+                val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
 
-            log_scalar('validation/policy_loss', val_policy_loss.item(), iteration)
-            log_scalar('validation/value_loss', val_value_loss.item(), iteration)
-            log_scalar('validation/loss', val_loss.item(), iteration)
-            validation_stats.update(
-                val_policy_loss.item(),
-                val_value_loss.item(),
-                val_loss.item(),
-                out_value_mean.item(),
-                out_value_std.item(),
-                1,
-            )
+                validation_total_policy_loss += val_policy_loss.detach()
+                validation_total_value_loss += val_value_loss.detach()
+                validation_total_loss += val_loss.detach()
 
-            log(f'Validation stats: {validation_stats}')
+        validation_stats = TrainingStats()
+        validation_stats.update(
+            validation_total_policy_loss.item(),
+            validation_total_value_loss.item(),
+            validation_total_loss.item(),
+            out_value_mean.item(),
+            out_value_std.item(),
+            len(validation_dataloader),
+        )
 
-        return train_stats
+        log(f'Validation stats: {validation_stats}')
+
+        return train_stats, validation_stats

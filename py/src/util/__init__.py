@@ -12,6 +12,10 @@ def lerp(a: T, b: T, t: float) -> T:
     return (1 - t) * a + t * b  # type: ignore
 
 
+def clamp(value: float, min_value: float, max_value: float) -> float:
+    return max(min(value, max_value), min_value)
+
+
 def random_id(seed_new: bool = True) -> str:
     if seed_new:
         random.seed(time.time())

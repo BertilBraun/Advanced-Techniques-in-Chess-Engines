@@ -75,13 +75,13 @@ class EvaluationProcess:
             iteration,
         )
 
-        first_model_path = model_save_path(0, self.args.save_path)
+        first_model_path = self.args.save_path + '/reference_model.pt'
         results = model_evaluation.play_two_models_search(first_model_path)
 
-        log(f'Results after playing the current vs the first at iteration {iteration}:', results)
+        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
 
         log_scalars(
-            'evaluation/vs_first_model',
+            'evaluation/vs_reference_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,

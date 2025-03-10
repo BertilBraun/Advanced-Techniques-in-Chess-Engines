@@ -44,7 +44,7 @@ def sampling_window(current_iteration: int) -> int:
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 20:
         return 0.2
-    if current_iteration < 40:
+    if current_iteration < 70:
         return 0.02
     if current_iteration < 100:
         return 0.002

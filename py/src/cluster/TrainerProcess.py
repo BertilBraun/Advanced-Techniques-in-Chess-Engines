@@ -4,7 +4,7 @@ import torch
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU, log_scalar, TensorboardWriter
+from src.settings import USE_GPU, TensorboardWriter
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.profiler import start_cpu_usage_logger
@@ -60,18 +60,25 @@ class TrainerProcess:
         self._wait_for_enough_training_samples(iteration)
 
         train_stats = TrainingStats()
+        valid_stats = TrainingStats()
 
         for epoch in range(self.args.training.num_epochs):
             # Only loads a light wrapper around the entire dataset
-            dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+            dataset, validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
+            validation_dataloader = validation_dataset.as_dataloader(
+                self.args.training.batch_size, self.args.training.num_workers
+            )
 
-            epoch_train_stats = trainer.train(dataloader, iteration)
+            epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
             train_stats += epoch_train_stats
+            valid_stats += epoch_valid_stats
 
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
-        self._log_to_tensorboard(iteration, train_stats)
+        train_stats.log_to_tensorboard(iteration, 'train')
+        valid_stats.log_to_tensorboard(iteration, 'validation')
+
         return train_stats
 
     @timeit
@@ -82,31 +89,28 @@ class TrainerProcess:
         while games(iteration) + 0.5 * games(iteration - 1) < self.args.num_games_per_iteration:
             time.sleep(10)
 
-    def _log_to_tensorboard(self, iteration: int, train_stats: TrainingStats) -> None:
-        log_scalar('train/policy_loss', train_stats.policy_loss, iteration)
-        log_scalar('train/value_loss', train_stats.value_loss, iteration)
-        log_scalar('train/total_loss', train_stats.total_loss, iteration)
-        log_scalar('train/value_mean', train_stats.value_mean, iteration)
-        log_scalar('train/value_std', train_stats.value_std, iteration)
-
     @timeit
-    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayTrainDataset:
+    def _load_all_memories_to_train_on_for_iteration(
+        self, iteration: int
+    ) -> tuple[SelfPlayTrainDataset, SelfPlayTrainDataset]:
         window_size = self.args.training.sampling_window(iteration)
 
         log(
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        dataset = SelfPlayTrainDataset(self.run_id, self.device)
+        all_dataset_files = [
+            (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
+            for iteration in range(max(iteration - window_size, 0), iteration + 1)
+        ]
+        validation_dataset_file = all_dataset_files.pop(-1)
 
-        dataset.load_from_files(
-            self.args.save_path,
-            [
-                (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
-                for iteration in range(max(iteration - window_size, 0), iteration + 1)
-            ],
-        )
+        dataset = SelfPlayTrainDataset(self.run_id, self.device)
+        dataset.load_from_files(self.args.save_path, all_dataset_files)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 
-        return dataset
+        validation_dataset = SelfPlayTrainDataset(self.run_id, self.device)
+        validation_dataset.load_from_files(self.args.save_path, [validation_dataset_file])
+
+        return dataset, validation_dataset

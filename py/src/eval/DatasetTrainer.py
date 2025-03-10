@@ -24,7 +24,12 @@ NUM_EPOCHS = 50
 
 
 def train_model(
-    model: Network, optimizer: torch.optim.Optimizer, dataloader: DataLoader, num_epochs: int, iteration: int
+    model: Network,
+    optimizer: torch.optim.Optimizer,
+    dataloader: DataLoader,
+    test_dataloader: DataLoader,
+    num_epochs: int,
+    iteration: int,
 ) -> None:
     def learning_rate(iteration: int) -> float:
         if iteration < 5:
@@ -52,7 +57,7 @@ def train_model(
     log('Training with lr:', trainer.args.learning_rate(iteration))
 
     for epoch in range(num_epochs):
-        stats = trainer.train(dataloader, iteration)
+        stats = trainer.train(dataloader, test_dataloader, iteration)
         log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
 
 
@@ -100,7 +105,7 @@ def main(dataset_paths: list[str]):
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
 
-            train_model(model, optimizer, train_dataloader, num_epochs=1, iteration=iter)
+            train_model(model, optimizer, train_dataloader, test_dataloader, num_epochs=1, iteration=iter)
 
             # Evaluate the model
             policy_at_1, policy_at_5, policy_at_10, avg_value_loss = ModelEvaluation._evaluate_model_vs_dataset(

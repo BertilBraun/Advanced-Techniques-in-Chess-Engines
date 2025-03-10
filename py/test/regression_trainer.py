@@ -40,7 +40,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
     log('Training with lr:', trainer.args.learning_rate(iteration))
 
     for epoch in range(num_epochs):
-        stats = trainer.train(dataloader, iteration)
+        stats = trainer.train(dataloader, dataloader, iteration)
         log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
 
 

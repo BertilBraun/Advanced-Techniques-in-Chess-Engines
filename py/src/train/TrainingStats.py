@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.util.tensorboard import log_scalar
+
 
 @dataclass
 class TrainingStats:
@@ -31,6 +33,13 @@ class TrainingStats:
     @property
     def value_std(self) -> float:
         return self._value_std / self._num_batches
+
+    def log_to_tensorboard(self, iteration: int, prefix: str) -> None:
+        log_scalar(f'{prefix}/policy_loss', self.policy_loss, iteration)
+        log_scalar(f'{prefix}/value_loss', self.value_loss, iteration)
+        log_scalar(f'{prefix}/total_loss', self.total_loss, iteration)
+        log_scalar(f'{prefix}/value_mean', self.value_mean, iteration)
+        log_scalar(f'{prefix}/value_std', self.value_std, iteration)
 
     def update(
         self,

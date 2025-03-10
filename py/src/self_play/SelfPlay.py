@@ -8,7 +8,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.util import lerp
+from src.util import clamp
 from src.util.remove_repetitions import remove_repetitions
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
@@ -213,10 +213,11 @@ class SelfPlay:
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
-                    lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
+                    clamp(turn_game_outcome + self.args.result_score_weight * mem.result_score, -1, 1),
+                    # lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
-            game_outcome *= 0.995  # discount the game outcome for each move
+            game_outcome *= 0.997  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         total_visits = sum(visit_count for _, visit_count in visit_counts)
