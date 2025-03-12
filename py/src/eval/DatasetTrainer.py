@@ -74,7 +74,7 @@ def main(dataset_paths: list[str]):
         test_dataset.deduplicate()
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
-        tmp_dataset = SelfPlayTrainDataset(run_id, device=device)
+        tmp_dataset = SelfPlayTrainDataset(run_id)
         tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
         train_stats = tmp_dataset.stats
 
@@ -99,7 +99,7 @@ def main(dataset_paths: list[str]):
 
         for iter in range(pre_iter, NUM_EPOCHS):
             # Instantiate the dataset
-            dataset = SelfPlayTrainDataset(run_id, device=device)
+            dataset = SelfPlayTrainDataset(run_id)
             dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
 
             # Create a DataLoader

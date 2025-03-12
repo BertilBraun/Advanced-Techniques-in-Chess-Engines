@@ -3,33 +3,27 @@ from __future__ import annotations
 import torch
 import numpy as np
 from pathlib import Path
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 from torch.multiprocessing import Process
 
 from src.Encoding import decode_board_state
 from src.mcts.MCTS import action_probabilities
-from src.settings import TORCH_DTYPE, log_histogram, log_scalar
+from src.settings import log_histogram, log_scalar
+from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
-class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, run: int, device: torch.device) -> None:
+    def __init__(self, run: int) -> None:
         self.run = run
-        self.device = device
 
         self.all_chunks: list[list[Path]] = []
 
         self.stats = SelfPlayDatasetStats()
-
-        self.sample_index: list[int] = []
-
-        self.active_states: list[torch.Tensor] = []
-        self.active_policies: list[torch.Tensor] = []
-        self.active_values: list[torch.Tensor] = []
 
     def load_from_files(self, folder_path: str, origins: list[tuple[int, list[Path]]]) -> None:
         self.stats = SelfPlayDatasetStats()
@@ -55,10 +49,6 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                     self.stats += SelfPlayDataset.load_stats(chunk)
 
                 self.all_chunks.append(chunks)
-                self.sample_index.append(0)
-                self.active_states.append(torch.zeros(0))
-                self.active_policies.append(torch.zeros(0))
-                self.active_values.append(torch.zeros(0))
 
                 if self.stats.num_samples > 10_000_000:
                     print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
@@ -77,12 +67,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
                 n = len(self.all_chunks)
                 assert n % 2 == 0, 'Number of chunks must be even'
                 self.all_chunks = [self.all_chunks[i] + self.all_chunks[i + n // 2] for i in range(n // 2)]
-                self.sample_index = [0] * (n // 2)
-                self.active_states = [torch.zeros(0)] * (n // 2)
-                self.active_policies = [torch.zeros(0)] * (n // 2)
-                self.active_values = [torch.zeros(0)] * (n // 2)
 
             if self.stats.num_samples > 5_000_000:
+                log(f'Loaded {self.stats.num_samples} samples with {i+1} multiplications.')
                 break
 
     @staticmethod
@@ -130,45 +117,38 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             num_workers=num_workers,
             drop_last=True,
             persistent_workers=True,
-            prefetch_factor=64,
+            pin_memory=True,
+            prefetch_factor=4,
         )
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        index = idx % len(self.all_chunks)
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            assert False, 'For now, this dataset is only compatible with DataLoader with num_workers > 0'
 
-        if self.sample_index[index] >= len(self.active_states[index]):
-            self.active_states[index], self.active_policies[index], self.active_values[index] = self._load_samples(
-                index
-            )
+        worker_id = worker_info.id
+        num_workers = worker_info.num_workers
 
-            self.sample_index[index] = 0
+        chunks = self.all_chunks[worker_id::num_workers]
+        self.sample_index = [0] * len(chunks)
 
-        state = self.active_states[index][self.sample_index[index]]
-        policy_target = self.active_policies[index][self.sample_index[index]]
-        value_target = self.active_values[index][self.sample_index[index]]
-        self.sample_index[index] += 1
+        active_chunks = [SelfPlayDataset.load(chunk[0]) for chunk in chunks]
 
-        return state, policy_target, value_target
+        while chunks:
+            for i, chunk in enumerate(chunks):
+                if self.sample_index[i] >= len(active_chunks[i]):
+                    active_chunks[i] = SelfPlayDataset.load(chunk.pop(0))
+                    self.sample_index[i] = 0
+
+                dataset = active_chunks[i]
+                state = torch.from_numpy(decode_board_state(dataset.encoded_states[self.sample_index[i]]))
+                policy_target = torch.from_numpy(action_probabilities(dataset.visit_counts[self.sample_index[i]]))
+                value_target = torch.tensor(dataset.value_targets[self.sample_index[i]])
+                self.sample_index[i] += 1
+
+                yield state, policy_target, value_target
+
+            chunks = [chunk for chunk in chunks if chunk]
 
     def __len__(self) -> int:
         return self.stats.num_samples
-
-    def _load_samples(self, iteration: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        chunk_to_load = self.all_chunks[iteration].pop(0)
-        self.all_chunks[iteration].append(chunk_to_load)
-
-        dataset = SelfPlayDataset.load(chunk_to_load)
-
-        states_np = np.array([decode_board_state(state) for state in dataset.encoded_states], dtype=np.float32)
-        policy_targets_np = np.array(
-            [action_probabilities(visit_counts) for visit_counts in dataset.visit_counts], dtype=np.float32
-        )
-        value_targets_np = np.array(dataset.value_targets, dtype=np.float32)
-
-        states_torch = torch.from_numpy(states_np).to(device=self.device, dtype=TORCH_DTYPE, non_blocking=True)
-        policies_torch = torch.from_numpy(policy_targets_np).to(
-            device=self.device, dtype=TORCH_DTYPE, non_blocking=True
-        )
-        values_torch = torch.tensor(value_targets_np).to(device=self.device, dtype=TORCH_DTYPE, non_blocking=True)
-
-        return states_torch, policies_torch, values_torch

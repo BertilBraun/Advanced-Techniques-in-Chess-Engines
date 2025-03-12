@@ -81,7 +81,7 @@ def main(dataset_path: str):
             # Instantiate the dataset
             dataset_content = get_regression_dataset(dataset_path)
             iter_dataset_path = dataset_content.save(save_folder, iter)
-            dataset = SelfPlayTrainDataset(run_id, device=device)
+            dataset = SelfPlayTrainDataset(run_id)
             dataset.load_from_files(save_folder, [(iter, [iter_dataset_path])])
 
             # Create a DataLoader
