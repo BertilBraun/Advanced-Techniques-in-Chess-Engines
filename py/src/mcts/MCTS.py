@@ -24,6 +24,8 @@ def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
     for move, visit_count in visit_counts:
         action_probabilities[move] = visit_count
     action_probabilities /= np.sum(action_probabilities)
+    return action_probabilities  # TODO does the softmax application help?
+    # NOTE: Currently, the training targets are too spikey, which means only a single move is even explored.
 
     # Set 0 probabilities to -inf to mask them out in the softmax
     action_probabilities[action_probabilities == 0] = -1e10
