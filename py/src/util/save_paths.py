@@ -1,3 +1,4 @@
+from time import sleep
 import torch
 from os import PathLike
 from pathlib import Path
@@ -31,7 +32,16 @@ def create_optimizer(model: Network) -> torch.optim.Optimizer:
 def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) -> Network:
     model = create_model(args, device)
     try:
-        data = torch.load(path, map_location=device, weights_only=True)
+        for _ in range(5):
+            try:
+                data = torch.load(path, map_location=device, weights_only=True)
+                break
+            except EOFError:
+                sleep(1)
+        else:
+            log(f'Could not load model from: {path}')
+            return model
+
     except FileNotFoundError:
         log(f'No model found for: {path}')
         return model
@@ -66,13 +76,24 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
 
 
 def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimizer:
+    optimizer = create_optimizer(model)
     try:
-        optimizer = create_optimizer(model)
-        optimizer.load_state_dict(torch.load(path, map_location=model.device, weights_only=True))
-        return optimizer
+        for _ in range(5):
+            try:
+                data = torch.load(path, weights_only=True)
+                break
+            except EOFError:
+                sleep(1)
+        else:
+            log(f'Could not load optimizer from: {path}')
+            raise FileNotFoundError
+
     except FileNotFoundError:
         log(f'No optimizer found for: {path}')
         raise
+
+    optimizer.load_state_dict(data)
+    return optimizer
 
 
 def load_model_and_optimizer(
