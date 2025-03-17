@@ -106,6 +106,7 @@ class TrainerProcess:
             (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
             for iteration in range(max(iteration - window_size, 0), iteration + 1)
         ]
+        all_dataset_files = [(i, f) for i, f in all_dataset_files if f]
         validation_dataset_file = (all_dataset_files[-1][0], [all_dataset_files[-1][1].pop(-1)])
 
         dataset = SelfPlayTrainDataset(self.run_id)
