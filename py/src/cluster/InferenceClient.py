@@ -39,23 +39,30 @@ class InferenceClient:
         self.hasher = ZobristHasherNumpy(channels, rows, cols)
 
     def load_model(self, model_path: str | PathLike) -> None:
-        del self.model
+        for _ in range(5):
+            try:
+                del self.model
 
-        # sync and gc collect to free up memory before loading the model
-        torch.cuda.empty_cache()
-        import gc
+                # sync and gc collect to free up memory before loading the model
+                torch.cuda.empty_cache()
+                import gc
 
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
-        self.model = load_model(model_path, self.network_args, self.device)
-        self.model.disable_auto_grad()
-        self.model.eval()
-        self.model.fuse_model()
+                self.model = load_model(model_path, self.network_args, self.device)
+                self.model.disable_auto_grad()
+                self.model.eval()
+                self.model.fuse_model()
+                break
+            except RuntimeError as e:
+                log(f'Failed to load model: "{e}" retrying...', level=LogLevel.ERROR)
+        else:
+            raise RuntimeError('Failed to load model after 5 retries')
 
     def update_iteration(self, iteration: int) -> None:
         """Update the Inference Client to use the model for the given iteration.
