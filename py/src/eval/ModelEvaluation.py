@@ -61,7 +61,7 @@ class Results:
 EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 
 # The device to use for evaluation. Since Training is done on device 0, we can use device 1 for evaluation
-EVAL_DEVICE = 1
+EVAL_DEVICE = 0
 
 
 class ModelEvaluation:
