@@ -62,8 +62,8 @@ class InferenceClient:
                 self.model.eval()
                 self.model.fuse_model()
                 break
-            except RuntimeError as e:
-                log(f'Failed to load model: "{e}" retrying...', level=LogLevel.ERROR)
+            except RuntimeError:
+                # log(f'Failed to load model: "{e}" retrying...', level=LogLevel.ERROR)
                 sleep(random() * 60)  # sleep for a random amount of time to avoid overloading the GPU VRAM
         else:
             raise RuntimeError('Failed to load model after 5 retries')
