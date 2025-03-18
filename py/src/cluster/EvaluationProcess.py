@@ -141,4 +141,5 @@ if __name__ == '__main__':
     for iteration in range(1, 100):
         if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
             break
+        log(f'Running evaluation process for iteration {iteration}')
         run_evaluation_process(run_id, TRAINING_ARGS, iteration)
