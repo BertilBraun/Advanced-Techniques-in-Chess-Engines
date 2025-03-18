@@ -128,7 +128,6 @@ class MCTS:
         log_scalar('dataset/average_search_entropy', average_entropy)
 
         # print(repr(roots[0]))
-        print(f'Average search depth: {average_depth}, Average search entropy: {average_entropy}')
 
         return [
             MCTSResult(
