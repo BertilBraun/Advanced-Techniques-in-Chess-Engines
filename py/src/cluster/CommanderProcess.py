@@ -117,8 +117,10 @@ def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_coun
     if not USE_GPU:
         return 0
 
+    assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
+
     num_on_each_device = total / num_devices
-    num_on_device_0 = round(num_on_each_device / 16)
+    num_on_device_0 = 0  # TODO? round(num_on_each_device / 16)
 
     if i < num_on_device_0:
         return 0
