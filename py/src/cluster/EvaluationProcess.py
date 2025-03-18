@@ -105,7 +105,7 @@ class EvaluationProcess:
 
         from src.games.chess.ChessGame import ChessGame
 
-        if isinstance(CurrentGame, ChessGame):
+        if isinstance(CurrentGame, ChessGame) and False:
             from src.games.chess.comparison_bots.HandcraftedBotV4 import HandcraftedBotV4
 
             comparison_bot = HandcraftedBotV4()
@@ -133,13 +133,25 @@ class EvaluationProcess:
 
 
 if __name__ == '__main__':
+    import torch.multiprocessing as mp
+
+    mp.set_start_method('spawn')
+
+    import torch  # noqa
+
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.matmul.allow_tf32 = True
+
     from src.settings import get_run_id, TRAINING_ARGS
     from src.util.save_paths import model_save_path
 
     run_id = get_run_id()
 
-    for iteration in range(1, 100):
+    def evaluate_iteration(iteration):
         if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
-            break
+            return
         log(f'Running evaluation process for iteration {iteration}')
         run_evaluation_process(run_id, TRAINING_ARGS, iteration)
+
+    with mp.Pool(processes=4) as pool:
+        pool.map(evaluate_iteration, range(1, 100))
