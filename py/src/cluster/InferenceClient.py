@@ -1,5 +1,7 @@
 from __future__ import annotations
 from os import PathLike
+from random import random
+from time import sleep
 
 import torch
 import numpy as np
@@ -61,6 +63,7 @@ class InferenceClient:
                 break
             except RuntimeError as e:
                 log(f'Failed to load model: "{e}" retrying...', level=LogLevel.ERROR)
+                sleep(random() * 60)  # sleep for a random amount of time to avoid overloading the GPU VRAM
         else:
             raise RuntimeError('Failed to load model after 5 retries')
 
