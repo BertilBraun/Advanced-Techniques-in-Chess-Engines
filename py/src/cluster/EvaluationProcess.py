@@ -132,6 +132,16 @@ class EvaluationProcess:
             )
 
 
+def evaluate_iteration(iteration):
+    from src.settings import TRAINING_ARGS
+    from src.util.save_paths import model_save_path
+
+    if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
+        return
+    log(f'Running evaluation process for iteration {iteration}')
+    run_evaluation_process(run_id, TRAINING_ARGS, iteration)
+
+
 if __name__ == '__main__':
     import torch.multiprocessing as mp
 
@@ -142,16 +152,9 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.settings import get_run_id, TRAINING_ARGS
-    from src.util.save_paths import model_save_path
+    from src.settings import get_run_id
 
     run_id = get_run_id()
-
-    def evaluate_iteration(iteration):
-        if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
-            return
-        log(f'Running evaluation process for iteration {iteration}')
-        run_evaluation_process(run_id, TRAINING_ARGS, iteration)
 
     with mp.Pool(processes=4) as pool:
         pool.map(evaluate_iteration, range(1, 100))
