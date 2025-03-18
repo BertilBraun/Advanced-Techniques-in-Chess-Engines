@@ -144,7 +144,7 @@ def evaluate_iteration(args: tuple[int, int]):
     run_evaluation_process(run_id, TRAINING_ARGS, iteration)
 
 
-if __name__ == '__main__':
+def __main():
     import torch.multiprocessing as mp
 
     mp.set_start_method('spawn')
@@ -160,3 +160,7 @@ if __name__ == '__main__':
 
     with mp.Pool(processes=4) as pool:
         pool.map(evaluate_iteration, [(i, run_id) for i in range(1, 100)])
+
+
+if __name__ == '__main__':
+    __main()
