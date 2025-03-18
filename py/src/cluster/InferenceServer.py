@@ -123,7 +123,7 @@ def _inference_server(device_id: int, server_address: str):
 
     context = zmq.Context.instance()
     # ROUTER socket to handle multiple client DEALER connections
-    socket = context.socket(zmq.ROUTER)
+    socket: zmq.Socket = context.socket(zmq.ROUTER)
     socket.bind(server_address)
 
     batch_inputs = []  # List of input data for the current batch.
@@ -132,6 +132,8 @@ def _inference_server(device_id: int, server_address: str):
 
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
+
+    last_iteration_update_check = 0
 
     while True:
         # Poll with a timeout (in milliseconds)
@@ -152,7 +154,9 @@ def _inference_server(device_id: int, server_address: str):
 
         # If we have some messages and either the batch is full or the timeout expired...
         if batch_inputs and (len(batch_inputs) >= BATCH_SIZE or (time.time() - batch_start_time) >= BATCH_TIMEOUT):
-            server.check_for_iteration_update()
+            if time.time() - last_iteration_update_check > 5:  # Check for new model every 5 seconds
+                server.check_for_iteration_update()
+                last_iteration_update_check = time.time()
             # Perform batched inference
             results = server.inference_batch(batch_inputs)
             # Send each result back to the corresponding client with its correlation id.
