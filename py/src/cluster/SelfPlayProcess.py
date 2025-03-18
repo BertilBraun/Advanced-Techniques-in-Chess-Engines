@@ -10,11 +10,11 @@ from src.util.profiler import start_cpu_usage_logger
 from src.util.save_paths import model_save_path
 
 
-    if device_id == 0:
-        start_cpu_usage_logger(run, 'self_play_cpu_usage')
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
+    if device_id == 0:
+        start_cpu_usage_logger(run, 'self_play_cpu_usage')
 
     client = InferenceClient(device_id, args.network, args.save_path)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
