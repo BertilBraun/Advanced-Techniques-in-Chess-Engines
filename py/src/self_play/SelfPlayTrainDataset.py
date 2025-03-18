@@ -59,7 +59,7 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
             if i == 0:
                 thread = Process(
                     target=self._log_all_dataset_stats,
-                    args=(self.all_chunks, self.run),
+                    args=([list.copy() for list in self.all_chunks], self.run),
                     daemon=True,
                 )
                 thread.start()
@@ -118,7 +118,7 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
             drop_last=True,
             persistent_workers=True,
             pin_memory=True,
-            prefetch_factor=4,
+            prefetch_factor=2,
         )
 
     def __iter__(self):

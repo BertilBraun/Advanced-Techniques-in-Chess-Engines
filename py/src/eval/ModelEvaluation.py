@@ -60,6 +60,9 @@ class Results:
 
 EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 
+# The device to use for evaluation. Since Training is done on device 0, we can use device 1 for evaluation
+EVAL_DEVICE = 1
+
 
 class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
@@ -82,7 +85,7 @@ class ModelEvaluation:
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
-        device = torch.device('cuda' if USE_GPU else 'cpu')
+        device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
         dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
@@ -145,7 +148,7 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        opponent = InferenceClient(0, self.args.network, self.args.save_path)
+        opponent = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         opponent.load_model(model_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -159,7 +162,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(0, self.args.network, self.args.save_path)
+        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
