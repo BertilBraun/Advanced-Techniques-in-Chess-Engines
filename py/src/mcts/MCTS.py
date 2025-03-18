@@ -1,3 +1,4 @@
+import time
 from typing import Iterable, Protocol
 import numpy as np
 from dataclasses import dataclass
@@ -166,6 +167,7 @@ class MCTS:
         return [self._add_noise(moves) for moves, _ in results]
 
     def _add_noise(self, moves: list[MoveScore]) -> list[MoveScore]:
+        np.random.seed(time.time())
         noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(moves))
         return [(move, lerp(policy, noise, self.args.dirichlet_epsilon)) for (move, policy), noise in zip(moves, noise)]
 
