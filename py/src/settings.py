@@ -194,7 +194,7 @@ elif True:
 
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
-        num_epochs=2,
+        num_epochs=1,
         batch_size=2048,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
