@@ -8,3 +8,4 @@ tensorboardX
 chess
 pygame
 GPUtil
+pyzmq

@@ -123,7 +123,7 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), optimizer_save_path(iteration, save_folder))
 
 
-def get_latest_model_iteration(max_iteration: int, save_folder: str | PathLike) -> int:
+def get_latest_model_iteration(save_folder: str | PathLike, max_iteration: int = 1000) -> int:
     while max_iteration >= 0 and not model_save_path(max_iteration, save_folder).exists():
         max_iteration -= 1
     return max(max_iteration, 0)

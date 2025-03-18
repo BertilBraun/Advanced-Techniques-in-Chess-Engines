@@ -1,21 +1,21 @@
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter
-from src.util.log import log
 from src.self_play.SelfPlay import SelfPlay
 from src.cluster.InferenceClient import InferenceClient
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import SelfPlayParams, TrainingArgs
 from src.util.PipeConnection import PipeConnection
 from src.util.profiler import start_cpu_usage_logger
-from src.util.save_paths import model_save_path
+from src.util.save_paths import get_latest_model_iteration, model_save_path
 
 
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
-    start_cpu_usage_logger(run, f'self_play_{device_id}')
+    if device_id == 0:
+        start_cpu_usage_logger(run, f'self_play_{device_id}')
 
-    client = InferenceClient(device_id, args.network, args.save_path)
+    client = InferenceClient(device_id)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
     with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter(run, 'self_play'):
         self_play_process.run()
@@ -33,35 +33,18 @@ class SelfPlayProcess:
         self.commander_pipe = commander_pipe
 
     def run(self):
-        current_iteration = -1
-        running = False
+        current_iteration = get_latest_model_iteration(self.save_path)
 
         while True:
-            if running:
-                self.self_play.self_play()
+            self.self_play.self_play()
 
-                if self.self_play.dataset.stats.num_games >= self.args.num_games_after_which_to_write:
-                    self._save_dataset(current_iteration)
+            if self.self_play.dataset.stats.num_games >= self.args.num_games_after_which_to_write:
+                self._save_dataset(current_iteration)
 
-                if model_save_path(current_iteration + 1, self.save_path).exists():
-                    self._save_dataset(current_iteration)
-                    self.self_play.update_iteration(current_iteration + 1)
-                    current_iteration += 1
-
-            if self.commander_pipe.poll():
-                message = self.commander_pipe.recv()
-                assert isinstance(message, str), f'Expected message to be a string, got {message}'
-                if message == 'STOP':
-                    break
-                elif message.startswith('START AT ITERATION:'):
-                    old_current_iteration = current_iteration
-                    current_iteration = int(message.split(':')[-1])
-                    running = True
-                    if old_current_iteration != current_iteration:
-                        self._save_dataset(current_iteration)
-                        self.self_play.update_iteration(current_iteration)
-
-        log('Self play process stopped.')
+            if model_save_path(current_iteration + 1, self.save_path).exists():
+                self._save_dataset(current_iteration)
+                self.self_play.update_iteration(current_iteration + 1)
+                current_iteration += 1
 
     def _save_dataset(self, iteration: int):
         if not len(self.self_play.dataset):

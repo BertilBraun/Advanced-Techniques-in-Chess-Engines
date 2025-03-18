@@ -3,6 +3,7 @@ import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
+from src.cluster.InferenceServer import run_inference_server
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
@@ -35,6 +36,8 @@ class CommanderProcess:
         self.self_play_processes: list[Process] = []
         self.commander_self_play_pipes: list[PipeConnection] = []
 
+        self.inference_servers: list[Process] = []
+
     def _setup_connections(self) -> None:
         # The Trainer and Commander has a Pipe connection
         # Each SelfPlay and InferenceServer has a Pipe connection to the LoadBalancer
@@ -48,6 +51,14 @@ class CommanderProcess:
             target=run_trainer_process, args=(self.run_id, self.args, trainer_commander_pipe, trainer_device_id)
         )
         self.trainer_process.start()
+
+        for device_id in range(max(torch.cuda.device_count() * 2, 1)):
+            process = Process(
+                target=run_inference_server,
+                args=(self.run_id, device_id),
+            )
+            process.start()
+            self.inference_servers.append(process)
 
         self.commander_self_play_pipes: list[PipeConnection] = []
         for device_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
@@ -75,7 +86,7 @@ class CommanderProcess:
         self._setup_connections()
         log('Connections set up.')
 
-        starting_iteration = get_latest_model_iteration(self.args.num_iterations, self.args.save_path)
+        starting_iteration = get_latest_model_iteration(self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
 
         with log_exceptions('Commander process'):

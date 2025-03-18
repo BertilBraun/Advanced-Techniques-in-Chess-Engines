@@ -72,7 +72,6 @@ class SelfPlay:
             log(f'Warning: Dataset should be empty when updating iteration. Discarding {len(self.dataset)} samples.')
         self.iteration = iteration
         self.dataset = SelfPlayDataset()
-        self.client.update_iteration(iteration)
 
     def self_play(self) -> None:
         mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])

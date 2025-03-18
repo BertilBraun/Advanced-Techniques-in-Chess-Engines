@@ -25,7 +25,7 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    iteration = get_latest_model_iteration(TRAINING_ARGS.num_iterations, TRAINING_ARGS.save_path)
+    iteration = get_latest_model_iteration(TRAINING_ARGS.save_path)
 
     HUMAN_PLAY = True
 
