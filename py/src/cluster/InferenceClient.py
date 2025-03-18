@@ -43,7 +43,8 @@ class InferenceClient:
     def load_model(self, model_path: str | PathLike) -> None:
         for _ in range(5):
             try:
-                del self.model
+                if hasattr(self, 'model'):
+                    del self.model
 
                 # sync and gc collect to free up memory before loading the model
                 torch.cuda.empty_cache()
