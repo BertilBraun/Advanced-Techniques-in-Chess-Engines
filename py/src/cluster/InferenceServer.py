@@ -91,6 +91,12 @@ class BasicModelInference:
                 'boards',
                 'On average inferences per second:',
                 self.inference_cache.total_evals / (time.time() - self.inference_cache.start_time),
+                'Cache size:',
+                len(self.inference_cache.inference_cache),
+                'Total hits:',
+                self.inference_cache.total_hits,
+                'Total evals:',
+                self.inference_cache.total_evals,
             )
 
         responses: list[tuple[MoveList, float]] = [self.inference_cache.get_encoded(hash) for hash in board_hashes]
