@@ -188,9 +188,7 @@ elif True:
     NUM_GPUS = torch.cuda.device_count()
     SELF_PLAYERS_PER_NODE = 16
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
-    NUM_SELF_PLAYERS = max(2, NUM_SELF_PLAYERS)
-
-    NUM_SELF_PLAYERS = multiprocessing.cpu_count() - 4
+    NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(

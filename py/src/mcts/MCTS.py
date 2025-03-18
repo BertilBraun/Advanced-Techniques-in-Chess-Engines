@@ -1,5 +1,5 @@
 import time
-from typing import Iterable, Protocol
+from typing import Iterable
 import numpy as np
 from dataclasses import dataclass
 
@@ -7,6 +7,7 @@ from src.train.TrainingArgs import MCTSParams
 from src.util import lerp
 from src.mcts.MCTSNode import MCTSNode
 from src.settings import CurrentBoard, CurrentGame
+from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import MoveScore, get_board_result_score
 from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
@@ -36,13 +37,8 @@ def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
     return action_probabilities
 
 
-class InferenceClientProtocol(Protocol):
-    def inference_batch(self, inputs: list[CurrentBoard]) -> list[tuple[list[tuple[int, float]], float]]:
-        ...
-
-
 class MCTS:
-    def __init__(self, client: InferenceClientProtocol, args: MCTSParams) -> None:
+    def __init__(self, client: InferenceClient, args: MCTSParams) -> None:
         self.client = client
         self.args = args
 
