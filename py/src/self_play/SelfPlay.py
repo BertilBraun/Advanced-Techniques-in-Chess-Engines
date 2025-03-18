@@ -193,7 +193,7 @@ class SelfPlay:
             self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
-            num_games=1,
+            game_length=len(spg.played_moves),
             generation_time=time.time() - spg.start_generation_time,
             resignation=resignation,
         )
