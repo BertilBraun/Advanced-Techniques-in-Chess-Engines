@@ -180,7 +180,7 @@ class SelfPlay:
         temperature_action_probabilities = action_probabilities ** (1 / temperature)
         temperature_action_probabilities /= np.sum(temperature_action_probabilities)
 
-        np.random.seed()
+        np.random.seed(time.time_ns())
         action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
         return CurrentGame.decode_move(action)
