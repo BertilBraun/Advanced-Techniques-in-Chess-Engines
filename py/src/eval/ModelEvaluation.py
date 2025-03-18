@@ -13,9 +13,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
+from src.cluster.InferenceServer import BasicModelInference
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import MCTSParams, TrainingArgs
-from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
@@ -148,8 +148,7 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        opponent = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
-        opponent.load_model(model_path)
+        opponent = self._inference_client(model_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
@@ -162,8 +161,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
-        current_model.update_iteration(self.iteration)
+        current_model = self._inference_client(model_save_path(self.iteration, self.args.save_path))
 
         def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
             results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
@@ -175,6 +173,18 @@ class ModelEvaluation:
         results -= self._play_two_models_search(evaluation_model, model1, num_games // 2, 'current_vs_' + name)
 
         return results
+
+    def _inference_client(self, model_path: str | PathLike):
+        client = BasicModelInference(EVAL_DEVICE, self.args.network, self.args.save_path)
+        client.load_model(model_path)
+
+        class InferenceClientWrapper:
+            def inference_batch(self, inputs: list[CurrentBoard]) -> list[tuple[list[tuple[int, float]], float]]:
+                boards = [CurrentGame.get_canonical_board(board) for board in inputs]
+                results = client.inference_batch(boards)
+                return [([(int(move), prob) for move, prob in moves], value) for moves, value in results]
+
+        return InferenceClientWrapper()
 
     def _play_two_models_search(
         self, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str

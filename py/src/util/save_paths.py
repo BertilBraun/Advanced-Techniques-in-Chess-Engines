@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 from src.Network import Network
+from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import NetworkParams
 from src.util.compile import try_compile
 from src.util.log import LogLevel, log
@@ -123,7 +124,8 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), optimizer_save_path(iteration, save_folder))
 
 
-def get_latest_model_iteration(save_folder: str | PathLike, max_iteration: int = 1000) -> int:
+def get_latest_model_iteration(save_folder: str | PathLike) -> int:
+    max_iteration = TRAINING_ARGS.num_iterations
     while max_iteration >= 0 and not model_save_path(max_iteration, save_folder).exists():
         max_iteration -= 1
     return max(max_iteration, 0)

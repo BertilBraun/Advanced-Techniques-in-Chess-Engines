@@ -34,7 +34,6 @@ class CommanderProcess:
         self.commander_trainer_pipe: PipeConnection
 
         self.self_play_processes: list[Process] = []
-        self.commander_self_play_pipes: list[PipeConnection] = []
 
         self.inference_servers: list[Process] = []
 
@@ -53,25 +52,22 @@ class CommanderProcess:
         self.trainer_process.start()
 
         for device_id in range(max(torch.cuda.device_count() * 2, 1)):
+            # Two InferenceServers per device
             process = Process(
                 target=run_inference_server,
-                args=(self.run_id, device_id),
+                args=(self.run_id, device_id, f'ipc:///tmp/inference_{device_id}.ipc'),
             )
             process.start()
             self.inference_servers.append(process)
 
-        self.commander_self_play_pipes: list[PipeConnection] = []
-        for device_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
-            self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
-            self.commander_self_play_pipes.append(commander_self_play_pipe)
-
+        for player_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
             process = Process(
                 target=run_self_play_process,
                 args=(
                     self.run_id,
                     self.args,
-                    self_play_commander_pipe,
-                    _get_device_id(device_id, self.args.cluster.num_self_play_nodes_on_cluster),
+                    f'ipc:///tmp/inference_{player_id % len(self.inference_servers)}.ipc',
+                    # _get_device_id(device_id, self.args.cluster.num_self_play_nodes_on_cluster),
                 ),
             )
             process.start()
@@ -92,35 +88,28 @@ class CommanderProcess:
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
-                for pipe in self._all_pipes():
-                    pipe.send(f'START AT ITERATION: {iteration}')
+                self.commander_trainer_pipe.send(f'START AT ITERATION: {iteration}')
                 log(f'All processes started at iteration {iteration}.')
 
                 # Wait for Trainer to finish
                 train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
                 assert self.commander_trainer_pipe.recv() == 'FINISHED'
-                yield iteration, train_stats
 
                 # start EvaluationProcess
                 Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration), daemon=True).start()
 
-        log('Training complete. Sending STOP to all processes.')
-        for pipe in self._all_pipes():
-            try:
-                pipe.send('STOP')
-            except BrokenPipeError:
-                pass
+                yield iteration, train_stats
 
+        log('Training complete. Sending STOP to all processes.')
         self.trainer_process.kill()
         for process in self.self_play_processes:
-            process.join(timeout=10)
+            process.kill()
+        for process in self.inference_servers:
+            process.kill()
         exit()
 
     def _all_processes(self) -> list[Process]:
         return self.self_play_processes + [self.trainer_process]
-
-    def _all_pipes(self) -> list[PipeConnection]:
-        return self.commander_self_play_pipes + [self.commander_trainer_pipe]
 
 
 def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_count()) -> int:

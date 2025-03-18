@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections import defaultdict
+import contextlib
 import zmq
 import time
 import pickle
@@ -34,7 +35,7 @@ T = TypeVar('T')
 MoveList = np.ndarray  #  list[MoveScore]
 
 
-class InferenceServer:
+class BasicModelInference:
     """The Inference Client is responsible for batching and caching inference requests. It uses a model to directly infer the policy and value for a given board state on the provided device."""
 
     def __init__(self, device_id: int, network_args: NetworkParams, save_path: str) -> None:
@@ -115,13 +116,15 @@ class InferenceServer:
             self.update_iteration(iteration)
 
 
-def _inference_server(device_id: int):
-    server = InferenceServer(device_id=device_id, network_args=TRAINING_ARGS.network, save_path=TRAINING_ARGS.save_path)
+def _inference_server(device_id: int, server_address: str):
+    server = BasicModelInference(
+        device_id=device_id, network_args=TRAINING_ARGS.network, save_path=TRAINING_ARGS.save_path
+    )
 
     context = zmq.Context.instance()
     # ROUTER socket to handle multiple client DEALER connections
     socket = context.socket(zmq.ROUTER)
-    socket.bind(f'ipc:///tmp/inference_{device_id}.ipc')
+    socket.bind(server_address)
 
     batch_inputs = []  # List of input data for the current batch.
     batch_meta = []  # List of tuples (client_identity, corr_id) for each input.
@@ -170,6 +173,7 @@ def _inference_server(device_id: int):
             batch_start_time = time.time()
 
 
-def run_inference_server(run: int, device_id: int):
-    with log_exceptions(f'Inference Server {device_id} crashed.'), TensorboardWriter(run, 'inference_server'):
-        _inference_server(device_id)
+def run_inference_server(run: int | None, device_id: int, server_address: str):
+    with log_exceptions(f'Inference Server {device_id} crashed.'):
+        with TensorboardWriter(run, 'inference_server') if run is not None else contextlib.nullcontext():
+            _inference_server(device_id, server_address)

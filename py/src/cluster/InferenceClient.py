@@ -13,11 +13,10 @@ from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 class InferenceClient:
     """The Inference Client is responsible for batching and caching inference requests. It uses a model to directly infer the policy and value for a given board state on the provided device."""
 
-    def __init__(self, device_id: int):
+    def __init__(self, server_address: str):
         self.context = zmq.Context.instance()
         # Use a DEALER socket so we can send many messages concurrently.
         self.socket = self.context.socket(zmq.DEALER)
-        server_address = f'ipc:///tmp/inference_{device_id}.ipc'
         self.socket.connect(server_address)
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)

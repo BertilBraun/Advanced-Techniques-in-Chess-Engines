@@ -44,9 +44,9 @@ def sampling_window(current_iteration: int) -> int:
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 20:
         return 0.2
-    if current_iteration < 70:
+    if current_iteration < 80:
         return 0.02
-    if current_iteration < 100:
+    if current_iteration < 110:
         return 0.002
     return 0.0002
 
@@ -189,6 +189,8 @@ elif True:
     SELF_PLAYERS_PER_NODE = 16
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(2, NUM_SELF_PLAYERS)
+
+    NUM_SELF_PLAYERS = multiprocessing.cpu_count() - 4
 
     network = NetworkParams(num_layers=12, hidden_size=128)
     training = TrainingParams(
