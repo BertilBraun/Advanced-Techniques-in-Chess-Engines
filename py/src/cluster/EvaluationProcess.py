@@ -158,7 +158,7 @@ def __main():
 
     run_id = get_run_id()
 
-    with mp.Pool(processes=4) as pool:
+    with mp.Pool(processes=1) as pool:
         pool.map(evaluate_iteration, [(i, run_id) for i in range(1, 100)])
 
 
