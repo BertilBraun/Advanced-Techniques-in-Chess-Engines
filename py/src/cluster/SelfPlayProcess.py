@@ -1,3 +1,4 @@
+import torch
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter
 from src.util.log import log
@@ -15,6 +16,8 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
 
     if device_id == 0:
         start_cpu_usage_logger(run, 'self_play_cpu_usage')
+
+    torch.cuda.set_per_process_memory_fraction(0.01, device=device_id)
 
     client = InferenceClient(device_id, args.network, args.save_path)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)
