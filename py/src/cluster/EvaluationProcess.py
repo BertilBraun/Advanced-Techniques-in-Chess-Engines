@@ -130,3 +130,15 @@ class EvaluationProcess:
                 },
                 iteration,
             )
+
+
+if __name__ == '__main__':
+    from src.settings import get_run_id, TRAINING_ARGS
+    from src.util.save_paths import model_save_path
+
+    run_id = get_run_id()
+
+    for iteration in range(1, 100):
+        if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
+            break
+        run_evaluation_process(run_id, TRAINING_ARGS, iteration)
