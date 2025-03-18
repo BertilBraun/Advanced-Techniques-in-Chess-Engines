@@ -132,9 +132,11 @@ class EvaluationProcess:
             )
 
 
-def evaluate_iteration(iteration):
+def evaluate_iteration(args: tuple[int, int]):
     from src.settings import TRAINING_ARGS
     from src.util.save_paths import model_save_path
+
+    iteration, run_id = args
 
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
@@ -157,4 +159,4 @@ if __name__ == '__main__':
     run_id = get_run_id()
 
     with mp.Pool(processes=4) as pool:
-        pool.map(evaluate_iteration, range(1, 100))
+        pool.map(evaluate_iteration, [(i, run_id) for i in range(1, 100)])
