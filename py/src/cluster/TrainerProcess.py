@@ -21,6 +21,8 @@ def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnec
 
     start_cpu_usage_logger(run, 'trainer')
 
+    torch.cuda.set_device(device_id)
+
     trainer_process = TrainerProcess(args, run, device_id, commander_pipe)
     with log_exceptions('Trainer process'), TensorboardWriter(run, 'trainer', postfix_pid=False):
         trainer_process.run()
