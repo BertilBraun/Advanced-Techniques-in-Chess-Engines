@@ -82,7 +82,11 @@ class CommanderProcess:
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 for pipe in self._all_pipes():
-                    pipe.send(f'START AT ITERATION: {iteration}')
+                    try:
+                        pipe.send(f'START AT ITERATION: {iteration}')
+                    except BrokenPipeError:
+                        if pipe is self.commander_trainer_pipe:
+                            raise
                 log(f'All processes started at iteration {iteration}.')
 
                 # Wait for Trainer to finish
