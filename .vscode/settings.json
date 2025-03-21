@@ -23,6 +23,7 @@
     "cmake.configureOnOpen": true,
     "C_Cpp.default.compilerPath": "cl.exe",
     "files.associations": {
+        "*.et": "c",
         "vector": "cpp",
         "algorithm": "cpp",
         "array": "cpp",
@@ -116,7 +117,8 @@
         "coroutine": "cpp",
         "resumable": "cpp",
         "any": "cpp",
-        "codecvt": "cpp"
+        "codecvt": "cpp",
+        "execution": "cpp"
     },
     "cmake.sourceDirectory": "C:/Projects/ChessBot/cpp"
 }

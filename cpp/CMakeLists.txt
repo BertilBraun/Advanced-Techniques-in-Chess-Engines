@@ -24,9 +24,16 @@ endif()
 if(CMAKE_CUDA_COMPILER)
     set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda")
     set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda/share/cmake/Torch")
+elseif(UNIX)
+    # if on linux
+    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux")
+    set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/share/cmake/Torch")
+elseif(MSVC)
+    # if on windows
+    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_win")
+    set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_win/share/cmake/Torch")
 else()
-    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu")
-    set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu/share/cmake/Torch")
+    message(FATAL_ERROR "Unsupported platform")
 endif()
 find_package(Torch REQUIRED)
 
@@ -51,6 +58,7 @@ else()
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
 endif()
 
+
 # Ensure we're setting the correct flags for the target rather than globally
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:RELEASE>:${CMAKE_CXX_FLAGS_RELEASE}>)
@@ -69,8 +77,10 @@ endif()
 include_directories(src)
 if (CMAKE_CUDA_COMPILER)
     include_directories(libtorch_cuda/include)
-else()
-    include_directories(libtorch_cpu/include)
+elseif(UNIX)
+    include_directories(libtorch_cpu_linux/include)
+elseif(MSVC)
+    include_directories(libtorch_cpu_win/include)
 endif()
 
 # Copy DLLs on Windows

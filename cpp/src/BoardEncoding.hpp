@@ -99,18 +99,6 @@ Board decodeBoard(const torch::Tensor &encodedBoard) {
     return board;
 }
 
-torch::Tensor flipBoardHorizontal(const torch::Tensor &encodedBoard) {
-    // Flip along the width (columns)
-    return encodedBoard.flip(2);
-}
-
-torch::Tensor flipBoardVertical(const torch::Tensor &encodedBoard) {
-    // Flip along the height (rows)
-    // Also swap the layers so that the current player's pieces are at the bottom of the first
-    torch::Tensor flippedBoard = encodedBoard.flip(1);
-    return torch::cat({flippedBoard.narrow(0, 6, 6), flippedBoard.narrow(0, 0, 6)}, 0);
-}
-
 std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
     0.0f, // None
     1.0f, // Pawn
@@ -126,7 +114,23 @@ float __MAX_MATERIAL_SCORE =
     2 * __PIECE_VALUES[PieceType::BISHOP] + 2 * __PIECE_VALUES[PieceType::KNIGHT] +
     8 * __PIECE_VALUES[PieceType::PAWN];
 
-float getBoardResultScore(Board &board) {
+float getMaterialScore(const Board &board) {
+    // Returns the material score for the given board. The score is positive if the white player has
+    // the advantage, and negative if the black player has the advantage. The score is normalized to
+    // be in the range [-1.0, 1.0].
+
+    float materialScore = 0.0f;
+    for (PieceType pieceType : PIECE_TYPES) {
+        int whitePieceCount = board.pieces(pieceType, WHITE).size();
+        int blackPieceCount = board.pieces(pieceType, BLACK).size();
+        int pieceValue = __PIECE_VALUES[pieceType];
+        materialScore += (whitePieceCount - blackPieceCount) * pieceValue;
+    }
+
+    return materialScore / __MAX_MATERIAL_SCORE;
+}
+
+std::optional<float> getBoardResultScore(Board &board) {
     // Returns the result score for the given board.
     //
     // The result score is 1.0 if the current player has won, otherwise it must have been a draw,
@@ -135,19 +139,20 @@ float getBoardResultScore(Board &board) {
     // :param board: The board to get the result score for.
     // :return: The result score for the given board.
 
-    if (board.isCheckmate()) {
-        return 1.0f; // Our last move put the opponent in checkmate
-    }
+    if (!board.isGameOver())
+        return std::nullopt;
+
+    if (board.isCheckmate())
+        return {-1.0f}; // Our last move put us in checkmate
 
     // Draw -> Return a score between -0.5 and 0.5 based on the remaining material
+    // The materialScore is positive if the white player has the advantage, and negative if the
+    // black player has the advantage. Therefore, we need to negate the material score if the black
+    // player is the current player.
+    float materialScore = getMaterialScore(board);
+    if (board.turn == BLACK)
+        materialScore = -materialScore;
 
-    float materialScore = 0.0f;
-    for (PieceType pieceType : PIECE_TYPES) {
-        materialScore += (popcount(board.piecesMask(pieceType, WHITE)) -
-                          popcount(board.piecesMask(pieceType, BLACK))) *
-                         __PIECE_VALUES[pieceType];
-    }
-
-    return materialScore / (__MAX_MATERIAL_SCORE * 2.0f); // Normalize to [-0.5, 0.5]
-    // In theory just return 0.0f;
+    // Normalize the material score to be in the range [-0.5, 0.5]
+    return {0.5f * materialScore};
 }

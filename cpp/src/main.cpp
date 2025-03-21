@@ -1,5 +1,36 @@
 #include "common.hpp"
 
+#include "MCTS/MCTS.hpp"
+
+int main() {
+    InferenceClient client;
+    MCTSParams args = {
+        .num_searches_per_turn = 100,
+        .num_parallel_searches = 4,
+        .c_param = 1.7f,
+        .dirichlet_alpha = 0.3f,
+        .dirichlet_epsilon = 0.25f,
+    };
+    MCTS mcts(&client, args);
+
+    // start timestamp
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i : range(100)) {
+        std::vector<Board> boards(100);
+        mcts.search(boards);
+    }
+
+    // end timestamp
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "Elapsed time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms"
+              << std::endl;
+
+    return 0;
+}
+
+/*
 #include "AlphaZeroSelfPlayer.hpp"
 #include "AlphaZeroTrainer.hpp"
 #include "Network.hpp"
@@ -66,21 +97,21 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    /*
-    args = TrainingArgs(
-        num_iterations=200,
-        num_self_play_iterations=32000,
-        num_parallel_games=64,
-        num_iterations_per_turn=200,
-        num_epochs=20,
-        num_separate_nodes_on_cluster=2,
-        batch_size=64,
-        temperature=1.0,
-        dirichlet_epsilon=0.25,
-        dirichlet_alpha=0.03,
-        c_param=2.0,
-    )
-    */
+
+    // args = TrainingArgs(
+    //     num_iterations=200,
+    //     num_self_play_iterations=32000,
+    //     num_parallel_games=64,
+    //     num_iterations_per_turn=200,
+    //     num_epochs=20,
+    //     num_separate_nodes_on_cluster=2,
+    //     batch_size=64,
+    //     temperature=1.0,
+    //     dirichlet_epsilon=0.25,
+    //     dirichlet_alpha=0.03,
+    //     c_param=2.0,
+    // )
+
 
     std::vector<std::thread> threads;
 
@@ -111,3 +142,4 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+*/

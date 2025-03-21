@@ -4,91 +4,79 @@
 
 class AlphaMCTSNode {
 public:
-    static AlphaMCTSNode *root(Board board) {
-        AlphaMCTSNode *instance =
-            new AlphaMCTSNode(std::move(board), 1.0, Move::null(), nullptr, 0);
-        instance->number_of_visits = 1.0;
+    static AlphaMCTSNode root(Board board) {
+        AlphaMCTSNode instance(std::move(board), 1.0, Move::null(), nullptr, 0);
+        instance.number_of_visits = 1;
         return instance;
     }
 
     AlphaMCTSNode(Board board, float policy, Move move_to_get_here, AlphaMCTSNode *parent,
                   int num_played_moves)
         : board(std::move(board)), parent(parent), move_to_get_here(move_to_get_here),
-          num_played_moves(num_played_moves), number_of_visits(0.0001f), result_score(-1.0),
-          policy(policy) {}
+          num_played_moves(num_played_moves), policy(policy) {}
 
-    bool isTerminalNode() { return board.isGameOver(); }
+    bool isTerminalNode() { return this->board.isGameOver(); }
 
-    bool isFullyExpanded() const { return !children.empty(); }
+    bool isFullyExpanded() const { return !this->children.empty(); }
 
     float ucb(float c_param = 0.1) const {
         if (!parent) {
             throw std::logic_error("Node must have a parent");
         }
 
-        float ucb_score =
-            policy * c_param * std::sqrt(parent->number_of_visits) / (1 + number_of_visits);
+        float ucb_score = this->policy * c_param * std::sqrt(this->parent->number_of_visits) /
+                          (1 + this->number_of_visits);
 
-        if (number_of_visits > 0) {
-            ucb_score += 1 - ((result_score / number_of_visits) + 1) / 2;
+        if (this->number_of_visits > 0) {
+            ucb_score +=
+                1 - (((this->result_score + this->virtual_loss) / this->number_of_visits) + 1) / 2;
         }
         return ucb_score;
     }
 
     void expand(const std::vector<std::pair<Move, float>> &moves_with_scores) {
-        std::vector<float> policies;
-
-        children.reserve(moves_with_scores.size());
-        policies.reserve(moves_with_scores.size());
+        this->children.reserve(moves_with_scores.size());
 
         for (const auto &[move, score] : moves_with_scores) {
-            Board new_board = board.copy();
-            new_board.push(move);
+            Board new_board = this->board.copy();
+            new_board.push(move); // TODO check whether this is a bottleneck
 
-            children.emplace_back(std::move(new_board), score, move, this, num_played_moves + 1);
-            policies.push_back(score);
+            this->children.emplace_back(std::move(new_board), score, move, this,
+                                        num_played_moves + 1);
         }
-
-        // Initialize tensors for vectorized operations
-        children_number_of_visits = torch::zeros({static_cast<long>(moves_with_scores.size())});
-        children_result_scores = torch::zeros({static_cast<long>(moves_with_scores.size())});
-        children_policies = torch::from_blob(policies.data(), {static_cast<long>(policies.size())},
-                                             torch::kFloat16);
     }
 
     void backPropagate(float result) {
-        number_of_visits += 1.0;
-        result_score += result;
-        if (parent) {
-            // Vectorized update of visits and scores
-            auto child_index = 0;
-            for (; child_index < parent->children.size(); ++child_index) {
-                if (&parent->children[child_index] == this) {
-                    break;
-                }
-            }
-
-            parent->children_number_of_visits.index_put_(
-                {child_index}, parent->children_number_of_visits.index({child_index}) + 1.0);
-            parent->children_result_scores.index_put_(
-                {child_index}, parent->children_result_scores.index({child_index}) + result);
-            parent->backPropagate(result);
+        this->result_score += result;
+        this->number_of_visits += 1;
+        if (this->parent) {
+            this->parent->backPropagate(-result * 0.99); // Discount the result for the parent
         }
     }
 
-    AlphaMCTSNode &bestChild(float c_param = 0.1) {
-        assert(!children.empty() && "Node has no children");
+    void updateVirtualLoss(int delta) {
+        this->virtual_loss += delta;
+        this->number_of_visits += delta;
+        if (this->parent) {
+            this->parent->updateVirtualLoss(delta);
+        }
+    }
 
-        auto q_scores =
-            (board.turn == WHITE ? 1 : -1) * children_result_scores / children_number_of_visits;
-        auto policy_scores = children_policies * c_param *
-                             torch::sqrt(torch::tensor(number_of_visits)) /
-                             (1 + children_number_of_visits);
-        auto ucb_scores = q_scores + policy_scores;
+    AlphaMCTSNode &bestChild(float cParam) {
+        assert(!this->children.empty() && "Node has no children");
 
-        auto best_child_index = ucb_scores.argmax(0).item<int64_t>();
+        AlphaMCTSNode &bestChild = this->children[0];
+        float bestScore = this->children[0].ucb(cParam);
 
-        return children[best_child_index];
+        for (size_t i = 1; i < this->children.size(); ++i) {
+            float score = this->children[i].ucb(cParam);
+            if (score > bestScore) {
+                bestScore = score;
+                bestChild = this->children[i];
+            }
+        }
+
+        return bestChild;
     }
 
     bool operator==(AlphaMCTSNode &other) {
@@ -99,13 +87,9 @@ public:
     AlphaMCTSNode *parent;
     std::vector<AlphaMCTSNode> children;
     Move move_to_get_here;
-    int num_played_moves;
-    float number_of_visits;
-    float result_score;
-    float policy;
-
-private:
-    torch::Tensor children_number_of_visits;
-    torch::Tensor children_result_scores;
-    torch::Tensor children_policies;
+    int num_played_moves = 0;
+    int number_of_visits = 0;
+    float virtual_loss = 1.0; // Init to loss as that seems to work better during search
+    float result_score = 0.0;
+    float policy = 0.0;
 };

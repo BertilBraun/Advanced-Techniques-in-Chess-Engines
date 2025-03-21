@@ -25,7 +25,9 @@ public:
         }
 
         if (currentNode && currentNode->isTerminalNode()) {
-            currentNode->backPropagate(getBoardResultScore(currentNode->board));
+            auto result = getBoardResultScore(currentNode->board);
+            assert(result.has_value());
+            currentNode->backPropagate(result.value());
             return nullptr;
         }
 

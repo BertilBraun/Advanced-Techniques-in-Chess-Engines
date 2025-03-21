@@ -17,6 +17,30 @@
             "intelliSenseMode": "windows-msvc-x64",
             "compilerPath": "cl.exe",
             "cppStandard": "c++17"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "/mnt/c/Projects/ChessBot/**",
+                "/mnt/c/Projects/ChessBot/src/**",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/**"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "intelliSenseMode": "linux-clang-x64",
+            "compilerPath": "/usr/bin/clang++-14",
+            "cppStandard": "c++20",
+            "compilerPathInCppPropertiesJson": "/usr/bin/clang++-14",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "/mnt/c/Projects/ChessBot/**",
+                    "/mnt/c/Projects/ChessBot/src/**",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

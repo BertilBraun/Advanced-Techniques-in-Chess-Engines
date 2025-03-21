@@ -41,6 +41,7 @@ public:
                     selfPlayStats.update(game.memory.size(), getBoardResultScore(game.board));
 
                     // Remove the game from the list of self play games
+                    delete selfPlayGames[i].root;
                     selfPlayGames[i--] = selfPlayGames.back();
                     selfPlayGames.pop_back();
                 }

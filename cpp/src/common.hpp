@@ -15,6 +15,8 @@
 #include "Time.hpp"
 #include "chess.hpp"
 
+#include "util/py.hpp"
+
 #ifdef _WIN32
 #pragma warning(push, 0)
 #endif

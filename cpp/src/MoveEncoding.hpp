@@ -7,14 +7,14 @@ using PolicyMove = std::pair<Move, float>;
 inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
                                                                         Board &board);
 
-inline int encodeMove(const Move &move, Color currentColor);
+inline int encodeMove(const Move &move);
 
 inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 Color currentColor, bool normalize = true);
+                                 bool normalize = true);
 
-inline Move decodeMove(int moveIndex, Color currentColor);
+inline Move decodeMove(int moveIndex);
 
-inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color currentColor);
+inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices);
 
 inline torch::Tensor flipActionProbabilitiesHorizontal(const torch::Tensor &actionProbabilities);
 inline torch::Tensor flipActionProbabilitiesVertical(const torch::Tensor &actionProbabilities);
@@ -24,6 +24,17 @@ inline int flipMoveIndexHorizontal(int moveIndex);
 inline int flipMoveIndexVertical(int moveIndex);
 
 using MoveMapping = std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, 64>, 64>;
+
+inline std::pair<int, int> square_to_index(int square) { return {square / 8, square % 8}; }
+
+namespace defines {
+const std::vector<std::pair<int, int>> DIRECTIONS = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
+                                                     {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
+const std::vector<std::pair<int, int>> KNIGHT_MOVES = {{2, 1},   {1, 2},   {-1, 2}, {-2, 1},
+                                                       {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
+const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN, PieceType::ROOK,
+                                                 PieceType::BISHOP, PieceType::KNIGHT};
+} // namespace defines
 
 inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
     MoveMapping moveMappings{};
@@ -42,54 +53,38 @@ inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
         moveMappings[fromSquare][toSquare][(int) promotionType] = index++;
     };
 
-    auto addPromotionMoves = [&](int fromSquare, int col, int toRow) {
-        for (int offset : {-1, 0, 1}) {
-            if (0 <= col + offset && col + offset < 8) {
-                int toSquare = square(col + offset, toRow);
-                addMove(fromSquare, toSquare, PieceType::QUEEN);
-                addMove(fromSquare, toSquare, PieceType::ROOK);
-                addMove(fromSquare, toSquare, PieceType::BISHOP);
-                addMove(fromSquare, toSquare, PieceType::KNIGHT);
+    for (const auto from_square : range(64)) {
+        const auto [row, col] = square_to_index(from_square);
+
+        for (const auto& [dr, dc] : defines::DIRECTIONS) {
+            for (int distance : range(1, 8)) {
+                int toRow = row + dr * distance;
+                int toCol = col + dc * distance;
+                if (0 <= toRow && toRow < 8 && 0 <= toCol && toCol < 8) {
+                    addMove(from_square, square(toCol, toRow), PieceType::NONE);
+                }
             }
         }
-    };
 
-    for (int row = 0; row < 8; ++row) {
-        for (int col = 0; col < 8; ++col) {
-            int fromSquare = square(col, row);
-
-            for (const auto &[dx, dy] : KNIGHT_MOVES) {
-                if (0 <= row + dx && row + dx < 8 && 0 <= col + dy && col + dy < 8) {
-                    int toSquare = square(col + dy, row + dx);
-                    addMove(fromSquare, toSquare, PieceType::NONE);
-                }
+        for (const auto &[dx, dy] : defines::KNIGHT_MOVES) {
+            int toRow = row + dx;
+            int toCol = col + dy;
+            if (0 <= toRow && toRow < 8 && 0 <= toCol && toCol < 8) {
+                addMove(from_square, square(toCol, toRow), PieceType::NONE);
             }
+        }
 
-            for (const auto &[dx, dy] : ROOK_MOVES) {
-                for (int i = 1; i < 8; ++i) {
-                    if (0 <= row + i * dx && row + i * dx < 8 && 0 <= col + i * dy &&
-                        col + i * dy < 8) {
-                        int toSquare = square(col + i * dy, row + i * dx);
-                        addMove(fromSquare, toSquare, PieceType::NONE);
+        // Calculate pawn promotion moves from this square
+        if (row == 1 || row == 6) {
+            int toRow = row == 1 ? 0 : 7;
+
+            for (int offset : {-1, 0, 1}) {
+                if (0 <= col + offset && col + offset < 8) {
+                    int toSquare = square(col + offset, toRow);
+                    for (PieceType promotionType : defines::PROMOTION_PIECES) {
+                        addMove(from_square, toSquare, promotionType);
                     }
                 }
-            }
-
-            for (const auto &[dx, dy] : BISHOP_MOVES) {
-                for (int i = 1; i < 8; ++i) {
-                    if (0 <= row + i * dx && row + i * dx < 8 && 0 <= col + i * dy &&
-                        col + i * dy < 8) {
-                        int toSquare = square(col + i * dy, row + i * dx);
-                        addMove(fromSquare, toSquare, PieceType::NONE);
-                    }
-                }
-            }
-
-            // Calculate pawn promotion moves from this square
-            if (row == 1) {
-                addPromotionMoves(fromSquare, col, row - 1);
-            } else if (row == 6) {
-                addPromotionMoves(fromSquare, col, row + 1);
             }
         }
     }
@@ -154,7 +149,7 @@ inline const auto __FLIPPED_INDICES_HORIZONTAL =
 inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
 inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 Color currentColor, bool normalize) {
+                                 bool normalize) {
     // Encodes a list of moves with their corresponding probabilities into a 1D tensor.
     //
     // The list of moves is a list of tuples, where each tuple contains a move and its
@@ -179,7 +174,7 @@ inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabi
     }
 
     for (const auto &[move, probability] : movesWithProbabilities) {
-        movesEncoded[encodeMove(move, currentColor)] = probability;
+        movesEncoded[encodeMove(move)] = probability;
     }
 
     if (!normalize) {
@@ -206,7 +201,7 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     for (const auto &move : board.legalMoves()) {
         movesWithProbabilities.emplace_back(move, 1.0);
     }
-    return encodeMoves(movesWithProbabilities, board.turn, false);
+    return encodeMoves(movesWithProbabilities, false);
 }
 
 inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
@@ -227,14 +222,14 @@ inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, B
     return filteredPolicy;
 }
 
-inline std::vector<PolicyMove> __mapPolicyToMoves(const torch::Tensor &policy, Color currentColor) {
+inline std::vector<PolicyMove> __mapPolicyToMoves(const torch::Tensor &policy) {
     std::vector<PolicyMove> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
     for (int i = 0; i < (int) nonzeroIndices.size(0); ++i) {
         int index = nonzeroIndices[i].item<int>();
         float probability = policy[index].item<float>();
-        Move move = decodeMove(index, currentColor);
+        Move move = decodeMove(index);
         movesWithProbabilities.emplace_back(move, probability);
     }
 
@@ -254,49 +249,41 @@ inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const to
     // :return: The list of moves with their corresponding probabilities.
 
     auto filteredPolicy = __filterPolicyWithLegalMoves(policy, board);
-    auto movesWithProbabilities = __mapPolicyToMoves(filteredPolicy, board.turn);
+    auto movesWithProbabilities = __mapPolicyToMoves(filteredPolicy);
     return movesWithProbabilities;
 }
 
-inline int encodeMove(const Move &move, Color currentColor) {
+inline int encodeMove(const Move &move) {
     // Encodes a chess move into a move index.
     //
     // :param move: The move to encode.
-    // :param current_player: The current player to encode the move for.
     // :return: The encoded move index.
 
     int moveIndex = __MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
 
-    if (currentColor == Color::BLACK) {
-        return flipMoveIndexVertical(moveIndex);
-    }
-
     return moveIndex;
 }
 
-inline Move decodeMove(int moveIndex, Color currentColor) {
+inline Move decodeMove(int moveIndex) {
     // Decodes a move index into a chess move.
     //
     // :param move_index: The index of the move to decode.
     // :return: The decoded chess move.
 
-    if (currentColor == Color::BLACK) {
-        moveIndex = flipMoveIndexVertical(moveIndex);
-    }
-
     auto [from_square, to_square, promotion_type] = __REVERSE_MOVE_MAPPINGS[moveIndex];
     return Move(from_square, to_square, promotion_type);
 }
 
-inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, Color currentColor) {
+inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
     // Decodes an array of move indices into a list of chess moves.
     //
     // :param moveIndices: The array of move indices to decode.
     // :return: The list of decoded chess moves.
 
     std::vector<Move> moves;
+    moves.reserve(moveIndices.size());
     for (int moveIndex : moveIndices) {
-        moves.push_back(decodeMove(moveIndex, currentColor));
+        moves.emplace_back(decodeMove(moveIndex));
     }
     return moves;
 }

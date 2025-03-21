@@ -14,15 +14,21 @@
             "command": "cd py && python -m src.util.profiler_visualization",
         },
         {
+            "label": "Run",
+            "type": "shell",
+            "command": "cd cpp/build && ./AIZeroChessBot",
+            "problemMatcher": []
+        },
+        {
             "label": "Build and Run",
             "type": "shell",
-            "command": "cd cpp/build && cmake --build . --config Release && cd Release && AIZeroChessBot.exe ${input:execType}",
+            "command": "cd cpp/build && cmake --build . --config Release && ./AIZeroChessBot",
             "problemMatcher": []
         },
         {
             "label": "Build and Debug",
             "type": "shell",
-            "command": "cd cpp/build && cmake --build . --config Debug && cd Debug && AIZeroChessBot.exe ${input:execType}",
+            "command": "cd cpp/build && cmake --build . --config Debug && ./AIZeroChessBot",
             "problemMatcher": []
         }
     ],
