@@ -8,14 +8,27 @@
 
 typedef std::vector<std::pair<std::vector<MoveScore>, float>> InferenceResult;
 
-struct VisitCount {
-    int move;
-    int count;
+struct VisitCounts {
+    struct VisitCount {
+        int move;
+        int count;
+    };
+
+    std::vector<VisitCount> visits;
+
+    torch::Tensor actionProbabilities() {
+        auto actionProbabilities = torch::zeros({ACTION_SIZE}, torch::kFloat16);
+        for (const auto &visit : visits) {
+            actionProbabilities[visit.move] = visit.count;
+        }
+
+        return actionProbabilities / actionProbabilities.sum();
+    }
 };
 
 struct MCTSResult {
     float result;
-    std::vector<VisitCount> visits;
+    VisitCounts visits;
 };
 
 struct MCTSParams {
@@ -74,7 +87,7 @@ class MCTS {
 public:
     MCTS(InferenceClient *client, const MCTSParams &args) : client(client), args(args) {}
 
-    std::vector<MCTSResult> search(std::vector<Board> &boards) const { 
+    std::vector<MCTSResult> search(std::vector<Board> &boards) const {
         if (boards.empty())
             return {};
 
@@ -97,11 +110,12 @@ public:
         // Build and return the results.
         std::vector<MCTSResult> results;
         for (const MCTSNode &root : roots) {
-            std::vector<VisitCount> visit_counts;
+            VisitCounts visitCounts;
             for (const MCTSNode &child : root.children) {
-                visit_counts.emplace_back(child.encoded_move_to_get_here, child.number_of_visits);
+                visitCounts.visits.emplace_back(child.encoded_move_to_get_here,
+                                                child.number_of_visits);
             }
-            results.push_back({root.result_score, visit_counts});
+            results.push_back({root.result_score, visitCounts});
         }
 
         return results;
@@ -109,10 +123,10 @@ public:
 
     // This method performs several iterations of tree search in parallel.
     void parallel_iterate(std::vector<MCTSNode> &roots) const {
-        std::vector<MCTSNode*> nodes;
+        std::vector<MCTSNode *> nodes;
         for (int i = 0; i < args.num_parallel_searches; i++) {
             for (MCTSNode &root : roots) {
-                std::optional<MCTSNode*> node =
+                std::optional<MCTSNode *> node =
                     _get_best_child_or_back_propagate(root, args.c_param);
                 if (node.has_value()) {
                     node.value()->updateVirtualLoss(1);
@@ -126,7 +140,7 @@ public:
         // Gather boards for inference.
         std::vector<Board> boards;
         boards.reserve(nodes.size());
-        for (MCTSNode* node : nodes)
+        for (MCTSNode *node : nodes)
             boards.push_back(node->board);
 
         // Run inference in batch.
@@ -172,9 +186,9 @@ private:
 
     // Traverse the tree to find the best child or, if the node is terminal,
     // back-propagate the board’s result.
-    std::optional<MCTSNode*> _get_best_child_or_back_propagate(MCTSNode &root,
+    std::optional<MCTSNode *> _get_best_child_or_back_propagate(MCTSNode &root,
                                                                 float c_param) const {
-        MCTSNode* node = &root;
+        MCTSNode *node = &root;
         while (node->isFullyExpanded()) {
             node = &node->bestChild(c_param);
         }

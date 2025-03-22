@@ -118,14 +118,6 @@ class Trainer:
             total_value_loss += value_loss.detach()
             total_loss += loss.detach()
 
-        total_norm = 0
-        for p in self.model.parameters():
-            assert p.grad is not None
-            param_norm = p.grad.detach().data.norm(2)
-            total_norm += param_norm.item() ** 2
-        total_norm = total_norm**0.5
-        print('Total norm:', total_norm)
-
         train_stats = TrainingStats()
         train_stats.update(
             total_policy_loss.item(),
@@ -135,6 +127,8 @@ class Trainer:
             out_value_std.item(),
             len(dataloader),
         )
+
+        log(f'Training stats: {train_stats}')
 
         # print('Optimal policy loss:', optimal_policy_loss.item() / len(dataloader))
         # print('Current policy loss:', current_policy_loss.item() / len(dataloader))
@@ -150,7 +144,7 @@ class Trainer:
         validation_total_loss = torch.tensor(0.0, device=self.model.device)
 
         with torch.no_grad():
-            for validation_batch in validation_dataloader:
+            for validation_batch in tqdm(validation_dataloader, desc='Validation batches'):
                 val_policy_loss, val_value_loss, val_loss = calculate_loss_for_batch(validation_batch)
 
                 validation_total_policy_loss += val_policy_loss.detach()

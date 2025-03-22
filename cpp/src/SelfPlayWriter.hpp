@@ -3,10 +3,6 @@
 #include "common.hpp"
 
 #include "MoveEncoding.hpp"
-#include "Network.hpp"
-#include "SelfPlayGame.hpp"
-#include "TrainingArgs.hpp"
-#include "TrainingStats.hpp"
 
 struct SelfPlayMemory {
     torch::Tensor state;

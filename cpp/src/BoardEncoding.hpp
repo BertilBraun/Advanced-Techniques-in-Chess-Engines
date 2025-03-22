@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-torch::Tensor encodeBoard(const Board &board, torch::Device device) {
+torch::Tensor encodeBoard(const Board &board) {
     // Encodes a chess board into a 12x8x8 tensor.
     //
     // Each layer in the first dimension represents one of the 12 distinct
@@ -17,18 +17,17 @@ torch::Tensor encodeBoard(const Board &board, torch::Device device) {
     // :param board: The chess board to encode.
     // :return: A 12x8x8 tensor representing the encoded board.
 
-    auto encodedBoard = torch::zeros({ENCODING_CHANNELS, 8, 8},
-                                     torch::TensorOptions().device(device).dtype(torch::kFloat16));
+    auto encodedBoard =
+        torch::zeros({ENCODING_CHANNELS, 8, 8}, torch::TensorOptions().dtype(torch::kInt8));
 
     for (Color color : COLORS) {
         for (PieceType pieceType : PIECE_TYPES) {
             int layerIndex = (color != board.turn) * 6 + pieceType - 1;
             auto bitboard = board.piecesMask(pieceType, color);
 
-            for (Square square : SQUARES) {
-                if (board.turn == BLACK)
-                    square = squareFlipVertical(square);
+            board.
 
+                for (Square square : SQUARES) {
                 int row = squareRank(square);
                 int col = squareFile(square);
 
@@ -37,6 +36,11 @@ torch::Tensor encodeBoard(const Board &board, torch::Device device) {
                 }
             }
         }
+    }
+
+    if (board.turn == BLACK) {
+        // Flip the board vertically
+        encodedBoard = torch::flip(encodedBoard, {1});
     }
 
     return encodedBoard;

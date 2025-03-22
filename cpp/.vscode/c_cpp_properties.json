@@ -21,10 +21,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "/mnt/c/Projects/ChessBot/**",
-                "/mnt/c/Projects/ChessBot/src/**",
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/src/**"
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/libtorch_cpu_linux/include",
+                "${workspaceFolder}/libtorch_cpu_linux/include/torch/csrc/api/include"
             ],
             "defines": [],
             "cStandard": "c17",
@@ -35,9 +35,9 @@
             "mergeConfigurations": false,
             "browse": {
                 "path": [
-                    "/mnt/c/Projects/ChessBot/**",
-                    "/mnt/c/Projects/ChessBot/src/**",
-                    "${workspaceFolder}"
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/libtorch_cpu_linux/include",
+                    "${workspaceFolder}/libtorch_cpu_linux/include/torch/csrc/api/include"
                 ],
                 "limitSymbolsToIncludedHeaders": true
             }

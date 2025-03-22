@@ -865,7 +865,10 @@ private:
     std::array<Bitboard, 2> m_occupied_color; // Bitboards for white and black pieces
     Bitboard m_pawns, m_knights, m_bishops, m_rooks, m_queens, m_kings, m_promoted, m_occupied;
 
-    std::optional<std::vector<Move>> cachedLegalMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedLegalMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedPseudoLegalMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedLegalEPMoves = std::nullopt;
+    std::optional<std::vector<Move>> m_cachedPseudoLegalEPMoves = std::nullopt;
 
 public:
     static Board fromFEN(const std::string &fen) {
@@ -991,7 +994,7 @@ public:
         return _generateLegalMoves();
     }
 
-    std::vector<Move> pseudoLegalMoves() const {
+    std::vector<Move> pseudoLegalMoves() {
         // A dynamic list of pseudo-legal moves, much like the legal move list.
         //
         // Pseudo-legal moves might leave or put the king in check, but are
@@ -1304,7 +1307,7 @@ public:
 
     bool isCheck() const { return _checkersMask() != BB_EMPTY; }
 
-    bool isIntoCheck(const Move &move) const {
+    bool isIntoCheck(const Move &move) {
         auto opt_king = king(turn);
         if (!opt_king.has_value())
             return false;
@@ -1323,7 +1326,7 @@ public:
         return !isSafe(king, sliderBlockers(king), move);
     }
 
-    bool isPseudoLegal(const Move &move) const {
+    bool isPseudoLegal(const Move &move) {
         // Check if a move is pseudo-legal
         if (!move)
             return false; // Null moves are not pseudo-legal in C++ context
@@ -1365,7 +1368,7 @@ public:
         return _attacksMask(move.fromSquare()) & to_mask;
     }
 
-    bool isLegal(const Move &move) const {
+    bool isLegal(const Move &move) {
         // Check if a move is legal
         return isPseudoLegal(move) && !isIntoCheck(move);
     }
@@ -1460,6 +1463,9 @@ public:
         */
 
         // Updates the position with the given move
+        // Reset the generated moves
+        _resetStoredMoves();
+
         move = _toChess960(move);
         castling_rights = _cleanCastlingRights();
 
@@ -1559,18 +1565,16 @@ public:
 
         // Swap turns
         turn = !turn;
-
-        cachedLegalMoves = std::nullopt;
     }
 
-    bool hasPseudoLegalEnPassant() const {
+    bool hasPseudoLegalEnPassant() {
         if (!ep_square.has_value())
             return false;
 
         return !_generatePseudoLegalEP().empty();
     }
 
-    bool hasLegalEnPassant() const {
+    bool hasLegalEnPassant() {
         if (!ep_square.has_value())
             return false;
 
@@ -1919,7 +1923,7 @@ public:
     }
 
 private:
-    Move _toChess960(Move move) const {
+    Move _toChess960(Move move) {
         if (move.fromSquare() == E1 && (m_kings & BB_E1)) {
             if (move.toSquare() == G1 && !(m_rooks & BB_G1))
                 return Move(E1, H1);
@@ -1933,6 +1937,13 @@ private:
         }
 
         return move;
+    }
+
+    void _resetStoredMoves() {
+        m_cachedLegalMoves = std::nullopt;
+        m_cachedPseudoLegalMoves = std::nullopt;
+        m_cachedLegalEPMoves = std::nullopt;
+        m_cachedPseudoLegalEPMoves = std::nullopt;
     }
 
     Bitboard _attacksMask(Square square) const {
@@ -2087,7 +2098,11 @@ private:
     }
 
     std::vector<Move> _generatePseudoLegalMoves(Bitboard from_mask = BB_ALL,
-                                                Bitboard to_mask = BB_ALL) const {
+                                                Bitboard to_mask = BB_ALL) {
+        if (m_cachedPseudoLegalMoves.has_value()) {
+            return m_cachedPseudoLegalMoves.value();
+        }
+
         std::vector<Move> moves;
         Bitboard our_pieces = m_occupied_color[turn];
 
@@ -2161,11 +2176,16 @@ private:
             moves.insert(moves.end(), epMoves.begin(), epMoves.end());
         }
 
+        m_cachedPseudoLegalMoves = moves;
         return moves;
     }
 
     std::vector<Move> _generatePseudoLegalEP(Bitboard from_mask = BB_ALL,
-                                             Bitboard to_mask = BB_ALL) const {
+                                             Bitboard to_mask = BB_ALL) {
+        if (m_cachedPseudoLegalEPMoves.has_value()) {
+            return m_cachedPseudoLegalEPMoves.value();
+        }
+
         std::vector<Move> moves;
         if (!ep_square.has_value() || !(BB_SQUARES[ep_square.value()] & to_mask) ||
             (BB_SQUARES[ep_square.value()] & m_occupied)) {
@@ -2178,6 +2198,7 @@ private:
             moves.emplace_back(capturer, ep_square.value());
         }
 
+        m_cachedPseudoLegalEPMoves = moves;
         return moves;
     }
 
@@ -2213,7 +2234,7 @@ private:
 
     bool _isHalfMoves(int n) { return halfmove_clock >= n && !_generateLegalMoves().empty(); }
 
-    Move _findMove(int from_square, int to_square, PieceType promotion) const {
+    Move _findMove(int from_square, int to_square, PieceType promotion) {
         if (promotion == PieceType::NONE && (m_pawns & BB_SQUARES[from_square]) &&
             (BB_SQUARES[to_square] & BB_BACK_RANKS)) {
             promotion = PieceType::QUEEN;
@@ -2228,7 +2249,7 @@ private:
     }
 
     std::vector<Move> _generateEvasions(Square king, Bitboard checkers, Bitboard from_mask = BB_ALL,
-                                        Bitboard to_mask = BB_ALL) const {
+                                        Bitboard to_mask = BB_ALL) {
         std::vector<Move> evasions;
         Bitboard sliders = checkers & (m_bishops | m_rooks | m_queens);
 
@@ -2265,8 +2286,8 @@ private:
     }
 
     std::vector<Move> _generateLegalMoves(Bitboard from_mask = BB_ALL, Bitboard to_mask = BB_ALL) {
-        if (cachedLegalMoves.has_value()) {
-            return cachedLegalMoves.value();
+        if (m_cachedLegalMoves.has_value()) {
+            return m_cachedLegalMoves.value();
         }
 
         std::vector<Move> legalMoves;
@@ -2296,11 +2317,15 @@ private:
                       std::back_inserter(legalMoves));
         }
 
-        cachedLegalMoves = legalMoves;
+        m_cachedLegalMoves = legalMoves;
         return legalMoves;
     }
 
-    std::vector<Move> _generateLegalEP(Bitboard from_mask = BB_ALL, Bitboard to_mask = BB_ALL) const {
+    std::vector<Move> _generateLegalEP(Bitboard from_mask = BB_ALL, Bitboard to_mask = BB_ALL) {
+        if (m_cachedLegalEPMoves.has_value()) {
+            return m_cachedLegalEPMoves.value();
+        }
+
         std::vector<Move> legalEP;
         auto pseudoLegalEP = _generatePseudoLegalEP(from_mask, to_mask);
         for (const Move &move : pseudoLegalEP) {
@@ -2309,6 +2334,7 @@ private:
             }
         }
 
+        m_cachedLegalEPMoves = legalEP;
         return legalEP;
     }
 
@@ -2362,7 +2388,7 @@ private:
     using TranspositionKey = std::tuple<Bitboard, Bitboard, Bitboard, Bitboard, Bitboard, Bitboard,
                                         Bitboard, Bitboard, Color, Bitboard, std::optional<Square>>;
 
-    TranspositionKey _transpositionKey() const {
+    TranspositionKey _transpositionKey() {
         return {m_pawns,
                 m_knights,
                 m_bishops,

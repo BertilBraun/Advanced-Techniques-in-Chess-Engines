@@ -9,8 +9,7 @@ inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const to
 
 inline int encodeMove(const Move &move);
 
-inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 bool normalize = true);
+inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities);
 
 inline Move decodeMove(int moveIndex);
 
@@ -56,7 +55,7 @@ inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
     for (const auto from_square : range(64)) {
         const auto [row, col] = square_to_index(from_square);
 
-        for (const auto& [dr, dc] : defines::DIRECTIONS) {
+        for (const auto &[dr, dc] : defines::DIRECTIONS) {
             for (int distance : range(1, 8)) {
                 int toRow = row + dr * distance;
                 int toCol = col + dc * distance;
@@ -148,8 +147,7 @@ inline const auto __FLIPPED_INDICES_HORIZONTAL =
     __precalculateFlippedIndices(__MOVE_MAPPINGS).first;
 inline const auto __FLIPPED_INDICES_VERTICAL = __precalculateFlippedIndices(__MOVE_MAPPINGS).second;
 
-inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities,
-                                 bool normalize) {
+inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabilities) {
     // Encodes a list of moves with their corresponding probabilities into a 1D tensor.
     //
     // The list of moves is a list of tuples, where each tuple contains a move and its
@@ -162,28 +160,13 @@ inline torch::Tensor encodeMoves(const std::vector<PolicyMove> &movesWithProbabi
     // :param movesWithProbabilities: The list of moves with their corresponding probabilities.
     // :return: A 1D tensor representing the encoded moves.
 
-    torch::Tensor movesEncoded;
-
-    if (normalize) {
-        // Initialize the tensor with -inf so that the softmax function will set the probability of
-        // illegal moves to 0
-        movesEncoded =
-            torch::full({ACTION_SIZE}, -std::numeric_limits<float>::infinity(), torch::kFloat16);
-    } else {
-        movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat16);
-    }
+    torch::Tensor movesEncoded = torch::zeros({ACTION_SIZE}, torch::kFloat16);
 
     for (const auto &[move, probability] : movesWithProbabilities) {
         movesEncoded[encodeMove(move)] = probability;
     }
 
-    if (!normalize) {
-        return movesEncoded;
-    }
-
-    // Normalize the tensor to be a probability distribution
-    // Softmax multiplied by 20 to make the probabilities more confident
-    return torch::softmax(movesEncoded * 20.f, 0);
+    return movesEncoded / movesEncoded.sum();
 }
 
 inline torch::Tensor __encodeLegalMoves(Board &board) {
@@ -201,7 +184,7 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     for (const auto &move : board.legalMoves()) {
         movesWithProbabilities.emplace_back(move, 1.0);
     }
-    return encodeMoves(movesWithProbabilities, false);
+    return encodeMoves(movesWithProbabilities);
 }
 
 inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {

@@ -34,6 +34,7 @@
 #include <vector>
 
 #include <torch/torch.h>
+
 #ifdef _WIN32
 #pragma warning(pop)
 #endif
@@ -42,23 +43,12 @@ using namespace chess;
 
 static inline constexpr int ROW_COUNT = 8;
 static inline constexpr int COLUMN_COUNT = 8;
-static inline constexpr int NUM_RES_BLOCKS = 15;
-static inline constexpr int NUM_HIDDEN = 256;
 // 6 types for each color
-static inline constexpr int ENCODING_CHANNELS = 6 + 6;
+static inline constexpr int ENCODING_CHANNELS = 6 + 6 + 2;
 
 // Calculated as output of __precalculateMoveMappings() but defined here to be able to use it as a
 // constexpr variable
 static inline constexpr int ACTION_SIZE = 1968;
-
-static inline std::string SAVE_PATH = "models";
-
-static inline const std::filesystem::path MEMORY_DIR =
-    "/pfs/work7/workspace/scratch/uxude-Chess/memory/";
-static inline const std::string CONFIG_FILE_NAME = "last_training_config.pt";
-
-static inline constexpr bool USE_MULTI_THREADED_TRAINING = false;
-static inline constexpr size_t NUM_THREADS_FOR_TRAINING_PER_GPU = 5;
 
 template <typename T> inline size_t index_of(const std::vector<T> &vec, const T &elem) {
     auto it = std::find(vec.begin(), vec.end(), elem);
