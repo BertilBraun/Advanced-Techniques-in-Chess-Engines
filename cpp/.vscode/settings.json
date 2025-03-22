@@ -21,7 +21,18 @@
         "Zobrist"
     ],
     "cmake.configureOnOpen": true,
-    "C_Cpp.default.compilerPath": "cl.exe",
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++-14",
+    "C_Cpp.intelliSenseEngine": "default",
+    "files.exclude": {
+        "**/.git": true,
+        "**/build": true,
+        "**/libtorch**": true,
+    },
+    "C_Cpp.files.exclude": {
+        "**/.git": true,
+        "**/build": true,
+        "**/libtorch**": true,
+    },
     "files.associations": {
         "*.et": "c",
         "vector": "cpp",
@@ -120,5 +131,5 @@
         "codecvt": "cpp",
         "execution": "cpp"
     },
-    "cmake.sourceDirectory": "C:/Projects/ChessBot/cpp"
+    "cmake.sourceDirectory": "C:/Projects/ChessBot/cpp/src"
 }
