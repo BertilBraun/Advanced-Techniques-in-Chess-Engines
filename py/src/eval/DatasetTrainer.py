@@ -75,7 +75,7 @@ def main(dataset_paths: list[str]):
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
         tmp_dataset = SelfPlayTrainDataset(run_id)
-        tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
+        tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
         train_stats = tmp_dataset.stats
 
         # Instantiate the model
@@ -100,7 +100,7 @@ def main(dataset_paths: list[str]):
         for iter in range(pre_iter, NUM_EPOCHS):
             # Instantiate the dataset
             dataset = SelfPlayTrainDataset(run_id)
-            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths])
+            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
 
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)

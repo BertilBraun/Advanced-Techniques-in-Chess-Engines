@@ -25,10 +25,12 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
 
         self.stats = SelfPlayDatasetStats()
 
-    def load_from_files(self, folder_path: str, origins: list[tuple[int, list[Path]]]) -> None:
+    def load_from_files(
+        self, folder_path: str, origins: list[tuple[int, list[Path]]], max_num_repetitions: int
+    ) -> None:
         self.stats = SelfPlayDatasetStats()
 
-        for i in range(5):
+        for i in range(max_num_repetitions):
             for iteration, sublist in origins[::-1]:
                 if len(sublist) == 0:
                     continue

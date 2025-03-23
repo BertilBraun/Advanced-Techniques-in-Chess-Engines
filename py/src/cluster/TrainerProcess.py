@@ -112,11 +112,11 @@ class TrainerProcess:
         validation_dataset_file = (all_dataset_files[-1][0], [all_dataset_files[-1][1].pop(-1)])
 
         dataset = SelfPlayTrainDataset(self.run_id)
-        dataset.load_from_files(self.args.save_path, all_dataset_files)
+        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=5)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 
         validation_dataset = SelfPlayTrainDataset(self.run_id)
-        validation_dataset.load_from_files(self.args.save_path, [validation_dataset_file])
+        validation_dataset.load_from_files(self.args.save_path, [validation_dataset_file], max_num_repetitions=1)
 
         return dataset, validation_dataset
