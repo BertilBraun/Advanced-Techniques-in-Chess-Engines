@@ -4,9 +4,11 @@
 
 #include "../BoardEncoding.hpp"
 #include "../MoveEncoding.hpp"
+#include "../TrainingArgs.hpp"
 #include "MCTSNode.hpp"
 
 typedef std::vector<std::pair<std::vector<MoveScore>, float>> InferenceResult;
+typedef std::array<float, ACTION_SIZE> ActionProbabilities;
 
 struct VisitCounts {
     struct VisitCount {
@@ -16,13 +18,20 @@ struct VisitCounts {
 
     std::vector<VisitCount> visits;
 
-    torch::Tensor actionProbabilities() {
-        auto actionProbabilities = torch::zeros({ACTION_SIZE}, torch::kFloat16);
+    ActionProbabilities actionProbabilities() {
+        ActionProbabilities actionProbabilities = {0};
+
         for (const auto &visit : visits) {
             actionProbabilities[visit.move] = visit.count;
         }
 
-        return actionProbabilities / actionProbabilities.sum();
+        float totalVisits = sum(actionProbabilities);
+
+        for (const auto &visit : visits) {
+            actionProbabilities[visit.move] /= totalVisits;
+        }
+
+        return actionProbabilities;
     }
 };
 
@@ -31,20 +40,18 @@ struct MCTSResult {
     VisitCounts visits;
 };
 
-struct MCTSParams {
-    int num_searches_per_turn;
-    int num_parallel_searches;
-    float c_param;
-    float dirichlet_alpha;
-    float dirichlet_epsilon;
-};
-
 class InferenceClient {
 public:
     // The inference_batch function takes a vector of boards and returns for each board a pair:
     //   - A vector of MoveScore (the move probabilities)
     //   - A float value (the board evaluation)
     InferenceResult inference_batch(std::vector<Board> &boards) const {
+        torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
+
+        // TODO model.eval()
+
+        // TODO periodically (every 5sec or so, check for a new model to load)
+
         InferenceResult results;
         // TODO: Dummy implementation: for each board, return 5 moves with random policies and a
         // dummy value.

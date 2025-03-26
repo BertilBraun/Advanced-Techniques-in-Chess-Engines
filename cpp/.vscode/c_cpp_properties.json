@@ -23,6 +23,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src",
+                "${workspaceFolder}/NumCpp/include",
                 "${workspaceFolder}/libtorch_cpu_linux/include",
                 "${workspaceFolder}/libtorch_cpu_linux/include/torch/csrc/api/include"
             ],
@@ -36,6 +37,7 @@
             "browse": {
                 "path": [
                     "${workspaceFolder}/src",
+                    "${workspaceFolder}/NumCpp/include",
                     "${workspaceFolder}/libtorch_cpu_linux/include",
                     "${workspaceFolder}/libtorch_cpu_linux/include/torch/csrc/api/include"
                 ],

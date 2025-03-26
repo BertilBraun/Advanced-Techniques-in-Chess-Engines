@@ -14,14 +14,14 @@ struct MCTSParams {
     // Higher values enable more parallelism but also increase exploration.
     int num_parallel_searches;
 
-    // Epsilon value for the Dirichlet noise added to the root node to encourage exploration.
-    double dirichlet_epsilon;
+    // The c parameter used in the UCB1 formula to balance exploration and exploitation.
+    double c_param;
 
     // Alpha value for the Dirichlet noise. Typically around 10/number_of_actions.
     double dirichlet_alpha;
 
-    // The c parameter used in the UCB1 formula to balance exploration and exploitation.
-    double c_param;
+    // Epsilon value for the Dirichlet noise added to the root node to encourage exploration.
+    double dirichlet_epsilon;
 };
 
 // Contains the parameters for self-play.

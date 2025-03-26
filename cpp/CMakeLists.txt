@@ -107,6 +107,10 @@ if(UNIX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
     target_link_libraries(${PROJECT_NAME} stdc++fs)
 endif()
 
+# export compile flags to json
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+
 # Include directories
 include_directories(src)
 if(CMAKE_CUDA_COMPILER)

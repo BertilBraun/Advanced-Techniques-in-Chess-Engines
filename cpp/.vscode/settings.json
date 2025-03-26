@@ -136,5 +136,9 @@
         "numbers": "cpp",
         "semaphore": "cpp"
     },
-    "cmake.sourceDirectory": "/mnt/c/Projects/ChessBot/cpp"
+    "cmake.sourceDirectory": "/mnt/c/Projects/ChessBot/cpp",
+    "editor.defaultFormatter": "xaver.clang-format",
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format"
+    }
 }

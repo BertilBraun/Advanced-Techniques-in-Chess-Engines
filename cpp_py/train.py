@@ -1,6 +1,3 @@
-import src.environ_setup  # noqa # isort:skip # This import is necessary for setting up the environment variables
-
-
 if __name__ == '__main__':
     import torch.multiprocessing as mp
 
@@ -35,5 +32,6 @@ if __name__ == '__main__':
     commander = CommanderProcess(run, TRAINING_ARGS)
     for iteration, stats in commander.run():
         log(f'Trainer finished at iteration {iteration}.')
+        log(f'Iteration {iteration}: {stats}')
 
     log('Training finished')

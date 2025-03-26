@@ -1,31 +1,56 @@
 #include "common.hpp"
 
 #include "MCTS/MCTS.hpp"
+#include "TrainingArgs.hpp"
+
+static inline TrainingArgs TRAINING_ARGS = {
+    .save_path = 'training_data/chess',
+    .self_play =
+        {
+            .mcts =
+                {
+                    .num_searches_per_turn = 640,
+                    .num_parallel_searches = 8,
+                    .dirichlet_epsilon = 0.25,
+                    .dirichlet_alpha = 0.3,
+                    .c_param = 1.7,
+                },
+            .num_parallel_games = 32,
+            .num_moves_after_which_to_play_greedy = 25,
+            .max_moves = 250,
+            .result_score_weight = 0.15,
+            .num_games_after_which_to_write = 5,
+            .resignation_threshold = -1.0,
+        },
+};
 
 int main() {
-    InferenceClient client;
-    MCTSParams args = {
-        .num_searches_per_turn = 100,
-        .num_parallel_searches = 4,
-        .c_param = 1.7f,
-        .dirichlet_alpha = 0.3f,
-        .dirichlet_epsilon = 0.25f,
-    };
-    MCTS mcts(&client, args);
+    auto numProcessors = std::thread::hardware_concurrency();
+    auto numGPUs = torch::cuda::device_count();
 
-    // start timestamp
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (int i : range(100)) {
-        std::vector<Board> boards(100);
-        mcts.search(boards);
+    std::vector<InferenceClient> clients;
+    for (int i = 0; i < numGPUs * 2; i++) { // start 2 InferenceClients per GPU
+        clients.emplace_back(i % numGPUs);
     }
 
-    // end timestamp
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "Elapsed time: "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms"
-              << std::endl;
+    SelfPlayWriter writer(TRAINING_ARGS);
+
+    std::vector<std::thread> threads;
+
+    for (size_t i = 0; i < numProcessors; ++i) {
+        threads.emplace_back(std::thread([i, numProcessors, args] {
+            SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play);
+            log("Worker process", i + 1, "of", numProcessors, "started");
+
+            while (true) {
+                timeit([&] { selfPlay.selfPlay(); }, "selfPlay");
+            }
+        }));
+    }
+
+    for (auto &thread : threads) {
+        thread.join();
+    }
 
     return 0;
 }

@@ -11,9 +11,10 @@
 #pragma warning(disable : 6262)
 #endif
 
-#include "Log.hpp"
-#include "Time.hpp"
 #include "chess.hpp"
+#include "util/Log.hpp"
+#include "util/Time.hpp"
+
 
 #include "util/py.hpp"
 
@@ -41,10 +42,15 @@
 
 using namespace chess;
 
-static inline constexpr int ROW_COUNT = 8;
-static inline constexpr int COLUMN_COUNT = 8;
-// 6 types for each color
-static inline constexpr int ENCODING_CHANNELS = 6 + 6 + 2;
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+
+typedef int8_t int8;
+typedef int16_t int16;
+typedef int32_t int32;
+typedef int64_t int64;
 
 // Calculated as output of __precalculateMoveMappings() but defined here to be able to use it as a
 // constexpr variable
