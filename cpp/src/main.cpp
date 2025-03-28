@@ -1,7 +1,8 @@
 #include "common.hpp"
 
 #include "MCTS/MCTS.hpp"
-#include "TrainingArgs.hpp"
+#include "SelfPlay/SelfPlay.hpp"
+#include "SelfPlay/SelfPlayWriter.hpp"
 
 static inline TrainingArgs TRAINING_ARGS = {
     .save_path = 'training_data/chess',
@@ -11,9 +12,14 @@ static inline TrainingArgs TRAINING_ARGS = {
                 {
                     .num_searches_per_turn = 640,
                     .num_parallel_searches = 8,
-                    .dirichlet_epsilon = 0.25,
-                    .dirichlet_alpha = 0.3,
                     .c_param = 1.7,
+                    .dirichlet_alpha = 0.3,
+                    .dirichlet_epsilon = 0.25,
+                },
+            .writer =
+                {
+                    .filePrefix = 'batch',
+                    .batchSize = 5000,
                 },
             .num_parallel_games = 32,
             .num_moves_after_which_to_play_greedy = 25,
@@ -33,12 +39,12 @@ int main() {
         clients.emplace_back(i % numGPUs);
     }
 
-    SelfPlayWriter writer(TRAINING_ARGS);
+    SelfPlayWriter writer(TRAINING_ARGS.self_play);
 
     std::vector<std::thread> threads;
 
     for (size_t i = 0; i < numProcessors; ++i) {
-        threads.emplace_back(std::thread([i, numProcessors, args] {
+        threads.emplace_back(std::thread([&] {
             SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play);
             log("Worker process", i + 1, "of", numProcessors, "started");
 

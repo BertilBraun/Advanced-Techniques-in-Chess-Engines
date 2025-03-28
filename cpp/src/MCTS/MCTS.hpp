@@ -1,94 +1,18 @@
 #pragma once
 
-#include "../common.hpp"
+#include "common.hpp"
 
 #include "../BoardEncoding.hpp"
 #include "../MoveEncoding.hpp"
-#include "../TrainingArgs.hpp"
 #include "MCTSNode.hpp"
+#include "VisitCounts.hpp"
 
-typedef std::vector<std::pair<std::vector<MoveScore>, float>> InferenceResult;
-typedef std::array<float, ACTION_SIZE> ActionProbabilities;
-
-struct VisitCounts {
-    struct VisitCount {
-        int move;
-        int count;
-    };
-
-    std::vector<VisitCount> visits;
-
-    ActionProbabilities actionProbabilities() {
-        ActionProbabilities actionProbabilities = {0};
-
-        for (const auto &visit : visits) {
-            actionProbabilities[visit.move] = visit.count;
-        }
-
-        float totalVisits = sum(actionProbabilities);
-
-        for (const auto &visit : visits) {
-            actionProbabilities[visit.move] /= totalVisits;
-        }
-
-        return actionProbabilities;
-    }
-};
+#include "../InferenceClient.hpp"
 
 struct MCTSResult {
     float result;
     VisitCounts visits;
 };
-
-class InferenceClient {
-public:
-    // The inference_batch function takes a vector of boards and returns for each board a pair:
-    //   - A vector of MoveScore (the move probabilities)
-    //   - A float value (the board evaluation)
-    InferenceResult inference_batch(std::vector<Board> &boards) const {
-        torch::NoGradGuard no_grad; // Disable gradient calculation equivalent to torch.no_grad()
-
-        // TODO model.eval()
-
-        // TODO periodically (every 5sec or so, check for a new model to load)
-
-        InferenceResult results;
-        // TODO: Dummy implementation: for each board, return 5 moves with random policies and a
-        // dummy value.
-        for (auto &board : boards) {
-            auto legalMoves = board.legalMoves();
-            std::vector<MoveScore> moves;
-            for (auto move : legalMoves) {
-                moves.emplace_back(encodeMove(move),
-                                   1.0f / legalMoves.size()); // Dummy uniform policy
-            }
-            results.emplace_back(moves, 0.0f);
-        }
-        return results;
-    }
-};
-
-template <typename T> T lerp(T a, T b, float t) { return (1 - t) * a + t * b; }
-
-std::vector<float> dirichlet(float alpha, size_t n) {
-    // Sample from a Dirichlet distribution with parameter alpha.
-    std::mt19937 random_engine(std::random_device{}());
-    std::gamma_distribution<float> gamma(alpha, 1.0);
-
-    std::vector<float> noise(n);
-    float sum = 0.0f;
-    for (size_t i = 0; i < n; i++) {
-        noise[i] = gamma(random_engine);
-        sum += noise[i];
-    }
-
-    float norm = 1.0f / sum;
-    for (size_t i = 0; i < n; i++) {
-        noise[i] *= norm;
-    }
-
-    return noise;
-}
 
 class MCTS {
 public:
@@ -99,9 +23,10 @@ public:
             return {};
 
         // Get policy moves (with noise) for the given boards.
-        std::vector<std::vector<MoveScore>> movesList = _get_policy_with_noise(boards);
+        const std::vector<std::vector<MoveScore>> movesList = _get_policy_with_noise(boards);
 
         std::vector<MCTSNode> roots;
+        roots.reserve(boards.size());
         for (const auto &[board, moves] : zip(boards, movesList)) {
             // Since no node is pre-expanded, create a new root.
             MCTSNode root = MCTSNode::root(board);
@@ -116,8 +41,10 @@ public:
 
         // Build and return the results.
         std::vector<MCTSResult> results;
+        results.reserve(roots.size());
         for (const MCTSNode &root : roots) {
             VisitCounts visitCounts;
+            visitCounts.visits.reserve(root.children.size());
             for (const MCTSNode &child : root.children) {
                 visitCounts.visits.emplace_back(child.encoded_move_to_get_here,
                                                 child.number_of_visits);
@@ -131,6 +58,7 @@ public:
     // This method performs several iterations of tree search in parallel.
     void parallel_iterate(std::vector<MCTSNode> &roots) const {
         std::vector<MCTSNode *> nodes;
+        nodes.reserve(roots.size() * args.num_parallel_searches);
         for (int i = 0; i < args.num_parallel_searches; i++) {
             for (MCTSNode &root : roots) {
                 std::optional<MCTSNode *> node =
@@ -151,7 +79,7 @@ public:
             boards.push_back(node->board);
 
         // Run inference in batch.
-        InferenceResult results = client->inference_batch(boards);
+        const InferenceResult results = client->inference_batch(boards);
 
         for (auto [node, result] : zip(nodes, results)) {
             const auto &[moves, value] = result;
@@ -167,9 +95,10 @@ private:
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>> _get_policy_with_noise(std::vector<Board> &boards) const {
-        InferenceResult inferenceResults = client->inference_batch(boards);
+        const InferenceResult inferenceResults = client->inference_batch(boards);
 
         std::vector<std::vector<MoveScore>> noisyMoves;
+        noisyMoves.reserve(inferenceResults.size());
         for (auto &result : inferenceResults) {
             noisyMoves.push_back(_add_noise(result.first));
         }
@@ -178,7 +107,7 @@ private:
 
     // Add Dirichlet noise to a vector of MoveScore.
     std::vector<MoveScore> _add_noise(const std::vector<MoveScore> &moves) const {
-        std::vector<float> noiseList = dirichlet(args.dirichlet_alpha, moves.size());
+        const std::vector<float> noiseList = dirichlet(args.dirichlet_alpha, moves.size());
 
         std::vector<MoveScore> noisyMoves;
         noisyMoves.reserve(moves.size());

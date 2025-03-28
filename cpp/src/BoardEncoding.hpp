@@ -7,7 +7,8 @@
 // 6 types for each color + 1 for castling and en passant + 1 for current player
 static inline constexpr int ENCODING_CHANNELS = 6 + 6 + 2;
 
-typedef std::array<std::array<std::array<int8, 8>, 8>, ENCODING_CHANNELS> EncodedBoard;
+typedef std::array<std::array<std::array<int8, BOARD_LENGTH>, BOARD_LENGTH>, ENCODING_CHANNELS>
+    EncodedBoard;
 typedef std::array<uint64, ENCODING_CHANNELS> CompressedEncodedBoard;
 
 CompressedEncodedBoard encodeBoard(const Board &board) {
@@ -34,11 +35,18 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     }
 
     encodedBoard[12] = ( // The castling rights encoded in the corners of a bitboard
-        board.hasKingsideCastlingRights(WHITE) << (0) |      // Upper left corner
-        board.hasQueensideCastlingRights(WHITE) << (8 - 1) | // Upper right corner
-        board.hasKingsideCastlingRights(BLACK) << (64 - 8) | // Bottom left corner
-        board.hasQueensideCastlingRights(BLACK) << (64 - 1)  // Bottom right corner
+        board.hasKingsideCastlingRights(WHITE) << (0) |                 // Upper left corner
+        board.hasQueensideCastlingRights(WHITE) << (BOARD_LENGTH - 1) | // Upper right corner
+        board.hasKingsideCastlingRights(BLACK)
+            << (BOARD_SIZE - BOARD_LENGTH) |                        // Bottom left corner
+        board.hasQueensideCastlingRights(BLACK) << (BOARD_SIZE - 1) // Bottom right corner
     );
+
+    if (board.ep_square.has_value()) {
+        Square square = board.ep_square.value();
+        assert(square != 0 && square != 7 && square != 56 && square != 63);
+        encodedBoard[12] |= (1 << square);
+    }
 
     encodedBoard[13] = (board.turn == WHITE) ? 0xFFFFFFFFFFFFFFFF : 0;
 
@@ -48,18 +56,19 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
     return encodedBoard;
 }
 
-CompressedEncodedBoard binaryTo64Bit(const EncodedBoard &binary) {
+CompressedEncodedBoard compress(const EncodedBoard &binary) {
     // Converts a binary array to a compressed 64-bit array.
     //
     // :param binary: The binary array to convert.
     // :return: The 64-bit array.
 
-    std::array<uint64, ENCODING_CHANNELS> compressed{};
+    CompressedEncodedBoard compressed{};
 
     for (int channel : range(ENCODING_CHANNELS)) {
-        for (int row : range(8)) {
-            for (int col : range(8)) {
-                compressed[channel] |= (uint64) binary[channel][row][col] << (row * 8 + col);
+        for (int row : range(BOARD_LENGTH)) {
+            for (int col : range(BOARD_LENGTH)) {
+                compressed[channel] |= (uint64) binary[channel][row][col]
+                                       << (row * BOARD_LENGTH + col);
             }
         }
     }
@@ -67,7 +76,7 @@ CompressedEncodedBoard binaryTo64Bit(const EncodedBoard &binary) {
     return compressed;
 }
 
-EncodedBoard 64BitToBinary(const CompressedEncodedBoard &compressed) {
+EncodedBoard decompress(const CompressedEncodedBoard &compressed) {
     // Converts a compressed 64-bit array to a binary array.
     //
     // :param compressed: The 64-bit array to convert.
@@ -76,9 +85,9 @@ EncodedBoard 64BitToBinary(const CompressedEncodedBoard &compressed) {
     EncodedBoard binary{};
 
     for (int channel : range(ENCODING_CHANNELS)) {
-        for (int row : range(8)) {
-            for (int col : range(8)) {
-                binary[channel][row][col] = (compressed[channel] >> (row * 8 + col)) & 1;
+        for (int row : range(BOARD_LENGTH)) {
+            for (int col : range(BOARD_LENGTH)) {
+                binary[channel][row][col] = (compressed[channel] >> (row * BOARD_LENGTH + col)) & 1;
             }
         }
     }

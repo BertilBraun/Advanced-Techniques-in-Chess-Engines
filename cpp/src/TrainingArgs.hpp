@@ -15,18 +15,25 @@ struct MCTSParams {
     int num_parallel_searches;
 
     // The c parameter used in the UCB1 formula to balance exploration and exploitation.
-    double c_param;
+    float c_param;
 
     // Alpha value for the Dirichlet noise. Typically around 10/number_of_actions.
-    double dirichlet_alpha;
+    float dirichlet_alpha;
 
     // Epsilon value for the Dirichlet noise added to the root node to encourage exploration.
-    double dirichlet_epsilon;
+    float dirichlet_epsilon;
+};
+
+struct WriterParams {
+    std::string filePrefix;
+    size_t batchSize;
 };
 
 // Contains the parameters for self-play.
 struct SelfPlayParams {
     MCTSParams mcts;
+
+    WriterParams writer;
 
     // The number of games to run in parallel for self-play.
     int num_parallel_games;
@@ -39,16 +46,16 @@ struct SelfPlayParams {
 
     // Sampling temperature for move selection during self-play.
     // A temperature of 1.0 is the same as the raw policy; 0.0 is pure argmax.
-    double temperature = 1.25;
+    float temperature = 1.25f;
 
     // Weight for interpolating between the final game outcome and the MCTS result score.
-    double result_score_weight = 0.5;
+    float result_score_weight = 0.5f;
 
     // Number of games to collect before writing them to disk.
     int num_games_after_which_to_write = 5;
 
     // Resignation threshold; if the MCTS result score falls below this, the game is resigned.
-    double resignation_threshold = -0.85;
+    float resignation_threshold = -0.85f;
 };
 
 // Contains the top-level training arguments.

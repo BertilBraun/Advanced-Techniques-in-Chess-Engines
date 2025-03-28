@@ -172,6 +172,22 @@ template <typename Container> impl::enumerate_wrapper<Container> enumerate(Conta
     return impl::enumerate_wrapper<Container>(container);
 }
 
+// reverse wrapper
+template <typename Container> class reverse_wrapper {
+public:
+    explicit reverse_wrapper(Container &container) : container_(container) {}
+
+    auto begin() { return std::rbegin(container_); }
+    auto end() { return std::rend(container_); }
+
+private:
+    Container &container_;
+};
+
+template <typename Container> reverse_wrapper<Container> reverse(Container &container) {
+    return reverse_wrapper<Container>(container);
+}
+
 // Generic sum function for any iterable container
 template <typename Container> auto sum(const Container &container) {
     using ValueType = typename std::decay<decltype(*std::begin(container))>::type;
@@ -230,3 +246,8 @@ template <typename Container> size_t multinomial(const Container &container) {
     }
     return container.size() - 1;
 }
+
+// Generic clamp function for any type
+template <typename T> T clamp(T value, T min, T max) { return std::max(min, std::min(value, max)); }
+
+template <typename T> T lerp(T a, T b, float t) { return (1 - t) * a + t * b; }

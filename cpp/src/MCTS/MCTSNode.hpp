@@ -4,8 +4,6 @@
 
 #include "../MoveEncoding.hpp"
 
-typedef std::pair<int, float> MoveScore;
-
 class MCTSNode {
 public:
     static MCTSNode root(Board board) {

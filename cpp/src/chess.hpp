@@ -1837,13 +1837,14 @@ public:
         }
     }
 
-    bool operator==(Board &other) {
+    bool operator==(const Board &other) const {
         return halfmove_clock == other.halfmove_clock && fullmove_number == other.fullmove_number &&
                m_pawns == other.m_pawns && m_knights == other.m_knights &&
                m_bishops == other.m_bishops && m_rooks == other.m_rooks &&
                m_queens == other.m_queens && m_kings == other.m_kings &&
                m_occupied == other.m_occupied && m_occupied_color == other.m_occupied_color &&
-               m_promoted == other.m_promoted && _transpositionKey() == other._transpositionKey();
+               m_promoted ==
+                   other.m_promoted; //  && _transpositionKey() == other._transpositionKey();
     }
 
     Board copy() const {
