@@ -25,6 +25,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -33,8 +35,13 @@
 #include <stddef.h>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
+#include <torch/script.h>
 #include <torch/torch.h>
 
 #ifdef _WIN32

@@ -95,6 +95,19 @@ EncodedBoard decompress(const CompressedEncodedBoard &compressed) {
     return binary;
 }
 
+uint64 hash(const CompressedEncodedBoard &compressed) {
+    // Computes the hash of a compressed 64-bit array.
+    //
+    // :param compressed: The 64-bit array to hash.
+    // :return: The hash of the array.
+
+    uint64 hash = 0;
+    for (int channel : range(ENCODING_CHANNELS)) {
+        hash ^= compressed[channel] + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    }
+    return hash;
+}
+
 Board decodeBoard(const EncodedBoard &encodedBoard) {
     // Decodes a 12x8x8 tensor into a chess board.
     //

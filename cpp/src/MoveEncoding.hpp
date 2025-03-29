@@ -2,7 +2,6 @@
 
 #include "common.hpp"
 
-typedef std::pair<Move, float> PolicyMove;
 typedef std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, BOARD_SIZE>, BOARD_SIZE>
     MoveMapping;
 
@@ -179,8 +178,8 @@ inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, B
     return filteredPolicy;
 }
 
-inline std::vector<PolicyMove> __mapPolicyToMoves(const torch::Tensor &policy) {
-    std::vector<PolicyMove> movesWithProbabilities;
+inline std::vector<MoveScore> __mapPolicyToMoves(const torch::Tensor &policy) {
+    std::vector<MoveScore> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
     for (int i = 0; i < (int) nonzeroIndices.size(0); ++i) {
@@ -193,8 +192,8 @@ inline std::vector<PolicyMove> __mapPolicyToMoves(const torch::Tensor &policy) {
     return movesWithProbabilities;
 }
 
-inline std::vector<PolicyMove> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
-                                                                        Board &board) {
+inline std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+                                                                       Board &board) {
     // Gets a list of moves with their corresponding probabilities from a policy.
     //
     // The policy is a 1D tensor representing the probabilities of each move
@@ -266,7 +265,7 @@ inline torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::
     return filteredPolicy;
 }
 
-inline std::vector<PolicyMove>
+inline std::vector<MoveScore>
 filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(const torch::Tensor &policy,
                                                            Board &board) {
     // Gets a list of moves with their corresponding probabilities from a policy.
