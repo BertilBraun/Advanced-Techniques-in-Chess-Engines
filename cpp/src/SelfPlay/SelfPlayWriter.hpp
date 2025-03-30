@@ -1,18 +1,19 @@
 #pragma once
 
+#include "TrainingArgs.hpp"
+#include "common.hpp"
+
 #include "BoardEncoding.hpp"
 #include "MCTS/VisitCounts.hpp"
 #include "MoveEncoding.hpp"
 #include "SelfPlayGame.hpp"
-#include "common.hpp"
 #include "util/json.hpp"
-#include <filesystem>
-#include <mutex>
 
 class SelfPlayWriter {
 public:
     // Constructor takes a file prefix, the batch size, and optional user metadata.
-    SelfPlayWriter(SelfPlayParams selfPlayArgs) : m_args(selfPlayArgs), m_batchCounter(0) {}
+    SelfPlayWriter(TrainingArgs args, TensorBoardLogger &logger)
+        : m_args(args), m_logger(logger), m_batchCounter(0) {}
 
     ~SelfPlayWriter() {
         if (!m_samples.empty()) {
@@ -41,8 +42,8 @@ public:
             const CompressedEncodedBoard encodedBoard = encodeBoard(mem.board);
             // Adjust outcome based on turn.
             const float turnGameOutcome = (game.board.turn == mem.board.turn) ? outcome : -outcome;
-            const float resultScore =
-                clamp(turnGameOutcome + m_args.result_score_weight * mem.result, -1.0f, 1.0f);
+            const float resultScore = clamp(
+                turnGameOutcome + m_args.self_play.result_score_weight * mem.result, -1.0f, 1.0f);
 
             // Process symmetric variations.
             auto variations =
@@ -53,6 +54,40 @@ public:
             }
             outcome *= 0.997f; // discount the game outcome for each move
         }
+    }
+
+    void updateIteration(int iteration) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (!m_samples.empty()) {
+            // Flush any remaining samples to file.
+            // This is important to ensure that all samples are written before the next iteration.
+            _flushBatch();
+        }
+
+        // Log statistics to TensorBoard.
+        m_logger.add_scalar("dataset/num_samples", iteration, m_stats.num_samples);
+        m_logger.add_scalar("dataset/num_games", iteration, m_stats.num_games);
+        m_logger.add_scalar("dataset/game_lengths", iteration, m_stats.game_lengths);
+        m_logger.add_scalar("dataset/total_generation_time", iteration,
+                            m_stats.total_generation_time);
+        m_logger.add_scalar("dataset/resignations", iteration, m_stats.resignations);
+        m_logger.add_scalar("dataset/num_too_long_games", iteration, m_stats.num_too_long_games);
+        m_logger.add_scalar("dataset/num_samples_per_game", iteration,
+                            static_cast<double>(m_stats.num_samples) / m_stats.num_games);
+
+        // Update the save path for the current iteration.
+        m_savePath = m_args.save_path + "/iteration_" + std::to_string(iteration);
+        // The next batch will start from 0.
+        m_batchCounter = 0;
+
+        // Ensure the save path exists.
+        if (!std::filesystem::exists(m_savePath)) {
+            std::filesystem::create_directories(m_savePath);
+        }
+
+        // resets all statistics to defaults
+        m_stats = Stats();
     }
 
 private:
@@ -88,13 +123,15 @@ private:
     }
 
     std::string _getSaveFilename() {
-        std::string filename =
-            m_args.writer.filePrefix + "_" + std::to_string(m_batchCounter) + ".bin";
+        assert(m_savePath != "THIS_IS_NOT_SET");
+        std::string filename = m_savePath + "/" + m_args.writer.filePrefix + "_" +
+                               std::to_string(m_batchCounter) + ".bin";
         m_batchCounter += 1;
 
         // while file already exists, update filename and increase batchCounter
         while (std::filesystem::exists(std::filesystem::path{filename})) {
-            filename = m_args.writer.filePrefix + "_" + std::to_string(m_batchCounter) + ".bin";
+            filename = m_savePath + "/" + m_args.writer.filePrefix + "_" +
+                       std::to_string(m_batchCounter) + ".bin";
             m_batchCounter += 1;
         }
 
@@ -189,12 +226,12 @@ private:
     VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) const {
         VisitCounts flippedVisitCounts;
         for (const auto &[move, count] : visitCounts.visits) {
-            Move flippedMove = decodeMove(move);
-            auto [moveFromRow, moveFromCol] = squareToIndex(flippedMove.fromSquare());
-            auto [moveToRow, moveToCol] = squareToIndex(flippedMove.toSquare());
-            Square flippedMoveFrom = square(moveFromRow, BOARD_LENGTH - 1 - moveFromCol);
-            Square flippedMoveTo = square(moveToRow, BOARD_LENGTH - 1 - moveToCol);
-            int flippedIndex =
+            const Move flippedMove = decodeMove(move);
+            const auto [moveFromRow, moveFromCol] = squareToIndex(flippedMove.fromSquare());
+            const auto [moveToRow, moveToCol] = squareToIndex(flippedMove.toSquare());
+            const Square flippedMoveFrom = square(moveFromRow, BOARD_LENGTH - 1 - moveFromCol);
+            const Square flippedMoveTo = square(moveToRow, BOARD_LENGTH - 1 - moveToCol);
+            const int flippedIndex =
                 encodeMove(Move(flippedMoveFrom, flippedMoveTo, flippedMove.promotion()));
             flippedVisitCounts.visits.push_back({flippedIndex, count});
         }
@@ -232,7 +269,9 @@ private:
     }
 
 private:
-    SelfPlayParams m_args;
+    TrainingArgs m_args;
+    std::string m_savePath = "THIS_IS_NOT_SET"; // This will be set in updateIteration
+    TensorBoardLogger &m_logger;
 
     // Members for sample batch and file naming.
     size_t m_batchCounter;

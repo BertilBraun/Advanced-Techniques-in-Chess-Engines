@@ -209,6 +209,30 @@ inline std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const tor
     return movesWithProbabilities;
 }
 
+inline std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &moves,
+                                                        Board &board) {
+    // Filters a list of moves with the legal moves of a chess board.
+    //
+    // The list of moves is a list of tuples, where each tuple contains a move
+    // and its corresponding probability. The legal moves are encoded in a 1D tensor,
+    // where each entry is 1 if the corresponding move is legal, and 0 otherwise.
+    // The list of moves is then filtered to only include the legal moves.
+
+    std::unordered_set<int> legalMovesSet;
+    for (const Move &move : board.legalMoves()) {
+        legalMovesSet.insert(encodeMove(move));
+    }
+
+    std::vector<MoveScore> filteredMoves;
+    filteredMoves.reserve(moves.size());
+    for (const auto &[move, probability] : moves) {
+        if (legalMovesSet.find(move) != legalMovesSet.end()) {
+            filteredMoves.emplace_back(move, probability);
+        }
+    }
+    return filteredMoves;
+}
+
 inline torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
                                                                    Board &board) {
     // Filters a policy with the legal moves of a chess board but also allows all en passant moves.

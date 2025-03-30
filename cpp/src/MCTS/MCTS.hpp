@@ -16,7 +16,8 @@ struct MCTSResult {
 
 class MCTS {
 public:
-    MCTS(InferenceClient *client, const MCTSParams &args) : client(client), args(args) {}
+    MCTS(InferenceClient *client, const MCTSParams &args, TensorBoardLogger &logger)
+        : client(client), args(args), m_logger(logger) {}
 
     std::vector<MCTSResult> search(std::vector<Board> &boards) const {
         if (boards.empty())
@@ -52,6 +53,8 @@ public:
             results.push_back({root.result_score, visitCounts});
         }
 
+        _logMCTSStatistics(roots);
+
         return results;
     }
 
@@ -79,7 +82,8 @@ public:
             boards.push_back(node->board);
 
         // Run inference in batch.
-        const InferenceResult results = client->inference_batch(boards);
+        const std::vector<InferenceResult> results =
+            timeit([&] { return client->inference_batch(boards); }, "Inference");
 
         for (auto [node, result] : zip(nodes, results)) {
             const auto &[moves, value] = result;
@@ -92,10 +96,11 @@ public:
 private:
     InferenceClient *client;
     MCTSParams args;
+    TensorBoardLogger &m_logger;
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>> _get_policy_with_noise(std::vector<Board> &boards) const {
-        const InferenceResult inferenceResults = client->inference_batch(boards);
+        const std::vector<InferenceResult> inferenceResults = client->inference_batch(boards);
 
         std::vector<std::vector<MoveScore>> noisyMoves;
         noisyMoves.reserve(inferenceResults.size());
@@ -137,47 +142,44 @@ private:
         }
         return {node};
     }
-};
 
-/*
-void log_details(const std::vector<MCTSNode> &roots) {
-
-    // Compute the depth of each search tree using a DFS.
-    auto dfs = [&](MCTSNode *node, auto &dfs_ref) -> int {
-        if (!node || !node->is_fully_expanded())
-            return 0;
-        int max_depth = 0;
-        for (MCTSNode *child : node->children) {
-            int d = dfs_ref(child, dfs_ref);
-            if (d > max_depth)
-                max_depth = d;
-        }
-        return 1 + max_depth;
-    };
-    std::vector<int> depths;
-    for (MCTSNode *root : roots) {
-        depths.push_back(dfs(root, dfs));
-    }
-    float average_depth = sum(depths) / depths.size();
-    log_scalar("dataset/average_search_depth", average_depth);
-
-    // Compute the entropy of the visit counts.
-    auto entropy = [](MCTSNode *node) -> float {
-        int total = node->number_of_visits();
-        float ent = 0.0f;
-        for (int v : node->children_number_of_visits) {
-            if (v > 0) {
-                float p = static_cast<float>(v) / total;
-                ent -= p * std::log2(p);
+    void _logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
+        // Compute the depth of each search tree using a DFS.
+        auto dfs = [&](const MCTSNode &node, auto &dfs_ref) -> int {
+            if (!node.isFullyExpanded())
+                return 0;
+            int max_depth = 0;
+            for (const MCTSNode &child : node.children) {
+                int d = dfs_ref(child, dfs_ref);
+                if (d > max_depth)
+                    max_depth = d;
             }
+            return 1 + max_depth;
+        };
+        std::vector<int> depths;
+        for (const MCTSNode &root : roots) {
+            depths.push_back(dfs(root, dfs));
         }
-        return ent;
-    };
-    std::vector<float> entropies;
-    for (MCTSNode *root : roots) {
-        entropies.push_back(entropy(root));
+        float average_depth = (float) sum(depths) / depths.size();
+        m_logger.add_scalar("dataset/average_search_depth", average_depth);
+
+        // Compute the entropy of the visit counts.
+        auto entropy = [](const MCTSNode &node) -> float {
+            int total = node.number_of_visits;
+            float ent = 0.0f;
+            for (const MCTSNode &child : node.children) {
+                if (child.number_of_visits > 0) {
+                    float p = static_cast<float>(child.number_of_visits) / total;
+                    ent -= p * std::log2(p);
+                }
+            }
+            return ent;
+        };
+        std::vector<float> entropies;
+        for (const MCTSNode &root : roots) {
+            entropies.push_back(entropy(root));
+        }
+        float average_entropy = sum(entropies) / entropies.size();
+        m_logger.add_scalar("dataset/average_search_entropy", average_entropy);
     }
-    float average_entropy = sum(entropies) / entropies.size();
-    log_scalar("dataset/average_search_entropy", average_entropy);
-}
-    */
+};

@@ -1,5 +1,7 @@
 # C++ Port of Alpha-Zero Chess Bot
 
+// TODO update the readme
+
 As described in the [Future Works](../documentation/future.md) Section of the Python implementation, a lot of performance is lost due to the limited parallelization capabilities of Python regarding the GIL. This project aims to port the Alpha-Zero Chess Bot to C++ to take advantage of the better parallelization capabilities of C++ as well as the better performance of C++ in general.
 
 ## Documentation

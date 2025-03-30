@@ -18,8 +18,9 @@ private:
     MCTS m_mcts;
 
 public:
-    SelfPlay(InferenceClient *inferenceClient, SelfPlayWriter *writer, SelfPlayParams args)
-        : m_writer(writer), m_args(args), m_mcts(inferenceClient, args.mcts) {
+    SelfPlay(InferenceClient *inferenceClient, SelfPlayWriter *writer, SelfPlayParams args,
+             TensorBoardLogger &logger)
+        : m_writer(writer), m_args(args), m_mcts(inferenceClient, args.mcts, logger) {
         // Initialize the self-play games with the number of parallel games.
         m_selfPlayGames.resize(args.num_parallel_games);
     }
@@ -31,7 +32,8 @@ public:
             boards.push_back(game.board);
         }
 
-        const std::vector<MCTSResult> results = m_mcts.search(boards);
+        const std::vector<MCTSResult> results =
+            timeit([&] { return m_mcts.search(boards); }, "MCTS search");
 
         assert(m_selfPlayGames.size() == m_args.num_parallel_games);
 

@@ -43,7 +43,19 @@ else()
 endif()
 find_package(Torch REQUIRED)
 
-# Collect all source files (adjust pattern as needed)
+# --- Add tensorboard_logger via FetchContent ---
+include(FetchContent)
+FetchContent_Declare(
+    tensorboard_logger
+    GIT_REPOSITORY      https://github.com/RustingSword/tensorboard_logger.git
+    GIT_TAG             master
+)
+FetchContent_MakeAvailable(tensorboard_logger)
+# This will add a target named "tensorboard_logger"
+# (Make sure Protobuf is installed or find_package(Protobuf REQUIRED) is successful.) (sudo apt-get install protobuf-compiler libprotobuf-dev)
+find_package(Protobuf REQUIRED)
+
+# Collect all source files
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # General warnings
@@ -53,19 +65,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 message(STATUS "MSVC: ${MSVC}")
 message(STATUS "UNIX: ${UNIX}")
 
-# Set compiler-specific flags for Debug and Release builds using list variables
 if(MSVC)
-    # MSVC flags
     set(debug_flags_list "/Od" "/Zi")
     set(release_flags_list "/O2" "/DNDEBUG")
     set(linker_release_flags_list "/LTCG")
 else()
-    # For GCC/Clang, use -O0 and -g
     set(debug_flags_list "-Og" "-g")
     set(release_flags_list "-O3" "-ffast-math" "-DNDEBUG" "-march=native")
 endif()
 
-# Set CUDA flags if CUDA is enabled (as lists)
 if(CMAKE_CUDA_COMPILER)
     if(MSVC)
         set(cuda_debug_flags_list "-G" "-g")
@@ -78,11 +86,8 @@ endif()
 
 # Define the executable target
 add_executable(${PROJECT_NAME} ${SOURCES})
-
-# Use Precompiled Header (PCH) from src/common.hpp
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/common.hpp)
 
-# Apply compile options based on build configuration using generator expressions
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:DEBUG>:${debug_flags_list}>
     $<$<CONFIG:RELEASE>:${release_flags_list}>
@@ -94,8 +99,8 @@ if(CMAKE_CUDA_COMPILER)
     )
 endif()
 
-# Link LibTorch libraries
-target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
+# Link LibTorch and tensorboard_logger libraries
+target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}" tensorboard_logger)
 
 # Append linker flags for MSVC Release builds
 if(MSVC)
@@ -120,8 +125,9 @@ elseif(UNIX)
 elseif(MSVC)
     include_directories(libtorch_cpu_win/include)
 endif()
+target_include_directories(${PROJECT_NAME} PRIVATE ${tensorboard_logger_SOURCE_DIR}/include)
 
-# Copy DLLs on Windows after build
+
 if(MSVC)
     file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
     add_custom_command(TARGET ${PROJECT_NAME}

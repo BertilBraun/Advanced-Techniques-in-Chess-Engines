@@ -19,6 +19,9 @@ if __name__ == '__main__':
     log('Training args:')
     log(TRAINING_ARGS, use_pprint=True)
 
+    # TODO make sure to Write the first model to "save_path/model_1.pt" before starting the C++ self players
+    # TODO pass the run id to the C++ self players
+
     run = get_run_id()
     log(f'Run ID: {run}')
 

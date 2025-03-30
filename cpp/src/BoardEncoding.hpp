@@ -95,6 +95,26 @@ EncodedBoard decompress(const CompressedEncodedBoard &compressed) {
     return binary;
 }
 
+torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device device) {
+    // Converts a compressed 64-bit array to a uncompressed ENCODING_CHANNELS x 8 x 8 tensor.
+    //
+    // :param compressed: The 64-bit array to convert.
+    // :return: The uncompressed tensor.
+
+    torch::Tensor tensor =
+        torch::empty({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH}, torch::kByte).to(device);
+
+    for (int channel : range(ENCODING_CHANNELS)) {
+        for (int row : range(BOARD_LENGTH)) {
+            for (int col : range(BOARD_LENGTH)) {
+                tensor[channel][row][col] = (compressed[channel] >> (row * BOARD_LENGTH + col)) & 1;
+            }
+        }
+    }
+
+    return tensor;
+}
+
 uint64 hash(const CompressedEncodedBoard &compressed) {
     // Computes the hash of a compressed 64-bit array.
     //

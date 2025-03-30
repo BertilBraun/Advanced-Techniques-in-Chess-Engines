@@ -33,8 +33,6 @@ struct WriterParams {
 struct SelfPlayParams {
     MCTSParams mcts;
 
-    WriterParams writer;
-
     // The number of games to run in parallel for self-play.
     int num_parallel_games;
 
@@ -51,11 +49,12 @@ struct SelfPlayParams {
     // Weight for interpolating between the final game outcome and the MCTS result score.
     float result_score_weight = 0.5f;
 
-    // Number of games to collect before writing them to disk.
-    int num_games_after_which_to_write = 5;
-
     // Resignation threshold; if the MCTS result score falls below this, the game is resigned.
     float resignation_threshold = -0.85f;
+};
+
+struct InferenceParams {
+    size_t maxBatchSize = 128;
 };
 
 // Contains the top-level training arguments.
@@ -64,4 +63,8 @@ struct TrainingArgs {
     std::string save_path;
 
     SelfPlayParams self_play;
+
+    WriterParams writer;
+
+    InferenceParams inference;
 };

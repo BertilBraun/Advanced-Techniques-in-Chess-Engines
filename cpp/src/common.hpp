@@ -28,9 +28,13 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <random>
 #include <stddef.h>
 #include <stdexcept>
@@ -43,6 +47,8 @@
 
 #include <torch/script.h>
 #include <torch/torch.h>
+
+#include "tensorboard_logger.h"
 
 #ifdef _WIN32
 #pragma warning(pop)
