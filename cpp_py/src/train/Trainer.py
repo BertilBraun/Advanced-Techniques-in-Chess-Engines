@@ -9,7 +9,6 @@ from src.settings import TORCH_DTYPE, log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import TrainingStats
 from src.util.log import log
-from src.util.timing import timeit
 
 
 class Trainer:

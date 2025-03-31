@@ -21,7 +21,6 @@ if __name__ == '__main__':
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.settings import TensorboardWriter, log_text
-    from src.cluster.CommanderProcess import CommanderProcess
 
     log('Starting training')
     log('Training on:', 'GPU' if USE_GPU else 'CPU')

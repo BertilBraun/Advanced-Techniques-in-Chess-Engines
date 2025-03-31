@@ -142,10 +142,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:
         try:
             with h5py.File(file_path, 'r') as file:
-                metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
-                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-                assert metadata == SelfPlayDataset._get_current_metadata(), message
-
                 stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
                 return SelfPlayDatasetStats(**stats)
         except Exception as e:
@@ -190,8 +186,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                     padded_visit_counts[i, j] = [move, count]
             file.create_dataset('visit_counts', data=padded_visit_counts)
             file.create_dataset('value_targets', data=np.array(self.value_targets))
-            # write the metadata information about the current game, action size, representation shape, etc.
-            file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
             # write the stats information about the dataset, num_games, total_generation_time
             file.attrs['stats'] = str(self.stats._asdict())
 
@@ -226,12 +220,3 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}'))
 
         return chunked_files
-
-    @staticmethod
-    def _get_current_metadata() -> dict[str, Any]:
-        # metadata information about current game, action size, representation shape, etc.
-        return {
-            'action_size': str(ChessGame.action_size()),
-            'representation_shape': str(ChessGame.representation_shape()),
-            'game': ChessGame.__class__.__name__,
-        }
