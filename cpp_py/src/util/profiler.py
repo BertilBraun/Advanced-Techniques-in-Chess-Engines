@@ -45,11 +45,11 @@ def start_gpu_usage_logger(run: int):
     ).start()
 
 
-def start_cpu_usage_logger(run: int, title: str):
+def start_cpu_usage_logger(run: int, title: str, pid: int):
     """Starts the CPU usage logger in a separate daemon thread."""
 
     Process(
         target=_tensorboard_cpu_usage,
-        args=(run, 10.0, title, psutil.Process().pid),
+        args=(run, 10.0, title, pid),
         daemon=True,
     ).start()

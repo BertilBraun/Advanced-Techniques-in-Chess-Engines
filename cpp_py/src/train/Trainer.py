@@ -23,7 +23,6 @@ class Trainer:
         self.optimizer = optimizer
         self.args = args
 
-    @timeit
     def train(
         self, dataloader: DataLoader, validation_dataloader: DataLoader, iteration: int
     ) -> tuple[TrainingStats, TrainingStats]:

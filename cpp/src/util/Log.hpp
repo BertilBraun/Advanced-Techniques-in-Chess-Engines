@@ -137,6 +137,12 @@ inline std::string formatDuration(std::chrono::steady_clock::duration duration) 
     return oss.str();
 }
 
+// Progress bar function
+// Usage:
+// for (auto _ : range(100)) {
+//     tqdm(i, 100, "Processing");
+//     ...
+// }
 inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50) {
     if (start_times.find(desc) == start_times.end()) {
         // If this is the first time this desc is being used, set the start time.

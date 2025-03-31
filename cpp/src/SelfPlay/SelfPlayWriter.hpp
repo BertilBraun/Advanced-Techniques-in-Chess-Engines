@@ -30,12 +30,13 @@ public:
         m_stats.game_lengths += game.memory.size();
         m_stats.total_generation_time += game.generationTime();
 
-        if (resignation) {
+        if (resignation)
             m_stats.resignations += 1;
-        }
-        if (tooLong) {
+        if (tooLong)
             m_stats.num_too_long_games += 1;
-        }
+
+        if (rand() % 100 == 0)
+            _logGame(game, outcome);
 
         // Process moves in reverse order.
         for (auto mem : reverse(game.memory)) {
@@ -66,25 +67,35 @@ public:
         }
 
         // Log statistics to TensorBoard.
-        m_logger.add_scalar("dataset/num_samples", iteration, m_stats.num_samples);
-        m_logger.add_scalar("dataset/num_games", iteration, m_stats.num_games);
-        m_logger.add_scalar("dataset/game_lengths", iteration, m_stats.game_lengths);
-        m_logger.add_scalar("dataset/total_generation_time", iteration,
-                            m_stats.total_generation_time);
-        m_logger.add_scalar("dataset/resignations", iteration, m_stats.resignations);
-        m_logger.add_scalar("dataset/num_too_long_games", iteration, m_stats.num_too_long_games);
-        m_logger.add_scalar("dataset/num_samples_per_game", iteration,
-                            static_cast<double>(m_stats.num_samples) / m_stats.num_games);
+        if (m_stats.num_samples > 0) {
+            m_logger.add_scalar("dataset/num_samples", iteration, m_stats.num_samples);
+            m_logger.add_scalar("dataset/num_games", iteration, m_stats.num_games);
+            m_logger.add_scalar("dataset/average_game_lengths", iteration,
+                                static_cast<double>(m_stats.game_lengths) / m_stats.num_games);
+            m_logger.add_scalar("dataset/average_generation_time", iteration,
+                                m_stats.total_generation_time / m_stats.num_games);
+            m_logger.add_scalar("dataset/resignations", iteration, m_stats.resignations);
+            m_logger.add_scalar("dataset/num_too_long_games", iteration,
+                                m_stats.num_too_long_games);
+            m_logger.add_scalar("dataset/num_samples_per_game", iteration,
+                                static_cast<double>(m_stats.num_samples) / m_stats.num_games);
 
-        // Update the save path for the current iteration.
-        m_savePath = m_args.save_path + "/iteration_" + std::to_string(iteration);
+            log("Iteration", iteration, ":");
+            log("  num_samples:", m_stats.num_samples);
+            log("  num_games:", m_stats.num_games);
+            log("  average_game_lengths:",
+                static_cast<double>(m_stats.game_lengths) / m_stats.num_games);
+            log("  average_generation_time:", m_stats.total_generation_time / m_stats.num_games);
+            log("  resignations:", m_stats.resignations);
+            log("  num_too_long_games:", m_stats.num_too_long_games);
+            log("  num_samples_per_game:",
+                static_cast<double>(m_stats.num_samples) / m_stats.num_games);
+        }
+
+        // Update the iteration for the current iteration.
+        m_iteration = iteration;
         // The next batch will start from 0.
         m_batchCounter = 0;
-
-        // Ensure the save path exists.
-        if (!std::filesystem::exists(m_savePath)) {
-            std::filesystem::create_directories(m_savePath);
-        }
 
         // resets all statistics to defaults
         m_stats = Stats();
@@ -123,14 +134,22 @@ private:
     }
 
     std::string _getSaveFilename() {
-        assert(m_savePath != "THIS_IS_NOT_SET");
-        std::string filename = m_savePath + "/" + m_args.writer.filePrefix + "_" +
+        assert(m_iteration != -1);
+        const std::string saveFolder =
+            m_args.save_path + "/iteration_" + std::to_string(m_iteration);
+
+        // Ensure the save path exists.
+        if (!std::filesystem::exists(saveFolder)) {
+            std::filesystem::create_directories(saveFolder);
+        }
+
+        std::string filename = saveFolder + "/" + m_args.writer.filePrefix + "_" +
                                std::to_string(m_batchCounter) + ".bin";
         m_batchCounter += 1;
 
         // while file already exists, update filename and increase batchCounter
         while (std::filesystem::exists(std::filesystem::path{filename})) {
-            filename = m_savePath + "/" + m_args.writer.filePrefix + "_" +
+            filename = saveFolder + "/" + m_args.writer.filePrefix + "_" +
                        std::to_string(m_batchCounter) + ".bin";
             m_batchCounter += 1;
         }
@@ -268,9 +287,21 @@ private:
         return newVisitCounts;
     }
 
+    void _logGame(const SelfPlayGame &game, float result) {
+        auto step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        // Log the game moves and result.
+        std::string moves;
+        for (const auto &move : game.playedMoves) {
+            moves += std::to_string(encodeMove(move)) + ",";
+        }
+        moves.pop_back(); // Remove the trailing comma
+        m_logger.add_text("moves/" + std::to_string(m_iteration), step,
+                          (std::to_string(result) + ':' + moves).c_str());
+    }
+
 private:
     TrainingArgs m_args;
-    std::string m_savePath = "THIS_IS_NOT_SET"; // This will be set in updateIteration
+    int m_iteration = -1;
     TensorBoardLogger &m_logger;
 
     // Members for sample batch and file naming.

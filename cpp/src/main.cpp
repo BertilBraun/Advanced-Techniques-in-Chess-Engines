@@ -5,35 +5,6 @@
 #include "SelfPlay/SelfPlayWriter.hpp"
 #include <cassert>
 
-static inline TrainingArgs TRAINING_ARGS = {
-    .save_path = 'training_data/chess',
-    .self_play =
-        {
-            .mcts =
-                {
-                    .num_searches_per_turn = 640,
-                    .num_parallel_searches = 8,
-                    .c_param = 1.7,
-                    .dirichlet_alpha = 0.3,
-                    .dirichlet_epsilon = 0.25,
-                },
-            .num_parallel_games = 32,
-            .num_moves_after_which_to_play_greedy = 25,
-            .max_moves = 250,
-            .result_score_weight = 0.15,
-            .resignation_threshold = -1.0,
-        },
-    .writer =
-        {
-            .filePrefix = 'batch',
-            .batchSize = 5000,
-        },
-    .inference =
-        {
-            .maxBatchSize = 128,
-        },
-};
-
 // Assume this function is implemented elsewhere.
 // It returns a pair: (latest model file path, iteration number).
 std::pair<std::string, int> get_latest_iteration_save_path(const std::string &savePath) {
@@ -42,7 +13,7 @@ std::pair<std::string, int> get_latest_iteration_save_path(const std::string &sa
     // The function returns the latest model file path and its iteration number.
 
     for (int i : range(500, 0, -1)) {
-        std::string modelPath = fmt::format("{}/model_{}.pt", savePath, i);
+        const std::string modelPath = savePath + "/model_" + std::to_string(i) + ".pt";
         if (std::filesystem::exists(modelPath)) {
             return {modelPath, i};
         }
@@ -50,13 +21,51 @@ std::pair<std::string, int> get_latest_iteration_save_path(const std::string &sa
     assert(false && "No model found in the save path.");
 }
 
-int main() {
-    int numProcessors = std::thread::hardware_concurrency() - 10; // leave 10 cores for other tasks
-    numProcessors = std::max(numProcessors, 2);
-    int numGPUs = torch::cuda::device_count();
-    numGPUs = std::max(numGPUs, 1);
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        log("Usage:", argv[0], "<runId> <savePath>");
+        return 1;
+    }
 
-    TensorBoardLogger logger("logs/tfevents"); // TODO get the run id from sys args
+    // leave 10 cores for other tasks but a minimum of 2
+    const int numProcessors = std::max((int) std::thread::hardware_concurrency() - 10, 2);
+    // num actual GPUs or a minimum of 1
+    const int numGPUs = std::max((int) torch::cuda::device_count(), 1);
+
+    const int runId = std::stoi(argv[1]);
+    const std::string savePath = argv[2];
+
+    const TrainingArgs TRAINING_ARGS = {
+        .save_path = savePath,
+        .self_play =
+            {
+                .mcts =
+                    {
+                        .num_searches_per_turn = 640,
+                        .num_parallel_searches = 8,
+                        .c_param = 1.7,
+                        .dirichlet_alpha = 0.3,
+                        .dirichlet_epsilon = 0.25,
+                    },
+                .num_parallel_games = 32,
+                .num_moves_after_which_to_play_greedy = 25,
+                .max_moves = 250,
+                .result_score_weight = 0.15,
+                .resignation_threshold = -1.0,
+            },
+        .writer =
+            {
+                .filePrefix = 'batch',
+                .batchSize = 5000,
+            },
+        .inference =
+            {
+                .maxBatchSize = 128,
+            },
+    };
+
+    TensorBoardLogger logger(std::string("logs/run_") + std::to_string(runId) +
+                             std::string("/tfevents"));
 
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);
@@ -70,16 +79,19 @@ int main() {
     SelfPlayWriter writer(TRAINING_ARGS, logger);
     writer.updateIteration(currentIteration);
 
-    std::vector<std::thread> threads;
+    log("Number of processors:", numProcessors, "Number of GPUs:", numGPUs);
+    log("Starting on run", runId, "with model path:", currentModelPath,
+        "Iteration:", currentIteration);
 
-    for (size_t i = 0; i < numProcessors; ++i) {
+    std::vector<std::thread> threads;
+    for (int i : range(numProcessors)) {
         threads.emplace_back(std::thread([&] {
             SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play,
                               logger);
             log("Worker process", i + 1, "of", numProcessors, "started");
 
             while (true) {
-                timeit([&] { selfPlay.selfPlay(); }, "selfPlay");
+                selfPlay.selfPlay();
             }
         }));
     }
@@ -100,15 +112,14 @@ int main() {
 
         writer.updateIteration(latestIteration);
 
+        reset_times(logger, currentIteration);
+
         currentModelPath = latestModelPath;
         currentIteration = latestIteration;
         log("Model updated for all clients");
     }
 
-    for (auto &thread : threads) {
-        thread.join();
-    }
-
+    log("Main thread finished");
     return 0;
 }
 

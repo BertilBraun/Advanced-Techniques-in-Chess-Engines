@@ -8,6 +8,7 @@
 #include "VisitCounts.hpp"
 
 #include "../InferenceClient.hpp"
+#include <cstddef>
 
 struct MCTSResult {
     float result;
@@ -22,6 +23,8 @@ public:
     std::vector<MCTSResult> search(std::vector<Board> &boards) const {
         if (boards.empty())
             return {};
+
+        TimeItGuard timer("MCTS::search");
 
         // Get policy moves (with noise) for the given boards.
         const std::vector<std::vector<MoveScore>> movesList = _get_policy_with_noise(boards);
@@ -60,6 +63,8 @@ public:
 
     // This method performs several iterations of tree search in parallel.
     void parallel_iterate(std::vector<MCTSNode> &roots) const {
+        TimeItGuard timer("MCTS::parallel_iterate");
+
         std::vector<MCTSNode *> nodes;
         nodes.reserve(roots.size() * args.num_parallel_searches);
         for (int i = 0; i < args.num_parallel_searches; i++) {
@@ -82,8 +87,7 @@ public:
             boards.push_back(node->board);
 
         // Run inference in batch.
-        const std::vector<InferenceResult> results =
-            timeit([&] { return client->inference_batch(boards); }, "Inference");
+        const std::vector<InferenceResult> results = client->inference_batch(boards);
 
         for (auto [node, result] : zip(nodes, results)) {
             const auto &[moves, value] = result;
@@ -144,6 +148,8 @@ private:
     }
 
     void _logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
+        size_t step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+
         // Compute the depth of each search tree using a DFS.
         auto dfs = [&](const MCTSNode &node, auto &dfs_ref) -> int {
             if (!node.isFullyExpanded())
@@ -161,7 +167,7 @@ private:
             depths.push_back(dfs(root, dfs));
         }
         float average_depth = (float) sum(depths) / depths.size();
-        m_logger.add_scalar("dataset/average_search_depth", average_depth);
+        m_logger.add_scalar("dataset/average_search_depth", step, average_depth);
 
         // Compute the entropy of the visit counts.
         auto entropy = [](const MCTSNode &node) -> float {
@@ -180,6 +186,6 @@ private:
             entropies.push_back(entropy(root));
         }
         float average_entropy = sum(entropies) / entropies.size();
-        m_logger.add_scalar("dataset/average_search_entropy", average_entropy);
+        m_logger.add_scalar("dataset/average_search_entropy", step, average_entropy);
     }
 };

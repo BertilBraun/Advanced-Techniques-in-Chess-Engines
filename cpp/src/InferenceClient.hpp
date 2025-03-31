@@ -55,6 +55,8 @@ public:
             return std::vector<InferenceResult>();
         }
 
+        TimeItGuard timer("InferenceClient::inference_batch");
+
         // Encode all boards.
         std::vector<CompressedEncodedBoard> encodedBoards;
         encodedBoards.reserve(boards.size());
@@ -173,6 +175,11 @@ private:
         }
         const double sizeInMB = static_cast<double>(sizeInBytes) / (1024 * 1024);
         m_logger.add_scalar("cache/size_mb", iteration, sizeInMB);
+
+        log("Inference Client stats on iteration:", iteration);
+        log("  cache_hit_rate:", cacheHitRate);
+        log("  unique_positions:", m_inferenceCache.size());
+        log("  cache_size_mb:", sizeInMB);
     }
 
     /**
@@ -208,7 +215,7 @@ private:
                 }
 
                 const std::vector<std::pair<torch::Tensor, float>> inferenceResults =
-                    timeit([&] { return modelInference(tensorBatch); }, "ModelInference");
+                    modelInference(tensorBatch);
 
                 // For each request in the batch, process the result, update the cache, and
                 // fulfill the promise.
@@ -236,6 +243,7 @@ private:
      */
     std::vector<std::pair<torch::Tensor, float>>
     modelInference(const std::vector<torch::Tensor> &boards) {
+        TimeItGuard timer("InferenceClient::modelInference");
         torch::NoGradGuard no_grad;
         std::unique_lock<std::mutex> lock(m_modelMutex);
 

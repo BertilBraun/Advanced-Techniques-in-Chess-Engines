@@ -11,10 +11,8 @@ from typing import Any
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, encode_board_state
-from src.mcts.MCTS import action_probabilities
-from src.settings import TORCH_DTYPE, ChessGame
+from src.settings import TORCH_DTYPE
 from src.util import random_id
-from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
@@ -75,7 +73,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         new_dataset.stats = self.stats + other.stats
         return new_dataset
 
-    @timeit
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
         mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
@@ -108,7 +105,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.visit_counts = [policy_target for _, (policy_target, _) in mp.values()]
         self.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
 
-    @timeit
     def shuffle(self) -> SelfPlayDataset:
         indices = np.arange(len(self))
         np.random.shuffle(indices)
@@ -120,7 +116,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         shuffled_dataset.stats = self.stats
         return shuffled_dataset
 
-    @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()

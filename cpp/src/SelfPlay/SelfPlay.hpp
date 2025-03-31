@@ -26,14 +26,14 @@ public:
     }
 
     void selfPlay() {
+        TimeItGuard timer("SelfPlay");
         std::vector<Board> boards;
         boards.reserve(m_selfPlayGames.size());
         for (const SelfPlayGame &game : m_selfPlayGames) {
             boards.push_back(game.board);
         }
 
-        const std::vector<MCTSResult> results =
-            timeit([&] { return m_mcts.search(boards); }, "MCTS search");
+        const std::vector<MCTSResult> results = m_mcts.search(boards);
 
         assert(m_selfPlayGames.size() == m_args.num_parallel_games);
 
