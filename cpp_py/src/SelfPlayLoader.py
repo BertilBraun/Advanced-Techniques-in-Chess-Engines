@@ -16,11 +16,15 @@ class Stats:
 @dataclass
 class Sample:
     board: list[int]
-    visitCounts: list[tuple]
+    visitCounts: list[tuple[int, int]]
     resultScore: float
 
 
-def load_selfplay_file(filename: str) -> tuple[Stats, list[Sample]]:
+def load_selfplay_stats(filename: str) -> Stats:
+    return load_selfplay_file(filename, load_samples=False)[0]
+
+
+def load_selfplay_file(filename: str, load_samples: bool = True) -> tuple[Stats, list[Sample]]:
     with open(filename, 'rb') as f:
         # Read the magic number (4 bytes) and check it.
         magic = f.read(4)
@@ -50,6 +54,9 @@ def load_selfplay_file(filename: str) -> tuple[Stats, list[Sample]]:
             resignations=metadata_dict.get('resignations', 0),
             num_too_long_games=metadata_dict.get('num_too_long_games', 0),
         )
+
+        if not load_samples:
+            return stats, []
 
         # Read sample count.
         sample_count_bytes = f.read(4)

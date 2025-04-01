@@ -44,6 +44,10 @@ endif()
 find_package(Torch REQUIRED)
 
 # --- Add tensorboard_logger via FetchContent ---
+
+# (Make sure Protobuf is installed or find_package(Protobuf REQUIRED) is successful.) (sudo apt-get install protobuf-compiler libprotobuf-dev)
+find_package(Protobuf REQUIRED)
+
 include(FetchContent)
 FetchContent_Declare(
     tensorboard_logger
@@ -51,9 +55,17 @@ FetchContent_Declare(
     GIT_TAG             master
 )
 FetchContent_MakeAvailable(tensorboard_logger)
+
+
 # This will add a target named "tensorboard_logger"
-# (Make sure Protobuf is installed or find_package(Protobuf REQUIRED) is successful.) (sudo apt-get install protobuf-compiler libprotobuf-dev)
-find_package(Protobuf REQUIRED)
+
+# --- Add fmtlib via FetchContent ---
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 8.1.1  # Or another version tag
+)
+FetchContent_MakeAvailable(fmt)
 
 # Collect all source files
 file(GLOB_RECURSE SOURCES "src/*.cpp")
@@ -84,9 +96,17 @@ if(CMAKE_CUDA_COMPILER)
     endif()
 endif()
 
+
 # Define the executable target
 add_executable(${PROJECT_NAME} ${SOURCES})
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/common.hpp)
+
+target_compile_definitions(${PROJECT_NAME} PUBLIC _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS)
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${tensorboard_logger_SOURCE_DIR}/include)
+
+
+
+# TODO target_precompile_headers(${PROJECT_NAME} PRIVATE src/common.hpp)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:DEBUG>:${debug_flags_list}>
@@ -99,8 +119,8 @@ if(CMAKE_CUDA_COMPILER)
     )
 endif()
 
-# Link LibTorch and tensorboard_logger libraries
-target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}" tensorboard_logger)
+# Link LibTorch and tensorboard_logger and fmt libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE "${TORCH_LIBRARIES}" tensorboard_logger fmt::fmt)
 
 # Append linker flags for MSVC Release builds
 if(MSVC)
@@ -125,7 +145,6 @@ elseif(UNIX)
 elseif(MSVC)
     include_directories(libtorch_cpu_win/include)
 endif()
-target_include_directories(${PROJECT_NAME} PRIVATE ${tensorboard_logger_SOURCE_DIR}/include)
 
 
 if(MSVC)

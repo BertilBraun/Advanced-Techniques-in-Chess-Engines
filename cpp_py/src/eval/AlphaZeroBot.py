@@ -1,11 +1,7 @@
 import numpy as np
 
-from src.cluster.InferenceClient import InferenceClient
-from src.mcts.MCTS import MCTS
-from src.train.TrainingArgs import MCTSParams
 from src.util.log import log
 from src.eval.Bot import Bot
-from src.mcts.MCTSNode import MCTSNode
 from src.settings import TRAINING_ARGS, ChessBoard, ChessGame, ChessMove, PLAY_C_PARAM
 
 

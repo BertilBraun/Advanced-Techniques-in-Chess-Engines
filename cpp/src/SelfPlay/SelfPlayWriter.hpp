@@ -68,28 +68,26 @@ public:
 
         // Log statistics to TensorBoard.
         if (m_stats.num_samples > 0) {
-            m_logger.add_scalar("dataset/num_samples", iteration, m_stats.num_samples);
-            m_logger.add_scalar("dataset/num_games", iteration, m_stats.num_games);
+            m_logger.add_scalar("dataset/num_samples", iteration, (float) m_stats.num_samples);
+            m_logger.add_scalar("dataset/num_games", iteration, (float) m_stats.num_games);
             m_logger.add_scalar("dataset/average_game_lengths", iteration,
-                                static_cast<double>(m_stats.game_lengths) / m_stats.num_games);
+                                (float) m_stats.game_lengths / m_stats.num_games);
             m_logger.add_scalar("dataset/average_generation_time", iteration,
                                 m_stats.total_generation_time / m_stats.num_games);
-            m_logger.add_scalar("dataset/resignations", iteration, m_stats.resignations);
+            m_logger.add_scalar("dataset/resignations", iteration, (float) m_stats.resignations);
             m_logger.add_scalar("dataset/num_too_long_games", iteration,
-                                m_stats.num_too_long_games);
+                                (float) m_stats.num_too_long_games);
             m_logger.add_scalar("dataset/num_samples_per_game", iteration,
-                                static_cast<double>(m_stats.num_samples) / m_stats.num_games);
+                                (float) m_stats.num_samples / m_stats.num_games);
 
             log("Iteration", iteration, ":");
             log("  num_samples:", m_stats.num_samples);
             log("  num_games:", m_stats.num_games);
-            log("  average_game_lengths:",
-                static_cast<double>(m_stats.game_lengths) / m_stats.num_games);
+            log("  average_game_lengths:", (float) m_stats.game_lengths / m_stats.num_games);
             log("  average_generation_time:", m_stats.total_generation_time / m_stats.num_games);
             log("  resignations:", m_stats.resignations);
             log("  num_too_long_games:", m_stats.num_too_long_games);
-            log("  num_samples_per_game:",
-                static_cast<double>(m_stats.num_samples) / m_stats.num_games);
+            log("  num_samples_per_game:", (float) m_stats.num_samples / m_stats.num_games);
         }
 
         // Update the iteration for the current iteration.

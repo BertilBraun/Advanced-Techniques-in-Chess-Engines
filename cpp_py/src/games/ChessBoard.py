@@ -76,7 +76,7 @@ class ChessBoard:
         return board
 
     def __repr__(self) -> str:
-        from src.games.ChessGame import BOARD_LENGTH
+        from src.settings import BOARD_LENGTH
 
         rows = []
         rows.append('  a b c d e f g h')

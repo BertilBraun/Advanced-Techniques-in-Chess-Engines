@@ -25,7 +25,7 @@ public:
      * @param maxBatchSize  Maximum number of requests to process in one batch.
      */
     InferenceClient(const int device_id, const std::string &currentModelPath,
-                    const int maxBatchSize, TensorBoardLogger &logger)
+                    const int maxBatchSize, TensorBoardLogger *logger)
         : m_device(torch::kCPU), m_logger(logger), m_totalHits(0), m_totalEvals(0),
           m_shutdown(false), m_maxBatchSize(maxBatchSize) {
         // Use GPU if available, else CPU.
@@ -153,20 +153,20 @@ private:
      */
     void logCacheStatistics(int iteration) {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
-        if (m_totalEvals == 0) {
+        if (m_totalEvals == 0 || !m_logger) {
             return; // Avoid division by zero.
         }
 
         const double cacheHitRate = (static_cast<double>(m_totalHits) / m_totalEvals) * 100.0;
-        m_logger.add_scalar("cache/hit_rate", iteration, cacheHitRate);
-        m_logger.add_scalar("cache/unique_positions", iteration,
-                            static_cast<double>(m_inferenceCache.size()));
+        m_logger->add_scalar("cache/hit_rate", iteration, cacheHitRate);
+        m_logger->add_scalar("cache/unique_positions", iteration,
+                             static_cast<double>(m_inferenceCache.size()));
         std::vector<float> nnOutputValues;
         nnOutputValues.reserve(m_inferenceCache.size());
         for (const auto &entry : m_inferenceCache) {
             nnOutputValues.push_back(entry.second.second);
         }
-        m_logger.add_histogram("nn_output_value_distribution", iteration, nnOutputValues);
+        m_logger->add_histogram("nn_output_value_distribution", iteration, nnOutputValues);
 
         size_t sizeInBytes = 0;
         for (const auto &entry : m_inferenceCache) {
@@ -174,7 +174,7 @@ private:
             sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
         }
         const double sizeInMB = static_cast<double>(sizeInBytes) / (1024 * 1024);
-        m_logger.add_scalar("cache/size_mb", iteration, sizeInMB);
+        m_logger->add_scalar("cache/size_mb", iteration, sizeInMB);
 
         log("Inference Client stats on iteration:", iteration);
         log("  cache_hit_rate:", cacheHitRate);
@@ -280,7 +280,7 @@ private:
     // Member variables.
     torch::jit::script::Module m_model;
     torch::Device m_device;
-    TensorBoardLogger &m_logger;
+    TensorBoardLogger *m_logger;
 
     // Cache: board hash -> InferenceResult.
     std::unordered_map<int64_t, InferenceResult> m_inferenceCache;

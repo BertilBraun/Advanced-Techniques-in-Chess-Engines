@@ -40,10 +40,8 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     from src.games.ChessBoard import ChessBoard
-    from src.games.ChessGame import ChessGame
     from src.self_play.SelfPlayDataset import SelfPlayDataset
 
-    chess_game = ChessGame()
     dataset = SelfPlayDataset()
 
     output_paths: list[Path] = []

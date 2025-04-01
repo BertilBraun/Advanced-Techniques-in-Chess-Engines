@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "tensorboard_logger.h"
+#include <tensorboard_logger.h>
 
 // Global timing results and a mutex to protect them.
 std::unordered_map<std::string, double> function_times;
@@ -65,7 +65,7 @@ private:
     std::chrono::high_resolution_clock::time_point start;
 };
 
-inline void reset_times(TensorBoardLogger &logger, int iteration) {
+void reset_times(TensorBoardLogger &logger, int iteration) {
     std::lock_guard<std::mutex> lock(time_mutex);
 
     // Sum the times recorded in function_times.

@@ -19,7 +19,7 @@ private:
 
 public:
     SelfPlay(InferenceClient *inferenceClient, SelfPlayWriter *writer, SelfPlayParams args,
-             TensorBoardLogger &logger)
+             TensorBoardLogger *logger)
         : m_writer(writer), m_args(args), m_mcts(inferenceClient, args.mcts, logger) {
         // Initialize the self-play games with the number of parallel games.
         m_selfPlayGames.resize(args.num_parallel_games);

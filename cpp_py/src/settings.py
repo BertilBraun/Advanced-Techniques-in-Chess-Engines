@@ -1,23 +1,22 @@
 import os
 import torch
-from src.train.TrainingArgs import (
-    ClusterParams,
-    EvaluationParams,
-    MCTSParams,
-    NetworkParams,
-    SelfPlayParams,
-    TrainingArgs,
-    TrainingParams,
-)
-from src.util import lerp
+from src.train.TrainingArgs import ClusterParams, EvaluationParams, NetworkParams, TrainingArgs, TrainingParams
+from src.util import clamp, lerp
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 from src.util.tensorboard import *  # noqa # Load tensorboard after setting the environment variable
 
 USE_GPU = torch.cuda.is_available()
+NUM_GPUS = torch.cuda.device_count()
 # Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
+
+
+ACTION_SIZE = 1968  # The number of possible moves in chess (including castling and en passant)
+BOARD_LENGTH = 8  # The length of the chess board (8x8)
+BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH  # The total number of squares on the chess board (64)
+ENCODING_CHANNELS = 12 + 1 + 1  # 12 for pieces + 1 for castling rights + 1 for color
 
 
 def get_run_id():
@@ -32,8 +31,6 @@ def get_run_id():
 
 LOG_FOLDER = 'logs'
 SAVE_PATH = 'training_data'
-
-PLAY_C_PARAM = 1.0
 
 
 def sampling_window(current_iteration: int) -> int:
@@ -80,14 +77,12 @@ def ensure_eval_dataset_exists(dataset_path: str) -> None:
         out_paths[0].rename(dataset_path)
 
 
-NUM_GPUS = torch.cuda.device_count()
 SELF_PLAYERS_PER_NODE = 64
-NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE  # + SELF_PLAYERS_PER_NODE // 2
-NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
+NUM_SELF_PLAY_GPUS = max(NUM_GPUS - 1, 1)  # The last GPU is used for training
+NUM_SELF_PLAYERS = NUM_SELF_PLAY_GPUS * SELF_PLAYERS_PER_NODE
+NUM_SELF_PLAYERS = clamp(NUM_SELF_PLAYERS, 1, multiprocessing.cpu_count() - 10)
 
-NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 10)
-
-network = NetworkParams(num_layers=12, hidden_size=128)
+network = NetworkParams(num_layers=15, hidden_size=128)
 training = TrainingParams(
     num_epochs=2,
     batch_size=2048,
@@ -96,7 +91,6 @@ training = TrainingParams(
     learning_rate_scheduler=learning_rate_scheduler,
 )
 evaluation = EvaluationParams(
-    num_searches_per_turn=60,
     num_games=40,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
@@ -104,33 +98,15 @@ evaluation = EvaluationParams(
 ensure_eval_dataset_exists(evaluation.dataset_path)
 
 PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 640
-MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
 if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 2
-    NUM_SEARCHES_PER_TURN = 640
-    MIN_VISIT_COUNT = 1
 
 TRAINING_ARGS = TrainingArgs(
     num_iterations=500,
     save_path=SAVE_PATH + '/chess',
     num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
     network=network,
-    self_play=SelfPlayParams(
-        num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=25,
-        result_score_weight=0.15,
-        resignation_threshold=-1.0,  # TODO -0.9,
-        mcts=MCTSParams(
-            num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-            num_parallel_searches=8,
-            dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.3,  # Based on AZ Paper
-            c_param=1.7,  # Based on MiniGO Paper
-            min_visit_count=MIN_VISIT_COUNT,
-        ),
-    ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
     training=training,
     evaluation=evaluation,

@@ -17,7 +17,7 @@ struct MCTSResult {
 
 class MCTS {
 public:
-    MCTS(InferenceClient *client, const MCTSParams &args, TensorBoardLogger &logger)
+    MCTS(InferenceClient *client, const MCTSParams &args, TensorBoardLogger *logger)
         : client(client), args(args), m_logger(logger) {}
 
     std::vector<MCTSResult> search(std::vector<Board> &boards) const {
@@ -100,7 +100,7 @@ public:
 private:
     InferenceClient *client;
     MCTSParams args;
-    TensorBoardLogger &m_logger;
+    TensorBoardLogger *m_logger;
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>> _get_policy_with_noise(std::vector<Board> &boards) const {
@@ -148,6 +148,9 @@ private:
     }
 
     void _logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
+        if (roots.empty() || !m_logger)
+            return;
+
         size_t step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 
         // Compute the depth of each search tree using a DFS.
@@ -167,7 +170,7 @@ private:
             depths.push_back(dfs(root, dfs));
         }
         float average_depth = (float) sum(depths) / depths.size();
-        m_logger.add_scalar("dataset/average_search_depth", step, average_depth);
+        m_logger->add_scalar("dataset/average_search_depth", step, average_depth);
 
         // Compute the entropy of the visit counts.
         auto entropy = [](const MCTSNode &node) -> float {
@@ -186,6 +189,6 @@ private:
             entropies.push_back(entropy(root));
         }
         float average_entropy = sum(entropies) / entropies.size();
-        m_logger.add_scalar("dataset/average_search_entropy", step, average_entropy);
+        m_logger->add_scalar("dataset/average_search_entropy", step, average_entropy);
     }
 };

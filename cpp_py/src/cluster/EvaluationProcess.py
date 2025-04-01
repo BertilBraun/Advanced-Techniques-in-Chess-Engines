@@ -26,12 +26,7 @@ class EvaluationProcess:
         if not self.eval_args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
             return
 
-        model_evaluation = ModelEvaluation(
-            iteration,
-            self.args,
-            self.eval_args.num_games,
-            self.eval_args.num_searches_per_turn,
-        )
+        model_evaluation = ModelEvaluation(iteration, self.args, self.eval_args.num_games)
 
         dataset = SelfPlayDataset.load(self.eval_args.dataset_path)
         (

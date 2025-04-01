@@ -55,6 +55,11 @@ class TrainerProcess:
 
         return train_stats
 
+    def ensure_model_exists(self, iteration: int) -> None:
+        """Ensures that the model exists for the given iteration. If it does not exist, it creates a new model and saves it."""
+        model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device, self.args.save_path)
+        save_model_and_optimizer(model, optimizer, iteration, self.args.save_path)
+
     def _wait_for_enough_training_samples(self, iteration):
         def games(iteration: int) -> int:
             return SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games

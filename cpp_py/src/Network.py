@@ -2,8 +2,8 @@ import torch
 
 from torch import nn, Tensor
 
-from src.settings import ChessGame, TORCH_DTYPE
 from src.util.log import log
+from src.settings import ACTION_SIZE, BOARD_LENGTH, ENCODING_CHANNELS, TORCH_DTYPE
 
 
 class Network(nn.Module):
@@ -22,11 +22,8 @@ class Network(nn.Module):
 
         self.device = device
 
-        encoding_channels, row_count, column_count = ChessGame.representation_shape()
-        action_size = ChessGame.action_size()
-
         self.startBlock = nn.Sequential(
-            nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding='same', bias=False),
+            nn.Conv2d(ENCODING_CHANNELS, hidden_size, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(hidden_size),
             nn.ReLU(),
         )
@@ -38,7 +35,7 @@ class Network(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (row_count - 2) * (column_count - 2), action_size),
+            nn.Linear(16 * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), ACTION_SIZE),
         )
 
         self.valueHead = nn.Sequential(
@@ -46,7 +43,7 @@ class Network(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (row_count - 2) * (column_count - 2), 1),
+            nn.Linear(16 * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), 1),
             nn.Tanh(),
         )
 

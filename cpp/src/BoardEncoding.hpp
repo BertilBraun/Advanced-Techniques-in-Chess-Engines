@@ -2,8 +2,6 @@
 
 #include "common.hpp"
 
-#include <cstdint>
-
 // 6 types for each color + 1 for castling and en passant + 1 for current player
 static inline constexpr int ENCODING_CHANNELS = 6 + 6 + 2;
 
@@ -34,18 +32,21 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
         }
     }
 
-    encodedBoard[12] = ( // The castling rights encoded in the corners of a bitboard
-        board.hasKingsideCastlingRights(WHITE) << (0) |                 // Upper left corner
-        board.hasQueensideCastlingRights(WHITE) << (BOARD_LENGTH - 1) | // Upper right corner
-        board.hasKingsideCastlingRights(BLACK)
-            << (BOARD_SIZE - BOARD_LENGTH) |                        // Bottom left corner
-        board.hasQueensideCastlingRights(BLACK) << (BOARD_SIZE - 1) // Bottom right corner
-    );
+    // The castling rights encoded in the corners of a bitboard
+    encodedBoard[12] = (
+        // Upper left corner
+        (uint64) board.hasKingsideCastlingRights(WHITE) << (0) |
+        // Upper right corner
+        (uint64) board.hasQueensideCastlingRights(WHITE) << (BOARD_LENGTH - 1) |
+        // Bottom left corner
+        (uint64) board.hasKingsideCastlingRights(BLACK) << (BOARD_SIZE - BOARD_LENGTH) |
+        // Bottom right corner
+        (uint64) board.hasQueensideCastlingRights(BLACK) << (BOARD_SIZE - 1));
 
     if (board.ep_square.has_value()) {
         Square square = board.ep_square.value();
         assert(square != 0 && square != 7 && square != 56 && square != 63);
-        encodedBoard[12] |= (1 << square);
+        encodedBoard[12] |= (((uint64) 1) << square);
     }
 
     encodedBoard[13] = (board.turn == WHITE) ? 0xFFFFFFFFFFFFFFFF : 0;
@@ -148,7 +149,7 @@ Board decodeBoard(const EncodedBoard &encodedBoard) {
     for (Color color : COLORS) {
         for (PieceType pieceType : PIECE_TYPES) {
             int layerIndex = color * 6 + pieceType - 1;
-            auto layer = encodedBoard[layerIndex];
+            const auto& layer = encodedBoard[layerIndex];
 
             for (Square square : SQUARES) {
                 int row = squareRank(square);
@@ -197,7 +198,7 @@ float getMaterialScore(const Board &board) {
 std::optional<float> getBoardResultScore(Board &board) {
     // Returns the result score for the given board.
     //
-    // The result score is 1.0 if the current player has won, otherwise it must have been a
+    // The result score is -1.0 if the current player has lost, otherwise it must have been a
     // draw, in which case the score is based on the remaining material.
     //
     // :param board: The board to get the result score for.

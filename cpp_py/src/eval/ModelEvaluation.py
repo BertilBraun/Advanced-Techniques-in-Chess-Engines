@@ -13,12 +13,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
+from src.games.ChessBoard import ChessBoard, Player
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.train.TrainingArgs import MCTSParams, TrainingArgs
-from src.cluster.InferenceClient import InferenceClient
-from src.mcts.MCTS import MCTS, action_probabilities
-from src.settings import USE_GPU, ChessBoard, ChessGame
-from src.games.Game import Player
+from src.train.TrainingArgs import TrainingArgs
+from src.settings import USE_GPU
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
 
@@ -67,22 +65,10 @@ EVAL_DEVICE = 0
 class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
-    def __init__(
-        self, iteration: int, args: TrainingArgs, num_games: int = 64, num_searches_per_turn: int = 20
-    ) -> None:
+    def __init__(self, iteration: int, args: TrainingArgs, num_games: int = 64) -> None:
         self.iteration = iteration
         self.num_games = num_games
-        self.num_searches_per_turn = num_searches_per_turn
         self.args = args
-
-        self.mcts_args = MCTSParams(
-            num_searches_per_turn=num_searches_per_turn,
-            num_parallel_searches=args.self_play.mcts.num_parallel_searches,
-            c_param=2,
-            dirichlet_epsilon=0.0,
-            dirichlet_alpha=1.0,
-            min_visit_count=0,
-        )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
         device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')

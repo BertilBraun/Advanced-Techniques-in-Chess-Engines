@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 from src.eval.GUI import BaseGridGameGUI
 from src.games.ChessBoard import ChessBoard, ChessMove
-from src.games.ChessGame import BOARD_LENGTH
+from src.settings import BOARD_LENGTH
 
 
 class ChessVisuals:
