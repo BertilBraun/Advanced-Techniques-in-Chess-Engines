@@ -200,7 +200,6 @@ template <typename Container> auto sum(const Container &container) {
 
 // Generic div function for any iterable container
 template <typename Container> auto div(const Container &container, float divisor) {
-    using ValueType = typename std::decay<decltype(*std::begin(container))>::type;
     Container copy = container;
     for (auto &elem : copy) {
         elem /= divisor;
@@ -210,7 +209,6 @@ template <typename Container> auto div(const Container &container, float divisor
 
 // Generic pow function for any iterable container
 template <typename Container> auto pow(const Container &container, float power) {
-    using ValueType = typename std::decay<decltype(*std::begin(container))>::type;
     Container copy = container;
     for (auto &elem : copy) {
         elem = std::pow(elem, power);

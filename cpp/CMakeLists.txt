@@ -107,6 +107,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${tensorboard_logger_SOURCE_DI
 
 
 # TODO target_precompile_headers(${PROJECT_NAME} PRIVATE src/common.hpp)
+target_precompile_headers(${PROJECT_NAME} PRIVATE src/chess.hpp)
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:DEBUG>:${debug_flags_list}>

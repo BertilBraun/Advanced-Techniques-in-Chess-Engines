@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#include "MoveEncoding.hpp"
+#include "MoveEncoding.cpp"
 
 void _testMoveMappingCount() {
     auto [moveMappings, index] = __precalculateMoveMappings();

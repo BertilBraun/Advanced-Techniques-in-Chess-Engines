@@ -29,11 +29,13 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <random>
 #include <stddef.h>
