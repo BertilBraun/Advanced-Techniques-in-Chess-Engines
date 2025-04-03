@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::string command = argv[1];
-    std::vector<std::string> args(argv + 1, argv + argc);
+    std::vector<std::string> args(argv + 2, argv + argc);
 
     if (command == "selfplay") {
         return selfPlayMain(args);
@@ -29,6 +29,9 @@ int main(int argc, char *argv[]) {
 int selfPlayMain(const std::vector<std::string> &args) {
     if (args.size() != 4) {
         std::cerr << "Usage: selfplay <runId> <savePath> <numProcessors> <numGPUs>" << std::endl;
+        std::cout << args.size() << std::endl;
+        for (auto s : args)
+            std::cout << s << std::endl;
         return 1;
     }
 
@@ -38,7 +41,7 @@ int selfPlayMain(const std::vector<std::string> &args) {
     const int numProcessors = std::stoi(args[2]);
     assert(numProcessors >= 1);
     const int numGPUs = std::stoi(args[3]);
-    assert(0 < numGPUs && numGPUs < torch::cuda::device_count());
+    assert(0 < numGPUs && numGPUs <= std::max((int) torch::cuda::device_count(), 1));
 
     const TrainingArgs TRAINING_ARGS = {
         .save_path = savePath,
@@ -60,7 +63,7 @@ int selfPlayMain(const std::vector<std::string> &args) {
             },
         .writer =
             {
-                .filePrefix = std::string("batch"),
+                .filePrefix = std::string("memory"),
                 .batchSize = 5000,
             },
         .inference =
@@ -75,10 +78,10 @@ int selfPlayMain(const std::vector<std::string> &args) {
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);
 
-    std::vector<InferenceClient> clients;
+    std::vector<InferenceClient> clients(numGPUs * 2);
     for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
-        clients.emplace_back(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
-                             &logger);
+        clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
+                        &logger);
     }
 
     SelfPlayWriter writer(TRAINING_ARGS, logger);
@@ -117,7 +120,7 @@ int selfPlayMain(const std::vector<std::string> &args) {
 
         writer.updateIteration(latestIteration);
 
-        reset_times(logger, currentIteration);
+        reset_times(&logger, currentIteration);
 
         currentModelPath = latestModelPath;
         currentIteration = latestIteration;
@@ -151,7 +154,8 @@ int boardInferenceMain(const std::vector<std::string> &args) {
     const int numBoards = args.size() - 1;
     const int maxBatchSize = numBoards * EVALUATION_MCTS_PARAMS.num_parallel_searches;
 
-    InferenceClient inferenceClient(0, modelPath, maxBatchSize, nullptr);
+    InferenceClient inferenceClient;
+    inferenceClient.init(0, modelPath, maxBatchSize, nullptr);
     const MCTS mcts(&inferenceClient, EVALUATION_MCTS_PARAMS, nullptr);
 
     std::vector<Board> boards;

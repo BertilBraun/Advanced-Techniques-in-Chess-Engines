@@ -80,7 +80,7 @@ def ensure_eval_dataset_exists(dataset_path: str) -> None:
 SELF_PLAYERS_PER_NODE = 64
 NUM_SELF_PLAY_GPUS = max(NUM_GPUS - 1, 1)  # The last GPU is used for training
 NUM_SELF_PLAYERS = NUM_SELF_PLAY_GPUS * SELF_PLAYERS_PER_NODE
-NUM_SELF_PLAYERS = clamp(NUM_SELF_PLAYERS, 1, multiprocessing.cpu_count() - 10)
+NUM_SELF_PLAYERS = clamp(NUM_SELF_PLAYERS, 1, multiprocessing.cpu_count() - 5)
 
 network = NetworkParams(num_layers=15, hidden_size=128)
 training = TrainingParams(

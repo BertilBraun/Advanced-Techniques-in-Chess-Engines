@@ -1,17 +1,14 @@
 from __future__ import annotations
 from math import ceil
 
-import h5py
 import torch
 import numpy as np
 import numpy.typing as npt
 from os import PathLike
 from pathlib import Path
-from typing import Any
 from torch.utils.data import Dataset
 
-from src.Encoding import decode_board_state, encode_board_state
-from src.settings import TORCH_DTYPE
+from src.self_play.SelfPlayDatasetIO import SelfPlaySample, load_selfplay_file, write_selfplay_file
 from src.util import random_id
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
@@ -41,15 +38,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def __len__(self) -> int:
         return len(self.encoded_states)
-
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        state = decode_board_state(self.encoded_states[idx])
-        probabilities = action_probabilities(self.visit_counts[idx])
-        return (
-            torch.from_numpy(state).to(dtype=TORCH_DTYPE, non_blocking=True),
-            torch.from_numpy(probabilities).to(dtype=TORCH_DTYPE, non_blocking=True),
-            torch.tensor(self.value_targets[idx], dtype=torch.float32),
-        )
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
         new_dataset = SelfPlayDataset()
@@ -105,31 +93,24 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
-        dataset.stats = SelfPlayDataset.load_stats(file_path)
-
         try:
-            with h5py.File(file_path, 'r') as file:
-                dataset.encoded_states = [state for state in file['states']]  # type: ignore
-                # parse out the visit counts but only the non-zero ones
-                dataset.visit_counts = [
-                    visit_count[visit_count[:, 1] > 0]
-                    for visit_count in file['visit_counts']  # type: ignore
-                ]
-                dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
-
-                return dataset
+            stats, samples = load_selfplay_file(str(file_path))
+            dataset.stats = stats
+            for board, visit_counts, result_score in samples:
+                dataset.encoded_states.append(np.array(board, dtype=np.uint64))
+                dataset.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
+                dataset.value_targets.append(result_score)
         except Exception as e:
             from src.util.log import log, LogLevel
 
             log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.DEBUG)
-            return SelfPlayDataset()
+        return dataset
 
     @staticmethod
     def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:
         try:
-            with h5py.File(file_path, 'r') as file:
-                stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
-                return SelfPlayDatasetStats(**stats)
+            stats, _ = load_selfplay_file(str(file_path), load_samples=False)
+            return stats
         except Exception as e:
             from src.util.log import log, LogLevel
 
@@ -152,35 +133,26 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     @staticmethod
     def get_files_to_load_for_iteration(folder_path: str | PathLike, iteration: int) -> list[Path]:
-        old_save_format = list(Path(folder_path).glob(f'memory_{iteration}*.hdf5'))
-        new_save_path = Path(folder_path) / f'memory_{iteration}'
-        if new_save_path.exists():
-            return list(new_save_path.glob('*.hdf5')) + list(old_save_format)
-        return old_save_format
+        save_path = Path(folder_path) / f'iteration_{iteration}'
+        if not save_path.exists():
+            return []
+        return list(save_path.glob('memory_*.bin'))
 
     def save_to_path(self, file_path: Path) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # write a h5py file with states, policy targets and value targets in it
-        with h5py.File(file_path, 'w') as file:
-            file.create_dataset('states', data=np.array(self.encoded_states))
-            max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
-            # padd all visit counts to the same length
-            padded_visit_counts = np.zeros((len(self.visit_counts), max_visit_num, 2), dtype=np.int32)
-            for i, visit_count in enumerate(self.visit_counts):
-                for j, (move, count) in enumerate(visit_count):
-                    padded_visit_counts[i, j] = [move, count]
-            file.create_dataset('visit_counts', data=padded_visit_counts)
-            file.create_dataset('value_targets', data=np.array(self.value_targets))
-            # write the stats information about the dataset, num_games, total_generation_time
-            file.attrs['stats'] = str(self.stats._asdict())
+        samples: list[SelfPlaySample] = []
+        for board_arr, visit_count_arr, value in zip(self.encoded_states, self.visit_counts, self.value_targets):
+            board = board_arr.tolist()
+            visit_counts = [tuple(pair) for pair in visit_count_arr.tolist()]
+            samples.append((board, visit_counts, value))
+        write_selfplay_file(str(file_path), self.stats, samples)
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
         if suffix:
-            file_path = Path(folder_path) / f'memory_{iteration}/{suffix}.hdf5'
+            file_path = Path(folder_path) / f'iteration_{iteration}/{suffix}.bin'
         else:
             while True:
-                file_path = Path(folder_path) / f'memory_{iteration}/{random_id()}.hdf5'
+                file_path = Path(folder_path) / f'iteration_{iteration}/{random_id()}.bin'
                 if not file_path.exists():
                     break
 

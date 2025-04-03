@@ -150,7 +150,7 @@ chess::Board decodeBoard(const EncodedBoard &encodedBoard) {
     return board;
 }
 
-static inline std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
+static std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
     0.0f, // None
     1.0f, // Pawn
     3.0f, // Knight
@@ -160,7 +160,7 @@ static inline std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
     0.0f  // King
 };
 
-inline float __MAX_MATERIAL_SCORE =
+float __MAX_MATERIAL_SCORE =
     __PIECE_VALUES[PieceType::QUEEN] + 2 * __PIECE_VALUES[PieceType::ROOK] +
     2 * __PIECE_VALUES[PieceType::BISHOP] + 2 * __PIECE_VALUES[PieceType::KNIGHT] +
     8 * __PIECE_VALUES[PieceType::PAWN];

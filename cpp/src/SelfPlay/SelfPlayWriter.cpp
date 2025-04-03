@@ -194,7 +194,6 @@ void SelfPlayWriter::_flushBatch() {
     j["resignations"] = m_stats.resignations;
     j["num_too_long_games"] = m_stats.num_too_long_games;
     std::string metadata_str = j.dump(4);
-    uint32_t metadataLength = static_cast<uint32_t>(metadata_str.size());
 
     // --- Write Header ---
     // Magic number (4 bytes).
@@ -203,13 +202,12 @@ void SelfPlayWriter::_flushBatch() {
     uint32_t version = 1;
     add(version);
     // Metadata JSON length (4 bytes).
-    add(metadataLength);
+    add(static_cast<uint32_t>(metadata_str.size()));
     // Metadata JSON string.
-    add(metadata_str.c_str(), metadataLength);
+    add(metadata_str.c_str(), metadata_str.size());
 
     // --- Write Sample Count ---
-    uint32_t sampleCount = static_cast<uint32_t>(m_samples.size());
-    add(sampleCount);
+    add(static_cast<uint32_t>(m_samples.size()));
 
     // --- Write Each Sample ---
     for (const auto &sample : m_samples) {
@@ -217,13 +215,12 @@ void SelfPlayWriter::_flushBatch() {
         add(sample.board.data(), sizeof(uint64_t) * ENCODING_CHANNELS);
 
         // Write the number of pairs in visitCounts (as a 32-bit integer).
-        uint32_t numPairs = static_cast<uint32_t>(sample.visitCounts.visits.size());
-        add(numPairs);
+        add(static_cast<uint32_t>(sample.visitCounts.visits.size()));
 
         // Write each pair (each int as 32-bit).
         for (const auto &[move, count] : sample.visitCounts.visits) {
-            add(static_cast<int32_t>(move));
-            add(static_cast<int32_t>(count));
+            add(static_cast<uint32_t>(move));
+            add(static_cast<uint32_t>(count));
         }
 
         // Write the result score as a 32-bit float.

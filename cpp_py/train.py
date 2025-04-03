@@ -47,7 +47,7 @@ if __name__ == '__main__':
     log('Starting self play process.')
     self_play_process = subprocess.Popen(
         [
-            'build/AlphaZeroSelfPlay',
+            '../cpp/build/AlphaZeroSelfPlay',
             str(run),
             str(TRAINING_ARGS.save_path),
             str(TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster),

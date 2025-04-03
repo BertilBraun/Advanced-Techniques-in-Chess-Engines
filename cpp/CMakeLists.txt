@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
-project(AIZeroChessBot LANGUAGES CXX)
+project(AlphaZeroSelfPlay LANGUAGES CXX)
 
 # Check for CUDA support
 include(CheckLanguage)

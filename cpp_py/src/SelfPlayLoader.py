@@ -26,20 +26,23 @@ def load_selfplay_stats(filename: str) -> Stats:
 
 def load_selfplay_file(filename: str, load_samples: bool = True) -> tuple[Stats, list[Sample]]:
     with open(filename, 'rb') as f:
+
+        def read_uint32() -> int:
+            # Read 4 bytes and unpack as unsigned int (little-endian).
+            return struct.unpack('I', f.read(4))[0]
+
         # Read the magic number (4 bytes) and check it.
         magic = f.read(4)
         if magic != b'SMPF':
             raise ValueError('Invalid file format')
 
         # Read version (uint32).
-        version_bytes = f.read(4)
-        version = struct.unpack('I', version_bytes)[0]
+        version = read_uint32()
         if version != 1:
             raise ValueError(f'Unsupported version: {version}')
 
         # Read metadata JSON length (uint32).
-        metadata_length_bytes = f.read(4)
-        metadata_length = struct.unpack('I', metadata_length_bytes)[0]
+        metadata_length = read_uint32()
 
         # Read metadata JSON string.
         metadata_json = f.read(metadata_length).decode('utf-8')
@@ -59,33 +62,55 @@ def load_selfplay_file(filename: str, load_samples: bool = True) -> tuple[Stats,
             return stats, []
 
         # Read sample count.
-        sample_count_bytes = f.read(4)
-        sample_count = struct.unpack('I', sample_count_bytes)[0]
+        sample_count = read_uint32()
 
         samples = []
         for _ in range(sample_count):
             # Read board: 14 64-bit unsigned ints.
-            board_bytes = f.read(14 * 8)
-            board = list(struct.unpack('14Q', board_bytes))
+            board = list(struct.unpack('14Q', f.read(14 * 8)))
 
             # Read number of visitCount pairs (uint32).
-            num_pairs_bytes = f.read(4)
-            num_pairs = struct.unpack('I', num_pairs_bytes)[0]
+            num_pairs = read_uint32()
 
-            pairs = []
+            visit_counts = []
             for _ in range(num_pairs):
-                # Each pair: two 32-bit integers.
-                pair_bytes = f.read(8)
-                first, second = struct.unpack('ii', pair_bytes)
-                pairs.append((first, second))
+                # Each pair: two uint32
+                move, count = read_uint32(), read_uint32()
+                visit_counts.append((move, count))
 
             # Read result score (32-bit float).
-            result_score_bytes = f.read(4)
-            result_score = struct.unpack('f', result_score_bytes)[0]
+            result_score = struct.unpack('f', f.read(4))[0]
 
-            samples.append(Sample(board=board, visitCounts=pairs, resultScore=result_score))
+            samples.append(Sample(board=board, visitCounts=visit_counts, resultScore=result_score))
 
     return stats, samples
+
+
+def write_selfplay_file(filename: str, stats: Stats, samples: list[Sample]):
+    with open(filename, 'wb') as f:
+
+        def write_uint32(value: int):
+            # Pack unsigned int (little-endian) and write 4 bytes.
+            f.write(struct.pack('I', value))
+
+        assert f.write(b'SMPF') == 4  # Magic number
+
+        write_uint32(1)  # Version
+
+        metadata_json = json.dumps(stats.__dict__).encode('utf-8')
+        write_uint32(len(metadata_json))
+        assert f.write(metadata_json) == len(metadata_json)
+
+        write_uint32(len(samples))
+        for sample in samples:
+            f.write(struct.pack('14Q', *sample.board))  # 14 64-bit unsigned ints
+
+            write_uint32(len(sample.visitCounts))  # Number of visitCount pairs
+            for move, count in sample.visitCounts:
+                write_uint32(move)
+                write_uint32(count)
+
+            f.write(struct.pack('f', sample.resultScore))  # Result score (32-bit float)
 
 
 # Example usage:

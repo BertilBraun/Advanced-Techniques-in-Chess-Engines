@@ -1,4 +1,5 @@
 #include "Time.hpp"
+#include "Log.hpp"
 
 #include <algorithm>
 #include <iostream>

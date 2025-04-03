@@ -6,19 +6,19 @@
         {
             "label": "Run",
             "type": "shell",
-            "command": "cd build && ./AIZeroChessBot",
+            "command": "cd build && ./AlphaZeroSelfPlay",
             "problemMatcher": []
         },
         {
             "label": "Build and Run",
             "type": "shell",
-            "command": "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j2 && ./AIZeroChessBot",
+            "command": "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j2 && ./AlphaZeroSelfPlay selfplay 0 training_data 2 1",
             "problemMatcher": []
         },
         {
             "label": "Build and Debug",
             "type": "shell",
-            "command": "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2 && ./AIZeroChessBot",
+            "command": "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j2 && ./AlphaZeroSelfPlay selfplay 0 training_data 2 1",
             "problemMatcher": []
         }
     ]

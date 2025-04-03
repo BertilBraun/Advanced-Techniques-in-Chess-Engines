@@ -9,7 +9,7 @@ const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN, PieceType::RO
                                                  PieceType::BISHOP, PieceType::KNIGHT};
 } // namespace defines
 
-inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
+std::pair<MoveMapping, int> __precalculateMoveMappings() {
     MoveMapping moveMappings{};
     // fill with -1
     for (auto &fromSquare : moveMappings) {
@@ -65,7 +65,7 @@ inline std::pair<MoveMapping, int> __precalculateMoveMappings() {
     return {moveMappings, index};
 }
 
-inline std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE>
+std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE>
 __precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 
     std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE> reverseMoveMappings;
@@ -84,10 +84,10 @@ __precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
     return reverseMoveMappings;
 }
 
-inline const auto __MOVE_MAPPINGS = __precalculateMoveMappings().first;
-inline const auto __REVERSE_MOVE_MAPPINGS = __precalculateReverseMoveMappings(__MOVE_MAPPINGS);
+const auto __MOVE_MAPPINGS = __precalculateMoveMappings().first;
+const auto __REVERSE_MOVE_MAPPINGS = __precalculateReverseMoveMappings(__MOVE_MAPPINGS);
 
-inline int encodeMove(const Move &move) {
+int encodeMove(const Move &move) {
     // Encodes a chess move into a move index.
     //
     // :param move: The move to encode.
@@ -98,7 +98,7 @@ inline int encodeMove(const Move &move) {
     return moveIndex;
 }
 
-inline Move decodeMove(int moveIndex) {
+Move decodeMove(int moveIndex) {
     // Decodes a move index into a chess move.
     //
     // :param move_index: The index of the move to decode.
@@ -108,7 +108,7 @@ inline Move decodeMove(int moveIndex) {
     return Move(from_square, to_square, promotion_type);
 }
 
-inline torch::Tensor encodeMoves(const std::vector<Move> &moves) {
+torch::Tensor encodeMoves(const std::vector<Move> &moves) {
     // Encodes a list of moves into a 1D tensor.
     //
     // Each entry in the array represents a possible move on the board. If the
@@ -128,7 +128,7 @@ inline torch::Tensor encodeMoves(const std::vector<Move> &moves) {
     return movesEncoded;
 }
 
-inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
+std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
     // Decodes an array of move indices into a list of chess moves.
     //
     // :param moveIndices: The array of move indices to decode.
@@ -142,7 +142,7 @@ inline std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
     return moves;
 }
 
-inline torch::Tensor __encodeLegalMoves(Board &board) {
+torch::Tensor __encodeLegalMoves(Board &board) {
     // Encodes the legal moves of a chess board into a 1D tensor.
     //
     // Each entry in the array represents a possible move on the board. If the
@@ -155,7 +155,7 @@ inline torch::Tensor __encodeLegalMoves(Board &board) {
     return encodeMoves(board.legalMoves());
 }
 
-inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
+torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
     // Filters a policy with the legal moves of a chess board.
     //
     // The policy is a 1D tensor representing the probabilities of each move
@@ -173,7 +173,7 @@ inline torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, B
     return filteredPolicy;
 }
 
-inline std::vector<MoveScore> __mapPolicyToMoves(const torch::Tensor &policy) {
+std::vector<MoveScore> __mapPolicyToMoves(const torch::Tensor &policy) {
     std::vector<MoveScore> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
@@ -186,8 +186,8 @@ inline std::vector<MoveScore> __mapPolicyToMoves(const torch::Tensor &policy) {
     return movesWithProbabilities;
 }
 
-inline std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
-                                                                       Board &board) {
+std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+                                                                Board &board) {
     // Gets a list of moves with their corresponding probabilities from a policy.
     //
     // The policy is a 1D tensor representing the probabilities of each move
@@ -203,8 +203,8 @@ inline std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const tor
     return movesWithProbabilities;
 }
 
-inline std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &moves,
-                                                        Board &board) {
+std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &moves,
+                                                 Board &board) {
     // Filters a list of moves with the legal moves of a chess board.
     //
     // The list of moves is a list of tuples, where each tuple contains a move
@@ -227,8 +227,8 @@ inline std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveSc
     return filteredMoves;
 }
 
-inline torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
-                                                                   Board &board) {
+torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
+                                                            Board &board) {
     // Filters a policy with the legal moves of a chess board but also allows all en passant moves.
 
     // The policy is a 1D tensor representing the probabilities of each move
@@ -283,7 +283,7 @@ inline torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::
     return filteredPolicy;
 }
 
-inline std::vector<MoveScore>
+std::vector<MoveScore>
 filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(const torch::Tensor &policy,
                                                            Board &board) {
     // Gets a list of moves with their corresponding probabilities from a policy.

@@ -30,7 +30,7 @@ void SelfPlay::selfPlay() {
             continue;
         }
 
-        if (game.playedMoves.size() >= m_args.max_moves) {
+        if ((int) game.playedMoves.size() >= m_args.max_moves) {
             _handleTooLongGame(game);
             m_selfPlayGames[i] = SelfPlayGame();
             continue;
@@ -51,7 +51,7 @@ void SelfPlay::selfPlay() {
             // if move was played in the last 16 moves, then it is a repeated move
             bool isRepeatedMove = false;
             for (int i : range(1, 16)) {
-                if (game.playedMoves.size() < i)
+                if ((int) game.playedMoves.size() < i)
                     break;
                 if (game.playedMoves[game.playedMoves.size() - i] == move) {
                     isRepeatedMove = true;

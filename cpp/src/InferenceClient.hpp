@@ -19,23 +19,10 @@ typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
  */
 class InferenceClient {
 public:
-    /**
-     * @param device_id     GPU device id to use (if available), else CPU.
-     * @param savePath      Path used to resolve the model file.
-     * @param maxBatchSize  Maximum number of requests to process in one batch.
-     */
-    InferenceClient(const int device_id, const std::string &currentModelPath,
-                    const int maxBatchSize, TensorBoardLogger *logger)
-        : m_device(torch::kCPU), m_logger(logger), m_totalHits(0), m_totalEvals(0),
-          m_shutdown(false), m_maxBatchSize(maxBatchSize) {
-        // Use GPU if available, else CPU.
-        if (torch::cuda::is_available()) {
-            m_device = torch::Device(torch::kCUDA, device_id);
-        }
-        loadModel(currentModelPath);
-
-        // Start the worker thread that processes inference requests.
-        m_inferenceThread = std::thread(&InferenceClient::inferenceWorker, this);
+    InferenceClient() : m_device(torch::kCPU), m_shutdown(false), m_maxBatchSize(1) {
+        // Initialize the model and other members.
+        m_totalHits = 0;
+        m_totalEvals = 0;
     }
 
     ~InferenceClient() {
@@ -44,6 +31,30 @@ public:
         if (m_inferenceThread.joinable()) {
             m_inferenceThread.join();
         }
+    }
+
+    /**
+     * @param device_id     GPU device id to use (if available), else CPU.
+     * @param savePath      Path used to resolve the model file.
+     * @param maxBatchSize  Maximum number of requests to process in one batch.
+     */
+    void init(const int device_id, const std::string &currentModelPath, const int maxBatchSize,
+              TensorBoardLogger *logger) {
+        m_device = torch::Device(torch::kCPU);
+        m_logger = logger;
+        m_totalHits = 0;
+        m_totalEvals = 0;
+        m_shutdown = false;
+        m_maxBatchSize = maxBatchSize;
+
+        // Use GPU if available, else CPU.
+        if (torch::cuda::is_available()) {
+            m_device = torch::Device(torch::kCUDA, device_id);
+        }
+        loadModel(currentModelPath);
+
+        // Start the worker thread that processes inference requests.
+        m_inferenceThread = std::thread(&InferenceClient::inferenceWorker, this);
     }
 
     /**

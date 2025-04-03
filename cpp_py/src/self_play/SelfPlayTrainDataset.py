@@ -6,7 +6,7 @@ from pathlib import Path
 from torch.utils.data import IterableDataset
 from torch.multiprocessing import Process
 
-from src.Encoding import decode_board_state
+from src.Encoding import action_probabilities, decode_board_state
 from src.settings import log_histogram, log_scalar
 from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
