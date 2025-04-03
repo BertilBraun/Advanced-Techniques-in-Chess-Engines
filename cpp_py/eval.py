@@ -1,24 +1,20 @@
 import torch
 
 from src.eval.TournamentManager import TournamentManager
-from src.games.comparison_bots.StockfishBot import ChessStockfishBot
 from src.util.log import log
-from src.settings import TRAINING_ARGS
+from src.settings import BOARD_LENGTH, TRAINING_ARGS
 from src.eval.GUI import BaseGridGameGUI
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot
 from src.util.save_paths import get_latest_model_iteration
-from src.games.ChessGame import ChessGame
 from src.games.ChessVisuals import ChessVisuals
 
 
 class CommonHumanPlayer(HumanPlayer):
     def __init__(self) -> None:
         """Initializes the human player."""
-        _, rows, cols = ChessGame.representation_shape()
-        gui = BaseGridGameGUI(rows, cols)
-        super().__init__(gui, ChessVisuals())
+        super().__init__(BaseGridGameGUI(BOARD_LENGTH, BOARD_LENGTH), ChessVisuals())
 
 
 if __name__ == '__main__':
@@ -44,8 +40,8 @@ if __name__ == '__main__':
     else:
         tournament_manager = TournamentManager(
             AlphaZeroBot(iteration, max_time_to_think=0.2),
-            ChessStockfishBot(skill_level=4, max_time_to_think=0.2),
-            # AlphaZeroBot(iteration, network_eval_only=True),
+            AlphaZeroBot(iteration, network_eval_only=True),
+            # ChessStockfishBot(skill_level=4, max_time_to_think=0.2),
             num_games=10,
         )
 

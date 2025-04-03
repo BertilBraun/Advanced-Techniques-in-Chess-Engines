@@ -1,7 +1,7 @@
 import random
 
 from src.eval.Bot import Bot
-from src.settings import ChessMove, ChessBoard
+from src.games.ChessBoard import ChessBoard, ChessMove
 
 
 class RandomPlayer(Bot):

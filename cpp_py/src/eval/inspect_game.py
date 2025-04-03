@@ -2,8 +2,8 @@ import time
 
 from src.eval.GUI import BaseGridGameGUI
 from src.games.ChessBoard import ChessBoard
-from src.games.ChessGame import ChessGame
 from src.games.ChessVisuals import ChessVisuals
+from src.settings import BOARD_LENGTH
 
 # TODO Copy this move list from tensorboard
 move_list = '1:2,3,1,7,5,4,8'  # example move list
@@ -26,11 +26,10 @@ def display_board(move_index: int, gui: BaseGridGameGUI):
 
 
 def main():
-    _, rows, cols = ChessGame.representation_shape()
-    if hasattr(ChessBoard(), 'board_dimensions'):
-        rows, cols = ChessBoard().board_dimensions  # type: ignore
     gui = BaseGridGameGUI(
-        rows, cols, title=f'Game Inspector: Press left and right to navigate through the game. Game Result: {result}'
+        BOARD_LENGTH,
+        BOARD_LENGTH,
+        title=f'Game Inspector: Press left and right to navigate through the game. Game Result: {result}',
     )
 
     current_displayed_board = 0

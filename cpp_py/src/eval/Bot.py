@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import time
 
-from src.settings import ChessBoard, ChessMove
+from src.games.ChessBoard import ChessBoard, ChessMove
 
 
 class Bot(ABC):
