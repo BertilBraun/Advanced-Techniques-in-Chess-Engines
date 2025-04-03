@@ -1,8 +1,8 @@
 import time
 import torch
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
+from src.dataset.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.util.log import log

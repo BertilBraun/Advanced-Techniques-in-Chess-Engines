@@ -1,4 +1,4 @@
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.settings import log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions

@@ -40,7 +40,7 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     from src.games.ChessBoard import ChessBoard
-    from src.self_play.SelfPlayDataset import SelfPlayDataset
+    from src.dataset.SelfPlayDataset import SelfPlayDataset
 
     dataset = SelfPlayDataset()
 
@@ -64,11 +64,6 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
                 board.make_move(move)
 
-            dataset.add_generation_stats(
-                num_games=1,
-                generation_time=0.0,
-                resignation=False,
-            )
         except Exception as e:
             from src.util.log import log, LogLevel
 

@@ -12,9 +12,10 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from src.Encoding import action_probabilities
 from src.Network import Network
 from src.games.ChessBoard import ChessBoard, Player
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.util.save_paths import load_model, model_save_path
@@ -173,39 +174,32 @@ class ModelEvaluation:
         game_to_index = {game: i for i, game in enumerate(games)}
 
         # start from different starting positions, as the players are deterministic
-        if 'Chess' in ChessGame.__class__.__name__:
-            opening_fens = [
-                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
-                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 3 3',  # Scotch Game
-                'rnbqkb1r/pp1ppppp/5n2/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 2 2',  # Sicilian Defense
-                'rnbqkb1r/pppp1ppp/4pn2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 3',  # French Defense
-                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Caro-Kann Defense
-                'rnbqkb1r/ppp1pppp/3p4/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Pirc Defense
-                'rnbqkb1r/ppp1pppp/3p4/8/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Modern Defense
-                'rnbqkb1r/pppp1ppp/8/4p3/3Pn3/5N2/PPP2PPP/RNBQKB1R w KQkq - 3 3',  # Alekhine’s Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # King's Indian Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 2 3',  # Grünfeld Defense
-                'rnbqkb1r/pp1ppppp/5n2/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Queen’s Gambit Declined
-                'rnbqkb1r/pp1ppppp/5n2/8/2pPP3/8/PP3PPP/RNBQKBNR w KQkq - 0 3',  # Queen’s Gambit Accepted
-                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Slav Defense
-                'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
-                'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
-                'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
-                'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
-                'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
-            ]
+        opening_fens = [
+            'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
+            'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 3 3',  # Scotch Game
+            'rnbqkb1r/pp1ppppp/5n2/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 2 2',  # Sicilian Defense
+            'rnbqkb1r/pppp1ppp/4pn2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 3',  # French Defense
+            'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Caro-Kann Defense
+            'rnbqkb1r/ppp1pppp/3p4/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Pirc Defense
+            'rnbqkb1r/ppp1pppp/3p4/8/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Modern Defense
+            'rnbqkb1r/pppp1ppp/8/4p3/3Pn3/5N2/PPP2PPP/RNBQKB1R w KQkq - 3 3',  # Alekhine’s Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # King's Indian Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 2 3',  # Grünfeld Defense
+            'rnbqkb1r/pp1ppppp/5n2/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Queen’s Gambit Declined
+            'rnbqkb1r/pp1ppppp/5n2/8/2pPP3/8/PP3PPP/RNBQKBNR w KQkq - 0 3',  # Queen’s Gambit Accepted
+            'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Slav Defense
+            'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
+            'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
+            'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
+            'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
+            'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
+        ]
 
-            for game, fen in zip(games, opening_fens):
-                game.set_fen(fen)
-                game_move_histories[game_to_index[game]].append(f'FEN"{fen}"')
-        else:
-            for game in games:
-                for _ in range(3):
-                    move = random.choice(game.get_valid_moves())
-                    game.make_move(move)
-                    game_move_histories[game_to_index[game]].append(str(ChessGame.encode_move(move)))
+        for game, fen in zip(games, opening_fens):
+            game.set_fen(fen)
+            game_move_histories[game_to_index[game]].append(f'FEN"{fen}"')
 
         while games:
             games_for_player1 = [game for game in games if game.current_player == 1]

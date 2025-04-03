@@ -2,7 +2,7 @@ import json
 import struct
 from typing import Tuple, List
 
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 SelfPlaySample = Tuple[List[int], List[Tuple[int, int]], float]
 

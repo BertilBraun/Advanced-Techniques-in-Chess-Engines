@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
+from src.dataset.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, ChessGame, get_run_id
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams

@@ -8,9 +8,9 @@ from os import PathLike
 from pathlib import Path
 from torch.utils.data import Dataset
 
-from src.self_play.SelfPlayDatasetIO import SelfPlaySample, load_selfplay_file, write_selfplay_file
+from src.dataset.SelfPlayDatasetIO import SelfPlaySample, load_selfplay_file, write_selfplay_file
 from src.util import random_id
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
 class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):

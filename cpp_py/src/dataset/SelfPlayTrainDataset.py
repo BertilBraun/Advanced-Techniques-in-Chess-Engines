@@ -10,8 +10,8 @@ from src.Encoding import action_probabilities, decode_board_state
 from src.settings import log_histogram, log_scalar
 from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.dataset.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
