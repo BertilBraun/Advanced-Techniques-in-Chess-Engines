@@ -8,8 +8,10 @@ from src.settings import BOARD_LENGTH
 def _decode_square(cell: tuple[int, int]) -> int:
     return (BOARD_LENGTH - 1 - cell[0]) * BOARD_LENGTH + cell[1]
 
+
 def _encode_square(square: int) -> tuple[int, int]:
     return (BOARD_LENGTH - 1 - (square // BOARD_LENGTH), square % BOARD_LENGTH)
+
 
 class ChessVisuals:
     @staticmethod
@@ -28,17 +30,13 @@ class ChessVisuals:
     @staticmethod
     def try_make_move(
         board: chess.Board,
-        from_cell: Optional[Tuple[int, int]],
+        from_cell: Tuple[int, int],
         to_cell: Tuple[int, int],
     ) -> Optional[chess.Move]:
-        assert from_cell is not None, 'from_cell should not be None'
-
         from_square = _decode_square(from_cell)
         to_square = _decode_square(to_cell)
 
-        moves = [
-            move for move in board.legal_moves if move.from_square == from_square and move.to_square == to_square
-        ]
+        moves = [move for move in board.legal_moves if move.from_square == from_square and move.to_square == to_square]
         if len(moves) > 1:
             print(f'Multiple moves found for {from_cell} -> {to_cell}')
             for i, move in enumerate(moves):

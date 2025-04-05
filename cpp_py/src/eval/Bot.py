@@ -1,6 +1,23 @@
-from abc import ABC, abstractmethod
 import time
 import chess
+from typing import Optional
+from abc import ABC, abstractmethod
+
+
+def check_winner(board: chess.Board) -> Optional[chess.Color]:
+    """
+    Checks the winner of the game based on the board state.
+
+    :param board: The chess board.
+    :return: The color of the winning player or None if it's a draw.
+    """
+    result = board.result()
+    if result == '1-0':
+        return chess.WHITE
+    elif result == '0-1':
+        return chess.BLACK
+    else:
+        return None
 
 
 class Bot(ABC):

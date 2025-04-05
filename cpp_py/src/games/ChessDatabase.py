@@ -40,7 +40,6 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     import AlphaZeroCpp
-    from src.games.ChessBoard import ChessBoard
     from src.dataset.SelfPlayDataset import SelfPlayDataset
 
     dataset = SelfPlayDataset()
@@ -51,19 +50,18 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
         try:
             winner = eval(game.headers['Result'])
 
-            board = ChessBoard()
+            board = chess.Board()
             for move in game.mainline_moves():
-                encoded_board = chess_game.get_canonical_board(board)
-                visit_counts = [(AlphaZeroCpp.encode_move(move), 1)]
+                encoded_board = AlphaZeroCpp.encode_board(board.fen())
+                visit_counts = np.array([(AlphaZeroCpp.encode_move(move), 1)])
 
-                for board_variation, visits in chess_game.symmetric_variations(encoded_board, visit_counts):
-                    dataset.add_sample(
-                        board_variation.copy().astype(np.int8),
-                        visits,
-                        winner * board.current_player,
-                    )
+                dataset.add_sample(
+                    encoded_board,
+                    visit_counts,
+                    winner * (1 if board.turn == chess.WHITE else -1),
+                )
 
-                board.make_move(move)
+                board.push(move)
 
         except Exception as e:
             from src.util.log import log, LogLevel

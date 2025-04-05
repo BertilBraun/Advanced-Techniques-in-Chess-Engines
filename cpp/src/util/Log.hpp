@@ -26,6 +26,12 @@ template <typename T> std::string toString(const T &value) {
     return ss.str();
 }
 
+namespace chess {
+    class Move;
+}
+
+std::string toString(const chess::Move &move);
+
 template <typename T1, typename T2> std::string toString(const std::pair<T1, T2> &pair) {
     // Specialization for pairs
     return "(" + toString(pair.first) + ", " + toString(pair.second) + ")";

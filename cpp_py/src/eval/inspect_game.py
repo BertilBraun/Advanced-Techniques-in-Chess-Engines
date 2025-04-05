@@ -21,8 +21,7 @@ def display_board(move_index: int, gui: BaseGridGameGUI):
             board = chess.Board()
             board.set_fen(move[4:-1])
         else:
-            move = AlphaZeroCpp.decode_move(int(move))
-            board.push(chess.Move(move.from_square(), move.to_square(), move.promotion().value))
+            board.push(AlphaZeroCpp.decode_move(int(move)))
 
     gui.clear_highlights_and_redraw(lambda: ChessVisuals.draw_pieces(board, gui))
     gui.update_display()

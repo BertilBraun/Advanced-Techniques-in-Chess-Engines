@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 
 from src.Network import Network
 from src.dataset.SelfPlayDataset import SelfPlayDataset
+from src.eval.Bot import check_winner
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.util.save_paths import load_model, model_save_path
@@ -43,7 +44,7 @@ class Results:
             draws=self.draws + other.draws,
         )
 
-    def update(self, result: Player | None, main_player: Player) -> None:
+    def update(self, result: chess.Color | None, main_player: chess.Color) -> None:
         if result is None:
             self.draws += 1
         elif result == main_player:
@@ -127,8 +128,7 @@ class ModelEvaluation:
     def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
         def encode_move_into_policy(move: chess.Move) -> list[int]:
-            azp_move = AlphaZeroCpp.Move(move.from_square, move.to_square, AlphaZeroCpp.PieceType(move.promotion))
-            return AlphaZeroCpp.action_probabilities([(AlphaZeroCpp.encode_move(azp_move), 1)])
+            return AlphaZeroCpp.action_probabilities([(AlphaZeroCpp.encode_move(move), 1)])
 
         def random_evaluator(boards: list[chess.Board]) -> list[list[int]]:
             def get_random_policy(board: chess.Board) -> list[int]:
@@ -151,7 +151,9 @@ class ModelEvaluation:
         results = Results(0, 0, 0)
 
         def model1(boards: list[chess.Board]) -> list[list[int]]:
-            results = AlphaZeroCpp.board_inference_main(model_save_path(self.iteration, self.args.save_path), [board.board.fen() for board in boards])
+            results = AlphaZeroCpp.board_inference_main(
+                model_save_path(self.iteration, self.args.save_path), [board.fen() for board in boards]
+            )
             return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
         num_games = num_games or self.num_games
@@ -200,8 +202,8 @@ class ModelEvaluation:
             game_move_histories[game_to_index[game]].append(f'FEN"{fen}"')
 
         while games:
-            games_for_player1 = [game for game in games if game.current_player == 1]
-            games_for_player2 = [game for game in games if game.current_player == -1]
+            games_for_player1 = [game for game in games if game.turn == chess.WHITE]
+            games_for_player2 = [game for game in games if game.turn == chess.BLACK]
 
             policies1 = np.array(model1(games_for_player1))
             policies2 = np.array(model2(games_for_player2))
@@ -219,12 +221,13 @@ class ModelEvaluation:
                 game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():
-                    results.update(game.check_winner(), 1)
+                    game.result()
+                    results.update(check_winner(game), chess.WHITE)
 
                     moves = ','.join(game_move_histories[game_to_index[game]])
                     log_text(
                         f'evaluation_moves/{self.iteration}/{name}',
-                        str(game.check_winner()) + ':' + moves,
+                        str(check_winner(game)) + ':' + moves,
                     )
 
             games = [game for game in games if not game.is_game_over()]

@@ -1,5 +1,12 @@
 #include "Log.hpp"
 
+#include "chess.hpp"
+
+std::string toString(const chess::Move &move) {
+    // Specialization for Move type
+    return move.uci();
+}
+
 std::string currentTime() {
     // Helper function to get the current time as a string
     // Format: "hh:mm:ss:ms"

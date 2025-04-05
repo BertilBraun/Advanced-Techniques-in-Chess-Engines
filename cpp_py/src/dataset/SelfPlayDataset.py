@@ -46,6 +46,17 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         new_dataset.value_targets = self.value_targets + other.value_targets
         new_dataset.stats = self.stats + other.stats
         return new_dataset
+    
+    def add_sample(
+        self,
+        encoded_state: npt.NDArray[np.uint64],
+        visit_counts: npt.NDArray[np.uint16],
+        value_target: float,
+    ) -> None:
+        """Add a new sample to the dataset"""
+        self.encoded_states.append(encoded_state)
+        self.visit_counts.append(visit_counts)
+        self.value_targets.append(value_target)
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""

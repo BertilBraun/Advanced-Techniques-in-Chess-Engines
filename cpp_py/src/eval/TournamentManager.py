@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import chess
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,6 +29,6 @@ class TournamentManager:
 
             game_manager = GameManager(white, black)
             result = game_manager.play_game(verify_moves)
-            results.update(result, 1 if white == self.players[0] else -1)
+            results.update(result, chess.WHITE if white == self.players[0] else chess.BLACK)
 
         return results

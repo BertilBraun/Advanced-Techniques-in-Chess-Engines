@@ -1,11 +1,10 @@
 #include "common.hpp"
 
+#include "main.hpp"
+
 #include "MCTS/MCTS.hpp"
 #include "SelfPlay/SelfPlay.hpp"
 #include "SelfPlay/SelfPlayWriter.hpp"
-
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h> // for automatic binding of STL containers
 
 void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int numGPUs) {
     assert(runId >= 0);
@@ -101,8 +100,6 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     log("Main thread finished");
 }
 
-typedef std::pair<int, std::vector<std::pair<int, int>>> PyInferenceResult; // (score, visits);
-
 std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
                                                   const std::vector<std::string> &fens) {
     log("Model path:", modelPath);
@@ -180,7 +177,7 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
 
     if (networkOnly) {
         // Run the network inference only
-        const auto [value, moves] = inferenceClient.inference_batch(boards)[0];
+        const auto [moves, value] = inferenceClient.inference_batch(boards)[0];
         log("Network inference completed");
         int bestMoveIndex = -1;
         float bestMoveScore = -1.0f;
@@ -196,37 +193,6 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
         return decodeMove(bestMoveIndex);
     }
 
-    /*
-
-        root = MCTSNode.root(board)
-
-        for _ in range(self.mcts_args.num_searches_per_turn //
-       self.mcts_args.num_parallel_searches): self.mcts.parallel_iterate([root]) if self.time_is_up:
-                break
-
-        best_move_index = np.argmax(root.children_number_of_visits)
-        best_child = root.children[best_move_index]
-
-        def max_depth(node: MCTSNode) -> int:
-            if not node.children:
-                return 0
-            return 1 + max(max_depth(child) for child in node.children)
-
-        log('---------------------- Alpha Zero Best Move ----------------------')
-        log('Total number of searches:', root.number_of_visits)
-        log('Max depth:', max_depth(root))
-        log('Best child index:', best_move_index)
-        log(f'Best child has {best_child.number_of_visits} visits')
-        log(f'Best child has {best_child.result_score:.4f} result_score')
-        log('Child moves:', [child.encoded_move_to_get_here for child in root.children])
-        log('Child visits:', root.children_number_of_visits)
-        log('Child result_scores:', np.round(root.children_result_scores, 2))
-        log('Child priors:', np.round(root.children_policies, 2))
-        log('------------------------------------------------------------------')
-
-        return ChessGame.decode_move(best_child.encoded_move_to_get_here)
-        */
-
     // Run MCTS search until maxTime is reached
     auto start = std::chrono::high_resolution_clock::now();
     auto isTimeUp = [&]() {
@@ -235,18 +201,19 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
         return duration.count() >= maxTime;
     };
 
-    MCTSNode root = MCTSNode::root(board);
+    std::vector<MCTSNode> roots;
+    roots.push_back(MCTSNode::root(board));
 
-    while (!isTimeUp() && root.number_of_visits < EVALUATION_MCTS_PARAMS.num_searches_per_turn) {
+    while (!isTimeUp() &&
+           roots[0].number_of_visits < EVALUATION_MCTS_PARAMS.num_searches_per_turn) {
         // Run MCTS search
-        mcts.parallel_iterate({root});
+        mcts.parallel_iterate(roots);
     }
 
     // Get the best move from the MCTS results
     int bestMoveIndex = -1;
     int bestMoveVisits = -1;
-    for (size_t i = 0; i < root.children.size(); ++i) {
-        const MCTSNode &child = root.children[i];
+    for (const MCTSNode &child : roots[0].children) {
         if (child.number_of_visits > bestMoveVisits) {
             bestMoveVisits = child.number_of_visits;
             bestMoveIndex = child.encoded_move_to_get_here;
@@ -254,98 +221,10 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
     }
     assert(bestMoveIndex != -1);
     log("Best move:", decodeMove(bestMoveIndex), "Best move visits:", bestMoveVisits);
-    log("Result:", root.result_score);
+    log("Result:", roots[0].result_score);
     log("Board inference completed");
-    log("Total number of searches:", root.number_of_visits);
+    log("Total number of searches:", roots[0].number_of_visits);
     log("Best child visits:", bestMoveVisits);
 
     return decodeMove(bestMoveIndex);
-}
-
-namespace py = pybind11;
-using namespace py::literals;
-
-PYBIND11_MODULE(AlphaZeroCpp, m) {
-    m.doc() = "AlphaZero C++ bindings for Python";
-
-    m.def("self_play_main", &selfPlayMain,
-          "Runs self-play on the given model save directory path and parameters", py::arg("run_id"),
-          py::arg("save_path"), py::arg("num_processors"), py::arg("num_gpus"))
-        .attr("__annotations__") =
-        py::dict("return"_a = "None", "run_id"_a = "int", "save_path"_a = "str",
-                 "num_processors"_a = "int", "num_gpus"_a = "int");
-
-    m.def("board_inference_main", &boardInferenceMain,
-          "Runs board inference on a list of FEN strings", py::arg("model_path"), py::arg("fens"))
-        .attr("__annotations__") = py::dict("return"_a = "List[Tuple[int, List[Tuple[int, int]]]]",
-                                            "model_path"_a = "str", "fens"_a = "List[str]");
-
-    m.def("eval_board_iterate", &evalBoardIterate, "Runs board inference on a single FEN string",
-          py::arg("model_path"), py::arg("fen"), py::arg("network_only") = false,
-          py::arg("max_time") = 5.0)
-        .attr("__annotations__") =
-        py::dict("return"_a = "Move", "model_path"_a = "str", "fen"_a = "str",
-                 "network_only"_a = "bool", "max_time"_a = "float");
-
-    // encodeBoard function
-    m.def("encode_board", &encodeBoard, "Encodes a board into a CompressedEncodedBoard",
-          py::arg("board"));
-
-    py::module_ typing = py::module_::import("typing");
-    py::module_ numpy = py::module_::import("numpy");
-
-    // type alias for CompressedEncodedBoard = List[uint64]
-    m.attr("CompressedEncodedBoard") = typing.attr("List")(numpy.attr("uint64"));
-
-    // type alias for EncodedBoard = List[List[List[int8]]]
-    m.attr("EncodedBoard") =
-        typing.attr("List")(typing.attr("List")(typing.attr("List")(numpy.attr("int8"))));
-
-    // compress function
-    m.def("compress", &compress, "Compresses an EncodedBoard into a CompressedEncodedBoard",
-          py::arg("binary"))
-        .attr("__annotations__") =
-        py::dict("return"_a = "CompressedEncodedBoard", "binary"_a = "EncodedBoard");
-
-    // decompress function
-    m.def("decompress", &decompress, "Decompresses a CompressedEncodedBoard into an EncodedBoard",
-          py::arg("compressed"))
-        .attr("__annotations__") =
-        py::dict("return"_a = "EncodedBoard", "compressed"_a = "CompressedEncodedBoard");
-
-    // register the PieceType enum in Python
-    py::enum_<PieceType>(m, "PieceType")
-        .value("NONE", PieceType::NONE)
-        .value("PAWN", PieceType::PAWN)
-        .value("KNIGHT", PieceType::KNIGHT)
-        .value("BISHOP", PieceType::BISHOP)
-        .value("ROOK", PieceType::ROOK)
-        .value("QUEEN", PieceType::QUEEN)
-        .value("KING", PieceType::KING);
-
-    // define the Move class in Python with methods to access fromSquare(), toSquare(), and
-    // promotion()
-    py::class_<Move>(m, "Move")
-        .def(py::init<int, int, PieceType>(), py::arg("from_square"), py::arg("to_square"),
-             py::arg("promotion") = PieceType::NONE)
-        .def("from_square", &Move::fromSquare, "Returns the from square of the move")
-        .def("to_square", &Move::toSquare, "Returns the to square of the move")
-        .def("promotion", &Move::promotion, "Returns the promotion type of the move")
-        .def("__str__", &Move::uci, "Returns the UCI string representation of the move")
-        .def("__repr__", [](const Move &move) { return move.uci(); });
-
-    // encodeMove function
-    m.def("encode_move", &encodeMove, "Encodes a move into an integer", py::arg("move"))
-        .attr("__annotations__") = py::dict("return"_a = "int", "move"_a = "Move");
-
-    // decodeMove function
-    m.def("decode_move", &decodeMove, "Decodes an integer into a move", py::arg("move_index"))
-        .attr("__annotations__") = py::dict("return"_a = "Move", "move_index"_a = "int");
-
-    // actionProbabilities function
-    m.def("action_probabilities", &actionProbabilities,
-          "Returns the action probabilities for a given visit counts vector",
-          py::arg("visit_counts"))
-        .attr("__annotations__") =
-        py::dict("return"_a = "List[int]", "visit_counts"_a = "List[Tuple[int, int]]");
 }
