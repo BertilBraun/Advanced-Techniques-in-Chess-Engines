@@ -8,7 +8,6 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    import subprocess
     from pathlib import Path
 
     from src.cluster.EvaluationProcess import run_evaluation_process
@@ -45,17 +44,26 @@ if __name__ == '__main__':
     trainer_process.ensure_model_exists(starting_iteration)
 
     log('Starting self play process.')
-    self_play_process = subprocess.Popen(
-        [
-            '../cpp/build/AlphaZeroSelfPlay',
-            str(run),
-            str(TRAINING_ARGS.save_path),
-            str(TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster),
-            str(NUM_GPUS - 1),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+
+    # start a process which imports AlphaZeroCpp and starts the self play main loop
+    def self_play_main_loop():
+        import AlphaZeroCpp
+
+        # start the self play main loop
+        AlphaZeroCpp.self_play_main(
+            run,
+            TRAINING_ARGS.save_path,
+            TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster,
+            NUM_GPUS - 1,
+        )
+
+    self_play_process = mp.Process(
+        target=self_play_main_loop,
+        args=(),
+        daemon=True,
     )
+    self_play_process.start()
+    assert self_play_process.pid is not None, 'Failed to start self play process.'
     log(f'Self play process started with PID: {self_play_process.pid}')
 
     start_gpu_usage_logger(run)

@@ -8,7 +8,7 @@ from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
-from src.settings import TRAINING_ARGS, TensorboardWriter, ChessGame, get_run_id
+from src.settings import TRAINING_ARGS, TensorboardWriter, get_run_id
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
@@ -63,7 +63,7 @@ def train_model(
 
 def main(dataset_paths: list[str]):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    save_folder = f'reference/{ChessGame.__class__.__name__}'
+    save_folder = 'reference/chess'
 
     for dataset_path in dataset_paths:
         assert os.path.exists(dataset_path), f'Dataset path does not exist: {dataset_path}'

@@ -2,6 +2,7 @@ from __future__ import annotations
 from itertools import chain
 from os import PathLike
 import os
+import chess
 import random
 
 import numpy as np
@@ -12,14 +13,14 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from src.Encoding import action_probabilities
 from src.Network import Network
-from src.games.ChessBoard import ChessBoard, Player
 from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
+
+import AlphaZeroCpp
 
 
 @dataclass
@@ -57,7 +58,7 @@ class Results:
         return f'Wins: {self.wins}, Losses: {self.losses}, Draws: {self.draws}'
 
 
-EvaluationModel = Callable[[list[ChessBoard]], list[np.ndarray]]
+EvaluationModel = Callable[[list[chess.Board]], list[list[int]]]
 
 # The device to use for evaluation. Since Training is done on device 0, we can use device 1 for evaluation
 EVAL_DEVICE = 0
@@ -125,22 +126,22 @@ class ModelEvaluation:
 
     def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
+        def encode_move_into_policy(move: chess.Move) -> list[int]:
+            azp_move = AlphaZeroCpp.Move(move.from_square, move.to_square, AlphaZeroCpp.PieceType(move.promotion))
+            return AlphaZeroCpp.action_probabilities([(AlphaZeroCpp.encode_move(azp_move), 1)])
 
-        def random_evaluator(boards: list[ChessBoard]) -> list[np.ndarray]:
-            def get_random_policy(board: ChessBoard) -> np.ndarray:
-                return ChessGame.encode_moves([random.choice(board.get_valid_moves())])
+        def random_evaluator(boards: list[chess.Board]) -> list[list[int]]:
+            def get_random_policy(board: chess.Board) -> list[int]:
+                return encode_move_into_policy(random.choice(list(board.legal_moves)))
 
             return [get_random_policy(board) for board in boards]
 
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        opponent = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
-        opponent.load_model(model_path)
-
-        def opponent_evaluator(boards: list[ChessBoard]) -> list[np.ndarray]:
-            results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
-            return [action_probabilities(result.visit_counts) for result in results]
+        def opponent_evaluator(boards: list[chess.Board]) -> list[list[int]]:
+            results = AlphaZeroCpp.board_inference_main(model_path, [board.fen() for board in boards])
+            return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
 
@@ -149,12 +150,9 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
-        current_model.update_iteration(self.iteration)
-
-        def model1(boards: list[ChessBoard]) -> list[np.ndarray]:
-            results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
-            return [action_probabilities(result.visit_counts) for result in results]
+        def model1(boards: list[chess.Board]) -> list[list[int]]:
+            results = AlphaZeroCpp.board_inference_main(model_save_path(self.iteration, self.args.save_path), [board.board.fen() for board in boards])
+            return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
         num_games = num_games or self.num_games
 
@@ -168,7 +166,7 @@ class ModelEvaluation:
     ) -> Results:
         results = Results(0, 0, 0)
 
-        games = [ChessBoard() for _ in range(num_games)]
+        games = [chess.Board() for _ in range(num_games)]
 
         game_move_histories: list[list[str]] = [[] for _ in range(num_games)]
         game_to_index = {game: i for i, game in enumerate(games)}
@@ -205,8 +203,8 @@ class ModelEvaluation:
             games_for_player1 = [game for game in games if game.current_player == 1]
             games_for_player2 = [game for game in games if game.current_player == -1]
 
-            policies1 = model1(games_for_player1)
-            policies2 = model2(games_for_player2)
+            policies1 = np.array(model1(games_for_player1))
+            policies2 = np.array(model2(games_for_player2))
 
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
@@ -217,7 +215,7 @@ class ModelEvaluation:
                 policy /= policy.sum()
 
                 move = np.argmax(policy).item()
-                game.make_move(ChessGame.decode_move(move))
+                game.push(AlphaZeroCpp.decode_move(move))
                 game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():

@@ -9,6 +9,9 @@ struct SelfPlayGameMemory {
     Board board;
     VisitCounts visitCounts;
     float result;
+
+    SelfPlayGameMemory(const Board &_board, const VisitCounts &_visitCounts, float _result)
+        : board(_board), visitCounts(_visitCounts), result(_result) {}
 };
 
 struct SelfPlayGame {

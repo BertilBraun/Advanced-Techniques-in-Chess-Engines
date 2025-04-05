@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
-# Check for CUDA support
+# Enable position-independent code for all targets
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# --- Check for CUDA support ---
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)
@@ -9,7 +12,7 @@ if(CMAKE_CUDA_COMPILER)
     add_definitions(-DUSE_CUDA)
 endif()
 
-# Set C++ and CUDA standards
+# --- Set C++ and CUDA standards to C++20---
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 if(CMAKE_CUDA_COMPILER)
@@ -17,7 +20,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 endif()
 
-# Enable ccache for faster recompilation
+# --- Enable ccache for faster recompilation ---
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
     message(STATUS "Using ccache")
@@ -28,7 +31,7 @@ if(CCACHE_FOUND)
     endif()
 endif()
 
-# LibTorch configuration
+# --- LibTorch configuration ---
 if(CMAKE_CUDA_COMPILER)
     set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda")
     set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda/share/cmake/Torch")
@@ -44,20 +47,14 @@ endif()
 find_package(Torch REQUIRED)
 
 # --- Add tensorboard_logger via FetchContent ---
-
-# (Make sure Protobuf is installed or find_package(Protobuf REQUIRED) is successful.) (sudo apt-get install protobuf-compiler libprotobuf-dev)
 find_package(Protobuf REQUIRED)
-
 include(FetchContent)
 FetchContent_Declare(
     tensorboard_logger
-    GIT_REPOSITORY      https://github.com/RustingSword/tensorboard_logger.git
-    GIT_TAG             master
+    GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
+    GIT_TAG master
 )
 FetchContent_MakeAvailable(tensorboard_logger)
-
-
-# This will add a target named "tensorboard_logger"
 
 # --- Add fmtlib via FetchContent ---
 FetchContent_Declare(
@@ -67,77 +64,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fmt)
 
-# Collect all source files
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-
-# General warnings
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-
-# Print MSVC and UNIX values
-message(STATUS "MSVC: ${MSVC}")
-message(STATUS "UNIX: ${UNIX}")
-
-if(MSVC)
-    set(debug_flags_list "/Od" "/Zi")
-    set(release_flags_list "/O2" "/DNDEBUG")
-    set(linker_release_flags_list "/LTCG")
-else()
-    set(debug_flags_list "-Og" "-g")
-    set(release_flags_list "-O3" "-ffast-math" "-DNDEBUG" "-march=native")
-endif()
-
-if(CMAKE_CUDA_COMPILER)
-    if(MSVC)
-        set(cuda_debug_flags_list "-G" "-g")
-        set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-    else()
-        set(cuda_debug_flags_list "-O0" "-G" "-g")
-        set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-    endif()
-endif()
-
-
-# Define the executable target
-add_executable(${PROJECT_NAME} ${SOURCES})
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC _SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS)
-
-target_include_directories(${PROJECT_NAME} PUBLIC ${tensorboard_logger_SOURCE_DIR}/include)
-
-
-
-# TODO target_precompile_headers(${PROJECT_NAME} PRIVATE src/common.hpp)
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/chess.hpp)
-
-target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<CONFIG:DEBUG>:${debug_flags_list}>
-    $<$<CONFIG:RELEASE>:${release_flags_list}>
+# --- FetchContent for pybind11 ---
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v2.13.6  # Use the desired version
 )
-if(CMAKE_CUDA_COMPILER)
-    target_compile_options(${PROJECT_NAME} PRIVATE
-        $<$<CONFIG:DEBUG>:${cuda_debug_flags_list}>
-        $<$<CONFIG:RELEASE>:${cuda_release_flags_list}>
-    )
-endif()
+FetchContent_MakeAvailable(pybind11)
 
-# Link LibTorch and tensorboard_logger and fmt libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE "${TORCH_LIBRARIES}" tensorboard_logger fmt::fmt)
-
-# Append linker flags for MSVC Release builds
-if(MSVC)
-    target_link_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:RELEASE>:${linker_release_flags_list}>)
-endif()
-
-# Conditionally link stdc++fs for UNIX systems with older GCC versions
-if(UNIX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-    target_link_libraries(${PROJECT_NAME} stdc++fs)
-endif()
-
-# export compile flags to json
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-
-# Include directories
+# --- Include directories ---
 include_directories(src)
 if(CMAKE_CUDA_COMPILER)
     include_directories(libtorch_cuda/include)
@@ -147,13 +82,60 @@ elseif(MSVC)
     include_directories(libtorch_cpu_win/include)
 endif()
 
+# --- Collect sources for the Python module ---
+# Gather all .cpp files under src/
+file(GLOB_RECURSE MODULE_SOURCES "src/*.cpp")
 
+# Precompiled headers for src/common.hpp
+
+set(PCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/common.hpp")
+
+
+# --- Build the Python extension module ---
+pybind11_add_module(AlphaZeroCpp ${MODULE_SOURCES})
+
+# --- Set compile options (optional) ---
 if(MSVC)
-    file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
-    add_custom_command(TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${TORCH_DLLS}
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    set(debug_flags_list "/Od" "/Zi")
+    set(release_flags_list "/O2" "/DNDEBUG")
+else()
+    set(debug_flags_list "-Og" "-g")
+    set(release_flags_list "-O3" "-ffast-math" "-DNDEBUG" "-march=native")
+endif()
+
+target_compile_options(AlphaZeroCpp PRIVATE
+    $<$<CONFIG:DEBUG>:${debug_flags_list}>
+    $<$<CONFIG:RELEASE>:${release_flags_list}>
+)
+if(CMAKE_CUDA_COMPILER)
+    if(MSVC)
+        set(cuda_debug_flags_list "-G" "-g")
+        set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
+    else()
+        set(cuda_debug_flags_list "-O0" "-G" "-g")
+        set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
+    endif()
+    target_compile_options(AlphaZeroCpp PRIVATE
+        $<$<CONFIG:DEBUG>:${cuda_debug_flags_list}>
+        $<$<CONFIG:RELEASE>:${cuda_release_flags_list}>
     )
 endif()
+
+# --- Link libraries ---
+target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}" tensorboard_logger fmt::fmt)
+if(MSVC)
+    target_link_options(AlphaZeroCpp PRIVATE $<$<CONFIG:RELEASE>:"/LTCG">)
+endif()
+if(UNIX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(AlphaZeroCpp stdc++fs)
+endif()
+
+# --- Export compile commands ---
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# --- Post-build: Copy the generated shared library to "../../cpp_py/" ---
+add_custom_command(TARGET AlphaZeroCpp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
+    COMMENT "Copying AlphaZeroCpp module to ../../cpp_py/"
+)

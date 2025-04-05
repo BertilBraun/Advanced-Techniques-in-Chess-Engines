@@ -1,10 +1,10 @@
 import time
+import chess
 from typing import Optional, Tuple
 
 from src.eval.Bot import Bot
 from src.eval.GUI import BaseGridGameGUI
 from src.games.ChessVisuals import ChessVisuals
-from src.games.ChessBoard import ChessBoard, ChessMove
 
 
 class HumanPlayer(Bot):
@@ -15,9 +15,9 @@ class HumanPlayer(Bot):
         self.game_visuals = game_visuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
-        self.board_history: list[ChessBoard] = []
+        self.board_history: list[chess.Board] = []
 
-    def think(self, board: ChessBoard) -> ChessMove:
+    def think(self, board: chess.Board) -> chess.Move:
         # Common input loop for all games
 
         self.display_board(board)
@@ -45,7 +45,7 @@ class HumanPlayer(Bot):
                         # Return the move if successfully formed
                         # Show the move on the GUI before returning
                         new_board = board.copy()
-                        new_board.make_move(move)
+                        new_board.push(move)
                         self.display_board(new_board)
                         self.board_history.append(new_board.copy())
                         return move
@@ -64,11 +64,11 @@ class HumanPlayer(Bot):
 
             time.sleep(0.2)
 
-    def display_board(self, board: ChessBoard):
+    def display_board(self, board: chess.Board):
         self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
         self.gui.update_display()
 
-    def handle_click(self, board: ChessBoard, cell: Tuple[int, int]) -> Optional[ChessMove]:
+    def handle_click(self, board: chess.Board, cell: Tuple[int, int]) -> Optional[chess.Move]:
         if self.selected_cell is None:
             # First click: select a piece if valid
             moves_from_cell = self.game_visuals.get_moves_from_square(board, *cell)

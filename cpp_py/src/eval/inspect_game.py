@@ -1,7 +1,9 @@
 import time
+import chess
+
+import AlphaZeroCpp
 
 from src.eval.GUI import BaseGridGameGUI
-from src.games.ChessBoard import ChessBoard
 from src.games.ChessVisuals import ChessVisuals
 from src.settings import BOARD_LENGTH
 
@@ -13,13 +15,14 @@ moves = moves.split(',')
 
 
 def display_board(move_index: int, gui: BaseGridGameGUI):
-    board = ChessBoard()
+    board = chess.Board()
     for move in moves[:move_index]:
         if move.startswith('FEN'):
-            board = ChessBoard()
+            board = chess.Board()
             board.set_fen(move[4:-1])
         else:
-            board.make_move(ChessGame.decode_move(int(move)))
+            move = AlphaZeroCpp.decode_move(int(move))
+            board.push(chess.Move(move.from_square(), move.to_square(), move.promotion().value))
 
     gui.clear_highlights_and_redraw(lambda: ChessVisuals.draw_pieces(board, gui))
     gui.update_display()

@@ -6,13 +6,13 @@ from pathlib import Path
 from torch.utils.data import IterableDataset
 from torch.multiprocessing import Process
 
-from src.Encoding import action_probabilities, decode_board_state
 from src.settings import log_histogram, log_scalar
 from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
 from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
+import AlphaZeroCpp
 
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
@@ -86,13 +86,13 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
 
                     accumulated_stats += dataset.stats
 
-                    policies = [action_probabilities(visits) for visits in dataset.visit_counts]
+                    policies = [AlphaZeroCpp.action_probabilities(visits) for visits in dataset.visit_counts]
 
-                    spikiness = sum(policy.max() for policy in policies) / len(dataset)
+                    spikiness = sum(max(policy) for policy in policies) / len(dataset)
 
                     log_scalar('dataset/policy_spikiness', spikiness)
 
-                    log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
+                    log_histogram('dataset/policy_targets', np.array([max(policy) for policy in policies]))
                     log_histogram('dataset/value_targets', np.array(dataset.value_targets))
 
                     # dataset.deduplicate()
@@ -143,8 +143,8 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     self.sample_index[i] = 0
 
                 dataset = active_chunks[i]
-                state = torch.from_numpy(decode_board_state(dataset.encoded_states[self.sample_index[i]]))
-                policy_target = torch.from_numpy(action_probabilities(dataset.visit_counts[self.sample_index[i]]))
+                state = torch.from_numpy(AlphaZeroCpp.decompress(dataset.encoded_states[self.sample_index[i]]))
+                policy_target = torch.from_numpy(AlphaZeroCpp.action_probabilities(dataset.visit_counts[self.sample_index[i]]))
                 value_target = torch.tensor(dataset.value_targets[self.sample_index[i]])
                 self.sample_index[i] += 1
 

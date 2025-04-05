@@ -18,7 +18,8 @@ CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
 
 VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
     VisitCounts flippedVisitCounts;
-    for (const auto &[move, count] : visitCounts.visits) {
+    flippedVisitCounts.reserve(visitCounts.size());
+    for (const auto &[move, count] : visitCounts) {
         const Move flippedMove = decodeMove(move);
         const auto [moveFromRow, moveFromCol] = squareToIndex(flippedMove.fromSquare());
         const auto [moveToRow, moveToCol] = squareToIndex(flippedMove.toSquare());
@@ -26,7 +27,7 @@ VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
         const Square flippedMoveTo = square(moveToRow, BOARD_LENGTH - 1 - moveToCol);
         const int flippedIndex =
             encodeMove(Move(flippedMoveFrom, flippedMoveTo, flippedMove.promotion()));
-        flippedVisitCounts.visits.push_back({flippedIndex, count});
+        flippedVisitCounts.emplace_back(flippedIndex, count);
     }
     return flippedVisitCounts;
 }
@@ -46,14 +47,17 @@ _symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &vis
 
 VisitCounts _preprocessVisitCounts(const VisitCounts &visitCounts) {
     int totalVisits = 0;
-    for (const auto &[_, visitCount] : visitCounts.visits) {
+    for (const auto &[_, visitCount] : visitCounts) {
         totalVisits += visitCount;
     }
 
     VisitCounts newVisitCounts;
-    for (const auto &[move, count] : visitCounts.visits) {
+    newVisitCounts.reserve(visitCounts.size());
+    // Filter out moves with less than 1% of the total visits.
+    // This is to reduce the size of the visit counts and focus on the most significant moves.
+    for (const auto &[move, count] : visitCounts) {
         if (count >= totalVisits * 0.01) {
-            newVisitCounts.visits.push_back({move, count});
+            newVisitCounts.emplace_back(move, count);
         }
     }
 
@@ -215,10 +219,10 @@ void SelfPlayWriter::_flushBatch() {
         add(sample.board.data(), sizeof(uint64_t) * ENCODING_CHANNELS);
 
         // Write the number of pairs in visitCounts (as a 32-bit integer).
-        add(static_cast<uint32_t>(sample.visitCounts.visits.size()));
+        add(static_cast<uint32_t>(sample.visitCounts.size()));
 
         // Write each pair (each int as 32-bit).
-        for (const auto &[move, count] : sample.visitCounts.visits) {
+        for (const auto &[move, count] : sample.visitCounts) {
             add(static_cast<uint32_t>(move));
             add(static_cast<uint32_t>(count));
         }

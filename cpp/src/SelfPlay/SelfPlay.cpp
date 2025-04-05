@@ -36,7 +36,7 @@ void SelfPlay::selfPlay() {
             continue;
         }
 
-        ActionProbabilities gameActionProbabilities = mcts_result.visits.actionProbabilities();
+        ActionProbabilities gameActionProbabilities = actionProbabilities(mcts_result.visits);
 
         while (sum(gameActionProbabilities) > 0.0) {
             const auto [newGame, move] = _sampleSPG(game, gameActionProbabilities);
@@ -65,7 +65,7 @@ void SelfPlay::selfPlay() {
             }
         }
         if (sum(gameActionProbabilities) == 0.0) {
-            const auto [newGame, move] = _sampleSPG(game, mcts_result.visits.actionProbabilities());
+            const auto [newGame, move] = _sampleSPG(game, actionProbabilities(mcts_result.visits));
             m_selfPlayGames[i] = newGame;
         }
     }

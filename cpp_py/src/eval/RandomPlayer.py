@@ -1,7 +1,7 @@
 import random
+import chess
 
 from src.eval.Bot import Bot
-from src.games.ChessBoard import ChessBoard, ChessMove
 
 
 class RandomPlayer(Bot):
@@ -9,5 +9,5 @@ class RandomPlayer(Bot):
         """Initializes the random player."""
         super().__init__('RandomPlayer', max_time_to_think=0.0)
 
-    def think(self, board: ChessBoard) -> ChessMove:
-        return random.choice(board.get_valid_moves())
+    def think(self, board: chess.Board) -> chess.Move:
+        return random.choice(list(board.legal_moves))

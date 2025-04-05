@@ -6,21 +6,6 @@ from typing import Literal, Optional, List
 ChessMove = chess.Move
 Player = Literal[-1, 1]
 
-PIECE_VALUE = {
-    chess.PAWN: 1,
-    chess.KNIGHT: 3,
-    chess.BISHOP: 3,
-    chess.ROOK: 5,
-    chess.QUEEN: 9,
-    chess.KING: 0,
-}
-MAX_MATERIAL_VALUE = (
-    PIECE_VALUE[chess.PAWN] * 8
-    + PIECE_VALUE[chess.KNIGHT] * 2
-    + PIECE_VALUE[chess.BISHOP] * 2
-    + PIECE_VALUE[chess.ROOK] * 2
-    + PIECE_VALUE[chess.QUEEN] * 1
-)
 
 
 class ChessBoard:
@@ -56,14 +41,6 @@ class ChessBoard:
 
     def quick_hash(self) -> int:
         return hash(self.board.fen())
-
-    def get_approximate_result_score(self) -> float:
-        mat_value = 0
-        for piece in chess.PIECE_TYPES:
-            mat_value += len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]
-            mat_value -= len(self.board.pieces(piece, chess.BLACK)) * PIECE_VALUE[piece]
-
-        return mat_value / MAX_MATERIAL_VALUE
 
     def set_fen(self, fen: str) -> None:
         self.board.set_fen(fen)

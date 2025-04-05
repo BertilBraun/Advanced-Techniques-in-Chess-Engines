@@ -28,9 +28,9 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
     results.reserve(roots.size());
     for (const MCTSNode &root : roots) {
         VisitCounts visitCounts;
-        visitCounts.visits.reserve(root.children.size());
+        visitCounts.reserve(root.children.size());
         for (const MCTSNode &child : root.children) {
-            visitCounts.visits.emplace_back(child.encoded_move_to_get_here, child.number_of_visits);
+            visitCounts.emplace_back(child.encoded_move_to_get_here, child.number_of_visits);
         }
         results.push_back({root.result_score, visitCounts});
     }

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import chess
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.eval.Bot import Bot
-from src.games.ChessBoard import Player
-from src.games.ChessBoard import ChessBoard
 
 
 class GameManager:
@@ -15,7 +14,7 @@ class GameManager:
 
     def play_game(self, verify_moves=True) -> Optional[Player]:
         """Manages the gameplay loop until the game is over or a player quits."""
-        self.board = ChessBoard()
+        self.board = chess.Board()
         while not self.board.is_game_over():
             current_player = self.players[self.board.current_player]
 
