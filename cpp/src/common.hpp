@@ -50,9 +50,7 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
-#include <tensorboard_logger.h>
-
-#include <fmt/core.h>
+#include "TensorBoardLogger.hpp"
 
 #ifdef _WIN32
 #pragma warning(pop)

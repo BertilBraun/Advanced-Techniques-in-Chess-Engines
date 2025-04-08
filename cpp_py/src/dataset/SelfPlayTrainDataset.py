@@ -14,6 +14,7 @@ from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 import AlphaZeroCpp
 
+
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
@@ -70,7 +71,7 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                 self.all_chunks = [self.all_chunks[i] + self.all_chunks[i + n // 2] for i in range(n // 2)]
 
             if self.stats.num_samples > 5_000_000:
-                log(f'Loaded {self.stats.num_samples} samples with {i+1} multiplications.')
+                log(f'Loaded {self.stats.num_samples} samples with {i + 1} multiplications.')
                 break
 
     @staticmethod
@@ -143,8 +144,12 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     self.sample_index[i] = 0
 
                 dataset = active_chunks[i]
-                state = torch.from_numpy(AlphaZeroCpp.decompress(dataset.encoded_states[self.sample_index[i]]))
-                policy_target = torch.from_numpy(AlphaZeroCpp.action_probabilities(dataset.visit_counts[self.sample_index[i]]))
+                state = torch.from_numpy(
+                    np.array(AlphaZeroCpp.decompress(dataset.encoded_states[self.sample_index[i]]))
+                )
+                policy_target = torch.from_numpy(
+                    np.array(AlphaZeroCpp.action_probabilities(dataset.visit_counts[self.sample_index[i]]))
+                )
                 value_target = torch.tensor(dataset.value_targets[self.sample_index[i]])
                 self.sample_index[i] += 1
 

@@ -14,4 +14,6 @@
 
 source setup.sh
 
+python -m src.games.ChessDatabase 20
+
 python -m src.eval.DatasetTrainer reference/chess_database/memory_*.hdf5 

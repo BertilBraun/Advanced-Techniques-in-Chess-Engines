@@ -10,11 +10,11 @@ if __name__ == '__main__':
 
     from pathlib import Path
 
+    from src.settings import TRAINING_ARGS, USE_GPU, NUM_GPUS, get_run_id, TensorboardWriter, log_text
     from src.cluster.EvaluationProcess import run_evaluation_process
     from src.cluster.TrainerProcess import TrainerProcess
     from src.util.exceptions import log_exceptions
     from src.util.profiler import start_cpu_usage_logger, start_gpu_usage_logger
-    from src.settings import TRAINING_ARGS, USE_GPU, NUM_GPUS, get_run_id, TensorboardWriter, log_text
     from src.util.save_paths import get_latest_model_iteration
     from src.util.log import log
 

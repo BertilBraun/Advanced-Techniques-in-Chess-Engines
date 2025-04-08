@@ -7,7 +7,9 @@
 #include "MoveEncoding.hpp"
 
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h> // for automatic binding of STL containers
+
+#include <pybind11/numpy.h> // for numpy array support
+#include <pybind11/stl.h>   // for automatic binding of STL containers
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -84,12 +86,6 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.def("encode_board", &encode_board, "Encodes a board into a CompressedEncodedBoard",
           py::arg("fen"))
         .attr("__annotations__") = py::dict("return"_a = "CompressedEncodedBoard", "fen"_a = "str");
-
-    // compress function
-    m.def("compress", &compress, "Compresses an EncodedBoard into a CompressedEncodedBoard",
-          py::arg("binary"))
-        .attr("__annotations__") =
-        py::dict("return"_a = "CompressedEncodedBoard", "binary"_a = "EncodedBoard");
 
     // decompress function
     m.def("decompress", &decompress, "Decompresses a CompressedEncodedBoard into an EncodedBoard",
