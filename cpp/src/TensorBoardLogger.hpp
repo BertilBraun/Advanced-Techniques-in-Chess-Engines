@@ -94,13 +94,10 @@ public:
 
     void periodic_flush() {
         while (true) {
-            {
-                std::lock_guard<std::mutex> lock(mu);
-                if (stop_thread)
-                    break;
-                flush();
-                std::this_thread::sleep_for(std::chrono::minutes(1));
-            }
+            if (stop_thread)
+                break;
+            flush();
+            std::this_thread::sleep_for(std::chrono::minutes(1));
         }
     }
 

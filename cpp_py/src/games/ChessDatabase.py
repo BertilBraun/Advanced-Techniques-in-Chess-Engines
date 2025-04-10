@@ -52,8 +52,8 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             board = chess.Board()
             for move in game.mainline_moves():
-                encoded_board = AlphaZeroCpp.encode_board(board.fen())
-                visit_counts = np.array([(AlphaZeroCpp.encode_move(move), 1)])
+                encoded_board = np.array(AlphaZeroCpp.encode_board(board.fen()), dtype=np.uint64)
+                visit_counts = np.array([(AlphaZeroCpp.encode_move(move), 1)], dtype=np.uint16)
 
                 dataset.add_sample(
                     encoded_board,

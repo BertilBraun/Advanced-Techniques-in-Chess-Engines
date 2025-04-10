@@ -12,8 +12,8 @@
 #include "TensorBoardLogger.hpp"
 
 // Global timing results and a mutex to protect them.
-std::unordered_map<std::string, double> function_times;
-std::unordered_map<std::string, double> global_function_times;
+std::unordered_map<std::string, float> function_times;
+std::unordered_map<std::string, float> global_function_times;
 std::unordered_map<std::string, int> global_function_invocations;
 std::mutex time_mutex;
 
@@ -36,12 +36,11 @@ TimeItGuard::TimeItGuard(const std::string &name)
 }
 
 TimeItGuard::~TimeItGuard() {
-    auto end = std::chrono::high_resolution_clock::now();
-    double elapsed = std::chrono::duration<double>(end - start).count();
+    float elapsedSeconds = elapsed();
 
     std::lock_guard<std::mutex> lock(time_mutex);
     // Update the accumulated time and invocation count for this function.
-    function_times[func_name] += elapsed;
+    function_times[func_name] += elapsedSeconds;
     global_function_invocations[func_name] += 1;
 
     // Pop the call stack (we assume matching push/pop).
@@ -51,7 +50,7 @@ TimeItGuard::~TimeItGuard() {
     // If we are inside a parent function, subtract the elapsed time from its total.
     if (!call_stack.empty()) {
         std::string parent = call_stack.back();
-        function_times[parent] -= elapsed;
+        function_times[parent] -= elapsedSeconds;
     }
 }
 
@@ -59,7 +58,7 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
     std::lock_guard<std::mutex> lock(time_mutex);
 
     // Sum the times recorded in function_times.
-    double total_time = 0.0;
+    float total_time = 0.0;
     for (const auto &[key, value] : function_times) {
         total_time += value;
     }
@@ -70,14 +69,14 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
     }
 
     // Sum the total global function times.
-    double global_total_time = 0.0;
+    float global_total_time = 0.0;
     for (const auto &[key, value] : global_function_times) {
         global_total_time += value;
     }
 
     if (total_time > 0) {
         // Prepare a sorted vector of (function name, accumulated time) pairs.
-        std::vector<std::pair<std::string, double>> sorted;
+        std::vector<std::pair<std::string, float>> sorted;
         for (const auto &[key, value] : global_function_times) {
             sorted.emplace_back(key, value);
         }
@@ -86,23 +85,23 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
 
         // Log scalar metrics for each function.
         for (const auto &[key, totalFuncTime] : sorted) {
-            double percent = totalFuncTime / global_total_time * 100.0;
+            float percent = totalFuncTime / global_total_time * 100.0;
             logger->add_scalar(std::string("function_percent_of_execution_time/") + key, iteration,
                                percent);
             logger->add_scalar(std::string("function_total_time/") + key, iteration, totalFuncTime);
             logger->add_scalar(std::string("function_total_invocations/") + key, iteration,
-                               static_cast<double>(global_function_invocations[key]));
+                               static_cast<float>(global_function_invocations[key]));
 
             // Calculate local percentage for the function, if it exists in function_times.
-            double local_percent =
+            float local_percent =
                 function_times.count(key) ? function_times[key] / total_time * 100.0 : 0.0;
             log(local_percent, "% (total", percent, "% on", global_function_invocations[key],
                 "invocations)", key);
         }
 
-        double total_elapsed = std::chrono::duration<double>(
-                                   std::chrono::high_resolution_clock::now() - start_timing_time)
-                                   .count();
+        float total_elapsed = std::chrono::duration<float>(
+                                  std::chrono::high_resolution_clock::now() - start_timing_time)
+                                  .count();
         logger->add_scalar("function_time_total_traced_percent", iteration,
                            global_total_time / total_elapsed * 100.0);
         log("In total:", global_total_time / total_elapsed, "recorded");
@@ -110,4 +109,10 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
 
     // Clear the temporary function timing data.
     function_times.clear();
+}
+float TimeItGuard::elapsed() const {
+    // Calculate the elapsed time in seconds.
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    return duration.count() / 1000.0f;
 }

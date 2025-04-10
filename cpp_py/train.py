@@ -1,7 +1,32 @@
 if __name__ == '__main__':
     import torch.multiprocessing as mp
 
+    # set the start method to spawn for multiprocessing
+    # this is required for the C++ self play process
+    # and should be set before importing torch.multiprocessing
+    # otherwise it will not work on Windows
     mp.set_start_method('spawn')
+
+import torch  # noqa
+import AlphaZeroCpp
+
+
+def self_play_main_loop(run: int):
+    from src.settings import TRAINING_ARGS, NUM_SELF_PLAY_GPUS
+
+    # start the self play main loop
+    AlphaZeroCpp.self_play_main(
+        run,
+        TRAINING_ARGS.save_path,
+        TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster,
+        NUM_SELF_PLAY_GPUS,
+    )
+
+
+def main():
+    import torch.multiprocessing as mp
+
+    # mp.set_start_method('spawn')
 
     import torch  # noqa
 
@@ -10,7 +35,7 @@ if __name__ == '__main__':
 
     from pathlib import Path
 
-    from src.settings import TRAINING_ARGS, USE_GPU, NUM_GPUS, get_run_id, TensorboardWriter, log_text
+    from src.settings import TRAINING_ARGS, USE_GPU, get_run_id, TensorboardWriter, log_text
     from src.cluster.EvaluationProcess import run_evaluation_process
     from src.cluster.TrainerProcess import TrainerProcess
     from src.util.exceptions import log_exceptions
@@ -46,20 +71,9 @@ if __name__ == '__main__':
     log('Starting self play process.')
 
     # start a process which imports AlphaZeroCpp and starts the self play main loop
-    def self_play_main_loop():
-        import AlphaZeroCpp
-
-        # start the self play main loop
-        AlphaZeroCpp.self_play_main(
-            run,
-            TRAINING_ARGS.save_path,
-            TRAINING_ARGS.cluster.num_self_play_nodes_on_cluster,
-            NUM_GPUS - 1,
-        )
-
     self_play_process = mp.Process(
         target=self_play_main_loop,
-        args=(),
+        args=(run,),
         daemon=True,
     )
     self_play_process.start()
@@ -77,3 +91,7 @@ if __name__ == '__main__':
 
             # start EvaluationProcess
             mp.Process(target=run_evaluation_process, args=(run, TRAINING_ARGS, iteration), daemon=True).start()
+
+
+if __name__ == '__main__':
+    main()

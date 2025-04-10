@@ -69,8 +69,7 @@ def write_selfplay_file(filename: str, stats: SelfPlayDatasetStats, samples: Lis
         # Write sample count.
         write_uint32(len(samples))
         for board, visit_counts, result_score in samples:
-            if len(board) != 14:
-                raise ValueError('Board must have 14 numbers')
+            assert len(board) == 14, f'Expected 14 elements in board, got {len(board)}'
             # Write board as 14 64-bit unsigned ints.
             f.write(struct.pack('14Q', *board))
             # Write visitCounts.

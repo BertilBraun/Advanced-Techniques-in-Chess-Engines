@@ -13,6 +13,8 @@ public:
     // On exit, calculate the elapsed time and update globals.
     ~TimeItGuard();
 
+    float elapsed() const;
+
 private:
     std::string func_name;
     std::chrono::high_resolution_clock::time_point start;

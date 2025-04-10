@@ -19,7 +19,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
             {
                 .mcts =
                     {
-                        .num_searches_per_turn = 640,
+                        .num_searches_per_turn = 64, // TODO 640 / 800
                         .num_parallel_searches = 8,
                         .c_param = 1.7,
                         .dirichlet_alpha = 0.3,
@@ -48,8 +48,14 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);
 
-    std::vector<InferenceClient> clients(numGPUs * 2);
-    for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
+    // TODO
+    // std::vector<InferenceClient> clients(numGPUs * 2);
+    // for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
+    //     clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
+    //                     &logger);
+    // }
+    std::vector<InferenceClient> clients(numGPUs);
+    for (int i : range(numGPUs)) {
         clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
                         &logger);
     }

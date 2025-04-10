@@ -44,8 +44,22 @@ elseif(MSVC)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
+
+# TODO ... based on  python3 -c "import torch; print(torch.utils.cmake_prefix_path)"
+set(CMAKE_PREFIX_PATH "/home/bertil/.local/lib/python3.10/site-packages/torch/share/cmake")
+
 find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}") #  -fPIC -D_GLIBCXX_USE_CXX11_ABI=1
+
+# TODO? set(TORCH_PATH "/home/bertil/.local/lib/python3.10/site-packages/torch")
+# TODO? find_package(Torch REQUIRED PATHS ${TORCH_PATH})
+# TODO? if(NOT TORCH_FOUND)
+# TODO?     message(FATAL_ERROR "LibTorch not found!")
+# TODO? endif()
+
+#find_package(TORCH_PYTHON_LIBRARY torch_python "${TORCH_PATH}/lib")
+
+# TODO .. ABI based on python3 -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${TORCH_CUDA_FLAGS}")
 
 # --- Define additional LibTorch libraries explicitly ---
@@ -163,6 +177,13 @@ set_target_properties(AlphaZeroCpp PROPERTIES
     PREFIX ""
     SUFFIX ".so"
     INSTALL_RPATH "$ORIGIN")
+
+# TODO ..
+set_target_properties(AlphaZeroCpp PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+
 
 # TODO: target_compile_options(AlphaZeroSelfPlay PRIVATE
 # TODO:     $<$<CONFIG:DEBUG>:${debug_flags_list}>
