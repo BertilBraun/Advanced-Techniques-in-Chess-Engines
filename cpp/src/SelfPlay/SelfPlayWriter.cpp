@@ -17,6 +17,9 @@ CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
 }
 
 VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
+    if (visitCounts.empty()) {
+        return {};
+    }
 
     VisitCounts flippedVisitCounts;
     flippedVisitCounts.reserve(visitCounts.size());
