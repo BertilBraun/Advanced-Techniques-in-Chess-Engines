@@ -31,7 +31,7 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
         for (const MCTSNode &child : root.children) {
             visitCounts.emplace_back(child.encoded_move_to_get_here, child.number_of_visits);
         }
-        results.push_back({root.result_score, visitCounts});
+        results.push_back({-root.result_score / (float) root.number_of_visits, visitCounts});
     }
 
     _logMCTSStatistics(roots);
@@ -83,6 +83,9 @@ std::vector<std::vector<MoveScore>> MCTS::_get_policy_with_noise(std::vector<Boa
 }
 
 std::vector<MoveScore> MCTS::_add_noise(const std::vector<MoveScore> &moves) const {
+    if (moves.empty())
+        return {};
+
     const std::vector<float> noiseList = dirichlet(args.dirichlet_alpha, moves.size());
 
     std::vector<MoveScore> noisyMoves;

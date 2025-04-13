@@ -12,6 +12,8 @@
 struct MCTSResult {
     float result;
     VisitCounts visits;
+
+    MCTSResult(float result_, const VisitCounts &visits_) : result(result_), visits(visits_) {}
 };
 
 class MCTS {

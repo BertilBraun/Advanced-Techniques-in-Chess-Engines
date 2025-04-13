@@ -99,7 +99,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
 }
 void InferenceClient::logCacheStatistics(int iteration) {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
-    if (m_totalEvals == 0 || !m_logger) {
+    if (m_totalEvals == 0 || !m_logger || m_inferenceCache.empty()) {
         return; // Avoid division by zero.
     }
 

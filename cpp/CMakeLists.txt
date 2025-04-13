@@ -1,6 +1,37 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
+# Set default build type if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# Add debug flags
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Adding debug flags (-g -O0)")
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-omit-frame-pointer")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
+    if(CMAKE_CUDA_COMPILER)
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -O0")
+    endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "Adding release flags (-O3)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    if(CMAKE_CUDA_COMPILER)
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
+    endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    message(STATUS "Adding release with debug info flags (-O3 -g)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g")
+    if(CMAKE_CUDA_COMPILER)
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 -G")
+    endif()
+else()
+    message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
+endif()
+
 # Enable position-independent code (required for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

@@ -17,6 +17,7 @@ CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
 }
 
 VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
+
     VisitCounts flippedVisitCounts;
     flippedVisitCounts.reserve(visitCounts.size());
     for (const auto &[move, count] : visitCounts) {
@@ -46,6 +47,10 @@ _symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &vis
 }
 
 VisitCounts _preprocessVisitCounts(const VisitCounts &visitCounts) {
+    if (visitCounts.empty()) {
+        return {};
+    }
+
     int totalVisits = 0;
     for (const auto &[_, visitCount] : visitCounts) {
         totalVisits += visitCount;

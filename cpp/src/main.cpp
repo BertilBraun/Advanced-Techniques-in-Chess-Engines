@@ -108,6 +108,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 
 std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
                                                   const std::vector<std::string> &fens) {
+    assert(!fens.empty());
     log("Model path:", modelPath);
     log("Starting board inference");
 

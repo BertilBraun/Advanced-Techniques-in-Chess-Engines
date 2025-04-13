@@ -31,13 +31,13 @@ MCTSNode::MCTSNode(MCTSNode &&other)
       virtual_loss(other.virtual_loss), result_score(other.result_score), policy(other.policy) {
     // NOTE: For some reason this move constructor is required to set the parent pointer
     // correctly in some part of the MCTS search.
-    for (auto &child : children) {
+    for (MCTSNode &child : children) {
         child.parent = this;
     }
 }
 
 void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
-    if (isFullyExpanded())
+    if (isFullyExpanded() || moves_with_scores.empty())
         return;
 
     children.reserve(moves_with_scores.size());

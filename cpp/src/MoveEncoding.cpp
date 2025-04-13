@@ -133,6 +133,9 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
     //
     // :param moveIndices: The array of move indices to decode.
     // :return: The list of decoded chess moves.
+    if (moveIndices.empty()) {
+        return {};
+    }
 
     std::vector<Move> moves;
     moves.reserve(moveIndices.size());
@@ -211,6 +214,10 @@ std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &m
     // and its corresponding probability. The legal moves are encoded in a 1D tensor,
     // where each entry is 1 if the corresponding move is legal, and 0 otherwise.
     // The list of moves is then filtered to only include the legal moves.
+
+    if (moves.empty()) {
+        return {};
+    }
 
     std::unordered_set<int> legalMovesSet;
     for (const Move &move : board.legalMoves()) {
