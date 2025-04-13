@@ -1,5 +1,6 @@
 #include "InferenceClient.hpp"
-#include "util/Time.hpp"
+
+auto TORCH_DTYPE = torch::kFloat32; // TODO torch::kFloat16; // Use half precision for inference.
 
 InferenceClient::InferenceClient() : m_device(torch::kCPU), m_shutdown(false), m_maxBatchSize(1) {
     // Initialize the model and other members.
@@ -19,6 +20,7 @@ void InferenceClient::init(const int device_id, const std::string &currentModelP
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
         m_device = torch::Device(torch::kCUDA, device_id);
+        TORCH_DTYPE = torch::kFloat16; // Use half precision for inference.
     }
     loadModel(currentModelPath);
 
@@ -40,34 +42,34 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
         encodedBoards.push_back(encodeBoard(board));
     }
 
-    // TODO: If multiple requests for the same board are made, currently all of them will be
-    // run through the model. This should be optimized to only run the model once and
-    // return the same result for all requests.
     m_totalEvals += boards.size();
 
-    // Prepare a futures vector to preserve input order.
+    std::set<uint64> enqueuedBoards; // Track enqueued boards.
+    // Prepare a futures vector for the inference results.
+    // This will be used to wait for the results of the inference requests.
     std::vector<std::pair<size_t, std::future<ModelInferenceResult>>> futures;
     futures.reserve(boards.size());
 
     for (size_t i : range(boards.size())) {
-        const int64 h = hash(encodedBoards[i]);
-
         // Check if the result is already cached.
         // If so, set the promise and continue.
-        if (m_inferenceCache.contains(h)) {
+        const uint64 encodedBoardHash = hash(encodedBoards[i]);
+        if (m_inferenceCache.contains(encodedBoardHash) ||
+            enqueuedBoards.contains(encodedBoardHash)) {
             m_totalHits++;
             continue;
         }
 
         // Create and enqueue a new request.
         InferenceRequest req;
-        req.boardTensor = toTensor(encodedBoards[i], m_device); // TODO verrrrry slow
+        req.boardTensor = toTensor(encodedBoards[i], m_device);
         futures.emplace_back(i, std::move(req.promise.get_future()));
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_requestQueue.push(std::move(req));
         }
         m_queueCV.notify_one();
+        enqueuedBoards.insert(encodedBoardHash); // Mark this board as enqueued.
     }
 
     // Wait for all inference futures to complete.
@@ -84,13 +86,13 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
     results.reserve(boards.size());
 
     for (auto &&[board, encodedBoard] : zip(boards, encodedBoards)) {
-        InferenceResult res;
-        if (!m_inferenceCache.lookup(hash(encodedBoard), res))
+        InferenceResult result;
+        if (!m_inferenceCache.lookup(hash(encodedBoard), result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
         // Filter the policy without en passant moves.
-        res.first = filterMovesWithLegalMoves(res.first, board);
-        results.push_back(res);
+        result.first = filterMovesWithLegalMoves(result.first, board);
+        results.push_back(result);
     }
 
     return results;
@@ -106,6 +108,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
     m_model = torch::jit::load(modelPath, m_device);
+    m_model.to(TORCH_DTYPE); // Use half precision for inference.
     m_model.eval();
 }
 
@@ -182,7 +185,8 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).
-    const torch::Tensor inputTensor = torch::stack(boards).to(m_device).to(torch::kFloat32);
+    const torch::Tensor inputTensor =
+        torch::stack(boards).to(torch::TensorOptions().device(m_device).dtype(TORCH_DTYPE));
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(inputTensor);
 
@@ -197,8 +201,8 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     torch::Tensor values = outputTuple->elements()[1].toTensor();
 
     policies = torch::softmax(policies, 1);
-    policies = policies.to(torch::kCPU).to(torch::kFloat32);
-    values = values.to(torch::kCPU).to(torch::kFloat32);
+    policies = policies.to(torch::TensorOptions().device(torch::kCPU).dtype(TORCH_DTYPE));
+    values = values.to(torch::TensorOptions().device(torch::kCPU).dtype(TORCH_DTYPE));
 
     std::vector<std::pair<torch::Tensor, float>> results;
     results.reserve(boards.size());

@@ -69,15 +69,16 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 
     std::vector<std::thread> threads;
     for (int i : range(numProcessors)) {
-        threads.emplace_back(std::thread([&] {
-            SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play,
-                              &logger);
-            log("Worker process", i + 1, "of", numProcessors, "started");
+        threads.emplace_back(
+            std::thread([i, &clients, &writer, &logger, &TRAINING_ARGS, numProcessors] {
+                SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play,
+                                  &logger);
+                log("Worker process", i + 1, "of", numProcessors, "started");
 
-            while (true) {
-                selfPlay.selfPlay();
-            }
-        }));
+                while (true) {
+                    selfPlay.selfPlay();
+                }
+            }));
     }
 
     while (true) {

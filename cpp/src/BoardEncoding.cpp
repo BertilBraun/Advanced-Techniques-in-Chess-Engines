@@ -91,12 +91,15 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
     // :return: The uncompressed tensor.
 
     torch::Tensor tensor =
-        torch::empty({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH}, torch::kByte).to(device);
+        torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH}, torch::kUInt8);
 
-    for (int channel : range(ENCODING_CHANNELS)) {
-        for (int row : range(BOARD_LENGTH)) {
-            for (int col : range(BOARD_LENGTH)) {
-                tensor[channel][row][col] = (compressed[channel] >> (row * BOARD_LENGTH + col)) & 1;
+    for (int channel = 0; channel < ENCODING_CHANNELS; ++channel) {
+        uint64 bits = compressed[channel];
+        for (int row = 0; row < BOARD_LENGTH; ++row) {
+            for (int col = 0; col < BOARD_LENGTH; ++col) {
+                if ((bits >> (row * BOARD_LENGTH + col)) & 1) {
+                    tensor[channel][row][col] = 1;
+                }
             }
         }
     }
