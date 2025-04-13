@@ -4,6 +4,8 @@
 
 #include "BoardEncoding.hpp"
 #include "MoveEncoding.hpp"
+#include "util/ShardedCache.hpp"
+#include <ATen/core/TensorBody.h>
 
 // InferenceResult is defined as a pair: (vector of MoveScore, float value)
 typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
@@ -50,14 +52,13 @@ public:
     void updateModel(const std::string &modelPath, int iteration);
 
 private:
+    typedef std::pair<torch::Tensor, float> ModelInferenceResult;
     /**
      * @brief Structure representing a single asynchronous inference request.
      */
     struct InferenceRequest {
-        CompressedEncodedBoard encodedBoard;   // Encoded board representation.
-        Board board;                           // Original board (for move filtering).
-        int64_t hash;                          // Computed board hash.
-        std::promise<InferenceResult> promise; // Promise to deliver the result.
+        torch::Tensor boardTensor;                  // Encoded board representation.
+        std::promise<ModelInferenceResult> promise; // Promise to deliver the result.
     };
 
     /**
@@ -95,10 +96,9 @@ private:
     TensorBoardLogger *m_logger;
 
     // Cache: board hash -> InferenceResult.
-    std::unordered_map<int64_t, InferenceResult> m_inferenceCache;
+    ShardedCache<int64_t, InferenceResult, 32> m_inferenceCache;
     int m_totalHits;
     int m_totalEvals;
-    std::mutex m_cacheMutex;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

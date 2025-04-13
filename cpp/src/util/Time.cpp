@@ -86,11 +86,14 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
         // Log scalar metrics for each function.
         for (const auto &[key, totalFuncTime] : sorted) {
             float percent = totalFuncTime / global_total_time * 100.0;
-            logger->add_scalar(std::string("function_percent_of_execution_time/") + key, iteration,
-                               percent);
-            logger->add_scalar(std::string("function_total_time/") + key, iteration, totalFuncTime);
-            logger->add_scalar(std::string("function_total_invocations/") + key, iteration,
-                               static_cast<float>(global_function_invocations[key]));
+            if (logger) {
+                logger->add_scalar(std::string("function_percent_of_execution_time/") + key,
+                                   iteration, percent);
+                logger->add_scalar(std::string("function_total_time/") + key, iteration,
+                                   totalFuncTime);
+                logger->add_scalar(std::string("function_total_invocations/") + key, iteration,
+                                   static_cast<float>(global_function_invocations[key]));
+            }
 
             // Calculate local percentage for the function, if it exists in function_times.
             float local_percent =
@@ -102,9 +105,11 @@ void reset_times(TensorBoardLogger *logger, int iteration) {
         float total_elapsed = std::chrono::duration<float>(
                                   std::chrono::high_resolution_clock::now() - start_timing_time)
                                   .count();
-        logger->add_scalar("function_time_total_traced_percent", iteration,
-                           global_total_time / total_elapsed * 100.0);
-        log("In total:", global_total_time / total_elapsed, "recorded");
+        if (logger) {
+            logger->add_scalar("function_time_total_traced_percent", iteration,
+                               global_total_time / total_elapsed * 100.0);
+        }
+        log("In total:", global_total_time / total_elapsed * 100.f, "% recorded");
     }
 
     // Clear the temporary function timing data.

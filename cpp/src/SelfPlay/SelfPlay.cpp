@@ -6,6 +6,7 @@ SelfPlay::SelfPlay(InferenceClient *inferenceClient, SelfPlayWriter *writer, Sel
     // Initialize the self-play games with the number of parallel games.
     m_selfPlayGames.resize(args.num_parallel_games);
 }
+
 void SelfPlay::selfPlay() {
     TimeItGuard timer("SelfPlay");
     std::vector<Board> boards;
@@ -71,6 +72,7 @@ void SelfPlay::selfPlay() {
         }
     }
 }
+
 void SelfPlay::_handleTooLongGame(const SelfPlayGame &game) {
     const int numWhitePieces = _countPieces(game.board, chess::WHITE);
     const int numBlackPieces = _countPieces(game.board, chess::BLACK);
@@ -82,6 +84,7 @@ void SelfPlay::_handleTooLongGame(const SelfPlayGame &game) {
         m_writer->write(game, outcome, false, true);
     }
 }
+
 int SelfPlay::_countPieces(const Board &board, chess::Color color) const {
     int count = 0;
     for (chess::PieceType pieceType : chess::PIECE_TYPES) {
@@ -89,6 +92,7 @@ int SelfPlay::_countPieces(const Board &board, chess::Color color) const {
     }
     return count;
 }
+
 std::pair<SelfPlayGame, Move> SelfPlay::_sampleSPG(const SelfPlayGame &game,
                                                    const ActionProbabilities &actionProbabilities) {
     const Move move = _sampleMove(game.playedMoves.size(), actionProbabilities);
@@ -106,6 +110,7 @@ std::pair<SelfPlayGame, Move> SelfPlay::_sampleSPG(const SelfPlayGame &game,
 
     return {SelfPlayGame(), move};
 }
+
 Move SelfPlay::_sampleMove(int numMoves, const ActionProbabilities &actionProbabilities) const {
     int moveIndex = -1;
 

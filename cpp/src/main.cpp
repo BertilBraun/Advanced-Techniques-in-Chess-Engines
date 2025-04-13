@@ -20,12 +20,12 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
                 .mcts =
                     {
                         .num_searches_per_turn = 640,
-                        .num_parallel_searches = 1, // TODO 8?
+                        .num_parallel_searches = 8,
                         .c_param = 1.7,
                         .dirichlet_alpha = 0.3,
                         .dirichlet_epsilon = 0.25,
                     },
-                .num_parallel_games = 32,
+                .num_parallel_games = 4, // TODO 32,
                 .num_moves_after_which_to_play_greedy = 25,
                 .max_moves = 250,
                 .result_score_weight = 0.15,
