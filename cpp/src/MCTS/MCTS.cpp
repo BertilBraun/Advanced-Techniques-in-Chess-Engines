@@ -13,13 +13,12 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
     roots.reserve(boards.size());
     for (const auto &[board, moves] : zip(boards, movesList)) {
         // Since no node is pre-expanded, create a new root.
-        MCTSNode root = MCTSNode::root(board);
-        root.expand(moves);
-        roots.push_back(std::move(root));
+        roots.push_back(MCTSNode::root(board));
+        roots.back().expand(moves);
     }
 
     int iterations = args.num_searches_per_turn / args.num_parallel_searches;
-    for (int i = 0; i < iterations; i++) {
+    for (int _ : range(iterations)) {
         parallel_iterate(roots);
     }
 
@@ -44,8 +43,8 @@ void MCTS::parallel_iterate(std::vector<MCTSNode> &roots) const {
 
     std::vector<MCTSNode *> nodes;
     nodes.reserve(roots.size() * args.num_parallel_searches);
-    for (int i = 0; i < args.num_parallel_searches; i++) {
-        for (MCTSNode &root : roots) {
+    for (MCTSNode &root : roots) {
+        for (int _ : range(args.num_parallel_searches)) {
             std::optional<MCTSNode *> node = _get_best_child_or_back_propagate(root, args.c_param);
             if (node.has_value()) {
                 node.value()->updateVirtualLoss(1);
@@ -82,6 +81,7 @@ std::vector<std::vector<MoveScore>> MCTS::_get_policy_with_noise(std::vector<Boa
     }
     return noisyMoves;
 }
+
 std::vector<MoveScore> MCTS::_add_noise(const std::vector<MoveScore> &moves) const {
     const std::vector<float> noiseList = dirichlet(args.dirichlet_alpha, moves.size());
 
@@ -95,6 +95,7 @@ std::vector<MoveScore> MCTS::_add_noise(const std::vector<MoveScore> &moves) con
 
     return noisyMoves;
 }
+
 std::optional<MCTSNode *> MCTS::_get_best_child_or_back_propagate(MCTSNode &root,
                                                                   float c_param) const {
     MCTSNode *node = &root;

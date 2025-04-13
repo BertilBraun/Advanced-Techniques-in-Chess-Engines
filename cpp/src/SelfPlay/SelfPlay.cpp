@@ -60,6 +60,7 @@ void SelfPlay::selfPlay() {
             }
             if (!isDuplicate && !isRepeatedMove) {
                 m_selfPlayGames[i] = newGame;
+                break;
             } else {
                 gameActionProbabilities[encodeMove(move)] = 0.0;
             }
@@ -71,19 +72,19 @@ void SelfPlay::selfPlay() {
     }
 }
 void SelfPlay::_handleTooLongGame(const SelfPlayGame &game) {
-    const int numWhitePieces = _countPieces(game.board, WHITE);
-    const int numBlackPieces = _countPieces(game.board, BLACK);
+    const int numWhitePieces = _countPieces(game.board, chess::WHITE);
+    const int numBlackPieces = _countPieces(game.board, chess::BLACK);
 
     if (numWhitePieces < 4 || numBlackPieces < 4) {
         // Find out which player has better value pieces remaining.
         const float materialScore = getMaterialScore(game.board);
-        const float outcome = game.board.turn == WHITE ? materialScore : -materialScore;
+        const float outcome = game.board.turn == chess::WHITE ? materialScore : -materialScore;
         m_writer->write(game, outcome, false, true);
     }
 }
-int SelfPlay::_countPieces(const Board &board, Color color) const {
+int SelfPlay::_countPieces(const Board &board, chess::Color color) const {
     int count = 0;
-    for (PieceType pieceType : PIECE_TYPES) {
+    for (chess::PieceType pieceType : chess::PIECE_TYPES) {
         count += board.pieces(pieceType, color).size();
     }
     return count;

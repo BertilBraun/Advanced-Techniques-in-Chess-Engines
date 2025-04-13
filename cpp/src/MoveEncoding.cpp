@@ -217,13 +217,22 @@ std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &m
         legalMovesSet.insert(encodeMove(move));
     }
 
+    float totalProbability = 0.0f;
     std::vector<MoveScore> filteredMoves;
     filteredMoves.reserve(moves.size());
     for (const auto &[move, probability] : moves) {
         if (legalMovesSet.find(move) != legalMovesSet.end()) {
             filteredMoves.emplace_back(move, probability);
+            totalProbability += probability;
         }
     }
+
+    // Ensure the filtered moves sum to 1.0
+    assert(totalProbability > 0.0f);
+    for (auto &[move, probability] : filteredMoves) {
+        probability /= totalProbability;
+    }
+
     return filteredMoves;
 }
 

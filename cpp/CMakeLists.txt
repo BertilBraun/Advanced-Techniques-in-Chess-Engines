@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
-# Enable position-independent code for all targets
-# TODO? set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Enable position-independent code (required for shared libraries)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# --- Check for CUDA support ---
+# --- Check and enable CUDA (if available) ---
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)
@@ -12,7 +12,7 @@ if(CMAKE_CUDA_COMPILER)
     add_definitions(-DUSE_CUDA)
 endif()
 
-# --- Set C++ and CUDA standards to C++20---
+# --- Set C++ and CUDA standards to C++20 ---
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 if(CMAKE_CUDA_COMPILER)
@@ -20,7 +20,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
 endif()
 
-# --- Enable ccache for faster recompilation ---
+# --- Enable ccache for faster recompilation (if available) ---
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
     message(STATUS "Using ccache")
@@ -31,196 +31,68 @@ if(CCACHE_FOUND)
     endif()
 endif()
 
-# --- LibTorch configuration ---
-if(CMAKE_CUDA_COMPILER)
-    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda")
-    # set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cuda/share/cmake/Torch")
-elseif(UNIX)
-    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux")
-    # set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/share/cmake/Torch")
-elseif(MSVC)
-    set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_win")
-    # set(Torch_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_win/share/cmake/Torch")
-else()
-    message(FATAL_ERROR "Unsupported platform")
-endif()
-
-# TODO ... based on  python3 -c "import torch; print(torch.utils.cmake_prefix_path)"
-set(CMAKE_PREFIX_PATH "/home/bertil/.local/lib/python3.10/site-packages/torch/share/cmake")
+# --- Dynamically set CMAKE_PREFIX_PATH using Python and torch ---
+execute_process(
+    COMMAND python3 -c "import torch; print(torch.utils.cmake_prefix_path)"
+    OUTPUT_VARIABLE TORCH_CMAKE_PREFIX_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+message(STATUS "Setting CMAKE_PREFIX_PATH to: ${TORCH_CMAKE_PREFIX_PATH}")
+set(CMAKE_PREFIX_PATH "${TORCH_CMAKE_PREFIX_PATH}")
 
 find_package(Torch REQUIRED)
 
-# TODO? set(TORCH_PATH "/home/bertil/.local/lib/python3.10/site-packages/torch")
-# TODO? find_package(Torch REQUIRED PATHS ${TORCH_PATH})
-# TODO? if(NOT TORCH_FOUND)
-# TODO?     message(FATAL_ERROR "LibTorch not found!")
-# TODO? endif()
+# --- Dynamically set the GLIBCXX flag using Python and torch ---
+execute_process(
+    COMMAND python3 -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
+    OUTPUT_VARIABLE TORCH_GLIBCXX_FLAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+message(STATUS "Torch reports _GLIBCXX_USE_CXX11_ABI as: ${TORCH_GLIBCXX_FLAG}")
+if(TORCH_GLIBCXX_FLAG STREQUAL "True")
+    set(GLIBCXX_ABI_VAL 1)
+else()
+    set(GLIBCXX_ABI_VAL 0)
+endif()
+message(STATUS "Setting _GLIBCXX_USE_CXX11_ABI to: ${GLIBCXX_ABI_VAL}")
 
-#find_package(TORCH_PYTHON_LIBRARY torch_python "${TORCH_PATH}/lib")
-
-# TODO .. ABI based on python3 -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS} -fPIC -D_GLIBCXX_USE_CXX11_ABI=0")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${TORCH_CUDA_FLAGS}")
-
-# --- Define additional LibTorch libraries explicitly ---
-if(UNIX)
-    # Make sure to point to libtorch.so. Adjust the path if needed.
-    # set(ADDITIONAL_TORCH_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/lib/libtorch.so;${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/lib/libc10.so;${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/lib/libtorch_python.so;${CMAKE_CURRENT_SOURCE_DIR}/libtorch_cpu_linux/lib/libtorch_global_deps.so")
+# Append LibTorch compiler flags and ABI flag
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS} -fPIC -D_GLIBCXX_USE_CXX11_ABI=${GLIBCXX_ABI_VAL}")
+if(CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${TORCH_CUDA_FLAGS}")
 endif()
 
-
-# --- Add tensorboard_logger via FetchContent ---
-# find_package(Protobuf REQUIRED)
+# --- Fetch pybind11 for Python bindings ---
 include(FetchContent)
-# FetchContent_Declare(
-#     tensorboard_logger
-#     GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
-#     GIT_TAG master
-# )
-# FetchContent_MakeAvailable(tensorboard_logger)
-
-# --- Add fmtlib via FetchContent ---
-# FetchContent_Declare(
-#     fmt
-#     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-#     GIT_TAG 8.1.1  # Or another version tag
-# )
-# FetchContent_MakeAvailable(fmt)
-
-# --- FetchContent for pybind11 ---
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v2.13.6  # Use the desired version
+    GIT_TAG v2.13.6
 )
 FetchContent_MakeAvailable(pybind11)
 
-
 # --- Include directories ---
 include_directories(src)
-# if(CMAKE_CUDA_COMPILER)
-#     include_directories(libtorch_cuda/include)
-# elseif(UNIX)
-#    include_directories(libtorch_cpu_linux/include)
-# elseif(MSVC)
-#    include_directories(libtorch_cpu_win/include)
-# endif()
 
-# --- Collect sources for the Python module ---
-# Gather all .cpp files under src/
-file(GLOB_RECURSE MODULE_SOURCES "src/*.cpp")
+# --- Collect all source files from src/ ---
+file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 
-# Precompiled headers for src/common.hpp
-#TODO! set(PCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/common.hpp")
-
-# --- Build the Python extension module ---
-pybind11_add_module(AlphaZeroCpp ${MODULE_SOURCES})
-
-# TODO: # Build src/main.cpp into an executable
-# TODO: # add all .cpp files in src/ to the executable
-# TODO: file(GLOB_RECURSE EXECUTABLE_SOURCES "src/*.cpp")
-# TODO: # remove src/binding.cpp from the list of sources
-# TODO: list(REMOVE_ITEM EXECUTABLE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/binding.cpp")
-# TODO: add_executable(AlphaZeroSelfPlay ${EXECUTABLE_SOURCES})
-
-# --- Set compile options (optional) ---
-#TODO! if(MSVC)
-#TODO!     set(debug_flags_list "/Od" "/Zi")
-#TODO!     set(release_flags_list "/O2" "/DNDEBUG")
-#TODO! else()
-#TODO!     set(debug_flags_list "-Og" "-g")
-#TODO!     set(release_flags_list "-O3" "-ffast-math" "-DNDEBUG" "-march=native")
-#TODO! endif()
-#TODO! 
-#TODO! target_compile_options(AlphaZeroCpp PRIVATE
-#TODO!     $<$<CONFIG:DEBUG>:${debug_flags_list}>
-#TODO!     $<$<CONFIG:RELEASE>:${release_flags_list}>
-#TODO! )
-#TODO! if(CMAKE_CUDA_COMPILER)
-#TODO!     if(MSVC)
-#TODO!         set(cuda_debug_flags_list "-G" "-g")
-#TODO!         set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-#TODO!     else()
-#TODO!         set(cuda_debug_flags_list "-O0" "-G" "-g")
-#TODO!         set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-#TODO!     endif()
-#TODO!     target_compile_options(AlphaZeroCpp PRIVATE
-#TODO!         $<$<CONFIG:DEBUG>:${cuda_debug_flags_list}>
-#TODO!         $<$<CONFIG:RELEASE>:${cuda_release_flags_list}>
-#TODO!     )
-#TODO! endif()
-
-
-# --- Link libraries ---
-target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}") #  tensorboard_logger fmt::fmt TODO?  ${ADDITIONAL_TORCH_LIBS}
-
-# if(MSVC)
-#     target_link_options(AlphaZeroCpp PRIVATE $<$<CONFIG:RELEASE>:"/LTCG">)
-# endif()
-
-# --- Embed RPATH so that LibTorch libraries can be found at runtime ---
-# if(UNIX)
-#     # Assume that you copy the LibTorch shared libraries (like libc10.so, libtorch.so) to the same directory
-#     # as your Python module. Get that directory's absolute path.
-#     get_filename_component(PY_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py" ABSOLUTE)
-#     message(STATUS "Python module directory (for RPATH): ${PY_MODULE_DIR}")
-# 
-#     # Set both BUILD_RPATH and INSTALL_RPATH to that directory.
-#     set_target_properties(AlphaZeroCpp PROPERTIES BUILD_RPATH "${PY_MODULE_DIR}")
-#     set_target_properties(AlphaZeroCpp PROPERTIES INSTALL_RPATH "${PY_MODULE_DIR}")
-# endif()
-
-set_property(TARGET AlphaZeroCpp PROPERTY CXX_STANDARD 20)
-
-
+# Build the Python module from the binding entry point and shared sources
+pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
+target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 set_target_properties(AlphaZeroCpp PROPERTIES
+    CXX_STANDARD 20
     PREFIX ""
     SUFFIX ".so"
-    INSTALL_RPATH "$ORIGIN")
-
-# TODO ..
-set_target_properties(AlphaZeroCpp PROPERTIES
     INSTALL_RPATH "$ORIGIN"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-
-
-# TODO: target_compile_options(AlphaZeroSelfPlay PRIVATE
-# TODO:     $<$<CONFIG:DEBUG>:${debug_flags_list}>
-# TODO:     $<$<CONFIG:RELEASE>:${release_flags_list}>
-# TODO: )
-# TODO: if(CMAKE_CUDA_COMPILER)
-# TODO:     if(MSVC)
-# TODO:         set(cuda_debug_flags_list "-G" "-g")
-# TODO:         set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-# TODO:     else()
-# TODO:         set(cuda_debug_flags_list "-O0" "-G" "-g")
-# TODO:         set(cuda_release_flags_list "-O3" "--use_fast_math" "-DNDEBUG")
-# TODO:     endif()
-# TODO:     target_compile_options(AlphaZeroSelfPlay PRIVATE
-# TODO:         $<$<CONFIG:DEBUG>:${cuda_debug_flags_list}>
-# TODO:         $<$<CONFIG:RELEASE>:${cuda_release_flags_list}>
-# TODO:     )
-# TODO: endif()
-# TODO: 
-
-# TODO: target_link_libraries(AlphaZeroSelfPlay PRIVATE "${TORCH_LIBRARIES}" ${ADDITIONAL_TORCH_LIBS} c10 tensorboard_logger fmt::fmt)
-# TODO: 
-
-# TODO: if(MSVC)
-# TODO:     target_link_options(AlphaZeroSelfPlay PRIVATE $<$<CONFIG:RELEASE>:"/LTCG">)
-# TODO: endif()
-# TODO: if(UNIX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-# TODO:     target_link_libraries(AlphaZeroSelfPlay stdc++fs)
-# TODO: endif()
-
-
-# --- Export compile commands ---
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# --- Post-build: Copy the generated shared library to "../../cpp_py/" ---
+# Optional: Post-build step to copy the module
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
     COMMENT "Copying AlphaZeroCpp module to ../../cpp_py/"
 )
+
+# --- Export compile commands ---
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

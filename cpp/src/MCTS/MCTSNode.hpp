@@ -11,6 +11,8 @@ public:
     MCTSNode(Board board, float policy, int encoded_move_to_get_here, MCTSNode *parent,
              int num_played_moves);
 
+    MCTSNode(MCTSNode &&other);
+
     bool isTerminalNode() { return board.isGameOver(); }
 
     bool isFullyExpanded() const { return !children.empty(); }

@@ -19,8 +19,8 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
             {
                 .mcts =
                     {
-                        .num_searches_per_turn = 64, // TODO 640 / 800
-                        .num_parallel_searches = 8,
+                        .num_searches_per_turn = 640,
+                        .num_parallel_searches = 1, // TODO 8?
                         .c_param = 1.7,
                         .dirichlet_alpha = 0.3,
                         .dirichlet_epsilon = 0.25,

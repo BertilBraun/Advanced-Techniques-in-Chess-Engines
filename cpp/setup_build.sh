@@ -15,7 +15,6 @@ module purge
 module load devel/cuda/11.6
 module load devel/cmake/3.23.3
 module load compiler/gnu/11.2
-module load mpi/openmpi/4.1
 module save chess
 
 # if conda doesnt have the chess environment, create it
@@ -53,7 +52,7 @@ fi
 # Download src/json.hpp if it doesn't exist from https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp
 if [ ! -f "src/json.hpp" ]; then
     echo "Downloading json.hpp..."
-    wget -O "src/json.hpp" "https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp"
+    wget -O "src/util/json.hpp" "https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp"
 fi
 
 # Create a build directory
