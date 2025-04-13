@@ -25,7 +25,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
                         .dirichlet_alpha = 0.3,
                         .dirichlet_epsilon = 0.25,
                     },
-                .num_parallel_games = 4, // TODO 32,
+                .num_parallel_games = 32,
                 .num_moves_after_which_to_play_greedy = 25,
                 .max_moves = 250,
                 .result_score_weight = 0.15,
@@ -48,14 +48,8 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);
 
-    // TODO
-    // std::vector<InferenceClient> clients(numGPUs * 2);
-    // for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
-    //     clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
-    //                     &logger);
-    // }
-    std::vector<InferenceClient> clients(numGPUs);
-    for (int i : range(numGPUs)) {
+    std::vector<InferenceClient> clients(numGPUs * 2);
+    for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
         clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
                         &logger);
     }

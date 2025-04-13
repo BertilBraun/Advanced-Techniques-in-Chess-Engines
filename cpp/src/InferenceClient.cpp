@@ -1,6 +1,6 @@
 #include "InferenceClient.hpp"
 
-auto TORCH_DTYPE = torch::kFloat32; // TODO torch::kFloat16; // Use half precision for inference.
+auto TORCH_DTYPE = torch::kFloat32;
 
 InferenceClient::InferenceClient() : m_device(torch::kCPU), m_shutdown(false), m_maxBatchSize(1) {
     // Initialize the model and other members.
@@ -143,8 +143,12 @@ void InferenceClient::logCacheStatistics(int iteration) {
 }
 
 void InferenceClient::inferenceWorker() {
+    std::vector<torch::Tensor> tensorBatch;
+    std::vector<std::promise<ModelInferenceResult>> promises;
+    tensorBatch.reserve(m_maxBatchSize);
+    promises.reserve(m_maxBatchSize);
+
     while (true) {
-        std::vector<InferenceRequest> batch;
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
             m_queueCV.wait_for(lock, std::chrono::milliseconds(2),
@@ -153,26 +157,23 @@ void InferenceClient::inferenceWorker() {
                 break;
 
             // Extract up to m_maxBatchSize requests.
-            while (!m_requestQueue.empty() && batch.size() < m_maxBatchSize) {
-                batch.push_back(std::move(m_requestQueue.front()));
+            while (!m_requestQueue.empty() && promises.size() < m_maxBatchSize) {
+                tensorBatch.push_back(m_requestQueue.front().boardTensor);
+                promises.push_back(std::move(m_requestQueue.front().promise));
                 m_requestQueue.pop();
             }
         }
 
-        if (!batch.empty()) {
-            // Build the input tensor batch.
-            std::vector<torch::Tensor> tensorBatch;
-            tensorBatch.reserve(batch.size());
-            for (const InferenceRequest &req : batch) {
-                tensorBatch.push_back(req.boardTensor);
-            }
-
+        if (!promises.empty()) {
             const std::vector<std::pair<torch::Tensor, float>> inferenceResults =
                 modelInference(tensorBatch);
 
-            for (auto &&[req, res] : zip(batch, inferenceResults)) {
-                req.promise.set_value(res); // Set the promise for each request.
+            for (auto &&[promise, res] : zip(promises, inferenceResults)) {
+                promise.set_value(res); // Set the promise for each request.
             }
+
+            tensorBatch.clear(); // Clear the batch for the next iteration.
+            promises.clear();    // Clear the promises for the next iteration.
         }
     }
 }
