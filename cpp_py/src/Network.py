@@ -55,15 +55,15 @@ class Network(nn.Module):
             x = block(x)
         return self.policyHead(x), self.valueHead(x)
 
-    def fuse_model(self):
-        for m in self.modules():
-            if type(m) == nn.Sequential:
-                modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
-                torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
+    # def fuse_model(self):
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Sequential):
+    #             modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
+    #             torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
 
-    def disable_auto_grad(self):
-        for p in self.parameters():
-            p.requires_grad = False
+    # def disable_auto_grad(self):
+    #     for p in self.parameters():
+    #         p.requires_grad = False
 
     def print_params(self):
         for name, param in self.named_parameters():

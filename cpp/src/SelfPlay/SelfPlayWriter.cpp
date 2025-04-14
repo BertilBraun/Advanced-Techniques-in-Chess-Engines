@@ -106,7 +106,12 @@ void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resigna
         }
         outcome *= 0.997f; // discount the game outcome for each move
     }
+
+    if (m_samples.size() >= m_args.writer.batchSize) {
+        _flushBatch();
+    }
 }
+
 void SelfPlayWriter::updateIteration(int iteration) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -148,6 +153,7 @@ void SelfPlayWriter::updateIteration(int iteration) {
     // resets all statistics to defaults
     m_stats = Stats();
 }
+
 void SelfPlayWriter::_addSample(const CompressedEncodedBoard &board, const VisitCounts &visitCounts,
                                 float resultScore) {
     Sample sample;
@@ -155,11 +161,8 @@ void SelfPlayWriter::_addSample(const CompressedEncodedBoard &board, const Visit
     sample.visitCounts = visitCounts;
     sample.resultScore = resultScore;
     m_samples.push_back(std::move(sample));
-
-    if (m_samples.size() >= m_args.writer.batchSize) {
-        _flushBatch();
-    }
 }
+
 std::string SelfPlayWriter::_getSaveFilename() {
     assert(m_iteration != -1);
     const std::string saveFolder = m_args.save_path + "/iteration_" + std::to_string(m_iteration);
@@ -182,6 +185,7 @@ std::string SelfPlayWriter::_getSaveFilename() {
 
     return filename;
 }
+
 void SelfPlayWriter::_flushBatch() {
     std::string filename = _getSaveFilename();
     std::ofstream out(filename, std::ios::binary);
@@ -190,11 +194,11 @@ void SelfPlayWriter::_flushBatch() {
         return;
     }
 
-    auto add = [&](const auto &data, size_t size = 0) {
-        if (size == 0) {
-            size = sizeof(data);
-        }
-        out.write(reinterpret_cast<const char *>(&data), size);
+    auto add = [&](const auto &data) {
+        out.write(reinterpret_cast<const char *>(&data), sizeof(data));
+    };
+    auto add_ptr = [&](const auto *data, size_t size) {
+        out.write(reinterpret_cast<const char *>(data), size);
     };
 
     // --- Build Metadata JSON from the Stats struct ---
@@ -209,14 +213,14 @@ void SelfPlayWriter::_flushBatch() {
 
     // --- Write Header ---
     // Magic number (4 bytes).
-    add("SMPF", 4);
+    add_ptr("SMPF", 4);
     // Version (4 bytes, here version 1).
     uint32_t version = 1;
     add(version);
     // Metadata JSON length (4 bytes).
     add(static_cast<uint32_t>(metadata_str.size()));
     // Metadata JSON string.
-    add(metadata_str.c_str(), metadata_str.size());
+    add_ptr(metadata_str.c_str(), metadata_str.size());
 
     // --- Write Sample Count ---
     add(static_cast<uint32_t>(m_samples.size()));
@@ -224,7 +228,7 @@ void SelfPlayWriter::_flushBatch() {
     // --- Write Each Sample ---
     for (const auto &sample : m_samples) {
         // Write the fixed board array (14 x 64-bit integers).
-        add(sample.board.data(), sizeof(uint64_t) * ENCODING_CHANNELS);
+        add_ptr(sample.board.data(), sizeof(uint64_t) * ENCODING_CHANNELS);
 
         // Write the number of pairs in visitCounts (as a 32-bit integer).
         add(static_cast<uint32_t>(sample.visitCounts.size()));
@@ -246,6 +250,7 @@ void SelfPlayWriter::_flushBatch() {
     m_stats = Stats(); // resets all statistics to defaults
     ++m_batchCounter;
 }
+
 void SelfPlayWriter::_logGame(const SelfPlayGame &game, float result) {
     auto step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     // Log the game moves and result.
