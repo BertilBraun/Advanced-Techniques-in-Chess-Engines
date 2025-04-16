@@ -1,4 +1,9 @@
 #include "SelfPlayWriter.hpp"
+#include "BoardEncoding.hpp"
+
+const std::string BOARD_FILE_POSTFIX = "_board.csv";
+const std::string MOVE_FILE_POSTFIX = "_moves.csv";
+const std::string STATS_FILE_POSTFIX = "_stats.json";
 
 CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
     EncodedBoard flippedBoard;
@@ -75,6 +80,11 @@ VisitCounts _preprocessVisitCounts(const VisitCounts &visitCounts) {
 void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resignation,
                            bool tooLong) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    log("Writing game with outcome:", outcome, "Number of moves:", game.memory.size(),
+        "resignation:", resignation, "tooLong:", tooLong, "generationTime:", game.generationTime(),
+        "playedMoves:", game.playedMoves.size(), "iteration:", m_iteration);
+    log(game.playedMoves);
+    reset_times(nullptr, m_iteration);
 
     // Update per-game statistics.
     m_stats.num_games += 1;
@@ -172,83 +182,91 @@ std::string SelfPlayWriter::_getSaveFilename() {
         std::filesystem::create_directories(saveFolder);
     }
 
-    std::string filename =
-        saveFolder + "/" + m_args.writer.filePrefix + "_" + std::to_string(m_batchCounter) + ".bin";
+    std::string filename = saveFolder + "/" + m_args.writer.filePrefix + "_" +
+                           std::to_string(m_batchCounter) + STATS_FILE_POSTFIX;
     m_batchCounter += 1;
 
     // while file already exists, update filename and increase batchCounter
     while (std::filesystem::exists(std::filesystem::path{filename})) {
         filename = saveFolder + "/" + m_args.writer.filePrefix + "_" +
-                   std::to_string(m_batchCounter) + ".bin";
+                   std::to_string(m_batchCounter) + STATS_FILE_POSTFIX;
         m_batchCounter += 1;
     }
 
-    return filename;
+    // Remove the postfix from the filename.
+    return filename.substr(0, filename.size() - STATS_FILE_POSTFIX.size());
 }
 
 void SelfPlayWriter::_flushBatch() {
-    std::string filename = _getSaveFilename();
-    std::ofstream out(filename, std::ios::binary);
-    if (!out) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
+    std::string baseFilename = _getSaveFilename();
 
-    auto add = [&](const auto &data) {
-        out.write(reinterpret_cast<const char *>(&data), sizeof(data));
-    };
-    auto add_ptr = [&](const auto *data, size_t size) {
-        out.write(reinterpret_cast<const char *>(data), size);
-    };
-
-    // --- Build Metadata JSON from the Stats struct ---
-    nlohmann::json j;
-    j["num_samples"] = m_stats.num_samples;
-    j["num_games"] = m_stats.num_games;
-    j["game_lengths"] = m_stats.game_lengths;
-    j["total_generation_time"] = m_stats.total_generation_time;
-    j["resignations"] = m_stats.resignations;
-    j["num_too_long_games"] = m_stats.num_too_long_games;
-    std::string metadata_str = j.dump(4);
-
-    // --- Write Header ---
-    // Magic number (4 bytes).
-    add_ptr("SMPF", 4);
-    // Version (4 bytes, here version 1).
-    uint32_t version = 1;
-    add(version);
-    // Metadata JSON length (4 bytes).
-    add(static_cast<uint32_t>(metadata_str.size()));
-    // Metadata JSON string.
-    add_ptr(metadata_str.c_str(), metadata_str.size());
-
-    // --- Write Sample Count ---
-    add(static_cast<uint32_t>(m_samples.size()));
-
-    // --- Write Each Sample ---
-    for (const auto &sample : m_samples) {
-        // Write the fixed board array (14 x 64-bit integers).
-        add_ptr(sample.board.data(), sizeof(uint64_t) * ENCODING_CHANNELS);
-
-        // Write the number of pairs in visitCounts (as a 32-bit integer).
-        add(static_cast<uint32_t>(sample.visitCounts.size()));
-
-        // Write each pair (each int as 32-bit).
-        for (const auto &[move, count] : sample.visitCounts) {
-            add(static_cast<uint32_t>(move));
-            add(static_cast<uint32_t>(count));
+    // === Write Stats JSON to {baseFilename}_stats.json ===
+    {
+        std::string statsFilename = baseFilename + STATS_FILE_POSTFIX;
+        std::ofstream statsOut(statsFilename);
+        if (!statsOut) {
+            log("Failed to open file for writing:", statsFilename);
+            return;
         }
 
-        // Write the result score as a 32-bit float.
-        add(sample.resultScore);
+        nlohmann::json j;
+        j["num_samples"] = m_stats.num_samples;
+        j["num_games"] = m_stats.num_games;
+        j["game_lengths"] = m_stats.game_lengths;
+        j["total_generation_time"] = m_stats.total_generation_time;
+        j["resignations"] = m_stats.resignations;
+        j["num_too_long_games"] = m_stats.num_too_long_games;
+
+        // Write pretty JSON with an indent of 4 spaces.
+        statsOut << j.dump(4);
+        statsOut.close();
     }
 
-    out.close();
+    // === Write Boards as binary to {baseFilename}_boards.csv ===
+    {
+        std::string boardsFilename = baseFilename + BOARD_FILE_POSTFIX;
+        std::ofstream boardsOut(boardsFilename);
+        if (!boardsOut) {
+            log("Failed to open file for writing:", boardsFilename);
+            return;
+        }
+
+        for (const auto &sample : m_samples) {
+            // Write the board as a binary string.
+            boardsOut << std::hex << std::setfill('0');
+            for (int i : range(ENCODING_CHANNELS)) {
+                boardsOut << std::setw(16) << sample.board[i] << ",";
+            }
+            boardsOut << sample.resultScore << "\n";
+        }
+        boardsOut.close();
+    }
+
+    // === Write Visit Counts (Moves) to {baseFilename}_moves.csv ===
+    {
+        std::string movesFilename = baseFilename + MOVE_FILE_POSTFIX;
+        std::ofstream movesOut(movesFilename);
+        if (!movesOut) {
+            std::cerr << "Failed to open file for writing: " << movesFilename << std::endl;
+            return;
+        }
+
+        // Optionally write a CSV header:
+        movesOut << "sample_index,move,count\n";
+
+        // Write each sample’s visit count pairs.
+        for (const auto &[sampleIndex, sample] : enumerate(m_samples)) {
+            for (const auto &[move, count] : sample.visitCounts) {
+                // Optionally, you could perform your validations here.
+                movesOut << sampleIndex << "," << move << "," << count << "\n";
+            }
+        }
+        movesOut.close();
+    }
 
     // Clear the batch and reset per-batch statistics.
     m_samples.clear();
-    m_stats = Stats(); // resets all statistics to defaults
-    ++m_batchCounter;
+    m_stats = Stats();
 }
 
 void SelfPlayWriter::_logGame(const SelfPlayGame &game, float result) {

@@ -47,6 +47,9 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                 iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 500)
 
                 chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
+                if not chunks:
+                    continue
+
                 for chunk in chunks:
                     self.stats += SelfPlayDataset.load_stats(chunk)
 
