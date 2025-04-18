@@ -77,7 +77,7 @@ class ModelEvaluation:
         device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
-        return self._evaluate_model_vs_dataset(model, dataset.as_dataloader(128, 0))
+        return self._evaluate_model_vs_dataset(model, dataset.as_dataloader(batch_size=128, num_workers=1))
 
     @staticmethod
     def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float, float, float]:
