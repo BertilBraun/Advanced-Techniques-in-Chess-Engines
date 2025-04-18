@@ -46,6 +46,9 @@ class TrainerProcess:
             valid_stats += epoch_valid_stats
 
             if train_stats.value_std < 0.01:
+                log(
+                    f'Early stopping at iteration {iteration} and epoch {epoch} due to low value std: {train_stats.value_std:.4f}'
+                )
                 exit()
 
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
