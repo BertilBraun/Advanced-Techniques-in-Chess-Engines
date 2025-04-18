@@ -78,11 +78,6 @@ VisitCounts _preprocessVisitCounts(const VisitCounts &visitCounts) {
 void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resignation,
                            bool tooLong) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    log("Writing game with outcome:", outcome, "Number of moves:", game.memory.size(),
-        "resignation:", resignation, "tooLong:", tooLong, "generationTime:", game.generationTime(),
-        "playedMoves:", game.playedMoves.size(), "iteration:", m_iteration);
-    log(game.playedMoves);
-    reset_times(nullptr, m_iteration);
 
     // Update per-game statistics.
     m_stats.num_games += 1;
