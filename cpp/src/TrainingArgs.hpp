@@ -55,6 +55,8 @@ struct SelfPlayParams {
 
 struct InferenceParams {
     size_t maxBatchSize = 128;
+
+    size_t numInferenceClientsPerGPU = 2;
 };
 
 // Contains the top-level training arguments.

@@ -39,6 +39,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
         .inference =
             {
                 .maxBatchSize = 128,
+                .numInferenceClientsPerGPU = 4,
             },
     };
 
@@ -48,8 +49,9 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);
 
-    std::vector<InferenceClient> clients(numGPUs * 2);
-    for (int i : range(numGPUs * 2)) { // start 2 InferenceClients per GPU
+    size_t numClients = numGPUs * TRAINING_ARGS.inference.numInferenceClientsPerGPU;
+    std::vector<InferenceClient> clients(numClients);
+    for (int i : range(numClients)) { // start 2 InferenceClients per GPU
         clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
                         &logger);
     }
