@@ -97,7 +97,7 @@ evaluation = EvaluationParams(
 )
 ensure_eval_dataset_exists(evaluation.dataset_path)
 
-PARALLEL_GAMES = 32
+PARALLEL_GAMES = 16
 
 if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 2
