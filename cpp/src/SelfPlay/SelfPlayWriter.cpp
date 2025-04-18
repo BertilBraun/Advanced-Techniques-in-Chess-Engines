@@ -1,7 +1,7 @@
 #include "SelfPlayWriter.hpp"
 #include "BoardEncoding.hpp"
 
-const std::string BOARD_FILE_POSTFIX = "_board.csv";
+const std::string BOARD_FILE_POSTFIX = "_boards.csv";
 const std::string MOVE_FILE_POSTFIX = "_moves.csv";
 const std::string STATS_FILE_POSTFIX = "_stats.json";
 
@@ -45,11 +45,9 @@ std::vector<std::pair<CompressedEncodedBoard, VisitCounts>>
 _symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &visitCounts) {
     std::vector<std::pair<CompressedEncodedBoard, VisitCounts>> variations;
 
-    auto flippedBoard = _flipBoardVertical(board);
-    auto flippedVisitCounts = _flipActionProbabilitiesVertical(visitCounts);
-
-    variations.push_back({board, visitCounts});
-    variations.push_back({flippedBoard, flippedVisitCounts});
+    variations.emplace_back(board, visitCounts);
+    // variations.emplace_back(_flipBoardVertical(board),
+    //                         _flipActionProbabilitiesVertical(visitCounts));
 
     return variations;
 }

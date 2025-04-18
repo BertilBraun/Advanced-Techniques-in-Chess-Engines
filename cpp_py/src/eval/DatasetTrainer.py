@@ -58,7 +58,7 @@ def train_model(
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, test_dataloader, iteration)
-        log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
+        log(f'Epoch {epoch + 1}/{num_epochs} done: {stats}')
 
 
 def main(dataset_paths: list[str]):
@@ -74,7 +74,7 @@ def main(dataset_paths: list[str]):
         test_dataset.deduplicate()
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
-        tmp_dataset = SelfPlayTrainDataset(run_id)
+        tmp_dataset = SelfPlayTrainDataset()
         tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
         train_stats = tmp_dataset.stats
 
@@ -112,9 +112,9 @@ def main(dataset_paths: list[str]):
                 model, test_dataloader
             )
             log(f'Evaluation results at iteration {iter}:')
-            log(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
-            log(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
-            log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
+            log(f'    Policy accuracy @1: {policy_at_1 * 100:.2f}%')
+            log(f'    Policy accuracy @5: {policy_at_5 * 100:.2f}%')
+            log(f'    Policy accuracy @10: {policy_at_10 * 100:.2f}%')
             log(f'    Avg value loss: {avg_value_loss}')
 
             save_model_and_optimizer(model, optimizer, iter, save_folder)

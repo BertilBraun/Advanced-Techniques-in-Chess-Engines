@@ -1,4 +1,5 @@
 #include "InferenceClient.hpp"
+#include "util/ShardedCache.hpp"
 
 auto TORCH_DTYPE = torch::kFloat32;
 
@@ -50,11 +51,13 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
     std::vector<std::pair<size_t, std::future<ModelInferenceResult>>> futures;
     futures.reserve(boards.size());
 
+    int myIteration = m_currentIteration;
+
     for (size_t i : range(boards.size())) {
         // Check if the result is already cached.
         // If so, set the promise and continue.
         const uint64 encodedBoardHash = hash(encodedBoards[i]);
-        if (m_inferenceCache.contains(encodedBoardHash) ||
+        if (m_cache[myIteration].contains(encodedBoardHash) ||
             enqueuedBoards.contains(encodedBoardHash)) {
             m_totalHits++;
             continue;
@@ -76,7 +79,7 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
     for (auto &&[i, future] : futures) {
         auto [policy, value] = future.get(); // Make a copy of the result.
 
-        m_inferenceCache.insert(
+        m_cache[myIteration].insert(
             hash(encodedBoards[i]),
             {filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
@@ -87,7 +90,7 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
 
     for (auto &&[board, encodedBoard] : zip(boards, encodedBoards)) {
         InferenceResult result;
-        if (!m_inferenceCache.lookup(hash(encodedBoard), result))
+        if (!m_cache[myIteration].lookup(hash(encodedBoard), result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
         // Filter the policy without en passant moves.
@@ -100,7 +103,15 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
 
 void InferenceClient::updateModel(const std::string &modelPath, int iteration) {
     logCacheStatistics(iteration);
-    m_inferenceCache.clear();
+    // remove all entries from the cache which are not the m_currentIteration
+    for (auto it = m_cache.begin(); it != m_cache.end();) {
+        if (it->first != m_currentIteration) {
+            it = m_cache.erase(it); // erase returns the next valid iterator
+        } else {
+            ++it;
+        }
+    }
+    m_currentIteration = iteration;
     loadModel(modelPath);
 }
 
@@ -113,23 +124,23 @@ void InferenceClient::loadModel(const std::string &modelPath) {
 }
 
 void InferenceClient::logCacheStatistics(int iteration) {
-    if (m_totalEvals == 0 || !m_logger || m_inferenceCache.empty()) {
+    if (m_totalEvals == 0 || !m_logger || m_cache[iteration].empty()) {
         return; // Avoid division by zero.
     }
 
     const double cacheHitRate = (static_cast<double>(m_totalHits) / m_totalEvals) * 100.0;
     m_logger->add_scalar("cache/hit_rate", iteration, cacheHitRate);
     m_logger->add_scalar("cache/unique_positions", iteration,
-                         static_cast<double>(m_inferenceCache.size()));
+                         static_cast<double>(m_cache[iteration].size()));
     std::vector<float> nnOutputValues;
-    nnOutputValues.reserve(m_inferenceCache.size());
-    for (const auto &entry : m_inferenceCache) {
+    nnOutputValues.reserve(m_cache[iteration].size());
+    for (const auto &entry : m_cache[iteration]) {
         nnOutputValues.push_back(entry.second.second);
     }
     m_logger->add_histogram("nn_output_value_distribution", iteration, nnOutputValues);
 
     size_t sizeInBytes = 0;
-    for (const auto &entry : m_inferenceCache) {
+    for (const auto &entry : m_cache[iteration]) {
         sizeInBytes += sizeof(entry.first) + sizeof(entry.second);
         sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
     }
@@ -138,7 +149,7 @@ void InferenceClient::logCacheStatistics(int iteration) {
 
     log("Inference Client stats on iteration:", iteration);
     log("  cache_hit_rate:", cacheHitRate);
-    log("  unique_positions:", m_inferenceCache.size());
+    log("  unique_positions:", m_cache[iteration].size());
     log("  cache_size_mb:", sizeInMB);
 }
 

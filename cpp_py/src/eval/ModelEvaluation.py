@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.dataset.SelfPlayDataset import SelfPlayDataset
+from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.eval.Bot import check_winner
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
@@ -73,12 +73,11 @@ class ModelEvaluation:
         self.num_games = num_games
         self.args = args
 
-    def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
+    def evaluate_model_vs_dataset(self, dataset: SelfPlayTrainDataset) -> tuple[float, float, float, float]:
         device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
-        dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
-        return self._evaluate_model_vs_dataset(model, dataloader)
+        return self._evaluate_model_vs_dataset(model, dataset.as_dataloader(128, 0))
 
     @staticmethod
     def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float, float, float]:

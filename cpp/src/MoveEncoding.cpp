@@ -243,6 +243,39 @@ std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &m
     return filteredMoves;
 }
 
+const std::vector<Move> EN_PASSANT_MOVES = {
+    // White en passant moves
+    Move(A5, B6),
+    Move(B5, A6),
+    Move(B5, C6),
+    Move(C5, B6),
+    Move(C5, D6),
+    Move(D5, C6),
+    Move(D5, E6),
+    Move(E5, D6),
+    Move(E5, F6),
+    Move(F5, E6),
+    Move(F5, G6),
+    Move(G5, F6),
+    Move(G5, H6),
+    Move(H5, G6),
+    // Black en passant moves
+    Move(A4, B3),
+    Move(B4, A3),
+    Move(B4, C3),
+    Move(C4, B3),
+    Move(C4, D3),
+    Move(D4, C3),
+    Move(D4, E3),
+    Move(E4, D3),
+    Move(E4, F3),
+    Move(F4, E3),
+    Move(F4, G3),
+    Move(G4, F3),
+    Move(G4, H3),
+    Move(H4, G3),
+};
+
 torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
                                                             Board &board) {
     // Filters a policy with the legal moves of a chess board but also allows all en passant moves.
@@ -252,41 +285,8 @@ torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor 
     // entry is 1 if the corresponding move is legal, and 0 otherwise. The policy
     // is then filtered to only include the probabilities of the legal moves.
 
-    std::vector<Move> enPassantMoves = {
-        // White en passant moves
-        Move(A5, B6),
-        Move(B5, A6),
-        Move(B5, C6),
-        Move(C5, B6),
-        Move(C5, D6),
-        Move(D5, C6),
-        Move(D5, E6),
-        Move(E5, D6),
-        Move(E5, F6),
-        Move(F5, E6),
-        Move(F5, G6),
-        Move(G5, F6),
-        Move(G5, H6),
-        Move(H5, G6),
-        // Black en passant moves
-        Move(A4, B3),
-        Move(B4, A3),
-        Move(B4, C3),
-        Move(C4, B3),
-        Move(C4, D3),
-        Move(D4, C3),
-        Move(D4, E3),
-        Move(E4, D3),
-        Move(E4, F3),
-        Move(F4, E3),
-        Move(F4, G3),
-        Move(G4, F3),
-        Move(G4, H3),
-        Move(H4, G3),
-    };
-
     auto allMoves = board.legalMoves();
-    extend(allMoves, enPassantMoves);
+    extend(allMoves, EN_PASSANT_MOVES);
 
     torch::Tensor legalMovesEncoded = encodeMoves(allMoves);
     torch::Tensor filteredPolicy = policy * legalMovesEncoded;

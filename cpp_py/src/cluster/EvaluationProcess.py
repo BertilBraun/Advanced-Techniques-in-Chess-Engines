@@ -1,4 +1,5 @@
-from src.dataset.SelfPlayDataset import SelfPlayDataset
+from pathlib import Path
+from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.settings import log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions
@@ -28,7 +29,8 @@ class EvaluationProcess:
 
         model_evaluation = ModelEvaluation(iteration, self.args, self.eval_args.num_games)
 
-        dataset = SelfPlayDataset.load(self.eval_args.dataset_path)
+        dataset = SelfPlayTrainDataset()
+        dataset.load_from_files('evaluation', [(iteration, [Path(self.eval_args.dataset_path)])], max_num_repetitions=1)
         (
             policy_accuracy_at_1,
             policy_accuracy_at_5,

@@ -69,12 +69,12 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
 
 
 def ensure_eval_dataset_exists(dataset_path: str) -> None:
-    if not os.path.exists(dataset_path):
-        from src.games import ChessDatabase
+    from src.games import ChessDatabase
 
+    if not os.path.exists(dataset_path + '_stats.json'):
         out_paths = ChessDatabase.process_month(2024, 10, num_games_per_month=50)
         assert len(out_paths) == 1
-        out_paths[0].rename(dataset_path)
+        assert dataset_path == str(out_paths[0])
 
 
 SELF_PLAYERS_PER_NODE = 64
@@ -93,7 +93,7 @@ training = TrainingParams(
 evaluation = EvaluationParams(
     num_games=40,
     every_n_iterations=1,
-    dataset_path='reference/memory_0_chess_database.hdf5',
+    dataset_path='reference/chess_database/iteration_202410/0',
 )
 ensure_eval_dataset_exists(evaluation.dataset_path)
 

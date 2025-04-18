@@ -73,22 +73,26 @@ class TrainerProcess:
         window_size = self.args.training.sampling_window(iteration)
 
         log(
-            f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
+            f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 1)}-{iteration})'
         )
 
         all_dataset_files = [
             (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
-            for iteration in range(max(iteration - window_size, 0), iteration + 1)
+            for iteration in range(max(iteration - window_size, 1), iteration + 1)
         ]
         all_dataset_files = [(i, f) for i, f in all_dataset_files if f]
-        validation_dataset_file = (all_dataset_files[-1][0], [all_dataset_files[-1][1].pop(-1)])
+        validation_dataset_file = (
+            -all_dataset_files[-1][0],  # use "-iteration" as the evaluation dataset, to not mix the training dataset
+            [all_dataset_files[-1][1].pop(-1)],
+        )
 
-        dataset = SelfPlayTrainDataset(self.run_id)
+        dataset = SelfPlayTrainDataset()
         dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=5)
+        dataset.log_stats_to_tensorboard(self.run_id)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 
-        validation_dataset = SelfPlayTrainDataset(self.run_id)
+        validation_dataset = SelfPlayTrainDataset()
         validation_dataset.load_from_files(self.args.save_path, [validation_dataset_file], max_num_repetitions=1)
 
         return dataset, validation_dataset

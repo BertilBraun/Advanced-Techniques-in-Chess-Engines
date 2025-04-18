@@ -18,9 +18,7 @@ import AlphaZeroCpp
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, run: int) -> None:
-        self.run = run
-
+    def __init__(self) -> None:
         self.all_chunks: list[list[Path]] = []
 
         self.stats = SelfPlayDatasetStats()
@@ -61,14 +59,7 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     print(f'Loaded from {len(self.all_chunks)} iterations.')
                     break
 
-            if i == 0:
-                thread = Process(
-                    target=self._log_all_dataset_stats,
-                    args=([list.copy() for list in self.all_chunks], self.run),
-                    daemon=True,
-                )
-                thread.start()
-            else:
+            if i != 0:
                 n = len(self.all_chunks)
                 assert n % 2 == 0, 'Number of chunks must be even'
                 self.all_chunks = [self.all_chunks[i] + self.all_chunks[i + n // 2] for i in range(n // 2)]
@@ -76,6 +67,14 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
             if self.stats.num_samples > 5_000_000:
                 log(f'Loaded {self.stats.num_samples} samples with {i + 1} multiplications.')
                 break
+
+    def log_stats_to_tensorboard(self, run: int) -> None:
+        thread = Process(
+            target=self._log_all_dataset_stats,
+            args=([list.copy() for list in self.all_chunks], run),
+            daemon=True,
+        )
+        thread.start()
 
     @staticmethod
     def _log_all_dataset_stats(iterations: list[list[Path]], run: int) -> None:

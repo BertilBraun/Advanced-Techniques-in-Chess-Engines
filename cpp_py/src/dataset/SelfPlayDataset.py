@@ -1,19 +1,17 @@
 from __future__ import annotations
 from math import ceil
 
-import torch
 import numpy as np
 import numpy.typing as npt
 from os import PathLike
 from pathlib import Path
-from torch.utils.data import Dataset
 
 from src.dataset.SelfPlayDatasetIO import SelfPlaySample, load_selfplay_file, write_selfplay_file
 from src.util import random_id
 from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
-class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
+class SelfPlayDataset:
     """Each sample is represented by:
     state: torch.Tensor
     policy_targets: torch.Tensor
@@ -46,7 +44,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         new_dataset.value_targets = self.value_targets + other.value_targets
         new_dataset.stats = self.stats + other.stats
         return new_dataset
-    
+
     def add_sample(
         self,
         encoded_state: npt.NDArray[np.uint64],
@@ -57,6 +55,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.encoded_states.append(encoded_state)
         self.visit_counts.append(visit_counts)
         self.value_targets.append(value_target)
+        self.stats += SelfPlayDatasetStats(num_samples=1)
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
@@ -106,6 +105,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         dataset = SelfPlayDataset()
         try:
             stats, samples = load_selfplay_file(str(file_path))
+
             dataset.stats = stats
             for board, visit_counts, result_score in samples:
                 dataset.encoded_states.append(np.array(board, dtype=np.uint64))
@@ -147,7 +147,18 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         save_path = Path(folder_path) / f'iteration_{iteration}'
         if not save_path.exists():
             return []
-        return list(save_path.glob('memory_*.bin'))
+        all_files = list(save_path.glob('memory_*.json')) + list(save_path.glob('memory_*.csv'))
+        # all files with the postfix after the last '_' removed
+        files_with_removed_postfix: list[str] = []
+        for file in all_files:
+            file_name = file.name
+            if '_' in file_name:
+                file_name = file_name[: file_name.rindex('_')]
+            files_with_removed_postfix.append(file_name)
+        # remove duplicates
+        files_with_removed_postfix = list(set(files_with_removed_postfix))
+
+        return [save_path / file_name for file_name in files_with_removed_postfix]
 
     def save_to_path(self, file_path: Path) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,10 +171,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
         if suffix:
-            file_path = Path(folder_path) / f'iteration_{iteration}/{suffix}.bin'
+            file_path = Path(folder_path) / f'iteration_{iteration}/{suffix}'
         else:
             while True:
-                file_path = Path(folder_path) / f'iteration_{iteration}/{random_id()}.bin'
+                file_path = Path(folder_path) / f'iteration_{iteration}/{random_id()}'
                 if not file_path.exists():
                     break
 
@@ -181,11 +192,11 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             fract_of_games = ceil(len(self) / chunk_size)
             chunk.stats = SelfPlayDatasetStats(
                 num_samples=len(chunk),
-                num_games=self.stats.num_games // fract_of_games,
+                num_games=ceil(self.stats.num_games / fract_of_games),
                 total_generation_time=self.stats.total_generation_time / fract_of_games,
                 resignations=self.stats.resignations // fract_of_games,
             )
 
-            chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}'))
+            chunked_files.append(chunk.save(folder_path, iteration, f'memory_{i // chunk_size}'))
 
         return chunked_files

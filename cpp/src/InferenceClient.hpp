@@ -95,10 +95,11 @@ private:
     torch::Device m_device;
     TensorBoardLogger *m_logger;
 
-    // Cache: board hash -> InferenceResult.
-    ShardedCache<int64_t, InferenceResult, 32> m_inferenceCache;
+    // Cache: iteration -> board hash -> InferenceResult.
+    std::unordered_map<int, ShardedCache<int64_t, InferenceResult, 32>> m_cache;
     int m_totalHits;
     int m_totalEvals;
+    int m_currentIteration;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

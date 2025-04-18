@@ -1,16 +1,6 @@
 #pragma once
 
-#include <array>
-#include <cmath>
-#include <functional>
-#include <iomanip>
-#include <iostream>
-#include <optional>
-#include <regex>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
+#include "commonBase.hpp"
 
 namespace chess {
 enum Color : bool { WHITE, BLACK };
@@ -346,16 +336,6 @@ inline constexpr int lsb(Bitboard bb) {
     return n;
 }
 
-inline std::vector<int> scanForward(Bitboard bb) {
-    std::vector<int> squares;
-    while (bb) {
-        int sq = lsb(bb);
-        squares.push_back(sq);
-        bb &= bb - 1; // Reset LSB
-    }
-    return squares;
-}
-
 inline constexpr int msb(Bitboard bb) {
     if (bb == 0)
         return -1;
@@ -386,16 +366,6 @@ inline constexpr int msb(Bitboard bb) {
     return n;
 }
 
-inline std::vector<Square> scanReversed(Bitboard bb) {
-    std::vector<Square> squares;
-    while (bb) {
-        int sq = msb(bb);
-        squares.push_back((Square) sq);
-        bb &= ~(1ULL << sq); // Reset MSB
-    }
-    return squares;
-}
-
 inline std::vector<std::string> split(const std::string &s, char delimiter) {
     std::vector<std::string> tokens;
     std::string token;
@@ -416,6 +386,28 @@ inline constexpr int popcount(Bitboard bb) {
     bb = (bb & m2) + ((bb >> 2) & m2); // put count of each 4 bits into those 4 bits
     bb = (bb + (bb >> 4)) & m4;        // put count of each 8 bits into those 8 bits
     return (bb * h01) >> 56; // returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ...
+}
+
+inline std::vector<Square> scanForward(Bitboard bb) {
+    std::vector<Square> squares;
+    squares.reserve(popcount(bb));
+    while (bb) {
+        int sq = lsb(bb);
+        squares.push_back((Square) sq);
+        bb &= bb - 1; // Reset LSB
+    }
+    return squares;
+}
+
+inline std::vector<Square> scanReversed(Bitboard bb) {
+    std::vector<Square> squares;
+    squares.reserve(popcount(bb));
+    while (bb) {
+        int sq = msb(bb);
+        squares.push_back((Square) sq);
+        bb &= ~(1ULL << sq); // Reset MSB
+    }
+    return squares;
 }
 
 inline constexpr Bitboard flipVertical(Bitboard bb) {
@@ -515,6 +507,7 @@ inline constexpr Bitboard _edges(Square square) {
 
 inline std::vector<Bitboard> _carryRippler(Bitboard mask) {
     std::vector<Bitboard> subsets;
+    subsets.reserve(popcount(mask) + 1);
     Bitboard subset = BB_EMPTY;
     do {
         subsets.push_back(subset);
@@ -760,15 +753,7 @@ public:
     void clear() { mask = BB_EMPTY; }
 
     // Iteration over squares in the set
-    std::vector<Square> squares() const {
-        std::vector<Square> result;
-        for (Square square : SQUARES) {
-            if (contains(square)) {
-                result.push_back(square);
-            }
-        }
-        return result;
-    }
+    std::vector<Square> squares() const { return scanForward(mask); }
 
     // Printing
     std::string toString() const {
@@ -989,19 +974,15 @@ public:
         }
     }
 
-    std::vector<Move> legalMoves() {
-        // A dynamic list of legal moves.
-        return _generateLegalMoves();
-    }
+    // A dynamic list of legal moves.
+    std::vector<Move> legalMoves() { return _generateLegalMoves(); }
 
-    std::vector<Move> pseudoLegalMoves() {
-        // A dynamic list of pseudo-legal moves, much like the legal move list.
-        //
-        // Pseudo-legal moves might leave or put the king in check, but are
-        // otherwise valid. Null moves are not pseudo-legal. Castling moves are
-        // only included if they are completely legal.
-        return _generatePseudoLegalMoves();
-    }
+    // A dynamic list of pseudo-legal moves, much like the legal move list.
+    //
+    // Pseudo-legal moves might leave or put the king in check, but are
+    // otherwise valid. Null moves are not pseudo-legal. Castling moves are
+    // only included if they are completely legal.
+    std::vector<Move> pseudoLegalMoves() { return _generatePseudoLegalMoves(); }
 
     void resetBoard() {
         // Resets pieces to the starting position.
@@ -1318,7 +1299,7 @@ public:
         if (checkers) {
             auto evasions = _generateEvasions(king, checkers, BB_SQUARES[move.fromSquare()],
                                               BB_SQUARES[move.toSquare()]);
-            if (std::find(evasions.begin(), evasions.end(), move) == evasions.end()) {
+            if (not contains(evasions, move)) {
                 return true;
             }
         }
@@ -1329,7 +1310,7 @@ public:
     bool isPseudoLegal(const Move &move) {
         // Check if a move is pseudo-legal
         if (!move)
-            return false; // Null moves are not pseudo-legal in C++ context
+            return false; // Null moves are not pseudo-legal
 
         auto piece = pieceTypeAt(move.fromSquare());
         if (!piece.has_value())
@@ -1351,9 +1332,9 @@ public:
         }
 
         if (piece == PieceType::KING) {
-            auto castlingMoves = _generateCastlingMoves(); // This needs to be defined
-            return std::find(castlingMoves.begin(), castlingMoves.end(), move) !=
-                   castlingMoves.end();
+            auto castlingMoves = _generateCastlingMoves();
+            if (contains(castlingMoves, move))
+                return true; // Castling move is legal
         }
 
         if (m_occupied_color[turn] & to_mask)
@@ -1362,7 +1343,7 @@ public:
         if (piece == PieceType::PAWN) {
             // Specific pawn moves handling
             auto pawnMoves = _generatePseudoLegalMoves(from_mask, to_mask);
-            return std::find(pawnMoves.begin(), pawnMoves.end(), move) != pawnMoves.end();
+            return contains(pawnMoves, move);
         }
 
         return _attacksMask(move.fromSquare()) & to_mask;
@@ -1428,12 +1409,12 @@ public:
 
         // Knights or bishops only
         if (our_pieces & m_knights) {
-            return popcount(our_pieces) <= 2 && !(m_occupied_color[!color] & ~(m_kings | m_queens));
+            return popcount(our_pieces) <= 2 && !(m_occupied_color[!color] & ~m_kings & ~m_queens);
         }
 
         if (our_pieces & m_bishops) {
             bool same_color_bishops =
-                !((m_bishops & BB_DARK_SQUARES) && (m_bishops & BB_LIGHT_SQUARES));
+                (!(m_bishops & BB_DARK_SQUARES)) || (!(m_bishops & BB_LIGHT_SQUARES));
             return same_color_bishops && !m_pawns && !m_knights;
         }
 
@@ -1466,7 +1447,6 @@ public:
         // Reset the generated moves
         _resetStoredMoves();
 
-        move = _toChess960(move);
         castling_rights = _cleanCastlingRights();
 
         // Reset en passant square
@@ -1480,7 +1460,7 @@ public:
         }
 
         // Handle null moves
-        if (!move || !pieceTypeAt(move.fromSquare()).has_value()) {
+        if (!move) {
             turn = !turn;
             return;
         }
@@ -1496,7 +1476,8 @@ public:
         bool promoted = (m_promoted & fromBB) != 0;
         auto piece = _removePieceAt(move.fromSquare());
         if (!piece.has_value()) {
-            return; // Move must be at least pseudo-legal
+            throw std::invalid_argument("Invalid move: " + move.uci() +
+                                        " in position: " + boardFen());
         }
         auto pieceType = piece.value();
 
@@ -1528,10 +1509,11 @@ public:
             } else if (distance == -16 && squareRank(move.fromSquare()) == 6) {
                 ep_square = move.fromSquare() - 8;
             } else if (epSquare.has_value() && move.toSquare() == epSquare.value() &&
-                       (std::abs(distance) == 7 || std::abs(distance) == 9)) {
+                       (std::abs(distance) == 7 || std::abs(distance) == 9) &&
+                       !capturedPieceType.has_value()) {
                 // En passant capture
                 int down = (turn == WHITE) ? -8 : 8;
-                captureSquare = move.toSquare() + down;
+                captureSquare = epSquare.value() + down;
                 capturedPieceType = _removePieceAt(captureSquare);
             }
         }
@@ -1568,18 +1550,10 @@ public:
     }
 
     bool hasPseudoLegalEnPassant() {
-        if (!ep_square.has_value())
-            return false;
-
-        return !_generatePseudoLegalEP().empty();
+        return ep_square.has_value() && !_generatePseudoLegalEP().empty();
     }
 
-    bool hasLegalEnPassant() {
-        if (!ep_square.has_value())
-            return false;
-
-        return !_generateLegalEP().empty();
-    }
+    bool hasLegalEnPassant() { return ep_square.has_value() && !_generateLegalEP().empty(); }
 
     bool isEnPassant(const Move &move) const {
         int distance = std::abs(move.toSquare() - move.fromSquare());
@@ -1595,16 +1569,15 @@ public:
 
     bool isZeroing(const Move &move) const {
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
-        return (touched & m_pawns) || (touched & m_occupied_color[!turn]) ||
-               (move.promotion() == PieceType::PAWN);
+        return (touched & m_pawns) || (touched & m_occupied_color[!turn]);
     }
 
     bool reducesCastlingRights(const Move &move) const {
         Bitboard cr = _cleanCastlingRights();
         Bitboard touched = BB_SQUARES[move.fromSquare()] ^ BB_SQUARES[move.toSquare()];
         return (touched & cr) ||
-               (cr & BB_RANK_1 && touched & m_kings & m_occupied_color[WHITE] & ~m_promoted) ||
-               (cr & BB_RANK_8 && touched & m_kings & m_occupied_color[BLACK] & ~m_promoted);
+               ((cr & BB_RANK_1) && touched & m_kings & m_occupied_color[WHITE] & ~m_promoted) ||
+               ((cr & BB_RANK_8) && touched & m_kings & m_occupied_color[BLACK] & ~m_promoted);
     }
 
     bool isCastling(const Move &move) const {
@@ -1785,7 +1758,7 @@ public:
             return false;
 
         Square last_double = ep_square.value() + ((turn == WHITE) ? -8 : 8);
-        Bitboard occupancy = (m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer]) |
+        Bitboard occupancy = m_occupied & ~BB_SQUARES[last_double] & ~BB_SQUARES[capturer] |
                              BB_SQUARES[ep_square.value()];
 
         Bitboard horizontal_attackers = m_occupied_color[!turn] & (m_rooks | m_queens);
@@ -1813,7 +1786,7 @@ public:
         Bitboard blockers = BB_EMPTY;
         for (Square sniper : scanReversed(snipers)) {
             Bitboard b = between(king, sniper) & m_occupied;
-            if (b && popcount(b) == 1) {
+            if (b && BB_SQUARES[msb(b)] == b) {
                 blockers |= b;
             }
         }
@@ -1924,22 +1897,6 @@ public:
     }
 
 private:
-    Move _toChess960(Move move) {
-        if (move.fromSquare() == E1 && (m_kings & BB_E1)) {
-            if (move.toSquare() == G1 && !(m_rooks & BB_G1))
-                return Move(E1, H1);
-            else if (move.toSquare() == C1 && !(m_rooks & BB_C1))
-                return Move(E1, A1);
-        } else if (move.fromSquare() == E8 && (m_kings & BB_E8)) {
-            if (move.toSquare() == G8 && !(m_rooks & BB_G8))
-                return Move(E8, H8);
-            else if (move.toSquare() == C8 && !(m_rooks & BB_C8))
-                return Move(E8, A8);
-        }
-
-        return move;
-    }
-
     void _resetStoredMoves() {
         m_cachedLegalMoves = std::nullopt;
         m_cachedPseudoLegalMoves = std::nullopt;
@@ -1997,7 +1954,6 @@ private:
         }
 
         Bitboard square_mask = BB_SQUARES[square];
-        Bitboard pinMask = BB_ALL;
 
         std::array<std::pair<std::array<std::unordered_map<Bitboard, Bitboard>, 64> &, Bitboard>, 3>
             attacks_and_sliders = {{{BB_FILE_ATTACKS, m_rooks | m_queens},
@@ -2011,14 +1967,14 @@ private:
                 for (auto sniper : scanReversed(snipers)) {
                     if ((between(sniper, king.value()) & (m_occupied | square_mask)) ==
                         square_mask) {
-                        pinMask = ray(king.value(), sniper);
-                        break;
+                        return ray(king.value(), sniper);
                     }
                 }
+                break;
             }
         }
 
-        return pinMask;
+        return BB_ALL;
     }
 
     std::optional<PieceType> _removePieceAt(Square square) {
@@ -2090,11 +2046,11 @@ private:
             return;
         }
 
-        m_occupied |= mask;
-        m_occupied_color[color] |= mask;
+        m_occupied ^= mask;
+        m_occupied_color[color] ^= mask;
 
         if (promoted) {
-            m_promoted |= mask;
+            m_promoted ^= mask;
         }
     }
 
@@ -2120,11 +2076,17 @@ private:
         // Generate castling moves
         if (from_mask & m_kings) {
             auto castlingMoves = _generateCastlingMoves(from_mask, to_mask);
-            moves.insert(moves.end(), castlingMoves.begin(), castlingMoves.end());
+            extend(moves, castlingMoves);
         }
 
         // Generate pawn moves
         Bitboard pawns = m_pawns & m_occupied_color[turn] & from_mask;
+
+        if (pawns == BB_EMPTY) {
+            m_cachedPseudoLegalMoves = moves;
+            return moves;
+        }
+
         // Generate pawn captures
         for (int from_square : scanReversed(pawns)) {
             Bitboard targets =
@@ -2174,7 +2136,7 @@ private:
         // Generate en passant captures
         if (ep_square.has_value()) {
             auto epMoves = _generatePseudoLegalEP(from_mask, to_mask);
-            moves.insert(moves.end(), epMoves.begin(), epMoves.end());
+            extend(moves, epMoves);
         }
 
         m_cachedPseudoLegalMoves = moves;
@@ -2187,14 +2149,17 @@ private:
             return m_cachedPseudoLegalEPMoves.value();
         }
 
-        std::vector<Move> moves;
         if (!ep_square.has_value() || !(BB_SQUARES[ep_square.value()] & to_mask) ||
             (BB_SQUARES[ep_square.value()] & m_occupied)) {
-            return moves;
+            return {};
         }
 
         Bitboard capturers = m_pawns & m_occupied_color[turn] & from_mask &
                              BB_PAWN_ATTACKS[!turn][ep_square.value()] & BB_RANKS[turn ? 4 : 3];
+
+        std::vector<Move> moves;
+        moves.reserve(popcount(capturers));
+
         for (int capturer : scanReversed(capturers)) {
             moves.emplace_back(capturer, ep_square.value());
         }
@@ -2271,14 +2236,14 @@ private:
             // Capture or block a single checker.
             Bitboard target = between(king, checker) | checkers;
             auto directEvasions = _generatePseudoLegalMoves(~m_kings & from_mask, target & to_mask);
-            evasions.insert(evasions.end(), directEvasions.begin(), directEvasions.end());
+            extend(evasions, directEvasions);
 
             // Capture the checking pawn en passant (avoiding duplicates).
             if (ep_square.has_value() && !(BB_SQUARES[ep_square.value()] & target)) {
                 int last_double = ep_square.value() + (turn == WHITE ? -8 : 8);
                 if (last_double == checker) {
                     auto epEvasions = _generatePseudoLegalEP(from_mask, to_mask);
-                    evasions.insert(evasions.end(), epEvasions.begin(), epEvasions.end());
+                    extend(evasions, epEvasions);
                 }
             }
         }
@@ -2299,6 +2264,7 @@ private:
             Bitboard checkers = attackersMask(!turn, king);
             if (checkers) {
                 auto evasions = _generateEvasions(king, checkers, from_mask, to_mask);
+                legalMoves.reserve(evasions.size());
                 for (const Move &move : evasions) {
                     if (isSafe(king, blockers, move)) {
                         legalMoves.push_back(move);
@@ -2306,6 +2272,7 @@ private:
                 }
             } else {
                 auto pseudoLegalMoves = _generatePseudoLegalMoves(from_mask, to_mask);
+                legalMoves.reserve(pseudoLegalMoves.size());
                 for (const Move &move : pseudoLegalMoves) {
                     if (isSafe(king, blockers, move)) {
                         legalMoves.push_back(move);
@@ -2313,9 +2280,7 @@ private:
                 }
             }
         } else {
-            auto pseudoLegalMoves = _generatePseudoLegalMoves(from_mask, to_mask);
-            std::copy(pseudoLegalMoves.begin(), pseudoLegalMoves.end(),
-                      std::back_inserter(legalMoves));
+            legalMoves = _generatePseudoLegalMoves(from_mask, to_mask);
         }
 
         m_cachedLegalMoves = legalMoves;
@@ -2327,8 +2292,10 @@ private:
             return m_cachedLegalEPMoves.value();
         }
 
-        std::vector<Move> legalEP;
         auto pseudoLegalEP = _generatePseudoLegalEP(from_mask, to_mask);
+
+        std::vector<Move> legalEP;
+        legalEP.reserve(pseudoLegalEP.size());
         for (const Move &move : pseudoLegalEP) {
             if (!isIntoCheck(move)) {
                 legalEP.push_back(move);
@@ -2340,11 +2307,9 @@ private:
     }
 
     bool _attackedForKing(Bitboard path, Bitboard occupied) const {
-        for (int sq = msb(path); path; sq = msb(path)) {
-            if (_attackersMask(!turn, (Square) sq, occupied)) {
+        for (auto sq : scanReversed(path)) {
+            if (_attackersMask(!turn, (Square) sq, occupied))
                 return true;
-            }
-            path &= path - 1; // Clear the scanned bit
         }
         return false;
     }
@@ -2353,20 +2318,19 @@ private:
                                              Bitboard to_mask = BB_ALL) const {
         std::vector<Move> moves;
 
-        Bitboard back_rank = (turn == WHITE) ? BB_RANK_1 : BB_RANK_8;
-        Bitboard king = m_occupied_color[turn] & m_kings & ~m_promoted & back_rank & from_mask;
+        Bitboard backrank = (turn == WHITE) ? BB_RANK_1 : BB_RANK_8;
+        Bitboard king = m_occupied_color[turn] & m_kings & ~m_promoted & backrank & from_mask;
+        king &= -king; // Isolate the least-significant bit (king)
         if (!king) {
             return moves;
         }
 
-        Bitboard bb_c = BB_FILE_C & back_rank;
-        Bitboard bb_d = BB_FILE_D & back_rank;
-        Bitboard bb_f = BB_FILE_F & back_rank;
-        Bitboard bb_g = BB_FILE_G & back_rank;
+        Bitboard bb_c = BB_FILE_C & backrank;
+        Bitboard bb_d = BB_FILE_D & backrank;
+        Bitboard bb_f = BB_FILE_F & backrank;
+        Bitboard bb_g = BB_FILE_G & backrank;
 
-        Bitboard clean_rights = _cleanCastlingRights();
-        for (int candidate = msb(clean_rights & back_rank & to_mask);
-             clean_rights && candidate >= 0; candidate = msb(clean_rights)) {
+        for (auto candidate : scanReversed(_cleanCastlingRights() & backrank & to_mask)) {
             Bitboard rook = BB_SQUARES[candidate];
 
             bool a_side = rook < king;
@@ -2376,12 +2340,14 @@ private:
             Bitboard king_path = between(msb(king), msb(king_to));
             Bitboard rook_path = between(candidate, msb(rook_to));
 
-            if (!((m_occupied ^ king ^ rook) & (king_path | rook_path | king_to | rook_to)) &&
-                !_attackedForKing(king_path | king, m_occupied ^ king) &&
-                !_attackedForKing(king_to, m_occupied ^ king ^ rook ^ rook_to)) {
+            bool condition =
+                (m_occupied ^ king ^ rook) & (king_path | rook_path | king_to | rook_to) ||
+                _attackedForKing(king_path | king, m_occupied ^ king) ||
+                _attackedForKing(king_to, m_occupied ^ king ^ rook ^ rook_to);
+
+            if (!condition) {
                 moves.emplace_back(candidate, msb(king_to));
             }
-            clean_rights &= clean_rights - 1; // Clear the scanned bit
         }
         return moves;
     }
