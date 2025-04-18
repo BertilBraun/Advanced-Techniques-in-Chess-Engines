@@ -85,12 +85,16 @@ def main():
 
     with log_exceptions('Commander process'), TensorboardWriter(run, 'trainer', postfix_pid=False):
         for iteration in range(starting_iteration, TRAINING_ARGS.num_iterations):
+            log(f'Starting training at iteration {iteration}.')
             training_stats = trainer_process.train(iteration)
             log(f'Trainer finished at iteration {iteration}.')
             log(f'Iteration {iteration}: {training_stats}')
 
             # start EvaluationProcess
-            mp.Process(target=run_evaluation_process, args=(run, TRAINING_ARGS, iteration), daemon=True).start()
+            eval_process = mp.Process(target=run_evaluation_process, args=(run, TRAINING_ARGS, iteration))
+            eval_process.start()
+            eval_process.join()
+            log(f'Evaluation process finished at iteration {iteration}.')
 
 
 if __name__ == '__main__':
