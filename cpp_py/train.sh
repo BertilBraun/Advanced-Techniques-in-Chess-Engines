@@ -17,7 +17,10 @@ source setup.sh
 cd ../cpp
 mkdir -p build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release .. 
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_FLAGS="" \
+      -DCMAKE_C_FLAGS="" ..
+
 make -j
 
 cd ../../cpp_py
