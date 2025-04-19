@@ -90,21 +90,20 @@ class ModelEvaluation:
         total_value_loss = 0.0
 
         with torch.no_grad():
-            for batch in dataloader:
-                board, moves, outcome = batch
-                board = board.to(model.device)
-                moves = moves.to(model.device)
-                outcome = outcome.to(model.device).unsqueeze(1)
+            for boards, moves_list, outcomes in dataloader:
+                boards = boards.to(model.device)
+                moves_list = moves_list.to(model.device)
+                outcomes = outcomes.to(model.device).unsqueeze(1)
 
-                policy_output, value_output = model(board)
+                policy_outputs, value_outputs = model(boards)
 
-                policy_pred = torch.softmax(policy_output, dim=1)
+                policy_preds = torch.softmax(policy_outputs, dim=1)
 
-                for i in range(len(moves)):
-                    top1 = policy_pred[i].topk(1).indices
-                    top5 = policy_pred[i].topk(5).indices
-                    top10 = policy_pred[i].topk(10).indices
-                    true_moves = moves[i].nonzero().squeeze()
+                for i in range(len(boards)):
+                    top1 = policy_preds[i].topk(1).indices
+                    top5 = policy_preds[i].topk(5).indices
+                    top10 = policy_preds[i].topk(10).indices
+                    true_moves = moves_list[i].nonzero().squeeze()
 
                     if torch.any(top1 == true_moves):
                         total_top1_correct += 1
@@ -115,7 +114,7 @@ class ModelEvaluation:
 
                     total_policy_total += 1
 
-                total_value_loss += F.mse_loss(value_output, outcome).item()
+                total_value_loss += F.mse_loss(value_outputs, outcomes).item()
 
         top1_accuracy = total_top1_correct / total_policy_total
         top5_accuracy = total_top5_correct / total_policy_total

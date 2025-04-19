@@ -39,6 +39,15 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
+    if current_iteration < 8:
+        return 0.2
+    if current_iteration < 20:
+        return 0.02
+    if current_iteration < 30:
+        return 0.008
+    if current_iteration < 50:
+        return 0.002
+    return 0.0002
     if current_iteration < 20:
         return 0.2
     if current_iteration < 80:
@@ -103,7 +112,7 @@ if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 2
 
 TRAINING_ARGS = TrainingArgs(
-    num_iterations=500,
+    num_iterations=79,
     save_path=SAVE_PATH + '/chess',
     num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
     network=network,

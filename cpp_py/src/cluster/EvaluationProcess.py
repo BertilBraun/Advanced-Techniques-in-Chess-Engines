@@ -30,7 +30,7 @@ class EvaluationProcess:
         model_evaluation = ModelEvaluation(iteration, self.args, self.eval_args.num_games)
 
         dataset = SelfPlayTrainDataset()
-        dataset.load_from_files('evaluation', [(iteration, [Path(self.eval_args.dataset_path)])], max_num_repetitions=1)
+        dataset.load_from_files('evaluation', [(-1, [Path(self.eval_args.dataset_path)])], max_num_repetitions=1)
         (
             policy_accuracy_at_1,
             policy_accuracy_at_5,
