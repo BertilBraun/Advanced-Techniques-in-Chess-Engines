@@ -69,8 +69,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     m.def("board_inference_main", &boardInferenceMain,
           "Runs board inference on a list of FEN strings", py::arg("model_path"), py::arg("fens"))
-        .attr("__annotations__") = py::dict("return"_a = "List[Tuple[int, List[Tuple[int, int]]]]",
-                                            "model_path"_a = "str", "fens"_a = "List[str]");
+        .attr("__annotations__") =
+        py::dict("return"_a = "List[Tuple[float, List[Tuple[int, int]]]]", "model_path"_a = "str",
+                 "fens"_a = "List[str]");
 
     m.def("eval_board_iterate", &eval_board_iterate, "Runs board inference on a single FEN string",
           py::arg("model_path"), py::arg("fen"), py::arg("network_only") = false,

@@ -93,16 +93,16 @@ NUM_SELF_PLAYERS = clamp(NUM_SELF_PLAYERS, 1, multiprocessing.cpu_count() - 5)
 
 network = NetworkParams(num_layers=15, hidden_size=128)
 training = TrainingParams(
-    num_epochs=2,
-    batch_size=2048,
+    num_epochs=2 if USE_GPU else 1,
+    batch_size=2048 if USE_GPU else 256,
+    eval_batch_size=128,
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
-    max_num_sample_repetitions=3,
+    max_num_sample_repetitions=3 if USE_GPU else 2,
 )
 evaluation = EvaluationParams(
     num_games=40,
-    every_n_iterations=1,
     dataset_path='reference/chess_database/iteration_202410/0',
 )
 ensure_eval_dataset_exists(evaluation.dataset_path)
@@ -115,7 +115,7 @@ if not USE_GPU:  # TODO remove
 TRAINING_ARGS = TrainingArgs(
     num_iterations=70,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
     network=network,
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
     training=training,

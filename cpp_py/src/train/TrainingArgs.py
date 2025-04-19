@@ -25,6 +25,9 @@ class TrainingParams:
     batch_size: int
     """This is the size of the batch to train with"""
 
+    eval_batch_size: int
+    """This is the size of the batch to use for the validation set. This should be smaller than the training batch size to speed up validation."""
+
     sampling_window: Callable[[int], int]
     """This is a function that returns the sampling window to use for the self-play data. The sampling window is the number of most recent games to sample from to train with. This is used to phase out old data that is no longer useful to train with. The function should take the current iteration as input and return the sampling window to use for that iteration.
     Example:
@@ -54,20 +57,16 @@ class TrainingParams:
     """
 
     max_num_sample_repetitions: int
-    """Maximum number of times the dataset is replicated before training. Basically the same as num_epochs.""" 
+    """Maximum number of times the dataset is replicated before training. Basically the same as num_epochs."""
 
     num_workers: int = 4
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
-    
 
 
 @dataclass
 class EvaluationParams:
     num_games: int
     """This is the number of games to play for the evaluation. The more games the more accurate the evaluation but the longer the evaluation. Typically 32-256 for evaluation"""
-
-    every_n_iterations: int
-    """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
 
     dataset_path: str
     """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""

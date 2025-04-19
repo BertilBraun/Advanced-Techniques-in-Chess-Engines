@@ -106,8 +106,6 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
                                                   const std::vector<std::string> &fens) {
     assert(!fens.empty());
-    log("Model path:", modelPath);
-    log("Starting board inference");
 
     const MCTSParams EVALUATION_MCTS_PARAMS = {
         .num_searches_per_turn =
@@ -144,7 +142,6 @@ std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
         pyResults.emplace_back(score, visits);
     }
 
-    log("Board inference completed");
     return pyResults;
 }
 

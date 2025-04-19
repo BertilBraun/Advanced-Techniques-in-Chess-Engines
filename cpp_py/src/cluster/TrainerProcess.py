@@ -40,7 +40,7 @@ class TrainerProcess:
             dataset, validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
             validation_dataloader = validation_dataset.as_dataloader(
-                self.args.training.batch_size, self.args.training.num_workers
+                self.args.training.eval_batch_size, self.args.training.num_workers
             )
 
             epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
@@ -104,7 +104,9 @@ class TrainerProcess:
         )
 
         dataset = SelfPlayTrainDataset()
-        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=self.args.training.max_num_sample_repetitions)
+        dataset.load_from_files(
+            self.args.save_path, all_dataset_files, max_num_repetitions=self.args.training.max_num_sample_repetitions
+        )
         dataset.log_stats_to_tensorboard(self.run_id)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')

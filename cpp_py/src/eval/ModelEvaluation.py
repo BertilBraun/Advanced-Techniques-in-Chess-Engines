@@ -2,6 +2,7 @@ from __future__ import annotations
 from itertools import chain
 from os import PathLike
 import os
+from pathlib import Path
 import chess
 import random
 
@@ -17,7 +18,7 @@ from src.Network import Network
 from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.eval.Bot import check_winner
 from src.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU
+from src.settings import USE_GPU, TORCH_DTYPE
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
 
@@ -91,9 +92,9 @@ class ModelEvaluation:
 
         with torch.no_grad():
             for boards, moves_list, outcomes in dataloader:
-                boards = boards.to(model.device)
-                moves_list = moves_list.to(model.device)
-                outcomes = outcomes.to(model.device).unsqueeze(1)
+                boards = boards.to(device=model.device, dtype=TORCH_DTYPE)
+                moves_list = moves_list.to(device=model.device, dtype=TORCH_DTYPE)
+                outcomes = outcomes.to(device=model.device, dtype=TORCH_DTYPE).unsqueeze(1)
 
                 policy_outputs, value_outputs = model(boards)
 
@@ -138,7 +139,8 @@ class ModelEvaluation:
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
         def opponent_evaluator(boards: list[chess.Board]) -> list[list[int]]:
-            results = AlphaZeroCpp.board_inference_main(model_path, [board.fen() for board in boards])
+            model_path_str = self._get_jit_model_path(model_path)
+            results = AlphaZeroCpp.board_inference_main(model_path_str, [board.fen() for board in boards])
             return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
@@ -149,8 +151,10 @@ class ModelEvaluation:
         results = Results(0, 0, 0)
 
         def model1(boards: list[chess.Board]) -> list[list[int]]:
+            current_model_path = model_save_path(self.iteration, self.args.save_path)
             results = AlphaZeroCpp.board_inference_main(
-                model_save_path(self.iteration, self.args.save_path), [board.fen() for board in boards]
+                self._get_jit_model_path(current_model_path),
+                [board.fen() for board in boards],
             )
             return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
@@ -161,15 +165,20 @@ class ModelEvaluation:
 
         return results
 
+    def _get_jit_model_path(self, model_path: str | PathLike) -> str:
+        model_path_str = str(Path(model_path).absolute())
+        if model_path_str.endswith('.jit.pt'):
+            return model_path_str
+        if model_path_str.endswith('.pt'):
+            return model_path_str[:-3] + '.jit.pt'
+        assert False, f'Invalid model path: {model_path_str}'
+
     def _play_two_models_search(
         self, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str
     ) -> Results:
         results = Results(0, 0, 0)
 
         games = [chess.Board() for _ in range(num_games)]
-
-        game_move_histories: list[list[str]] = [[] for _ in range(num_games)]
-        game_to_index = {game: i for i, game in enumerate(games)}
 
         # start from different starting positions, as the players are deterministic
         opening_fens = [
@@ -190,14 +199,13 @@ class ModelEvaluation:
             'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
             'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
             'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
-            'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
+            'rnbqkb1r/ppppppp1/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
             'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
             'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
         ]
 
         for game, fen in zip(games, opening_fens):
             game.set_fen(fen)
-            game_move_histories[game_to_index[game]].append(f'FEN"{fen}"')
 
         while games:
             games_for_player1 = [game for game in games if game.turn == chess.WHITE]
@@ -208,25 +216,29 @@ class ModelEvaluation:
 
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
-                for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
-                    if not move.startswith('FEN'):
-                        policy[int(move)] /= i + 1
+                for i, move in enumerate(game.move_stack[-10:]):
+                    policy[AlphaZeroCpp.encode_move(move)] /= i + 1
 
                 policy /= policy.sum()
 
                 move = np.argmax(policy).item()
                 game.push(AlphaZeroCpp.decode_move(move))
-                game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():
                     game.result()
                     results.update(check_winner(game), chess.WHITE)
 
-                    moves = ','.join(game_move_histories[game_to_index[game]])
-                    log_text(
-                        f'evaluation_moves/{self.iteration}/{name}',
-                        str(check_winner(game)) + ':' + moves,
-                    )
+                    history: list[str] = []
+                    while True:
+                        try:
+                            move = game.pop()
+                            history.append(str(move))
+                        except IndexError:
+                            break
+                    history.append(f'FEN"{game.fen()}"')
+                    history.reverse()
+                    moves = ','.join(history)
+                    log_text(f'evaluation_moves/{self.iteration}/{name}', f'{check_winner(game)}:{moves}')
 
             games = [game for game in games if not game.is_game_over()]
 
