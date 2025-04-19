@@ -30,7 +30,7 @@ class SelfPlayDataset:
 
     def __init__(self) -> None:
         self.encoded_states: list[npt.NDArray[np.uint64]] = []
-        self.visit_counts: list[npt.NDArray[np.uint16]] = []
+        self.visit_counts: list[npt.NDArray[np.uint32]] = []
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats()
 
@@ -48,7 +48,7 @@ class SelfPlayDataset:
     def add_sample(
         self,
         encoded_state: npt.NDArray[np.uint64],
-        visit_counts: npt.NDArray[np.uint16],
+        visit_counts: npt.NDArray[np.uint32],
         value_target: float,
     ) -> None:
         """Add a new sample to the dataset"""
@@ -59,7 +59,7 @@ class SelfPlayDataset:
 
     def deduplicate(self) -> None:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
+        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint32], float]]] = {}
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             state = tuple(state)
@@ -77,7 +77,7 @@ class SelfPlayDataset:
 
                 mp[state] = (
                     count + 1,
-                    (np.array(new_visit_counts, dtype=np.uint16), value_target_sum + value_target),
+                    (np.array(new_visit_counts, dtype=np.uint32), value_target_sum + value_target),
                 )
             else:
                 mp[state] = (
@@ -109,7 +109,7 @@ class SelfPlayDataset:
             dataset.stats = stats
             for board, visit_counts, result_score in samples:
                 dataset.encoded_states.append(np.array(board, dtype=np.uint64))
-                dataset.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
+                dataset.visit_counts.append(np.array(visit_counts, dtype=np.uint32))
                 dataset.value_targets.append(result_score)
         except Exception as e:
             from src.util.log import log, LogLevel

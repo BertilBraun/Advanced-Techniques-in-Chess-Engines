@@ -50,6 +50,7 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
             children.emplace_back(std::move(new_board), score, move, this, num_played_moves + 1);
         } catch (std::invalid_argument &e) {
             // Ignore invalid moves (e.g., castling when the king is in check)
+            log("Invalid move: ", e.what(), " for move: ", move, " in board: ", board.fen());
         }
     }
 }

@@ -1476,8 +1476,7 @@ public:
         bool promoted = (m_promoted & fromBB) != 0;
         auto piece = _removePieceAt(move.fromSquare());
         if (!piece.has_value()) {
-            throw std::invalid_argument("Invalid move: " + move.uci() +
-                                        " in position: " + boardFen());
+            throw std::invalid_argument("Invalid move: " + move.uci() + " in position: " + fen());
         }
         auto pieceType = piece.value();
 

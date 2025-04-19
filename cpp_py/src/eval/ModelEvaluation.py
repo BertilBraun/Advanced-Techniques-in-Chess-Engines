@@ -139,8 +139,10 @@ class ModelEvaluation:
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
         def opponent_evaluator(boards: list[chess.Board]) -> list[list[int]]:
-            model_path_str = self._get_jit_model_path(model_path)
-            results = AlphaZeroCpp.board_inference_main(model_path_str, [board.fen() for board in boards])
+            results = AlphaZeroCpp.board_inference_main(
+                self._get_jit_model_path(model_path),
+                [board.fen() for board in boards],
+            )
             return [AlphaZeroCpp.action_probabilities(visit_counts) for score, visit_counts in results]
 
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
@@ -206,6 +208,7 @@ class ModelEvaluation:
 
         for game, fen in zip(games, opening_fens):
             game.set_fen(fen)
+            assert game.is_valid(), f'Invalid FEN: {fen}'
 
         while games:
             games_for_player1 = [game for game in games if game.turn == chess.WHITE]
