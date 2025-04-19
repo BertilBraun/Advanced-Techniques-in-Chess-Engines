@@ -28,7 +28,7 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
-#include "TensorBoardLogger.hpp"
+#include "tensorboard_logger.h"
 
 #ifdef _WIN32
 #pragma warning(pop)
