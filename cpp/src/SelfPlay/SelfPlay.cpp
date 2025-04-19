@@ -38,6 +38,12 @@ void SelfPlay::selfPlay() {
         }
 
         ActionProbabilities gameActionProbabilities = actionProbabilities(mcts_result.visits);
+        if (sum(gameActionProbabilities) == 0.0) {
+            log("WARNING: No valid moves found for game ", game.board.fen(), " with result ",
+                mcts_result.result);
+            m_selfPlayGames[i] = SelfPlayGame();
+            continue;
+        }
 
         while (sum(gameActionProbabilities) > 0.0) {
             const auto [newGame, move] = _sampleSPG(game, gameActionProbabilities);
