@@ -44,9 +44,13 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 
     for (const auto &[move, score] : moves_with_scores) {
         Board new_board = board.copy();
-        new_board.push(decodeMove(move)); // TODO check whether this is a bottleneck
+        try {
+            new_board.push(decodeMove(move)); // TODO check whether this is a bottleneck
 
-        children.emplace_back(std::move(new_board), score, move, this, num_played_moves + 1);
+            children.emplace_back(std::move(new_board), score, move, this, num_played_moves + 1);
+        } catch (std::invalid_argument &e) {
+            // Ignore invalid moves (e.g., castling when the king is in check)
+        }
     }
 }
 
