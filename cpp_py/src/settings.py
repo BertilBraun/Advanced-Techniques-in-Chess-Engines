@@ -86,8 +86,8 @@ def ensure_eval_dataset_exists(dataset_path: str) -> None:
         assert dataset_path == str(out_paths[0])
 
 
-SELF_PLAYERS_PER_NODE = 15
-NUM_SELF_PLAY_GPUS = max(NUM_GPUS - 1, 1)  # The last GPU is used for training
+SELF_PLAYERS_PER_NODE = 24
+NUM_SELF_PLAY_GPUS = max(NUM_GPUS, 1)
 NUM_SELF_PLAYERS = NUM_SELF_PLAY_GPUS * SELF_PLAYERS_PER_NODE
 NUM_SELF_PLAYERS = clamp(NUM_SELF_PLAYERS, 1, multiprocessing.cpu_count() - 5)
 
@@ -98,6 +98,7 @@ training = TrainingParams(
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
+    max_num_sample_repetitions=3,
 )
 evaluation = EvaluationParams(
     num_games=40,
@@ -112,7 +113,7 @@ if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 2
 
 TRAINING_ARGS = TrainingArgs(
-    num_iterations=79,
+    num_iterations=70,
     save_path=SAVE_PATH + '/chess',
     num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
     network=network,

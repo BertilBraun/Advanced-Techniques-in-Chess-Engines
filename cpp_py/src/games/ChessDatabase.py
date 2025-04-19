@@ -28,7 +28,7 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
     #     parse the game
     #     yield the game
 
-    file = load_content(year, month, 'reference/data/chess_database')
+    file = load_content(year, month, 'reference/chess_database/data')
     with ZipFile(file, 'r') as zip_ref:
         content = zip_ref.read(zip_ref.namelist()[0]).decode('utf-8')
 

@@ -53,8 +53,12 @@ class TrainingParams:
         return lerp(min_lr, base_lr, batch_percentage)
     """
 
+    max_num_sample_repetitions: int
+    """Maximum number of times the dataset is replicated before training. Basically the same as num_epochs.""" 
+
     num_workers: int = 4
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
+    
 
 
 @dataclass

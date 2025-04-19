@@ -1,5 +1,6 @@
 import time
 import torch
+from tqdm import tqdm
 
 from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
@@ -21,7 +22,8 @@ class TrainerProcess:
         self.run_id = run_id
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        torch.cuda.set_device(device_id)
+        if USE_GPU:
+            torch.cuda.set_device(device_id)
 
     def train(self, iteration: int) -> TrainingStats:
         model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device, self.args.save_path)
@@ -67,8 +69,20 @@ class TrainerProcess:
         def games(iteration: int) -> int:
             return SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games
 
-        while games(iteration) + 0.5 * games(iteration - 1) < self.args.num_games_per_iteration:
-            time.sleep(10)
+        required_games = self.args.num_games_per_iteration
+        current_games = games(iteration) + 0.5 * games(iteration - 1)
+
+        with tqdm(
+            total=required_games,
+            desc=f'Collecting games for iteration {iteration}',
+            initial=current_games,
+            unit='games',
+        ) as pbar:
+            while current_games < required_games:
+                time.sleep(10)
+                new_games = games(iteration) + 0.5 * games(iteration - 1)
+                pbar.update(new_games - current_games)
+                current_games = new_games
 
     def _load_all_memories_to_train_on_for_iteration(
         self, iteration: int
@@ -90,7 +104,7 @@ class TrainerProcess:
         )
 
         dataset = SelfPlayTrainDataset()
-        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=5)
+        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=self.args.training.max_num_sample_repetitions)
         dataset.log_stats_to_tensorboard(self.run_id)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')

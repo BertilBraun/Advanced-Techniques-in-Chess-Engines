@@ -22,3 +22,4 @@ cpp/build/**
 cpp/libtorch**/**
 
 **/.cache/**
+/cpp_py/reference

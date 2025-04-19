@@ -59,8 +59,7 @@ def main():
     Path(TRAINING_ARGS.save_path).mkdir(parents=True, exist_ok=True)
 
     # Trainer
-    trainer_device_id = torch.cuda.device_count() - 1
-    trainer_process = TrainerProcess(TRAINING_ARGS, run, trainer_device_id)
+    trainer_process = TrainerProcess(TRAINING_ARGS, run, device_id=0)
 
     starting_iteration = get_latest_model_iteration(TRAINING_ARGS.save_path)
     log(f'Starting training at iteration {starting_iteration}.')
