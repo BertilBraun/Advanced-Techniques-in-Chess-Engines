@@ -118,7 +118,7 @@ void MCTS::_logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
     if (roots.empty() || !m_logger)
         return;
 
-    size_t step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    size_t step = current_time_step();
 
     // Compute the depth of each search tree using a DFS.
     auto dfs = [&](const MCTSNode &node, auto &dfs_ref) -> int {

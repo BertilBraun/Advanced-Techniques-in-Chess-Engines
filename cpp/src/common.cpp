@@ -34,3 +34,6 @@ std::pair<std::string, int> get_latest_iteration_save_path(const std::string &sa
     }
     throw std::runtime_error("No model found in the save path.");
 }
+size_t current_time_step() {
+    return std::chrono::high_resolution_clock::now().time_since_epoch().count();
+}

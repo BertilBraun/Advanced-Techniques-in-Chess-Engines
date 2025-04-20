@@ -28,7 +28,7 @@
 #include <torch/script.h>
 #include <torch/torch.h>
 
-#include "tensorboard_logger.h"
+#include "util/TensorBoardLogger.hpp"
 
 #ifdef _WIN32
 #pragma warning(pop)
@@ -55,3 +55,5 @@ std::vector<float> dirichlet(float alpha, size_t n);
 
 // It returns a pair: (latest model file path, iteration number).
 std::pair<std::string, int> get_latest_iteration_save_path(const std::string &savePath);
+
+size_t current_time_step();

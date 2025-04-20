@@ -165,6 +165,9 @@ def evaluate_iteration(args: tuple[int, int]):
 
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
+
+    TRAINING_ARGS.evaluation.num_games = 4
+
     log(f'Running evaluation process for iteration {iteration}')
     run_evaluation_process(run_id, TRAINING_ARGS, iteration)
 
@@ -183,8 +186,8 @@ def __main():
 
     run_id = get_run_id()
 
-    with mp.Pool(processes=1) as pool:
-        pool.map(evaluate_iteration, [(i, run_id) for i in range(1, 100)])
+    for i in range(1, 100):
+        evaluate_iteration((i, run_id))
 
 
 if __name__ == '__main__':

@@ -141,9 +141,12 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
 
         while chunks:
             for i, chunk in enumerate(chunks):
-                if self.sample_index[i] >= len(active_chunks[i]):
+                while chunk and self.sample_index[i] >= len(active_chunks[i]):
                     active_chunks[i] = SelfPlayDataset.load(chunk.pop(0))
                     self.sample_index[i] = 0
+
+                if not chunk and self.sample_index[i] >= len(active_chunks[i]):
+                    continue
 
                 dataset = active_chunks[i]
                 state = torch.from_numpy(

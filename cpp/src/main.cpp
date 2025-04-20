@@ -6,6 +6,11 @@
 #include "SelfPlay/SelfPlay.hpp"
 #include "SelfPlay/SelfPlayWriter.hpp"
 
+TensorBoardLogger getTensorBoardLogger(int runId) {
+    return TensorBoardLogger(std::string("logs/run_") + std::to_string(runId) +
+                             std::string("/tfevents"));
+}
+
 void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int numGPUs) {
     assert(runId >= 0);
     assert(numProcessors >= 1);
@@ -43,8 +48,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
             },
     };
 
-    TensorBoardLogger logger(std::string("logs/run_") + std::to_string(runId) +
-                             std::string("/tfevents"));
+    TensorBoardLogger logger = getTensorBoardLogger(runId);
 
     auto [currentModelPath, currentIteration] =
         get_latest_iteration_save_path(TRAINING_ARGS.save_path);

@@ -5,6 +5,7 @@
 #include "BoardEncoding.hpp"
 #include "MCTS/VisitCounts.hpp"
 #include "MoveEncoding.hpp"
+#include "eval/ModelEvaluation.hpp"
 
 #include <pybind11/pybind11.h>
 
@@ -57,6 +58,14 @@ auto encode_board(const std::string &fen) {
     return encodeBoard(board);
 }
 
+auto evaluate_model(int iteration, std::string const &save_path, int num_games, int runId,
+                    std::string const &model_path) {
+    TensorBoardLogger logger = getTensorBoardLogger(runId);
+    ModelEvaluation evaluator(iteration, save_path, num_games, &logger);
+    Results res = evaluator.play_two_models_search(model_path);
+    return py::make_tuple(res.wins, res.losses, res.draws);
+}
+
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "AlphaZero C++ bindings for Python.";
 
@@ -79,6 +88,13 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .attr("__annotations__") =
         py::dict("return"_a = "chess.Move", "model_path"_a = "str", "fen"_a = "str",
                  "network_only"_a = "bool", "max_time"_a = "float");
+
+    m.def("evaluate_model", &evaluate_model, "Evaluates a model against the current model",
+          py::arg("iteration"), py::arg("save_path"), py::arg("num_games"), py::arg("run_id"),
+          py::arg("model_path"))
+        .attr("__annotations__") =
+        py::dict("return"_a = "Tuple[int, int, int]", "iteration"_a = "int", "save_path"_a = "str",
+                 "num_games"_a = "int", "run_id"_a = "int", "model_path"_a = "str");
 
     // type alias for CompressedEncodedBoard = List[uint64]
     // type alias for EncodedBoard = List[List[List[int8]]]

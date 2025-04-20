@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "tensorboard_logger.h"
+#include "util/TensorBoardLogger.hpp"
 
 // Global timing results and a mutex to protect them.
 std::unordered_map<std::string, float> function_times;

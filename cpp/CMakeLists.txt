@@ -103,13 +103,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(pybind11)
 
 # --- Fetch tensorboard_logger ---
-FetchContent_Declare(
-    tensorboard_logger
-    GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(tensorboard_logger)
+# FetchContent_Declare(
+#     tensorboard_logger
+#     GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
+#     GIT_TAG master
+# )
+# FetchContent_MakeAvailable(tensorboard_logger)
 
+# find_package(Protobuf REQUIRED)
 
 # --- Include directories ---
 include_directories(src)
@@ -119,9 +120,13 @@ file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
 
 # Build the Python module from the binding entry point and shared sources
 pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
-target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}" tensorboard_logger)
 
-target_include_directories(AlphaZeroCpp PRIVATE ${tensorboard_logger_SOURCE_DIR}/include)
+
+target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
+# target_link_libraries(AlphaZeroCpp PRIVATE ${Protobuf_LIBRARIES} tensorboard_logger "${TORCH_LIBRARIES}")
+
+# target_include_directories(AlphaZeroCpp PRIVATE ${Protobuf_INCLUDE_DIRS})
+# target_include_directories(AlphaZeroCpp PRIVATE ${tensorboard_logger_SOURCE_DIR}/include)
 
 set_target_properties(AlphaZeroCpp PROPERTIES
     CXX_STANDARD 20
