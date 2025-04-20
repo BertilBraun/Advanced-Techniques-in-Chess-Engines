@@ -135,7 +135,7 @@ class EvaluationProcess:
         if not self.eval_args:
             return
 
-        model_evaluation = ModelEvaluation(iteration, self.args, self.eval_args.num_games)
+        model_evaluation = ModelEvaluation(iteration, self.args, run, self.eval_args.num_games)
 
         processes: list[mp.Process] = []
 
@@ -157,11 +157,9 @@ class EvaluationProcess:
             p.join()
 
 
-def evaluate_iteration(args: tuple[int, int]):
+def evaluate_iteration(iteration: int, run_id: int):
     from src.settings import TRAINING_ARGS
     from src.util.save_paths import model_save_path
-
-    iteration, run_id = args
 
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
@@ -187,7 +185,7 @@ def __main():
     run_id = get_run_id()
 
     for i in range(1, 100):
-        evaluate_iteration((i, run_id))
+        evaluate_iteration(i, run_id)
 
 
 if __name__ == '__main__':

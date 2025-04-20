@@ -96,5 +96,7 @@ class ModelEvaluation:
         return Results.from_cpp(res)
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        res = AlphaZeroCpp.evaluate_model(self.iteration, self.args.save_path, self.num_games, self.run, model_path)
+        res = AlphaZeroCpp.evaluate_model(
+            self.iteration, self.args.save_path, self.num_games, self.run, str(model_path)
+        )
         return Results.from_cpp(res)
