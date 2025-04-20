@@ -14,6 +14,10 @@
 
 source setup.sh
 
+git stash
+git pull
+git stash pop
+
 cd ../cpp
 mkdir -p build
 cd build
