@@ -151,7 +151,7 @@ private:
 
     Bucket &getBucket(const KeyType &key) {
         // Simple hash to bucket index.
-        size_t bucketIndex = std::hash<KeyType>{}(key) % buckets.size();
+        size_t bucketIndex = std::hash<KeyType>{}(key) % NumBuckets;
         return buckets[bucketIndex];
     }
 };

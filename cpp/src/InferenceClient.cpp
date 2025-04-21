@@ -102,8 +102,9 @@ std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board>
 }
 
 void InferenceClient::updateModel(const std::string &modelPath, int iteration) {
-    logCacheStatistics(iteration);
+    logCacheStatistics(m_currentIteration);
     // remove all entries from the cache which are not the m_currentIteration
+    std::lock_guard<std::mutex> lock(m_cacheMutex);
     for (auto it = m_cache.begin(); it != m_cache.end();) {
         if (it->first != m_currentIteration) {
             it = m_cache.erase(it); // erase returns the next valid iterator
@@ -125,6 +126,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
 
 void InferenceClient::logCacheStatistics(int iteration) {
     if (m_totalEvals == 0 || !m_logger || m_cache[iteration].empty()) {
+        log("No cache statistics to log.");
         return; // Avoid division by zero.
     }
 

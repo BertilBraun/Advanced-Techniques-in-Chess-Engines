@@ -126,19 +126,19 @@ void SelfPlayWriter::updateIteration(int iteration) {
 
     // Log statistics to TensorBoard.
     if (m_stats.num_samples > 0) {
-        m_logger.add_scalar("dataset/num_samples", iteration, (float) m_stats.num_samples);
-        m_logger.add_scalar("dataset/num_games", iteration, (float) m_stats.num_games);
-        m_logger.add_scalar("dataset/average_game_lengths", iteration,
-                            (float) m_stats.game_lengths / m_stats.num_games);
-        m_logger.add_scalar("dataset/average_generation_time", iteration,
-                            m_stats.total_generation_time / m_stats.num_games);
-        m_logger.add_scalar("dataset/resignations", iteration, (float) m_stats.resignations);
-        m_logger.add_scalar("dataset/num_too_long_games", iteration,
-                            (float) m_stats.num_too_long_games);
-        m_logger.add_scalar("dataset/num_samples_per_game", iteration,
-                            (float) m_stats.num_samples / m_stats.num_games);
+        m_logger->add_scalar("dataset/num_samples", m_iteration, (float) m_stats.num_samples);
+        m_logger->add_scalar("dataset/num_games", m_iteration, (float) m_stats.num_games);
+        m_logger->add_scalar("dataset/average_game_lengths", m_iteration,
+                             (float) m_stats.game_lengths / m_stats.num_games);
+        m_logger->add_scalar("dataset/average_generation_time", m_iteration,
+                             m_stats.total_generation_time / m_stats.num_games);
+        m_logger->add_scalar("dataset/resignations", m_iteration, (float) m_stats.resignations);
+        m_logger->add_scalar("dataset/num_too_long_games", m_iteration,
+                             (float) m_stats.num_too_long_games);
+        m_logger->add_scalar("dataset/num_samples_per_game", m_iteration,
+                             (float) m_stats.num_samples / m_stats.num_games);
 
-        log("Iteration", iteration, ":");
+        log("Iteration", m_iteration, ":");
         log("  num_samples:", m_stats.num_samples);
         log("  num_games:", m_stats.num_games);
         log("  average_game_lengths:", (float) m_stats.game_lengths / m_stats.num_games);
@@ -270,6 +270,6 @@ void SelfPlayWriter::_logGame(const SelfPlayGame &game, float result) {
         moves += std::to_string(encodeMove(move)) + ",";
     }
     moves.pop_back(); // Remove the trailing comma
-    m_logger.add_text("moves/" + std::to_string(m_iteration), step,
-                      (std::to_string(result) + ':' + moves).c_str());
+    m_logger->add_text("moves/" + std::to_string(m_iteration), step,
+                       (std::to_string(result) + ':' + moves).c_str());
 }

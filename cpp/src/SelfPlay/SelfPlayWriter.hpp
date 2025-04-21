@@ -12,7 +12,7 @@
 class SelfPlayWriter {
 public:
     // Constructor takes a file prefix, the batch size, and optional user metadata.
-    SelfPlayWriter(TrainingArgs args, TensorBoardLogger &logger)
+    SelfPlayWriter(TrainingArgs args, TensorBoardLogger *logger)
         : m_args(args), m_logger(logger), m_batchCounter(0) {}
 
     ~SelfPlayWriter() {
@@ -57,7 +57,7 @@ private:
 
     TrainingArgs m_args;
     int m_iteration = -1;
-    TensorBoardLogger &m_logger;
+    TensorBoardLogger *m_logger;
 
     // Members for sample batch and file naming.
     size_t m_batchCounter;

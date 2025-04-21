@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -24,6 +25,7 @@ public:
     }
 
     ~TensorBoardLogger() {
+        std::cout << "Stopping TensorBoard logger..." << std::endl;
         {
             std::lock_guard<std::mutex> lock(mu);
             stop_thread = true;
@@ -40,8 +42,7 @@ public:
         j["tag"] = tag;
         j["step"] = step;
         j["value"] = value;
-        std::lock_guard<std::mutex> lock(mu);
-        events.push_back(j);
+        push_event(j);
     }
 
     template <typename T>
@@ -51,8 +52,7 @@ public:
         j["tag"] = tag;
         j["step"] = step;
         j["values"] = values;
-        std::lock_guard<std::mutex> lock(mu);
-        events.push_back(j);
+        push_event(j);
     }
 
     void add_text(const std::string &tag, int step, const std::string &text) {
@@ -61,8 +61,17 @@ public:
         j["tag"] = tag;
         j["step"] = step;
         j["text"] = text;
+        push_event(j);
+    }
+
+private:
+    void push_event(const nlohmann::json &event) {
         std::lock_guard<std::mutex> lock(mu);
-        events.push_back(j);
+        events.push_back(event);
+        if (events.size() >= 100) {
+            print("WARNING: TensorBoard logger buffer is full. Flushing to disk manually.");
+            flush();
+        }
     }
 
     void flush() {

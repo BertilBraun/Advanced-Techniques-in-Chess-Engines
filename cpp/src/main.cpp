@@ -6,10 +6,8 @@
 #include "SelfPlay/SelfPlay.hpp"
 #include "SelfPlay/SelfPlayWriter.hpp"
 
-TensorBoardLogger getTensorBoardLogger(int runId) {
-    return TensorBoardLogger(std::string("logs/run_") + std::to_string(runId) +
-                             std::string("/tfevents"));
-}
+#define getTensorBoardLogger(runId)                                                                \
+    TensorBoardLogger(std::string("logs/run_") + std::to_string(runId) + std::string("/tfevents"))
 
 void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int numGPUs) {
     assert(runId >= 0);
@@ -60,7 +58,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
                         &logger);
     }
 
-    SelfPlayWriter writer(TRAINING_ARGS, logger);
+    SelfPlayWriter writer(TRAINING_ARGS, &logger);
     writer.updateIteration(currentIteration);
 
     log("Number of processors:", numProcessors, "Number of GPUs:", numGPUs);
