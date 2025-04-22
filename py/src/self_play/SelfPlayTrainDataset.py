@@ -147,6 +147,14 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                 state = torch.from_numpy(decode_board_state(dataset.encoded_states[self.sample_index[i]]))
                 policy_target = torch.from_numpy(action_probabilities(dataset.visit_counts[self.sample_index[i]]))
                 value_target = torch.tensor(dataset.value_targets[self.sample_index[i]])
+                print(
+                    'Yielding sample:',
+                    self.sample_index[i],
+                    'from chunk',
+                    i,
+                    dataset.encoded_states[self.sample_index[i]],
+                    dataset.value_targets[self.sample_index[i]],
+                )
                 self.sample_index[i] += 1
 
                 yield state, policy_target, value_target
