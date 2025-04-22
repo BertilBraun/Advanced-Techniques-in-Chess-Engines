@@ -54,7 +54,7 @@ def train_model(
         ),
     )
 
-    log('Training with lr:', trainer.args.learning_rate(iteration))
+    log('Training with lr:', trainer.args.learning_rate(iteration), 'and batch size:', trainer.args.batch_size)
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, test_dataloader, iteration)

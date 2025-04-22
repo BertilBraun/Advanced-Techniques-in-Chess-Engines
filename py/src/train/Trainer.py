@@ -72,6 +72,8 @@ class Trainer:
                 print(
                     'Batch:',
                     batchIdx,
+                    'State shape:',
+                    state.shape,
                     'Unique input states:',
                     unique_input_states_by_batch,
                     'Unique value targets:',
