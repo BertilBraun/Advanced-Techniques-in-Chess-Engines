@@ -192,7 +192,7 @@ elif True:
 
     NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 10)
 
-    network = NetworkParams(num_layers=12, hidden_size=128)
+    network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
         num_epochs=2,
         batch_size=2048,

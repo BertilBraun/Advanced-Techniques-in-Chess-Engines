@@ -86,7 +86,7 @@ class ChessGame(Game[ChessMove]):
     def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
         from src.Encoding import decode_board_state
 
-        colors = (chess.WHITE, chess.BLACK) if board.current_player == 1 else (chess.BLACK, chess.WHITE)
+        colors = (chess.WHITE, chess.BLACK)  # if board.current_player == 1 else (chess.BLACK, chess.WHITE)
         encoded_pieces: list[int] = [
             piece
             for co in colors
@@ -120,8 +120,8 @@ class ChessGame(Game[ChessMove]):
         canonical_board = decode_board_state(
             np.array(encoded_pieces + [encoded_castling_rights, color], dtype=np.uint64)
         )
-        if board.current_player == -1:
-            canonical_board = np.flip(canonical_board, axis=1)
+        # if board.current_player == -1:
+        #     canonical_board = np.flip(canonical_board, axis=1)
         return canonical_board
 
     def decode_canonical_board(self, canonical_board: np.ndarray) -> ChessBoard:
@@ -158,7 +158,7 @@ class ChessGame(Game[ChessMove]):
             # Vertical flip
             # 1234 -> becomes -> 4321
             # 5678               8765
-            (np.flip(board, axis=2), self._flip_action_probs(visit_counts)),
+            # (np.flip(board, axis=2), self._flip_action_probs(visit_counts)),
         ]
 
     def _flip_action_probs(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
