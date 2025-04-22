@@ -1,6 +1,27 @@
 cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
+# --- Export compile commands for Clang-Tidy ---
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# --- Optional: Enable clang-tidy integration ---
+option(ENABLE_CLANG_TIDY "Enable clang-tidy" ON)
+if(ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+        set(CMAKE_CXX_CLANG_TIDY
+            ${CLANG_TIDY_EXE}
+            -checks=readability-identifier-naming
+            -fix
+            -format-style=file
+            -warnings-as-errors=*
+        )
+    else()
+        message(WARNING "clang-tidy not found!")
+    endif()
+endif()
+
 # Set default build type if not specified
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -135,6 +156,7 @@ set_target_properties(AlphaZeroCpp PROPERTIES
     INSTALL_RPATH "$ORIGIN"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
+
 # Optional: Post-build step to copy the module
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
