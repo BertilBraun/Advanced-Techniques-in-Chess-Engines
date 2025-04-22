@@ -64,7 +64,7 @@ class Trainer:
             value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
             # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
 
-            if False and batchIdx % 50 == 49:
+            if True and batchIdx % 50 == 1:
                 for value, target in zip(out_value, value_targets[:10]):
                     print('Value:', value.item(), 'Target:', target.item())
 
@@ -109,7 +109,7 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.1)
             # TODO magic hyperparameter and sensible like this?
 
             self.optimizer.step()
