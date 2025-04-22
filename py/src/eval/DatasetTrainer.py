@@ -75,7 +75,9 @@ def main(dataset_paths: list[str]):
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
         tmp_dataset = SelfPlayTrainDataset(run_id)
-        tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
+        tmp_dataset.load_from_files(
+            save_folder, [(i, [Path(p)]) for i, p in enumerate(dataset_paths)], max_num_repetitions=1
+        )
         train_stats = tmp_dataset.stats
 
         # Instantiate the model
