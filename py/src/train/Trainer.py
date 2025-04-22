@@ -65,9 +65,9 @@ class Trainer:
             # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
 
             if True and batchIdx % 50 == 1 or True:
-                count_unique_values_in_value_targets = torch.unique(value_targets).numel()
-                count_unique_values_in_out_value = torch.unique(out_value).numel()
-                unique_input_states = torch.unique(state, dim=0).numel()
+                count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
+                count_unique_values_in_out_value = torch.unique(out_value.to(torch.float32)).numel()
+                unique_input_states = torch.unique(state.to(torch.float32), dim=0).numel()
                 print(
                     'Batch:',
                     batchIdx,
