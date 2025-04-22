@@ -67,19 +67,29 @@ class Trainer:
             if True and batchIdx % 50 == 1 or True:
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
                 count_unique_values_in_out_value = torch.unique(out_value.to(torch.float32)).numel()
-                unique_input_states = torch.unique(state.to(torch.float32), dim=0).numel()
+                unique_input_states_by_batch = torch.unique(state.to(torch.float32), dim=0).numel()
+
                 print(
                     'Batch:',
                     batchIdx,
                     'Unique input states:',
-                    unique_input_states,
+                    unique_input_states_by_batch,
                     'Unique value targets:',
                     count_unique_values_in_value_targets,
                     'Unique out value:',
                     count_unique_values_in_out_value,
                 )
-                for value, target in zip(out_value, value_targets[:5]):
-                    print('Value:', value.item(), 'Target:', target.item())
+                ones, zeros, neg_ones = False, False, False
+                for value, target in zip(out_value, value_targets):
+                    if target.item() == 1 and not ones:
+                        ones = True
+                        print('Value:', value.item(), 'Target:', target.item())
+                    elif target.item() == 0 and not zeros:
+                        zeros = True
+                        print('Value:', value.item(), 'Target:', target.item())
+                    elif target.item() == -1 and not neg_ones:
+                        neg_ones = True
+                        print('Value:', value.item(), 'Target:', target.item())
 
                 for policy, target in zip(out_policy, policy_targets):
                     break
@@ -122,7 +132,8 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.1)
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.1)
+            print('Gradient norm:', norm.item())
             # TODO magic hyperparameter and sensible like this?
 
             self.optimizer.step()
