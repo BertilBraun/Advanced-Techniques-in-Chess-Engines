@@ -79,17 +79,14 @@ class Trainer:
                     'Unique out value:',
                     count_unique_values_in_out_value,
                 )
-                ones, zeros, neg_ones = 0, 0, 0
+                seen = set()
                 for value, target in zip(out_value, value_targets):
-                    if target.item() == 1 and ones < 3:
-                        ones += 1
-                        print('Value:', value.item(), 'Target:', target.item())
-                    elif target.item() == 0 and zeros < 3:
-                        zeros += 1
-                        print('Value:', value.item(), 'Target:', target.item())
-                    elif target.item() == -1 and neg_ones < 3:
-                        neg_ones += 1
-                        print('Value:', value.item(), 'Target:', target.item())
+                    value = value.item()
+                    target = target.item()
+                    if (value, target) in seen:
+                        continue
+                    seen.add((value, target))
+                    print('Value:', value, 'Target:', target)
 
                 for policy, target in zip(out_policy, policy_targets):
                     break
