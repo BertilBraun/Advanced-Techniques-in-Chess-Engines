@@ -1,9 +1,8 @@
 #include "InferenceClient.hpp"
 #include "util/ShardedCache.hpp"
 
-auto TORCH_DTYPE = torch::kFloat32;
-
-InferenceClient::InferenceClient() : m_device(torch::kCPU), m_shutdown(false), m_maxBatchSize(1) {
+InferenceClient::InferenceClient()
+    : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false), m_maxBatchSize(1) {
     // Initialize the model and other members.
     m_totalHits = 0;
     m_totalEvals = 0;
@@ -11,7 +10,6 @@ InferenceClient::InferenceClient() : m_device(torch::kCPU), m_shutdown(false), m
 
 void InferenceClient::init(const int device_id, const std::string &currentModelPath,
                            const int maxBatchSize, TensorBoardLogger *logger) {
-    m_device = torch::Device(torch::kCPU);
     m_logger = logger;
     m_totalHits = 0;
     m_totalEvals = 0;
@@ -21,7 +19,7 @@ void InferenceClient::init(const int device_id, const std::string &currentModelP
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
         m_device = torch::Device(torch::kCUDA, device_id);
-        TORCH_DTYPE = torch::kFloat16; // Use half precision for inference.
+        m_torchDtype = torch::kFloat16; // Use half precision for inference.
     }
     loadModel(currentModelPath);
 
@@ -29,7 +27,7 @@ void InferenceClient::init(const int device_id, const std::string &currentModelP
     m_inferenceThread = std::thread(&InferenceClient::inferenceWorker, this);
 }
 
-std::vector<InferenceResult> InferenceClient::inference_batch(std::vector<Board> &boards) {
+std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> &boards) {
     if (boards.empty()) {
         return std::vector<InferenceResult>();
     }
@@ -119,7 +117,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
     m_model = torch::jit::load(modelPath, m_device);
-    m_model.to(TORCH_DTYPE); // Use half precision for inference.
+    m_model.to(m_torchDtype); // Use half precision for inference.
     m_model.eval();
 }
 
@@ -130,15 +128,15 @@ void InferenceClient::logCacheStatistics(int iteration) {
     }
 
     const double cacheHitRate = (static_cast<double>(m_totalHits) / m_totalEvals) * 100.0;
-    m_logger->add_scalar("cache/hit_rate", iteration, cacheHitRate);
-    m_logger->add_scalar("cache/unique_positions", iteration,
-                         static_cast<double>(m_cache[iteration].size()));
+    m_logger->addScalar("cache/hit_rate", iteration, cacheHitRate);
+    m_logger->addScalar("cache/unique_positions", iteration,
+                        static_cast<double>(m_cache[iteration].size()));
     std::vector<float> nnOutputValues;
     nnOutputValues.reserve(m_cache[iteration].size());
     for (const auto &entry : m_cache[iteration]) {
         nnOutputValues.push_back(entry.second.second);
     }
-    m_logger->add_histogram("nn_output_value_distribution", iteration, nnOutputValues);
+    m_logger->addHistogram("nn_output_value_distribution", iteration, nnOutputValues);
 
     size_t sizeInBytes = 0;
     for (const auto &entry : m_cache[iteration]) {
@@ -146,7 +144,7 @@ void InferenceClient::logCacheStatistics(int iteration) {
         sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
     }
     const double sizeInMB = static_cast<double>(sizeInBytes) / (1024 * 1024);
-    m_logger->add_scalar("cache/size_mb", iteration, sizeInMB);
+    m_logger->addScalar("cache/size_mb", iteration, sizeInMB);
 
     log("Inference Client stats on iteration:", iteration);
     log("  cache_hit_rate:", cacheHitRate);
@@ -193,13 +191,13 @@ void InferenceClient::inferenceWorker() {
 std::vector<std::pair<torch::Tensor, float>>
 InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     TimeItGuard timer("InferenceClient::modelInference");
-    torch::NoGradGuard no_grad;
+    torch::NoGradGuard noGrad;
     std::unique_lock<std::mutex> lock(m_modelMutex);
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).
     const torch::Tensor inputTensor =
-        torch::stack(boards).to(torch::TensorOptions().device(m_device).dtype(TORCH_DTYPE));
+        torch::stack(boards).to(torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(inputTensor);
 
@@ -214,8 +212,8 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     torch::Tensor values = outputTuple->elements()[1].toTensor();
 
     policies = torch::softmax(policies, 1);
-    policies = policies.to(torch::TensorOptions().device(torch::kCPU).dtype(TORCH_DTYPE));
-    values = values.to(torch::TensorOptions().device(torch::kCPU).dtype(TORCH_DTYPE));
+    policies = policies.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
+    values = values.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
 
     std::vector<std::pair<torch::Tensor, float>> results;
     results.reserve(boards.size());

@@ -21,10 +21,10 @@ public:
     std::vector<Move> playedMoves;
 
 private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_startTime;
 
 public:
-    SelfPlayGame() : board(Board()), startTime(std::chrono::high_resolution_clock::now()) {}
+    SelfPlayGame() : board(Board()), m_startTime(std::chrono::high_resolution_clock::now()) {}
 
     SelfPlayGame expand(Move move) const {
         SelfPlayGame newGame = this->copy();
@@ -35,7 +35,7 @@ public:
 
     float generationTime() const {
         auto now = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - m_startTime);
         return duration.count();
     }
 
@@ -45,7 +45,7 @@ private:
         newGame.board = board.copy();
         newGame.memory = memory;
         newGame.playedMoves = playedMoves;
-        newGame.startTime = startTime;
+        newGame.m_startTime = m_startTime;
         return newGame;
     }
 };

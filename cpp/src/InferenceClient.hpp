@@ -42,7 +42,7 @@ public:
      * Synchronous interface: runs inference on a batch of boards and returns results
      * in the same order as the input.
      */
-    std::vector<InferenceResult> inference_batch(std::vector<Board> &boards);
+    std::vector<InferenceResult> inferenceBatch(std::vector<Board> &boards);
 
     /**
      * Reloads the model from the latest file in the save path.
@@ -93,6 +93,7 @@ private:
     // Member variables.
     torch::jit::script::Module m_model;
     torch::Device m_device;
+    torch::Dtype m_torchDtype;
     TensorBoardLogger *m_logger;
 
     // Cache: iteration -> board hash -> InferenceResult.

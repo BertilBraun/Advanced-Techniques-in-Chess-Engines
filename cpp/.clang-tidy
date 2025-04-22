@@ -2,11 +2,17 @@ Checks: >
   readability-identifier-naming
 
 CheckOptions:
+  # Class / Struct / Enum naming
   - { key: readability-identifier-naming.ClassCase, value: CamelCase }
-  - { key: readability-identifier-naming.FunctionCase, value: camelBack }
-  - { key: readability-identifier-naming.PrivateMemberPrefix, value: m_ }
-  - { key: readability-identifier-naming.PrivateMemberCase, value: camelBack }
-  - { key: readability-identifier-naming.VariableCase, value: camelBack }
   - { key: readability-identifier-naming.StructCase, value: CamelCase }
-  - { key: readability-identifier-naming.NamespaceCase, value: lower_case }
   - { key: readability-identifier-naming.EnumCase, value: CamelCase }
+
+  # Functions and variables
+  - { key: readability-identifier-naming.FunctionCase, value: camelBack }
+  - { key: readability-identifier-naming.VariableCase, value: camelBack }
+  - { key: readability-identifier-naming.PrivateMemberCase, value: camelBack }
+  - { key: readability-identifier-naming.PrivateMemberPrefix, value: m_ }
+
+  # Constants (global static consts)
+  - { key: readability-identifier-naming.GlobalConstantCase, value: UPPER_CASE }
+  - { key: readability-identifier-naming.GlobalConstantSuffix, value: "" }

@@ -13,7 +13,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     assert(std::filesystem::exists(std::filesystem::path(savePath)));
     assert(std::filesystem::is_directory(std::filesystem::path(savePath)));
 
-    const TrainingArgs TRAINING_ARGS = {
+    const TrainingArgs trainingArgs = {
         .save_path = savePath,
         .self_play =
             {
@@ -45,17 +45,16 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 
     TensorBoardLogger logger = getTensorBoardLogger(runId);
 
-    auto [currentModelPath, currentIteration] =
-        get_latest_iteration_save_path(TRAINING_ARGS.save_path);
+    auto [currentModelPath, currentIteration] = getLatestIterationSavePath(trainingArgs.save_path);
 
-    size_t numClients = numGPUs * TRAINING_ARGS.inference.numInferenceClientsPerGPU;
+    size_t numClients = numGPUs * trainingArgs.inference.numInferenceClientsPerGPU;
     std::vector<InferenceClient> clients(numClients);
     for (int i : range(numClients)) { // start 2 InferenceClients per GPU
-        clients[i].init(i % numGPUs, currentModelPath, TRAINING_ARGS.inference.maxBatchSize,
+        clients[i].init(i % numGPUs, currentModelPath, trainingArgs.inference.maxBatchSize,
                         &logger);
     }
 
-    SelfPlayWriter writer(TRAINING_ARGS, &logger);
+    SelfPlayWriter writer(trainingArgs, &logger);
     writer.updateIteration(currentIteration);
 
     log("Number of processors:", numProcessors, "Number of GPUs:", numGPUs);
@@ -65,8 +64,8 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
     std::vector<std::thread> threads;
     for (int i : range(numProcessors)) {
         threads.emplace_back(
-            std::thread([i, &clients, &writer, &logger, &TRAINING_ARGS, numProcessors] {
-                SelfPlay selfPlay(&clients[i % clients.size()], &writer, TRAINING_ARGS.self_play,
+            std::thread([i, &clients, &writer, &logger, &trainingArgs, numProcessors] {
+                SelfPlay selfPlay(&clients[i % clients.size()], &writer, trainingArgs.self_play,
                                   &logger);
                 log("Worker process", i + 1, "of", numProcessors, "started");
 
@@ -78,7 +77,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 
     while (true) {
         const auto [latestModelPath, latestIteration] =
-            get_latest_iteration_save_path(TRAINING_ARGS.save_path);
+            getLatestIterationSavePath(trainingArgs.save_path);
 
         if (latestModelPath == currentModelPath) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -92,7 +91,7 @@ void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int
 
         writer.updateIteration(latestIteration);
 
-        reset_times(&logger, currentIteration);
+        resetTimes(&logger, currentIteration);
 
         currentModelPath = latestModelPath;
         currentIteration = latestIteration;
@@ -106,7 +105,7 @@ std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
                                                   const std::vector<std::string> &fens) {
     assert(!fens.empty());
 
-    const MCTSParams EVALUATION_MCTS_PARAMS = {
+    const MCTSParams evaluationMctsParams = {
         .num_searches_per_turn =
             64, // Reduced number of searches to speed up the evaluation process
         .num_parallel_searches = 8,
@@ -116,11 +115,11 @@ std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
     };
 
     const int numBoards = fens.size();
-    const int maxBatchSize = numBoards * EVALUATION_MCTS_PARAMS.num_parallel_searches;
+    const int maxBatchSize = numBoards * evaluationMctsParams.num_parallel_searches;
 
     InferenceClient inferenceClient;
     inferenceClient.init(0, modelPath, maxBatchSize, nullptr);
-    const MCTS mcts(&inferenceClient, EVALUATION_MCTS_PARAMS, nullptr);
+    const MCTS mcts(&inferenceClient, evaluationMctsParams, nullptr);
 
     std::vector<Board> boards;
     boards.reserve(numBoards);
@@ -152,7 +151,7 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
     log("Network only:", networkOnly);
     log("Max time:", maxTime);
 
-    const MCTSParams EVALUATION_MCTS_PARAMS = {
+    const MCTSParams evaluationMctsParams = {
         .num_searches_per_turn =
             2 << 30, // Set to a very high number to ensure we search until maxTime is reached
         .num_parallel_searches = 8,
@@ -164,7 +163,7 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
     const int maxBatchSize = 1; // * EVALUATION_MCTS_PARAMS.num_parallel_searches;
     InferenceClient inferenceClient;
     inferenceClient.init(0, modelPath, maxBatchSize, nullptr);
-    const MCTS mcts(&inferenceClient, EVALUATION_MCTS_PARAMS, nullptr);
+    const MCTS mcts(&inferenceClient, evaluationMctsParams, nullptr);
 
     Board board = Board::fromFEN(fen);
     if (!board.isValid()) {
@@ -177,7 +176,7 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
 
     if (networkOnly) {
         // Run the network inference only
-        const auto [moves, value] = inferenceClient.inference_batch(boards)[0];
+        const auto [moves, value] = inferenceClient.inferenceBatch(boards)[0];
         log("Network inference completed");
         int bestMoveIndex = -1;
         float bestMoveScore = -1.0f;
@@ -204,10 +203,9 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
     std::vector<MCTSNode> roots;
     roots.push_back(MCTSNode::root(board));
 
-    while (!isTimeUp() &&
-           roots[0].number_of_visits < EVALUATION_MCTS_PARAMS.num_searches_per_turn) {
+    while (!isTimeUp() && roots[0].number_of_visits < evaluationMctsParams.num_searches_per_turn) {
         // Run MCTS search
-        mcts.parallel_iterate(roots);
+        mcts.parallelIterate(roots);
     }
 
     // Get the best move from the MCTS results

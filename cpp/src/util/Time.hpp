@@ -16,8 +16,8 @@ public:
     float elapsed() const;
 
 private:
-    std::string func_name;
-    std::chrono::high_resolution_clock::time_point start;
+    std::string m_funcName;
+    std::chrono::high_resolution_clock::time_point m_start;
 };
 
-void reset_times(TensorBoardLogger *logger, int iteration);
+void resetTimes(TensorBoardLogger *logger, int iteration);

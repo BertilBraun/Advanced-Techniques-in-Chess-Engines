@@ -4,12 +4,12 @@
 
 #include "MoveEncoding.cpp"
 
-void _testMoveMappingCount() {
-    auto [moveMappings, index] = __precalculateMoveMappings();
+void testMoveMappingCount() {
+    auto [moveMappings, index] = precalculateMoveMappings();
     assert(index == ACTION_SIZE);
 }
 
-void _fuzzTestMoveEncodingAndDecoding() {
+void fuzzTestMoveEncodingAndDecoding() {
     for (auto i : range(100)) {
         tqdm(i, 100, "Fuzz testing move encoding and decoding");
         Board board;

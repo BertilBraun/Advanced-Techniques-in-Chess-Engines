@@ -19,56 +19,56 @@
 
 class TensorBoardLogger {
 public:
-    TensorBoardLogger(const std::string &log_dir) : log_dir(log_dir), stop_thread(false) {
+    TensorBoardLogger(const std::string &log_dir) : m_logDir(log_dir), m_stopThread(false) {
         // Start periodic flush thread.
-        flush_thread = std::thread(&TensorBoardLogger::periodic_flush, this);
+        m_flushThread = std::thread(&TensorBoardLogger::periodicFlush, this);
     }
 
     ~TensorBoardLogger() {
         std::cout << "Stopping TensorBoard logger..." << std::endl;
         {
-            std::lock_guard<std::mutex> lock(mu);
-            stop_thread = true;
+            std::lock_guard<std::mutex> lock(m_mu);
+            m_stopThread = true;
         }
-        if (flush_thread.joinable()) {
-            flush_thread.join();
+        if (m_flushThread.joinable()) {
+            m_flushThread.join();
         }
         flush();
     }
 
-    template <typename T> void add_scalar(const std::string &tag, int step, T value) {
+    template <typename T> void addScalar(const std::string &tag, int step, T value) {
         nlohmann::json j;
         j["type"] = "scalar";
         j["tag"] = tag;
         j["step"] = step;
         j["value"] = value;
-        push_event(j);
+        pushEvent(j);
     }
 
     template <typename T>
-    void add_histogram(const std::string &tag, int step, const std::vector<T> &values) {
+    void addHistogram(const std::string &tag, int step, const std::vector<T> &values) {
         nlohmann::json j;
         j["type"] = "histogram";
         j["tag"] = tag;
         j["step"] = step;
         j["values"] = values;
-        push_event(j);
+        pushEvent(j);
     }
 
-    void add_text(const std::string &tag, int step, const std::string &text) {
+    void addText(const std::string &tag, int step, const std::string &text) {
         nlohmann::json j;
         j["type"] = "text";
         j["tag"] = tag;
         j["step"] = step;
         j["text"] = text;
-        push_event(j);
+        pushEvent(j);
     }
 
 private:
-    void push_event(const nlohmann::json &event) {
-        std::lock_guard<std::mutex> lock(mu);
-        events.push_back(event);
-        if (events.size() >= 100) {
+    void pushEvent(const nlohmann::json &event) {
+        std::lock_guard<std::mutex> lock(m_mu);
+        m_events.push_back(event);
+        if (m_events.size() >= 100) {
             std::cout << "WARNING: TensorBoard logger buffer is full. Flushing to disk manually."
                       << std::endl;
             flush();
@@ -76,20 +76,20 @@ private:
     }
 
     void flush() {
-        std::lock_guard<std::mutex> lock(mu);
-        if (events.empty())
+        std::lock_guard<std::mutex> lock(m_mu);
+        if (m_events.empty())
             return;
 
         // Create JSON array from events.
-        nlohmann::json j = events;
+        nlohmann::json j = m_events;
 
         // Generate a new file path.
-        std::string file_path = getNewFilePath();
-        std::ofstream ofs(file_path);
+        std::string filePath = getNewFilePath();
+        std::ofstream ofs(filePath);
         if (ofs) {
             ofs << j.dump(4);
             // Clear events after flushing.
-            events.clear();
+            m_events.clear();
         }
     }
 
@@ -98,22 +98,22 @@ private:
         auto time = std::chrono::system_clock::to_time_t(now);
         std::tm tm = *std::localtime(&time);
         std::ostringstream oss;
-        oss << log_dir << "/events_" << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".json";
+        oss << m_logDir << "/events_" << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".json";
         return oss.str();
     }
 
-    void periodic_flush() {
+    void periodicFlush() {
         while (true) {
-            if (stop_thread)
+            if (m_stopThread)
                 break;
             flush();
             std::this_thread::sleep_for(std::chrono::minutes(1));
         }
     }
 
-    std::string log_dir;
-    std::mutex mu;
-    std::vector<nlohmann::json> events;
-    std::thread flush_thread;
-    bool stop_thread;
+    std::string m_logDir;
+    std::mutex m_mu;
+    std::vector<nlohmann::json> m_events;
+    std::thread m_flushThread;
+    bool m_stopThread;
 };

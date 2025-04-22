@@ -5,7 +5,7 @@ const std::string BOARD_FILE_POSTFIX = "_boards.csv";
 const std::string MOVE_FILE_POSTFIX = "_moves.csv";
 const std::string STATS_FILE_POSTFIX = "_stats.json";
 
-CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
+CompressedEncodedBoard flipBoardVertical(const CompressedEncodedBoard &board) {
     EncodedBoard flippedBoard;
     EncodedBoard decompressedBoard = decompress(board);
 
@@ -21,7 +21,7 @@ CompressedEncodedBoard _flipBoardVertical(const CompressedEncodedBoard &board) {
     return compress(flippedBoard);
 }
 
-VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
+VisitCounts flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
     if (visitCounts.empty()) {
         return {};
     }
@@ -42,7 +42,7 @@ VisitCounts _flipActionProbabilitiesVertical(const VisitCounts &visitCounts) {
 }
 
 std::vector<std::pair<CompressedEncodedBoard, VisitCounts>>
-_symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &visitCounts) {
+symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &visitCounts) {
     std::vector<std::pair<CompressedEncodedBoard, VisitCounts>> variations;
 
     variations.emplace_back(board, visitCounts);
@@ -52,7 +52,7 @@ _symmetricVariations(const CompressedEncodedBoard &board, const VisitCounts &vis
     return variations;
 }
 
-VisitCounts _preprocessVisitCounts(const VisitCounts &visitCounts) {
+VisitCounts preprocessVisitCounts(const VisitCounts &visitCounts) {
     if (visitCounts.empty()) {
         return {};
     }
@@ -90,7 +90,7 @@ void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resigna
         m_stats.num_too_long_games += 1;
 
     if (rand() % 100 == 0)
-        _logGame(game, outcome);
+        logGame(game, outcome);
 
     // Process moves in reverse order.
     for (auto mem : reverse(game.memory)) {
@@ -101,17 +101,16 @@ void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resigna
             clamp(turnGameOutcome + m_args.self_play.result_score_weight * mem.result, -1.0f, 1.0f);
 
         // Process symmetric variations.
-        auto variations =
-            _symmetricVariations(encodedBoard, _preprocessVisitCounts(mem.visitCounts));
+        auto variations = symmetricVariations(encodedBoard, preprocessVisitCounts(mem.visitCounts));
         for (const auto &[board, visitCounts] : variations) {
-            _addSample(board, visitCounts, resultScore);
+            addSample(board, visitCounts, resultScore);
             m_stats.num_samples += 1;
         }
         outcome *= 0.997f; // discount the game outcome for each move
     }
 
     if (m_samples.size() >= m_args.writer.batchSize) {
-        _flushBatch();
+        flushBatch();
     }
 }
 
@@ -121,22 +120,22 @@ void SelfPlayWriter::updateIteration(int iteration) {
     if (!m_samples.empty()) {
         // Flush any remaining samples to file.
         // This is important to ensure that all samples are written before the next iteration.
-        _flushBatch();
+        flushBatch();
     }
 
     // Log statistics to TensorBoard.
     if (m_stats.num_samples > 0) {
-        m_logger->add_scalar("dataset/num_samples", m_iteration, (float) m_stats.num_samples);
-        m_logger->add_scalar("dataset/num_games", m_iteration, (float) m_stats.num_games);
-        m_logger->add_scalar("dataset/average_game_lengths", m_iteration,
-                             (float) m_stats.game_lengths / m_stats.num_games);
-        m_logger->add_scalar("dataset/average_generation_time", m_iteration,
-                             m_stats.total_generation_time / m_stats.num_games);
-        m_logger->add_scalar("dataset/resignations", m_iteration, (float) m_stats.resignations);
-        m_logger->add_scalar("dataset/num_too_long_games", m_iteration,
-                             (float) m_stats.num_too_long_games);
-        m_logger->add_scalar("dataset/num_samples_per_game", m_iteration,
-                             (float) m_stats.num_samples / m_stats.num_games);
+        m_logger->addScalar("dataset/num_samples", m_iteration, (float) m_stats.num_samples);
+        m_logger->addScalar("dataset/num_games", m_iteration, (float) m_stats.num_games);
+        m_logger->addScalar("dataset/average_game_lengths", m_iteration,
+                            (float) m_stats.game_lengths / m_stats.num_games);
+        m_logger->addScalar("dataset/average_generation_time", m_iteration,
+                            m_stats.total_generation_time / m_stats.num_games);
+        m_logger->addScalar("dataset/resignations", m_iteration, (float) m_stats.resignations);
+        m_logger->addScalar("dataset/num_too_long_games", m_iteration,
+                            (float) m_stats.num_too_long_games);
+        m_logger->addScalar("dataset/num_samples_per_game", m_iteration,
+                            (float) m_stats.num_samples / m_stats.num_games);
 
         log("Iteration", m_iteration, ":");
         log("  num_samples:", m_stats.num_samples);
@@ -157,8 +156,8 @@ void SelfPlayWriter::updateIteration(int iteration) {
     m_stats = Stats();
 }
 
-void SelfPlayWriter::_addSample(const CompressedEncodedBoard &board, const VisitCounts &visitCounts,
-                                float resultScore) {
+void SelfPlayWriter::addSample(const CompressedEncodedBoard &board, const VisitCounts &visitCounts,
+                               float resultScore) {
     Sample sample;
     sample.board = board;
     sample.visitCounts = visitCounts;
@@ -166,7 +165,7 @@ void SelfPlayWriter::_addSample(const CompressedEncodedBoard &board, const Visit
     m_samples.push_back(std::move(sample));
 }
 
-std::string SelfPlayWriter::_getSaveFilename() {
+std::string SelfPlayWriter::getSaveFilename() {
     assert(m_iteration != -1);
     const std::string saveFolder = m_args.save_path + "/iteration_" + std::to_string(m_iteration);
 
@@ -190,8 +189,8 @@ std::string SelfPlayWriter::_getSaveFilename() {
     return filename.substr(0, filename.size() - STATS_FILE_POSTFIX.size());
 }
 
-void SelfPlayWriter::_flushBatch() {
-    std::string baseFilename = _getSaveFilename();
+void SelfPlayWriter::flushBatch() {
+    std::string baseFilename = getSaveFilename();
 
     // === Write Stats JSON to {baseFilename}_stats.json ===
     {
@@ -262,7 +261,7 @@ void SelfPlayWriter::_flushBatch() {
     m_stats = Stats();
 }
 
-void SelfPlayWriter::_logGame(const SelfPlayGame &game, float result) {
+void SelfPlayWriter::logGame(const SelfPlayGame &game, float result) {
     auto step = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     // Log the game moves and result.
     std::string moves;
@@ -270,6 +269,6 @@ void SelfPlayWriter::_logGame(const SelfPlayGame &game, float result) {
         moves += std::to_string(encodeMove(move)) + ",";
     }
     moves.pop_back(); // Remove the trailing comma
-    m_logger->add_text("moves/" + std::to_string(m_iteration), step,
-                       (std::to_string(result) + ':' + moves).c_str());
+    m_logger->addText("moves/" + std::to_string(m_iteration), step,
+                      (std::to_string(result) + ':' + moves).c_str());
 }

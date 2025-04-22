@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-thread_local std::mt19937 _random_engine(std::random_device{}());
+thread_local std::mt19937 randomEngine(std::random_device{}());
 
 std::vector<float> dirichlet(float alpha, size_t n) {
     // Sample from a Dirichlet distribution with parameter alpha.
@@ -9,7 +9,7 @@ std::vector<float> dirichlet(float alpha, size_t n) {
     std::vector<float> noise(n);
     float sum = 0.0f;
     for (size_t i = 0; i < n; i++) {
-        noise[i] = gamma(_random_engine);
+        noise[i] = gamma(randomEngine);
         sum += noise[i];
     }
 
@@ -21,7 +21,7 @@ std::vector<float> dirichlet(float alpha, size_t n) {
     return noise;
 }
 
-std::pair<std::string, int> get_latest_iteration_save_path(const std::string &savePath) {
+std::pair<std::string, int> getLatestIterationSavePath(const std::string &savePath) {
     // Models are saved in the savePath folder numbered starting from 1 up to the latest iteration.
     // For example: "{savePath}/model_1.pt", "{savePath}/model_2.pt", etc.
     // The function returns the latest model file path and its iteration number.
@@ -34,6 +34,6 @@ std::pair<std::string, int> get_latest_iteration_save_path(const std::string &sa
     }
     throw std::runtime_error("No model found in the save path.");
 }
-size_t current_time_step() {
+size_t currentTimeStep() {
     return std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }

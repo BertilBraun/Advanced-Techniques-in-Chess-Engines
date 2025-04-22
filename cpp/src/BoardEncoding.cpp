@@ -153,7 +153,7 @@ chess::Board decodeBoard(const EncodedBoard &encodedBoard) {
     return board;
 }
 
-static std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
+static const std::array<float, PieceType::NUM_PIECE_TYPES> PIECE_VALUES = {
     0.0f, // None
     1.0f, // Pawn
     3.0f, // Knight
@@ -163,10 +163,10 @@ static std::array<float, PieceType::NUM_PIECE_TYPES> __PIECE_VALUES = {
     0.0f  // King
 };
 
-float __MAX_MATERIAL_SCORE =
-    __PIECE_VALUES[PieceType::QUEEN] + 2 * __PIECE_VALUES[PieceType::ROOK] +
-    2 * __PIECE_VALUES[PieceType::BISHOP] + 2 * __PIECE_VALUES[PieceType::KNIGHT] +
-    8 * __PIECE_VALUES[PieceType::PAWN];
+const float MAX_MATERIAL_SCORE =
+    PIECE_VALUES[PieceType::QUEEN] + 2 * PIECE_VALUES[PieceType::ROOK] +
+    2 * PIECE_VALUES[PieceType::BISHOP] + 2 * PIECE_VALUES[PieceType::KNIGHT] +
+    8 * PIECE_VALUES[PieceType::PAWN];
 
 float getMaterialScore(const Board &board) {
     // Returns the material score for the given board. The score is positive if the white player
@@ -177,11 +177,11 @@ float getMaterialScore(const Board &board) {
     for (PieceType pieceType : PIECE_TYPES) {
         int whitePieceCount = board.pieces(pieceType, WHITE).size();
         int blackPieceCount = board.pieces(pieceType, BLACK).size();
-        int pieceValue = __PIECE_VALUES[pieceType];
+        int pieceValue = PIECE_VALUES[pieceType];
         materialScore += (whitePieceCount - blackPieceCount) * pieceValue;
     }
 
-    return materialScore / __MAX_MATERIAL_SCORE;
+    return materialScore / MAX_MATERIAL_SCORE;
 }
 std::optional<float> getBoardResultScore(Board &board) {
     // Returns the result score for the given board.

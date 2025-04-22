@@ -27,7 +27,7 @@ template <typename T> std::string toString(const T &value) {
 }
 
 namespace chess {
-    class Move;
+class Move;
 }
 
 std::string toString(const chess::Move &move);
@@ -64,21 +64,21 @@ template <typename K, typename V> std::string toString(const std::map<K, V> &map
 constexpr bool TO_FILE = true;
 constexpr bool TO_STDERR = true;
 
-static inline std::map<std::thread::id, std::string> __THREAD_IDS;
+static inline std::map<std::thread::id, std::string> threadIds;
 
 template <bool AddNewline, typename... Args> void logCommon(Args... args) {
     // Common log function that writes to file and/or stderr
 
     std::thread::id threadId = std::this_thread::get_id();
-    if (__THREAD_IDS.find(threadId) == __THREAD_IDS.end()) {
+    if (threadIds.find(threadId) == threadIds.end()) {
         // Start IDs from 1 for readability
-        __THREAD_IDS[threadId] = toString(__THREAD_IDS.size() + 1);
-        if (__THREAD_IDS[threadId].size() == 1)
-            __THREAD_IDS[threadId] = "0" + __THREAD_IDS[threadId];
+        threadIds[threadId] = toString(threadIds.size() + 1);
+        if (threadIds[threadId].size() == 1)
+            threadIds[threadId] = "0" + threadIds[threadId];
     }
 
     std::ostringstream logStream;
-    logStream << '[' << currentTime() << "] [" << __THREAD_IDS[threadId] << "] ";
+    logStream << '[' << currentTime() << "] [" << threadIds[threadId] << "] ";
 
     auto appendToLog = [&logStream](const auto &arg) {
         std::string argStr = toString(arg);
@@ -100,7 +100,7 @@ template <bool AddNewline, typename... Args> void logCommon(Args... args) {
         logString.pop_back(); // Remove trailing space
 
     if constexpr (TO_FILE) {
-        std::string logPath = "log_" + toString(__THREAD_IDS[threadId]) + ".txt";
+        std::string logPath = "log_" + toString(threadIds[threadId]) + ".txt";
         std::ofstream logFile(logPath, std::ios::app);
         logFile << logString;
         logFile.flush();
@@ -122,7 +122,7 @@ template <typename... Args> void logNoNewline(Args... args) { logCommon<false>(a
 //     tqdm(i, 100, "Processing");
 //     ...
 // }
-inline bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50);
+bool tqdm(size_t current, size_t total, std::string desc = "", int width = 50);
 
 class PrettyTable {
     // Helper class to print a table with a header and rows

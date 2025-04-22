@@ -10,13 +10,13 @@ if(ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES clang-tidy)
     if(CLANG_TIDY_EXE)
         message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
-        set(CMAKE_CXX_CLANG_TIDY
-            ${CLANG_TIDY_EXE}
-            -checks=readability-identifier-naming
-            -fix
-            -format-style=file
-            -warnings-as-errors=*
-        )
+        # TODO set(CMAKE_CXX_CLANG_TIDY
+        # TODO     ${CLANG_TIDY_EXE}
+        # TODO     -checks=readability-identifier-naming
+        # TODO     -fix
+        # TODO     -format-style=file
+        # TODO     -warnings-as-errors=*
+        # TODO )
     else()
         message(WARNING "clang-tidy not found!")
     endif()

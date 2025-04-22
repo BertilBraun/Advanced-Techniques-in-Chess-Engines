@@ -6,7 +6,7 @@ template <typename KeyType, typename ValueType, size_t NumBuckets = 16> class Sh
 public:
     ShardedCache() {
         // Initialize buckets.
-        for (auto &bucket : buckets) {
+        for (auto &bucket : m_buckets) {
             bucket.map.reserve(1024); // Preallocate space for 1024 elements.
         }
     }
@@ -37,7 +37,7 @@ public:
     }
 
     void clear() {
-        for (auto &bucket : buckets) {
+        for (auto &bucket : m_buckets) {
             std::lock_guard lock(bucket.mutex); // Exclusive lock for writing.
             bucket.map.clear();
         }
@@ -45,7 +45,7 @@ public:
 
     size_t size() const {
         size_t totalSize = 0;
-        for (const auto &bucket : buckets) {
+        for (const auto &bucket : m_buckets) {
             std::shared_lock lock(bucket.mutex); // Allow concurrent reads.
             totalSize += bucket.map.size();
         }
@@ -54,7 +54,7 @@ public:
 
     // Check if the cache is empty.
     bool empty() const {
-        for (const auto &bucket : buckets) {
+        for (const auto &bucket : m_buckets) {
             std::shared_lock lock(bucket.mutex); // Allow concurrent reads.
             if (!bucket.map.empty()) {
                 return false;
@@ -69,12 +69,12 @@ public:
     // Iterator that locks all buckets during iteration
     class LockedIterator {
     private:
-        ShardedCache &cache;
-        std::vector<std::shared_lock<std::shared_mutex>> locks;
+        ShardedCache &m_cache;
+        std::vector<std::shared_lock<std::shared_mutex>> m_locks;
         using MapIterator = typename std::unordered_map<KeyType, ValueType>::iterator;
-        size_t currentBucket = 0;
-        MapIterator currentIt;
-        MapIterator currentEnd;
+        size_t m_currentBucket = 0;
+        MapIterator m_currentIt;
+        MapIterator m_currentEnd;
 
     public:
         using value_type = std::pair<const KeyType, ValueType>;
@@ -83,54 +83,55 @@ public:
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::forward_iterator_tag;
 
-        LockedIterator(ShardedCache &c, bool isEnd = false) : cache(c) {
+        LockedIterator(ShardedCache &c, bool isEnd = false) : m_cache(c) {
             // Lock all buckets
             for (size_t i = 0; i < NumBuckets; ++i) {
-                locks.emplace_back(cache.buckets[i].mutex);
+                m_locks.emplace_back(m_cache.m_buckets[i].mutex);
             }
 
             if (!isEnd) {
                 // Find first non-empty bucket
-                while (currentBucket < NumBuckets && cache.buckets[currentBucket].map.empty()) {
-                    ++currentBucket;
+                while (m_currentBucket < NumBuckets &&
+                       m_cache.m_buckets[m_currentBucket].map.empty()) {
+                    ++m_currentBucket;
                 }
 
-                if (currentBucket < NumBuckets) {
-                    currentIt = cache.buckets[currentBucket].map.begin();
-                    currentEnd = cache.buckets[currentBucket].map.end();
+                if (m_currentBucket < NumBuckets) {
+                    m_currentIt = m_cache.m_buckets[m_currentBucket].map.begin();
+                    m_currentEnd = m_cache.m_buckets[m_currentBucket].map.end();
                 }
             } else {
-                currentBucket = NumBuckets;
+                m_currentBucket = NumBuckets;
             }
         }
 
         // Move to next element, possibly crossing bucket boundaries
         LockedIterator &operator++() {
-            if (currentBucket < NumBuckets) {
-                ++currentIt;
-                if (currentIt == currentEnd) {
+            if (m_currentBucket < NumBuckets) {
+                ++m_currentIt;
+                if (m_currentIt == m_currentEnd) {
                     // Find next non-empty bucket
                     do {
-                        ++currentBucket;
-                    } while (currentBucket < NumBuckets &&
-                             cache.buckets[currentBucket].map.empty());
+                        ++m_currentBucket;
+                    } while (m_currentBucket < NumBuckets &&
+                             m_cache.m_buckets[m_currentBucket].map.empty());
 
-                    if (currentBucket < NumBuckets) {
-                        currentIt = cache.buckets[currentBucket].map.begin();
-                        currentEnd = cache.buckets[currentBucket].map.end();
+                    if (m_currentBucket < NumBuckets) {
+                        m_currentIt = m_cache.m_buckets[m_currentBucket].map.begin();
+                        m_currentEnd = m_cache.m_buckets[m_currentBucket].map.end();
                     }
                 }
             }
             return *this;
         }
 
-        reference operator*() { return *currentIt; }
-        pointer operator->() { return &(*currentIt); }
+        reference operator*() { return *m_currentIt; }
+        pointer operator->() { return &(*m_currentIt); }
 
         bool operator==(const LockedIterator &other) const {
-            if (currentBucket != other.currentBucket)
+            if (m_currentBucket != other.m_currentBucket)
                 return false;
-            return (currentBucket == NumBuckets) || (currentIt == other.currentIt);
+            return (m_currentBucket == NumBuckets) || (m_currentIt == other.m_currentIt);
         }
 
         bool operator!=(const LockedIterator &other) const { return !(*this == other); }
@@ -147,11 +148,11 @@ private:
         mutable std::shared_mutex mutex;
     };
 
-    std::array<Bucket, NumBuckets> buckets;
+    std::array<Bucket, NumBuckets> m_buckets;
 
     Bucket &getBucket(const KeyType &key) {
         // Simple hash to bucket index.
         size_t bucketIndex = std::hash<KeyType>{}(key) % NumBuckets;
-        return buckets[bucketIndex];
+        return m_buckets[bucketIndex];
     }
 };

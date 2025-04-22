@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <tuple>
@@ -12,42 +13,42 @@
 template <typename T = int> class range {
 public:
     // Iterator type for range
-    class iterator {
+    class Iterator {
     public:
         using value_type = T;
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::input_iterator_tag;
 
-        iterator(T current, T step) : current_(current), step_(step) {}
+        Iterator(T current, T step) : m_current(current), m_step(step) {}
 
-        T operator*() const { return current_; }
+        T operator*() const { return m_current; }
 
-        iterator &operator++() {
-            current_ += step_;
+        Iterator &operator++() {
+            m_current += m_step;
             return *this;
         }
 
         // For a forward range, we use a simple inequality test.
-        bool operator!=(const iterator &other) const {
+        bool operator!=(const Iterator &other) const {
             // For positive steps, continue while current_ < other.current_
             // For negative steps, continue while current_ > other.current_
-            return step_ > 0 ? (current_ < other.current_) : (current_ > other.current_);
+            return m_step > 0 ? (m_current < other.m_current) : (m_current > other.m_current);
         }
 
     private:
-        T current_;
-        T step_;
+        T m_current;
+        T m_step;
     };
 
     range(T stop) : range(T(0), stop, T(1)) {}
     range(T start, T stop) : range(start, stop, T(1)) {}
-    range(T start, T stop, T step) : start_(start), stop_(stop), step_(step) {}
+    range(T start, T stop, T step) : m_start(start), m_stop(stop), m_step(step) {}
 
-    iterator begin() const { return iterator(start_, step_); }
-    iterator end() const { return iterator(stop_, step_); }
+    Iterator begin() const { return Iterator(m_start, m_step); }
+    Iterator end() const { return Iterator(m_stop, m_step); }
 
 private:
-    T start_, stop_, step_;
+    T m_start, m_stop, m_step;
 };
 
 //////////////////////////
@@ -56,74 +57,74 @@ private:
 
 // Helper: Check if any iterator in tuple equals its corresponding end.
 template <typename TupleIt, typename TupleEnd, std::size_t... I>
-bool any_equal_impl(const TupleIt &it, const TupleEnd &end, std::index_sequence<I...>) {
+bool anyEqualImpl(const TupleIt &it, const TupleEnd &end, std::index_sequence<I...>) {
     return ((std::get<I>(it) == std::get<I>(end)) || ...);
 }
 
 template <typename TupleIt, typename TupleEnd>
-bool any_equal(const TupleIt &it, const TupleEnd &end) {
-    return any_equal_impl(it, end, std::make_index_sequence<std::tuple_size<TupleIt>::value>{});
+bool anyEqual(const TupleIt &it, const TupleEnd &end) {
+    return anyEqualImpl(it, end, std::make_index_sequence<std::tuple_size<TupleIt>::value>{});
 }
 
 namespace impl {
 // zip_wrapper holds references to the provided containers.
-template <typename... Containers> class zip_wrapper {
+template <typename... Containers> class ZipWrapper {
 public:
-    explicit zip_wrapper(Containers &...containers) : containers_(std::tie(containers...)) {}
+    explicit ZipWrapper(Containers &...containers) : m_containers(std::tie(containers...)) {}
 
     // zip_iterator stores a tuple of current iterators and the corresponding ends.
-    class iterator {
+    class Iterator {
     public:
         using iterator_tuple = std::tuple<decltype(std::begin(std::declval<Containers &>()))...>;
 
-        iterator(iterator_tuple current, iterator_tuple ends) : current_(current), ends_(ends) {}
+        Iterator(iterator_tuple current, iterator_tuple ends) : m_current(current), m_ends(ends) {}
 
-        iterator &operator++() {
-            std::apply([](auto &...it) { ((++it), ...); }, current_);
+        Iterator &operator++() {
+            std::apply([](auto &...it) { ((++it), ...); }, m_current);
             return *this;
         }
 
         auto operator*() const {
             // Return a tuple of references to the elements.
-            return std::apply([](auto &...it) { return std::tie(*it...); }, current_);
+            return std::apply([](auto &...it) { return std::tie(*it...); }, m_current);
         }
 
-        bool operator!=(const iterator &) const {
+        bool operator!=(const Iterator &) const {
             // Stop if any iterator equals its end (like Python’s zip)
-            return !any_equal(current_, ends_);
+            return !anyEqual(m_current, m_ends);
         }
 
     private:
-        iterator_tuple current_;
-        iterator_tuple ends_;
+        iterator_tuple m_current;
+        iterator_tuple m_ends;
     };
 
-    iterator begin() {
-        auto begin_tuple =
+    Iterator begin() {
+        auto beginTuple =
             std::apply([](auto &...container) { return std::make_tuple(std::begin(container)...); },
-                       containers_);
-        auto end_tuple =
+                       m_containers);
+        auto endTuple =
             std::apply([](auto &...container) { return std::make_tuple(std::end(container)...); },
-                       containers_);
-        return iterator(begin_tuple, end_tuple);
+                       m_containers);
+        return Iterator(beginTuple, endTuple);
     }
 
-    iterator end() {
+    Iterator end() {
         // The end iterator is defined as having all underlying iterators at their ends.
-        auto end_tuple =
+        auto endTuple =
             std::apply([](auto &...container) { return std::make_tuple(std::end(container)...); },
-                       containers_);
-        return iterator(end_tuple, end_tuple);
+                       m_containers);
+        return Iterator(endTuple, endTuple);
     }
 
 private:
-    std::tuple<Containers &...> containers_;
+    std::tuple<Containers &...> m_containers;
 };
 } // namespace impl
 
 // Helper function to deduce types.
-template <typename... Containers> impl::zip_wrapper<Containers...> zip(Containers &...containers) {
-    return impl::zip_wrapper<Containers...>(containers...);
+template <typename... Containers> impl::ZipWrapper<Containers...> zip(Containers &...containers) {
+    return impl::ZipWrapper<Containers...>(containers...);
 }
 
 ////////////////////////////
@@ -132,60 +133,60 @@ template <typename... Containers> impl::zip_wrapper<Containers...> zip(Container
 
 namespace impl {
 
-template <typename Container> class enumerate_wrapper {
+template <typename Container> class EnumerateWrapper {
 public:
-    explicit enumerate_wrapper(Container &container) : container_(container) {}
+    explicit EnumerateWrapper(Container &container) : m_container(container) {}
 
-    class iterator {
+    class Iterator {
     public:
         using inner_iterator = decltype(std::begin(std::declval<Container &>()));
         using value_type =
             std::pair<std::size_t, decltype(*std::begin(std::declval<Container &>()))>;
 
-        iterator(inner_iterator it, std::size_t index) : it_(it), index_(index) {}
+        Iterator(inner_iterator it, std::size_t index) : m_it(it), m_index(index) {}
 
-        iterator &operator++() {
-            ++it_;
-            ++index_;
+        Iterator &operator++() {
+            ++m_it;
+            ++m_index;
             return *this;
         }
 
-        auto operator*() const { return std::make_pair(index_, *it_); }
+        auto operator*() const { return std::make_pair(m_index, *m_it); }
 
-        bool operator!=(const iterator &other) const { return it_ != other.it_; }
+        bool operator!=(const Iterator &other) const { return m_it != other.m_it; }
 
     private:
-        inner_iterator it_;
-        std::size_t index_;
+        inner_iterator m_it;
+        std::size_t m_index;
     };
 
-    iterator begin() { return iterator(std::begin(container_), 0); }
-    iterator end() { return iterator(std::end(container_), 0); }
+    Iterator begin() { return Iterator(std::begin(m_container), 0); }
+    Iterator end() { return Iterator(std::end(m_container), 0); }
 
 private:
-    Container &container_;
+    Container &m_container;
 };
 
 } // namespace impl
 
-template <typename Container> impl::enumerate_wrapper<Container> enumerate(Container &container) {
-    return impl::enumerate_wrapper<Container>(container);
+template <typename Container> impl::EnumerateWrapper<Container> enumerate(Container &container) {
+    return impl::EnumerateWrapper<Container>(container);
 }
 
 // reverse wrapper
-template <typename Container> class reverse_wrapper {
+template <typename Container> class ReverseWrapper {
 public:
-    explicit reverse_wrapper(Container &container) : container_(container) {}
+    explicit ReverseWrapper(Container &container) : m_container(container) {}
 
-    auto begin() { return std::rbegin(container_); }
-    auto end() { return std::rend(container_); }
+    auto begin() { return std::rbegin(m_container); }
+    auto end() { return std::rend(m_container); }
 
 private:
-    Container &container_;
+    Container &m_container;
 };
 
-template <typename Container> reverse_wrapper<Container> reverse(Container &container) {
-    return reverse_wrapper<Container>(container);
+template <typename Container> ReverseWrapper<Container> reverse(Container &container) {
+    return ReverseWrapper<Container>(container);
 }
 
 // Generic sum function for any iterable container

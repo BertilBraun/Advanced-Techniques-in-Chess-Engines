@@ -24,12 +24,12 @@ public:
     void selfPlay();
 
 private:
-    void _handleTooLongGame(const SelfPlayGame &game);
+    void handleTooLongGame(const SelfPlayGame &game);
 
-    int _countPieces(const Board &board, Color color) const;
+    int countPieces(const Board &board, Color color) const;
 
-    std::pair<SelfPlayGame, Move> _sampleSPG(const SelfPlayGame &game,
-                                             const ActionProbabilities &actionProbabilities);
+    std::pair<SelfPlayGame, Move> sampleSpg(const SelfPlayGame &game,
+                                            const ActionProbabilities &actionProbabilities);
 
-    Move _sampleMove(int numMoves, const ActionProbabilities &actionProbabilities) const;
+    Move sampleMove(int numMoves, const ActionProbabilities &actionProbabilities) const;
 };

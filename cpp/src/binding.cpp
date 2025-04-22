@@ -62,7 +62,7 @@ auto evaluate_model(int iteration, std::string const &save_path, int num_games, 
                     std::string const &model_path) {
     TensorBoardLogger logger = getTensorBoardLogger(runId);
     ModelEvaluation evaluator(iteration, save_path, num_games, &logger);
-    Results res = evaluator.play_two_models_search(model_path);
+    Results res = evaluator.playTwoModelsSearch(model_path);
     return py::make_tuple(res.wins, res.losses, res.draws);
 }
 

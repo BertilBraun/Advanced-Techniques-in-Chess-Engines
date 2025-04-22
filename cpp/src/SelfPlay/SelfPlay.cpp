@@ -21,32 +21,32 @@ void SelfPlay::selfPlay() {
 
     for (auto i : range(m_selfPlayGames.size())) {
         SelfPlayGame &game = m_selfPlayGames[i];
-        const MCTSResult &mcts_result = results[i];
+        const MCTSResult &mctsResult = results[i];
 
-        game.memory.emplace_back(game.board.copy(), mcts_result.visits, mcts_result.result);
+        game.memory.emplace_back(game.board.copy(), mctsResult.visits, mctsResult.result);
 
-        if (mcts_result.result < m_args.resignation_threshold) {
-            m_writer->write(game, mcts_result.result, true, false);
+        if (mctsResult.result < m_args.resignation_threshold) {
+            m_writer->write(game, mctsResult.result, true, false);
             m_selfPlayGames[i] = SelfPlayGame();
             continue;
         }
 
         if ((int) game.playedMoves.size() >= m_args.max_moves) {
-            _handleTooLongGame(game);
+            handleTooLongGame(game);
             m_selfPlayGames[i] = SelfPlayGame();
             continue;
         }
 
-        ActionProbabilities gameActionProbabilities = actionProbabilities(mcts_result.visits);
+        ActionProbabilities gameActionProbabilities = actionProbabilities(mctsResult.visits);
         if (sum(gameActionProbabilities) == 0.0) {
             log("WARNING: No valid moves found for game ", game.board.fen(), " with result ",
-                mcts_result.result);
+                mctsResult.result);
             m_selfPlayGames[i] = SelfPlayGame();
             continue;
         }
 
         while (sum(gameActionProbabilities) > 0.0) {
-            const auto [newGame, move] = _sampleSPG(game, gameActionProbabilities);
+            const auto [newGame, move] = sampleSpg(game, gameActionProbabilities);
 
             bool isDuplicate = false;
             for (const SelfPlayGame &existingGame : m_selfPlayGames) {
@@ -73,15 +73,15 @@ void SelfPlay::selfPlay() {
             }
         }
         if (sum(gameActionProbabilities) == 0.0) {
-            const auto [newGame, move] = _sampleSPG(game, actionProbabilities(mcts_result.visits));
+            const auto [newGame, move] = sampleSpg(game, actionProbabilities(mctsResult.visits));
             m_selfPlayGames[i] = newGame;
         }
     }
 }
 
-void SelfPlay::_handleTooLongGame(const SelfPlayGame &game) {
-    const int numWhitePieces = _countPieces(game.board, chess::WHITE);
-    const int numBlackPieces = _countPieces(game.board, chess::BLACK);
+void SelfPlay::handleTooLongGame(const SelfPlayGame &game) {
+    const int numWhitePieces = countPieces(game.board, chess::WHITE);
+    const int numBlackPieces = countPieces(game.board, chess::BLACK);
 
     if (numWhitePieces < 4 || numBlackPieces < 4) {
         // Find out which player has better value pieces remaining.
@@ -91,7 +91,7 @@ void SelfPlay::_handleTooLongGame(const SelfPlayGame &game) {
     }
 }
 
-int SelfPlay::_countPieces(const Board &board, chess::Color color) const {
+int SelfPlay::countPieces(const Board &board, chess::Color color) const {
     int count = 0;
     for (chess::PieceType pieceType : chess::PIECE_TYPES) {
         count += board.pieces(pieceType, color).size();
@@ -99,9 +99,9 @@ int SelfPlay::_countPieces(const Board &board, chess::Color color) const {
     return count;
 }
 
-std::pair<SelfPlayGame, Move> SelfPlay::_sampleSPG(const SelfPlayGame &game,
-                                                   const ActionProbabilities &actionProbabilities) {
-    const Move move = _sampleMove(game.playedMoves.size(), actionProbabilities);
+std::pair<SelfPlayGame, Move> SelfPlay::sampleSpg(const SelfPlayGame &game,
+                                                  const ActionProbabilities &actionProbabilities) {
+    const Move move = sampleMove(game.playedMoves.size(), actionProbabilities);
 
     SelfPlayGame newGame = game.expand(move);
 
@@ -117,7 +117,7 @@ std::pair<SelfPlayGame, Move> SelfPlay::_sampleSPG(const SelfPlayGame &game,
     return {SelfPlayGame(), move};
 }
 
-Move SelfPlay::_sampleMove(int numMoves, const ActionProbabilities &actionProbabilities) const {
+Move SelfPlay::sampleMove(int numMoves, const ActionProbabilities &actionProbabilities) const {
     int moveIndex = -1;
 
     if (numMoves >= m_args.num_moves_after_which_to_play_greedy) {

@@ -15,13 +15,13 @@ float MCTSNode::ucb(float c_param) const {
         throw std::logic_error("Node must have a parent");
     }
 
-    float ucb_score =
+    float ucbScore =
         policy * c_param * std::sqrt(parent->number_of_visits) / (1 + number_of_visits);
 
     if (number_of_visits > 0) {
-        ucb_score += 1 - (((result_score + virtual_loss) / number_of_visits) + 1) / 2;
+        ucbScore += 1 - (((result_score + virtual_loss) / number_of_visits) + 1) / 2;
     }
-    return ucb_score;
+    return ucbScore;
 }
 
 MCTSNode::MCTSNode(MCTSNode &&other)
@@ -43,11 +43,11 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
     children.reserve(moves_with_scores.size());
 
     for (const auto &[move, score] : moves_with_scores) {
-        Board new_board = board.copy();
+        Board newBoard = board.copy();
         try {
-            new_board.push(decodeMove(move)); // TODO check whether this is a bottleneck
+            newBoard.push(decodeMove(move)); // TODO check whether this is a bottleneck
 
-            children.emplace_back(std::move(new_board), score, move, this, num_played_moves + 1);
+            children.emplace_back(std::move(newBoard), score, move, this, num_played_moves + 1);
         } catch (std::invalid_argument &e) {
             // Ignore invalid moves (e.g., castling when the king is in check)
             log("Invalid move: ", e.what(), " for move: ", move, " in board: ", board.fen());

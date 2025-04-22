@@ -51,6 +51,6 @@ template <typename T> inline void extend(std::vector<T> &vec, const std::vector<
 }
 
 template <typename T> inline void shuffle(std::vector<T> &vec) {
-    std::mt19937 _random_engine(std::random_device{}());
-    std::shuffle(vec.begin(), vec.end(), _random_engine);
+    std::mt19937 randomEngine(std::random_device{}());
+    std::shuffle(vec.begin(), vec.end(), randomEngine);
 }

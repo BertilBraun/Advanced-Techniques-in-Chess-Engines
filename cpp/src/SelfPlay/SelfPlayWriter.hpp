@@ -17,7 +17,7 @@ public:
 
     ~SelfPlayWriter() {
         if (!m_samples.empty()) {
-            _flushBatch();
+            flushBatch();
         }
     }
 
@@ -45,15 +45,15 @@ private:
     };
 
     // Add one sample to the batch.
-    void _addSample(const CompressedEncodedBoard &board, const VisitCounts &visitCounts,
-                    float resultScore);
+    void addSample(const CompressedEncodedBoard &board, const VisitCounts &visitCounts,
+                   float resultScore);
 
-    std::string _getSaveFilename();
+    std::string getSaveFilename();
 
     // Flush the current batch to file.
-    void _flushBatch();
+    void flushBatch();
 
-    void _logGame(const SelfPlayGame &game, float result);
+    void logGame(const SelfPlayGame &game, float result);
 
     TrainingArgs m_args;
     int m_iteration = -1;

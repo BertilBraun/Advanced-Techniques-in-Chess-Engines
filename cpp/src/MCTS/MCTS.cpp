@@ -7,7 +7,7 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
     TimeItGuard timer("MCTS::search");
 
     // Get policy moves (with noise) for the given boards.
-    const std::vector<std::vector<MoveScore>> movesList = _get_policy_with_noise(boards);
+    const std::vector<std::vector<MoveScore>> movesList = getPolicyWithNoise(boards);
 
     std::vector<MCTSNode> roots;
     roots.reserve(boards.size());
@@ -17,9 +17,9 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
         roots.back().expand(moves);
     }
 
-    int iterations = args.num_searches_per_turn / args.num_parallel_searches;
+    int iterations = m_args.num_searches_per_turn / m_args.num_parallel_searches;
     for (int _ : range(iterations)) {
-        parallel_iterate(roots);
+        parallelIterate(roots);
     }
 
     // Build and return the results.
@@ -34,18 +34,18 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
         results.push_back({-root.result_score / (float) root.number_of_visits, visitCounts});
     }
 
-    _logMCTSStatistics(roots);
+    logMctsStatistics(roots);
 
     return results;
 }
-void MCTS::parallel_iterate(std::vector<MCTSNode> &roots) const {
+void MCTS::parallelIterate(std::vector<MCTSNode> &roots) const {
     TimeItGuard timer("MCTS::parallel_iterate");
 
     std::vector<MCTSNode *> nodes;
-    nodes.reserve(roots.size() * args.num_parallel_searches);
+    nodes.reserve(roots.size() * m_args.num_parallel_searches);
     for (MCTSNode &root : roots) {
-        for (int _ : range(args.num_parallel_searches)) {
-            std::optional<MCTSNode *> node = _get_best_child_or_back_propagate(root, args.c_param);
+        for (int _ : range(m_args.num_parallel_searches)) {
+            std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
             if (node.has_value()) {
                 node.value()->updateVirtualLoss(1);
                 nodes.push_back(node.value());
@@ -62,7 +62,7 @@ void MCTS::parallel_iterate(std::vector<MCTSNode> &roots) const {
         boards.push_back(node->board);
 
     // Run inference in batch.
-    const std::vector<InferenceResult> results = client->inference_batch(boards);
+    const std::vector<InferenceResult> results = m_client->inferenceBatch(boards);
 
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
@@ -71,36 +71,35 @@ void MCTS::parallel_iterate(std::vector<MCTSNode> &roots) const {
         node->updateVirtualLoss(-1);
     }
 }
-std::vector<std::vector<MoveScore>> MCTS::_get_policy_with_noise(std::vector<Board> &boards) const {
-    const std::vector<InferenceResult> inferenceResults = client->inference_batch(boards);
+std::vector<std::vector<MoveScore>> MCTS::getPolicyWithNoise(std::vector<Board> &boards) const {
+    const std::vector<InferenceResult> inferenceResults = m_client->inferenceBatch(boards);
 
     std::vector<std::vector<MoveScore>> noisyMoves;
     noisyMoves.reserve(inferenceResults.size());
     for (auto &result : inferenceResults) {
-        noisyMoves.push_back(_add_noise(result.first));
+        noisyMoves.push_back(addNoise(result.first));
     }
     return noisyMoves;
 }
 
-std::vector<MoveScore> MCTS::_add_noise(const std::vector<MoveScore> &moves) const {
+std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const {
     if (moves.empty())
         return {};
 
-    const std::vector<float> noiseList = dirichlet(args.dirichlet_alpha, moves.size());
+    const std::vector<float> noiseList = dirichlet(m_args.dirichlet_alpha, moves.size());
 
     std::vector<MoveScore> noisyMoves;
     noisyMoves.reserve(moves.size());
     for (const auto &[noise, moveScore] : zip(noiseList, moves)) {
         const auto &[move, score] = moveScore;
-        float newScore = lerp(score, noise, args.dirichlet_epsilon);
+        float newScore = lerp(score, noise, m_args.dirichlet_epsilon);
         noisyMoves.push_back({move, newScore});
     }
 
     return noisyMoves;
 }
 
-std::optional<MCTSNode *> MCTS::_get_best_child_or_back_propagate(MCTSNode &root,
-                                                                  float c_param) const {
+std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(MCTSNode &root, float c_param) const {
     MCTSNode *node = &root;
     while (node->isFullyExpanded()) {
         node = &node->bestChild(c_param);
@@ -114,30 +113,30 @@ std::optional<MCTSNode *> MCTS::_get_best_child_or_back_propagate(MCTSNode &root
     }
     return {node};
 }
-void MCTS::_logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
+void MCTS::logMctsStatistics(const std::vector<MCTSNode> &roots) const {
     if (roots.empty() || !m_logger)
         return;
 
-    size_t step = current_time_step();
+    size_t step = currentTimeStep();
 
     // Compute the depth of each search tree using a DFS.
     auto dfs = [&](const MCTSNode &node, auto &dfs_ref) -> int {
         if (!node.isFullyExpanded())
             return 0;
-        int max_depth = 0;
+        int maxDepth = 0;
         for (const MCTSNode &child : node.children) {
             int d = dfs_ref(child, dfs_ref);
-            if (d > max_depth)
-                max_depth = d;
+            if (d > maxDepth)
+                maxDepth = d;
         }
-        return 1 + max_depth;
+        return 1 + maxDepth;
     };
     std::vector<int> depths;
     for (const MCTSNode &root : roots) {
         depths.push_back(dfs(root, dfs));
     }
-    float average_depth = (float) sum(depths) / depths.size();
-    m_logger->add_scalar("dataset/average_search_depth", step, average_depth);
+    float averageDepth = (float) sum(depths) / depths.size();
+    m_logger->addScalar("dataset/average_search_depth", step, averageDepth);
 
     // Compute the entropy of the visit counts.
     auto entropy = [](const MCTSNode &node) -> float {
@@ -155,6 +154,6 @@ void MCTS::_logMCTSStatistics(const std::vector<MCTSNode> &roots) const {
     for (const MCTSNode &root : roots) {
         entropies.push_back(entropy(root));
     }
-    float average_entropy = sum(entropies) / entropies.size();
-    m_logger->add_scalar("dataset/average_search_entropy", step, average_entropy);
+    float averageEntropy = sum(entropies) / entropies.size();
+    m_logger->addScalar("dataset/average_search_entropy", step, averageEntropy);
 }

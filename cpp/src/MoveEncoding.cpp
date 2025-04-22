@@ -9,7 +9,7 @@ const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN, PieceType::RO
                                                  PieceType::BISHOP, PieceType::KNIGHT};
 } // namespace defines
 
-std::pair<MoveMapping, int> __precalculateMoveMappings() {
+std::pair<MoveMapping, int> precalculateMoveMappings() {
     MoveMapping moveMappings{};
     // fill with -1
     for (auto &fromSquare : moveMappings) {
@@ -26,15 +26,15 @@ std::pair<MoveMapping, int> __precalculateMoveMappings() {
         moveMappings[fromSquare][toSquare][(int) promotionType] = index++;
     };
 
-    for (const auto from_square : range(BOARD_SIZE)) {
-        const auto [row, col] = squareToIndex(from_square);
+    for (const auto fromSquare : range(BOARD_SIZE)) {
+        const auto [row, col] = squareToIndex(fromSquare);
 
         for (const auto &[dr, dc] : defines::DIRECTIONS) {
             for (int distance : range(1, BOARD_LENGTH)) {
                 int toRow = row + dr * distance;
                 int toCol = col + dc * distance;
                 if (0 <= toRow && toRow < BOARD_LENGTH && 0 <= toCol && toCol < BOARD_LENGTH) {
-                    addMove(from_square, square(toCol, toRow), PieceType::NONE);
+                    addMove(fromSquare, square(toCol, toRow), PieceType::NONE);
                 }
             }
         }
@@ -43,7 +43,7 @@ std::pair<MoveMapping, int> __precalculateMoveMappings() {
             int toRow = row + dx;
             int toCol = col + dy;
             if (0 <= toRow && toRow < BOARD_LENGTH && 0 <= toCol && toCol < BOARD_LENGTH) {
-                addMove(from_square, square(toCol, toRow), PieceType::NONE);
+                addMove(fromSquare, square(toCol, toRow), PieceType::NONE);
             }
         }
 
@@ -55,7 +55,7 @@ std::pair<MoveMapping, int> __precalculateMoveMappings() {
                 if (0 <= col + offset && col + offset < BOARD_LENGTH) {
                     int toSquare = square(col + offset, toRow);
                     for (PieceType promotionType : defines::PROMOTION_PIECES) {
-                        addMove(from_square, toSquare, promotionType);
+                        addMove(fromSquare, toSquare, promotionType);
                     }
                 }
             }
@@ -66,7 +66,7 @@ std::pair<MoveMapping, int> __precalculateMoveMappings() {
 }
 
 std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE>
-__precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
+precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 
     std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE> reverseMoveMappings;
 
@@ -84,8 +84,8 @@ __precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
     return reverseMoveMappings;
 }
 
-const auto __MOVE_MAPPINGS = __precalculateMoveMappings().first;
-const auto __REVERSE_MOVE_MAPPINGS = __precalculateReverseMoveMappings(__MOVE_MAPPINGS);
+const auto MOVE_MAPPINGS = precalculateMoveMappings().first;
+const auto REVERSE_MOVE_MAPPINGS = precalculateReverseMoveMappings(MOVE_MAPPINGS);
 
 int encodeMove(const Move &move) {
     // Encodes a chess move into a move index.
@@ -93,7 +93,7 @@ int encodeMove(const Move &move) {
     // :param move: The move to encode.
     // :return: The encoded move index.
 
-    int moveIndex = __MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
+    int moveIndex = MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
 
     return moveIndex;
 }
@@ -104,7 +104,7 @@ Move decodeMove(int moveIndex) {
     // :param move_index: The index of the move to decode.
     // :return: The decoded chess move.
 
-    auto [from_square, to_square, promotion_type] = __REVERSE_MOVE_MAPPINGS[moveIndex];
+    auto [from_square, to_square, promotion_type] = REVERSE_MOVE_MAPPINGS[moveIndex];
     return Move(from_square, to_square, promotion_type);
 }
 
@@ -145,7 +145,7 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices) {
     return moves;
 }
 
-torch::Tensor __encodeLegalMoves(Board &board) {
+torch::Tensor encodeLegalMoves(Board &board) {
     // Encodes the legal moves of a chess board into a 1D tensor.
     //
     // Each entry in the array represents a possible move on the board. If the
@@ -158,7 +158,7 @@ torch::Tensor __encodeLegalMoves(Board &board) {
     return encodeMoves(board.legalMoves());
 }
 
-torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
+torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &board) {
     // Filters a policy with the legal moves of a chess board.
     //
     // The policy is a 1D tensor representing the probabilities of each move
@@ -170,13 +170,13 @@ torch::Tensor __filterPolicyWithLegalMoves(const torch::Tensor &policy, Board &b
     // :param board: The chess board to filter the policy with.
     // :return: The filtered policy.
 
-    torch::Tensor legalMovesEncoded = __encodeLegalMoves(board);
+    torch::Tensor legalMovesEncoded = encodeLegalMoves(board);
     torch::Tensor filteredPolicy = policy * legalMovesEncoded;
     filteredPolicy /= filteredPolicy.sum();
     return filteredPolicy;
 }
 
-std::vector<MoveScore> __mapPolicyToMoves(const torch::Tensor &policy) {
+std::vector<MoveScore> mapPolicyToMoves(const torch::Tensor &policy) {
     std::vector<MoveScore> movesWithProbabilities;
 
     torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
@@ -201,8 +201,8 @@ std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Ten
     // :param board: The chess board to filter the policy with.
     // :return: The list of moves with their corresponding probabilities.
 
-    auto filteredPolicy = __filterPolicyWithLegalMoves(policy, board);
-    auto movesWithProbabilities = __mapPolicyToMoves(filteredPolicy);
+    auto filteredPolicy = filterPolicyWithLegalMoves(policy, board);
+    auto movesWithProbabilities = mapPolicyToMoves(filteredPolicy);
     return movesWithProbabilities;
 }
 
@@ -276,8 +276,8 @@ const std::vector<Move> EN_PASSANT_MOVES = {
     Move(H4, G3),
 };
 
-torch::Tensor __filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
-                                                            Board &board) {
+torch::Tensor filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
+                                                          Board &board) {
     // Filters a policy with the legal moves of a chess board but also allows all en passant moves.
 
     // The policy is a 1D tensor representing the probabilities of each move
@@ -308,7 +308,7 @@ filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(const torch::Tensor &
     // in the board. The list of moves is a list of tuples, where each tuple contains
     // a move and its corresponding probability.
 
-    auto filteredPolicy = __filterPolicyWithLegalMovesAndEnPassantMoves(policy, board);
-    auto movesWithProbabilities = __mapPolicyToMoves(filteredPolicy);
+    auto filteredPolicy = filterPolicyWithLegalMovesAndEnPassantMoves(policy, board);
+    auto movesWithProbabilities = mapPolicyToMoves(filteredPolicy);
     return movesWithProbabilities;
 }
