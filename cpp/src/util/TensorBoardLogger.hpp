@@ -69,7 +69,8 @@ private:
         std::lock_guard<std::mutex> lock(mu);
         events.push_back(event);
         if (events.size() >= 100) {
-            print("WARNING: TensorBoard logger buffer is full. Flushing to disk manually.");
+            std::cout << "WARNING: TensorBoard logger buffer is full. Flushing to disk manually."
+                      << std::endl;
             flush();
         }
     }
