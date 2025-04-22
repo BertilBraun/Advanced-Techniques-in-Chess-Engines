@@ -82,13 +82,26 @@ class Trainer:
                     count_unique_values_in_out_value,
                 )
                 seen = set()
-                for value, target in zip(out_value, value_targets):
+                seen_again = set()
+                for s, value, target in zip(state, out_value, value_targets):
                     value = value.item()
                     target = target.item()
-                    if (value, target) in seen:
+                    if (value, target) in seen_again:
                         continue
-                    seen.add((value, target))
-                    print('Value:', value, 'Target:', target)
+                    # compress 14x8x8 binary tensor into 14 64-bit integers
+                    compressed = []
+                    for i in range(14):
+                        num = 0
+                        for j in range(8):
+                            for k in range(8):
+                                num = (num << 1) | int(s[i, j, k])
+                        compressed.append(num)
+                    compressed = tuple(compressed)
+                    if (value, target, compressed) in seen:
+                        seen_again.add((value, target, compressed))
+                    seen.add((value, target, compressed))
+
+                    print('Value:', value, 'Target:', target, 'Compressed:', compressed)
 
                 for policy, target in zip(out_policy, policy_targets):
                     break
