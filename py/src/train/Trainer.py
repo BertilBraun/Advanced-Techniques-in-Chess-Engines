@@ -64,8 +64,8 @@ class Trainer:
             value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
             # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
 
-            if True and batchIdx % 50 == 1:
-                for value, target in zip(out_value, value_targets[:10]):
+            if True and batchIdx % 50 == 1 or True:
+                for value, target in zip(out_value, value_targets[:5]):
                     print('Value:', value.item(), 'Target:', target.item())
 
                 for policy, target in zip(out_policy, policy_targets):
