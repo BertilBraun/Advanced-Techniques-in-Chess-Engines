@@ -3,6 +3,7 @@ from os import PathLike
 
 from dataclasses import dataclass
 
+import chess
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -25,6 +26,14 @@ class Results:
     @staticmethod
     def from_cpp(wld: tuple[int, int, int]) -> Results:
         return Results(wld[0], wld[1], wld[2])
+
+    def update(self, result: chess.Color | None, main_player: chess.Color) -> None:
+        if result is None:
+            self.draws += 1
+        elif result == main_player:
+            self.wins += 1
+        else:
+            self.losses += 1
 
 
 # The device to use for evaluation. Since Training is done on device 0, we can use device 1 for evaluation

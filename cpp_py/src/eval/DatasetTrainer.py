@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.dataset.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, get_run_id
 from src.train.Trainer import Trainer
@@ -47,10 +46,12 @@ def train_model(
         TrainingParams(
             num_epochs=num_epochs,
             batch_size=TRAINING_ARGS.training.batch_size,
+            eval_batch_size=TRAINING_ARGS.training.eval_batch_size,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=2,
+            max_num_sample_repetitions=1,
         ),
     )
 
@@ -70,9 +71,8 @@ def main(dataset_paths: list[str]):
 
     run_id = get_run_id()
     with TensorboardWriter(run_id, 'dataset_trainer'):
-        test_dataset = SelfPlayDataset.load(dataset_paths.pop())
-        test_dataset.deduplicate()
-        test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
+        test_dataset = SelfPlayTrainDataset()
+        test_dataset.load_from_files(save_folder, [(-1, [Path(dataset_paths.pop())])], max_num_repetitions=1)
 
         tmp_dataset = SelfPlayTrainDataset()
         tmp_dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
@@ -99,11 +99,12 @@ def main(dataset_paths: list[str]):
 
         for iter in range(pre_iter, NUM_EPOCHS):
             # Instantiate the dataset
-            dataset = SelfPlayTrainDataset(run_id)
+            dataset = SelfPlayTrainDataset()
             dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
 
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
+            test_dataloader = test_dataset.as_dataloader(TRAINING_ARGS.training.eval_batch_size, num_workers=1)
 
             train_model(model, optimizer, train_dataloader, test_dataloader, num_epochs=1, iteration=iter)
 

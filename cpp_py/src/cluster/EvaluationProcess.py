@@ -161,6 +161,9 @@ def evaluate_iteration(iteration: int, run_id: int):
     from src.settings import TRAINING_ARGS
     from src.util.save_paths import model_save_path
 
+    assert TRAINING_ARGS.evaluation, 'Evaluation process is not enabled. Set evaluation.enabled to True in the config.'
+    assert iteration > 0, 'Iteration must be greater than 0.'
+
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
 

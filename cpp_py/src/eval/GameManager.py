@@ -3,10 +3,25 @@ from __future__ import annotations
 import chess
 from typing import Optional, TYPE_CHECKING
 
-from src.eval.Bot import check_winner
 
 if TYPE_CHECKING:
     from src.eval.Bot import Bot
+
+
+def check_winner(board: chess.Board) -> Optional[chess.Color]:
+    """
+    Checks the winner of the game based on the board state.
+
+    :param board: The chess board.
+    :return: The color of the winning player or None if it's a draw.
+    """
+    result = board.result()
+    if result == '1-0':
+        return chess.WHITE
+    elif result == '0-1':
+        return chess.BLACK
+    else:
+        return None
 
 
 class GameManager:

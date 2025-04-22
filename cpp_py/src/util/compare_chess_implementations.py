@@ -115,7 +115,7 @@ def main(py_path, cpp_path):
         _, cpp_code = cpp_funcs[norm]
         try:
             comp = compare_logic(cpp_code, py_code, norm)
-            data = comp.dict()
+            data = comp.model_dump()
         except Exception as e:
             data = {'name': norm, 'equivalent': False, 'differences': f'<error: {e}>'}
 
