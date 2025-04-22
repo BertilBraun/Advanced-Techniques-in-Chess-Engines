@@ -6,9 +6,6 @@
 #include "SelfPlay/SelfPlay.hpp"
 #include "SelfPlay/SelfPlayWriter.hpp"
 
-#define getTensorBoardLogger(runId)                                                                \
-    TensorBoardLogger(std::string("logs/run_") + std::to_string(runId) + std::string("/tfevents"))
-
 void selfPlayMain(int runId, const std::string &savePath, int numProcessors, int numGPUs) {
     assert(runId >= 0);
     assert(numProcessors >= 1);

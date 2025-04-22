@@ -11,4 +11,5 @@ std::vector<PyInferenceResult> boardInferenceMain(const std::string &modelPath,
 Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool networkOnly,
                       float maxTime);
 
-TensorBoardLogger getTensorBoardLogger(int runId);
+#define getTensorBoardLogger(runId)                                                                \
+    TensorBoardLogger(std::string("logs/run_") + std::to_string(runId) + std::string("/tfevents"))
