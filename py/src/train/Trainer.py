@@ -64,7 +64,7 @@ class Trainer:
             value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
             # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
 
-            if True and batchIdx % 50 == 1 or True:
+            if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
                 count_unique_values_in_out_value = torch.unique(out_value.to(torch.float32)).numel()
                 unique_input_states_by_batch = torch.unique(state.to(torch.float32), dim=0).numel()
@@ -144,8 +144,8 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.1)
-            print('Gradient norm:', norm.item())
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.5)
+            # print('Gradient norm:', norm.item())
             # TODO magic hyperparameter and sensible like this?
 
             self.optimizer.step()
