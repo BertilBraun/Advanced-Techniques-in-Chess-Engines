@@ -67,7 +67,7 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
                 board.make_move(move)
 
             dataset.add_generation_stats(
-                num_games=1,
+                game_length=len(list(game.mainline_moves())),
                 generation_time=0.0,
                 resignation=False,
             )

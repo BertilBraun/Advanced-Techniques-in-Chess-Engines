@@ -4,11 +4,11 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
 
+from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
-from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
