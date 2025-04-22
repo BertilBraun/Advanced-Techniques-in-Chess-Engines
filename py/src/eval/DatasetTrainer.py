@@ -100,7 +100,9 @@ def main(dataset_paths: list[str]):
         for iter in range(pre_iter, NUM_EPOCHS):
             # Instantiate the dataset
             dataset = SelfPlayTrainDataset(run_id)
-            dataset.load_from_files(save_folder, [(0, [Path(p)]) for p in dataset_paths], max_num_repetitions=1)
+            dataset.load_from_files(
+                save_folder, [(i, [Path(p)]) for i, p in enumerate(dataset_paths)], max_num_repetitions=1
+            )
 
             # Create a DataLoader
             train_dataloader = dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
