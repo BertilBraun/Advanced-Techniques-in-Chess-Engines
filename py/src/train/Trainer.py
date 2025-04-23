@@ -164,6 +164,7 @@ class Trainer:
             len(dataloader),
         )
 
+        log(f'Last gradient norm: {norm.item()}')
         log(f'Training stats: {train_stats}')
 
         # print('Optimal policy loss:', optimal_policy_loss.item() / len(dataloader))

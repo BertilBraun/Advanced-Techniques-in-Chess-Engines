@@ -42,11 +42,11 @@ def sampling_window(current_iteration: int) -> int:
 def learning_rate(current_iteration: int) -> float:
     if current_iteration < 20:
         return 0.2
-    if current_iteration < 80:
+    if current_iteration < 50:
         return 0.02
-    if current_iteration < 120:
+    if current_iteration < 80:
         return 0.008
-    if current_iteration < 180:
+    if current_iteration < 100:
         return 0.002
     return 0.0002
 
@@ -187,14 +187,14 @@ elif True:
 
     NUM_GPUS = torch.cuda.device_count()
     SELF_PLAYERS_PER_NODE = 64
-    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE  # + SELF_PLAYERS_PER_NODE // 2
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 10)
 
     network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
-        num_epochs=2,
+        num_epochs=1,
         batch_size=2048,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
@@ -208,7 +208,7 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 32
+    PARALLEL_GAMES = 16
     NUM_SEARCHES_PER_TURN = 640
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
@@ -218,9 +218,9 @@ elif True:
         MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=500,
+        num_iterations=120,
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS + 1,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,

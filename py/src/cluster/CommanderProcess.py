@@ -124,7 +124,7 @@ def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_coun
     assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
 
     num_on_each_device = total / num_devices
-    num_on_last_device = 0  # TODO? round(num_on_each_device / 16)
+    num_on_last_device = round(num_on_each_device / 2)
 
     if i < num_on_last_device:
         return torch.cuda.device_count() - 1
