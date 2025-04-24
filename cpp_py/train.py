@@ -90,10 +90,7 @@ def main():
             log(f'Iteration {iteration}: {training_stats}')
 
             # start EvaluationProcess
-            eval_process = mp.Process(target=run_evaluation_process, args=(run, TRAINING_ARGS, iteration))
-            eval_process.start()
-            eval_process.join()
-            log(f'Evaluation process finished at iteration {iteration}.')
+            mp.Process(target=run_evaluation_process, args=(run, TRAINING_ARGS, iteration)).start()
 
 
 if __name__ == '__main__':
