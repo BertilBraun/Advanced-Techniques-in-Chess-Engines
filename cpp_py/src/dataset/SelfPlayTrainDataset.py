@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Iterable
 
 import torch
 import numpy as np
@@ -6,13 +7,48 @@ from pathlib import Path
 from torch.utils.data import IterableDataset
 from torch.multiprocessing import Process
 
-from src.settings import log_histogram, log_scalar
+from src.settings import ACTION_SIZE, log_histogram, log_scalar
 from src.util.log import log
 from src.util.tensorboard import TensorboardWriter
 from src.dataset.SelfPlayDataset import SelfPlayDataset
 from src.dataset.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 import AlphaZeroCpp
+
+from numba import njit
+import numpy.typing as npt
+
+
+_BOARD_SHAPE = (14, 8, 8)  # (channels, rows, columns)
+_N_BITS = _BOARD_SHAPE[1] * _BOARD_SHAPE[2]
+assert _N_BITS <= 64, 'The state is too large to encode'
+# Prepare the bit masks: 1, 2, 4, ..., 2^(n_bits-1)
+_BIT_MASK = 1 << np.arange(_N_BITS, dtype=np.uint64)  # use uint64 to prevent overflow
+
+
+def decode_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
+    """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
+    assert state.dtype == np.uint64, 'The state must be encoded as uint64 to prevent overflow'
+
+    return _decode_board_state(state)
+
+
+@njit
+def _decode_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
+    encoded_array = state.reshape(-1, 1)  # shape: (channels, 1)
+
+    # Extract bits for each channel
+    bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8)
+
+    return bits.reshape(_BOARD_SHAPE)
+
+
+def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
+    action_probabilities = np.zeros(ACTION_SIZE, dtype=np.float32)
+    for move, visit_count in visit_counts:
+        action_probabilities[move] = visit_count
+    action_probabilities /= np.sum(action_probabilities)
+    return action_probabilities
 
 
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
@@ -149,12 +185,8 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     continue
 
                 dataset = active_chunks[i]
-                state = torch.from_numpy(
-                    np.array(AlphaZeroCpp.decompress(dataset.encoded_states[self.sample_index[i]]))
-                )
-                policy_target = torch.from_numpy(
-                    np.array(AlphaZeroCpp.action_probabilities(dataset.visit_counts[self.sample_index[i]]))
-                )
+                state = torch.from_numpy(decode_board_state(dataset.encoded_states[self.sample_index[i]]))
+                policy_target = torch.from_numpy(action_probabilities(dataset.visit_counts[self.sample_index[i]]))
                 value_target = torch.tensor(dataset.value_targets[self.sample_index[i]])
                 self.sample_index[i] += 1
 
