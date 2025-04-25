@@ -42,11 +42,11 @@ class Network(nn.Module):
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 16, kernel_size=3, bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(hidden_size, 8, kernel_size=3, bias=False),
+            nn.BatchNorm2d(8),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (row_count - 2) * (column_count - 2), 1),
+            nn.Linear(8 * (row_count - 2) * (column_count - 2), 1),
             nn.Tanh(),
         )
 
