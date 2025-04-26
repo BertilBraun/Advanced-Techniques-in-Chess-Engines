@@ -47,7 +47,7 @@ class Network(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(12 * (row_count - 2) * (column_count - 2), 1),
-            # nn.Tanh(),
+            nn.Tanh(),
         )
 
         # init weights
