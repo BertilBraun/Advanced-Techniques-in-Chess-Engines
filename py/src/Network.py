@@ -41,9 +41,6 @@ class Network(nn.Module):
             nn.Linear(16 * row_count * column_count, action_size),
         )
 
-        # shell command to remove all *.processed files in all subdirectories
-        # find . -type f -name '*.processed' -delete
-
         self.valueHead = nn.Sequential(
             nn.Conv2d(hidden_size, 8, kernel_size=3, bias=False),
             nn.BatchNorm2d(8),
@@ -52,6 +49,14 @@ class Network(nn.Module):
             nn.Linear(8 * (row_count - 2) * (column_count - 2), 1),
             nn.Tanh(),
         )
+
+        # init weights
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+                nn.init.zeros_(m.bias)
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
