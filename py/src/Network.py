@@ -38,8 +38,11 @@ class Network(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (row_count - 2) * (column_count - 2), action_size),
+            nn.Linear(16 * row_count * column_count, action_size),
         )
+
+        # shell command to remove all *.processed files in all subdirectories
+        # find . -type f -name '*.processed' -delete
 
         self.valueHead = nn.Sequential(
             nn.Conv2d(hidden_size, 8, kernel_size=3, bias=False),
