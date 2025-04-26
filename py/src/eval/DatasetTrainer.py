@@ -32,6 +32,8 @@ def train_model(
     iteration: int,
 ) -> None:
     def learning_rate(iteration: int) -> float:
+        if iteration < 1:
+            return 0.001
         if iteration < 5:
             return 0.05
         elif iteration < 8:
