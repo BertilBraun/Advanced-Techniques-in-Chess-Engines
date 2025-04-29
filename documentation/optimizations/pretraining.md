@@ -53,3 +53,4 @@ Value count in range (of a 512 batch):
 | (1.0, 1.1)   | 0     |
 
 Compared against Stockfish 15, it plays on equal time settings at Skill Level 3-4.
+This seems reasonable given: <https://github.com/QueensGambit/CrazyAra/tree/master/DeepCrazyhouse/src/experiments/html/train_all_games_over_2000_elo/SGD>

@@ -42,9 +42,6 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     encodedBoard[13] = (board.turn == WHITE) ? 0xFFFFFFFFFFFFFFFF : 0;
 
-    // TODO: NOTE: previously this was then first decoded into binary and flipped along axis=1, but
-    // I think both is unnecessary
-
     return encodedBoard;
 }
 CompressedEncodedBoard compress(const EncodedBoard &binary) {

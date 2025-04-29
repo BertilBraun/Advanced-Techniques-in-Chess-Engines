@@ -41,3 +41,20 @@ As can be seen in the graph, the self-play games are not able to fully utilize t
 ## Multiple GPUs for Self-Play
 
 Because the demand for training samples is so high and the generation of samples still takes a considerable amount of time, multiple GPUs are used in parallel with duplicated setups of many self-players per GPU. This way, the demand for training samples can be met and the training can be performed on a large dataset. The amount of GPUs used is based on the demand for training samples and the time it takes to generate the samples and the time it takes to train the model.
+
+## Baseline Performance [Crazyhouse](https://ml-research.github.io/papers/czech2019deep.pdf)
+
+Two GPUs were exclusively used for selfplay game generation and one GPU was used
+both for game generation and updating the neural network as soon as sufficiently many
+samples have been acquired. On a single GPU about 45 games were generated per minute
+which corresponded to 1,000 training samples per minute. Each training sample was
+produced by an average of 800 MCTS rollouts with a batch-size of 8.
+
+Not all of the game moves were exported as training samples and exported as further
+described in Section 5.2.1. A new neural network was generated every 819,200 (= 640 ·
+128 · 10) newly generated samples. After the 10th model update, the number of required
+samples was increased to 1,228,800 (= 640 · 128 · 15) samples. 81,920 (= 640 · 128) of
+these samples were used for validation and the rest for training. Furthermore, 409,600
+(= 640 · 128 · 5) samples were added and randomly chosen from 5 % of the most recent
+replay memory data. The training proceeded for one epoch and afterwards, all samples,
+except validation samples, were added to the replay memory.
