@@ -41,7 +41,7 @@ Key features:
 > - **Model stagnation**: The model stops improving after reaching ~70% win rate against random players.
 > - **Early value head collapse**: The value head collapses to predicting a constant value after just one epoch of training.
 
-**Fixing these issues is essential** to enable scaling the project to complex games like Chess.
+**Fixing these issues is essential**.
 
 ---
 
@@ -51,7 +51,6 @@ Key features:
 
 - After reaching around **70% win rate against random opponents**, the model stops improving further.
 - Continued self-play and training fail to meaningfully strengthen the model.
-- **Without solving this**, scaling up to more complex games like **Chess** becomes impossible.
 
 **Potential causes under investigation:**
 - **Hyperparameter mismatches** (e.g., exploration vs. exploitation balance, learning rates).
@@ -64,7 +63,7 @@ Key features:
 
 ### **Training Logs for Debugging**
 
-To assist in diagnosing the critical learning challenges, **detailed TensorBoard logs** and **screenshots of several training runs** are provided under: `documentation/tensorboard_runs/`
+To assist in diagnosing the critical learning challenges, **detailed TensorBoard logs** and **screenshots of several training runs** are provided under: [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/).
 
 These logs include:
 
@@ -192,8 +191,7 @@ Future enhancements are planned:
 Major goals include:
 - **Solve model stagnation and value collapse** — **highest priority**.
 - Improve **C++ self-play optimization** for better GPU/CPU utilization.
-- Develop **more efficient hyperparameter search** for scaling to Chess and beyond.
-- Expand the system to handle other board games with varied rulesets.
+- Develop **more efficient hyperparameter search** with faster hyperparameter sample evaluation.
 - Implement additional **training improvements** for stability and faster convergence.
 
 ---
@@ -221,9 +219,8 @@ Contributions are **highly welcome**, especially for:
 - Fixing model stagnation and value collapse.
 - Debugging or improving MCTS and training.
 - Optimizing C++ self-play and GPU utilization.
-- Adding support for new board games.
 
-Please open issues or pull requests if you'd like to help!
+Please open issues or pull requests or contact the Author directly if you'd like to help!
 
 ---
 
