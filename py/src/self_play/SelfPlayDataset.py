@@ -228,7 +228,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 resignations=self.stats.resignations // fract_of_games,
             )
 
-            chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}'))
+            chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}_{random_id()}'))
 
         return chunked_files
 
