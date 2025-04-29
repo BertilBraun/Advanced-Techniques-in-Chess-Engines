@@ -36,12 +36,11 @@ Key features:
 
 ### **Critical Challenges**
 
-> **Two serious learning problems are currently blocking progress:**
+> **One serious learning problem is currently blocking progress:**
 > 
 > - **Model stagnation**: The model stops improving after reaching ~70% win rate against random players.
-> - **Early value head collapse**: The value head collapses to predicting a constant value after just one epoch of training.
 
-**Fixing these issues is essential**.
+**Fixing this issue is essential**.
 
 ---
 
@@ -59,6 +58,7 @@ Key features:
 - **Training pipeline flaws** such as gradient issues, loss imbalance, or poor replay data diversity.
 
 > **Solving model stagnation is the highest current priority for the project’s success.**
+
 ---
 
 ### **Training Logs for Debugging**
@@ -141,32 +141,18 @@ Topics covered include:
 
 ## **Additional Challenges**
 
-Besides model stagnation, there are several critical technical challenges:
+Besides model stagnation, there are several technical challenges:
 
-### **1. Early Value Head Collapse**
-
-- The **value head** of the neural network collapses to predicting a **constant value** (e.g., always zero or always the same number) **within the first training epoch**.
-- After collapse, the value output becomes **uninformative**, and the model **fails to learn** the true game outcomes.
-- This behavior persists **regardless of training data** or further optimization.
-- **Potential causes** may include:
-  - Incorrect loss function setup or imbalance between value and policy loss.
-  - Faulty target generation during self-play (e.g., wrong labeling of outcomes).
-  - Poor initialization or optimization parameters.
-  - Bugs in backpropagation, training loops, or MCTS result extraction.
-
-> **Fixing value head collapse is a high priority**, as it is likely connected to the broader model stagnation problem.
-
-### **2. High Cache hit Rate**
+### **1. High Cache Hit Rate**
 
 - We currently have a **cache hit rate of 60–80%** during self-play. This means that **60–80% of the states** were already evaluated and cached.
-- This means that we have a lot of duplicate evaluations, which could be from the MCTS trees, being rebuilt every time a new move is played, or from the same board state being reached by different move sequences or problems between the self-play workers.
-- This could be totally fine and simply by design of the MCTS, but it could also be a major bug/problem in the self-play engine or the MCTS implementation.
+- This could indicate duplicate evaluations or issues in the MCTS tree rebuilding or in self-play worker coordination.
 - **Possible solutions** include:
   - Investigating the MCTS tree rebuilding process.
   - Ensuring that self-play workers are not duplicating efforts unnecessarily.
   - Optimizing the caching mechanism to reduce redundancy.
 
-### **3. GPU Utilization**
+### **2. GPU Utilization**
 
 - During large-scale self-play, GPU usage remains around **60–70%**.
 - Possible causes:
@@ -174,7 +160,7 @@ Besides model stagnation, there are several critical technical challenges:
   - Suboptimal threading or caching techniques.
 - While important for speeding up training, this issue is **secondary** compared to the learning problems.
 
-### **4. Hyperparameter Tuning at Scale**
+### **3. Hyperparameter Tuning at Scale**
 
 - **Bayesian hyperparameter optimization** was effective for smaller games like Tic-Tac-Toe and Connect Four.
 - For **Chess and complex games**, tuning becomes **very expensive** and **slow** due to long training cycles.
@@ -189,7 +175,7 @@ Future enhancements are planned:
 - [Future Work Overview](documentation/future.md)
 
 Major goals include:
-- **Solve model stagnation and value collapse** — **highest priority**.
+- **Solve model stagnation** — **highest priority**.
 - Improve **C++ self-play optimization** for better GPU/CPU utilization.
 - Develop **more efficient hyperparameter search** with faster hyperparameter sample evaluation.
 - Implement additional **training improvements** for stability and faster convergence.
@@ -216,7 +202,7 @@ For setup and usage instructions, see the **Getting Started** guides inside each
 
 Contributions are **highly welcome**, especially for:
 
-- Fixing model stagnation and value collapse.
+- Fixing model stagnation.
 - Debugging or improving MCTS and training.
 - Optimizing C++ self-play and GPU utilization.
 
@@ -254,5 +240,5 @@ This project is licensed under the [MIT License](./LICENSE).
 
 ---
 
-> **Help on fixing model stagnation and value collapse is urgently needed —  
+> **Help on fixing model stagnation is urgently needed —  
 > if you have experience with AlphaZero, deep reinforcement learning, or debugging training systems, please reach out!**
