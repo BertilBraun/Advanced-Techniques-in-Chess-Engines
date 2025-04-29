@@ -105,6 +105,8 @@ class MCTSNode:
     def update_virtual_losses(self, delta: int) -> None:
         node = self
 
+        # TODO more virtual loss, to avoid the same node being selected multiple times (i.e. muliply delta by 100?)
+
         while node.parent:
             node.parent.children_virtual_losses[node.my_child_index] += delta
             node.parent.children_number_of_visits[node.my_child_index] += delta

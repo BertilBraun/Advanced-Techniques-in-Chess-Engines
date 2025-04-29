@@ -26,7 +26,7 @@ def create_model(args: NetworkParams, device: torch.device) -> Network:
 
 def create_optimizer(model: Network) -> torch.optim.Optimizer:
     # return torch.optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4, nesterov=True)
-    return torch.optim.AdamW(model.parameters(), lr=0.2, weight_decay=1e-4, amsgrad=True)
+    return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01, amsgrad=True)
 
 
 def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) -> Network:

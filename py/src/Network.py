@@ -22,6 +22,10 @@ class Network(nn.Module):
 
         self.device = device
 
+        num_policy_channels = 2
+        num_value_channels = 1  # TODO 8?
+        value_fc_size = 64  # TODO 256?
+
         encoding_channels, row_count, column_count = CurrentGame.representation_shape
         action_size = CurrentGame.action_size
 
@@ -34,19 +38,21 @@ class Network(nn.Module):
         self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 16, kernel_size=3, padding='same', bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(hidden_size, num_policy_channels, kernel_size=3, bias=False),
+            nn.BatchNorm2d(num_policy_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * row_count * column_count, action_size),
+            nn.Linear(num_policy_channels * (row_count - 2) * (column_count - 2), action_size),
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 8, kernel_size=3, bias=False),
-            nn.BatchNorm2d(8),
+            nn.Conv2d(hidden_size, num_value_channels, kernel_size=3, bias=False),
+            nn.BatchNorm2d(num_value_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(8 * (row_count - 2) * (column_count - 2), 1),
+            nn.Linear(num_value_channels * (row_count - 2) * (column_count - 2), value_fc_size),
+            nn.ReLU(),
+            nn.Linear(value_fc_size, 1),
             nn.Tanh(),
         )
 
