@@ -22,9 +22,9 @@ class Network(nn.Module):
 
         self.device = device
 
-        num_policy_channels = 2
-        num_value_channels = 1  # TODO 8?
-        value_fc_size = 64  # TODO 256?
+        num_policy_channels = 4
+        num_value_channels = 8
+        value_fc_size = 64
 
         encoding_channels, row_count, column_count = CurrentGame.representation_shape
         action_size = CurrentGame.action_size
