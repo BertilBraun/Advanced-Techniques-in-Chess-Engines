@@ -190,11 +190,11 @@ elif True:
     CurrentGameVisuals = ChessVisuals()
 
     NUM_GPUS = torch.cuda.device_count()
-    SELF_PLAYERS_PER_NODE = 64
+    SELF_PLAYERS_PER_NODE = 32
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 30)
+    NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 5)
 
     network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
