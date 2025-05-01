@@ -218,7 +218,7 @@ class SelfPlay:
                     # lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
-            game_outcome *= 0.997  # discount the game outcome for each move
+            game_outcome *= 0.99  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         total_visits = sum(visit_count for _, visit_count in visit_counts)

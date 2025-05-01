@@ -30,6 +30,9 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
     ) -> None:
         self.stats = SelfPlayDatasetStats()
 
+        total_samples_pre_deduplication = 0
+        total_samples_post_deduplication = 0
+
         for i in range(max_num_repetitions):
             for iteration, sublist in origins[::-1]:
                 if len(sublist) == 0:
@@ -43,10 +46,16 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     iteration_dataset += SelfPlayDataset.load(file)
                     processed_indicator.touch()
 
+                total_samples_pre_deduplication += len(iteration_dataset)
                 iteration_dataset.deduplicate()
+                total_samples_post_deduplication += len(iteration_dataset)
                 iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 500)
 
                 chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
+                if not chunks:
+                    log(f'No chunks found for iteration {iteration}.')
+                    continue
+
                 for chunk in chunks:
                     self.stats += SelfPlayDataset.load_stats(chunk)
 
@@ -73,6 +82,10 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
             if self.stats.num_samples > 5_000_000:
                 log(f'Loaded {self.stats.num_samples} samples with {i+1} multiplications.')
                 break
+
+        log(
+            f'Initially loaded {total_samples_pre_deduplication} samples. After deduplication {total_samples_post_deduplication} samples remained.'
+        )
 
     @staticmethod
     def _log_all_dataset_stats(iterations: list[list[Path]], run: int) -> None:

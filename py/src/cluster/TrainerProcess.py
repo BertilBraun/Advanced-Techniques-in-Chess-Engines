@@ -108,11 +108,12 @@ class TrainerProcess:
             (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
             for iteration in range(max(iteration - window_size, 0), iteration + 1)
         ]
-        all_dataset_files = [(i, f) for i, f in all_dataset_files if f]
-        validation_dataset_file = (all_dataset_files[-1][0], [all_dataset_files[-1][1].pop(-1)])
+        all_dataset_files = list(reversed(sorted([(i, f) for i, f in all_dataset_files if f])))
+        latest_iteration, latest_files = all_dataset_files[-1]
+        validation_dataset_file = (latest_iteration, [latest_files.pop(-1)])
 
         dataset = SelfPlayTrainDataset(self.run_id)
-        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=5)
+        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=2)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 
