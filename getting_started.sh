@@ -4,8 +4,8 @@ cd Advanced-Techniques-in-Chess-Engines/py
 
 source setup.sh
 
-# run train.py for 2 minute to setup of the reference dataset
-timeout 2m python3.11 train.py
+# run train.py for 1 minute to setup of the reference dataset
+timeout 1m python3.11 train.py
 
 # download the chess database
 python3.11 -m src.games.chess.ChessDatabase 30 2000

@@ -76,8 +76,11 @@ def main(dataset_paths: list[str]):
     for dataset_path in dataset_paths:
         assert os.path.exists(dataset_path), f'Dataset path does not exist: {dataset_path}'
 
+    log(f'Starting training with {len(dataset_paths)} datasets!')
+
     run_id = get_run_id()
     with TensorboardWriter(run_id, 'dataset_trainer'):
+        log('Loading datasets...')
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
         test_dataset = test_dataset.deduplicate()
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
