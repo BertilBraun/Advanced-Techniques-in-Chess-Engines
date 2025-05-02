@@ -212,7 +212,7 @@ elif True:
     )
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
-    PARALLEL_GAMES = 16
+    PARALLEL_GAMES = 8
     NUM_SEARCHES_PER_TURN = 640
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
@@ -224,7 +224,7 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=12,  # 120
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
