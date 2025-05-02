@@ -1,5 +1,15 @@
 import src.environ_setup  # noqa # isort:skip # This import is necessary for setting up the environment variables
 
+import os
+
+os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
+os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
+
+import torch
+
+torch.manual_seed(42)  # Set the random seed for PyTorch
+torch.set_num_threads(1)  # Limit the number of threads to 1 for PyTorch
+torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
 
 if __name__ == '__main__':
     import torch.multiprocessing as mp

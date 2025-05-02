@@ -32,6 +32,7 @@ class InferenceClient:
         self.save_path = save_path
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
+        log(f'Using device: {self.device}')
 
         self.inference_cache: dict[int, tuple[MoveList, float]] = {}
         self.total_hits = 0
@@ -58,6 +59,7 @@ class InferenceClient:
                 torch.cuda.synchronize()
 
                 self.model = load_model(model_path, self.network_args, self.device)
+                self.model.to(self.device)  # just to be sure
                 self.model.disable_auto_grad()
                 self.model.eval()
                 self.model.fuse_model()
