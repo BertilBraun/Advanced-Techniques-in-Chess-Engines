@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional
 
 
 @dataclass
@@ -73,6 +73,9 @@ class TrainingParams:
 
     batch_size: int
     """This is the size of the batch to train with"""
+
+    optimizer: Literal['adamw', 'sgd']
+    """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
 
     sampling_window: Callable[[int], int]
     """This is a function that returns the sampling window to use for the self-play data. The sampling window is the number of most recent games to sample from to train with. This is used to phase out old data that is no longer useful to train with. The function should take the current iteration as input and return the sampling window to use for that iteration.

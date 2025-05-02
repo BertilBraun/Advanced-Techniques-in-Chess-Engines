@@ -1,4 +1,5 @@
 from time import sleep
+from typing import Literal
 import torch
 from os import PathLike
 from pathlib import Path
@@ -8,6 +9,8 @@ from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
 from src.util.compile import try_compile
 from src.util.log import LogLevel, log
+
+OptimizerType = Literal['adamw', 'sgd']
 
 
 def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
@@ -24,9 +27,12 @@ def create_model(args: NetworkParams, device: torch.device) -> Network:
     return model
 
 
-def create_optimizer(model: Network) -> torch.optim.Optimizer:
-    # return torch.optim.SGD(model.parameters(), lr=0.2, momentum=0.9, weight_decay=1e-4, nesterov=True)
-    return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01, amsgrad=True)
+def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimizer:
+    if type == 'sgd':
+        return torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4, nesterov=True)
+    elif type == 'adamw':
+        return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.01, amsgrad=True)
+    raise ValueError(f'Optimizer type {type} not supported. Supported types: adamw, sgd')
 
 
 def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) -> Network:
@@ -75,8 +81,8 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
     return model
 
 
-def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimizer:
-    optimizer = create_optimizer(model)
+def load_optimizer(path: str | PathLike, model: Network, type: OptimizerType) -> torch.optim.Optimizer:
+    optimizer = create_optimizer(model, type)
     try:
         for _ in range(5):
             try:
@@ -97,20 +103,20 @@ def load_optimizer(path: str | PathLike, model: Network) -> torch.optim.Optimize
 
 
 def load_model_and_optimizer(
-    iteration: int, args: NetworkParams, device: torch.device, save_folder: str | PathLike
+    iteration: int, args: NetworkParams, device: torch.device, save_folder: str | PathLike, type: OptimizerType
 ) -> tuple[Network, torch.optim.Optimizer]:
     if iteration <= 0:
         model = create_model(args, device)
-        optimizer = create_optimizer(model)
+        optimizer = create_optimizer(model, type)
     else:
         try:
             model = load_model(model_save_path(iteration, save_folder), args, device)
             try:
-                optimizer = load_optimizer(optimizer_save_path(iteration, save_folder), model)
+                optimizer = load_optimizer(optimizer_save_path(iteration, save_folder), model, type)
             except FileNotFoundError:
-                optimizer = create_optimizer(model)
+                optimizer = create_optimizer(model, type)
         except FileNotFoundError:
-            return load_model_and_optimizer(iteration - 1, args, device, save_folder)
+            return load_model_and_optimizer(iteration - 1, args, device, save_folder, type)
 
     log(f'Model and optimizer loaded from iteration {iteration}')
     return model, optimizer

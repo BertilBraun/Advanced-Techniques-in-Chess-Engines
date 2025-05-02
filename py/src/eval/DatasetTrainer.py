@@ -53,6 +53,7 @@ def train_model(
         optimizer,
         TrainingParams(
             num_epochs=num_epochs,
+            optimizer='adamw',
             batch_size=TRAINING_ARGS.training.batch_size,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
@@ -78,7 +79,7 @@ def main(dataset_paths: list[str]):
     run_id = get_run_id()
     with TensorboardWriter(run_id, 'dataset_trainer'):
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
-        test_dataset.deduplicate()
+        test_dataset = test_dataset.deduplicate()
         test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
 
         tmp_dataset = SelfPlayTrainDataset(run_id)
@@ -89,7 +90,7 @@ def main(dataset_paths: list[str]):
 
         # Instantiate the model
         model = create_model(TRAINING_ARGS.network, device=device)
-        optimizer = create_optimizer(model)
+        optimizer = create_optimizer(model, TRAINING_ARGS.training.optimizer)
 
         # Train the model
         log('Starting training...')
@@ -102,7 +103,13 @@ def main(dataset_paths: list[str]):
 
         for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
             if model_save_path(pre_iter, save_folder).exists():
-                model, optimizer = load_model_and_optimizer(pre_iter, TRAINING_ARGS.network, device, save_folder)
+                model, optimizer = load_model_and_optimizer(
+                    pre_iter,
+                    TRAINING_ARGS.network,
+                    device,
+                    save_folder,
+                    TRAINING_ARGS.training.optimizer,
+                )
                 log(f'Loaded model_{pre_iter}.pt')
                 break
 

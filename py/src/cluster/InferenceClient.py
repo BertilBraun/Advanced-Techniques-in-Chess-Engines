@@ -144,14 +144,16 @@ class InferenceClient:
                 log('Model not loaded', level=LogLevel.ERROR)
             return [(np.full((CurrentGame.action_size,), 1 / CurrentGame.action_size), 0.0) for _ in boards]
 
-        input_tensor = torch.tensor(np.array(boards), dtype=TORCH_DTYPE, device=self.device)
+        input_tensor = torch.from_numpy(np.array(boards)).to(dtype=TORCH_DTYPE, device=self.device, non_blocking=True)
 
         policies, values = self.model(input_tensor)
 
+        policies = torch.detach(policies)
+        values = torch.detach(values)
+
         policies = torch.softmax(policies, dim=1)
 
-        results = torch.cat((policies, values), dim=1)
+        policies = policies.to(dtype=torch.float32, device='cpu').numpy()
+        values = values.to(dtype=torch.float32, device='cpu').numpy()
 
-        results = results.to(dtype=torch.float32, device='cpu').numpy()
-
-        return [(result[:-1], result[-1]) for result in results]
+        return [(policy, value) for policy, value in zip(policies, values)]

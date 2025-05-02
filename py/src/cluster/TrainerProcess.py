@@ -55,7 +55,13 @@ class TrainerProcess:
 
     @timeit
     def train(self, iteration: int) -> TrainingStats:
-        model, optimizer = load_model_and_optimizer(iteration, self.args.network, self.device, self.args.save_path)
+        model, optimizer = load_model_and_optimizer(
+            iteration,
+            self.args.network,
+            self.device,
+            self.args.save_path,
+            self.args.training.optimizer,
+        )
 
         trainer = Trainer(model, optimizer, self.args.training)
 
@@ -113,7 +119,7 @@ class TrainerProcess:
         validation_dataset_file = (latest_iteration, [latest_files.pop(-1)])
 
         dataset = SelfPlayTrainDataset(self.run_id)
-        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=2)
+        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=2, fraction_of_samples=0.1)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 

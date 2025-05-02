@@ -76,7 +76,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         return new_dataset
 
     @timeit
-    def deduplicate(self) -> None:
+    def deduplicate(self) -> SelfPlayDataset:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
         mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
 
@@ -104,11 +104,19 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                     (visit_counts, value_target),
                 )
 
-        self.encoded_states = [np.array(state) for state in mp.keys()]
-        self.visit_counts = [policy_target for _, (policy_target, _) in mp.values()]
-        self.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
+        deduplicated_dataset = SelfPlayDataset()
+        deduplicated_dataset.encoded_states = [np.array(state) for state in mp.keys()]
+        deduplicated_dataset.visit_counts = [visit_count for _, (visit_count, _) in mp.values()]
+        deduplicated_dataset.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
+        deduplicated_dataset.stats = SelfPlayDatasetStats(
+            num_samples=len(mp),
+            num_games=self.stats.num_games,
+            game_lengths=self.stats.game_lengths,
+            total_generation_time=self.stats.total_generation_time,
+            resignations=self.stats.resignations,
+        )
+        return deduplicated_dataset
 
-    @timeit
     def shuffle(self) -> SelfPlayDataset:
         indices = np.arange(len(self))
         np.random.shuffle(indices)
@@ -119,6 +127,16 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         shuffled_dataset.value_targets = [self.value_targets[i] for i in indices]
         shuffled_dataset.stats = self.stats
         return shuffled_dataset
+
+    def sample(self, num_samples: int) -> SelfPlayDataset:
+        indices = np.random.choice(len(self), num_samples, replace=False)
+
+        sampled_dataset = SelfPlayDataset()
+        sampled_dataset.encoded_states = [self.encoded_states[i] for i in indices]
+        sampled_dataset.visit_counts = [self.visit_counts[i] for i in indices]
+        sampled_dataset.value_targets = [self.value_targets[i] for i in indices]
+        sampled_dataset.stats = self.stats
+        return sampled_dataset
 
     @timeit
     @staticmethod

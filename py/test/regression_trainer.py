@@ -26,9 +26,10 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
 
     trainer = Trainer(
         model,
-        create_optimizer(model),
+        create_optimizer(model, 'adamw'),
         TrainingParams(
             num_epochs=num_epochs,
+            optimizer='adamw',
             batch_size=BATCH_SIZE,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
@@ -46,10 +47,8 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
 
 def get_regression_dataset(path: str) -> SelfPlayDataset:
     dataset = SelfPlayDataset.load(path)
-    dataset.deduplicate()
-    dataset.value_targets = dataset.value_targets[:BATCH_SIZE]
-    dataset.encoded_states = dataset.encoded_states[:BATCH_SIZE]
-    dataset.visit_counts = dataset.visit_counts[:BATCH_SIZE]
+    dataset = dataset.deduplicate()
+    dataset = dataset.sample(BATCH_SIZE).shuffle()
 
     for _ in range(5):
         dataset += dataset

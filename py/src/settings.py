@@ -40,6 +40,12 @@ def sampling_window(current_iteration: int) -> int:
 
 
 def learning_rate(current_iteration: int) -> float:
+    # SGD based on https://github.com/michaelnny/alpha_zero/blob/main/alpha_zero/training_go.py
+    if current_iteration < 10:
+        return 0.01
+    return 0.001
+
+    # AdamW
     if current_iteration < 10:
         return 0.001
     return 0.0005
@@ -71,21 +77,6 @@ def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         return lerp(min_lr, base_lr, batch_percentage * 2)
     else:
         return lerp(base_lr, min_lr, (batch_percentage - 0.5) * 2)
-
-
-# Chess training args
-# ALPHA_ZERO_TRAINING_ARGS = TrainingArgs(
-#     num_iterations=200,
-#     num_self_play_iterations=500_000,
-#     num_parallel_games=128,  # unknown
-#     num_iterations_per_turn=1600,
-#     num_epochs=2,  # unknown
-#     batch_size=2048,
-#     temperature=1.0,
-#     dirichlet_epsilon=0.25,
-#     dirichlet_alpha=0.3,
-#     c_param=4.0,  # unknown
-# )
 
 
 if False:
@@ -196,10 +187,11 @@ elif True:
 
     NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 3)
 
-    network = NetworkParams(num_layers=15, hidden_size=128)
+    network = NetworkParams(num_layers=15, hidden_size=64)
     training = TrainingParams(
         num_epochs=1,
-        batch_size=2048,
+        optimizer='sgd',
+        batch_size=512,  # TODO 2048,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
@@ -213,7 +205,7 @@ elif True:
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 8
-    NUM_SEARCHES_PER_TURN = 640
+    NUM_SEARCHES_PER_TURN = 320  # TODO 640
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove

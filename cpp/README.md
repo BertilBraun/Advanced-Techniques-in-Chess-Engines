@@ -10,7 +10,7 @@ While originally intended to replace the Python version entirely, some higher-le
 Detailed documentation for each project component can be found in:
 
 - **[Chess Encoding for Neural Networks](documentation/implementation/encodings.md)**: How chess board states are encoded as inputs to the neural network.
-- **[Chess Framework](documentation/implementation/chess/README.md)**: Details about the ported chess logic and performance gains.
+- **[Chess Framework](documentation/implementation/chess/README.md)**: Details about the ported chess logic and performance gains. **WARNING**: The chess logic has a **bug** somewhere in the move generation code. The perft tests are not passing!!!
 - **[Pre-Training System](documentation/optimizations/pretraining.md)**: Using grandmaster games and Stockfish to bootstrap the initial training.
 - **[Parallelization](documentation/implementation/parallelization/README.md)**: Strategies used for efficient parallel self-play and data generation.
 

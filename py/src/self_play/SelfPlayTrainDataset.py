@@ -26,7 +26,11 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
         self.stats = SelfPlayDatasetStats()
 
     def load_from_files(
-        self, folder_path: str, origins: list[tuple[int, list[Path]]], max_num_repetitions: int
+        self,
+        folder_path: str,
+        origins: list[tuple[int, list[Path]]],
+        max_num_repetitions: int,
+        fraction_of_samples: float = 1.0,
     ) -> None:
         self.stats = SelfPlayDatasetStats()
 
@@ -47,9 +51,12 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                     processed_indicator.touch()
 
                 total_samples_pre_deduplication += len(iteration_dataset)
-                iteration_dataset.deduplicate()
+                iteration_dataset = iteration_dataset.deduplicate()
                 total_samples_post_deduplication += len(iteration_dataset)
-                iteration_dataset.shuffle().chunked_save(folder_path + '/shuffled', iteration, 500)
+
+                iteration_dataset = iteration_dataset.sample(int(len(iteration_dataset) * fraction_of_samples))
+                iteration_dataset = iteration_dataset.shuffle()
+                iteration_dataset.chunked_save(folder_path + '/shuffled', iteration, 500)
 
                 chunks = SelfPlayDataset.get_files_to_load_for_iteration(folder_path + '/shuffled', iteration)
                 if not chunks:
@@ -61,28 +68,16 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
 
                 self.all_chunks.append(chunks)
 
-                if self.stats.num_samples > 10_000_000:
-                    log(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
-                    log(f'Originally loaded from {len(origins)} iterations.')
-                    log(f'Loaded from {len(self.all_chunks)} iterations.')
-                    break
-
-            if i == 0:
-                thread = Process(
-                    target=self._log_all_dataset_stats,
-                    args=([list.copy() for list in self.all_chunks], self.run),
-                    daemon=True,
-                )
-                thread.start()
-            else:
-                n = len(self.all_chunks)
-                assert n % 2 == 0, 'Number of chunks must be even'
-                self.all_chunks = [self.all_chunks[i] + self.all_chunks[i + n // 2] for i in range(n // 2)]
-
             if self.stats.num_samples > 5_000_000:
                 log(f'Loaded {self.stats.num_samples} samples with {i+1} multiplications.')
                 break
 
+        thread = Process(
+            target=self._log_all_dataset_stats,
+            args=([list.copy() for list in self.all_chunks], self.run),
+            daemon=True,
+        )
+        thread.start()
         log(
             f'Initially loaded {total_samples_pre_deduplication} samples. After deduplication {total_samples_post_deduplication} samples remained.'
         )

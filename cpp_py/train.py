@@ -7,7 +7,19 @@ if __name__ == '__main__':
     # otherwise it will not work on Windows
     mp.set_start_method('spawn')
 
-import torch  # noqa
+import os
+
+os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
+os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
+
+import torch
+
+torch.manual_seed(42)  # Set the random seed for PyTorch
+torch.set_num_threads(1)  # Limit the number of threads to 1 for PyTorch
+torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
+
+torch.autograd.set_detect_anomaly(True)
+
 import AlphaZeroCpp
 
 
