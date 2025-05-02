@@ -2457,3 +2457,42 @@ int main() {
 }
 
 */
+
+// perft tests for chess
+int perft(chess::Board &board, int depth) {
+    if (depth == 0) {
+        return 1;
+    }
+
+    int count = 0;
+    auto moves = board.legalMoves();
+    for (const auto &move : moves) {
+        chess::Board newBoard = board.copy();
+        newBoard.push(move);
+        count += perft(newBoard, depth - 1);
+    }
+    return count;
+}
+
+int main() {
+    chess::Board board =
+        chess::Board::fromFEN("rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKB1R w KQkq - 0 1");
+
+    for (int depth = 1; depth <= 5; ++depth) {
+        int result = perft(board, depth);
+        std::cout << "Perft result at depth " << depth << ": " << result << std::endl;
+    }
+
+    /*
+    Perft result at depth 1: 20
+    Perft result at depth 2: 400
+    Perft result at depth 3: 8888
+    Perft result at depth 4: 196264
+    Perft result at depth 5: 4812803
+
+    WARNING: This is wrong an indicates an error in the move generation code. At depth 5, the number
+    of moves should be: 4865609!
+    */
+
+    return 0;
+}
