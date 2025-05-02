@@ -26,7 +26,6 @@ MAX_MATERIAL_VALUE = (
 
 class ChessBoard(Board[ChessMove]):
     def __init__(self) -> None:
-        super().__init__()
         self.board = chess.Board()
 
     @property
