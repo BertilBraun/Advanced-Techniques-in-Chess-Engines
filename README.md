@@ -38,7 +38,7 @@ Key features:
 
 > **One serious learning problem is currently blocking progress:**
 > 
-> - **Model stagnation**: The model stops improving after reaching ~70% win rate against random players.
+> - **Model stagnation**: The model stops improving after reaching ~70% win rate against random players and when started from a strong pretrained model, it deteriorates to approximately the same level.
 
 **Fixing this issue is essential**.
 
@@ -65,23 +65,9 @@ Key features:
 
 To assist in diagnosing the critical learning challenges, **detailed TensorBoard logs** and **screenshots of several training runs** are provided under: [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/).
 
-These logs include:
+![Latest Run](documentation/tensorboard_runs/From pretrained py 3.png)
 
-- Cache hit rates
-- Dataset statistics
-- Policy target distributions
-- Value target distributions
-- Evaluation results
-- Loss curves
-- GPU utilization
-- Neural network outputs
-- Training and validation performance over time
-- Value output means and standard deviations
-
-> **If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems,  
-> you may be able to spot anomalies or common issues just by analyzing these plots —  
-> without needing to set up or run the system yourself.  
-> Any insights or help based on the provided results would be *greatly appreciated*!**
+> **If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!**
 
 ---
 
@@ -92,12 +78,14 @@ The training pipeline consists of:
 1. **Self-Play Generation**:
    - Multiple workers generate games using the current model and MCTS.
 2. **Data Collection**:
-   - Store game states, move probabilities, and outcomes.
+   - Store game states, move probabilities, and outcomes to file from the workers.
 3. **Training**:
+   - Load the collected data from the files, shuffle and deduplicate it.
    - Train the neural network to predict policies and values from self-play data.
 4. **Evaluation**:
    - Compare new models to previous best models.
    - Promote stronger models for further training.
+5. **Repeat**
 
 ---
 
@@ -194,7 +182,11 @@ The project is organized into two main sections:
   - High-performance self-play engine.
   - Optimized multithreaded inference.
 
-For setup and usage instructions, see the **Getting Started** guides inside each directory.
+For setup and usage instructions, see the **Getting Started** guides inside each directory. The entire project can be setup by launching the `getting_started.sh` script in the root directory. This will install all dependencies and set up the environment for both Python and C++ components and start the training process from the python implementation.
+
+```bash
+curl https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/refs/heads/master/getting_started.sh | bash
+```
 
 ---
 

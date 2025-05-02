@@ -2490,8 +2490,10 @@ int main() {
     Perft result at depth 4: 196264
     Perft result at depth 5: 4812803
 
-    WARNING: This is wrong an indicates an error in the move generation code. At depth 5, the number
-    of moves should be: 4865609!
+
+    WARNING: This is wrong an indicates an error in the move generation code. At depth 5, the
+    number of moves should be: 4865609!
+    TODO: Fix chess implementation to pass the perft test.
     */
 
     return 0;
