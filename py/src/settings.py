@@ -42,8 +42,8 @@ def sampling_window(current_iteration: int) -> int:
 def learning_rate(current_iteration: int) -> float:
     # SGD based on https://github.com/michaelnny/alpha_zero/blob/main/alpha_zero/training_go.py
     if current_iteration < 10:
-        return 0.01
-    return 0.001
+        return 0.1
+    return 0.01
 
     # AdamW
     if current_iteration < 10:
