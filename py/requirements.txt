@@ -8,3 +8,5 @@ tensorboardX
 chess
 pygame
 GPUtil
+requests
+psutil
