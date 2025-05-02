@@ -129,7 +129,7 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
             drop_last=True,
             persistent_workers=True,
             pin_memory=True,
-            prefetch_factor=2,
+            prefetch_factor=8,
         )
 
     def __iter__(self):
