@@ -204,18 +204,7 @@ Please open issues or pull requests or contact the Author directly if you'd like
 
 ## **References**
 
-- [Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm (AlphaZero Paper)](https://arxiv.org/pdf/1712.01815)
-- [Minigo: A Case Study in Reproducing Reinforcement Learning Research](https://openreview.net/pdf?id=H1eerhIpLV)
-- [Lessons from AlphaZero: Connect Four](https://medium.com/oracledevs/lessons-from-alphazero-connect-four-e4a0ae82af68)
-- [Lessons from AlphaZero Part 3: Parameter Tweaking](https://medium.com/oracledevs/lessons-from-alphazero-part-3-parameter-tweaking-4dceb78ed1e5)
-- [Lessons from AlphaZero Part 4: Improving the Training Target](https://medium.com/oracledevs/lessons-from-alphazero-part-4-improving-the-training-target-6efba2e71628)
-- [Lessons from AlphaZero Part 5: Performance Optimization](https://medium.com/oracledevs/lessons-from-alpha-zero-part-5-performance-optimization-664b38dc509e)
-- [Lessons from AlphaZero Part 6: Hyperparameter Tuning](https://medium.com/oracledevs/lessons-from-alphazero-part-6-hyperparameter-tuning-b1cfcbe4ca9a)
-- [AlphaZero Chess: How It Works, What Sets It Apart, and What It Can Tell Us](https://towardsdatascience.com/alphazero-chess-how-it-works-what-sets-it-apart-and-what-it-can-tell-us-4ab3d2d08867)
-- [AlphaZero Explained](https://nikcheerla.github.io/deeplearningschool/2018/01/01/AlphaZero-Explained/)
-- [AlphaGo Zero Cheat Sheet](https://medium.com/applied-data-science/alphago-zero-explained-in-one-diagram-365f5abf67e0)
-- [AlphaZero from Scratch (YouTube)](https://www.youtube.com/watch?v=wuSQpLinRB4&ab_channel=freeCodeCamp.org)
-- [AlphaZero General (GitHub)](https://github.com/suragnair/alpha-zero-general)
+Check out [references.md](documentation/references.md) for a list of papers, articles, and resources related to AlphaZero and deep reinforcement learning.
 
 ---
 

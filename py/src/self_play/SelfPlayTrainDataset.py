@@ -14,6 +14,8 @@ from src.util.tensorboard import TensorboardWriter
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
+# TODO: The entire selfplaytraindataset should fit into Memory at once, with compressed state and Action probs. This could speed up training by reducing the number of file reads and writes
+
 
 class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
