@@ -65,7 +65,7 @@ Key features:
 
 To assist in diagnosing the critical learning challenges, **detailed TensorBoard logs** and **screenshots of several training runs** are provided under: [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/).
 
-![Latest Run](documentation/tensorboard_runs/From_pretrained_py_3.png)
+![Latest Run](documentation/tensorboard_runs/From_pretrained_py_4.png)
 
 > **If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!**
 

@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import clamp
-from src.util.remove_repetitions import remove_repetitions
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
@@ -81,10 +80,7 @@ class SelfPlay:
         for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
             spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score))
 
-            if (
-                mcts_result.result_score < self.args.resignation_threshold
-                # TODO or len(spg.played_moves) >= 250  # some max game length
-            ):
+            if mcts_result.result_score < self.args.resignation_threshold:
                 # Resignation if most of the mcts searches result in a loss
                 self.self_play_games[spg] = 0
                 self._add_training_data(spg, mcts_result.result_score, resignation=True)
@@ -109,9 +105,14 @@ class SelfPlay:
                     }
                     white_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
                     black_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
-                    winner = 1 if white_value > black_value else -1 if black_value > white_value else 0
 
-                    self._add_training_data(spg, winner * spg.board.current_player, resignation=False)
+                    # Convert to result from current player's perspective
+                    if spg.board.current_player == 1:  # White's perspective
+                        game_outcome = 1.0 if white_value > black_value else -1.0 if black_value > white_value else 0.0
+                    else:  # Black's perspective
+                        game_outcome = 1.0 if black_value > white_value else -1.0 if white_value > black_value else 0.0
+
+                    self._add_training_data(spg, game_outcome, resignation=False)
                 self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
                 self.self_play_games[SelfPlayGame()] += count
                 continue
@@ -195,16 +196,10 @@ class SelfPlay:
             self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
-            game_length=len(spg.played_moves),
+            game_length=len(spg.memory),
             generation_time=time.time() - spg.start_generation_time,
             resignation=resignation,
         )
-
-        if game_outcome == 0.0:
-            # if the outcome is 0.0 (draw), remove repetitions from the moves
-            indices_to_keep = remove_repetitions(spg.played_moves)
-            spg.played_moves = [spg.played_moves[i] for i in indices_to_keep]
-            spg.memory = [spg.memory[i] for i in indices_to_keep]
 
         for mem in spg.memory[::-1]:
             encoded_board = CurrentGame.get_canonical_board(mem.board)

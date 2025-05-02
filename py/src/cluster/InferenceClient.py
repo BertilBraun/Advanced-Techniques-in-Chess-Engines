@@ -32,7 +32,6 @@ class InferenceClient:
         self.save_path = save_path
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
-        log(f'Using device: {self.device}')
 
         self.inference_cache: dict[int, tuple[MoveList, float]] = {}
         self.total_hits = 0

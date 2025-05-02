@@ -29,10 +29,13 @@ class ChessBoard(Board[ChessMove]):
         super().__init__()
         self.board = chess.Board()
 
+    @property
+    def current_player(self) -> Player:
+        return 1 if self.board.turn == chess.WHITE else -1
+
     def make_move(self, move: ChessMove) -> None:
         assert move in self.board.legal_moves
         self.board.push(move)
-        self._switch_player()
 
     def is_game_over(self) -> bool:
         return self.board.is_game_over()
@@ -52,7 +55,6 @@ class ChessBoard(Board[ChessMove]):
     def copy(self) -> ChessBoard:
         game = ChessBoard()
         game.board = self.board.copy(stack=False)
-        game.current_player = self.current_player
         return game
 
     def quick_hash(self) -> int:
@@ -68,7 +70,6 @@ class ChessBoard(Board[ChessMove]):
 
     def set_fen(self, fen: str) -> None:
         self.board.set_fen(fen)
-        self.current_player = 1 if self.board.turn == chess.WHITE else -1
 
     @staticmethod
     def from_fen(fen: str) -> ChessBoard:
