@@ -222,7 +222,7 @@ elif True:
         MIN_VISIT_COUNT = 1
 
     TRAINING_ARGS = TrainingArgs(
-        num_iterations=120,
+        num_iterations=12,  # 120
         save_path=SAVE_PATH + '/chess',
         num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
         network=network,
