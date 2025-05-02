@@ -194,7 +194,7 @@ elif True:
     NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + (2 * SELF_PLAYERS_PER_NODE) // 3
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
-    NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 5)
+    NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 3)
 
     network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
