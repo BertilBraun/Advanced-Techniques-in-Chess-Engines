@@ -191,7 +191,7 @@ elif True:
 
     NUM_GPUS = torch.cuda.device_count()
     SELF_PLAYERS_PER_NODE = 32
-    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + (2 * SELF_PLAYERS_PER_NODE) // 3
+    NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + SELF_PLAYERS_PER_NODE // 2
     NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
     NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 5)
