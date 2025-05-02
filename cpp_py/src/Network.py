@@ -22,6 +22,10 @@ class Network(nn.Module):
 
         self.device = device
 
+        num_policy_channels = 2
+        num_value_channels = 1
+        value_fc_size = 64
+
         self.startBlock = nn.Sequential(
             nn.Conv2d(ENCODING_CHANNELS, hidden_size, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(hidden_size),
@@ -31,21 +35,31 @@ class Network(nn.Module):
         self.backBone = nn.ModuleList([ResBlock(hidden_size) for _ in range(num_res_blocks)])
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 16, kernel_size=3, bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(hidden_size, num_policy_channels, kernel_size=3, bias=False),
+            nn.BatchNorm2d(num_policy_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), ACTION_SIZE),
+            nn.Linear(num_policy_channels * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), ACTION_SIZE),
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, 16, kernel_size=3, bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(hidden_size, num_value_channels, kernel_size=3, bias=False),
+            nn.BatchNorm2d(num_value_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(16 * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), 1),
+            nn.Linear(num_value_channels * (BOARD_LENGTH - 2) * (BOARD_LENGTH - 2), value_fc_size),
+            nn.ReLU(),
+            nn.Linear(value_fc_size, 1),
             nn.Tanh(),
         )
+
+        # init weights
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+                nn.init.zeros_(m.bias)
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 

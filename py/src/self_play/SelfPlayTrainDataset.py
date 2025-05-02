@@ -62,9 +62,9 @@ class SelfPlayTrainDataset(IterableDataset[tuple[torch.Tensor, torch.Tensor, tor
                 self.all_chunks.append(chunks)
 
                 if self.stats.num_samples > 10_000_000:
-                    print(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
-                    print(f'Originally loaded from {len(origins)} iterations.')
-                    print(f'Loaded from {len(self.all_chunks)} iterations.')
+                    log(f'Loaded {self.stats.num_samples} samples. Stopping loading more samples.')
+                    log(f'Originally loaded from {len(origins)} iterations.')
+                    log(f'Loaded from {len(self.all_chunks)} iterations.')
                     break
 
             if i == 0:

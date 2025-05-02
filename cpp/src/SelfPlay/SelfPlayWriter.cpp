@@ -106,7 +106,7 @@ void SelfPlayWriter::write(const SelfPlayGame &game, float outcome, bool resigna
             addSample(board, visitCounts, resultScore);
             m_stats.num_samples += 1;
         }
-        outcome *= 0.997f; // discount the game outcome for each move
+        outcome *= 0.99f; // discount the game outcome for each move
     }
 
     if (m_samples.size() >= m_args.writer.batchSize) {
