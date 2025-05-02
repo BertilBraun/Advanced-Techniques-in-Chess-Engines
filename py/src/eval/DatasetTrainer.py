@@ -20,7 +20,7 @@ from src.util.save_paths import (
     save_model_and_optimizer,
 )
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 6
 
 
 def train_model(

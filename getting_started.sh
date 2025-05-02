@@ -15,8 +15,8 @@ python3.11 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
 
 # copy the pretrained model to the training_data directory
 mkdir -p training_data/chess
-cp reference/ChessGame/model_9.pt training_data/chess/model_1.pt
-cp reference/ChessGame/model_9.pt training_data/chess/reference_model.pt
+cp reference/ChessGame/model_5.pt training_data/chess/model_1.pt
+cp reference/ChessGame/model_5.pt training_data/chess/reference_model.pt
 
 # run train.py based on the pretrained model
 python3.11 train.py
