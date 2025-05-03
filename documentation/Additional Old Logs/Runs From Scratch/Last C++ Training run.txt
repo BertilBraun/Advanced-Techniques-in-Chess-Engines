@@ -1,0 +1,220 @@
+Last C++ Training run
+
+
+
+[01.58.04] [INFO] Starting training
+[01.58.04] [INFO] Training on: GPU
+[01.58.04] [INFO] Training args:
+TrainingArgs(save_path='training_data/chess',
+             num_iterations=70,
+             num_games_per_iteration=1536,
+             network=NetworkParams(num_layers=15, hidden_size=128),
+             training=TrainingParams(num_epochs=2,
+                                     batch_size=2048,
+                                     eval_batch_size=128,
+                                     sampling_window=<function sampling_window at 0x15354f820a40>,
+                                     learning_rate=<function learning_rate at 0x15354f821bc0>,
+                                     learning_rate_scheduler=<function learning_rate_scheduler at 0x15354f464040>,
+                                     max_num_sample_repetitions=3,
+                                     num_workers=4),
+             cluster=ClusterParams(num_self_play_nodes_on_cluster=96),
+             evaluation=EvaluationParams(num_games=40, dataset_path='reference/chess_database/iteration_202410/0'))
+[01.58.04] [INFO] Run ID: 10
+[01.58.05] [INFO] Starting training at iteration 8.
+[01.58.16] [INFO] Model and optimizer loaded from iteration 8
+[01.58.16] [INFO] Starting self play process.
+[01.58.16] [INFO] Self play process started with PID: 3736755
+[01.58.16] [INFO] Starting training at iteration 8.
+[01.58.16] [INFO] Model and optimizer loaded from iteration 8
+Collecting games for iteration 8: 2827.0games [00:00, ?games/s]
+[01.58.16] [INFO] Loading memories for iteration 8 with window size 3 (5-8)
+[01:58:20] [01] Number of processors: 96 Number of GPUs: 4
+[01:58:20] [01] Starting on run 10 with model path: training_data/chess/model_8.jit.pt Iteration: 8
+[01:58:20] [02] Worker process 1 of 96 started
+
+[01.58.22] [INFO] Loaded 4712718 samples from 28728 games
+Training batches: 100%|█████████▉| 2295/2301 [08:42<00:01,  4.39it/s]
+[02.07.05] [INFO] Training stats: Policy Loss: 2.5689, Value Loss: 0.0745, Total Loss: 2.6438, Value Mean: 0.0021, Value Std: 0.3685
+Validation batches: 100%|██████████| 40/40 [00:07<00:00,  5.22it/s]
+[02.07.12] [INFO] Validation stats: Policy Loss: 3.1664, Value Loss: 0.2050, Total Loss: 3.3703, Value Mean: -0.0066, Value Std: 0.2891
+[02.07.13] [INFO] Loading memories for iteration 8 with window size 3 (5-8)
+[02:07:15] [01] New model found: training_data/chess/model_9.jit.pt Iteration: 9
+[02:07:15] [01] Updating model for all clients
+[02.07.17] [INFO] Loaded 4711722 samples from 29028 games
+[02:07:18] [01] 79.9098 % (total 79.9098 % on 720591 invocations) InferenceClient::inference_batch
+[02:07:18] [01] 12.8929 % (total 12.8929 % on 728545 invocations) InferenceClient::modelInference
+[02:07:18] [01] 5.81034 % (total 5.81034 % on 711645 invocations) MCTS::parallel_iterate
+[02:07:18] [01] 1.32192 % (total 1.32192 % on 8848 invocations) MCTS::search
+[02:07:18] [01] 0.0650295 % (total 0.0650295 % on 8848 invocations) SelfPlay
+[02:07:18] [01] In total: 10961 % recorded
+[02:07:18] [01] Model updated for all clients
+Training batches: 100%|█████████▉| 2294/2300 [08:35<00:01,  4.45it/s]
+[02.15.53] [INFO] Training stats: Policy Loss: 2.5556, Value Loss: 0.0648, Total Loss: 2.6202, Value Mean: 0.0021, Value Std: 0.3845
+Validation batches: 100%|██████████| 40/40 [00:04<00:00,  8.61it/s]
+[02.15.58] [INFO] Validation stats: Policy Loss: 3.1699, Value Loss: 0.2233, Total Loss: 3.3934, Value Mean: -0.0433, Value Std: 0.3220
+[02.16.00] [INFO] Trainer finished at iteration 8.
+[02.16.00] [INFO] Iteration 8: Policy Loss: 2.5623, Value Loss: 0.0697, Total Loss: 2.6320, Value Mean: 0.0021, Value Std: 0.3765
+[02.16.27] [INFO] Evaluation results at iteration 8:
+[02.16.27] [INFO]     Policy accuracy @1: 6.48%
+[02.16.27] [INFO]     Policy accuracy @5: 23.44%
+[02.16.27] [INFO]     Policy accuracy @10: 38.31%
+[02.16.27] [INFO]     Avg value loss: 1.0282118055555556
+[02.31.06] [INFO] Results after playing vs random at iteration 8: Results(wins=18, losses=0, draws=22)
+[02.39.06] [INFO] Results after playing the current vs the reference at iteration 8: Results(wins=7, losses=1, draws=32)
+[02.41.06] [INFO] Results after playing 8 vs 3: Results(wins=7, losses=0, draws=33)
+[02.42.06] [INFO] Results after playing two most recent models at iteration 8: Results(wins=5, losses=2, draws=33)
+[02.42.07] [INFO] Evaluation process finished at iteration 8.
+[02.42.07] [INFO] Starting training at iteration 9.
+[02.42.07] [INFO] Model and optimizer loaded from iteration 9
+Collecting games for iteration 9: 5137.5games [00:00, ?games/s]
+[02.42.07] [INFO] Loading memories for iteration 9 with window size 3 (6-9)
+[02.43.02] [INFO] Loaded 4911330 samples from 29829 games
+Training batches: 100%|█████████▉| 2389/2398 [08:43<00:01,  4.57it/s]
+[02.51.46] [INFO] Training stats: Policy Loss: 2.5277, Value Loss: 0.0884, Total Loss: 2.6161, Value Mean: 0.0024, Value Std: 0.3748
+Validation batches: 100%|██████████| 37/37 [00:04<00:00,  9.10it/s]
+[02.51.50] [INFO] Validation stats: Policy Loss: 2.5418, Value Loss: 0.2924, Total Loss: 2.8340, Value Mean: 0.0019, Value Std: 0.3438
+[02.51.51] [INFO] Loading memories for iteration 9 with window size 3 (6-9)
+[02:51:55] [01] New model found: training_data/chess/model_10.jit.pt Iteration: 10
+[02:51:55] [01] Updating model for all clients
+[02.52.07] [INFO] Loaded 4910565 samples from 29829 games
+Training batches:  29%|██▊       | 687/2397 [02:17<05:24,  5.28it/s][02:54:25] [01] 82.0576 % (total 81.7141 % on 5935630 invocations) InferenceClient::inference_batch
+[02:54:25] [01] 12.4375 % (total 12.5103 % on 4460888 invocations) InferenceClient::modelInference
+[02:54:25] [01] 3.87218 % (total 4.18219 % on 5862309 invocations) MCTS::parallel_iterate
+[02:54:25] [01] 1.42047 % (total 1.40471 % on 73225 invocations) MCTS::search
+[02:54:25] [01] 0.212286 % (total 0.188733 % on 73224 invocations) SelfPlay
+[02:54:25] [01] In total: 10955.2 % recorded
+[02:54:25] [01] Model updated for all clients
+Training batches: 100%|█████████▉| 2388/2397 [08:52<00:02,  4.48it/s]
+[03.01.01] [INFO] Training stats: Policy Loss: 2.5136, Value Loss: 0.0758, Total Loss: 2.5894, Value Mean: 0.0020, Value Std: 0.3889
+Validation batches: 100%|██████████| 37/37 [00:05<00:00,  7.16it/s]
+[03.01.06] [INFO] Validation stats: Policy Loss: 2.5600, Value Loss: 0.4139, Total Loss: 2.9730, Value Mean: -0.1067, Value Std: 0.3559
+[03.01.07] [INFO] Trainer finished at iteration 9.
+[03.01.07] [INFO] Iteration 9: Policy Loss: 2.5207, Value Loss: 0.0821, Total Loss: 2.6028, Value Mean: 0.0022, Value Std: 0.3818
+[03.01.28] [INFO] Evaluation results at iteration 9:
+[03.01.28] [INFO]     Policy accuracy @1: 7.20%
+[03.01.28] [INFO]     Policy accuracy @5: 24.59%
+[03.01.28] [INFO]     Policy accuracy @10: 39.70%
+[03.01.28] [INFO]     Avg value loss: 0.8969907407407407
+[03.13.13] [INFO] Results after playing vs random at iteration 9: Results(wins=17, losses=0, draws=23)
+[03.21.13] [INFO] Results after playing two most recent models at iteration 9: Results(wins=6, losses=1, draws=33)
+[03.23.13] [INFO] Results after playing 9 vs 4: Results(wins=4, losses=1, draws=35)
+[03.24.13] [INFO] Results after playing the current vs the reference at iteration 9: Results(wins=10, losses=1, draws=29)
+[03.24.14] [INFO] Evaluation process finished at iteration 9.
+[03.24.14] [INFO] Starting training at iteration 10.
+[03.24.14] [INFO] Model and optimizer loaded from iteration 10
+Collecting games for iteration 10: 11642.5games [00:00, ?games/s]
+[03.24.14] [INFO] Loading memories for iteration 10 with window size 3 (7-10)
+[03.26.56] [INFO] Loaded 5577162 samples with 2 multiplications.
+[03.26.59] [INFO] Loaded 5577162 samples from 33704 games
+Training batches: 100%|█████████▉| 2714/2723 [14:07<00:02,  3.20it/s]
+[03.41.07] [INFO] Training stats: Policy Loss: 2.6002, Value Loss: 0.1048, Total Loss: 2.7052, Value Mean: 0.0019, Value Std: 0.3157
+Validation batches: 100%|██████████| 38/38 [00:03<00:00, 10.09it/s]
+[03.41.11] [INFO] Validation stats: Policy Loss: 2.7179, Value Loss: 0.2649, Total Loss: 2.9819, Value Mean: -0.0471, Value Std: 0.3006
+[03.41.11] [INFO] Loading memories for iteration 10 with window size 3 (7-10)
+[03:41:11] [01] New model found: training_data/chess/model_11.jit.pt Iteration: 11
+[03:41:11] [01] Updating model for all clients
+[03.41.29] [INFO] Loaded 5576690 samples with 2 multiplications.
+[03.41.32] [INFO] Loaded 5576690 samples from 33704 games
+Training batches:  85%|████████▍ | 2309/2722 [10:38<04:03,  1.70it/s][03:52:13] [01] 81.9916 % (total 81.8543 % on 11756729 invocations) InferenceClient::inference_batch
+[03:52:13] [01] 11.4125 % (total 11.9558 % on 8615753 invocations) InferenceClient::modelInference
+[03:52:13] [01] 4.66409 % (total 4.42561 % on 11611541 invocations) MCTS::parallel_iterate
+[03:52:13] [01] 1.72789 % (total 1.56795 % on 145090 invocations) MCTS::search
+[03:52:13] [01] 0.203874 % (total 0.196381 % on 145090 invocations) SelfPlay
+[03:52:13] [01] In total: 10903.6 % recorded
+[03:52:13] [01] Model updated for all clients
+Training batches: 100%|█████████▉| 2713/2722 [14:20<00:02,  3.15it/s]
+[03.55.54] [INFO] Training stats: Policy Loss: 2.5651, Value Loss: 0.1001, Total Loss: 2.6652, Value Mean: 0.0019, Value Std: 0.3320
+Validation batches: 100%|██████████| 38/38 [00:05<00:00,  7.35it/s]
+[03.55.59] [INFO] Validation stats: Policy Loss: 2.7253, Value Loss: 0.2850, Total Loss: 3.0099, Value Mean: -0.0565, Value Std: 0.3154
+[03.56.00] [INFO] Trainer finished at iteration 10.
+[03.56.00] [INFO] Iteration 10: Policy Loss: 2.5827, Value Loss: 0.1025, Total Loss: 2.6852, Value Mean: 0.0019, Value Std: 0.3238
+[03.56.21] [INFO] Evaluation results at iteration 10:
+[03.56.21] [INFO]     Policy accuracy @1: 8.02%
+[03.56.21] [INFO]     Policy accuracy @5: 26.71%
+[03.56.21] [INFO]     Policy accuracy @10: 42.30%
+[03.56.21] [INFO]     Avg value loss: 1.0270543981481481
+[04:03:54] [01] WARNING: No valid moves found for game  2k3r1/8/2N4p/p1p1pp1P/P3Pp2/8/6P1/3K3R b - - 5 51  with result  0.167463
+[04:05:35] [02] WARNING: No valid moves found for game  5r1r/4k1p1/3b3p/2p1p2P/p3P3/3K4/8/8 w - - 5 120  with result  0.729817
+[04.08.07] [INFO] Results after playing vs random at iteration 10: Results(wins=14, losses=0, draws=26)
+[04.16.07] [INFO] Results after playing 10 vs 5: Results(wins=11, losses=1, draws=28)
+[04:16:23] [03] WARNING: No valid moves found for game  2k4r/P6K/8/5p2/4PP1P/5BR1/6PB/8 w - - 1 69  with result  -0.27813
+[04.17.07] [INFO] Results after playing two most recent models at iteration 10: Results(wins=2, losses=1, draws=37)
+[04.17.07] [INFO] Results after playing the current vs the reference at iteration 10: Results(wins=12, losses=0, draws=28)
+[04.17.08] [INFO] Evaluation process finished at iteration 10.
+[04.17.08] [INFO] Starting training at iteration 11.
+[04.17.08] [INFO] Model and optimizer loaded from iteration 11
+Collecting games for iteration 11: 7858.0games [00:00, ?games/s]
+[04.17.08] [INFO] Loading memories for iteration 11 with window size 3 (8-11)
+[04:17:30] [04] WARNING: No valid moves found for game  b2kQ1r1/8/8/P1P2pp1/P3pP2/2B1KP2/7P/1R6 b - - 3 54  with result  0.826833
+[04.17.45] [INFO] Loaded 5405328 samples with 2 multiplications.
+[04.17.49] [INFO] Loaded 5405328 samples from 32678 games
+Training batches:  68%|██████▊   | 1800/2639 [07:01<05:42,  2.45it/s][04:24:51] [05] WARNING: No valid moves found for game  r4k2/8/7p/p1p2Rp1/PpP3PN/RPQ5/1B1K4/8 b - - 0 77  with result  0.428286
+Training batches: 100%|█████████▉| 2630/2639 [14:02<00:02,  3.12it/s]
+[04.31.51] [INFO] Training stats: Policy Loss: 2.5475, Value Loss: 0.0992, Total Loss: 2.6468, Value Mean: 0.0009, Value Std: 0.3464
+Validation batches: 100%|██████████| 38/38 [00:05<00:00,  7.17it/s]
+[04.31.57] [INFO] Validation stats: Policy Loss: 2.5481, Value Loss: 0.2660, Total Loss: 2.8141, Value Mean: -0.0009, Value Std: 0.3156
+[04.31.57] [INFO] Loading memories for iteration 11 with window size 3 (8-11)
+[04:31:58] [01] New model found: training_data/chess/model_12.jit.pt Iteration: 12
+[04:31:58] [01] Updating model for all clients
+[04.32.12] [INFO] Loaded 5404764 samples with 2 multiplications.
+[04.32.15] [INFO] Loaded 5404764 samples from 32678 games
+Training batches:  92%|█████████▏| 2435/2639 [11:51<02:18,  1.47it/s][04:44:08] [01] 81.2899 % (total 81.6783 % on 16636507 invocations) InferenceClient::inference_batch
+[04:44:08] [01] 11.343 % (total 11.7647 % on 12243495 invocations) InferenceClient::modelInference
+[04:44:08] [01] 4.79252 % (total 4.54001 % on 16431069 invocations) MCTS::parallel_iterate
+[04:44:08] [01] 2.22721 % (total 1.7735 % on 205339 invocations) MCTS::search
+[04:44:08] [01] 0.347352 % (total 0.243453 % on 205339 invocations) SelfPlay
+[04:44:08] [01] In total: 10882.1 % recorded
+[04:44:08] [01] Model updated for all clients
+Training batches: 100%|█████████▉| 2629/2639 [13:36<00:03,  3.22it/s]
+[04.45.53] [INFO] Training stats: Policy Loss: 2.5342, Value Loss: 0.0911, Total Loss: 2.6252, Value Mean: 0.0009, Value Std: 0.3590
+Validation batches: 100%|██████████| 38/38 [00:05<00:00,  7.55it/s]
+[04.45.58] [INFO] Validation stats: Policy Loss: 2.5510, Value Loss: 0.2951, Total Loss: 2.8458, Value Mean: 0.0133, Value Std: 0.3528
+[04.45.59] [INFO] Trainer finished at iteration 11.
+[04.45.59] [INFO] Iteration 11: Policy Loss: 2.5408, Value Loss: 0.0952, Total Loss: 2.6360, Value Mean: 0.0009, Value Std: 0.3527
+[04.46.26] [INFO] Evaluation results at iteration 11:
+[04.46.26] [INFO]     Policy accuracy @1: 7.52%
+[04.46.26] [INFO]     Policy accuracy @5: 25.78%
+[04.46.26] [INFO]     Policy accuracy @10: 41.73%
+[04.46.26] [INFO]     Avg value loss: 0.8799189814814815
+[04:51:42] [06] WARNING: No valid moves found for game  K1k3r1/8/2p5/2P3pp/6PP/8/6R1/8 b - - 24 103  with result  -0.0507934
+[04.57.04] [INFO] Results after playing vs random at iteration 11: Results(wins=16, losses=0, draws=24)
+[05.07.04] [INFO] Results after playing two most recent models at iteration 11: Results(wins=5, losses=3, draws=32)
+[05.08.04] [INFO] Results after playing 11 vs 6: Results(wins=9, losses=3, draws=28)
+[05.08.04] [INFO] Results after playing the current vs the reference at iteration 11: Results(wins=10, losses=0, draws=30)
+[05.08.06] [INFO] Evaluation process finished at iteration 11.
+[05.08.06] [INFO] Starting training at iteration 12.
+[05.08.06] [INFO] Model and optimizer loaded from iteration 12
+Collecting games for iteration 12: 4736.5games [00:00, ?games/s]
+[05.08.06] [INFO] Loading memories for iteration 12 with window size 3 (9-12)
+[05.08.47] [INFO] Loaded 6133910 samples with 2 multiplications.
+[05.08.51] [INFO] Loaded 6133910 samples from 36828 games
+Training batches:  79%|███████▉  | 2379/2995 [09:00<05:44,  1.79it/s][05:17:52] [07] WARNING: No valid moves found for game  2r5/5b2/p4p2/P2K1kpp/2R3PP/8/6P1/8 w - - 20 94  with result  0.357839
+Training batches: 100%|█████████▉| 2985/2995 [14:15<00:02,  3.49it/s]
+[05.23.07] [INFO] Training stats: Policy Loss: 2.5198, Value Loss: 0.0960, Total Loss: 2.6157, Value Mean: 0.0014, Value Std: 0.3628
+Validation batches: 100%|██████████| 39/39 [00:03<00:00, 11.04it/s]
+[05.23.11] [INFO] Validation stats: Policy Loss: 2.4267, Value Loss: 0.2477, Total Loss: 2.6763, Value Mean: 0.0190, Value Std: 0.3575
+[05.23.11] [INFO] Loading memories for iteration 12 with window size 3 (9-12)
+[05:23:14] [01] New model found: training_data/chess/model_13.jit.pt Iteration: 13
+[05:23:14] [01] Updating model for all clients
+[05.23.29] [INFO] Loaded 6133500 samples with 2 multiplications.
+[05.23.31] [INFO] Loaded 6133500 samples from 36828 games
+Training batches:  84%|████████▍ | 2518/2994 [10:19<05:00,  1.58it/s][05:33:52] [01] 80.1158 % (total 81.3185 % on 21517943 invocations) InferenceClient::inference_batch
+[05:33:52] [01] 11.5882 % (total 11.7241 % on 15819248 invocations) InferenceClient::modelInference
+[05:33:52] [01] 4.82557 % (total 4.60576 % on 21252248 invocations) MCTS::parallel_iterate
+[05:33:52] [01] 3.0616 % (total 2.07009 % on 265599 invocations) MCTS::search
+[05:33:52] [01] 0.408897 % (total 0.281547 % on 265599 invocations) SelfPlay
+[05:33:52] [01] In total: 10875.2 % recorded
+[05:33:52] [01] Model updated for all clients
+Training batches: 100%|█████████▉| 2984/2994 [14:57<00:03,  3.32it/s]
+[05.38.30] [INFO] Training stats: Policy Loss: 2.5135, Value Loss: 0.0932, Total Loss: 2.6066, Value Mean: 0.0010, Value Std: 0.3703
+Validation batches: 100%|██████████| 39/39 [00:04<00:00,  7.97it/s]
+[05.38.35] [INFO] Validation stats: Policy Loss: 2.4283, Value Loss: 0.2464, Total Loss: 2.6743, Value Mean: 0.0061, Value Std: 0.3551
+[05.38.36] [INFO] Trainer finished at iteration 12.
+[05.38.36] [INFO] Iteration 12: Policy Loss: 2.5166, Value Loss: 0.0946, Total Loss: 2.6111, Value Mean: 0.0012, Value Std: 0.3665
+[05.38.59] [INFO] Evaluation results at iteration 12:
+[05.38.59] [INFO]     Policy accuracy @1: 7.29%
+[05.38.59] [INFO]     Policy accuracy @5: 26.69%
+[05.38.59] [INFO]     Policy accuracy @10: 42.19%
+[05.38.59] [INFO]     Avg value loss: 0.8297164351851852
+[05.48.40] [INFO] Results after playing vs random at iteration 12: Results(wins=19, losses=0, draws=21)
+slurmstepd: error: *** JOB 3094996 ON hkn0725 CANCELLED AT 2025-04-22T05:57:07 DUE TO TIME LIMIT ***

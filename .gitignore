@@ -23,3 +23,5 @@ cpp/libtorch**/**
 
 **/.cache/**
 /cpp_py/reference
+
+!documentation/**
