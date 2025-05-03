@@ -67,6 +67,77 @@ To assist in diagnosing the critical learning challenges, **detailed TensorBoard
 
 ![Latest Run](documentation/tensorboard_runs/From_pretrained_py_4.png)
 
+<details>
+<summary><strong>Training Parameters and Run documentation (click to expand)</strong></summary>
+
+Pretraining was done on 1xA10 GPU for ~20min on a dataset of ~600k 2000+ Elo games. As a decent baseline, the model wins 100% of the time against random players and has baselines for policy and value predictions:
+  Policy accuracy @1: 27.85%
+  Policy accuracy @5: 54.11%
+  Policy accuracy @10: 64.79%
+  Avg value loss: 0.712605288199016
+
+This model was then used as a starting point for the RL training run as well as for the evaluation reference model. Training then proceeded for 12 iterations with the following parameters:
+
+```jsonc
+{
+  "num_gpus": 1, // 1 A10 24GB GPU
+  "cpu_count": 30,
+  "num_self_play_players": 28,    // Based on GPU=1 and CPU=30
+  "num_games_per_iteration": 896, // 8 (parallel games) * 28 (num self players) * 4
+  "num_iterations": 12,
+
+  // Learning rate schedule (AdamW)
+  "learning_rate": {
+    "iteration 0-9": 0.001,
+    "iteration 10+": 0.0005
+  },
+
+  // Network configuration
+  "network": {
+    "num_layers": 15,
+    "hidden_size": 64
+  },
+
+  // Training settings
+  "training": {
+    "num_epochs": 1,
+    "optimizer": "adamw",
+    "batch_size": 512
+  },
+
+  // Evaluation settings
+  "evaluation": {
+    "num_searches_per_turn": 60,
+    "num_games": 40,
+    "every_n_iterations": 1,
+    "dataset_path": "reference/memory_0_chess_database.hdf5"
+  },
+
+  // Self-play parameters
+  "self_play": {
+    "num_parallel_games": 8,
+    "num_moves_after_which_to_play_greedy": 25,
+    "result_score_weight": 0.0,
+    "resignation_threshold": -1.0,
+    "temperature": 1.0,
+    "num_games_after_which_to_write": 1,
+
+    "mcts": {
+      "num_searches_per_turn": 320,
+      "num_parallel_searches": 8,
+      "dirichlet_epsilon": 0.25,
+      "dirichlet_alpha": 0.3,
+      "c_param": 1.7
+    }
+  }
+}
+```
+
+The model deteriorated rather quickly... Even though the train and validation losses decreased a lot, the evaluation shows detremental performance. The policy accuracy continuously decreased and the game win rate against the reference model dropped to a 1/13/26 win/draw/loss rate from an initial 12/16/12 win/draw/loss rate.
+
+</details>
+
+
 > **If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!**
 
 ---
@@ -182,7 +253,9 @@ The project is organized into two main sections:
   - High-performance self-play engine.
   - Optimized multithreaded inference.
 
-For setup and usage instructions, see the **Getting Started** guides inside each directory. The entire project can be setup by launching the `getting_started.sh` script in the root directory. This will install all dependencies and set up the environment for both Python and C++ components and start the training process from the python implementation.
+For setup and usage instructions, see the **Getting Started** guides inside each directory.
+
+The entire project can be setup and run by launching the `getting_started.sh` script in the root directory. This will install all dependencies and set up the environment for both Python and C++ components and start the training process from the python implementation. To do this, run the following command in your terminal:
 
 ```bash
 curl https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/refs/heads/master/getting_started.sh | bash
