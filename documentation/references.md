@@ -59,5 +59,5 @@
 
 ## 👥 People & Profiles
 
-* **[Jakub Czech – ML Researcher](https://ml-research.github.io/people/jczech/index.html)**
-* **[Jakub Czech – DeepCrazyhouse Paper (PDF)](https://ml-research.github.io/papers/czech2019deep.pdf)**
+* **[Johannes  Czech – ML Researcher](https://ml-research.github.io/people/jczech/index.html)**
+* **[Johannes  Czech – DeepCrazyhouse Paper (PDF)](https://ml-research.github.io/papers/czech2019deep.pdf)**
