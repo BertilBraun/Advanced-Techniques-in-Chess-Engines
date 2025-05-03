@@ -67,8 +67,10 @@ To assist in diagnosing the critical learning challenges, **detailed TensorBoard
 
 ![Latest Run](documentation/tensorboard_runs/From_pretrained_py_4.png)
 
+> **<span style="color:red">If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots and run documentation below — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!</span>**
+
 <details>
-<summary><strong>Training Parameters and Run documentation (click to expand)</strong></summary>
+<summary><strong>Training Parameters and Run documentation <span style="color:red">(click to expand)</span></strong></summary>
 
 Pretraining was done on 1xA10 GPU for ~20min on a dataset of ~600k 2000+ Elo games. As a decent baseline, the model wins 100% of the time against random players and has baselines for policy and value predictions:
   Policy accuracy @1: 27.85%
@@ -136,9 +138,6 @@ This model was then used as a starting point for the RL training run as well as 
 The model deteriorated rather quickly... Even though the train and validation losses decreased a lot, the evaluation shows detremental performance. The policy accuracy continuously decreased and the game win rate against the reference model dropped to a 1/13/26 win/draw/loss rate from an initial 12/16/12 win/draw/loss rate.
 
 </details>
-
-
-> **If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!**
 
 ---
 
