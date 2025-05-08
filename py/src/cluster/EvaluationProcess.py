@@ -60,13 +60,13 @@ class EvaluationProcess:
 
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
-        previous_model_path = model_save_path(iteration - self.eval_args.every_n_iterations, self.args.save_path)
-        results = model_evaluation.play_two_models_search(previous_model_path)
+        first_model_path = self.args.save_path + '/reference_model.pt'
+        results = model_evaluation.play_two_models_search(first_model_path)
 
-        log(f'Results after playing two most recent models at iteration {iteration}:', results)
+        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
 
         log_scalars(
-            'evaluation/vs_previous_model',
+            'evaluation/vs_reference_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,
@@ -75,13 +75,13 @@ class EvaluationProcess:
             iteration,
         )
 
-        first_model_path = self.args.save_path + '/reference_model.pt'
-        results = model_evaluation.play_two_models_search(first_model_path)
+        previous_model_path = model_save_path(iteration - self.eval_args.every_n_iterations, self.args.save_path)
+        results = model_evaluation.play_two_models_search(previous_model_path)
 
-        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
+        log(f'Results after playing two most recent models at iteration {iteration}:', results)
 
         log_scalars(
-            'evaluation/vs_reference_model',
+            'evaluation/vs_previous_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,
