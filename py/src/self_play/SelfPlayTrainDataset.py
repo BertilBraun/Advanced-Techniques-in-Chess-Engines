@@ -37,7 +37,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             self.datasets.append(SelfPlayDataset.load(file))
 
         self.dataset_length_prefix_sums = [0] + list(np.cumsum([len(dataset) for dataset in self.datasets]))
-        Process(target=self._log_all_dataset_stats, args=(self, self.run), daemon=True).start()
+        Process(target=self._log_all_dataset_stats, args=(self.run,), daemon=True).start()
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats
