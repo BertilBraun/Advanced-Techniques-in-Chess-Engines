@@ -163,14 +163,11 @@ class Trainer:
             out_value_mean.item(),
             out_value_std.item(),
             total_gradient_norm.item(),
-            len(dataloader),
+            num_batches=len(dataloader),
         )
 
         log(f'Last gradient norm: {norm.item()}')
         log(f'Training stats: {train_stats}')
-
-        # print('Optimal policy loss:', optimal_policy_loss.item() / len(dataloader))
-        # print('Current policy loss:', current_policy_loss.item() / len(dataloader))
 
         # Reset the mean and std for the validation batch
         out_value_mean = torch.tensor(0.0, device=self.model.device)
@@ -197,7 +194,7 @@ class Trainer:
             out_value_mean.item(),
             out_value_std.item(),
             0.0,  # No gradient norm for validation
-            len(validation_dataloader),
+            num_batches=len(validation_dataloader),
         )
 
         log(f'Validation stats: {validation_stats}')

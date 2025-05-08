@@ -128,14 +128,16 @@ class TrainerProcess:
             for iteration in range(max(iteration - window_size, 0), iteration + 1)
             for file in SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
         ]
-        validation_dataset_file = all_dataset_files.pop(-1)  # The newest file is the validation dataset
+
+        validation_dataset = SelfPlayTrainDataset(self.run_id)
+        while len(validation_dataset) == 0 and len(all_dataset_files) > 0:
+            # The newest file is the validation dataset
+            validation_dataset_file = all_dataset_files.pop(-1)
+            validation_dataset.load_from_files([validation_dataset_file])
 
         dataset = SelfPlayTrainDataset(self.run_id)
         dataset.load_from_files(all_dataset_files)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
-
-        validation_dataset = SelfPlayTrainDataset(self.run_id)
-        validation_dataset.load_from_files([validation_dataset_file])
 
         return dataset, validation_dataset

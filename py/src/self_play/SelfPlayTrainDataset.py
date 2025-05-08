@@ -78,7 +78,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             batch_size=batch_size,
             num_workers=num_workers,
             shuffle=True,
-            drop_last=True,
+            drop_last=False,
             persistent_workers=True,
             pin_memory=True,
             prefetch_factor=8,
