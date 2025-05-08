@@ -1,0 +1,168 @@
+BASELINE
+
+
+(Chess) ubuntu@129-80-125-82:~/Advanced-Techniques-in-Chess-Engines/py/logs$ cat ./log_10.33.46.log
+[10.33.46] [INFO] Starting training with 277 datasets!
+[10.33.46] [INFO] Loading datasets...
+[10.36.25] [INFO] Starting training...
+[10.36.25] [INFO] startBlock.0.weight [128, 14, 3, 3]
+[10.36.25] [INFO] startBlock.1.weight [128]
+[10.36.25] [INFO] startBlock.1.bias [128]
+[10.36.25] [INFO] backBone.0.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.0.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.0.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.0.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.0.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.0.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.1.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.1.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.1.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.1.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.1.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.1.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.2.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.2.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.2.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.2.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.2.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.2.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.3.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.3.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.3.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.3.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.3.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.3.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.4.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.4.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.4.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.4.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.4.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.4.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.5.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.5.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.5.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.5.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.5.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.5.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.6.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.6.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.6.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.6.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.6.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.6.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.7.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.7.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.7.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.7.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.7.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.7.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.8.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.8.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.8.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.8.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.8.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.8.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.9.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.9.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.9.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.9.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.9.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.9.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.10.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.10.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.10.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.10.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.10.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.10.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.11.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.11.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.11.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.11.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.11.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.11.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.12.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.12.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.12.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.12.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.12.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.12.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.13.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.13.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.13.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.13.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.13.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.13.conv_block2.1.bias [128]
+[10.36.25] [INFO] backBone.14.conv_block1.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.14.conv_block1.1.weight [128]
+[10.36.25] [INFO] backBone.14.conv_block1.1.bias [128]
+[10.36.25] [INFO] backBone.14.conv_block2.0.weight [128, 128, 3, 3]
+[10.36.25] [INFO] backBone.14.conv_block2.1.weight [128]
+[10.36.25] [INFO] backBone.14.conv_block2.1.bias [128]
+[10.36.25] [INFO] policyHead.0.weight [2, 128, 3, 3]
+[10.36.25] [INFO] policyHead.1.weight [2]
+[10.36.25] [INFO] policyHead.1.bias [2]
+[10.36.25] [INFO] policyHead.4.weight [1968, 72]
+[10.36.25] [INFO] policyHead.4.bias [1968]
+[10.36.25] [INFO] valueHead.0.weight [1, 128, 1, 1]
+[10.36.25] [INFO] valueHead.1.weight [1]
+[10.36.25] [INFO] valueHead.1.bias [1]
+[10.36.25] [INFO] valueHead.4.weight [64, 64]
+[10.36.25] [INFO] valueHead.4.bias [64]
+[10.36.25] [INFO] valueHead.6.weight [1, 64]
+[10.36.25] [INFO] valueHead.6.bias [1]
+[10.36.25] [INFO] Total number of parameters: 4598071
+[10.36.25] [INFO] Total number of trainable parameters: 4598071 (100.00%)
+[10.36.25] [INFO] Number of training samples: 5217201 on 59779 games
+[10.36.25] [INFO] Evaluating on 18619 samples on 220 games
+[10.36.25] [INFO] Training for 6 epochs
+[10.36.25] [INFO] Training with lr: 0.001 and batch size: 512
+[10.42.43] [INFO] Last gradient norm: 1.6328125
+[10.42.43] [INFO] Training stats: Policy Loss: 4.0177, Value Loss: 0.7469, Total Loss: 4.7647, Value Mean: 0.0046, Value Std: 0.2502, Gradient Norm: 1.5655, Num Batches: 10189
+[10.42.55] [INFO] Validation stats: Policy Loss: 3.7758, Value Loss: 0.7405, Total Loss: 4.5165, Value Mean: 0.0233, Value Std: 0.2863, Gradient Norm: 0.0000, Num Batches: 37
+[10.42.55] [INFO] Epoch 1/1 done: (Policy Loss: 4.0177, Value Loss: 0.7469, Total Loss: 4.7647, Value Mean: 0.0046, Value Std: 0.2502, Gradient Norm: 1.5655, Num Batches: 10189, Policy Loss: 3.7758, Value Loss: 0.7405, Total Loss: 4.5165, Value Mean: 0.0233, Value Std: 0.2863, Gradient Norm: 0.0000, Num Batches: 37)
+[10.42.59] [INFO] Evaluation results at iteration 0:
+[10.42.59] [INFO]     Policy accuracy @1: 25.68%
+[10.42.59] [INFO]     Policy accuracy @5: 51.25%
+[10.42.59] [INFO]     Policy accuracy @10: 62.30%
+[10.42.59] [INFO]     Avg value loss: 0.7403785707177343
+[10.43.00] [INFO] Training with lr: 0.001 and batch size: 512
+[10.49.10] [INFO] Last gradient norm: 2.0625
+[10.49.10] [INFO] Training stats: Policy Loss: 3.4565, Value Loss: 0.7214, Total Loss: 4.1780, Value Mean: 0.0048, Value Std: 0.2984, Gradient Norm: 1.7292, Num Batches: 10189
+[10.49.10] [INFO] Validation stats: Policy Loss: 3.6161, Value Loss: 0.7805, Total Loss: 4.3953, Value Mean: 0.0470, Value Std: 0.3808, Gradient Norm: 0.0000, Num Batches: 37
+[10.49.10] [INFO] Epoch 1/1 done: (Policy Loss: 3.4565, Value Loss: 0.7214, Total Loss: 4.1780, Value Mean: 0.0048, Value Std: 0.2984, Gradient Norm: 1.7292, Num Batches: 10189, Policy Loss: 3.6161, Value Loss: 0.7805, Total Loss: 4.3953, Value Mean: 0.0470, Value Std: 0.3808, Gradient Norm: 0.0000, Num Batches: 37)
+[10.49.14] [INFO] Evaluation results at iteration 1:
+[10.49.14] [INFO]     Policy accuracy @1: 29.04%
+[10.49.14] [INFO]     Policy accuracy @5: 55.19%
+[10.49.14] [INFO]     Policy accuracy @10: 65.48%
+[10.49.14] [INFO]     Avg value loss: 0.7801971403328148
+[10.49.16] [INFO] Training with lr: 0.001 and batch size: 512
+[10.55.25] [INFO] Last gradient norm: 2.046875
+[10.55.25] [INFO] Training stats: Policy Loss: 3.3154, Value Loss: 0.7094, Total Loss: 4.0245, Value Mean: 0.0048, Value Std: 0.3179, Gradient Norm: 1.8725, Num Batches: 10189
+[10.55.26] [INFO] Validation stats: Policy Loss: 3.5629, Value Loss: 0.7432, Total Loss: 4.3079, Value Mean: 0.0906, Value Std: 0.3347, Gradient Norm: 0.0000, Num Batches: 37
+[10.55.26] [INFO] Epoch 1/1 done: (Policy Loss: 3.3154, Value Loss: 0.7094, Total Loss: 4.0245, Value Mean: 0.0048, Value Std: 0.3179, Gradient Norm: 1.8725, Num Batches: 10189, Policy Loss: 3.5629, Value Loss: 0.7432, Total Loss: 4.3079, Value Mean: 0.0906, Value Std: 0.3347, Gradient Norm: 0.0000, Num Batches: 37)
+[10.55.30] [INFO] Evaluation results at iteration 2:
+[10.55.30] [INFO]     Policy accuracy @1: 31.26%
+[10.55.30] [INFO]     Policy accuracy @5: 56.75%
+[10.55.30] [INFO]     Policy accuracy @10: 66.83%
+[10.55.30] [INFO]     Avg value loss: 0.7428893487195711
+[10.55.31] [INFO] Training with lr: 0.001 and batch size: 512
+[11.01.45] [INFO] Last gradient norm: 1.8984375
+[11.01.45] [INFO] Training stats: Policy Loss: 3.2293, Value Loss: 0.7005, Total Loss: 3.9296, Value Mean: 0.0049, Value Std: 0.3315, Gradient Norm: 1.9888, Num Batches: 10189
+[11.01.46] [INFO] Validation stats: Policy Loss: 3.4848, Value Loss: 0.7873, Total Loss: 4.2724, Value Mean: 0.1391, Value Std: 0.3994, Gradient Norm: 0.0000, Num Batches: 37
+[11.01.46] [INFO] Epoch 1/1 done: (Policy Loss: 3.2293, Value Loss: 0.7005, Total Loss: 3.9296, Value Mean: 0.0049, Value Std: 0.3315, Gradient Norm: 1.9888, Num Batches: 10189, Policy Loss: 3.4848, Value Loss: 0.7873, Total Loss: 4.2724, Value Mean: 0.1391, Value Std: 0.3994, Gradient Norm: 0.0000, Num Batches: 37)
+[11.01.50] [INFO] Evaluation results at iteration 3:
+[11.01.50] [INFO]     Policy accuracy @1: 32.08%
+[11.01.50] [INFO]     Policy accuracy @5: 57.90%
+[11.01.50] [INFO]     Policy accuracy @10: 67.97%
+[11.01.50] [INFO]     Avg value loss: 0.7873727244299811
+[11.01.52] [INFO] Training with lr: 0.001 and batch size: 512
+[11.08.01] [INFO] Last gradient norm: 1.9375
+[11.08.01] [INFO] Training stats: Policy Loss: 3.1675, Value Loss: 0.6925, Total Loss: 3.8599, Value Mean: 0.0049, Value Std: 0.3431, Gradient Norm: 2.0943, Num Batches: 10189
+[11.08.02] [INFO] Validation stats: Policy Loss: 3.4751, Value Loss: 0.7421, Total Loss: 4.2183, Value Mean: -0.0263, Value Std: 0.3458, Gradient Norm: 0.0000, Num Batches: 37
+[11.08.02] [INFO] Epoch 1/1 done: (Policy Loss: 3.1675, Value Loss: 0.6925, Total Loss: 3.8599, Value Mean: 0.0049, Value Std: 0.3431, Gradient Norm: 2.0943, Num Batches: 10189, Policy Loss: 3.4751, Value Loss: 0.7421, Total Loss: 4.2183, Value Mean: -0.0263, Value Std: 0.3458, Gradient Norm: 0.0000, Num Batches: 37)
+[11.08.06] [INFO] Evaluation results at iteration 4:
+[11.08.06] [INFO]     Policy accuracy @1: 32.62%
+[11.08.06] [INFO]     Policy accuracy @5: 58.68%
+[11.08.06] [INFO]     Policy accuracy @10: 68.58%
+[11.08.06] [INFO]     Avg value loss: 0.7424687267960729
+[11.08.07] [INFO] Training with lr: 0.001 and batch size: 512

@@ -73,37 +73,37 @@ To assist in diagnosing the critical learning challenges, **detailed TensorBoard
 <summary><strong>Training Parameters and Run documentation <span style="color:red">(click to expand)</span></strong></summary>
 
 Pretraining was done on 1xA10 GPU for ~20min on a dataset of ~600k 2000+ Elo games. As a decent baseline, the model wins 100% of the time against random players and has baselines for policy and value predictions:
-  Policy accuracy @1: 27.85%
-  Policy accuracy @5: 54.11%
-  Policy accuracy @10: 64.79%
-  Avg value loss: 0.712605288199016
+    Policy accuracy @1: 36.22%
+    Policy accuracy @5: 65.42%
+    Policy accuracy @10: 73.82%
+    Avg value loss: 0.843603523572286
 
-This model was then used as a starting point for the RL training run as well as for the evaluation reference model. Training then proceeded for 12 iterations with the following parameters:
+This model was then used as a starting point for the RL training run as well as for the evaluation reference model. Training then proceeded for 9 iterations with the following parameters:
 
 ```jsonc
 {
   "num_gpus": 1, // 1 A10 24GB GPU
   "cpu_count": 30,
-  "num_self_play_players": 28,    // Based on GPU=1 and CPU=30
-  "num_games_per_iteration": 896, // 8 (parallel games) * 28 (num self players) * 4
+  "num_self_play_players": 27, // Based on CPU count - limited by CPU cores
+  "num_games_per_iteration": 1728, // 8 (parallel games) * 27 (self players) * 8
   "num_iterations": 12,
 
-  // Learning rate schedule (AdamW)
+  // Learning rate schedule (SGD)
   "learning_rate": {
-    "iteration 0-9": 0.001,
-    "iteration 10+": 0.0005
+    "iteration 0-9": 0.03,
+    "iteration 10+": 0.01
   },
 
   // Network configuration
   "network": {
     "num_layers": 15,
-    "hidden_size": 64
+    "hidden_size": 128
   },
 
   // Training settings
   "training": {
     "num_epochs": 1,
-    "optimizer": "adamw",
+    "optimizer": "sgd",
     "batch_size": 512
   },
 
@@ -118,24 +118,27 @@ This model was then used as a starting point for the RL training run as well as 
   // Self-play parameters
   "self_play": {
     "num_parallel_games": 8,
-    "num_moves_after_which_to_play_greedy": 25,
-    "result_score_weight": 0.0,
+    "num_moves_after_which_to_play_greedy": 24,
+    "result_score_weight": 0.15,
     "resignation_threshold": -1.0,
     "temperature": 1.0,
     "num_games_after_which_to_write": 1,
 
     "mcts": {
-      "num_searches_per_turn": 320,
-      "num_parallel_searches": 8,
+      "num_searches_per_turn": 640,
+      "num_parallel_searches": 4,
       "dirichlet_epsilon": 0.25,
       "dirichlet_alpha": 0.3,
-      "c_param": 1.7
+      "c_param": 1.7,
+      "full_search_probability": 0.2
     }
   }
 }
 ```
 
-The model deteriorated rather quickly... Even though the train and validation losses decreased a lot, the evaluation shows detremental performance. The policy accuracy continuously decreased and the game win rate against the reference model dropped to a 1/13/26 win/draw/loss rate from an initial 12/16/12 win/draw/loss rate.
+The model deteriorated rather quickly... Even though the train and validation losses decreased a lot, the evaluation shows detremental performance. The policy accuracy continuously decreased and the game win rate against the reference model dropped to a 4/19/17 win/draw/loss rate from an initial 12/17/11 win/draw/loss rate.
+
+Models as well as additional logs are available in the [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/) folder.
 
 </details>
 

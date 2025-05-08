@@ -67,12 +67,12 @@ class TrainingStats:
 
     @staticmethod
     def combine(stats_list: list[TrainingStats]) -> TrainingStats:
-        policy_loss = sum(stats.policy_loss for stats in stats_list)
-        value_loss = sum(stats.value_loss for stats in stats_list)
-        total_loss = sum(stats.total_loss for stats in stats_list)
-        value_mean = sum(stats.value_mean for stats in stats_list)
-        value_std = sum(stats.value_std for stats in stats_list)
-        gradient_norm = sum(stats.gradient_norm for stats in stats_list)
+        policy_loss = sum(stats._policy_loss for stats in stats_list)
+        value_loss = sum(stats._value_loss for stats in stats_list)
+        total_loss = sum(stats._total_loss for stats in stats_list)
+        value_mean = sum(stats._value_mean for stats in stats_list)
+        value_std = sum(stats._value_std for stats in stats_list)
+        gradient_norm = sum(stats._total_gradient_norm for stats in stats_list)
         num_batches = sum(stats._num_batches for stats in stats_list)
         return TrainingStats(
             policy_loss=policy_loss,

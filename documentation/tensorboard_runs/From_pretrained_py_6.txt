@@ -1,0 +1,191 @@
+python3.11 train.py
+[13.33.07] [INFO] Starting training
+[13.33.07] [INFO] Training on: GPU
+[13.33.07] [INFO] Training args:
+TrainingArgs(save_path='training_data/chess',
+             num_iterations=12,
+             num_games_per_iteration=1728,
+             network=NetworkParams(num_layers=15, hidden_size=128),
+             self_play=SelfPlayParams(mcts=MCTSParams(num_searches_per_turn=640, num_parallel_searches=4, dirichlet_epsilon=0.25, dirichlet_alpha=0.3, c_param=1.7, full_search_probability=0.2, min_visit_count=0),
+                                      num_parallel_games=8,
+                                      num_moves_after_which_to_play_greedy=24,
+                                      temperature=1.0,
+                                      result_score_weight=0.15,
+                                      num_games_after_which_to_write=1,
+                                      resignation_threshold=-1.0),
+             training=TrainingParams(num_epochs=1,
+                                     batch_size=512,
+                                     optimizer='sgd',
+                                     sampling_window=<function sampling_window at 0x7a322521bec0>,
+                                     learning_rate=<function learning_rate at 0x7a322521be20>,
+                                     learning_rate_scheduler=<function learning_rate_scheduler at 0x7a322519b2e0>,
+                                     num_workers=2),
+             cluster=ClusterParams(num_self_play_nodes_on_cluster=27),
+             evaluation=EvaluationParams(num_searches_per_turn=60, num_games=40, every_n_iterations=1, dataset_path='reference/memory_0_chess_database.hdf5'))
+[13.33.07] [INFO] Run ID: 9
+[13.33.07] [INFO] Setting up connections...
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Warning: Only one device available. Using device 0.
+[13.33.07] [INFO] Connections set up.
+[13.33.07] [INFO] Starting training at iteration 1.
+[13.33.07] [INFO] All processes started at iteration 1.
+[13.33.16] [INFO] No optimizer found for: training_data/chess/optimizer_1.pt
+[13.33.16] [INFO] Model and optimizer loaded from iteration 1
+Waiting for games (iter 1): 1729it [50:05,  1.74s/it]
+[14.23.22] [INFO] Loading memories for iteration 1 with window size 2 (0-1)
+[14.23.27] [INFO] Loaded 48271 samples from 1728 games
+Training batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 95/95 [04:09<00:00,  2.63s/it]
+[14.27.36] [INFO] Last gradient norm: 2.203125
+[14.27.36] [INFO] Training stats: Policy Loss: 2.1229, Value Loss: 0.2899, Total Loss: 2.4138, Value Mean: 0.0265, Value Std: 0.5255, Gradient Norm: 1.3027, Num Batches: 95
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:03<00:00,  3.72s/it]
+[14.27.40] [INFO] Validation stats: Policy Loss: 1.5391, Value Loss: 0.1777, Total Loss: 1.7188, Value Mean: -0.0728, Value Std: 0.6758, Gradient Norm: 0.0000, Num Batches: 1
+[14.27.41] [INFO] Trainer finished at iteration 1.
+[14.27.41] [INFO] All processes started at iteration 2.
+[14.27.42] [INFO] Model and optimizer loaded from iteration 2
+Waiting for games (iter 2):  65%|██████████████████████████████████████████████████████████████                                 | 1129/1728 [05:12<16:41,  1.67s/it][14.32.59] [INFO] Evaluation results at iteration 1:
+[14.32.59] [INFO]     Policy accuracy @1: 36.22%
+[14.32.59] [INFO]     Policy accuracy @5: 65.42%
+[14.32.59] [INFO]     Policy accuracy @10: 73.82%
+[14.32.59] [INFO]     Avg value loss: 0.843603523572286
+Waiting for games (iter 2):  78%|█████████████████████████████████████████████████████████████████████████▉                     | 1345/1728 [10:59<10:41,  1.68s/it][14.38.43] [INFO] Results after playing the current vs the reference at iteration 1: Wins: 12, Losses: 11, Draws: 17
+[14.38.47] [INFO] No model found for: training_data/chess/model_0.pt
+Waiting for games (iter 2):  85%|████████████████████████████████████████████████████████████████████████████████▋              | 1467/1728 [14:15<06:40,  1.54s/it][14.42.03] [INFO] Results after playing two most recent models at iteration 1: Wins: 39, Losses: 0, Draws: 1
+Waiting for games (iter 2):  88%|███████████████████████████████████████████████████████████████████████████████████▎           | 1515/1728 [15:42<06:35,  1.86s/it][14.43.35] [INFO] Results after playing vs random at iteration 1: Wins: 37, Losses: 0, Draws: 3
+Waiting for games (iter 2): 1731it [21:21,  1.35it/s]
+[14.49.04] [INFO] Loading memories for iteration 2 with window size 2 (0-2)
+[14.49.10] [INFO] Loaded 76362 samples from 2680 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 150/150 [06:18<00:00,  2.52s/it]
+[14.55.28] [INFO] Last gradient norm: 3.09375
+[14.55.28] [INFO] Training stats: Policy Loss: 1.8946, Value Loss: 0.2811, Total Loss: 2.1759, Value Mean: 0.0239, Value Std: 0.5302, Gradient Norm: 1.1998, Num Batches: 150
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:02<00:00,  2.89s/it]
+[14.55.31] [INFO] Validation stats: Policy Loss: 1.5859, Value Loss: 0.1484, Total Loss: 1.7344, Value Mean: 0.0466, Value Std: 0.5938, Gradient Norm: 0.0000, Num Batches: 1
+[14.55.33] [INFO] Trainer finished at iteration 2.
+[14.55.33] [INFO] All processes started at iteration 3.
+[14.55.34] [INFO] Model and optimizer loaded from iteration 3
+Waiting for games (iter 3):  41%|███████████████████████████████████████                                                         | 703/1728 [05:13<26:02,  1.52s/it][15.00.52] [INFO] Evaluation results at iteration 2:
+[15.00.52] [INFO]     Policy accuracy @1: 36.07%
+[15.00.52] [INFO]     Policy accuracy @5: 65.04%
+[15.00.52] [INFO]     Policy accuracy @10: 74.03%
+[15.00.52] [INFO]     Avg value loss: 0.8615652561187744
+Waiting for games (iter 3):  54%|███████████████████████████████████████████████████▋                                            | 930/1728 [11:20<17:48,  1.34s/it][15.07.02] [INFO] Results after playing the current vs the reference at iteration 2: Wins: 8, Losses: 17, Draws: 15
+Waiting for games (iter 3):  66%|██████████████████████████████████████████████████████████████▋                                | 1140/1728 [17:31<16:25,  1.68s/it][15.13.07] [INFO] Results after playing two most recent models at iteration 2: Wins: 8, Losses: 17, Draws: 15
+Waiting for games (iter 3):  71%|███████████████████████████████████████████████████████████████████▎                           | 1225/1728 [19:28<10:04,  1.20s/it][15.15.11] [INFO] Results after playing vs random at iteration 2: Wins: 36, Losses: 0, Draws: 4
+Waiting for games (iter 3): 1730it [33:15,  1.15s/it]
+[15.28.49] [INFO] Loading memories for iteration 3 with window size 2 (1-3)
+[15.28.57] [INFO] Loaded 121425 samples from 4151 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 238/238 [09:30<00:00,  2.40s/it]
+[15.38.28] [INFO] Last gradient norm: 2.796875
+[15.38.28] [INFO] Training stats: Policy Loss: 1.7490, Value Loss: 0.2768, Total Loss: 2.0256, Value Mean: 0.0234, Value Std: 0.5250, Gradient Norm: 1.1692, Num Batches: 238
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:02<00:00,  2.34s/it]
+[15.38.31] [INFO] Validation stats: Policy Loss: 1.7031, Value Loss: 1.1016, Total Loss: 2.8125, Value Mean: -0.0023, Value Std: 0.4082, Gradient Norm: 0.0000, Num Batches: 1
+[15.38.33] [INFO] Trainer finished at iteration 3.
+[15.38.33] [INFO] All processes started at iteration 4.
+[15.38.33] [INFO] Model and optimizer loaded from iteration 4
+Waiting for games (iter 4):  56%|█████████████████████████████████████████████████████▎                                          | 960/1728 [04:45<22:46,  1.78s/it][15.43.22] [INFO] Evaluation results at iteration 3:
+[15.43.22] [INFO]     Policy accuracy @1: 36.07%
+[15.43.22] [INFO]     Policy accuracy @5: 65.02%
+[15.43.22] [INFO]     Policy accuracy @10: 73.98%
+[15.43.22] [INFO]     Avg value loss: 0.8791954239209493
+Waiting for games (iter 4):  72%|████████████████████████████████████████████████████████████████████▌                          | 1248/1728 [13:04<11:59,  1.50s/it][15.51.40] [INFO] Results after playing the current vs the reference at iteration 3: Wins: 2, Losses: 20, Draws: 18
+Waiting for games (iter 4):  87%|██████████████████████████████████████████████████████████████████████████████████▏            | 1495/1728 [19:49<07:39,  1.97s/it][15.58.25] [INFO] Results after playing two most recent models at iteration 3: Wins: 12, Losses: 13, Draws: 15
+Waiting for games (iter 4):  90%|█████████████████████████████████████████████████████████████████████████████████████▉         | 1563/1728 [21:55<06:33,  2.39s/it][16.00.31] [INFO] Results after playing vs random at iteration 3: Wins: 34, Losses: 0, Draws: 6
+Waiting for games (iter 4): 1739it [26:07,  1.11it/s]
+[16.04.41] [INFO] Loading memories for iteration 4 with window size 2 (2-4)
+[16.04.53] [INFO] Loaded 108747 samples from 3569 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 213/213 [07:19<00:00,  2.06s/it]
+[16.12.13] [INFO] Last gradient norm: 1.65625
+[16.12.13] [INFO] Training stats: Policy Loss: 1.5111, Value Loss: 0.2679, Total Loss: 1.7789, Value Mean: 0.0203, Value Std: 0.5209, Gradient Norm: 1.1332, Num Batches: 213
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:02<00:00,  2.73s/it]
+[16.12.16] [INFO] Validation stats: Policy Loss: 1.9062, Value Loss: 0.5234, Total Loss: 2.4375, Value Mean: 0.0884, Value Std: 0.2236, Gradient Norm: 0.0000, Num Batches: 1
+[16.12.18] [INFO] Trainer finished at iteration 4.
+[16.12.18] [INFO] All processes started at iteration 5.
+[16.12.18] [INFO] Model and optimizer loaded from iteration 5
+Waiting for games (iter 5):  45%|███████████████████████████████████████████                                                     | 775/1728 [05:01<32:07,  2.02s/it][16.17.20] [INFO] Evaluation results at iteration 4:
+[16.17.20] [INFO]     Policy accuracy @1: 36.04%
+[16.17.20] [INFO]     Policy accuracy @5: 64.91%
+[16.17.20] [INFO]     Policy accuracy @10: 74.27%
+[16.17.20] [INFO]     Avg value loss: 0.8674941082795461
+Waiting for games (iter 5):  61%|██████████████████████████████████████████████████████████▎                                    | 1061/1728 [12:29<19:41,  1.77s/it][16.24.54] [INFO] Results after playing the current vs the reference at iteration 4: Wins: 5, Losses: 20, Draws: 15
+Waiting for games (iter 5):  79%|██████████████████████████████████████████████████████████████████████████▉                    | 1364/1728 [20:26<08:36,  1.42s/it][16.32.49] [INFO] Results after playing two most recent models at iteration 4: Wins: 12, Losses: 11, Draws: 17
+Waiting for games (iter 5):  84%|███████████████████████████████████████████████████████████████████████████████▍               | 1446/1728 [22:30<07:51,  1.67s/it][16.34.52] [INFO] Results after playing vs random at iteration 4: Wins: 36, Losses: 0, Draws: 4
+Waiting for games (iter 5): 1735it [30:00,  1.04s/it]
+[16.42.19] [INFO] Loading memories for iteration 5 with window size 3 (2-5)
+[16.42.37] [INFO] Loaded 151444 samples from 4963 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 296/296 [10:20<00:00,  2.09s/it]
+[16.52.57] [INFO] Last gradient norm: 1.140625
+[16.52.57] [INFO] Training stats: Policy Loss: 1.4873, Value Loss: 0.2660, Total Loss: 1.7532, Value Mean: 0.0199, Value Std: 0.5157, Gradient Norm: 1.1107, Num Batches: 296
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:03<00:00,  3.25s/it]
+[16.53.00] [INFO] Validation stats: Policy Loss: 1.2266, Value Loss: 0.1660, Total Loss: 1.3906, Value Mean: -0.0469, Value Std: 0.6953, Gradient Norm: 0.0000, Num Batches: 1
+[16.53.02] [INFO] Trainer finished at iteration 5.
+[16.53.02] [INFO] All processes started at iteration 6.
+[16.53.03] [INFO] Model and optimizer loaded from iteration 6
+Waiting for games (iter 6):  54%|████████████████████████████████████████████████████                                            | 938/1728 [04:35<18:38,  1.42s/it][16.57.45] [INFO] Evaluation results at iteration 5:
+[16.57.45] [INFO]     Policy accuracy @1: 36.17%
+[16.57.45] [INFO]     Policy accuracy @5: 64.73%
+[16.57.45] [INFO]     Policy accuracy @10: 74.41%
+[16.57.45] [INFO]     Avg value loss: 0.8714503784974416
+Waiting for games (iter 6):  68%|████████████████████████████████████████████████████████████████▌                              | 1175/1728 [11:26<15:59,  1.73s/it][17.04.36] [INFO] Results after playing the current vs the reference at iteration 5: Wins: 5, Losses: 26, Draws: 9
+Waiting for games (iter 6):  81%|█████████████████████████████████████████████████████████████████████████████▎                 | 1407/1728 [17:36<08:04,  1.51s/it][17.10.49] [INFO] Results after playing two most recent models at iteration 5: Wins: 7, Losses: 14, Draws: 19
+Waiting for games (iter 6):  87%|██████████████████████████████████████████████████████████████████████████████████▌            | 1501/1728 [19:51<05:26,  1.44s/it][17.13.04] [INFO] Results after playing vs random at iteration 5: Wins: 31, Losses: 0, Draws: 9
+Waiting for games (iter 6): 1731it [25:52,  1.11it/s]
+[17.18.55] [INFO] Loading memories for iteration 6 with window size 3 (3-6)
+[17.19.13] [INFO] Loaded 162831 samples from 5293 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 319/319 [11:07<00:00,  2.09s/it]
+[17.30.20] [INFO] Last gradient norm: 5.8125
+[17.30.20] [INFO] Training stats: Policy Loss: 1.4579, Value Loss: 0.2668, Total Loss: 1.7248, Value Mean: 0.0174, Value Std: 0.5131, Gradient Norm: 1.1338, Num Batches: 319
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:03<00:00,  3.48s/it]
+[17.30.24] [INFO] Validation stats: Policy Loss: 1.1094, Value Loss: 0.1797, Total Loss: 1.2891, Value Mean: -0.2461, Value Std: 0.6172, Gradient Norm: 0.0000, Num Batches: 1
+[17.30.26] [INFO] Trainer finished at iteration 6.
+[17.30.26] [INFO] All processes started at iteration 7.
+[17.30.27] [INFO] Model and optimizer loaded from iteration 7
+Waiting for games (iter 7):  51%|████████████████████████████████████████████████▌                                               | 874/1728 [04:43<23:35,  1.66s/it][17.35.12] [INFO] Evaluation results at iteration 6:
+[17.35.12] [INFO]     Policy accuracy @1: 35.93%
+[17.35.12] [INFO]     Policy accuracy @5: 64.65%
+[17.35.12] [INFO]     Policy accuracy @10: 74.09%
+[17.35.12] [INFO]     Avg value loss: 0.8720602671305339
+Waiting for games (iter 7):  64%|█████████████████████████████████████████████████████████████▏                                 | 1112/1728 [11:42<17:18,  1.69s/it][17.42.09] [INFO] Results after playing the current vs the reference at iteration 6: Wins: 7, Losses: 28, Draws: 5
+Waiting for games (iter 7):  77%|█████████████████████████████████████████████████████████████████████████                      | 1328/1728 [17:15<10:03,  1.51s/it][17.47.52] [INFO] Results after playing two most recent models at iteration 6: Wins: 7, Losses: 12, Draws: 21
+Waiting for games (iter 7):  82%|█████████████████████████████████████████████████████████████████████████████▋                 | 1414/1728 [19:29<08:32,  1.63s/it][17.50.06] [INFO] Results after playing vs random at iteration 6: Wins: 33, Losses: 0, Draws: 7
+Waiting for games (iter 7): 1730it [27:58,  1.03it/s]
+[17.58.25] [INFO] Loading memories for iteration 7 with window size 3 (4-7)
+[17.58.44] [INFO] Loaded 160708 samples from 5185 games
+Training batches: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 314/314 [10:56<00:00,  2.09s/it]
+[18.09.41] [INFO] Last gradient norm: 1.0625
+[18.09.41] [INFO] Training stats: Policy Loss: 1.4334, Value Loss: 0.2656, Total Loss: 1.6989, Value Mean: 0.0156, Value Std: 0.5095, Gradient Norm: 1.1213, Num Batches: 314
+Validation batches: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:04<00:00,  4.45s/it]
+[18.09.45] [INFO] Validation stats: Policy Loss: 1.1094, Value Loss: 0.2217, Total Loss: 1.3281, Value Mean: 0.0171, Value Std: 0.4277, Gradient Norm: 0.0000, Num Batches: 1
+[18.09.48] [INFO] Trainer finished at iteration 7.
+[18.09.48] [INFO] All processes started at iteration 8.
+[18.09.48] [INFO] Model and optimizer loaded from iteration 8
+Waiting for games (iter 8):  53%|██████████████████████████████████████████████████▌                                             | 911/1728 [04:44<32:27,  2.38s/it][18.14.34] [INFO] Evaluation results at iteration 7:
+[18.14.34] [INFO]     Policy accuracy @1: 36.20%
+[18.14.34] [INFO]     Policy accuracy @5: 64.91%
+[18.14.34] [INFO]     Policy accuracy @10: 74.22%
+[18.14.34] [INFO]     Avg value loss: 0.8682733714580536
+Waiting for games (iter 8):  68%|████████████████████████████████████████████████████████████████▍                              | 1172/1728 [11:44<13:41,  1.48s/it][18.21.44] [INFO] Results after playing the current vs the reference at iteration 7: Wins: 4, Losses: 17, Draws: 19
+Waiting for games (iter 8):  73%|█████████████████████████████████████████████████████████████████████▎                         | 1261/1728 [13:46<10:35,  1.36s/it]
