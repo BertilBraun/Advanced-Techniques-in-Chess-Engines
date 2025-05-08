@@ -98,8 +98,7 @@ class MCTSNode:
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
-        # self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
-        self.children_virtual_losses = np.full(len(self.children), 1, dtype=np.int32)  # Try out init to loss
+        self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
         self.children_policies = np.array([score for _, score in valid_encoded_moves_with_scores], dtype=np.float32)
 
     def update_virtual_losses(self, delta: int) -> None:
@@ -203,14 +202,18 @@ def _best_child_index(
     if np.any(low_visits_mask):
         return np.argmax(low_visits_mask).item()
 
-    positive_visits_mask = children_number_of_visits > 0
+    visited_mask = children_number_of_visits > 0
+    unvisited_mask = ~visited_mask
 
-    result_scores = children_result_scores[positive_visits_mask]
-    virtual_losses = children_virtual_losses[positive_visits_mask]
-    number_of_visits = children_number_of_visits[positive_visits_mask]
+    result_scores = children_result_scores[visited_mask]
+    virtual_losses = children_virtual_losses[visited_mask]
+    number_of_visits = children_number_of_visits[visited_mask]
 
+    # Q score is a value [-1, 1] where -1 is a loss and 1 is a win in the current position
+    # We want to maximize the Q score, which means minimizing the result score of the children, as the scores in the children are from the perspective of the opponent
     q_score = np.zeros_like(children_number_of_visits, dtype=np.float32)
-    q_score[positive_visits_mask] = 1 - ((result_scores + virtual_losses) / number_of_visits + 1) / 2
+    q_score[visited_mask] = -1 * (result_scores + virtual_losses) / number_of_visits
+    q_score[unvisited_mask] = -1.0  # Init to loss (0.0) for unvisited moves
 
     visits_quotient = np.sqrt(own_number_of_visits) / (1 + children_number_of_visits)
 
