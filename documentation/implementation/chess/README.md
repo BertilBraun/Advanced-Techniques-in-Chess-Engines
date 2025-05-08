@@ -30,4 +30,4 @@ The chess framework ported to C++ was based on the Python chess package, essenti
 
 ## GPU Utilization and Parallelization
 
-A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 20% GPU usage, a significant improvement from the Python version. Moreover, by employing 5 threads per GPU, we managed to maximize CPU usage, ensuring nearly 100% utilization. This parallelization strategy is detailed in our parallelization [README](../parallelization/README.md), offering insights into achieving optimal performance.
+A notable advantage of the C++ implementation is the efficient utilization of GPU resources. We achieved consistent 100% GPU usage, a significant improvement from the Python version, while only requiring 5 threads per GPU, ensuring nearly 100% utilization of all resources. This parallelization strategy is detailed in our parallelization [README](../parallelization/README.md), offering insights into achieving optimal performance.

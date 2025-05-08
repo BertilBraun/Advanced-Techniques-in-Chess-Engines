@@ -210,15 +210,7 @@ Besides model stagnation, there are several technical challenges:
   - Ensuring that self-play workers are not duplicating efforts unnecessarily.
   - Optimizing the caching mechanism to reduce redundancy.
 
-### **2. GPU Utilization**
-
-- During large-scale self-play, GPU usage remains around **60–70%**.
-- Possible causes:
-  - Inefficient inference batching or resource utilization.
-  - Suboptimal threading or caching techniques.
-- While important for speeding up training, this issue is **secondary** compared to the learning problems.
-
-### **3. Hyperparameter Tuning at Scale**
+### **2. Hyperparameter Tuning at Scale**
 
 - **Bayesian hyperparameter optimization** was effective for smaller games like Tic-Tac-Toe and Connect Four.
 - For **Chess and complex games**, tuning becomes **very expensive** and **slow** due to long training cycles.
@@ -234,7 +226,6 @@ Future enhancements are planned:
 
 Major goals include:
 - **Solve model stagnation** — **highest priority**.
-- Improve **C++ self-play optimization** for better GPU/CPU utilization.
 - Develop **more efficient hyperparameter search** with faster hyperparameter sample evaluation.
 - Implement additional **training improvements** for stability and faster convergence.
 
