@@ -21,33 +21,39 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
     def __init__(self, run: int) -> None:
         self.run = run
 
-        self.dataset = SelfPlayDataset()
+        self.datasets: list[SelfPlayDataset] = []
+        self.dataset_length_prefix_sums: list[int] = []
 
     @property
     def stats(self) -> SelfPlayDatasetStats:
         """Returns the stats of the dataset. This is a sum of all stats of the datasets in the dataset."""
-        return self.dataset.stats
+        accumulated_stats = SelfPlayDatasetStats()
+        for dataset in self.datasets:
+            accumulated_stats += dataset.stats
+        return accumulated_stats
 
     def load_from_files(self, files: list[Path]) -> None:
         for file in files:
-            self.dataset += SelfPlayDataset.load(file)
+            self.datasets.append(SelfPlayDataset.load(file))
 
+        self.dataset_length_prefix_sums = [0] + list(np.cumsum([len(dataset) for dataset in self.datasets]))
         Process(target=self._log_all_dataset_stats, args=(self, self.run), daemon=True).start()
 
     def _log_all_dataset_stats(self, run: int) -> None:
-        accumulated_stats = SelfPlayDatasetStats()
+        accumulated_stats = self.stats
 
         with TensorboardWriter(run, 'dataset', postfix_pid=False):
-            accumulated_stats += self.dataset.stats
+            policies = [action_probabilities(visits) for dataset in self.datasets for visits in dataset.visit_counts]
 
-            policies = [action_probabilities(visits) for visits in self.dataset.visit_counts]
-
-            spikiness = sum(policy.max() for policy in policies) / len(self.dataset)
+            spikiness = sum(policy.max() for policy in policies) / len(self)
 
             log_scalar('dataset/policy_spikiness', spikiness)
 
             log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
-            log_histogram('dataset/value_targets', np.array(self.dataset.value_targets))
+            log_histogram(
+                'dataset/value_targets',
+                np.array([value for dataset in self.datasets for value in dataset.value_targets]),
+            )
 
             # dataset.deduplicate()
             # log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))
@@ -79,7 +85,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         )
 
     def __len__(self) -> int:
-        return len(self.dataset)
+        return sum(len(dataset) for dataset in self.datasets)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.dataset[idx]
+        dataset_index = np.searchsorted(self.dataset_length_prefix_sums, idx + 1) - 1
+        idx -= self.dataset_length_prefix_sums[dataset_index]
+        assert 0 <= dataset_index < len(self.datasets), f'Index {idx} out of bounds for dataset {dataset_index}'
+        return self.datasets[dataset_index][idx]
