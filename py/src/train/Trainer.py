@@ -131,6 +131,7 @@ class Trainer:
         total_policy_loss = torch.tensor(0.0, device=self.model.device)
         total_value_loss = torch.tensor(0.0, device=self.model.device)
         total_loss = torch.tensor(0.0, device=self.model.device)
+        total_gradient_norm = torch.tensor(0.0)
 
         for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
@@ -145,6 +146,7 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
             norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+            total_gradient_norm += norm.detach()
             # print('Gradient norm:', norm.item())
             # TODO magic hyperparameter and sensible like this?
 
@@ -154,13 +156,13 @@ class Trainer:
             total_value_loss += value_loss.detach()
             total_loss += loss.detach()
 
-        train_stats = TrainingStats()
-        train_stats.update(
+        train_stats = TrainingStats(
             total_policy_loss.item(),
             total_value_loss.item(),
             total_loss.item(),
             out_value_mean.item(),
             out_value_std.item(),
+            total_gradient_norm.item(),
             len(dataloader),
         )
 
@@ -188,8 +190,7 @@ class Trainer:
                 validation_total_value_loss += val_value_loss.detach()
                 validation_total_loss += val_loss.detach()
 
-        validation_stats = TrainingStats()
-        validation_stats.update(
+        validation_stats = TrainingStats(
             validation_total_policy_loss.item(),
             validation_total_value_loss.item(),
             validation_total_loss.item(),

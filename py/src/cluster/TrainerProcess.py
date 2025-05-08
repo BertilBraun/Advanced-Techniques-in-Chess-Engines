@@ -67,8 +67,8 @@ class TrainerProcess:
 
         self._wait_for_enough_training_samples(iteration)
 
-        train_stats = TrainingStats()
-        valid_stats = TrainingStats()
+        train_stats: list[TrainingStats] = []
+        valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
             # Only loads a light wrapper around the entire dataset
@@ -79,18 +79,21 @@ class TrainerProcess:
             )
 
             epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
-            train_stats += epoch_train_stats
-            valid_stats += epoch_valid_stats
+            train_stats.append(epoch_train_stats)
+            valid_stats.append(epoch_valid_stats)
 
-            if train_stats.value_std < 0.01:
+            if epoch_train_stats.value_std < 0.01:
+                log('Training stopped early due to low value std deviation.')
                 exit()
 
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
 
-        train_stats.log_to_tensorboard(iteration, 'train')
-        valid_stats.log_to_tensorboard(iteration, 'validation')
+        combined_train_stats = TrainingStats.combine(train_stats)
+        combined_valid_stats = TrainingStats.combine(valid_stats)
+        combined_train_stats.log_to_tensorboard(iteration, 'train')
+        combined_valid_stats.log_to_tensorboard(iteration, 'validation')
 
-        return train_stats
+        return combined_train_stats
 
     @timeit
     def _wait_for_enough_training_samples(self, iteration):
@@ -111,19 +114,18 @@ class TrainerProcess:
         )
 
         all_dataset_files = [
-            (iteration, SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration))
+            file
             for iteration in range(max(iteration - window_size, 0), iteration + 1)
+            for file in SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
         ]
-        all_dataset_files = list(reversed(sorted([(i, f) for i, f in all_dataset_files if f])))
-        latest_iteration, latest_files = all_dataset_files[-1]
-        validation_dataset_file = (latest_iteration, [latest_files.pop(-1)])
+        validation_dataset_file = all_dataset_files.pop(-1)  # The newest file is the validation dataset
 
         dataset = SelfPlayTrainDataset(self.run_id)
-        dataset.load_from_files(self.args.save_path, all_dataset_files, max_num_repetitions=2, fraction_of_samples=0.1)
+        dataset.load_from_files(all_dataset_files)
 
         log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
 
         validation_dataset = SelfPlayTrainDataset(self.run_id)
-        validation_dataset.load_from_files(self.args.save_path, [validation_dataset_file], max_num_repetitions=1)
+        validation_dataset.load_from_files([validation_dataset_file])
 
         return dataset, validation_dataset

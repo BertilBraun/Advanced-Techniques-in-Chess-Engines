@@ -24,6 +24,7 @@ class AlphaZeroBot(Bot):
             dirichlet_epsilon=0.0,
             c_param=PLAY_C_PARAM,
             min_visit_count=0,
+            full_search_probability=1.0,
         )
         self.mcts = MCTS(self.inference_client, self.mcts_args)
 

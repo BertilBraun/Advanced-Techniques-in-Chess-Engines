@@ -44,6 +44,7 @@ def objective(trial: optuna.Trial) -> float:
 
     num_games_per_iteration = trial.suggest_int('num_games_per_iteration', 512 - 128, 512 + 128, step=128)
 
+    training_optimizer = trial.suggest_categorical('training_optimizer', ['adamw', 'sgd'])
     training_num_epochs = trial.suggest_int('training_num_epochs', 2, 6, step=2)
     training_batch_size_exponent = trial.suggest_int('training_batch_size_exponent', 4, 8, step=2)  # 16, 64, 256
     training_batch_size = 2**training_batch_size_exponent
@@ -63,10 +64,11 @@ def objective(trial: optuna.Trial) -> float:
     mcts_params = MCTSParams(
         num_searches_per_turn=mcts_num_searches_per_turn,
         dirichlet_epsilon=0.25,
-        dirichlet_alpha=lambda _: mcts_dirichlet_alpha,
+        dirichlet_alpha=mcts_dirichlet_alpha,
         c_param=mcts_c_param,
         num_parallel_searches=8,
         min_visit_count=mcts_num_searches_per_turn // 50,
+        full_search_probability=1.0,
     )
 
     network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size)
@@ -79,6 +81,7 @@ def objective(trial: optuna.Trial) -> float:
     )
 
     training_params = TrainingParams(
+        optimizer=training_optimizer,  # type: ignore
         num_epochs=training_num_epochs,
         batch_size=training_batch_size,
         sampling_window=sampling_window,

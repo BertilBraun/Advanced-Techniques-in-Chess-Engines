@@ -4,11 +4,10 @@ import time
 
 import chess
 import numpy as np
-from collections import Counter
 from dataclasses import dataclass
 
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.util import clamp
+from src.util import lerp
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
@@ -58,8 +57,7 @@ class SelfPlay:
         self.client = client
         self.args = args
 
-        self.self_play_games: Counter[SelfPlayGame] = Counter()
-        self.self_play_games[SelfPlayGame()] += self.args.num_parallel_games
+        self.self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
         self.dataset = SelfPlayDataset()
 
         self.iteration = 0
@@ -76,20 +74,20 @@ class SelfPlay:
     def self_play(self) -> None:
         mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
 
-        current_self_play_games = list(self.self_play_games.items())
-        for (spg, count), mcts_result in zip(current_self_play_games, mcts_results):
-            spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score))
+        for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results)):
+            if mcts_result.is_full_search:
+                spg.memory.append(
+                    SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
+                )
 
             if mcts_result.result_score < self.args.resignation_threshold:
                 # Resignation if most of the mcts searches result in a loss
-                self.self_play_games[spg] = 0
                 self._add_training_data(spg, mcts_result.result_score, resignation=True)
-                self.self_play_games[SelfPlayGame()] += count
+                self.self_play_games[i] = SelfPlayGame()
                 continue
 
             if len(spg.played_moves) >= 250:
                 # If the game is too long, end it and add it to the dataset
-                self.self_play_games[spg] = 0
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
@@ -114,36 +112,31 @@ class SelfPlay:
 
                     self._add_training_data(spg, game_outcome, resignation=False)
                 self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                self.self_play_games[SelfPlayGame()] += count
+                self.self_play_games[i] = SelfPlayGame()
                 continue
 
-            for _ in range(count):
-                self.self_play_games[spg] -= 1
+            spg_action_probabilities = action_probabilities(mcts_result.visit_counts)
 
-                spg_action_probabilities = action_probabilities(mcts_result.visit_counts)
+            while np.sum(spg_action_probabilities) > 0:
+                new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
-                while np.sum(spg_action_probabilities) > 0:
-                    new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
-
-                    if self.self_play_games[new_spg] == 0 and move not in spg.played_moves[-16:]:
-                        # don't play the same move twice in a row
-                        self.self_play_games[new_spg] += 1
-                        break
-                    else:
-                        # Already exploring this state, so remove the probability of this move and try again
-                        spg_action_probabilities[CurrentGame.encode_move(move)] = 0
-
+                is_duplicate = any(hash(game) == hash(new_spg) for game in self.self_play_games)
+                is_repetition = move in spg.played_moves[-16:]
+                if is_duplicate or is_repetition:
+                    # don't play the same move twice in a row
+                    # Already exploring this state, so remove the probability of this move and try again
+                    spg_action_probabilities[CurrentGame.encode_move(move)] = 0
                 else:
-                    # No valid moves left which are not already being explored
-                    # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
-                    new_spg, _ = self._sample_self_play_game(
-                        spg, action_probabilities(mcts_result.visit_counts), mcts_result.children
-                    )
-                    self.self_play_games[new_spg] += 1
+                    self.self_play_games[i] = new_spg
+                    break
 
-        # remove spgs with count 0
-        self.self_play_games = self.self_play_games - Counter()
-        assert all(count > 0 for count in self.self_play_games.values())
+            else:
+                # No valid moves left which are not already being explored
+                # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
+                new_spg, _ = self._sample_self_play_game(
+                    spg, action_probabilities(mcts_result.visit_counts), mcts_result.children
+                )
+                self.self_play_games[i] = new_spg
 
         reset_times()
 
@@ -196,7 +189,7 @@ class SelfPlay:
             self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
-            game_length=len(spg.memory),
+            game_length=len(spg.played_moves),
             generation_time=time.time() - spg.start_generation_time,
             resignation=resignation,
         )
@@ -209,8 +202,8 @@ class SelfPlay:
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
-                    clamp(turn_game_outcome + self.args.result_score_weight * mem.result_score, -1, 1),
-                    # lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
+                    # clamp(turn_game_outcome + self.args.result_score_weight * mem.result_score, -1, 1),
+                    lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
             game_outcome *= 0.99  # discount the game outcome for each move

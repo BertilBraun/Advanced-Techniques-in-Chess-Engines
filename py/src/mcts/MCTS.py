@@ -1,3 +1,4 @@
+import random
 import time
 from typing import Iterable
 import numpy as np
@@ -18,6 +19,7 @@ class MCTSResult:
     result_score: float
     visit_counts: list[tuple[int, int]]
     children: list[MCTSNode]
+    is_full_search: bool
 
 
 def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
@@ -88,8 +90,22 @@ class MCTS:
 
             moves_index += 1
 
-        for _ in range(self.args.num_searches_per_turn // self.args.num_parallel_searches):
-            self.parallel_iterate(roots)
+        """Run full searches for a subset of the roots, and fast searches for the rest. The fast searches should run 1/10th of the number of iterations as the full searches."""
+        should_run_full_search = [random.random() < self.args.full_search_probability for _ in range(len(roots))]
+
+        num_iterations_for_full_search = self.args.num_searches_per_turn // self.args.num_parallel_searches
+        num_iterations_for_fast_search = num_iterations_for_full_search // 10
+
+        assert num_iterations_for_fast_search > 0, 'num_iterations_for_fast_search must be greater than 0'
+
+        full_roots = [root for root, full_search in zip(roots, should_run_full_search) if full_search]
+        fast_roots = [root for root, full_search in zip(roots, should_run_full_search) if not full_search]
+
+        for _ in range(num_iterations_for_fast_search):
+            self.parallel_iterate(fast_roots + full_roots)
+
+        for _ in range(num_iterations_for_full_search - num_iterations_for_fast_search):
+            self.parallel_iterate(full_roots)
 
         # for root in roots:
         #     print(repr(root))
@@ -123,15 +139,14 @@ class MCTS:
 
         log_scalar('dataset/average_search_entropy', average_entropy)
 
-        # print(repr(roots[0]))
-
         return [
             MCTSResult(
                 root.result_score,
                 [(child.encoded_move_to_get_here, child.number_of_visits) for child in root.children],
                 root.children,
+                is_full_search,
             )
-            for root in roots
+            for root, is_full_search in zip(roots, should_run_full_search)
         ]
 
     @timeit

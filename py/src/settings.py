@@ -42,7 +42,7 @@ def sampling_window(current_iteration: int) -> int:
 def learning_rate(current_iteration: int) -> float:
     # SGD based on https://github.com/michaelnny/alpha_zero/blob/main/alpha_zero/training_go.py
     # if current_iteration < 10:
-    #     return 0.1
+    #     return 0.03
     # return 0.01
 
     # AdamW
@@ -187,7 +187,7 @@ elif True:
 
     NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 3)
 
-    network = NetworkParams(num_layers=15, hidden_size=64)
+    network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
         num_epochs=1,
         optimizer='adamw',  # 'sgd',
@@ -205,7 +205,7 @@ elif True:
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
     PARALLEL_GAMES = 8
-    NUM_SEARCHES_PER_TURN = 320  # TODO 640
+    NUM_SEARCHES_PER_TURN = 640
     MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 
     if not USE_GPU:  # TODO remove
@@ -216,22 +216,23 @@ elif True:
     TRAINING_ARGS = TrainingArgs(
         num_iterations=12,  # 120
         save_path=SAVE_PATH + '/chess',
-        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 4,
+        num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
         network=network,
         self_play=SelfPlayParams(
             num_parallel_games=PARALLEL_GAMES,
-            num_moves_after_which_to_play_greedy=25,
-            result_score_weight=0.0,  # TODO 0.15,
+            num_moves_after_which_to_play_greedy=24,  # even number - no bias towards white
+            result_score_weight=0.15,
             resignation_threshold=-1.0,  # TODO -0.9,
             temperature=1.0,  # based on https://github.com/QueensGambit/CrazyAra/blob/19e37d034cce086947f3fdbeca45af885959bead/DeepCrazyhouse/configs/rl_config.py#L45
             num_games_after_which_to_write=1,
             mcts=MCTSParams(
                 num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-                num_parallel_searches=8,
+                num_parallel_searches=4,
                 dirichlet_epsilon=0.25,
                 dirichlet_alpha=0.3,  # Based on AZ Paper
                 c_param=1.7,  # Based on MiniGO Paper
                 min_visit_count=MIN_VISIT_COUNT,
+                full_search_probability=0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
             ),
         ),
         cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
