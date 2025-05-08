@@ -131,6 +131,7 @@ class MCTSNode:
             self.children_virtual_losses,
             self.children_policies,
             self.number_of_visits,
+            self.result_score,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()
@@ -196,6 +197,7 @@ def _best_child_index(
     children_virtual_losses: np.ndarray,
     children_policies: np.ndarray,
     own_number_of_visits: int,
+    own_result_score: float,
 ) -> int:
     # if a child has < min_visit_count visits, it should be selected first
     low_visits_mask = children_number_of_visits < min_visit_count
@@ -213,7 +215,7 @@ def _best_child_index(
     # We want to maximize the Q score, which means minimizing the result score of the children, as the scores in the children are from the perspective of the opponent
     q_score = np.zeros_like(children_number_of_visits, dtype=np.float32)
     q_score[visited_mask] = -1 * (result_scores + virtual_losses) / number_of_visits
-    q_score[unvisited_mask] = -1.0  # Init to loss (0.0) for unvisited moves
+    q_score[unvisited_mask] = own_result_score  # Init to parent  # Init to loss (-1.0) for unvisited moves
 
     visits_quotient = np.sqrt(own_number_of_visits) / (1 + children_number_of_visits)
 

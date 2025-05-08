@@ -5,6 +5,7 @@ from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
+from src.train.TrainingArgs import MCTSParams
 
 
 def get_testing_inference_client() -> InferenceClient:
@@ -39,7 +40,16 @@ def run_mate_puzzle_regression():
     client = get_testing_inference_client()
 
     # Configure MCTS parameters.
-    mcts = MCTS(client, TRAINING_ARGS.self_play.mcts)
+    mcts_params = MCTSParams(
+        num_searches_per_turn=640,
+        num_parallel_searches=4,
+        dirichlet_epsilon=0.25,
+        dirichlet_alpha=0.3,
+        min_visit_count=0,
+        c_param=1.7,
+        full_search_probability=1.0,
+    )
+    mcts = MCTS(client, mcts_params)
 
     # Load the chess puzzles dataset.
     dataset = load_dataset('Lichess/chess-puzzles', split='train')
@@ -84,8 +94,8 @@ def run_mate_puzzle_regression():
     for (puzzle_id, expected_move, puzzle), result, (board, _) in zip(metadata, results, inputs):
         total_visits = sum(visit for _, visit in result.visit_counts)
         assert (
-            total_visits == TRAINING_ARGS.self_play.mcts.num_searches_per_turn
-        ), f'Expected {TRAINING_ARGS.self_play.mcts.num_searches_per_turn} searches, got {total_visits}.'
+            total_visits == mcts_params.num_searches_per_turn
+        ), f'Expected {mcts_params.num_searches_per_turn} searches, got {total_visits}.'
 
         # Apply a softmax to the visit counts.
         probs = action_probabilities(result.visit_counts)
