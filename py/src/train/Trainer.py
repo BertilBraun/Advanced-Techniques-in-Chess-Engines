@@ -131,7 +131,7 @@ class Trainer:
         total_policy_loss = torch.tensor(0.0, device=self.model.device)
         total_value_loss = torch.tensor(0.0, device=self.model.device)
         total_loss = torch.tensor(0.0, device=self.model.device)
-        total_gradient_norm = torch.tensor(0.0)
+        total_gradient_norm = torch.tensor(0.0, device=self.model.device)
 
         for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
             policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
@@ -196,6 +196,7 @@ class Trainer:
             validation_total_loss.item(),
             out_value_mean.item(),
             out_value_std.item(),
+            0.0,  # No gradient norm for validation
             len(validation_dataloader),
         )
 
