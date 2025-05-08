@@ -108,7 +108,7 @@ class TrainingParams:
         return lerp(min_lr, base_lr, batch_percentage)
     """
 
-    num_workers: int = 4
+    num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
 
 

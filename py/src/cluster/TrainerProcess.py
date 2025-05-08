@@ -1,5 +1,6 @@
 import time
 import torch
+from tqdm import tqdm
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
@@ -100,8 +101,17 @@ class TrainerProcess:
         def games(iteration: int) -> int:
             return SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games
 
-        while games(iteration) + 0.5 * games(iteration - 1) < self.args.num_games_per_iteration:
-            time.sleep(10)
+        target_games = self.args.num_games_per_iteration
+        with tqdm(total=target_games, desc=f'Waiting for games (iter {iteration})') as pbar:
+            current_games = games(iteration) + 0.5 * games(iteration - 1)
+            pbar.update(int(current_games))
+
+            while current_games < target_games:
+                time.sleep(10)
+                new_games = games(iteration) + 0.5 * games(iteration - 1)
+                if new_games > current_games:
+                    pbar.update(int(new_games - current_games))
+                    current_games = new_games
 
     @timeit
     def _load_all_memories_to_train_on_for_iteration(

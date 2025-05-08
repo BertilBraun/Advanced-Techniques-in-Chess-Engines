@@ -1,3 +1,6 @@
+# NOTE: Only if on lambdalabs, run:
+curl -L https://lambdalabs-guest-agent.s3.us-west-2.amazonaws.com/scripts/install.sh | sudo bash
+
 git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git
 
 cd Advanced-Techniques-in-Chess-Engines/py
