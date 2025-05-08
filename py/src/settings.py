@@ -41,9 +41,9 @@ def sampling_window(current_iteration: int) -> int:
 
 def learning_rate(current_iteration: int) -> float:
     # SGD based on https://github.com/michaelnny/alpha_zero/blob/main/alpha_zero/training_go.py
-    # if current_iteration < 10:
-    #     return 0.03
-    # return 0.01
+    if current_iteration < 10:
+        return 0.03
+    return 0.01
 
     # AdamW
     if current_iteration < 10:
@@ -190,7 +190,7 @@ elif True:
     network = NetworkParams(num_layers=15, hidden_size=128)
     training = TrainingParams(
         num_epochs=1,
-        optimizer='adamw',  # 'sgd',
+        optimizer='sgd',  # 'adamw',
         batch_size=512,  # TODO 2048,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
