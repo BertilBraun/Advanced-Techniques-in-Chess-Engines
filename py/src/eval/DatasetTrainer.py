@@ -33,7 +33,9 @@ def train_model(
 ) -> None:
     def learning_rate(iteration: int) -> float:
         # AdamW
-        if iteration < 10:
+        if iteration < 3:
+            return 0.01
+        elif iteration < 10:
             return 0.001
         return 0.0005
 
@@ -93,6 +95,7 @@ def main(dataset_paths: list[str]):
         train_dataset.load_from_files([Path(p) for p in dataset_paths])
         train_stats = train_dataset.stats
 
+        log('Creating model...')
         # Instantiate the model
         model = create_model(TRAINING_ARGS.network, device=device)
         optimizer = create_optimizer(model, TRAINING_ARGS.training.optimizer)

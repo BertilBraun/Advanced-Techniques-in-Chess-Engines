@@ -145,7 +145,7 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.5)
             total_gradient_norm += norm.detach()
             # print('Gradient norm:', norm.item())
             # TODO magic hyperparameter and sensible like this?
