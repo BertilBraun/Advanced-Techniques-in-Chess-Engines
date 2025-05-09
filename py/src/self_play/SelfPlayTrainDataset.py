@@ -76,7 +76,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         return torch.utils.data.DataLoader(
             self,
             batch_size=batch_size,
-            num_workers=num_workers,
+            num_workers=0,  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
             shuffle=True,
             drop_last=False,
             persistent_workers=True,
