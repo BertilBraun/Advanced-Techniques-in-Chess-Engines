@@ -4,7 +4,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
+from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id, learning_rate
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -31,29 +31,6 @@ def train_model(
     num_epochs: int,
     iteration: int,
 ) -> None:
-    def learning_rate(iteration: int) -> float:
-        # AdamW
-        if iteration < 3:
-            return 0.01
-        elif iteration < 10:
-            return 0.001
-        return 0.0005
-
-        # SGD
-        if iteration < 5:
-            return 0.1
-        else:
-            return 0.01
-
-        if iteration < 5:
-            return 0.05
-        elif iteration < 8:
-            return 0.02
-        elif iteration < 10:
-            return 0.002
-        else:
-            return 0.0002
-
     trainer = Trainer(
         model,
         optimizer,
@@ -68,7 +45,12 @@ def train_model(
         ),
     )
 
-    log('Training with lr:', trainer.args.learning_rate(iteration), 'and batch size:', trainer.args.batch_size)
+    log(
+        'Training with lr:',
+        trainer.args.learning_rate(iteration, trainer.args.optimizer),
+        'and batch size:',
+        trainer.args.batch_size,
+    )
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, test_dataloader, iteration)

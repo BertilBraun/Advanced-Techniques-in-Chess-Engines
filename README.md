@@ -3,7 +3,7 @@
 ## **Project Overview**
 
 **AlphaZero-Clone** is an open-source project implementing a **general AlphaZero-like system** for learning **board games** via **deep reinforcement learning** and **self-play**.  
-Starting with simpler games like **Tic-Tac-Toe** and **Connect Four**, it is designed to scale to more complex games, such as **Chess**.
+Starting with simpler games like **Tic-Tac-Toe**, **Connect Four**, **Checkers** and **Hex** it is designed to scale to more complex games, such as **Chess**.
 
 Key features:
 - Learns entirely from **self-play**, with no prior knowledge of the games.
@@ -28,7 +28,7 @@ Key features:
 
 ### **Training System**
 
-- The system has been **successfully validated** on **Tic-Tac-Toe** and **Connect Four**.
+- The system has been **successfully validated** on **Tic-Tac-Toe** and **Connect Four** - problems started araising with **Checkers** and **Hex** - and the system doesn't seem to improve over very basic play in **Chess**.
 - **Python** is used for game development and orchestration; **C++** for performance-critical components like self-play and inference.
 - **Highly parallelized self-play** with **hundreds of workers**.
 - **Caching mechanisms** are heavily utilized for efficiency.

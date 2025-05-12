@@ -27,10 +27,10 @@ class LogLevel(Enum):
     CRITICAL = 50
 
 
-LOG_FILE = LOG_FOLDER + f'/log_{time_str()}.log'
+LOG_FILE = LOG_FOLDER + f'/log_{date_str()}_{time_str()}.log'
 LOG_LEVEL = LogLevel.INFO
 os.makedirs(LOG_FOLDER, exist_ok=True)
-GLOBAL_LOG_FILE = open(LOG_FILE, 'w')
+GLOBAL_LOG_FILE = None
 
 
 def log(
@@ -50,6 +50,9 @@ def log(
             os.makedirs(dir_name, exist_ok=True)
         log_file = open(log_file_name, 'a')
     else:
+        global GLOBAL_LOG_FILE
+        if GLOBAL_LOG_FILE is None:
+            GLOBAL_LOG_FILE = open(LOG_FILE, 'w')
         log_file = GLOBAL_LOG_FILE
 
     if use_pprint:

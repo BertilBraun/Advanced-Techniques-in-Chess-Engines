@@ -1,8 +1,8 @@
-import numpy as np
+from torch import multiprocessing as mp
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.settings import log_scalar, CurrentGame, CurrentBoard, TensorboardWriter
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.settings import log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import TrainingArgs
@@ -12,42 +12,31 @@ from src.util.tensorboard import log_scalars
 
 def run_evaluation_process(run: int, args: TrainingArgs, iteration: int):
     evaluation_process = EvaluationProcess(args)
-    with log_exceptions('Evaluation process'), TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        evaluation_process.run(iteration)
+    with log_exceptions('Evaluation process'):
+        evaluation_process.run(run, iteration)
 
 
-class EvaluationProcess:
-    """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
+def _log_to_tensorboard(run: int, iteration: int, name: str, values: dict[str, float]):
+    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+        log_scalars(name, values, iteration)
 
-    def __init__(self, args: TrainingArgs) -> None:
-        self.args = args
-        self.eval_args = args.evaluation
 
-    def run(self, iteration: int):
-        """Play two most recent models against each other."""
-        if not self.eval_args or iteration % self.eval_args.every_n_iterations != 0 or iteration == 0:
-            return
+def _eval_vs_dataset(run: int, model_evaluation: ModelEvaluation, iteration: int, dataset_path: str):
+    dataset = SelfPlayDataset.load(dataset_path)
+    (
+        policy_accuracy_at_1,
+        policy_accuracy_at_5,
+        policy_accuracy_at_10,
+        avg_value_loss,
+    ) = model_evaluation.evaluate_model_vs_dataset(dataset)
 
-        model_evaluation = ModelEvaluation(
-            iteration,
-            self.args,
-            self.eval_args.num_games,
-            self.eval_args.num_searches_per_turn,
-        )
+    log(f'Evaluation results at iteration {iteration}:')
+    log(f'    Policy accuracy @1: {policy_accuracy_at_1:.2%}')
+    log(f'    Policy accuracy @5: {policy_accuracy_at_5:.2%}')
+    log(f'    Policy accuracy @10: {policy_accuracy_at_10:.2%}')
+    log(f'    Avg value loss: {avg_value_loss}')
 
-        dataset = SelfPlayDataset.load(self.eval_args.dataset_path)
-        (
-            policy_accuracy_at_1,
-            policy_accuracy_at_5,
-            policy_accuracy_at_10,
-            avg_value_loss,
-        ) = model_evaluation.evaluate_model_vs_dataset(dataset)
-        log(f'Evaluation results at iteration {iteration}:')
-        log(f'    Policy accuracy @1: {policy_accuracy_at_1:.2%}')
-        log(f'    Policy accuracy @5: {policy_accuracy_at_5:.2%}')
-        log(f'    Policy accuracy @10: {policy_accuracy_at_10:.2%}')
-        log(f'    Avg value loss: {avg_value_loss}')
-
+    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
         log_scalars(
             'evaluation/policy_accuracy',
             {
@@ -57,89 +46,133 @@ class EvaluationProcess:
             },
             iteration,
         )
-
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
-        first_model_path = self.args.save_path + '/reference_model.pt'
-        results = model_evaluation.play_two_models_search(first_model_path)
 
-        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
+def _eval_vs_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    if iteration < 2:
+        return
 
-        log_scalars(
-            'evaluation/vs_reference_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+    previous_model_path = model_save_path(iteration - 1, save_path)
+    results = model_evaluation.play_two_models_search(previous_model_path)
+    log(f'Results after playing two most recent models at iteration {iteration}:', results)
+
+    _log_to_tensorboard(
+        run,
+        iteration,
+        'evaluation/vs_previous_model',
+        {
+            'wins': results.wins,
+            'losses': results.losses,
+            'draws': results.draws,
+        },
+    )
+
+
+def _eval_vs_five_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    if iteration < 6:
+        return
+    previous_model_path = model_save_path(iteration - 5, save_path)
+    results = model_evaluation.play_two_models_search(previous_model_path)
+    log(f'Results after playing {iteration} vs {iteration - 5}:', results)
+
+    _log_to_tensorboard(
+        run,
+        iteration,
+        'evaluation/vs_five_previous_model',
+        {
+            'wins': results.wins,
+            'losses': results.losses,
+            'draws': results.draws,
+        },
+    )
+
+
+def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    reference_model_path = save_path + '/reference_model.pt'
+    results = model_evaluation.play_two_models_search(reference_model_path)
+    log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
+
+    _log_to_tensorboard(
+        run,
+        iteration,
+        'evaluation/vs_reference_model',
+        {
+            'wins': results.wins,
+            'losses': results.losses,
+            'draws': results.draws,
+        },
+    )
+
+
+def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str):
+    results = model_evaluation.play_vs_random()
+    log(f'Results after playing vs random at iteration {iteration}:', results)
+
+    _log_to_tensorboard(
+        run,
+        iteration,
+        'evaluation/vs_random',
+        {
+            'wins': results.wins,
+            'losses': results.losses,
+            'draws': results.draws,
+        },
+    )
+
+
+class EvaluationProcess:
+    """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
+
+    def __init__(self, args: TrainingArgs) -> None:
+        self.args = args
+        self.eval_args = args.evaluation
+
+    def run(self, run: int, iteration: int):
+        """Play two most recent models against each other."""
+        if not self.eval_args:
+            return
+
+        model_evaluation = ModelEvaluation(
             iteration,
+            self.args,
+            num_games=self.eval_args.num_games,
+            num_searches_per_turn=self.eval_args.num_searches_per_turn,
         )
 
-        previous_model_path = model_save_path(iteration - self.eval_args.every_n_iterations, self.args.save_path)
-        results = model_evaluation.play_two_models_search(previous_model_path)
+        processes: list[mp.Process] = []
 
-        log(f'Results after playing two most recent models at iteration {iteration}:', results)
-
-        log_scalars(
-            'evaluation/vs_previous_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
-        results = model_evaluation.play_vs_random()
-        log(f'Results after playing vs random at iteration {iteration}:', results)
-
-        log_scalars(
-            'evaluation/vs_random',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
-        from src.games.chess.ChessGame import ChessGame
-
-        if isinstance(CurrentGame, ChessGame) and False:
-            from src.games.chess.comparison_bots.HandcraftedBotV4 import HandcraftedBotV4
-
-            comparison_bot = HandcraftedBotV4()
-
-            def comparison_bot_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-                comparison_bot.restart_clock()
-                return [CurrentGame.encode_moves([comparison_bot.think(board)]) for board in boards]
-
-            results = model_evaluation.play_vs_evaluation_model(
-                comparison_bot_evaluator, 'comparison_bot', self.eval_args.num_games // 2
+        # Spawn subprocesses for each evaluation
+        if self.eval_args.dataset_path:
+            p = mp.Process(
+                target=_eval_vs_dataset,
+                args=(run, model_evaluation, iteration, self.eval_args.dataset_path),
             )
-            log(f'Results after playing vs comparison bot at iteration {iteration}:', results)
+            p.start()
+            processes.append(p)
 
-            # TODO for StockfishBot you have to call .cleanup() before quitting the process
+        for fn in [_eval_vs_previous, _eval_vs_five_previous, _eval_vs_reference, _eval_vs_random]:
+            p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
+            p.start()
+            processes.append(p)
 
-            log_scalars(
-                'evaluation/vs_comparison_bot',
-                {
-                    'wins': results.wins,
-                    'losses': results.losses,
-                    'draws': results.draws,
-                },
-                iteration,
-            )
+        # Wait for all to finish
+        for p in processes:
+            p.join()
 
 
-def evaluate_iteration(args: tuple[int, int]):
+def evaluate_iteration(iteration: int, run_id: int):
     from src.settings import TRAINING_ARGS
     from src.util.save_paths import model_save_path
 
-    iteration, run_id = args
+    assert TRAINING_ARGS.evaluation, 'Evaluation process is not enabled. Set evaluation.enabled to True in the config.'
+    assert iteration > 0, 'Iteration must be greater than 0.'
 
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
+
+    TRAINING_ARGS.evaluation.num_games = 4
+
     log(f'Running evaluation process for iteration {iteration}')
     run_evaluation_process(run_id, TRAINING_ARGS, iteration)
 
@@ -158,8 +191,8 @@ def __main():
 
     run_id = get_run_id()
 
-    with mp.Pool(processes=1) as pool:
-        pool.map(evaluate_iteration, [(i, run_id) for i in range(1, 100)])
+    for i in range(1, 100):
+        evaluate_iteration(i, run_id)
 
 
 if __name__ == '__main__':

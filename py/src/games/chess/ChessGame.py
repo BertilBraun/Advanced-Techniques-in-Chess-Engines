@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import chess
 import numpy as np
+import numpy.typing as npt
 from typing import NamedTuple
 
 from src.games.Game import Game
@@ -9,7 +10,7 @@ from src.games.chess.ChessBoard import ChessBoard, ChessMove
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-ENCODING_CHANNELS = 13 + 1  # 12 for pieces + 1 for castling rights + 1 for color
+ENCODING_CHANNELS = 12 + 1 + 1 + 1  # 12 for pieces + 1 for castling rights + 1 for color + 1 for en passant square
 
 
 def square_to_index(square: int) -> tuple[int, int]:
@@ -72,6 +73,21 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
     return move2index, index2move
 
 
+_BIT_MASK = 1 << np.arange(64, dtype=np.uint64)  # use uint64 to prevent overflow
+
+
+def _bitfield_to_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.int8]:
+    """Convert a tuple of integers into a binary state. Each integer represents a channel of the state. This assumes that the state is a binary state."""
+    assert state.dtype == np.uint64, 'The state must be encoded as uint64 to prevent overflow'
+
+    encoded_array = state.reshape(-1, 1)  # shape: (channels, 1)
+
+    # Extract bits for each channel
+    bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8)
+
+    return bits.reshape(ChessGame().representation_shape)
+
+
 class ChessGame(Game[ChessMove]):
     move2index, index2move = _build_action_dicts()
 
@@ -84,8 +100,6 @@ class ChessGame(Game[ChessMove]):
         return (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
     def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
-        from src.Encoding import decode_board_state
-
         colors = (chess.WHITE, chess.BLACK)
         encoded_pieces: list[int] = [
             piece
@@ -116,9 +130,10 @@ class ChessGame(Game[ChessMove]):
             + (castling_rights[3] << (BOARD_SIZE - 1))
         )
         color = 0xFFFFFFFFFFFFFFFF if board.current_player == 1 else 0
+        ep_square = (1 << board.board.ep_square) if board.board.ep_square else 0
 
-        canonical_board = decode_board_state(
-            np.array(encoded_pieces + [encoded_castling_rights, color], dtype=np.uint64)
+        canonical_board = _bitfield_to_board_state(
+            np.array(encoded_pieces + [encoded_castling_rights, ep_square, color], dtype=np.uint64)
         )
 
         return canonical_board

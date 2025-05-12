@@ -149,7 +149,7 @@ class MCTSNode:
         visits = ', '.join(str(round(child.number_of_visits, 2)) for child in children)
         new_policy = ', '.join(str(round(child.number_of_visits / self.number_of_visits, 2)) for child in children)
         policies = ', '.join(str(round(self.children_policies[child.my_child_index], 2)) for child in children)
-        moves = ', '.join(CurrentGame.decode_move(child.encoded_move_to_get_here).uci() for child in children)
+        moves = ', '.join(str(CurrentGame.decode_move(child.encoded_move_to_get_here)) for child in children)
         scores = ', '.join(str(round(self.children_result_scores[child.my_child_index], 2)) for child in children)
 
         def entropy(node: MCTSNode) -> float:
@@ -166,7 +166,7 @@ class MCTSNode:
         for child in children:
             if child.number_of_visits < 5:
                 continue
-            children_str += f'\n\tNum visits: {child.number_of_visits} (Score: {self.children_result_scores[child.my_child_index]:.2f}), Policy: {self.children_policies[child.my_child_index]:.2f} -> {child.number_of_visits / self.number_of_visits:.2f} (Move: {CurrentGame.decode_move(child.encoded_move_to_get_here).uci()})'
+            children_str += f'\n\tNum visits: {child.number_of_visits} (Score: {self.children_result_scores[child.my_child_index]:.2f}), Policy: {self.children_policies[child.my_child_index]:.2f} -> {child.number_of_visits / self.number_of_visits:.2f} (Move: {str(CurrentGame.decode_move(child.encoded_move_to_get_here))})'
 
         return f"""MCTSNode(
 {repr(self.board) if self.board else None}

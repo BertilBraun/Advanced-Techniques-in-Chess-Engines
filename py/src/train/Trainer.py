@@ -32,7 +32,7 @@ class Trainer:
         The target is the policy and value targets from the self-play memory.
         The model is trained to minimize the cross-entropy loss for the policy and the mean squared error for the value when evaluated on the board state from the memory.
         """
-        base_lr = self.args.learning_rate(iteration)
+        base_lr = self.args.learning_rate(iteration, self.args.optimizer)
         log_scalar('learning_rate', base_lr, iteration)
 
         self.model.train()
@@ -145,10 +145,9 @@ class Trainer:
 
             self.optimizer.zero_grad()
             loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.5)
-            total_gradient_norm += norm.detach()
-            # print('Gradient norm:', norm.item())
             # TODO magic hyperparameter and sensible like this?
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5.5)
+            total_gradient_norm += norm.detach()
 
             self.optimizer.step()
 
@@ -166,7 +165,6 @@ class Trainer:
             num_batches=len(dataloader),
         )
 
-        log(f'Last gradient norm: {norm.item()}')
         log(f'Training stats: {train_stats}')
 
         # Reset the mean and std for the validation batch

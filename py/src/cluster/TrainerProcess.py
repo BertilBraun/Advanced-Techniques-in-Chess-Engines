@@ -67,13 +67,12 @@ class TrainerProcess:
         trainer = Trainer(model, optimizer, self.args.training)
 
         self._wait_for_enough_training_samples(iteration)
+        dataset, validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
 
         train_stats: list[TrainingStats] = []
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
-            # Only loads a light wrapper around the entire dataset
-            dataset, validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
             dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
             validation_dataloader = validation_dataset.as_dataloader(
                 self.args.training.batch_size, self.args.training.num_workers

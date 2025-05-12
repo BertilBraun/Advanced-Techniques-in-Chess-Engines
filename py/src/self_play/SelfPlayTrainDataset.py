@@ -73,15 +73,16 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
         assert num_workers > 0, 'num_workers must be greater than 0'
+        num_workers = 1  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
         return torch.utils.data.DataLoader(
             self,
             batch_size=batch_size,
-            num_workers=0,  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
+            num_workers=num_workers,
             shuffle=True,
             drop_last=False,
-            persistent_workers=True,
+            persistent_workers=num_workers > 0,
             pin_memory=True,
-            prefetch_factor=8,
+            prefetch_factor=8 if num_workers > 0 else None,
         )
 
     def __len__(self) -> int:

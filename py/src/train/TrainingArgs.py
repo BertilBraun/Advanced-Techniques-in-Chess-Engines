@@ -69,6 +69,9 @@ class ClusterParams:
     """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with."""
 
 
+OptimizerType = Literal['adamw', 'sgd']
+
+
 @dataclass
 class TrainingParams:
     num_epochs: int
@@ -77,7 +80,7 @@ class TrainingParams:
     batch_size: int
     """This is the size of the batch to train with"""
 
-    optimizer: Literal['adamw', 'sgd']
+    optimizer: OptimizerType
     """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
 
     sampling_window: Callable[[int], int]
@@ -89,7 +92,7 @@ class TrainingParams:
         return 4 + (current_iteration - 5) // 2
     """
 
-    learning_rate: Callable[[int], float]
+    learning_rate: Callable[[int, OptimizerType], float]
     """This is a function that returns the learning rate to use for the training. The function should take the current iteration as input and return the learning rate to use for that iteration.
     Example:
     def learning_rate(current_iteration: int) -> float:
@@ -123,7 +126,7 @@ class EvaluationParams:
     every_n_iterations: int
     """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
 
-    dataset_path: str
+    dataset_path: str | None = None
     """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""
 
 

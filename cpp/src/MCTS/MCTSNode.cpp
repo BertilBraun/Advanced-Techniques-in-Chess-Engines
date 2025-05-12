@@ -15,13 +15,20 @@ float MCTSNode::ucb(float c_param) const {
         throw std::logic_error("Node must have a parent");
     }
 
-    float ucbScore =
-        policy * c_param * std::sqrt(parent->number_of_visits) / (1 + number_of_visits);
+    float uScore = policy * c_param * std::sqrt(parent->number_of_visits) / (1 + number_of_visits);
 
+    float qScore = 0.0;
     if (number_of_visits > 0) {
-        ucbScore += 1 - (((result_score + virtual_loss) / number_of_visits) + 1) / 2;
+        qScore = -1 * (result_score + virtual_loss) / number_of_visits;
+    } else {
+        if (parent != nullptr) {
+            qScore = parent->result_score / parent->number_of_visits; // Default to parent's score
+        } else {
+            qScore = -1.0; // Default to loss for unvisited moves
+        }
     }
-    return ucbScore;
+
+    return uScore + qScore;
 }
 
 MCTSNode::MCTSNode(MCTSNode &&other)

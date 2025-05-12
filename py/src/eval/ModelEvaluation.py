@@ -17,7 +17,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import MCTSParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
-from src.settings import USE_GPU, CurrentBoard, CurrentGame
+from src.settings import CURRENT_GAME, USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
@@ -188,7 +188,7 @@ class ModelEvaluation:
         game_to_index = {game: i for i, game in enumerate(games)}
 
         # start from different starting positions, as the players are deterministic
-        if 'Chess' in CurrentGame.__class__.__name__:
+        if CURRENT_GAME == 'chess':
             opening_fens = [
                 'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
                 'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game

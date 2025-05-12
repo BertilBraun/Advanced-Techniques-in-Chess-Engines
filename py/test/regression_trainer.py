@@ -8,7 +8,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
 from src.train.Trainer import Trainer
-from src.train.TrainingArgs import TrainingParams
+from src.train.TrainingArgs import OptimizerType, TrainingParams
 from src.util.log import log
 from src.util.save_paths import create_model, create_optimizer
 
@@ -17,7 +17,8 @@ BATCH_SIZE = 64
 
 
 def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iteration: int) -> None:
-    def learning_rate(iteration: int) -> float:
+    def learning_rate(iteration: int, optimizer: OptimizerType) -> float:
+        assert optimizer == 'adamw', 'Only adamw is supported for now'
         if iteration < 8:
             return 0.2
         if iteration < 12:
@@ -38,7 +39,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         ),
     )
 
-    log('Training with lr:', trainer.args.learning_rate(iteration))
+    log('Training with lr:', trainer.args.learning_rate(iteration, trainer.args.optimizer))
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, dataloader, iteration)

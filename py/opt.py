@@ -5,6 +5,7 @@ from multiprocessing import Process
 from src.util.log import log
 from src.train.TrainingArgs import (
     ClusterParams,
+    OptimizerType,
     TrainingArgs,
     MCTSParams,
     NetworkParams,
@@ -51,7 +52,8 @@ def objective(trial: optuna.Trial) -> float:
     training_learning_rate_initial = trial.suggest_float('training_learning_rate_initial', 5e-3, 1e-1, log=True)
     training_decay_rate = trial.suggest_float('learning_rate_decay_rate', 0.85, 0.99)
 
-    def learning_rate(current_iteration: int) -> float:
+    def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
+        # optimizer can be ignored, as the search is exploring lr seperately for each optimizer
         return training_learning_rate_initial * (training_decay_rate**current_iteration)
 
     initial_window = trial.suggest_int('sampling_window_initial', 2, 5)

@@ -1,16 +1,13 @@
-from time import sleep
-from typing import Literal
 import torch
 from os import PathLike
+from time import sleep
 from pathlib import Path
 
 
 from src.Network import Network
-from src.train.TrainingArgs import NetworkParams
+from src.train.TrainingArgs import NetworkParams, OptimizerType
 from src.util.compile import try_compile
 from src.util.log import LogLevel, log
-
-OptimizerType = Literal['adamw', 'sgd']
 
 
 def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
@@ -113,7 +110,7 @@ def load_model_and_optimizer(
             model = load_model(model_save_path(iteration, save_folder), args, device)
             try:
                 optimizer = load_optimizer(optimizer_save_path(iteration, save_folder), model, type)
-            except FileNotFoundError:
+            except:  # noqa: E722
                 optimizer = create_optimizer(model, type)
         except FileNotFoundError:
             return load_model_and_optimizer(iteration - 1, args, device, save_folder, type)

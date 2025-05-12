@@ -37,7 +37,7 @@ public:
     int encoded_move_to_get_here;
     int num_played_moves = 0;
     int number_of_visits = 0;
-    float virtual_loss = 1.0; // Init to loss as that seems to work better during search
+    float virtual_loss = 0.0; // Init to loss as that seems to work better during search
     float result_score = 0.0;
     float policy = 0.0;
 };

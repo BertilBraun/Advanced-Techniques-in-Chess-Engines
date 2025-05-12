@@ -36,7 +36,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     """
 
     def __init__(self) -> None:
-        self.encoded_states: list[npt.NDArray[np.uint64]] = []
+        self.encoded_states: list[bytes] = []
         self.visit_counts: list[npt.NDArray[np.uint16]] = []
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats()
@@ -78,10 +78,9 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     @timeit
     def deduplicate(self) -> SelfPlayDataset:
         """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[tuple[int, ...], tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
+        mp: dict[bytes, tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
-            state = tuple(state)
             if state in mp:
                 count, (visit_count_sum, value_target_sum) = mp[state]
                 new_visit_counts = []
@@ -105,9 +104,12 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 )
 
         deduplicated_dataset = SelfPlayDataset()
-        deduplicated_dataset.encoded_states = [np.array(state) for state in mp.keys()]
-        deduplicated_dataset.visit_counts = [visit_count for _, (visit_count, _) in mp.values()]
-        deduplicated_dataset.value_targets = [value_target / count for count, (_, value_target) in mp.values()]
+
+        for state, (count, (visit_count_sum, value_target_sum)) in mp.items():
+            deduplicated_dataset.encoded_states.append(state)
+            deduplicated_dataset.visit_counts.append(visit_count_sum)
+            deduplicated_dataset.value_targets.append(value_target_sum / count)
+
         deduplicated_dataset.stats = SelfPlayDatasetStats(
             num_samples=len(mp),
             num_games=self.stats.num_games,

@@ -8,7 +8,7 @@ import numpy as np
 from sys import getsizeof
 from typing import TypeVar
 
-from src.Encoding import MoveScore, filter_policy_with_en_passant_moves_then_get_moves_and_probabilities
+from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
@@ -47,15 +47,16 @@ class InferenceClient:
                     del self.model
 
                 # sync and gc collect to free up memory before loading the model
-                torch.cuda.empty_cache()
-                import gc
+                if USE_GPU:
+                    torch.cuda.empty_cache()
+                    import gc
 
-                gc.collect()
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-                gc.collect()
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
 
                 self.model = load_model(model_path, self.network_args, self.device)
                 self.model.to(self.device)  # just to be sure
@@ -122,8 +123,7 @@ class InferenceClient:
         if boards_to_infer:
             results = self._model_inference(boards_to_infer)
             for (hash, board), (policy, value) in zip(inference_hashes_and_boards, results):
-                # Dont filter out the en passant moves here, because the policy is already fixed, but the en passant moves are dependent on the board state
-                moves = filter_policy_with_en_passant_moves_then_get_moves_and_probabilities(policy, board)
+                moves = filter_policy_then_get_moves_and_probabilities(policy, board)
                 self.inference_cache[hash] = np.array(moves), value
 
         responses: list[tuple[list[MoveScore], float]] = []
