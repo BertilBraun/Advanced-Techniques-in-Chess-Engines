@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 
 from src.games.Game import Board
-from src.eval.GUI import BaseGridGameGUI
+from src.eval.GridGUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard, ROW_COUNT
 from src.games.tictactoe.TicTacToeGame import TicTacToeMove

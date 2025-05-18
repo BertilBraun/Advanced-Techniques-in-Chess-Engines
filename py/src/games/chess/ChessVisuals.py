@@ -1,6 +1,6 @@
 from typing import List, Optional, Tuple
 
-from src.eval.GUI import BaseGridGameGUI
+from src.eval.GridGUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.ChessGame import BOARD_LENGTH

@@ -3,12 +3,16 @@ import torch
 from src.eval.TournamentManager import TournamentManager
 from src.games.chess.comparison_bots.StockfishBot import ChessStockfishBot
 from src.util.log import log
-from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals
-from src.eval.GUI import BaseGridGameGUI
+from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals, CURRENT_GAME
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot
 from src.util.save_paths import get_latest_model_iteration
+
+if CURRENT_GAME == 'hex':
+    from src.eval.HexGUI import HexGridGameGUI as GUI
+else:
+    from src.eval.GridGUI import BaseGridGameGUI as GUI
 
 
 class CommonHumanPlayer(HumanPlayer):
@@ -17,7 +21,7 @@ class CommonHumanPlayer(HumanPlayer):
         _, rows, cols = CurrentGame.representation_shape
         if hasattr(CurrentBoard(), 'board_dimensions'):
             rows, cols = CurrentBoard().board_dimensions  # type: ignore
-        gui = BaseGridGameGUI(rows, cols)
+        gui = GUI(rows, cols)
         super().__init__(gui, CurrentGameVisuals)
 
 
