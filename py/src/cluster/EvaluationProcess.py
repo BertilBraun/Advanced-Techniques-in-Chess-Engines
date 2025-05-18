@@ -1,3 +1,4 @@
+import os
 from torch import multiprocessing as mp
 
 from src.eval.ModelEvaluation import ModelEvaluation
@@ -90,6 +91,9 @@ def _eval_vs_five_previous(run: int, model_evaluation: ModelEvaluation, iteratio
 
 def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
     reference_model_path = save_path + '/reference_model.pt'
+    if not os.path.exists(reference_model_path):
+        log(f'Reference model not found at {reference_model_path}. Skipping evaluation.')
+        return
     results = model_evaluation.play_two_models_search(reference_model_path)
     log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
 

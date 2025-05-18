@@ -30,7 +30,7 @@ training = TrainingParams(
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=60,
-    num_games=30,
+    num_games=20,
     every_n_iterations=1,
 )
 
@@ -41,7 +41,7 @@ MIN_VISIT_COUNT = 0  # TODO 1 or 2?
 TRAINING_ARGS = TrainingArgs(
     num_iterations=120,
     save_path=SAVE_PATH + '/hex',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,

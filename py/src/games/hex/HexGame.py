@@ -18,7 +18,7 @@ class HexGame(Game[HexMove]):
     @property
     def representation_shape(self) -> tuple[int, int, int]:
         # planes: current player, opponent, empty
-        return (4, SIZE, SIZE)
+        return (3, SIZE, SIZE)
 
     def get_initial_board(self) -> HexBoard:
         return HexBoard()
@@ -31,15 +31,15 @@ class HexGame(Game[HexMove]):
         2 – empty                       (1s)
         3 - current player (1s)
         """
-        return np.stack(
-            [
-                (board.board == 1),
-                (board.board == -1),
-                (board.board == 0),
-                np.full_like(board.board, board.current_player == 1),
-            ],
-            axis=0,
-        ).astype(np.float32)
+        # return np.stack(
+        #     [
+        #         (board.board == 1),
+        #         (board.board == -1),
+        #         (board.board == 0),
+        #         np.full_like(board.board, board.current_player == 1),
+        #     ],
+        #     axis=0,
+        # ).astype(np.float32)
 
         # Put the side to move’s stones in +1
         pos = board.board * board.current_player  # +1 == me, –1 == them
@@ -66,8 +66,8 @@ class HexGame(Game[HexMove]):
         self, board: np.ndarray, visit_counts: List[Tuple[int, int]]
     ) -> List[Tuple[np.ndarray, List[Tuple[int, int]]]]:
         """
-        Return the 4 symmetries of an NxN hex board: identity, 180° rotation,
-        main-diagonal reflection (transpose), and anti-diagonal reflection.
+        Return the 4 symmetries of an NxN hex board: identity, 180° rotation, flip top↔bottom, flip left↔right.
+        Each symmetry is a tuple of (board, visit_counts).
         """
 
         def remap_counts(map_fn):
