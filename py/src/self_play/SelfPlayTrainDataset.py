@@ -34,7 +34,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         for file in reversed(files):
             self.datasets.append(SelfPlayDataset.load(file))
 
-            if sum(len(dataset) for dataset in self.datasets) > 5_000_000:
+            if sum(len(dataset) for dataset in self.datasets) > 2_500_000:
                 print(f'Loaded {len(self.datasets)} datasets, stopping loading more.')
                 break
 
