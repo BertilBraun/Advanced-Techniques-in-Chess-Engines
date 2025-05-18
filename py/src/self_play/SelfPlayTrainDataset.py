@@ -31,11 +31,12 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         return accumulated_stats
 
     def load_from_files(self, files: list[Path]) -> None:
-        for file in files:
+        for file in reversed(files):
             self.datasets.append(SelfPlayDataset.load(file))
 
-        for i in range(len(self.datasets)):
-            self.datasets[i] = self.datasets[i].sample(int(len(self.datasets[i]) * 0.2))  # TODO remove?
+            if sum(len(dataset) for dataset in self.datasets) > 5_000_000:
+                print(f'Loaded {len(self.datasets)} datasets, stopping loading more.')
+                break
 
         self.dataset_length_prefix_sums = [0] + list(np.cumsum([len(dataset) for dataset in self.datasets]))
 

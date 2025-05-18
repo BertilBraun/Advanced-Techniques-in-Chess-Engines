@@ -98,8 +98,8 @@ class CommanderProcess:
                 p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration))
                 p.start()
                 print(f'Started evaluation process for iteration {iteration}.')
-                p.join()
-                print(f'Finished evaluation process for iteration {iteration}.')
+                # p.join()
+                # print(f'Finished evaluation process for iteration {iteration}.')
 
         log('Training complete. Sending STOP to all processes.')
         for pipe in self._all_pipes():
