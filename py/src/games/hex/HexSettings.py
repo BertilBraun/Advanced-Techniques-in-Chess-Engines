@@ -30,7 +30,7 @@ training = TrainingParams(
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=60,
-    num_games=40,
+    num_games=30,
     every_n_iterations=1,
 )
 

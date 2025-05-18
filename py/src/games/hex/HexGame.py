@@ -18,7 +18,7 @@ class HexGame(Game[HexMove]):
     @property
     def representation_shape(self) -> tuple[int, int, int]:
         # planes: current player, opponent, empty
-        return (3, SIZE, SIZE)
+        return (4, SIZE, SIZE)
 
     def get_initial_board(self) -> HexBoard:
         return HexBoard()
@@ -29,7 +29,18 @@ class HexGame(Game[HexMove]):
         0 – stones of the side to move  (1s)
         1 – stones of the opponent      (1s)
         2 – empty                       (1s)
+        3 - current player (1s)
         """
+        return np.stack(
+            [
+                (board.board == 1),
+                (board.board == -1),
+                (board.board == 0),
+                np.full_like(board.board, board.current_player == 1),
+            ],
+            axis=0,
+        ).astype(np.float32)
+
         # Put the side to move’s stones in +1
         pos = board.board * board.current_player  # +1 == me, –1 == them
 
