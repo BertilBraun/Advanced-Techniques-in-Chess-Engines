@@ -96,6 +96,6 @@ class HexBoard(Board[int]):
         lines = []
         for i, row in enumerate(self.board):
             indent = ' ' * i
-            line = ' '.join(symbols[cell] for cell in row)
+            line = ' '.join(symbols.get(cell, 'invalid') for cell in row)
             lines.append(indent + line)
         return '\n'.join(lines)

@@ -108,3 +108,25 @@ class HexGame(Game[HexMove]):
         )
 
         return syms
+
+
+if __name__ == '__main__':
+    game = HexGame()
+    board = game.get_initial_board()
+    for _ in range(10):
+        move = np.random.choice(board.get_valid_moves())
+        board.make_move(move)
+
+    print(board)
+    print(board.current_player)
+
+    print(game.get_canonical_board(board))
+    move = np.random.choice(board.get_valid_moves())
+    r, c = divmod(move, SIZE)
+    print(move, r, c)
+    for bv, mv in game.symmetric_variations(game.get_canonical_board(board), [(move, 5)]):
+        b = game.get_initial_board()
+        b.board = bv[0] - bv[1]
+        r, c = divmod(mv[0][0], SIZE)
+        b.board[r, c] = mv[0][1]
+        print(b)
