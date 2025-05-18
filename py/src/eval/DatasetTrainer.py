@@ -75,6 +75,7 @@ def main(dataset_paths: list[str]):
 
         train_dataset = SelfPlayTrainDataset(run_id)
         train_dataset.load_from_files([Path(p) for p in dataset_paths])
+        train_dataset.log_all_dataset_stats(run_id)
         train_stats = train_dataset.stats
 
         log('Creating model...')

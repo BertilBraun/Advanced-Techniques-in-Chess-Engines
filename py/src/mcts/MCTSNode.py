@@ -124,14 +124,15 @@ class MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
         # NOTE moving the calculations into seperate functions slowed this down by 2x, so it's all in here
         best_child_index = _best_child_index(
-            c_param,
-            min_visit_count,
-            self.children_number_of_visits,
-            self.children_result_scores,
-            self.children_virtual_losses,
-            self.children_policies,
-            self.number_of_visits,
-            self.result_score,
+            c_param=c_param,
+            min_visit_count=min_visit_count,
+            children_number_of_visits=self.children_number_of_visits,
+            children_result_scores=self.children_result_scores,
+            children_virtual_losses=self.children_virtual_losses,
+            children_policies=self.children_policies,
+            own_number_of_visits=self.number_of_visits,
+            # Fix: use 0 or parent.Q only for the very first depth, then default to 0 afterwards.
+            own_result_score=self.result_score if self.parent is None else 0.0,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()

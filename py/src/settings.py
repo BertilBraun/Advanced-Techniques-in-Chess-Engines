@@ -1,7 +1,7 @@
 from typing import Literal
 from src.settings_common import *
 
-CURRENT_GAME: Literal['tictactoe', 'connect4', 'hex', 'checkers', 'chess'] = 'chess'
+CURRENT_GAME: Literal['tictactoe', 'connect4', 'hex', 'checkers', 'chess'] = 'hex'
 
 if CURRENT_GAME == 'hex':
     from src.games.hex.HexSettings import *

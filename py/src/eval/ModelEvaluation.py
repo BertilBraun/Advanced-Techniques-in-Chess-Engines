@@ -253,3 +253,10 @@ class ModelEvaluation:
             games = [game for game in games if not game.is_game_over()]
 
         return results
+
+
+if __name__ == '__main__':
+    from src.settings import TRAINING_ARGS
+
+    evaluation = ModelEvaluation(0, TRAINING_ARGS, 100, 400)
+    print('Evaluation vs Random:', evaluation.play_vs_random())

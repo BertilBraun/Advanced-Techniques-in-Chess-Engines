@@ -18,9 +18,7 @@ from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
-    def __init__(self, run: int) -> None:
-        self.run = run
-
+    def __init__(self) -> None:
         self.datasets: list[SelfPlayDataset] = []
         self.dataset_length_prefix_sums: list[int] = []
 
@@ -36,8 +34,13 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         for file in files:
             self.datasets.append(SelfPlayDataset.load(file))
 
+        for i in range(len(self.datasets)):
+            self.datasets[i] = self.datasets[i].sample(int(len(self.datasets[i]) * 0.2))  # TODO remove?
+
         self.dataset_length_prefix_sums = [0] + list(np.cumsum([len(dataset) for dataset in self.datasets]))
-        Process(target=self._log_all_dataset_stats, args=(self.run,), daemon=True).start()
+
+    def log_all_dataset_stats(self, run: int) -> None:
+        Process(target=self._log_all_dataset_stats, args=(run,), daemon=True).start()
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats
@@ -61,15 +64,19 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             log_scalar('dataset/num_games', accumulated_stats.num_games)
             log_scalar('dataset/average_game_length', accumulated_stats.game_lengths / accumulated_stats.num_games)
             log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
-            log_scalar('dataset/num_resignations', accumulated_stats.resignations)
-            log_scalar(
-                'dataset/average_resignation_percent',
-                accumulated_stats.resignations / accumulated_stats.num_games * 100,
-            )
+
             log_scalar('dataset/num_samples', accumulated_stats.num_samples)
             log_scalar(
-                'dataset/average_generation_time', accumulated_stats.total_generation_time / accumulated_stats.num_games
+                'dataset/average_generation_time',
+                accumulated_stats.total_generation_time / accumulated_stats.num_games,
             )
+
+            if accumulated_stats.resignations > 0:
+                log_scalar('dataset/num_resignations', accumulated_stats.resignations)
+                log_scalar(
+                    'dataset/average_resignation_percent',
+                    accumulated_stats.resignations / accumulated_stats.num_games * 100,
+                )
 
     def as_dataloader(self, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
         assert num_workers > 0, 'num_workers must be greater than 0'

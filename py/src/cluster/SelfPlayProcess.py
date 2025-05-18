@@ -1,4 +1,7 @@
+import numpy as np
 import torch
+import torch.multiprocessing as mp
+
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter, USE_GPU
 from src.util.log import log
@@ -20,6 +23,8 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)
+
+    np.random.seed(mp.current_process().pid)
 
     client = InferenceClient(device_id, args.network, args.save_path)
     self_play_process = SelfPlayProcess(client, args.self_play, args.save_path, commander_pipe)

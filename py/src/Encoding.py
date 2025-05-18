@@ -89,11 +89,14 @@ def filter_moves(moves: list[MoveScore], board: CurrentBoard) -> list[MoveScore]
     :return: The filtered moves.
     """
     legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
-    filtered_moves = [(move, prob) for move, prob in moves if legal_moves_encoded[move] > 0 and prob > 0]
+    filtered_moves = [(move, prob) for move, prob in moves if legal_moves_encoded[move] > 0 and prob > 1e-6]
+    filtered_moves.sort(key=lambda x: x[1], reverse=True)
+    filtered_moves = filtered_moves[:20]  # TODO: make this a parameter - limit the number of moves to explore
 
     prob_sum = sum(prob for _, prob in filtered_moves)
 
     if prob_sum == 0:
+        print('Warning: No legal moves found in the filtered moves. Returning all legal moves with equal probability.')
         return __map_policy_to_moves(legal_moves_encoded / np.sum(legal_moves_encoded))
 
     for i, (move, prob) in enumerate(filtered_moves):

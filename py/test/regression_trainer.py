@@ -80,11 +80,11 @@ def main(dataset_path: str):
         dataset_content = get_regression_dataset(dataset_path)
         train_dataset_path = dataset_content.save(save_folder, 0)
 
-        for iter in range(NUM_EPOCHS):
-            # Instantiate the dataset
-            dataset = SelfPlayTrainDataset(run_id)
-            dataset.load_from_files([train_dataset_path])
+        # Instantiate the dataset
+        dataset = SelfPlayTrainDataset()
+        dataset.load_from_files([train_dataset_path])
 
+        for iter in range(NUM_EPOCHS):
             train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=TRAINING_ARGS.training.num_workers)
 
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)

@@ -1,5 +1,4 @@
 import random
-import time
 from typing import Iterable
 import numpy as np
 from dataclasses import dataclass
@@ -52,6 +51,7 @@ class MCTS:
         # TODO Already expanded nodes currently dont properly work. Issues:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
         #  - The node will get visited an additional X times, but should be visited a total of X times, i.e. X - node.number_of_visits times // "Playout Cap Oscillation" as per the KataGo paper.
+        # TODO: Fix:Playout-cap oscillation - cap the cumulative visits a root may receive; when the cap is reached, halve all N counts (or clear them) and continue - One for child: N //= 2 per move
         # If fastplay_frequency > 0, tree search is modified as follows:
         #   - Each move is either a "low-readout" fast move, or a full, slow move.
         #   The percent of fast moves corresponds to "fastplay_frequency"
@@ -113,6 +113,10 @@ class MCTS:
         #     from src.util.mcts_graph import draw_mcts_graph
         #
         #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
+
+        assert all(
+            np.all(node.children_virtual_losses == 0) for node in roots
+        ), 'Virtual losses should be 0 after the search'
 
         def dfs(node: MCTSNode) -> int:
             # depth dfs
@@ -177,7 +181,6 @@ class MCTS:
         return [self._add_noise(moves) for moves, _ in results]
 
     def _add_noise(self, moves: list[MoveScore]) -> list[MoveScore]:
-        np.random.seed(time.time_ns() % 2**32)
         noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(moves))
         return [(move, lerp(policy, noise, self.args.dirichlet_epsilon)) for (move, policy), noise in zip(moves, noise)]
 
@@ -197,3 +200,13 @@ class MCTS:
             return None
 
         return node
+
+
+if __name__ == '__main__':
+    from src.cluster.InferenceClient import InferenceClient
+    from src.settings import CurrentBoard, TRAINING_ARGS
+
+    client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
+    board = CurrentBoard()
+    mcts = MCTS(client, TRAINING_ARGS.self_play.mcts)
+    mcts.search([(board, None)])

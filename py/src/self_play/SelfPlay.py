@@ -175,7 +175,6 @@ class SelfPlay:
         temperature_action_probabilities = action_probabilities ** (1 / temperature)
         temperature_action_probabilities /= np.sum(temperature_action_probabilities)
 
-        np.random.seed(time.time_ns() % 2**32)
         action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
         return CurrentGame.decode_move(action)
@@ -206,7 +205,7 @@ class SelfPlay:
                     lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
                 )
 
-            game_outcome *= 0.99  # discount the game outcome for each move
+            # TODO disabled for now, discounting only in MCTS search game_outcome *= 0.99  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         total_visits = sum(visit_count for _, visit_count in visit_counts)

@@ -54,10 +54,10 @@ TRAINING_ARGS = TrainingArgs(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.15,
+            dirichlet_alpha=0.05,
             c_param=1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
-            full_search_probability=0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
+            full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
