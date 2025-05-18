@@ -63,7 +63,8 @@ class HexGame(Game[HexMove]):
             out: list[tuple[int, int]] = []
             for idx, n in visit_counts:
                 r, c = divmod(self.decode_move(idx), SIZE)
-                idx2 = self.encode_move(*map_fn(r, c))
+                nr, nc = map_fn(r, c)
+                idx2 = self.encode_move(nr * SIZE + nc)
                 out.append((idx2, n))
             return out
 
