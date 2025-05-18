@@ -19,7 +19,7 @@ CurrentGame = HexGame()
 CurrentBoard = HexBoard
 CurrentGameVisuals = HexVisuals()
 
-network = NetworkParams(num_layers=8, hidden_size=64)
+network = NetworkParams(num_layers=12, hidden_size=96)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
