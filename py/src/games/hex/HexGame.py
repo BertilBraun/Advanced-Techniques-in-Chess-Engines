@@ -24,8 +24,23 @@ class HexGame(Game[HexMove]):
         return HexBoard()
 
     def get_canonical_board(self, board: HexBoard) -> np.ndarray:
-        canonical = board.board * board.current_player
-        planes = np.stack([(canonical == 1), (canonical == -1), (canonical == 0)])
+        """
+        Planes:
+        0 – stones of the side to move  (1s)
+        1 – stones of the opponent      (1s)
+        2 – empty                       (1s)
+        """
+        # Put the side to move’s stones in +1
+        pos = board.board * board.current_player  # +1 == me, –1 == them
+
+        # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
+        if board.current_player == -1:
+            pos = np.rot90(pos, k=1)  # counter-clockwise
+
+        planes = np.stack(
+            [(pos == 1), (pos == -1), (pos == 0)],
+            dtype=np.float32,
+        )
         return planes.astype(np.float32)
 
     def encode_move(self, move: HexMove) -> int:
@@ -43,34 +58,41 @@ class HexGame(Game[HexMove]):
         Return the 4 symmetries of an NxN hex board: identity, 180° rotation,
         main-diagonal reflection (transpose), and anti-diagonal reflection.
         """
+
+        def remap_counts(map_fn):
+            out: list[tuple[int, int]] = []
+            for idx, n in visit_counts:
+                r, c = divmod(self.decode_move(idx), SIZE)
+                idx2 = self.encode_move(*map_fn(r, c))
+                out.append((idx2, n))
+            return out
+
         syms: List[Tuple[np.ndarray, List[Tuple[int, int]]]] = []
-        # 1) Identity
+        # 0) identity
         syms.append((board, visit_counts))
-        # 2) 180° rotation
-        b_rot = np.rot90(board, k=2, axes=(1, 2))
-        vc_rot: List[Tuple[int, int]] = []
-        for idx, count in visit_counts:
-            r, c = divmod(self.decode_move(idx), SIZE)
-            r2, c2 = SIZE - 1 - r, SIZE - 1 - c
-            idx2 = self.encode_move(r2 * SIZE + c2)
-            vc_rot.append((idx2, count))
-        syms.append((b_rot, vc_rot))
-        # 3) Main-diagonal reflection (transpose)
-        b_t = board.transpose((0, 2, 1))
-        vc_t: List[Tuple[int, int]] = []
-        for idx, count in visit_counts:
-            r, c = divmod(self.decode_move(idx), SIZE)
-            idx2 = self.encode_move(c * SIZE + r)
-            vc_t.append((idx2, count))
-        syms.append((b_t, vc_t))
-        # 4) Anti-diagonal reflection
-        # r2 = SIZE-1-c, c2 = SIZE-1-r
-        b_ad = np.rot90(b_t, k=2, axes=(1, 2))  # rotate transposed by 180 is anti-diagonal
-        vc_ad: List[Tuple[int, int]] = []
-        for idx, count in visit_counts:
-            r, c = divmod(self.decode_move(idx), SIZE)
-            r2, c2 = SIZE - 1 - c, SIZE - 1 - r
-            idx2 = self.encode_move(r2 * SIZE + c2)
-            vc_ad.append((idx2, count))
-        syms.append((b_ad, vc_ad))
+
+        # 1) 180° rotation (preserves N-S orientation)
+        syms.append(
+            (
+                np.rot90(board, k=2, axes=(1, 2)),
+                remap_counts(lambda r, c: (SIZE - 1 - r, SIZE - 1 - c)),
+            )
+        )
+
+        # 2) flip top↔bottom
+        syms.append(
+            (
+                np.flip(board, axis=1),
+                remap_counts(lambda r, c: (SIZE - 1 - r, c)),
+            )
+        )
+
+        # 3) flip left↔right
+        syms.append(
+            (
+                np.flip(board, axis=2),
+                remap_counts(lambda r, c: (r, SIZE - 1 - c)),
+            )
+        )
+
         return syms

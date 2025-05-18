@@ -15,6 +15,15 @@ hasher = ZobristHasherNumpy(planes=1, rows=SIZE, cols=SIZE)
 
 
 class HexBoard(Board[int]):
+    """This class represents the Hex board and implements the game logic.
+
+    The game is played on a hexagonal grid, and players take turns placing their pieces
+    on the board. The goal is to connect opposite sides of the board with a continuous
+    path of their pieces. Player 1 connects top to bottom, while Player -1 connects left to right.
+    No two players can occupy the same cell, and the game ends when one player connects their sides.
+    Therefore the game cannot end in a draw.
+    """
+
     def __init__(self) -> None:
         super().__init__()
         self.board = np.zeros((SIZE, SIZE), dtype=int)
