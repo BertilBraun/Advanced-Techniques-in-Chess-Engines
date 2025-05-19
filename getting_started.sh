@@ -24,5 +24,9 @@ cp reference/ChessGame/model_5.pt training_data/chess/reference_model.pt
 # run train.py based on the pretrained model
 python3.11 train.py
 
+# Or run train.py in the background
+nohup python3.11 train.py > train.log 2>&1 &
+tail -f train.log
+
 # view the results in TensorBoard
 tensorboard --logdir logs/
