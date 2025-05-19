@@ -89,6 +89,25 @@ def _eval_vs_five_previous(run: int, model_evaluation: ModelEvaluation, iteratio
     )
 
 
+def _eval_vs_ten_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    if iteration < 11:
+        return
+    previous_model_path = model_save_path(iteration - 10, save_path)
+    results = model_evaluation.play_two_models_search(previous_model_path)
+    log(f'Results after playing {iteration} vs {iteration - 10}:', results)
+
+    _log_to_tensorboard(
+        run,
+        iteration,
+        'evaluation/vs_ten_previous_model',
+        {
+            'wins': results.wins,
+            'losses': results.losses,
+            'draws': results.draws,
+        },
+    )
+
+
 def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
     reference_model_path = save_path + '/reference_model.pt'
     if not os.path.exists(reference_model_path):
@@ -155,7 +174,13 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
-        for fn in [_eval_vs_previous, _eval_vs_five_previous, _eval_vs_reference, _eval_vs_random]:
+        for fn in [
+            _eval_vs_previous,
+            _eval_vs_five_previous,
+            _eval_vs_ten_previous,
+            _eval_vs_reference,
+            _eval_vs_random,
+        ]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
             p.start()
             processes.append(p)
