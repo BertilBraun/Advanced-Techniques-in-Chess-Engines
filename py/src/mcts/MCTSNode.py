@@ -51,7 +51,7 @@ class MCTSNode:
                 raise ValueError('Parent node must have a board')
 
             self.board = self.parent.board.copy()
-            self.board.make_move(CurrentGame.decode_move(self.encoded_move_to_get_here))
+            self.board.make_move(CurrentGame.decode_move(self.encoded_move_to_get_here, self.board))
 
     @property
     def is_fully_expanded(self) -> bool:
@@ -131,8 +131,8 @@ class MCTSNode:
             children_virtual_losses=self.children_virtual_losses,
             children_policies=self.children_policies,
             own_number_of_visits=self.number_of_visits,
-            # Fix: use 0 or parent.Q only for the very first depth, then default to 0 afterwards.
-            own_result_score=self.result_score if self.parent is None else 0.0,
+            # Fix: use parent's result score if this is the root node, else init to loss (-1.0 (the own result score is inverted in the UCB1 formula))
+            own_result_score=self.result_score if self.parent is None else 1.0,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()
@@ -150,7 +150,9 @@ class MCTSNode:
         visits = ', '.join(str(round(child.number_of_visits, 2)) for child in children)
         new_policy = ', '.join(str(round(child.number_of_visits / self.number_of_visits, 2)) for child in children)
         policies = ', '.join(str(round(self.children_policies[child.my_child_index], 2)) for child in children)
-        moves = ', '.join(str(CurrentGame.decode_move(child.encoded_move_to_get_here)) for child in children)
+        moves = ', '.join(
+            str(CurrentGame.decode_move(child.encoded_move_to_get_here, self.board)) for child in children
+        )
         scores = ', '.join(str(round(self.children_result_scores[child.my_child_index], 2)) for child in children)
 
         def entropy(node: MCTSNode) -> float:
@@ -167,7 +169,7 @@ class MCTSNode:
         for child in children:
             if child.number_of_visits < 5:
                 continue
-            children_str += f'\n\tNum visits: {child.number_of_visits} (Score: {self.children_result_scores[child.my_child_index]:.2f}), Policy: {self.children_policies[child.my_child_index]:.2f} -> {child.number_of_visits / self.number_of_visits:.2f} (Move: {str(CurrentGame.decode_move(child.encoded_move_to_get_here))})'
+            children_str += f'\n\tNum visits: {child.number_of_visits} (Score: {self.children_result_scores[child.my_child_index]:.2f}), Policy: {self.children_policies[child.my_child_index]:.2f} -> {child.number_of_visits / self.number_of_visits:.2f} (Move: {str(CurrentGame.decode_move(child.encoded_move_to_get_here, self.board))})'
 
         return f"""MCTSNode(
 {repr(self.board) if self.board else None}
@@ -216,7 +218,7 @@ def _best_child_index(
     # We want to maximize the Q score, which means minimizing the result score of the children, as the scores in the children are from the perspective of the opponent
     q_score = np.zeros_like(children_number_of_visits, dtype=np.float32)
     q_score[visited_mask] = -1 * (result_scores + virtual_losses) / number_of_visits
-    q_score[unvisited_mask] = own_result_score  # Init to parent  # Init to loss (-1.0) for unvisited moves
+    q_score[unvisited_mask] = -own_result_score  # Init to parent  # Init to loss (-1.0) for unvisited moves
 
     visits_quotient = np.sqrt(own_number_of_visits) / (1 + children_number_of_visits)
 
@@ -225,3 +227,25 @@ def _best_child_index(
     ucb_scores = q_score + u_score
 
     return np.argmax(ucb_scores).item()
+
+
+def ucb(node: MCTSNode, c_param: float, own_result_score: float) -> float:
+    """
+    Calculate the UCB1 score for a node.
+
+    :param node: The node to calculate the UCB1 score for.
+    :param c_param: The exploration parameter.
+    :return: The UCB1 score for the node.
+    """
+    result_score = node.result_score
+    virtual_loss = node.parent.children_virtual_losses[node.my_child_index]
+    number_of_visits = node.parent.children_number_of_visits[node.my_child_index]
+    policy = node.parent.children_policies[node.my_child_index]
+
+    q_score = (-(result_score + virtual_loss) / number_of_visits) if number_of_visits > 0 else -own_result_score
+
+    visits_quotient = np.sqrt(number_of_visits) / (1 + node.parent.number_of_visits)
+
+    u_score = c_param * policy * visits_quotient
+
+    return q_score + u_score

@@ -31,27 +31,27 @@ class Game(ABC, Generic[_Move]):
         pass
 
     @abstractmethod
-    def encode_move(self, move: _Move) -> int:
+    def encode_move(self, move: _Move, board: Board[_Move]) -> int:
         """Encodes a move into the index of the action in the policy vector."""
         pass
 
     @abstractmethod
-    def decode_move(self, move: int) -> _Move:
+    def decode_move(self, move: int, board: Board[_Move]) -> _Move:
         """Decodes an action index into a move."""
         pass
 
-    def encode_moves(self, moves: list[_Move]) -> np.ndarray:
+    def encode_moves(self, moves: list[_Move], board: Board[_Move]) -> np.ndarray:
         encoded = np.zeros(self.action_size)
         for move in moves:
-            encoded[self.encode_move(move)] = 1
+            encoded[self.encode_move(move, board)] = 1
         return encoded
 
-    def decode_moves(self, moves: np.ndarray) -> list[_Move]:
-        return [self.decode_move(i) for i in moves]
+    def decode_moves(self, moves: np.ndarray, board: Board[_Move]) -> list[_Move]:
+        return [self.decode_move(i, board) for i in moves]
 
     @abstractmethod
     def symmetric_variations(
-        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+        self, board: Board[_Move], visit_counts: list[tuple[int, int]]
     ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         """Returns a list of symetric variations of the board and the corresponding visit counts.
         The board is a numpy array with shape (num_channels, height, width) as returned by the `representation_shape` property.

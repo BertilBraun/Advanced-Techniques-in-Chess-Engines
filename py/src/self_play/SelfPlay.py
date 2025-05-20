@@ -12,7 +12,7 @@ from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import SelfPlayParams
 from src.util.log import log
@@ -86,7 +86,7 @@ class SelfPlay:
                 self.self_play_games[i] = SelfPlayGame()
                 continue
 
-            if len(spg.played_moves) >= 250:
+            if len(spg.played_moves) >= 250 and CURRENT_GAME == 'chess':
                 # If the game is too long, end it and add it to the dataset
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
@@ -125,7 +125,7 @@ class SelfPlay:
                 if is_duplicate or is_repetition:
                     # don't play the same move twice in a row
                     # Already exploring this state, so remove the probability of this move and try again
-                    spg_action_probabilities[CurrentGame.encode_move(move)] = 0
+                    spg_action_probabilities[CurrentGame.encode_move(move, spg.board)] = 0
                 else:
                     self.self_play_games[i] = new_spg
                     break
@@ -150,9 +150,9 @@ class SelfPlay:
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
         if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
-            move = CurrentGame.decode_move(np.argmax(action_probabilities).item())
+            move = CurrentGame.decode_move(np.argmax(action_probabilities).item(), current.board)
         else:
-            move = self._sample_move(action_probabilities, self.args.temperature)
+            move = self._sample_move(action_probabilities, current.board, self.args.temperature)
 
         new_spg = current.expand(move)
         # TODO encoded_move = CurrentGame.encode_move(move)
@@ -169,7 +169,9 @@ class SelfPlay:
         self._add_training_data(new_spg, result, resignation=False)
         return SelfPlayGame(), move
 
-    def _sample_move(self, action_probabilities: np.ndarray, temperature: float = 1.0) -> CurrentGameMove:
+    def _sample_move(
+        self, action_probabilities: np.ndarray, board: CurrentBoard, temperature: float = 1.0
+    ) -> CurrentGameMove:
         assert temperature > 0, 'Temperature must be greater than 0'
 
         temperature_action_probabilities = action_probabilities ** (1 / temperature)
@@ -177,7 +179,7 @@ class SelfPlay:
 
         action = np.random.choice(CurrentGame.action_size, p=temperature_action_probabilities)
 
-        return CurrentGame.decode_move(action)
+        return CurrentGame.decode_move(action, board)
 
     @timeit
     def _add_training_data(self, spg: SelfPlayGame, game_outcome: float, resignation: bool) -> None:
@@ -194,10 +196,9 @@ class SelfPlay:
         )
 
         for mem in spg.memory[::-1]:
-            encoded_board = CurrentGame.get_canonical_board(mem.board)
             turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
 
-            for board, visit_counts in CurrentGame.symmetric_variations(encoded_board, mem.visit_counts):
+            for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
@@ -215,5 +216,5 @@ class SelfPlay:
         return visit_counts
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
-        moves = ','.join([str(CurrentGame.encode_move(move)) for move in spg.played_moves])
+        moves = ','.join([str(CurrentGame.encode_move(move, spg.board)) for move in spg.played_moves])
         log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')

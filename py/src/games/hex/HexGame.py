@@ -10,6 +10,14 @@ from src.games.hex.HexBoard import HexBoard, SIZE
 HexMove = int  # A Hex move is a single position on the board (flattened index)
 
 
+def rotClockwise(r: int, c: int) -> tuple[int, int]:
+    return (c, SIZE - 1 - r)
+
+
+def rotCounterClockwise(r: int, c: int) -> tuple[int, int]:
+    return (SIZE - 1 - c, r)
+
+
 class HexGame(Game[HexMove]):
     @property
     def action_size(self) -> int:
@@ -54,39 +62,52 @@ class HexGame(Game[HexMove]):
         )
         return planes.astype(np.float32)
 
-    def encode_move(self, move: HexMove) -> int:
+    def encode_move(self, move: HexMove, board: HexBoard) -> int:
         assert 0 <= move < SIZE * SIZE, f'Invalid move: {move}'
-        return move
+        if board.current_player == 1:
+            return move
+        # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
+        r, c = divmod(move, SIZE)
+        nr, nc = rotClockwise(r, c)
+        return nr * SIZE + nc
 
-    def decode_move(self, move_idx: int) -> HexMove:
+    def decode_move(self, move_idx: int, board: HexBoard) -> HexMove:
         assert 0 <= move_idx < SIZE * SIZE, f'Invalid move index: {move_idx}'
-        return move_idx
+        if board.current_player == 1:
+            return move_idx
+        # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
+        r, c = divmod(move_idx, SIZE)
+        nr, nc = rotCounterClockwise(r, c)
+        return nr * SIZE + nc
 
     def symmetric_variations(
-        self, board: np.ndarray, visit_counts: List[Tuple[int, int]]
+        self, board: HexBoard, visit_counts: List[Tuple[int, int]]
     ) -> List[Tuple[np.ndarray, List[Tuple[int, int]]]]:
         """
         Return the 4 symmetries of an NxN hex board: identity, 180° rotation, flip top↔bottom, flip left↔right.
         Each symmetry is a tuple of (board, visit_counts).
         """
 
-        def remap_counts(map_fn):
+        def remap_counts(map_fn) -> list[tuple[int, int]]:
             out: list[tuple[int, int]] = []
             for idx, n in visit_counts:
-                r, c = divmod(self.decode_move(idx), SIZE)
+                r, c = divmod(idx, SIZE)
                 nr, nc = map_fn(r, c)
-                idx2 = self.encode_move(nr * SIZE + nc)
+                idx2 = nr * SIZE + nc
                 out.append((idx2, n))
             return out
 
+        encoded_board = self.get_canonical_board(board)
+        visit_counts = [(self.encode_move(idx, board), n) for idx, n in visit_counts]
+
         syms: List[Tuple[np.ndarray, List[Tuple[int, int]]]] = []
         # 0) identity
-        syms.append((board, visit_counts))
+        syms.append((encoded_board, visit_counts))
 
         # 1) 180° rotation (preserves N-S orientation)
         syms.append(
             (
-                np.rot90(board, k=2, axes=(1, 2)),
+                np.rot90(encoded_board, k=2, axes=(1, 2)),
                 remap_counts(lambda r, c: (SIZE - 1 - r, SIZE - 1 - c)),
             )
         )
@@ -94,7 +115,7 @@ class HexGame(Game[HexMove]):
         # 2) flip top↔bottom
         syms.append(
             (
-                np.flip(board, axis=1),
+                np.flip(encoded_board, axis=1),
                 remap_counts(lambda r, c: (SIZE - 1 - r, c)),
             )
         )
@@ -102,7 +123,7 @@ class HexGame(Game[HexMove]):
         # 3) flip left↔right
         syms.append(
             (
-                np.flip(board, axis=2),
+                np.flip(encoded_board, axis=2),
                 remap_counts(lambda r, c: (r, SIZE - 1 - c)),
             )
         )
@@ -114,19 +135,23 @@ if __name__ == '__main__':
     game = HexGame()
     board = game.get_initial_board()
     for _ in range(10):
+        for move in board.get_valid_moves():
+            assert game.decode_move(game.encode_move(move, board), board) == move, f'Failed to decode move {move}'
         move = np.random.choice(board.get_valid_moves())
         board.make_move(move)
 
-    print(board)
-    print(board.current_player)
+    for i in range(3):
+        print(board)
+        print(board.current_player)
 
-    print(game.get_canonical_board(board))
-    move = np.random.choice(board.get_valid_moves())
-    r, c = divmod(move, SIZE)
-    print(move, r, c)
-    for bv, mv in game.symmetric_variations(game.get_canonical_board(board), [(move, 5)]):
-        b = game.get_initial_board()
-        b.board = bv[0] - bv[1]
-        r, c = divmod(mv[0][0], SIZE)
-        b.board[r, c] = mv[0][1]
-        print(b)
+        move = np.random.choice(board.get_valid_moves())
+        r, c = divmod(move, SIZE)
+        print(move, r, c)
+        for bv, mv in game.symmetric_variations(board, [(move, 5)]):
+            b = game.get_initial_board()
+            b.board = bv[0] - bv[1]
+            r, c = divmod(mv[0][0], SIZE)
+            b.board[r, c] = mv[0][1]
+            print(b)
+
+        board.make_move(move)

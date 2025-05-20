@@ -88,10 +88,10 @@ def filter_moves(moves: list[MoveScore], board: CurrentBoard) -> list[MoveScore]
     :param board: The chess board to filter the moves with.
     :return: The filtered moves.
     """
-    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
-    filtered_moves = [(move, prob) for move, prob in moves if legal_moves_encoded[move] > 0 and prob > 1e-6]
-    filtered_moves.sort(key=lambda x: x[1], reverse=True)
-    filtered_moves = filtered_moves[:20]  # TODO: make this a parameter - limit the number of moves to explore
+    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves(), board)
+    filtered_moves = [(move, prob) for move, prob in moves if legal_moves_encoded[move] > 0 and prob > 1e-3]
+    # filtered_moves.sort(key=lambda x: x[1], reverse=True)
+    # filtered_moves = filtered_moves[:50]  # TODO: make this a parameter - limit the number of moves to explore
 
     prob_sum = sum(prob for _, prob in filtered_moves)
 
@@ -118,7 +118,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
     :param board: The chess board to filter the policy with.
     :return: The filtered policy.
     """
-    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves())
+    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves(), board)
     filtered_policy = policy * legal_moves_encoded
     policy_sum = np.sum(filtered_policy)
     if policy_sum == 0:

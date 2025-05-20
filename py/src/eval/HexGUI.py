@@ -17,7 +17,7 @@ class HexGridGameGUI:
     row → axial r, col → axial q
     """
 
-    def __init__(self, rows: int, cols: int, hex_size: int = 50, title: str = 'Hex Board', light='white', dark='gray'):
+    def __init__(self, rows: int, cols: int, hex_size: int = 60, title: str = 'Hex Board', light='white', dark='gray'):
         self.rows = rows
         self.cols = cols
         self.size = hex_size  # distance from centre to any corner
@@ -104,9 +104,11 @@ class HexGridGameGUI:
         cx, cy = cx + self.offset[0], cy + self.offset[1]
         pygame.draw.circle(self.screen, pygame.Color(color), (int(cx), int(cy)), int(self.size * 0.55))
 
-    def draw_text(self, row: int, col: int, text: str, color: str = 'black', font_size: int = 32):
+    def draw_text(
+        self, row: int, col: int, text: str, color: str = 'black', font_size: int = 32, offset: tuple[int, int] = (0, 0)
+    ):
         cx, cy = self._centres[(row, col)]
-        cx, cy = cx + self.offset[0], cy + self.offset[1]
+        cx, cy = cx + self.offset[0] + offset[0], cy + self.offset[1] + offset[1]
         font = pygame.font.Font(None, font_size)
         surf = font.render(text, True, pygame.Color(color))
         rect = surf.get_rect(center=(cx, cy))
@@ -146,6 +148,9 @@ class HexGridGameGUI:
 
     def update_display(self):
         pygame.display.flip()
+
+    def update_window_title(self, title: str):
+        pygame.display.set_caption(title)
 
     def clear_highlights_and_redraw(self, draw_pieces_func):
         # Redraw the board and pieces:
