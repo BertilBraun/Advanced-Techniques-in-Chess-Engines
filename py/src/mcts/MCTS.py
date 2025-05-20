@@ -149,7 +149,7 @@ class MCTS:
         #             f'{root.children_policies[i]:.2f} -> {root.children_number_of_visits[i] / root.number_of_visits:.2f} ({divmod(root.children[i].encoded_move_to_get_here, 11)})'
         #         )
 
-        self.display_node(roots[0])
+        # self.display_node(roots[0])
 
         return [
             MCTSResult(
@@ -315,7 +315,7 @@ if __name__ == '__main__':
     from src.util.save_paths import model_save_path
 
     client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
-    client.load_model(model_save_path(120, TRAINING_ARGS.save_path))
+    client.load_model(model_save_path(1200, TRAINING_ARGS.save_path))
     board = CurrentBoard()
     board.board = np.array(
         [
