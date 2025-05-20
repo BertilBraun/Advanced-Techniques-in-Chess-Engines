@@ -54,8 +54,6 @@ def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
 
     # AdamW
     if optimizer == 'adamw':
-        if current_iteration < 5:
-            return 0.01
         if current_iteration < 10:
             return 0.005
         elif current_iteration < 20:
