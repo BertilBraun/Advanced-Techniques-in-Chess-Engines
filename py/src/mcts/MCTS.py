@@ -105,8 +105,8 @@ class MCTS:
 
         for _ in range(self.args.min_visit_count):
             assert self.args.min_visit_count == 1, 'min_visit_count must be 1'
-            nodes: list[MCTSNode] = []
             for root in full_roots:
+                nodes: list[MCTSNode] = []
                 for node in root.children:
                     node._maybe_init_board()
                     if node.is_terminal_node:
@@ -116,11 +116,11 @@ class MCTS:
                     else:
                         nodes.append(node)
 
-            results = self.client.inference_batch([node.board for node in nodes])
+                results = self.client.inference_batch([node.board for node in nodes])
 
-            for node, (moves, value) in zip(nodes, results):
-                node.expand(moves)
-                node.back_propagate(value)
+                for node, (moves, value) in zip(nodes, results):
+                    node.expand(moves)
+                    node.back_propagate(value)
 
         for _ in range(num_iterations_for_fast_search):
             self.parallel_iterate(fast_roots + full_roots)
