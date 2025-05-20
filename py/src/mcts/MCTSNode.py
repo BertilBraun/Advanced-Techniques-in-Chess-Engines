@@ -131,7 +131,7 @@ class MCTSNode:
             children_policies=self.children_policies,
             own_number_of_visits=self.number_of_visits,
             # Fix: use parent's result score if this is the root node, else init to loss (-1.0 (the own result score is inverted in the UCB1 formula))
-            own_result_score=self.result_score if self.parent is None else -1.0,
+            own_result_score=self.result_score if self.parent is None else 1.0,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()

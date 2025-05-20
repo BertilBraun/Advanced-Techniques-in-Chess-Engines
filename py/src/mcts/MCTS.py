@@ -125,7 +125,7 @@ class MCTS:
         for _ in range(num_iterations_for_fast_search):
             self.parallel_iterate(fast_roots + full_roots)
 
-        for _ in range(num_iterations_for_full_search - num_iterations_for_fast_search - self.args.min_visit_count):
+        for _ in range(num_iterations_for_full_search - num_iterations_for_fast_search):
             self.parallel_iterate(full_roots)
 
         # for root in roots:
@@ -213,12 +213,14 @@ class MCTS:
                                 )
                                 gui.draw_hex_cell(i, j, color)  # type: ignore
                                 gui.draw_text(i, j, f'pol:{root.children_policies[k]:.2f}', offset=(0, -30))
-                                gui.draw_text(
-                                    i,
-                                    j,
-                                    f'res:{root.children_number_of_visits[k] / (root.number_of_visits-1):.2f}',
-                                    offset=(0, -10),
+                                total = sum(
+                                    vis for vis in root.children_number_of_visits if vis >= root.number_of_visits * 0.01
                                 )
+                                res = root.children_number_of_visits[k] / total
+                                if root.children_number_of_visits[k] < root.number_of_visits * 0.01:
+                                    res = float('nan')
+
+                                gui.draw_text(i, j, f'res:{res:.2f}', offset=(0, -10))
                                 gui.draw_text(
                                     i,
                                     j,
