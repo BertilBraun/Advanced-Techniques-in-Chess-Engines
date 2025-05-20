@@ -103,10 +103,28 @@ class MCTS:
         full_roots = [root for root, full_search in zip(roots, should_run_full_search) if full_search]
         fast_roots = [root for root, full_search in zip(roots, should_run_full_search) if not full_search]
 
+        for _ in range(self.args.min_visit_count):
+            assert self.args.min_visit_count == 1, 'min_visit_count must be 1'
+            nodes: list[MCTSNode] = []
+            for root in full_roots:
+                for node in root.children:
+                    if node.is_terminal_node:
+                        result = get_board_result_score(node.board)
+                        assert result is not None
+                        node.back_propagate(result)
+                    else:
+                        nodes.append(node)
+
+            results = self.client.inference_batch([node.board for node in nodes])
+
+            for node, (moves, value) in zip(nodes, results):
+                node.expand(moves)
+                node.back_propagate(value)
+
         for _ in range(num_iterations_for_fast_search):
             self.parallel_iterate(fast_roots + full_roots)
 
-        for _ in range(num_iterations_for_full_search - num_iterations_for_fast_search):
+        for _ in range(num_iterations_for_full_search - num_iterations_for_fast_search - self.args.min_visit_count):
             self.parallel_iterate(full_roots)
 
         # for root in roots:
@@ -268,7 +286,7 @@ class MCTS:
 
         for _ in range(self.args.num_parallel_searches):
             for root in roots:
-                node = self._get_best_child_or_back_propagate(root, self.args.c_param, self.args.min_visit_count)
+                node = self._get_best_child_or_back_propagate(root, self.args.c_param)
                 if node is not None:
                     node.update_virtual_losses(1)
                     nodes.append(node)
@@ -293,14 +311,11 @@ class MCTS:
         noise = np.random.dirichlet([self.args.dirichlet_alpha] * len(moves))
         return [(move, lerp(policy, noise, self.args.dirichlet_epsilon)) for (move, policy), noise in zip(moves, noise)]
 
-    def _get_best_child_or_back_propagate(
-        self, root: MCTSNode, c_param: float, min_visit_count: int
-    ) -> MCTSNode | None:
+    def _get_best_child_or_back_propagate(self, root: MCTSNode, c_param: float) -> MCTSNode | None:
         node = root
 
         while node.is_fully_expanded:
-            node = node.best_child(c_param, min_visit_count)
-            min_visit_count = 0  # Only the root children have a min_visit_count
+            node = node.best_child(c_param)
 
         if node.is_terminal_node:
             result = get_board_result_score(node.board)

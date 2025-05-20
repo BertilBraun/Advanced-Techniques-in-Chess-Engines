@@ -120,12 +120,11 @@ class MCTSNode:
             result = -result * 0.99  # Discount the result for the parent node
             node = node.parent
 
-    def best_child(self, c_param: float, min_visit_count: int) -> MCTSNode:
+    def best_child(self, c_param: float) -> MCTSNode:
         """Selects the best child node using the UCB1 formula and initializes the best child before returning it."""
         # NOTE moving the calculations into seperate functions slowed this down by 2x, so it's all in here
         best_child_index = _best_child_index(
             c_param=c_param,
-            min_visit_count=min_visit_count,
             children_number_of_visits=self.children_number_of_visits,
             children_result_scores=self.children_result_scores,
             children_virtual_losses=self.children_virtual_losses,
@@ -194,7 +193,6 @@ best_move: {CurrentGame.decode_move(self.children[np.argmax(self.children_number
 @njit
 def _best_child_index(
     c_param: float,
-    min_visit_count: int,
     children_number_of_visits: np.ndarray,
     children_result_scores: np.ndarray,
     children_virtual_losses: np.ndarray,
@@ -202,11 +200,6 @@ def _best_child_index(
     own_number_of_visits: int,
     own_result_score: float,
 ) -> int:
-    # if a child has < min_visit_count visits, it should be selected first
-    low_visits_mask = children_number_of_visits < min_visit_count
-    if np.any(low_visits_mask):
-        return np.argmax(low_visits_mask).item()
-
     visited_mask = children_number_of_visits > 0
     unvisited_mask = ~visited_mask
 
