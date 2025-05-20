@@ -108,6 +108,7 @@ class MCTS:
             nodes: list[MCTSNode] = []
             for root in full_roots:
                 for node in root.children:
+                    node._maybe_init_board()
                     if node.is_terminal_node:
                         result = get_board_result_score(node.board)
                         assert result is not None
