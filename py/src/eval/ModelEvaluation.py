@@ -142,7 +142,7 @@ class ModelEvaluation:
 
         def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
-                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())])
+                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
 
             return [get_random_policy(board) for board in boards]
 
@@ -220,7 +220,7 @@ class ModelEvaluation:
                 for _ in range(3):
                     move = random.choice(game.get_valid_moves())
                     game.make_move(move)
-                    game_move_histories[game_to_index[game]].append(str(CurrentGame.encode_move(move)))
+                    game_move_histories[game_to_index[game]].append(str(CurrentGame.encode_move(move, game)))
 
         while games:
             games_for_player1 = [game for game in games if game.current_player == 1]
@@ -238,7 +238,7 @@ class ModelEvaluation:
                 policy /= policy.sum()
 
                 move = np.argmax(policy).item()
-                game.make_move(CurrentGame.decode_move(move))
+                game.make_move(CurrentGame.decode_move(move, game))
                 game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():
