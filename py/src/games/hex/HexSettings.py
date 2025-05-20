@@ -35,7 +35,7 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 400
+NUM_SEARCHES_PER_TURN = 500
 MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
 TRAINING_ARGS = TrainingArgs(
