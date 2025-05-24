@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 from src.games.Game import Board
 from src.games.Board import Player
@@ -12,6 +12,8 @@ SIZE: int = 11
 
 # Global Zobrist hasher using single-plane (signed values)
 hasher = ZobristHasherNumpy(planes=1, rows=SIZE, cols=SIZE)
+
+_NEIGHBOURS = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, 1), (1, -1)]
 
 
 class HexBoard(Board[int]):
@@ -26,7 +28,7 @@ class HexBoard(Board[int]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.board = np.zeros((SIZE, SIZE), dtype=int)
+        self.board = np.zeros((SIZE, SIZE), dtype=np.int8)
         self._winner: Optional[Player] = None
 
     def make_move(self, move: int) -> None:
@@ -35,39 +37,48 @@ class HexBoard(Board[int]):
         r, c = divmod(move, SIZE)
         assert self.board[r, c] == 0, 'Position already occupied'
         self.board[r, c] = self.current_player
-        if self.__check_winner(self.current_player):
+        if self.__check_winner(self.current_player, r, c):
             self._winner = self.current_player
         self._switch_player()
 
-    def __check_winner(self, player: Player) -> bool:
-        # Check connectivity via DFS between opposite sides
-        visited = set()
-        stack: List[Tuple[int, int]] = []
-        if player == 1:
-            # Player 1 connects top (row 0) to bottom (row SIZE-1)
-            for col in range(SIZE):
-                if self.board[0, col] == player:
-                    stack.append((0, col))
-                    visited.add((0, col))
-            target = ('row', SIZE - 1)
-        else:
-            # Player -1 connects left (col 0) to right (col SIZE-1)
-            for row in range(SIZE):
-                if self.board[row, 0] == player:
-                    stack.append((row, 0))
-                    visited.add((row, 0))
-            target = ('col', SIZE - 1)
-        # Neighbor offsets on hex grid
-        neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, 1), (1, -1)]
+    def __check_winner(self, player: Player, last_r: int, last_c: int) -> bool:
+        """
+        Return True iff placing `player`'s stone at (last_r, last_c) wins the game.
+        Assumes self.board[last_r, last_c] is already set to `player`.
+        """
+        stack = [(last_r, last_c)]
+        visited = {(last_r, last_c)}
+
+        # Track whether this connected component touches the two goal edges
+        touches_top = last_r == 0
+        touches_bottom = last_r == SIZE - 1
+        touches_left = last_c == 0
+        touches_right = last_c == SIZE - 1
+
         while stack:
             r, c = stack.pop()
-            if (target[0] == 'row' and r == target[1]) or (target[0] == 'col' and c == target[1]):
-                return True
-            for dr, dc in neighbors:
+            for dr, dc in _NEIGHBOURS:
                 nr, nc = r + dr, c + dc
                 if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in visited and self.board[nr, nc] == player:
                     visited.add((nr, nc))
                     stack.append((nr, nc))
+
+                    # update edge flags incrementally
+                    if nr == 0:
+                        touches_top = True
+                    if nr == SIZE - 1:
+                        touches_bottom = True
+                    if nc == 0:
+                        touches_left = True
+                    if nc == SIZE - 1:
+                        touches_right = True
+
+                    # early exit once both goal edges are reached
+                    if player == 1 and touches_top and touches_bottom:
+                        return True
+                    if player == -1 and touches_left and touches_right:
+                        return True
+
         return False
 
     def check_winner(self) -> Optional[Player]:
@@ -99,3 +110,17 @@ class HexBoard(Board[int]):
             line = ' '.join(symbols.get(cell, 'invalid') for cell in row)
             lines.append(indent + line)
         return '\n'.join(lines)
+
+
+if __name__ == '__main__':
+    import random
+
+    for _ in range(50_000):
+        b = HexBoard()
+        moves = b.get_valid_moves()
+        while not b.is_game_over():
+            mv = random.choice(moves)
+            b.make_move(mv)
+            moves.remove(mv)
+        # assert that exactly one winner is recorded
+        assert b.check_winner() in (1, -1)
