@@ -36,19 +36,8 @@ class HexGame(Game[HexMove]):
         Planes:
         0 – stones of the side to move  (1s)
         1 – stones of the opponent      (1s)
-        2 – empty                       (1s)
-        3 - current player (1s)
+        2 – empty cells                 (1s)
         """
-        # return np.stack(
-        #     [
-        #         (board.board == 1),
-        #         (board.board == -1),
-        #         (board.board == 0),
-        #         np.full_like(board.board, board.current_player == 1),
-        #     ],
-        #     axis=0,
-        # ).astype(np.float32)
-
         # Put the side to move’s stones in +1
         pos = board.board * board.current_player  # +1 == me, –1 == them
 
@@ -56,11 +45,10 @@ class HexGame(Game[HexMove]):
         if board.current_player == -1:
             pos = np.rot90(pos, k=1)  # counter-clockwise
 
-        planes = np.stack(
+        return np.stack(
             [(pos == 1), (pos == -1), (pos == 0)],
             dtype=np.float32,
         )
-        return planes.astype(np.float32)
 
     def encode_move(self, move: HexMove, board: HexBoard) -> int:
         assert 0 <= move < SIZE * SIZE, f'Invalid move: {move}'
@@ -68,7 +56,7 @@ class HexGame(Game[HexMove]):
             return move
         # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
         r, c = divmod(move, SIZE)
-        nr, nc = rotClockwise(r, c)
+        nr, nc = rotCounterClockwise(r, c)
         return nr * SIZE + nc
 
     def decode_move(self, move_idx: int, board: HexBoard) -> HexMove:
@@ -77,7 +65,7 @@ class HexGame(Game[HexMove]):
             return move_idx
         # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
         r, c = divmod(move_idx, SIZE)
-        nr, nc = rotCounterClockwise(r, c)
+        nr, nc = rotClockwise(r, c)
         return nr * SIZE + nc
 
     def symmetric_variations(
