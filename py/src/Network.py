@@ -65,14 +65,14 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
-    def forward(self, x: Tensor, *, return_logit=False) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, *, return_logits=False) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
-        if return_logit:
+        if return_logits:
             return policy_logits, value_logits
 
         policy = torch.softmax(policy_logits, dim=1)
