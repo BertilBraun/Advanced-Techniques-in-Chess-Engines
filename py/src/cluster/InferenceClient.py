@@ -80,7 +80,7 @@ class InferenceClient:
             cache_hit_rate = (self.total_hits / self.total_evals) * 100
             log_scalar('cache/hit_rate', cache_hit_rate, iteration)
             log_scalar('cache/unique_positions', len(self.inference_cache), iteration)
-            if iteration > 0:
+            if iteration > 1:
                 log_histogram(
                     'nn_output_value_distribution',
                     np.array([v for _, v in self.inference_cache.values()]),
