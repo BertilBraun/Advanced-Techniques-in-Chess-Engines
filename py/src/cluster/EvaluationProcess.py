@@ -130,15 +130,16 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
     results = model_evaluation.play_vs_random()
     log(f'Results after playing vs random at iteration {iteration}:', results)
 
-    log_scalars(
-        'evaluation/vs_random',
-        {
-            'wins': results.wins,
-            'losses': results.losses,
-            'draws': results.draws,
-        },
-        iteration,
-    )
+    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+        log_scalars(
+            'evaluation/vs_random',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
 
 
 class EvaluationProcess:
