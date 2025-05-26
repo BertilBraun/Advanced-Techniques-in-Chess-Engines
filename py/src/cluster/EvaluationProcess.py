@@ -127,10 +127,10 @@ def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: i
 
 
 def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str):
-    results = model_evaluation.play_vs_random()
-    log(f'Results after playing vs random at iteration {iteration}:', results)
-
     with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+        results = model_evaluation.play_vs_random()
+        log(f'Results after playing vs random at iteration {iteration}:', results)
+
         log_scalars(
             'evaluation/vs_random',
             {
