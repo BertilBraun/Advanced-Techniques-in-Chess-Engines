@@ -165,9 +165,18 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         target_dataset_size = int(len(self) * 0.25)
 
         if len(spiky_dataset) > target_dataset_size:
-            return spiky_dataset.sample(target_dataset_size)
+            new_dataset = spiky_dataset.sample(target_dataset_size)
+        else:
+            new_dataset = spiky_dataset + non_spiky_dataset.sample(target_dataset_size - len(spiky_dataset))
 
-        return spiky_dataset + non_spiky_dataset.sample(target_dataset_size - len(spiky_dataset))
+        new_dataset.stats = SelfPlayDatasetStats(
+            num_samples=len(new_dataset),
+            num_games=self.stats.num_games,
+            game_lengths=self.stats.game_lengths,
+            total_generation_time=self.stats.total_generation_time,
+            resignations=self.stats.resignations,
+        )
+        return new_dataset
 
     @timeit
     @staticmethod
