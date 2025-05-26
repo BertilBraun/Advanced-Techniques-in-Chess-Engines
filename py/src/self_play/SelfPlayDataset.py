@@ -149,30 +149,53 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def choose_only_samples_with_high_policy_spikyness(self) -> SelfPlayDataset:
         """Choose only samples where the policy targets have a high spikyness, i.e. where one move has a much higher probability than the others."""
         spiky_dataset = SelfPlayDataset()
+        non_spiky_dataset = SelfPlayDataset()
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             probabilities = action_probabilities(visit_counts)
-            if np.max(probabilities) > 0.1 and np.random.random() < 0.8:
+            if np.max(probabilities) > 0.15:
                 spiky_dataset.encoded_states.append(state)
                 spiky_dataset.visit_counts.append(visit_counts)
                 spiky_dataset.value_targets.append(value_target)
+            else:
+                non_spiky_dataset.encoded_states.append(state)
+                non_spiky_dataset.visit_counts.append(visit_counts)
+                non_spiky_dataset.value_targets.append(value_target)
 
-        while len(spiky_dataset) < len(self) * 0.2:
-            # if we don't have enough spiky samples, we can add random samples to fill up to 20% of the original dataset
-            idx = np.random.randint(len(self))
-            spiky_dataset.encoded_states.append(self.encoded_states[idx])
-            spiky_dataset.visit_counts.append(self.visit_counts[idx])
-            spiky_dataset.value_targets.append(self.value_targets[idx])
+        total_new_dataset_size = len(self) * 0.25
+        portion_of_spiky_samples = 0.85
+        portion_of_random_samples = 1 - portion_of_spiky_samples
 
-        spiky_dataset.stats = SelfPlayDatasetStats(
-            num_samples=len(spiky_dataset),
+        spiky_sample_indexes = np.random.choice(
+            len(spiky_dataset),
+            int(total_new_dataset_size * portion_of_spiky_samples),
+            replace=False,
+        )
+        random_sample_indexes = np.random.choice(
+            len(non_spiky_dataset),
+            int(total_new_dataset_size * portion_of_random_samples),
+            replace=False,
+        )
+
+        new_dataset = SelfPlayDataset()
+        new_dataset.encoded_states = [spiky_dataset.encoded_states[i] for i in spiky_sample_indexes] + [
+            non_spiky_dataset.encoded_states[i] for i in random_sample_indexes
+        ]
+        new_dataset.visit_counts = [spiky_dataset.visit_counts[i] for i in spiky_sample_indexes] + [
+            non_spiky_dataset.visit_counts[i] for i in random_sample_indexes
+        ]
+        new_dataset.value_targets = [spiky_dataset.value_targets[i] for i in spiky_sample_indexes] + [
+            non_spiky_dataset.value_targets[i] for i in random_sample_indexes
+        ]
+        new_dataset.stats = SelfPlayDatasetStats(
+            num_samples=len(new_dataset),
             num_games=self.stats.num_games,
             game_lengths=self.stats.game_lengths,
             total_generation_time=self.stats.total_generation_time,
             resignations=self.stats.resignations,
         )
 
-        return spiky_dataset
+        return new_dataset.shuffle()
 
     @timeit
     @staticmethod
