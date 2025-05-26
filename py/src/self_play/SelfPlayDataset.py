@@ -157,6 +157,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 spiky_dataset.visit_counts.append(visit_counts)
                 spiky_dataset.value_targets.append(value_target)
 
+        while len(spiky_dataset) < len(self) * 0.2:
+            # if we don't have enough spiky samples, we can add random samples to fill up to 20% of the original dataset
+            idx = np.random.randint(len(self))
+            spiky_dataset.encoded_states.append(self.encoded_states[idx])
+            spiky_dataset.visit_counts.append(self.visit_counts[idx])
+            spiky_dataset.value_targets.append(self.value_targets[idx])
+
         spiky_dataset.stats = SelfPlayDatasetStats(
             num_samples=len(spiky_dataset),
             num_games=self.stats.num_games,
