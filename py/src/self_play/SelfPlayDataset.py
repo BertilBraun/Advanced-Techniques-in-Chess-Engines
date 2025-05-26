@@ -146,6 +146,27 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         )
         return sampled_dataset
 
+    def choose_only_samples_with_high_policy_spikyness(self) -> SelfPlayDataset:
+        """Choose only samples where the policy targets have a high spikyness, i.e. where one move has a much higher probability than the others."""
+        spiky_dataset = SelfPlayDataset()
+
+        for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
+            probabilities = action_probabilities(visit_counts)
+            if np.max(probabilities) > 0.15:
+                spiky_dataset.encoded_states.append(state)
+                spiky_dataset.visit_counts.append(visit_counts)
+                spiky_dataset.value_targets.append(value_target)
+
+        spiky_dataset.stats = SelfPlayDatasetStats(
+            num_samples=len(spiky_dataset),
+            num_games=self.stats.num_games,
+            game_lengths=self.stats.game_lengths,
+            total_generation_time=self.stats.total_generation_time,
+            resignations=self.stats.resignations,
+        )
+
+        return spiky_dataset
+
     @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
