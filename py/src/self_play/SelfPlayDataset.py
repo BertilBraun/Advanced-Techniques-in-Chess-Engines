@@ -162,20 +162,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        total_new_dataset_size = len(self) * 0.25
+        total_new_dataset_size = int(len(self) * 0.25)
         portion_of_spiky_samples = 0.85
-        portion_of_random_samples = 1 - portion_of_spiky_samples
+        spiky_samples = min(len(spiky_dataset), int(total_new_dataset_size * portion_of_spiky_samples))
+        non_spiky_samples = min(len(non_spiky_dataset), total_new_dataset_size - spiky_samples)
 
-        spiky_sample_indexes = np.random.choice(
-            len(spiky_dataset),
-            int(total_new_dataset_size * portion_of_spiky_samples),
-            replace=False,
-        )
-        random_sample_indexes = np.random.choice(
-            len(non_spiky_dataset),
-            int(total_new_dataset_size * portion_of_random_samples),
-            replace=False,
-        )
+        spiky_sample_indexes = np.random.choice(len(spiky_dataset), spiky_samples, replace=False)
+        random_sample_indexes = np.random.choice(len(non_spiky_dataset), non_spiky_samples, replace=False)
 
         new_dataset = SelfPlayDataset()
         new_dataset.encoded_states = [spiky_dataset.encoded_states[i] for i in spiky_sample_indexes] + [
