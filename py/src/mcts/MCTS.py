@@ -183,10 +183,10 @@ class MCTS:
                 print('WARNING: Skipping KL divergence calculation for root with no visits or not fully expanded')
                 continue
 
-            priors = np.array(root.children_policies, dtype=np.float64)
-            visit_counts = np.array(root.children_number_of_visits, dtype=np.float64)
+            priors = root.children_policies
+            visit_counts = root.children_number_of_visits
 
-            kl_divs.append(_kl_divergence(priors, visit_counts / root.number_of_visits))
+            kl_divs.append(_kl_divergence(priors, visit_counts))
 
         average_kl_div = sum(kl_divs) / len(kl_divs)
         log_scalar('dataset/average_search_kl_divergence', average_kl_div)
