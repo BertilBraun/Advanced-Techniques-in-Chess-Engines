@@ -90,7 +90,7 @@ class SelfPlay:
             num_searches_per_turn > self.args.mcts.num_parallel_searches
         ), f'Number of searches per turn ({num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
 
-        log_scalar('mcts/num_searches_per_turn', num_searches_per_turn, iteration)
+        log_scalar('dataset/num_searches_per_turn', num_searches_per_turn, iteration)
 
         mcts_args = MCTSParams(
             num_searches_per_turn=num_searches_per_turn,
