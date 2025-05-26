@@ -153,7 +153,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             probabilities = action_probabilities(visit_counts)
-            if np.max(probabilities) > 0.15:
+            if np.max(probabilities) > 0.1:
                 spiky_dataset.encoded_states.append(state)
                 spiky_dataset.visit_counts.append(visit_counts)
                 spiky_dataset.value_targets.append(value_target)
@@ -162,33 +162,12 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        total_new_dataset_size = int(len(self) * 0.5)
-        portion_of_spiky_samples = 0.7
-        spiky_samples = min(len(spiky_dataset), int(total_new_dataset_size * portion_of_spiky_samples))
-        non_spiky_samples = min(len(non_spiky_dataset), total_new_dataset_size - spiky_samples)
+        target_dataset_size = int(len(self) * 0.25)
 
-        spiky_sample_indexes = np.random.choice(len(spiky_dataset), spiky_samples, replace=False)
-        random_sample_indexes = np.random.choice(len(non_spiky_dataset), non_spiky_samples, replace=False)
+        if len(spiky_dataset) > target_dataset_size:
+            return spiky_dataset.sample(target_dataset_size)
 
-        new_dataset = SelfPlayDataset()
-        new_dataset.encoded_states = [spiky_dataset.encoded_states[i] for i in spiky_sample_indexes] + [
-            non_spiky_dataset.encoded_states[i] for i in random_sample_indexes
-        ]
-        new_dataset.visit_counts = [spiky_dataset.visit_counts[i] for i in spiky_sample_indexes] + [
-            non_spiky_dataset.visit_counts[i] for i in random_sample_indexes
-        ]
-        new_dataset.value_targets = [spiky_dataset.value_targets[i] for i in spiky_sample_indexes] + [
-            non_spiky_dataset.value_targets[i] for i in random_sample_indexes
-        ]
-        new_dataset.stats = SelfPlayDatasetStats(
-            num_samples=len(new_dataset),
-            num_games=self.stats.num_games,
-            game_lengths=self.stats.game_lengths,
-            total_generation_time=self.stats.total_generation_time,
-            resignations=self.stats.resignations,
-        )
-
-        return new_dataset.shuffle()
+        return spiky_dataset + non_spiky_dataset.sample(target_dataset_size - len(spiky_dataset))
 
     @timeit
     @staticmethod
