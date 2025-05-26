@@ -40,7 +40,7 @@ NUM_SEARCHES_PER_TURN = 500
 MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
 TRAINING_ARGS = TrainingArgs(
-    num_iterations=120,
+    num_iterations=200,
     save_path=SAVE_PATH + '/hex',
     num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
     network=network,
