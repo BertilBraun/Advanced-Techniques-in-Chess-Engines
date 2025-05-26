@@ -8,7 +8,7 @@ from src.games.Board import Player
 from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 
 # Global board size
-SIZE: int = 11
+SIZE: int = 7
 
 # Global Zobrist hasher using single-plane (signed values)
 hasher = ZobristHasherNumpy(planes=1, rows=SIZE, cols=SIZE)

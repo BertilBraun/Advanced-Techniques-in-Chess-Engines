@@ -12,10 +12,11 @@ from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
-from src.train.TrainingArgs import SelfPlayParams
+from src.train.TrainingArgs import MCTSParams, SelfPlayParams
 from src.util.log import log
+from src.util.tensorboard import log_scalar
 from src.util.timing import reset_times, timeit
 
 
@@ -62,7 +63,7 @@ class SelfPlay:
 
         self.iteration = 0
 
-        self.mcts = MCTS(self.client, self.args.mcts)
+        self._set_mcts(self.iteration)
 
     def update_iteration(self, iteration: int) -> None:
         if len(self.dataset) > 0:
@@ -70,6 +71,37 @@ class SelfPlay:
         self.iteration = iteration
         self.dataset = SelfPlayDataset()
         self.client.update_iteration(iteration)
+
+        self._set_mcts(iteration)
+
+    def _set_mcts(self, iteration: int) -> None:
+        """Set the MCTS parameters for the current iteration."""
+        # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
+        total_iterations = TRAINING_ARGS.num_iterations
+        assert total_iterations > 10, 'Total iterations must be greater than 10 to scale MCTS searches properly.'
+        num_searches_per_turn = int(
+            lerp(
+                self.args.mcts.num_searches_per_turn / 10,
+                self.args.mcts.num_searches_per_turn,
+                min(iteration / (total_iterations * 0.1), 1.0),
+            )
+        )
+        assert (
+            num_searches_per_turn > self.args.mcts.num_parallel_searches
+        ), f'Number of searches per turn ({num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
+
+        log_scalar('mcts/num_searches_per_turn', num_searches_per_turn, iteration)
+
+        mcts_args = MCTSParams(
+            num_searches_per_turn=num_searches_per_turn,
+            num_parallel_searches=self.args.mcts.num_parallel_searches,
+            dirichlet_alpha=self.args.mcts.dirichlet_alpha,
+            dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
+            c_param=self.args.mcts.c_param,
+            full_search_probability=self.args.mcts.full_search_probability,
+            min_visit_count=self.args.mcts.min_visit_count,
+        )
+        self.mcts = MCTS(self.client, mcts_args)
 
     def self_play(self) -> None:
         mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
@@ -203,7 +235,11 @@ class SelfPlay:
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
                     # clamp(turn_game_outcome + self.args.result_score_weight * mem.result_score, -1, 1),
-                    lerp(turn_game_outcome, mem.result_score, self.args.result_score_weight),
+                    lerp(
+                        turn_game_outcome,
+                        mem.result_score,
+                        min(0.1, self.iteration / TRAINING_ARGS.num_iterations) * self.args.result_score_weight,
+                    ),
                 )
 
             # TODO disabled for now, discounting only in MCTS search game_outcome *= 0.99  # discount the game outcome for each move

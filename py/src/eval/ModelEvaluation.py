@@ -109,9 +109,7 @@ class ModelEvaluation:
                 moves = moves.to(model.device)
                 outcome = outcome.to(model.device).unsqueeze(1)
 
-                policy_output, value_output = model(board)
-
-                policy_pred = torch.softmax(policy_output, dim=1)
+                policy_pred, value_output = model(board)
 
                 for i in range(len(moves)):
                     top1 = policy_pred[i].topk(1).indices
@@ -157,6 +155,41 @@ class ModelEvaluation:
             return [action_probabilities(result.visit_counts) for result in results]
 
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
+
+    def play_policy_vs_random(self) -> Results:
+        results = Results(0, 0, 0)
+
+        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
+        current_model.update_iteration(self.iteration)
+
+        def policy_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = current_model.inference_batch(boards)
+            policies = []
+            for board, (visit_counts, value) in zip(boards, results):
+                policy = np.zeros(CurrentGame.action_size, dtype=np.float32)
+                for move, score in visit_counts:
+                    if CurrentGame.decode_move(move, board) not in board.get_valid_moves():
+                        print(f'Invalid move {move} for board {board}')
+                        continue
+                    policy[move] = score
+                assert policy.sum() >= 0, f'Policy for board {board} has negative sum: {policy.sum()}'
+                policies.append(policy / policy.sum())
+            return policies
+
+        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            def get_random_policy(board: CurrentBoard) -> np.ndarray:
+                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+
+            return [get_random_policy(board) for board in boards]
+
+        results += self._play_two_models_search(
+            policy_evaluator, random_evaluator, self.num_games // 2, 'policy_vs_random'
+        )
+        results -= self._play_two_models_search(
+            random_evaluator, policy_evaluator, self.num_games // 2, 'random_vs_policy'
+        )
+
+        return results
 
     def play_vs_evaluation_model(
         self, evaluation_model: EvaluationModel, name: str, num_games: int | None = None
@@ -219,8 +252,8 @@ class ModelEvaluation:
             for game in games:
                 for _ in range(3):
                     move = random.choice(game.get_valid_moves())
-                    game.make_move(move)
                     game_move_histories[game_to_index[game]].append(str(CurrentGame.encode_move(move, game)))
+                    game.make_move(move)
 
         while games:
             games_for_player1 = [game for game in games if game.current_player == 1]
@@ -242,7 +275,7 @@ class ModelEvaluation:
                 game_move_histories[game_to_index[game]].append(str(move))
 
                 if game.is_game_over():
-                    results.update(game.check_winner(), 1)
+                    results.update(game.check_winner(), main_player=1)
 
                     moves = ','.join(game_move_histories[game_to_index[game]])
                     log_text(

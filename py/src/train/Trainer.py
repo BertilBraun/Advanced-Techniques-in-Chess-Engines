@@ -51,22 +51,30 @@ class Trainer:
 
             value_targets = value_targets.unsqueeze(1)
 
-            out_policy, out_value = self.model(state)
+            policy_logits, value_logits = self.model(state, return_logits=True)
 
             # Binary cross entropy loss for the policy is definitely not correct, as the policy has multiple classes
             # torch.cross_entropy applies softmax internally, so we don't need to apply it to the output
-            policy_loss = F.cross_entropy(out_policy, policy_targets)
+            policy_loss = F.cross_entropy(policy_logits, policy_targets)
             # policy_loss = F.kl_div(F.log_softmax(out_policy, dim=1), policy_targets, reduction='batchmean')
             # policy_loss = F.mse_loss(F.softmax(out_policy, dim=1), policy_targets)
             # policy_loss = F.l1_loss(F.softmax(out_policy, dim=1) * 100, policy_targets * 100)
             # policy_loss = F.mse_loss(F.softmax(out_policy, dim=1) * 10, policy_targets * 10)
             # value_loss = F.l1_loss(out_value, value_targets)  # l1_loss = mean_absolute_error
-            value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
-            # value_loss = F.mse_loss(torch.tanh(out_value), value_targets)  # mse_loss = mean_squared_error
+            # value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
+
+            # NOTE:
+            # At |logit| ≈ 4 the derivative of tanh is already < 0.002, so the gradient almost vanishes.
+            # Smoothing the value targets to avoid overfitting to the extreme values which no longer give sensible gradients
+            # Non-saturated logits: 0.95 corresponds to logit ≈ +2.94, 0.05 to logit ≈ −2.94 – well inside the linear part of tanh. The gradient w.r.t. the logits is therefore still ≈ 0.05–0.1 instead of ≈ 0.001.
+            value_targets = 0.95 * value_targets
+
+            value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
+            value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
-                count_unique_values_in_out_value = torch.unique(out_value.to(torch.float32)).numel()
+                count_unique_values_in_out_value = torch.unique(value_logits.to(torch.float32)).numel()
                 unique_input_states_by_batch = torch.unique(state.to(torch.float32), dim=0).numel()
 
                 print(
@@ -83,7 +91,7 @@ class Trainer:
                 )
                 seen = set()
                 seen_again = set()
-                for s, value, target in zip(state, out_value, value_targets):
+                for s, value, target in zip(state, value_logits, value_targets):
                     value = value.item()
                     target = target.item()
                     if (value, target) in seen_again:
@@ -103,7 +111,7 @@ class Trainer:
 
                     print('Value:', value, 'Target:', target, 'Compressed:', compressed)
 
-                for policy, target in zip(out_policy, policy_targets):
+                for policy, target in zip(policy_logits, policy_targets):
                     break
                     if F.cross_entropy(policy.unsqueeze(0), target.unsqueeze(0)) > 0.5:
                         print('Policy        :', [f'{p:.2f}' for p in policy.tolist()])
@@ -113,8 +121,8 @@ class Trainer:
                         print()
 
             nonlocal out_value_mean, out_value_std
-            out_value_mean += out_value.mean().detach()
-            out_value_std += out_value.std().detach()
+            out_value_mean += value_logits.mean().detach()
+            out_value_std += value_logits.std().detach()
             # NOTE: Taking the log of the policy targets is necessary because the cross entropy loss expects the logit values, which can be reverted from the softmax distribution in the policy targets by applying the log function: https://math.stackexchange.com/a/3162684
             # optimal_policy_input = torch.full(policy_targets.shape, -1e6, device=self.model.device)
             # mask = policy_targets != 0
@@ -125,10 +133,9 @@ class Trainer:
             # Apparently just as in AZ Paper, give more weight to the policy loss
             # loss = torch.lerp(value_loss, policy_loss, 0.66)
             loss = (
-                policy_loss
-                + value_loss
-                + F.mse_loss(out_value.mean(), torch.tensor(0.0, device=self.model.device, dtype=TORCH_DTYPE))
-                + 10 * F.mse_loss(out_value.std(), torch.tensor(0.5, device=self.model.device, dtype=TORCH_DTYPE))
+                policy_loss + 0.5 * value_loss
+                # + F.mse_loss(out_value.mean(), torch.tensor(0.0, device=self.model.device, dtype=TORCH_DTYPE))
+                # + 10 * F.mse_loss(out_value.std(), torch.tensor(0.5, device=self.model.device, dtype=TORCH_DTYPE))
             )
 
             return policy_loss, value_loss, loss
@@ -151,7 +158,7 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
             # TODO magic hyperparameter and sensible like this?
-            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5.5)
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 2.0)
             total_gradient_norm += norm.detach()
 
             self.optimizer.step()

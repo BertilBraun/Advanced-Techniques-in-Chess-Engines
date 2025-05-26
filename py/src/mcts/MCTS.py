@@ -164,6 +164,33 @@ class MCTS:
 
         log_scalar('dataset/average_search_entropy', average_entropy)
 
+        # TODO KL divergence between the children policies and the visit counts
+
+        def _kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
+            """
+            p, q: 1-D arrays containing non-negative numbers.
+            Returns KL(p || q) with safe epsilon smoothing.
+            """
+            p = p.astype(np.float64) + eps
+            q = q.astype(np.float64) + eps
+            p /= p.sum()
+            q /= q.sum()
+            return np.sum(p * np.log(p / q))
+
+        kl_divs = []
+        for root in roots:
+            if not root.is_fully_expanded or root.number_of_visits == 0:
+                print('WARNING: Skipping KL divergence calculation for root with no visits or not fully expanded')
+                continue
+
+            priors = np.array(root.children_policies, dtype=np.float64)
+            visit_counts = np.array(root.children_number_of_visits, dtype=np.float64)
+
+            kl_divs.append(_kl_divergence(priors, visit_counts / root.number_of_visits))
+
+        average_kl_div = sum(kl_divs) / len(kl_divs)
+        log_scalar('dataset/average_search_kl_divergence', average_kl_div)
+
         # for root in roots:
         #     for i in range(len(root.children)):
         #         print(
@@ -185,26 +212,27 @@ class MCTS:
     def display_node(self, root: MCTSNode) -> None:
         import time
         from src.games.hex.HexVisuals import HexGridGameGUI
+        from src.games.hex.HexGame import SIZE as HEX_SIZE
 
-        gui = HexGridGameGUI(11, 11)
+        gui = HexGridGameGUI(HEX_SIZE, HEX_SIZE)
 
         def draw():
-            for i in range(11):
-                for j in range(11):
+            for i in range(HEX_SIZE):
+                for j in range(HEX_SIZE):
                     gui.draw_hex_cell(i, j, 'lightgrey')
 
-            for i in range(11):
-                for j in range(11):
+            for i in range(HEX_SIZE):
+                for j in range(HEX_SIZE):
                     if root.board.board[i, j] == 1:
                         gui.draw_hex_cell(i, j, 'blue')
                     elif root.board.board[i, j] == -1:
                         gui.draw_hex_cell(i, j, 'green')
-            for i in range(11):
-                for j in range(11):
+            for i in range(HEX_SIZE):
+                for j in range(HEX_SIZE):
                     if root.board.board[i, j] == 0:
                         max_policy = max(root.children_number_of_visits)
                         for k, child in enumerate(root.children):
-                            if child.encoded_move_to_get_here == CurrentGame.encode_move(i * 11 + j, root.board):
+                            if child.encoded_move_to_get_here == CurrentGame.encode_move(i * HEX_SIZE + j, root.board):
                                 # highest policy should be pure red, lowest should be pure white
                                 color = lerp(
                                     np.array([255, 255, 255]),
@@ -262,7 +290,7 @@ class MCTS:
             if events.clicked:
                 cell = gui.get_cell_from_click()
                 if cell is not None:
-                    move = cell[0] * 11 + cell[1]
+                    move = cell[0] * HEX_SIZE + cell[1]
                     print(
                         cell,
                         move,

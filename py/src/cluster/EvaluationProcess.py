@@ -142,6 +142,22 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
         )
 
 
+def _eval_policy_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+        results = model_evaluation.play_policy_vs_random()
+        log(f'Results after playing the current policy only vs random at iteration {iteration}:', results)
+
+        log_scalars(
+            'evaluation/policy_vs_random',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
+
+
 class EvaluationProcess:
     """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
 
@@ -178,6 +194,7 @@ class EvaluationProcess:
             _eval_vs_ten_previous,
             _eval_vs_reference,
             _eval_vs_random,
+            _eval_policy_vs_random,
         ]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
             p.start()

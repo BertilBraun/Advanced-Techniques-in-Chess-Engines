@@ -50,12 +50,9 @@ class Network(nn.Module):
             nn.BatchNorm2d(num_value_channels),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Dropout(0.5),
             nn.Linear(num_value_channels * row_count * column_count, value_fc_size),
             nn.ReLU(),
-            nn.Dropout(0.5),
             nn.Linear(value_fc_size, 1),
-            nn.Tanh(),
         )
 
         # init weights
@@ -68,11 +65,19 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, *, return_logit=False) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
-        return self.policyHead(x), self.valueHead(x)
+        policy_logits = self.policyHead(x)
+        value_logits = self.valueHead(x)
+
+        if return_logit:
+            return policy_logits, value_logits
+
+        policy = torch.softmax(policy_logits, dim=1)
+        value = torch.tanh(value_logits)
+        return policy, value
 
     def fuse_model(self):
         for m in self.modules():

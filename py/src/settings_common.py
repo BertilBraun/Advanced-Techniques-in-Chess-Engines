@@ -54,29 +54,13 @@ def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
 
     # AdamW
     if optimizer == 'adamw':
-        if current_iteration < 10:
-            return 0.005
-        elif current_iteration < 50:
+        if current_iteration < 5:
             return 0.002
-        elif current_iteration < 150:
+        elif current_iteration < 10:
             return 0.001
-        return 0.0005
+        return 3 * 10**-4
 
     raise ValueError(f'Optimizer type {optimizer} not supported. Supported types: adamw, sgd')
-
-    if current_iteration < 20:
-        return 0.2
-    if current_iteration < 50:
-        return 0.02
-    if current_iteration < 80:
-        return 0.008
-    if current_iteration < 100:
-        return 0.002
-    return 0.0002
-
-    base_lr = 0.2
-    lr_decay = 0.9
-    return base_lr * (lr_decay ** (current_iteration / 4))
 
 
 def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:

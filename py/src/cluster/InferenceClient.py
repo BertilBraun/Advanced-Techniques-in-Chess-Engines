@@ -150,8 +150,6 @@ class InferenceClient:
         policies = torch.detach(policies)
         values = torch.detach(values)
 
-        policies = torch.softmax(policies, dim=1)
-
         policies = policies.to(dtype=torch.float32, device='cpu').numpy()
         values = values.to(dtype=torch.float32, device='cpu').numpy()
 

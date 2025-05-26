@@ -162,8 +162,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        total_new_dataset_size = int(len(self) * 0.25)
-        portion_of_spiky_samples = 0.85
+        total_new_dataset_size = int(len(self) * 0.5)
+        portion_of_spiky_samples = 0.7
         spiky_samples = min(len(spiky_dataset), int(total_new_dataset_size * portion_of_spiky_samples))
         non_spiky_samples = min(len(non_spiky_dataset), total_new_dataset_size - spiky_samples)
 
