@@ -50,8 +50,10 @@ class Network(nn.Module):
             nn.BatchNorm2d(num_value_channels),
             nn.ReLU(),
             nn.Flatten(),
+            nn.Dropout(0.2),
             nn.Linear(num_value_channels * row_count * column_count, value_fc_size),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(value_fc_size, 1),
             nn.Tanh(),
         )

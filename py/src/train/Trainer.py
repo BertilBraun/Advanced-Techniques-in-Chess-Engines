@@ -125,10 +125,9 @@ class Trainer:
             # Apparently just as in AZ Paper, give more weight to the policy loss
             # loss = torch.lerp(value_loss, policy_loss, 0.66)
             loss = (
-                policy_loss
-                + value_loss
-                + F.mse_loss(out_value.mean(), torch.tensor(0.0, device=self.model.device, dtype=TORCH_DTYPE))
-                + F.mse_loss(out_value.std(), torch.tensor(0.5, device=self.model.device, dtype=TORCH_DTYPE))
+                policy_loss + value_loss
+                # + F.mse_loss(out_value.mean(), torch.tensor(0.0, device=self.model.device, dtype=TORCH_DTYPE))
+                # + F.mse_loss(out_value.std(), torch.tensor(0.5, device=self.model.device, dtype=TORCH_DTYPE))
             )
 
             return policy_loss, value_loss, loss

@@ -100,21 +100,31 @@ class HexGame(Game[HexMove]):
             )
         )
 
-        # 2) flip top↔bottom
-        syms.append(
-            (
-                np.flip(encoded_board, axis=1),
-                remap_counts(lambda r, c: (SIZE - 1 - r, c)),
-            )
-        )
-
-        # 3) flip left↔right
-        syms.append(
-            (
-                np.flip(encoded_board, axis=2),
-                remap_counts(lambda r, c: (r, SIZE - 1 - c)),
-            )
-        )
+        # NOTE: These two symmetries are not valid, as they shift the connected cells in a way that breaks the game rules.
+        # a b c
+        #  d e f
+        # when flip top↔bottom, it becomes:
+        # d e f
+        #  a b c
+        # when flip left↔right, it becomes:
+        # c b a
+        #  f e d
+        # In both cases, where a was only connected to d and b, it is now connected to d, b AND e. Therefore the flips are not valid symmetries.
+        #  # 2) flip top↔bottom
+        #  syms.append(
+        #      (
+        #          np.flip(encoded_board, axis=1),
+        #          remap_counts(lambda r, c: (SIZE - 1 - r, c)),
+        #      )
+        #  )
+        #
+        #  # 3) flip left↔right
+        #  syms.append(
+        #      (
+        #          np.flip(encoded_board, axis=2),
+        #          remap_counts(lambda r, c: (r, SIZE - 1 - c)),
+        #      )
+        #  )
 
         return syms
 
