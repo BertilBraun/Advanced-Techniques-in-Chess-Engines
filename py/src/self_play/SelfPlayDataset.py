@@ -162,7 +162,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        target_dataset_size = int(len(self) * 0.25)
+        target_dataset_size = int(len(self) * 0.1)
 
         if len(spiky_dataset) > target_dataset_size:
             new_dataset = spiky_dataset.sample(target_dataset_size)
@@ -239,35 +239,43 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             return list(new_save_path.glob('*.hdf5')) + list(old_save_format)
         return old_save_format
 
-    def save_to_path(self, file_path: Path) -> None:
+    def save_to_path(self, file_path: Path) -> bool:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # write a h5py file with states, policy targets and value targets in it
-        with h5py.File(file_path, 'w') as file:
-            file.create_dataset('states', data=np.array(self.encoded_states))
-            max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
-            # padd all visit counts to the same length
-            padded_visit_counts = np.zeros((len(self.visit_counts), max_visit_num, 2), dtype=np.int32)
-            for i, visit_count in enumerate(self.visit_counts):
-                for j, (move, count) in enumerate(visit_count):
-                    padded_visit_counts[i, j] = [move, count]
-            file.create_dataset('visit_counts', data=padded_visit_counts)
-            file.create_dataset('value_targets', data=np.array(self.value_targets))
-            # write the metadata information about the current game, action size, representation shape, etc.
-            file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
-            # write the stats information about the dataset, num_games, total_generation_time
-            file.attrs['stats'] = str(self.stats._asdict())
+        try:
+            with h5py.File(file_path, 'w') as file:
+                file.create_dataset('states', data=np.array(self.encoded_states))
+                max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
+                # padd all visit counts to the same length
+                padded_visit_counts = np.zeros((len(self.visit_counts), max_visit_num, 2), dtype=np.int32)
+                for i, visit_count in enumerate(self.visit_counts):
+                    for j, (move, count) in enumerate(visit_count):
+                        padded_visit_counts[i, j] = [move, count]
+                file.create_dataset('visit_counts', data=padded_visit_counts)
+                file.create_dataset('value_targets', data=np.array(self.value_targets))
+                # write the metadata information about the current game, action size, representation shape, etc.
+                file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
+                # write the stats information about the dataset, num_games, total_generation_time
+                file.attrs['stats'] = str(self.stats._asdict())
+
+            return True
+        except Exception as e:
+            from src.util.log import log, LogLevel
+
+            log(f'Error saving dataset to {file_path}: {e}', level=LogLevel.DEBUG)
+            return False
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:
         if suffix:
             file_path = Path(folder_path) / f'memory_{iteration}/{suffix}.hdf5'
+            if not self.save_to_path(file_path):
+                raise RuntimeError(f'Failed to save dataset to {file_path}')
         else:
             while True:
                 file_path = Path(folder_path) / f'memory_{iteration}/{random_id()}.hdf5'
-                if not file_path.exists():
+                if not file_path.exists() and self.save_to_path(file_path):
                     break
-
-        self.save_to_path(file_path)
 
         return file_path
 
