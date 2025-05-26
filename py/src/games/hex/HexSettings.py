@@ -56,7 +56,7 @@ TRAINING_ARGS = TrainingArgs(
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.4,  # TODO 0.2/0.3 for bigger boards
-            c_param=1.5,  # TODO 1.7,  # Based on MiniGO Paper
+            c_param=1.2,  # TODO 1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
             full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
