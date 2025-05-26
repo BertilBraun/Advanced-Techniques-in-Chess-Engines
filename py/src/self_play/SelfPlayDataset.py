@@ -152,7 +152,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
             probabilities = action_probabilities(visit_counts)
-            if np.max(probabilities) > 0.15:
+            if np.max(probabilities) > 0.1 and np.random.random() < 0.8:
                 spiky_dataset.encoded_states.append(state)
                 spiky_dataset.visit_counts.append(visit_counts)
                 spiky_dataset.value_targets.append(value_target)

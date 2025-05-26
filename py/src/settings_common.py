@@ -36,7 +36,7 @@ PLAY_C_PARAM = 1.0
 
 def sampling_window(current_iteration: int) -> int:
     """A slowly increasing sampling window, where the size of the window would start off small, and then slowly increase as the model generation count increased. This allowed us to quickly phase out very early data before settling to our fixed window size. We began with a window size of 4, so that by model 5, the first (and worst) generation of data was phased out. We then increased the history size by one every two models, until we reached our full 20 model history size at generation 35."""
-    return min(max(5, 5 + (current_iteration - 5) // 2), 12)
+    return min(max(5, 5 + (current_iteration - 5) // 5), 12)
 
 
 def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
