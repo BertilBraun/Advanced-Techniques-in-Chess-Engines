@@ -19,12 +19,12 @@ CurrentGame = HexGame()
 CurrentBoard = HexBoard
 CurrentGameVisuals = HexVisuals()
 
-network = NetworkParams(num_layers=12, hidden_size=96)
+network = NetworkParams(num_layers=9, hidden_size=128)
 
 training = TrainingParams(
-    num_epochs=1,
+    num_epochs=2,
     optimizer='adamw',  # 'sgd',
-    batch_size=256,  # TODO 512   # TODO 2048,
+    batch_size=512,  # TODO 2048,
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
@@ -49,14 +49,14 @@ TRAINING_ARGS = TrainingArgs(
         num_moves_after_which_to_play_greedy=20,  # even number - no bias towards white
         result_score_weight=0.25,
         resignation_threshold=-1.0,  # TODO -0.9,
-        temperature=1.0,  # based on https://github.com/QueensGambit/CrazyAra/blob/19e37d034cce086947f3fdbeca45af885959bead/DeepCrazyhouse/configs/rl_config.py#L45
+        temperature=1.25,
         num_games_after_which_to_write=1,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.4,  # TODO 0.2/0.3 for bigger boards
-            c_param=1.2,  # TODO 1.7,  # Based on MiniGO Paper
+            dirichlet_alpha=0.3,  # TODO 0.2/0.3 for bigger boards
+            c_param=2.0,  # TODO 1.2,  # TODO 1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
             full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),

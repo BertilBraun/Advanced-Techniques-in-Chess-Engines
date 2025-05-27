@@ -26,7 +26,7 @@ class HexGame(Game[HexMove]):
     @property
     def representation_shape(self) -> tuple[int, int, int]:
         # planes: current player, opponent, empty
-        return (3, SIZE, SIZE)
+        return (4, SIZE, SIZE)
 
     def get_initial_board(self) -> HexBoard:
         return HexBoard()
@@ -34,10 +34,21 @@ class HexGame(Game[HexMove]):
     def get_canonical_board(self, board: HexBoard) -> np.ndarray:
         """
         Planes:
-        0 – stones of the side to move  (1s)
-        1 – stones of the opponent      (1s)
+        0 – stones of TD                (1s)
+        1 – stones of LR                (1s)
         2 – empty cells                 (1s)
+        3 – color of the side to move   (1s)
         """
+        return np.stack(
+            [
+                (board.board == 1),  # TD stones
+                (board.board == -1),  # LR stones
+                (board.board == 0),  # empty cells
+                np.full((SIZE, SIZE), 1 if board.current_player == 1 else 0),  # current player (1s for TD, 0s for LR)
+            ],
+            dtype=np.float32,
+        )
+
         # Put the side to move’s stones in +1
         pos = board.board * board.current_player  # +1 == me, –1 == them
 
@@ -52,6 +63,8 @@ class HexGame(Game[HexMove]):
 
     def encode_move(self, move: HexMove, board: HexBoard) -> int:
         assert 0 <= move < SIZE * SIZE, f'Invalid move: {move}'
+        return move
+
         if board.current_player == 1:
             return move
         # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
@@ -61,6 +74,8 @@ class HexGame(Game[HexMove]):
 
     def decode_move(self, move_idx: int, board: HexBoard) -> HexMove:
         assert 0 <= move_idx < SIZE * SIZE, f'Invalid move index: {move_idx}'
+        return move_idx
+
         if board.current_player == 1:
             return move_idx
         # If the side to move is the LR-player, rotate 90° so *I* now aim N-S
@@ -93,12 +108,12 @@ class HexGame(Game[HexMove]):
         syms.append((encoded_board, visit_counts))
 
         # 1) 180° rotation (preserves N-S orientation)
-        syms.append(
-            (
-                np.rot90(encoded_board, k=2, axes=(1, 2)),
-                remap_counts(lambda r, c: (SIZE - 1 - r, SIZE - 1 - c)),
-            )
-        )
+        # syms.append(
+        #     (
+        #         np.rot90(encoded_board, k=2, axes=(1, 2)),
+        #         remap_counts(lambda r, c: (SIZE - 1 - r, SIZE - 1 - c)),
+        #     )
+        # )
 
         # NOTE: These two symmetries are not valid, as they shift the connected cells in a way that breaks the game rules.
         # a b c

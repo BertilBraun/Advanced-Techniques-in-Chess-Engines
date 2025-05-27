@@ -92,7 +92,11 @@ class MCTSNode:
 
         for encoded_move, _ in valid_encoded_moves_with_scores:
             self.children.append(
-                MCTSNode(encoded_move_to_get_here=encoded_move, parent=self, my_child_index=len(self.children))
+                MCTSNode(
+                    encoded_move_to_get_here=encoded_move,
+                    parent=self,
+                    my_child_index=len(self.children),
+                )
             )
 
         # Store precomputed values for the children to make the best_child method faster because it's called a lot
@@ -117,7 +121,7 @@ class MCTSNode:
         while node.parent:
             node.parent.children_number_of_visits[node.my_child_index] += 1
             node.parent.children_result_scores[node.my_child_index] += result
-            result = -result * 0.99  # Discount the result for the parent node
+            # TODO result = -result * 0.99  # Discount the result for the parent node
             node = node.parent
 
     def best_child(self, c_param: float) -> MCTSNode:
@@ -210,8 +214,13 @@ def _best_child_index(
     # Q score is a value [-1, 1] where -1 is a loss and 1 is a win in the current position
     # We want to maximize the Q score, which means minimizing the result score of the children, as the scores in the children are from the perspective of the opponent
     q_score = np.zeros_like(children_number_of_visits, dtype=np.float32)
-    q_score[visited_mask] = -1 * (result_scores + virtual_losses) / number_of_visits
-    q_score[unvisited_mask] = -own_result_score  # Init to parent  # Init to loss (-1.0) for unvisited moves
+    # TODO q_score[visited_mask] = -1 * (result_scores + virtual_losses) / number_of_visits
+    # TODO q_score[unvisited_mask] = -own_result_score  # Init to parent  # Init to loss (-1.0) for unvisited moves
+
+    # Q score based on foersterrobert
+    # Q store should now be between 0 and 1, where 0 is a loss and 1 is a win for the current player
+    q_score[visited_mask] = 1 - ((((result_scores + virtual_losses) / number_of_visits) + 1) / 2)
+    q_score[unvisited_mask] = 0  # Init to loss (0.0) for unvisited moves
 
     visits_quotient = np.sqrt(own_number_of_visits) / (1 + children_number_of_visits)
 
