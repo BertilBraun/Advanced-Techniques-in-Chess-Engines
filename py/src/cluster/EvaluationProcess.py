@@ -105,10 +105,12 @@ def _eval_vs_ten_previous(run: int, model_evaluation: ModelEvaluation, iteration
         )
 
 
-def _eval_vs_iteration(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+def _eval_vs_iteration(
+    run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
+):
     with TensorboardWriter(run, 'evaluation', postfix_pid=False):
         results = model_evaluation.play_two_models_search(model_save_path(iteration, save_path))
-        log(f'Results after playing vs model {iteration}:', results)
+        log(f'Results after playing vs model {iteration} at iteration {current_iteration}:', results)
 
         log_scalars(
             f'evaluation/vs_model_{iteration}',
@@ -117,7 +119,7 @@ def _eval_vs_iteration(run: int, model_evaluation: ModelEvaluation, iteration: i
                 'losses': results.losses,
                 'draws': results.draws,
             },
-            iteration,
+            current_iteration,
         )
 
 
@@ -216,9 +218,11 @@ class EvaluationProcess:
             processes.append(p)
 
         for iter in range(10, self.args.num_iterations + 1, 20):
-            if iteration < iter:
+            if iter >= iteration:
                 continue
-            p = mp.Process(target=_eval_vs_iteration, args=(run, model_evaluation, iter, self.args.save_path))
+            p = mp.Process(
+                target=_eval_vs_iteration, args=(run, model_evaluation, iter, self.args.save_path, iteration)
+            )
             p.start()
             processes.append(p)
 

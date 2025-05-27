@@ -67,7 +67,7 @@ class Trainer:
             # At |logit| ≈ 4 the derivative of tanh is already < 0.002, so the gradient almost vanishes.
             # Smoothing the value targets to avoid overfitting to the extreme values which no longer give sensible gradients
             # Non-saturated logits: 0.95 corresponds to logit ≈ +2.94, 0.05 to logit ≈ −2.94 – well inside the linear part of tanh. The gradient w.r.t. the logits is therefore still ≈ 0.05–0.1 instead of ≈ 0.001.
-            value_targets = 0.95 * value_targets
+            value_targets = 0.85 * value_targets
 
             value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
             value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)

@@ -131,7 +131,7 @@ class InferenceClient:
         for hash in board_hashes:
             moves_np, value = self.inference_cache[hash]
             moves = [(int(move), float(prob)) for move, prob in moves_np]
-            responses.append((moves, value * 0.8))  # TODO: remove * 0.75 when the model is fixed
+            responses.append((moves, value))
 
         return responses
 

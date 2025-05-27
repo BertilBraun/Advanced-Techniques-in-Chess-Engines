@@ -31,7 +31,7 @@ training = TrainingParams(
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=1,
-    num_games=300,
+    num_games=100,
     every_n_iterations=1,
 )
 
@@ -49,7 +49,7 @@ TRAINING_ARGS = TrainingArgs(
         num_moves_after_which_to_play_greedy=SIZE + 1,  # even number - no bias towards white
         result_score_weight=0.25,
         resignation_threshold=-1.0,  # TODO -0.9,
-        temperature=1.25,
+        temperature=1.0,
         num_games_after_which_to_write=1,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
