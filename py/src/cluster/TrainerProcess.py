@@ -29,6 +29,11 @@ def run_trainer_process(run: int, args: TrainingArgs, commander_pipe: PipeConnec
         trainer_process.run()
 
 
+def number_of_games_in_iteration(iteration: int, save_path: str) -> int:
+    """Returns the number of games in the given iteration."""
+    return SelfPlayDataset.load_iteration_stats(save_path, iteration).num_games
+
+
 class TrainerProcess:
     """This class provides functionality to train the model on the self play data. It listens to the commander for messages to start and stop the training process. Once it receives a start message, it waits for enough samples to be available for the current iteration and then trains the model for the specified number of epochs. The training stats are sent back to the commander once training is finished."""
 
@@ -98,7 +103,8 @@ class TrainerProcess:
     @timeit
     def _wait_for_enough_training_samples(self, iteration):
         def games(iteration: int) -> int:
-            return SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration).num_games
+            """Returns the number of games in the given iteration."""
+            return number_of_games_in_iteration(iteration, self.args.save_path)
 
         target_games = self.args.num_games_per_iteration
         with tqdm(total=target_games, desc=f'Waiting for games (iter {iteration})') as pbar:

@@ -2,8 +2,9 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
+from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import TensorboardWriter, USE_GPU
+from src.settings import TensorboardWriter, USE_GPU, TRAINING_ARGS
 from src.util.log import log
 from src.self_play.SelfPlay import SelfPlay
 from src.cluster.InferenceClient import InferenceClient
@@ -58,6 +59,14 @@ class SelfPlayProcess:
                     self._save_dataset(current_iteration)
                     self.self_play.update_iteration(current_iteration + 1)
                     current_iteration += 1
+
+                if (
+                    number_of_games_in_iteration(current_iteration, self.save_path)
+                    >= TRAINING_ARGS.num_games_per_iteration
+                ):
+                    log(f'Iteration {current_iteration} has enough games ({self.self_play.dataset.stats.num_games}).')
+                    running = False
+                    self.self_play.dataset = SelfPlayDataset()
 
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
