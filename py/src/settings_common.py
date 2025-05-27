@@ -30,7 +30,6 @@ NUM_SELF_PLAYERS = max(8, NUM_SELF_PLAYERS)  # TODO remove?
 
 # Leave 2 CPUs for Trainer, Dataloader, Evaluation, etc.
 NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 4)
-NUM_SELF_PLAYERS = 20  # TODO remove?
 
 PLAY_C_PARAM = 1.0
 
@@ -57,7 +56,7 @@ def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
     if optimizer == 'adamw':
         if current_iteration < 3:
             return 0.002
-        elif current_iteration < 100:
+        elif current_iteration < 150:
             return 0.001
         return 3 * 10**-4
 
