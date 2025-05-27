@@ -105,6 +105,22 @@ def _eval_vs_ten_previous(run: int, model_evaluation: ModelEvaluation, iteration
         )
 
 
+def _eval_vs_iteration(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+        results = model_evaluation.play_two_models_search(model_save_path(iteration, save_path))
+        log(f'Results after playing vs model {iteration}:', results)
+
+        log_scalars(
+            f'evaluation/vs_model_{iteration}',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
+
+
 def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
     reference_model_path = save_path + '/reference_model.pt'
     if not os.path.exists(reference_model_path):
@@ -197,6 +213,13 @@ class EvaluationProcess:
             _eval_policy_vs_random,
         ]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
+            p.start()
+            processes.append(p)
+
+        for iter in range(10, self.args.num_iterations + 1, 20):
+            if iteration < iter:
+                continue
+            p = mp.Process(target=_eval_vs_iteration, args=(run, model_evaluation, iter, self.args.save_path))
             p.start()
             processes.append(p)
 

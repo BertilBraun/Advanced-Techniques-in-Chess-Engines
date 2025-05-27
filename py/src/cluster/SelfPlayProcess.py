@@ -62,9 +62,9 @@ class SelfPlayProcess:
 
                 if (
                     number_of_games_in_iteration(current_iteration, self.save_path)
-                    >= TRAINING_ARGS.num_games_per_iteration
+                    >= TRAINING_ARGS.num_games_per_iteration * 5
                 ):
-                    log(f'Iteration {current_iteration} has enough games ({self.self_play.dataset.stats.num_games}).')
+                    log(f'Iteration {current_iteration} has enough games.')
                     running = False
                     self.self_play.dataset = SelfPlayDataset()
 

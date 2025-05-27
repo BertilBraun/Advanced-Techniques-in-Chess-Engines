@@ -11,7 +11,7 @@ from src.train.TrainingArgs import (
 )
 
 from src.games.hex.HexGame import HexGame, HexMove
-from src.games.hex.HexBoard import HexBoard
+from src.games.hex.HexBoard import SIZE, HexBoard
 from src.games.hex.HexVisuals import HexVisuals
 
 CurrentGameMove = HexMove
@@ -46,7 +46,7 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=20,  # even number - no bias towards white
+        num_moves_after_which_to_play_greedy=SIZE + 1,  # even number - no bias towards white
         result_score_weight=0.25,
         resignation_threshold=-1.0,  # TODO -0.9,
         temperature=1.25,
@@ -55,8 +55,8 @@ TRAINING_ARGS = TrainingArgs(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.3,  # TODO 0.2/0.3 for bigger boards
-            c_param=2.0,  # TODO 1.2,  # TODO 1.7,  # Based on MiniGO Paper
+            dirichlet_alpha=0.4,  # TODO 0.2/0.3 for bigger boards
+            c_param=1.2,  # TODO 1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
             full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),

@@ -75,36 +75,6 @@ def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: Cu
     return moves_with_probabilities
 
 
-def filter_moves(moves: list[MoveScore], board: CurrentBoard) -> list[MoveScore]:
-    """
-    Filters a list of moves with the legal moves of a chess board.
-
-    The list of moves is a list of tuples, where each tuple contains
-    a move and its corresponding probability. The legal moves are encoded in a 1D numpy array, where each
-    entry is 1 if the corresponding move is legal, and 0 otherwise. The policy
-    is then filtered to only include the probabilities of the legal moves.
-
-    :param moves: The moves to filter.
-    :param board: The chess board to filter the moves with.
-    :return: The filtered moves.
-    """
-    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves(), board)
-    filtered_moves = [(move, prob) for move, prob in moves if legal_moves_encoded[move] > 0 and prob > 1e-3]
-    # filtered_moves.sort(key=lambda x: x[1], reverse=True)
-    # filtered_moves = filtered_moves[:50]  # TODO: make this a parameter - limit the number of moves to explore
-
-    prob_sum = sum(prob for _, prob in filtered_moves)
-
-    if prob_sum == 0:
-        print('Warning: No legal moves found in the filtered moves. Returning all legal moves with equal probability.')
-        return __map_policy_to_moves(legal_moves_encoded / np.sum(legal_moves_encoded))
-
-    for i, (move, prob) in enumerate(filtered_moves):
-        filtered_moves[i] = (move, prob / prob_sum)
-
-    return filtered_moves
-
-
 def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) -> np.ndarray:
     """
     Filters a policy with the legal moves of a chess board.

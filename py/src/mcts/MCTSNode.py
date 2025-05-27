@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-from src.Encoding import MoveScore, filter_moves
+from src.Encoding import MoveScore
 from src.settings import CurrentBoard, CurrentGame
 
 
@@ -88,9 +88,7 @@ class MCTSNode:
 
         assert all(score > 0.0 for _, score in encoded_moves_with_scores), 'Scores must be positive'
 
-        valid_encoded_moves_with_scores = filter_moves(encoded_moves_with_scores, self.board)
-
-        for encoded_move, _ in valid_encoded_moves_with_scores:
+        for encoded_move, _ in encoded_moves_with_scores:
             self.children.append(
                 MCTSNode(
                     encoded_move_to_get_here=encoded_move,
@@ -103,7 +101,7 @@ class MCTSNode:
         self.children_number_of_visits = np.zeros(len(self.children), dtype=np.int32)
         self.children_result_scores = np.zeros(len(self.children), dtype=np.float32)
         self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
-        self.children_policies = np.array([score for _, score in valid_encoded_moves_with_scores], dtype=np.float32)
+        self.children_policies = np.array([score for _, score in encoded_moves_with_scores], dtype=np.float32)
 
     def update_virtual_losses(self, delta: int) -> None:
         node = self
@@ -121,7 +119,7 @@ class MCTSNode:
         while node.parent:
             node.parent.children_number_of_visits[node.my_child_index] += 1
             node.parent.children_result_scores[node.my_child_index] += result
-            # TODO result = -result * 0.99  # Discount the result for the parent node
+            result = -result  # TODO * 0.99  # Discount the result for the parent node
             node = node.parent
 
     def best_child(self, c_param: float) -> MCTSNode:
