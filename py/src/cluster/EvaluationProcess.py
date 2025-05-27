@@ -124,7 +124,6 @@ def _eval_vs_iteration(run: int, model_evaluation: ModelEvaluation, iteration: i
 def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
     reference_model_path = save_path + '/reference_model.pt'
     if not os.path.exists(reference_model_path):
-        log(f'Reference model not found at {reference_model_path}. Skipping evaluation.')
         return
 
     with TensorboardWriter(run, 'evaluation', postfix_pid=False):
