@@ -19,7 +19,7 @@ CurrentGame = HexGame()
 CurrentBoard = HexBoard
 CurrentGameVisuals = HexVisuals()
 
-network = NetworkParams(num_layers=13, hidden_size=128)
+network = NetworkParams(num_layers=12, hidden_size=128)
 
 training = TrainingParams(
     num_epochs=2,
@@ -36,7 +36,7 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 500
+NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
 TRAINING_ARGS = TrainingArgs(
@@ -46,7 +46,7 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=SIZE + 1,  # even number - no bias towards white
+        num_moves_after_which_to_play_greedy=SIZE * 2,  # even number - no bias towards white
         result_score_weight=0.25,
         resignation_threshold=-1.0,  # TODO -0.9,
         temperature=1.0,
@@ -55,8 +55,8 @@ TRAINING_ARGS = TrainingArgs(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.4,
-            c_param=1.5,  # TODO 1.7,  # Based on MiniGO Paper
+            dirichlet_alpha=10 / (SIZE * SIZE),
+            c_param=2.5,  # Higher to encourage exploration without adding too much noise through Dirichlet noise
             min_visit_count=MIN_VISIT_COUNT,
             full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
