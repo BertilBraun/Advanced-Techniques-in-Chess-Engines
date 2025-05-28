@@ -36,18 +36,18 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 800
-MIN_VISIT_COUNT = 1  # TODO 1 or 2?
+NUM_SEARCHES_PER_TURN = 1000
+MIN_VISIT_COUNT = 3  # TODO 1 or 2?
 
 TRAINING_ARGS = TrainingArgs(
-    num_iterations=200,
+    num_iterations=350,
     save_path=SAVE_PATH + '/hex',
     num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=SIZE * 2,  # even number - no bias towards white
-        result_score_weight=0.25,
+        num_moves_after_which_to_play_greedy=SIZE * 6,  # even number - no bias towards white
+        result_score_weight=0.4,
         resignation_threshold=-1.0,  # TODO -0.9,
         temperature=1.0,
         num_games_after_which_to_write=1,

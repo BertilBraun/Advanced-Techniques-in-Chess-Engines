@@ -240,7 +240,7 @@ class SelfPlay:
                     lerp(
                         turn_game_outcome,
                         mem.result_score,
-                        min(0.1, self.iteration / TRAINING_ARGS.num_iterations) * self.args.result_score_weight,
+                        min(1.0, self.iteration * 10 / TRAINING_ARGS.num_iterations) * self.args.result_score_weight,
                     ),
                 )
 

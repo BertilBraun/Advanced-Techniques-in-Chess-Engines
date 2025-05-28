@@ -104,10 +104,14 @@ class MCTS:
         fast_roots = [root for root, full_search in zip(roots, should_run_full_search) if not full_search]
 
         for _ in range(self.args.min_visit_count):
-            assert self.args.min_visit_count == 1, 'min_visit_count must be 1'
             for root in full_roots:
                 nodes: list[MCTSNode] = []
                 for node in root.children:
+                    if node.board is not None:
+                        node = self._get_best_child_or_back_propagate(node, self.args.c_param)
+                        if node is None:
+                            continue
+
                     node._maybe_init_board()
                     if node.is_terminal_node:
                         result = get_board_result_score(node.board)
@@ -194,7 +198,7 @@ class MCTS:
         # for root in roots:
         #     for i in range(len(root.children)):
         #         print(
-        #             f'{root.children_policies[i]:.2f} -> {root.children_number_of_visits[i] / root.number_of_visits:.2f} ({divmod(root.children[i].encoded_move_to_get_here, 11)})'
+        #             f'{root.children_policies[i]:.2f} -> {root.children_number_of_visits[i] / root.number_of_visits:.2f} ({divmod(root.children[i].encoded_move_to_get_here,  HEX_SIZE)})'
         #         )
 
         # self.display_node(roots[0])
@@ -209,7 +213,7 @@ class MCTS:
             for root, is_full_search in zip(roots, should_run_full_search)
         ]
 
-    def display_node(self, root: MCTSNode) -> None:
+    def display_node(self, root: MCTSNode, inspect_or_search: bool) -> None:
         import time
         from src.games.hex.HexVisuals import HexGridGameGUI
         from src.games.hex.HexGame import SIZE as HEX_SIZE
@@ -244,11 +248,10 @@ class MCTS:
                                 total = sum(
                                     vis for vis in root.children_number_of_visits if vis >= root.number_of_visits * 0.01
                                 )
-                                res = root.children_number_of_visits[k] / total
-                                if root.children_number_of_visits[k] < root.number_of_visits * 0.01:
-                                    res = float('nan')
-
-                                gui.draw_text(i, j, f'res:{res:.2f}', offset=(0, -10))
+                                if root.children_number_of_visits[k] >= root.number_of_visits * 0.01:
+                                    gui.draw_text(
+                                        i, j, f'res:{root.children_number_of_visits[k] / total:.2f}', offset=(0, -10)
+                                    )
                                 gui.draw_text(
                                     i,
                                     j,
@@ -273,6 +276,8 @@ class MCTS:
                 + ('blue' if root.board.current_player == 1 else 'green')
                 + '@'
                 + str(root.result_score)
+                + ' MCTS result Score - '
+                + ('Inspect' if inspect_or_search else 'Search')
             )
             gui.update_display()
 
@@ -287,6 +292,8 @@ class MCTS:
                 exit()
             if events.left:
                 return
+            if events.right:
+                inspect_or_search = not inspect_or_search
             if events.clicked:
                 cell = gui.get_cell_from_click()
                 if cell is not None:
@@ -303,10 +310,13 @@ class MCTS:
                             print(
                                 f'Child {k}: {child.encoded_move_to_get_here}, {child.number_of_visits}, {child.result_score}'
                             )
-                            if child.is_fully_expanded and child.number_of_visits > 1:
-                                self.search([(child.board, None)])
+                            if inspect_or_search:
+                                if child.is_fully_expanded and child.number_of_visits > 1:
+                                    self.display_node(child, inspect_or_search)
+                                else:
+                                    print('Child is not fully expanded')
                             else:
-                                print('Child is not fully expanded')
+                                self.search([(child.board, None)])
                             break
                     else:
                         print('No child found')
@@ -361,6 +371,7 @@ if __name__ == '__main__':
     from src.cluster.InferenceClient import InferenceClient
     from src.settings import CurrentBoard, TRAINING_ARGS
     from src.util.save_paths import model_save_path
+    from src.games.hex.HexBoard import SIZE
 
     client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
     client.load_model(model_save_path(1200, TRAINING_ARGS.save_path))
@@ -395,7 +406,7 @@ if __name__ == '__main__':
     #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
     #     ]
     # )
-    board.current_player = 1
+    board.board = np.zeros((SIZE, SIZE), dtype=np.int8)
 
     params = MCTSParams(
         num_searches_per_turn=500,
