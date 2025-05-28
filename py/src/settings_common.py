@@ -29,7 +29,7 @@ NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 NUM_SELF_PLAYERS = max(8, NUM_SELF_PLAYERS)  # TODO remove?
 
 # Leave 2 CPUs for Trainer, Dataloader, Evaluation, etc.
-NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 4)
+NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 2)
 
 PLAY_C_PARAM = 1.0
 
