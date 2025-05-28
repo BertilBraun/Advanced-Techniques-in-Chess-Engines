@@ -211,7 +211,7 @@ class EvaluationProcess:
             _eval_vs_ten_previous,
             _eval_vs_reference,
             _eval_vs_random,
-            _eval_policy_vs_random,
+            # _eval_policy_vs_random,
         ]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
             p.start()
