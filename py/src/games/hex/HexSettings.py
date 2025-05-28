@@ -36,7 +36,7 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 400
+NUM_SEARCHES_PER_TURN = 500
 MIN_VISIT_COUNT = 1  # TODO 1 or 2?
 
 TRAINING_ARGS = TrainingArgs(
@@ -55,8 +55,8 @@ TRAINING_ARGS = TrainingArgs(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
-            dirichlet_alpha=0.25,
-            c_param=1.2,  # TODO 1.7,  # Based on MiniGO Paper
+            dirichlet_alpha=0.4,
+            c_param=1.5,  # TODO 1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
             full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
