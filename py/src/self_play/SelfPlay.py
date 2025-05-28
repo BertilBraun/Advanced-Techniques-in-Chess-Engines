@@ -63,7 +63,7 @@ class SelfPlay:
 
         self.iteration = 0
 
-        self._set_mcts(self.iteration)
+        self.mcts: MCTS | None = None
 
     def update_iteration(self, iteration: int) -> None:
         if len(self.dataset) > 0:
@@ -104,6 +104,8 @@ class SelfPlay:
         self.mcts = MCTS(self.client, mcts_args)
 
     def self_play(self) -> None:
+        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+
         mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results)):
