@@ -22,7 +22,7 @@ CurrentGameVisuals = HexVisuals()
 network = NetworkParams(num_layers=9, hidden_size=128)
 
 training = TrainingParams(
-    num_epochs=1,
+    num_epochs=2,
     optimizer='adamw',  # 'sgd',
     batch_size=512,  # TODO 2048,
     sampling_window=sampling_window,

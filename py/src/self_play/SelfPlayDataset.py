@@ -162,7 +162,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        target_dataset_size = int(len(self) * 0.1)
+        target_dataset_size = int(len(self) * 0.2)
 
         if len(spiky_dataset) > target_dataset_size:
             new_dataset = spiky_dataset.sample(target_dataset_size)
