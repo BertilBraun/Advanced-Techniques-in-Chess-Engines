@@ -18,8 +18,8 @@ from src.util.save_paths import model_save_path
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
-    if device_id == 0:
-        start_cpu_usage_logger(run, 'self_play_cpu_usage')
+    # if device_id == 0:
+    #     start_cpu_usage_logger(run, 'self_play_cpu_usage')
 
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
