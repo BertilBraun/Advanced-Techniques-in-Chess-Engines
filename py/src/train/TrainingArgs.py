@@ -146,3 +146,6 @@ class TrainingArgs:
     training: TrainingParams
     cluster: ClusterParams
     evaluation: Optional[EvaluationParams] = None
+
+    on_startup: Optional[Callable[[], None]] = None
+    """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

@@ -41,6 +41,11 @@ if __name__ == '__main__':
 
     start_gpu_usage_logger(run)
 
+    # if a function on_startup is defined, call it
+    if TRAINING_ARGS.on_startup is not None:
+        log('Calling on_startup function...')
+        TRAINING_ARGS.on_startup()
+
     with TensorboardWriter(run, 'training_args', postfix_pid=False):
         import pprint
 

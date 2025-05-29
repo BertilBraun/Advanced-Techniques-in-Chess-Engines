@@ -45,7 +45,6 @@ evaluation = EvaluationParams(
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
-ensure_eval_dataset_exists(evaluation.dataset_path)
 
 PARALLEL_GAMES = 32
 NUM_SEARCHES_PER_TURN = 640
@@ -81,4 +80,5 @@ TRAINING_ARGS = TrainingArgs(
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
     training=training,
     evaluation=evaluation,
+    on_startup=lambda: ensure_eval_dataset_exists(evaluation.dataset_path),
 )
