@@ -16,6 +16,10 @@ from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessVisuals import ChessVisuals
 
 
+def on_startup():
+    ensure_eval_dataset_exists(evaluation.dataset_path)
+
+
 def ensure_eval_dataset_exists(dataset_path: str | None) -> None:
     if dataset_path and not os.path.exists(dataset_path):
         from src.games.chess import ChessDatabase
@@ -80,5 +84,5 @@ TRAINING_ARGS = TrainingArgs(
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
     training=training,
     evaluation=evaluation,
-    on_startup=lambda: ensure_eval_dataset_exists(evaluation.dataset_path),
+    on_startup=on_startup,
 )
