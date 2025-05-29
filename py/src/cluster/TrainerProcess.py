@@ -92,6 +92,9 @@ class TrainerProcess:
                 exit()
 
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
+            if number_of_games_in_iteration(iteration, self.args.save_path) >= self.args.num_games_per_iteration:
+                log('Enough games played, stopping training for this iteration.')
+                break
 
         combined_train_stats = TrainingStats.combine(train_stats)
         combined_valid_stats = TrainingStats.combine(valid_stats)
