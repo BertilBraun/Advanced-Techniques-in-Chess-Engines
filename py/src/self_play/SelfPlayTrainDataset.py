@@ -37,7 +37,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             self.dataset_stats.append(SelfPlayDataset.load_stats(file))
 
             if self.stats.num_samples > 300_000:
-                print(f'Loaded {len(self.datasets)} datasets, stopping loading more.')
+                print(f'Loaded {self.stats.num_samples} datasets, stopping loading more.')
                 break
 
         self.dataset_length_prefix_sums = [0] + list(np.cumsum([stats.num_samples for stats in self.dataset_stats]))
@@ -98,7 +98,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         )
 
     def __len__(self) -> int:
-        return sum(len(dataset) for dataset in self.datasets)
+        return sum(stats.num_samples for stats in self.dataset_stats)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         dataset_index = np.searchsorted(self.dataset_length_prefix_sums, idx + 1) - 1
