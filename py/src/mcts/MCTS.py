@@ -168,8 +168,7 @@ class MCTS:
 
         log_scalar('dataset/average_search_entropy', average_entropy)
 
-        # TODO KL divergence between the children policies and the visit counts
-
+        # KL divergence between the children policies and the visit counts
         def _kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
             """
             p, q: 1-D arrays containing non-negative numbers.
@@ -201,7 +200,7 @@ class MCTS:
         #             f'{root.children_policies[i]:.2f} -> {root.children_number_of_visits[i] / root.number_of_visits:.2f} ({divmod(root.children[i].encoded_move_to_get_here,  HEX_SIZE)})'
         #         )
 
-        # self.display_node(roots[0])
+        # self.display_node(roots[0], inspect_or_search=False)
 
         return [
             MCTSResult(

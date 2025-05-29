@@ -33,13 +33,14 @@ class ChessBoard(Board[ChessMove]):
         return 1 if self.board.turn == chess.WHITE else -1
 
     def make_move(self, move: ChessMove) -> None:
-        assert move in self.board.legal_moves
+        # TODO? assert move in self.board.legal_moves
         self.board.push(move)
 
     def is_game_over(self) -> bool:
         return self.board.is_game_over()
 
     def check_winner(self) -> Optional[Player]:
+        """Check if the game is over and return the winner."""
         result = self.board.result()
         if result == '1-0':
             return 1
@@ -60,6 +61,7 @@ class ChessBoard(Board[ChessMove]):
         return hash(self.board.fen())
 
     def get_approximate_result_score(self) -> float:
+        """Returns a score between -1 and 1, where 1 means white is winning, -1 means black is winning, and 0 is a draw."""
         mat_value = 0
         for piece in chess.PIECE_TYPES:
             mat_value += len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]

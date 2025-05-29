@@ -10,7 +10,7 @@ from src.games.chess.ChessBoard import ChessBoard, ChessMove
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-ENCODING_CHANNELS = 12 + 1 + 1 + 1  # 12 for pieces + 1 for castling rights + 1 for color + 1 for en passant square
+ENCODING_CHANNELS = 12 + 4 + 1  # 12 for pieces + 4 for castling rights + 1 for en passant square
 
 
 def square_to_index(square: int) -> tuple[int, int]:
@@ -85,7 +85,7 @@ def _bitfield_to_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.in
     # Extract bits for each channel
     bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8)
 
-    return bits.reshape(ChessGame().representation_shape)
+    return bits.reshape(_REPRESENTATION_SHAPE)
 
 
 class ChessGame(Game[ChessMove]):
@@ -100,52 +100,45 @@ class ChessGame(Game[ChessMove]):
         return (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
     def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
+        """Returns a canonical representation of the board from the perspective of the white player."""
+
+        # 1. If Black to move, mirror first
+        if board.board.turn == chess.BLACK:
+            tmp = board.board.mirror()
+        else:
+            tmp = board.board
+
+        # 2. Encode, but always assume tmp.turn == WHITE
         colors = (chess.WHITE, chess.BLACK)
-        encoded_pieces: list[int] = [
+        encoded_pieces = [
             piece
             for co in colors
             for piece in (
-                board.board.pawns & board.board.occupied_co[co],
-                board.board.knights & board.board.occupied_co[co],
-                board.board.bishops & board.board.occupied_co[co],
-                board.board.rooks & board.board.occupied_co[co],
-                board.board.queens & board.board.occupied_co[co],
-                board.board.kings & board.board.occupied_co[co],
+                tmp.pawns & tmp.occupied_co[co],
+                tmp.knights & tmp.occupied_co[co],
+                tmp.bishops & tmp.occupied_co[co],
+                tmp.rooks & tmp.occupied_co[co],
+                tmp.queens & tmp.occupied_co[co],
+                tmp.kings & tmp.occupied_co[co],
             )
         ]
 
-        castling_rights = [
-            right
+        castling_bits = [
+            right * 0xFFFF_FFFF_FFFF_FFFF
             for co in colors
-            for right in (
-                board.board.has_kingside_castling_rights(co),
-                board.board.has_queenside_castling_rights(co),
-            )
+            for right in (tmp.has_kingside_castling_rights(co), tmp.has_queenside_castling_rights(co))
         ]
 
-        encoded_castling_rights = (
-            castling_rights[0]
-            + (castling_rights[1] << (BOARD_LENGTH - 1))
-            + (castling_rights[2] << (BOARD_SIZE - BOARD_LENGTH))
-            + (castling_rights[3] << (BOARD_SIZE - 1))
-        )
-        color = 0xFFFFFFFFFFFFFFFF if board.current_player == 1 else 0
-        ep_square = (1 << board.board.ep_square) if board.board.ep_square else 0
+        ep_bit = (1 << tmp.ep_square) if tmp.ep_square else 0
 
-        canonical_board = _bitfield_to_board_state(
-            np.array(encoded_pieces + [encoded_castling_rights, ep_square, color], dtype=np.uint64)
-        )
-
-        return canonical_board
+        state = np.array(encoded_pieces + castling_bits + [ep_bit], dtype=np.uint64)
+        return _bitfield_to_board_state(state)
 
     def decode_canonical_board(self, canonical_board: np.ndarray) -> ChessBoard:
         board = self.get_initial_board()
         board.board.clear()
 
-        if canonical_board[13, 0, 0] == 0:
-            canonical_board = np.flip(canonical_board, axis=1)
-
-        colors = (chess.WHITE, chess.BLACK) if canonical_board[13, 0, 0] == 1 else (chess.BLACK, chess.WHITE)
+        colors = (chess.WHITE, chess.BLACK)
 
         for i, color in enumerate(colors):
             for j, piece in enumerate((chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING)):
@@ -156,38 +149,38 @@ class ChessGame(Game[ChessMove]):
 
         return board
 
-    def encode_move(self, move: ChessMove) -> int:
+    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:
+        if board.board.turn == chess.BLACK:
+            move = chess.Move(
+                chess.square_mirror(move.from_square),
+                chess.square_mirror(move.to_square),
+                promotion=move.promotion,
+            )
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]
 
-    def decode_move(self, move: int) -> ChessMove:
-        dict_move = self.index2move[move]
-        return ChessMove(dict_move.from_square, dict_move.to_square, dict_move.promotion)
+    def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:
+        m = self.index2move[idx]
+        if board.board.turn == chess.BLACK:
+            return chess.Move(
+                chess.square_mirror(m.from_square),
+                chess.square_mirror(m.to_square),
+                promotion=m.promotion,
+            )
+        return chess.Move(m.from_square, m.to_square, m.promotion)
 
     def symmetric_variations(
-        self, board: np.ndarray, visit_counts: list[tuple[int, int]]
+        self, board: ChessBoard, visit_counts: list[tuple[int, int]]
     ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
+        encoded_board = self.get_canonical_board(board)
+
         return [
             # Original board
-            (board, visit_counts),
-            # Vertical flip
-            # 1234 -> becomes -> 4321
-            # 5678               8765
-            # (np.flip(board, axis=2), self._flip_action_probs(visit_counts)),
+            (encoded_board, visit_counts),
+            # Mirrored board around the vertical axis (i.e. left-right mirroring)
         ]
-
-    def _flip_action_probs(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
-        flipped_visit_counts: list[tuple[int, int]] = []
-        for move, count in visit_counts:
-            flipped_move = self.decode_move(move)
-            move_from_row, move_from_col = square_to_index(flipped_move.from_square)
-            move_to_row, move_to_col = square_to_index(flipped_move.to_square)
-            flipped_move_from = index_to_square(move_from_row, BOARD_LENGTH - 1 - move_from_col)
-            flipped_move_to = index_to_square(move_to_row, BOARD_LENGTH - 1 - move_to_col)
-            flipped_index = self.encode_move(
-                chess.Move(flipped_move_from, flipped_move_to, promotion=flipped_move.promotion)
-            )
-            flipped_visit_counts.append((flipped_index, count))
-        return flipped_visit_counts
 
     def get_initial_board(self) -> ChessBoard:
         return ChessBoard()
+
+
+_REPRESENTATION_SHAPE = ChessGame().representation_shape

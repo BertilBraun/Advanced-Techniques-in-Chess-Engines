@@ -87,6 +87,6 @@ class SelfPlayProcess:
         if not len(self.self_play.dataset):
             return
 
-        self.self_play.dataset = self.self_play.dataset.choose_only_samples_with_high_policy_spikyness()  # TODO remove?
+        self.self_play.dataset = self.self_play.dataset.choose_only_samples_with_high_policy_spikyness()
         self.self_play.dataset.save(self.save_path, iteration)
         self.self_play.dataset = SelfPlayDataset()
