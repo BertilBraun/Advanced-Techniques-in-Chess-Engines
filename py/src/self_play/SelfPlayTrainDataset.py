@@ -36,7 +36,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             self.datasets.append((None, file))
             self.dataset_stats.append(SelfPlayDataset.load_stats(file))
 
-            if self.stats.num_samples > 300_000:
+            if self.stats.num_samples > 400_000:
                 print(f'Loaded {self.stats.num_samples} datasets, stopping loading more.')
                 break
 
