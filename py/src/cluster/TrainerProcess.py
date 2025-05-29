@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
+from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, TensorboardWriter
 from src.util.exceptions import log_exceptions
@@ -44,6 +44,8 @@ class TrainerProcess:
 
         self.commander_pipe = commander_pipe
 
+        self.rolling_buffer = RollingSelfPlayBuffer()
+
     def run(self):
         while True:
             message = self.commander_pipe.recv()
@@ -72,15 +74,21 @@ class TrainerProcess:
         trainer = Trainer(model, optimizer, self.args.training)
 
         self._wait_for_enough_training_samples(iteration)
-        dataset, validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
+        validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
 
         train_stats: list[TrainingStats] = []
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
-            dataloader = dataset.as_dataloader(self.args.training.batch_size, self.args.training.num_workers)
-            validation_dataloader = validation_dataset.as_dataloader(
-                self.args.training.batch_size, self.args.training.num_workers
+            dataloader = _as_dataloader(
+                self.rolling_buffer,
+                self.args.training.batch_size,
+                self.args.training.num_workers,
+            )
+            validation_dataloader = _as_dataloader(
+                validation_dataset,
+                self.args.training.batch_size,
+                self.args.training.num_workers,
             )
 
             epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
@@ -122,31 +130,42 @@ class TrainerProcess:
                     current_games = new_games
 
     @timeit
-    def _load_all_memories_to_train_on_for_iteration(
-        self, iteration: int
-    ) -> tuple[SelfPlayTrainDataset, SelfPlayTrainDataset]:
+    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayDataset:
         window_size = self.args.training.sampling_window(iteration)
 
         log(
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
 
-        all_dataset_files = [
-            file
-            for iteration in range(max(iteration - window_size, 0), iteration + 1)
-            for file in SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
-        ]
+        dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
+        assert dataset_files, f'No dataset files found for iteration {iteration}'
 
-        validation_dataset = SelfPlayTrainDataset()
-        while len(validation_dataset) == 0 and len(all_dataset_files) > 0:
+        validation_dataset = SelfPlayDataset()
+        while len(validation_dataset) == 0 and len(dataset_files) > 0:
             # The newest file is the validation dataset
-            validation_dataset_file = all_dataset_files.pop(-1)
-            validation_dataset.load_from_files([validation_dataset_file])
+            validation_dataset_file = dataset_files.pop(-1)
+            validation_dataset = SelfPlayDataset.load(validation_dataset_file)
 
-        dataset = SelfPlayTrainDataset()
-        dataset.load_from_files(all_dataset_files)
-        dataset.log_all_dataset_stats(self.run_id)
+        self.rolling_buffer.update(iteration, window_size, dataset_files)
 
-        log(f'Loaded {dataset.stats.num_samples} samples from {dataset.stats.num_games} games')
+        self.rolling_buffer.log_all_dataset_stats(self.run_id)
 
-        return dataset, validation_dataset
+        log(f'Loaded {self.rolling_buffer.stats.num_samples} samples from {self.rolling_buffer.stats.num_games} games')
+
+        return validation_dataset
+
+
+def _as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
+    assert num_workers > 0, 'num_workers must be greater than 0'
+    num_workers = 1  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=True,
+        drop_last=False,
+        persistent_workers=num_workers > 0,
+        pin_memory=True,
+        prefetch_factor=8 if num_workers > 0 else None,
+        multiprocessing_context='fork' if num_workers > 0 else None,
+    )
