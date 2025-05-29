@@ -138,13 +138,24 @@ class TrainerProcess:
         )
 
         dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
-        assert dataset_files, f'No dataset files found for iteration {iteration}'
 
         validation_dataset = SelfPlayDataset()
-        while len(validation_dataset) == 0 and len(dataset_files) > 0:
-            # The newest file is the validation dataset
-            validation_dataset_file = dataset_files.pop(-1)
-            validation_dataset = SelfPlayDataset.load(validation_dataset_file)
+        if dataset_files:
+            while len(validation_dataset) == 0 and len(dataset_files) > 0:
+                # The newest file is the validation dataset
+                validation_dataset_file = dataset_files.pop(-1)
+                validation_dataset = SelfPlayDataset.load(validation_dataset_file)
+        else:
+            previous_iteration_files = SelfPlayDataset.get_files_to_load_for_iteration(
+                self.args.save_path, iteration - 1
+            )
+            assert (
+                previous_iteration_files
+            ), f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
+            while len(validation_dataset) == 0 and len(previous_iteration_files) > 0:
+                # The newest file is the validation dataset
+                validation_dataset_file = previous_iteration_files.pop(-1)
+                validation_dataset = SelfPlayDataset.load(validation_dataset_file)
 
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer
