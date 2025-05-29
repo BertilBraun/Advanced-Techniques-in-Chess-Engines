@@ -19,26 +19,28 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
     """Dataset to train the neural network on self-play data. It is a wrapper around multiple SelfPlayDatasets (i.e. Iterations). The Idea is, to load only chunks of the datasets into memory and return the next sample from the next dataset in a round-robin fashion."""
 
     def __init__(self) -> None:
-        self.datasets: list[SelfPlayDataset] = []
+        self.datasets: list[tuple[SelfPlayDataset | None, Path]] = []
+        self.dataset_stats: list[SelfPlayDatasetStats] = []
         self.dataset_length_prefix_sums: list[int] = []
 
     @property
     def stats(self) -> SelfPlayDatasetStats:
         """Returns the stats of the dataset. This is a sum of all stats of the datasets in the dataset."""
         accumulated_stats = SelfPlayDatasetStats()
-        for dataset in self.datasets:
-            accumulated_stats += dataset.stats
+        for stats in self.dataset_stats:
+            accumulated_stats += stats
         return accumulated_stats
 
     def load_from_files(self, files: list[Path]) -> None:
         for file in reversed(files):
-            self.datasets.append(SelfPlayDataset.load(file))
+            self.datasets.append((None, file))
+            self.dataset_stats.append(SelfPlayDataset.load_stats(file))
 
             if self.stats.num_samples > 300_000:
                 print(f'Loaded {len(self.datasets)} datasets, stopping loading more.')
                 break
 
-        self.dataset_length_prefix_sums = [0] + list(np.cumsum([len(dataset) for dataset in self.datasets]))
+        self.dataset_length_prefix_sums = [0] + list(np.cumsum([stats.num_samples for stats in self.dataset_stats]))
 
     def log_all_dataset_stats(self, run: int) -> None:
         Process(target=self._log_all_dataset_stats, args=(run,), daemon=True).start()
@@ -47,7 +49,9 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         accumulated_stats = self.stats
 
         with TensorboardWriter(run, 'dataset', postfix_pid=False):
-            policies = [action_probabilities(visits) for dataset in self.datasets for visits in dataset.visit_counts]
+            datasets = [SelfPlayDataset.load(file) for _, file in self.datasets]
+
+            policies = [action_probabilities(visits) for dataset in datasets for visits in dataset.visit_counts]
 
             spikiness = sum(policy.max() for policy in policies) / len(self)
 
@@ -56,7 +60,7 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
             log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
             log_histogram(
                 'dataset/value_targets',
-                np.array([value for dataset in self.datasets for value in dataset.value_targets]),
+                np.array([value for dataset in datasets for value in dataset.value_targets]),
             )
 
             # dataset.deduplicate()
@@ -100,4 +104,10 @@ class SelfPlayTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tenso
         dataset_index = np.searchsorted(self.dataset_length_prefix_sums, idx + 1) - 1
         idx -= self.dataset_length_prefix_sums[dataset_index]
         assert 0 <= dataset_index < len(self.datasets), f'Index {idx} out of bounds for dataset {dataset_index}'
-        return self.datasets[dataset_index][idx]
+
+        dataset, path = self.datasets[dataset_index]
+        if dataset is None:
+            dataset = SelfPlayDataset.load(path)
+            self.datasets[dataset_index] = (dataset, path)
+
+        return dataset[idx]
