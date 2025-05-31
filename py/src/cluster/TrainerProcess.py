@@ -160,12 +160,12 @@ class TrainerProcess:
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer
             for i in range(max(iteration - window_size, 0), iteration):
-                dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, i)
-                if not dataset_files:
+                iter_dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, i)
+                if not iter_dataset_files:
                     log(f'No dataset files found for iteration {i}, skipping')
                     continue
 
-                self.rolling_buffer.update(i, window_size, dataset_files)
+                self.rolling_buffer.update(i, window_size, iter_dataset_files)
 
         self.rolling_buffer.update(iteration, window_size, dataset_files)
 
