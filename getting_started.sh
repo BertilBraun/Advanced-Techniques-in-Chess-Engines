@@ -27,6 +27,3 @@ source setup.sh
 # Or run train.py in the background
 nohup python3.11 train.py > train.log 2>&1 &
 tail -f train.log
-
-# view the results in TensorBoard
-tensorboard --logdir logs/

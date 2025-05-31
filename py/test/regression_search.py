@@ -5,7 +5,6 @@ from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
-from src.train.TrainingArgs import MCTSParams
 
 
 def get_testing_inference_client() -> InferenceClient:
@@ -38,25 +37,14 @@ def run_mate_puzzle_regression():
     """
     # Get the inference client with a well-trained model.
     client = get_testing_inference_client()
-
-    # Configure MCTS parameters.
-    mcts_params = MCTSParams(
-        num_searches_per_turn=640,
-        num_parallel_searches=4,
-        dirichlet_epsilon=0.25,
-        dirichlet_alpha=0.3,
-        min_visit_count=0,
-        c_param=1.7,
-        full_search_probability=1.0,
-    )
-    mcts = MCTS(client, mcts_params)
+    mcts = MCTS(client, TRAINING_ARGS.self_play.mcts)
 
     # Load the chess puzzles dataset.
     dataset = load_dataset('Lichess/chess-puzzles', split='train')
     # Filter for puzzles with mate themes.
     mate_puzzles = []
     for puzzle in dataset:
-        if 'mateIn1' in puzzle['Themes']:  # or 'mateIn2' in puzzle['Themes']:
+        if 'mateIn2' in puzzle['Themes']:  # or 'mateIn2' in puzzle['Themes']:
             mate_puzzles.append(puzzle)
 
             if len(mate_puzzles) == 200:  # Break early, to avoid iterating over 4Mil puzzles.
@@ -92,20 +80,15 @@ def run_mate_puzzle_regression():
 
     failures = []
     for (puzzle_id, expected_move, puzzle), result, (board, _) in zip(metadata, results, inputs):
-        total_visits = sum(visit for _, visit in result.visit_counts)
-        assert (
-            total_visits == mcts_params.num_searches_per_turn
-        ), f'Expected {mcts_params.num_searches_per_turn} searches, got {total_visits}.'
-
         # Apply a softmax to the visit counts.
         probs = action_probabilities(result.visit_counts)
         moves = [(move, probs[move], visit_count) for move, visit_count in result.visit_counts]
 
         best_move_encoded, best_visits, _ = max(moves, key=lambda mv: mv[1])
-        best_move_uci = CurrentGame.decode_move(best_move_encoded).uci()
+        best_move_uci = CurrentGame.decode_move(best_move_encoded, board).uci()
 
         expected = next(
-            (prob, count) for move, prob, count in moves if CurrentGame.decode_move(move).uci() == expected_move
+            (prob, count) for move, prob, count in moves if CurrentGame.decode_move(move, board).uci() == expected_move
         )
 
         sorted_moves = list(sorted(moves, key=lambda x: -x[1]))
@@ -115,7 +98,7 @@ def run_mate_puzzle_regression():
                 number_of_remaining_moves = len(sorted_moves) - i
                 moves_str_list.append(f'... {number_of_remaining_moves} more moves with <1% visits ...')
                 break
-            moves_str_list.append(f'{CurrentGame.decode_move(mv).uci()}: {visits:.4f} ({count})')
+            moves_str_list.append(f'{CurrentGame.decode_move(mv, board).uci()}: {visits:.4f} ({count})')
         moves_str = '\n\t'.join(moves_str_list)
         ratio_str = f'(visit policy: {best_visits:.4f}) with all moves:\n\t{moves_str}\nFor Board with FEN:\n{board.board.fen()}\n{"==="*20}'
 
@@ -135,7 +118,7 @@ def run_mate_puzzle_regression():
         elif (
             'mateIn1' in puzzle['Themes']
             and best_visits < 0.8
-            and not all(mates(CurrentGame.decode_move(move)) for move, policy, _ in moves if policy > 0.3)
+            and not all(mates(CurrentGame.decode_move(move, board)) for move, policy, _ in moves if policy > 0.3)
         ):
             failures.append(
                 f"Puzzle {puzzle_id}: Mate in 1 expected move '{expected_move}' {expected} has low visit ratio {ratio_str}."

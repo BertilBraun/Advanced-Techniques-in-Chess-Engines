@@ -36,12 +36,16 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
     - walk the knight moves (up to 8 per pos, can be less)
 
     For the second and second last row, we also have (8x3-2)*4 many promotion moves. Pawns can move forward or capture to the right/left but not at the boarders (8x3-2) and we have four different promotion pieces.
+    Note: given the current board encoding, we always present the current player's perspective as white, so we only need to encode the white promotion moves. The black moves are always mirrored to the equivalent white moves before.
+    Note: given the goal of this project to achieve a high amateur level of play, we can ignore the possibility of promoting to a knight, rook or bishop, as these moves are extremely rare in practice. We can just promote to a queen.
+    Note: these reduce the number of moves to encode by 154 moves in total, which is a significant reduction.
 
     I want to precalculate a dict mapping which I can utilize to encode all moves into a dense representation, i.e. each value from 0..ACTION_SIZE represents one of these moves, and we need to be able to decode them again."""
 
     DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
     KNIGHT_MOVES = [(2, 1), (1, 2), (-1, 2), (-2, 1), (-2, -1), (-1, -2), (1, -2), (2, -1)]
-    PROMOTION_PIECES = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+    PROMOTION_PIECES = [chess.QUEEN]
+    # Unless for really professional play, these promotion pieces never come to play: [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
 
     moves: list[DictMove] = []
     for from_square in range(BOARD_SIZE):
@@ -61,7 +65,8 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
                 moves.append(DictMove(from_square, index_to_square(to_row, to_col), None))
 
         # Promotion moves
-        if row in (1, 6):
+        # Note: we dont need blacks promotion moves anymore, as black moves are always mirrored to the equivalent white moves before (1, 6):
+        if row in (6,):
             for dc in (-1, 0, 1):
                 to_row, to_col = row + (-1 if row == 1 else 1), col + dc
                 if 0 <= to_row < BOARD_LENGTH and 0 <= to_col < BOARD_LENGTH:

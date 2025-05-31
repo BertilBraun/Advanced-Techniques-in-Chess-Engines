@@ -9,6 +9,7 @@ T = TypeVar('T')
 
 
 def lerp(a: T, b: T, t: float) -> T:
+    assert 0 <= t <= 1, 'Interpolation factor t must be in the range [0, 1]'
     return (1 - t) * a + t * b  # type: ignore
 
 

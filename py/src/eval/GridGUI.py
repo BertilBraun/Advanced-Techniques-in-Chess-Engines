@@ -27,6 +27,18 @@ class BaseGridGameGUI:
         self.dark_color = pygame.Color('gray')
         self.checkered = checkered
 
+    def draw_cell(self, row: int, col: int, color: str | pygame.Color | tuple[int, int, int]):
+        pygame.draw.rect(
+            self.screen,
+            pygame.Color(color),
+            pygame.Rect(
+                col * self.cell_size,
+                row * self.cell_size,
+                self.cell_size,
+                self.cell_size,
+            ),
+        )
+
     def draw_circle(self, row: int, col: int, color: str):
         pygame.draw.circle(
             self.screen,
@@ -38,13 +50,15 @@ class BaseGridGameGUI:
             self.cell_size // 3,
         )
 
-    def draw_text(self, row: int, col: int, text: str, color: str = 'black'):
-        font = pygame.font.Font('src/eval/Segoe-UI-Symbol.ttf', 64)
+    def draw_text(
+        self, row: int, col: int, text: str, color: str = 'black', offset: tuple[int, int] = (0, 0), font_size: int = 16
+    ):
+        font = pygame.font.Font('src/eval/Segoe-UI-Symbol.ttf', font_size)
         text_render = font.render(text, True, pygame.Color(color))
         text_rect = text_render.get_rect(
             center=(
-                col * self.cell_size + self.cell_size // 2,
-                row * self.cell_size + self.cell_size // 2,
+                col * self.cell_size + self.cell_size // 2 + offset[0],
+                row * self.cell_size + self.cell_size // 2 + offset[1],
             )
         )
         self.screen.blit(text_render, text_rect)
@@ -58,16 +72,7 @@ class BaseGridGameGUI:
                     if ((r + c) % 2 == 0 and self.checkered) or (c % 2 == 0 and not self.checkered)
                     else self.dark_color
                 )
-                pygame.draw.rect(
-                    self.screen,
-                    color,
-                    pygame.Rect(
-                        c * self.cell_size,
-                        r * self.cell_size,
-                        self.cell_size,
-                        self.cell_size,
-                    ),
-                )
+                self.draw_cell(r, c, color)
 
     def highlight_cell(self, row: int, col: int, color: str):
         highlight_surf = pygame.Surface((self.cell_size, self.cell_size))
@@ -85,6 +90,9 @@ class BaseGridGameGUI:
 
     def update_display(self):
         pygame.display.flip()
+
+    def update_window_title(self, title: str):
+        pygame.display.set_caption(title)
 
     def events_occurred(self) -> Events:
         # Poll for events

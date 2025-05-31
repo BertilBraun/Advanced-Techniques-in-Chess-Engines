@@ -4,11 +4,12 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
 
+from src.cluster.TrainerProcess import as_dataloader
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id, learning_rate
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
+from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
@@ -71,12 +72,21 @@ def main(dataset_paths: list[str]):
         log('Loading datasets...')
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
         test_dataset = test_dataset.deduplicate()
-        test_dataloader = DataLoader(test_dataset, batch_size=TRAINING_ARGS.training.batch_size, shuffle=False)
+        test_dataloader = as_dataloader(
+            test_dataset,
+            batch_size=TRAINING_ARGS.training.batch_size,
+            num_workers=1,
+        )
 
-        train_dataset = SelfPlayTrainDataset()
-        train_dataset.load_from_files([Path(p) for p in dataset_paths])
+        train_dataset = RollingSelfPlayBuffer()
+        train_dataset.update(0, 1, [Path(p) for p in dataset_paths])
         train_dataset.log_all_dataset_stats(run_id)
         train_stats = train_dataset.stats
+        train_dataloader = as_dataloader(
+            train_dataset,
+            batch_size=TRAINING_ARGS.training.batch_size,
+            num_workers=1,
+        )
 
         log('Creating model...')
         # Instantiate the model
@@ -106,8 +116,6 @@ def main(dataset_paths: list[str]):
 
         for iter in range(pre_iter, NUM_EPOCHS):
             # Create a DataLoader
-            train_dataloader = train_dataset.as_dataloader(TRAINING_ARGS.training.batch_size, num_workers=1)
-
             train_model(model, optimizer, train_dataloader, test_dataloader, num_epochs=1, iteration=iter)
 
             # Evaluate the model

@@ -47,7 +47,7 @@ def get_board_result_score(board: Board) -> float | None:
     if not board.is_game_over():
         return None
 
-    if winner := board.check_winner():
+    if (winner := board.check_winner()) is not None:
         assert winner != board.current_player, 'The winner must be the opponent, sine he just played a checkmate move'
         return -1.0
 

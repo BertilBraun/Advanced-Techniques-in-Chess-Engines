@@ -50,6 +50,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         )
 
     def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:
+        assert len(visit_counts) > 0, 'Visit counts must not be empty'
+        assert -1 - 1e-6 <= value_target <= 1 + 1e-6, 'Value target must be in the range [-1, 1]'
         self.encoded_states.append(encode_board_state(state))
         self.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
         self.value_targets.append(value_target)

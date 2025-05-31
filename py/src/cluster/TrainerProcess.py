@@ -80,12 +80,12 @@ class TrainerProcess:
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
-            dataloader = _as_dataloader(
+            dataloader = as_dataloader(
                 self.rolling_buffer,
                 self.args.training.batch_size,
                 self.args.training.num_workers,
             )
-            validation_dataloader = _as_dataloader(
+            validation_dataloader = as_dataloader(
                 validation_dataset,
                 self.args.training.batch_size,
                 self.args.training.num_workers,
@@ -176,7 +176,7 @@ class TrainerProcess:
         return validation_dataset
 
 
-def _as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
+def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
     assert num_workers > 0, 'num_workers must be greater than 0'
     num_workers = 1  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
     return torch.utils.data.DataLoader(

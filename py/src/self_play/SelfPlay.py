@@ -7,7 +7,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.util import lerp
+from src.util import clamp, lerp
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
@@ -77,13 +77,11 @@ class SelfPlay:
     def _set_mcts(self, iteration: int) -> None:
         """Set the MCTS parameters for the current iteration."""
         # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
-        total_iterations = TRAINING_ARGS.num_iterations
-        assert total_iterations > 10, 'Total iterations must be greater than 10 to scale MCTS searches properly.'
         num_searches_per_turn = int(
             lerp(
                 self.args.mcts.num_searches_per_turn / 10,
                 self.args.mcts.num_searches_per_turn,
-                min(iteration / (total_iterations * 0.1), 1.0),
+                clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
             )
         )
         assert (
@@ -120,34 +118,44 @@ class SelfPlay:
                 self.self_play_games[i] = SelfPlayGame()
                 continue
 
-            if len(spg.played_moves) >= 250 and CURRENT_GAME == 'chess':
-                # If the game is too long, end it and add it to the dataset
+            if CURRENT_GAME == 'chess':
+                if len(spg.played_moves) >= 250:
+                    # If the game is too long, end it and add it to the dataset
+                    self._add_training_data(spg, 0.0, resignation=False)
+                    self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
+                    self.self_play_games[i] = SelfPlayGame()
+                    continue
+
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if white_pieces < 4 or black_pieces < 4:
-                    # If there are only a few pieces left, the game is a win for the player with more pieces
-                    value_map = {
-                        chess.PAWN: 1,
-                        chess.KNIGHT: 3,
-                        chess.BISHOP: 3,
-                        chess.ROOK: 5,
-                        chess.QUEEN: 9,
-                        chess.KING: 0,
-                    }
-                    white_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
-                    black_value = sum(value_map[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
+                if (white_pieces < 4 or black_pieces < 4) and len(spg.played_moves) >= 80 and random.random() < 0.2:
+                    # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
+                    from src.games.chess.ChessBoard import PIECE_VALUE
+
+                    white_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
+                    black_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
 
                     # Convert to result from current player's perspective
                     if spg.board.current_player == 1:  # White's perspective
-                        game_outcome = 1.0 if white_value > black_value else -1.0 if black_value > white_value else 0.0
+                        if white_value > black_value:
+                            game_outcome = 1.0
+                        elif black_value > white_value:
+                            game_outcome = -1.0
+                        else:
+                            game_outcome = 0.0
                     else:  # Black's perspective
-                        game_outcome = 1.0 if black_value > white_value else -1.0 if white_value > black_value else 0.0
+                        if black_value > white_value:
+                            game_outcome = 1.0
+                        elif white_value > black_value:
+                            game_outcome = -1.0
+                        else:
+                            game_outcome = 0.0
 
+                    game_outcome *= 0.9  # somewhat unsure about the game outcome, therefore discount if with 0.9
                     self._add_training_data(spg, game_outcome, resignation=False)
-                self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                self.self_play_games[i] = SelfPlayGame()
-                continue
+                    self.self_play_games[i] = SelfPlayGame()
+                    continue
 
             spg_action_probabilities = action_probabilities(mcts_result.visit_counts)
 
@@ -161,7 +169,14 @@ class SelfPlay:
                     # Already exploring this state, so remove the probability of this move and try again
                     spg_action_probabilities[CurrentGame.encode_move(move, spg.board)] = 0
                 else:
-                    self.self_play_games[i] = new_spg
+                    if new_spg.board.is_game_over():
+                        # Game is over, add the game to the dataset
+                        result = get_board_result_score(new_spg.board)
+                        assert result is not None, 'Game should not be over if result is None'
+                        self._add_training_data(new_spg, result, resignation=False)
+                        self.self_play_games[i] = SelfPlayGame()
+                    else:
+                        self.self_play_games[i] = new_spg
                     break
 
             else:
@@ -170,7 +185,14 @@ class SelfPlay:
                 new_spg, _ = self._sample_self_play_game(
                     spg, action_probabilities(mcts_result.visit_counts), mcts_result.children
                 )
-                self.self_play_games[i] = new_spg
+                if new_spg.board.is_game_over():
+                    # Game is over, add the game to the dataset
+                    result = get_board_result_score(new_spg.board)
+                    assert result is not None, 'Game should not be over if result is None'
+                    self._add_training_data(new_spg, result, resignation=False)
+                    self.self_play_games[i] = SelfPlayGame()
+                else:
+                    self.self_play_games[i] = new_spg
 
         reset_times()
 
@@ -189,19 +211,12 @@ class SelfPlay:
             move = self._sample_move(action_probabilities, current.board, self.args.temperature)
 
         new_spg = current.expand(move)
+
+        return new_spg, move
         # TODO encoded_move = CurrentGame.encode_move(move)
         # TODO new_spg.already_expanded_node = next(
         # TODO     child for child in children if child.encoded_move_to_get_here == encoded_move
         # TODO ).copy(parent=None)  # remove parent to avoid memory leaks
-
-        if not new_spg.board.is_game_over():
-            return new_spg, move
-
-        # Game is over, add the game to the dataset
-        result = get_board_result_score(new_spg.board)
-        assert result is not None, 'Game should not be over if result is None'
-        self._add_training_data(new_spg, result, resignation=False)
-        return SelfPlayGame(), move
 
     def _sample_move(
         self, action_probabilities: np.ndarray, board: CurrentBoard, temperature: float = 1.0
@@ -236,15 +251,15 @@ class SelfPlay:
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
-                    # clamp(turn_game_outcome + self.args.result_score_weight * mem.result_score, -1, 1),
                     lerp(
                         turn_game_outcome,
                         mem.result_score,
-                        min(1.0, self.iteration * 10 / TRAINING_ARGS.num_iterations) * self.args.result_score_weight,
+                        clamp(self.iteration * 10 / TRAINING_ARGS.num_iterations, 0.0, 1.0)
+                        * self.args.result_score_weight,
                     ),
                 )
 
-            # TODO disabled for now, discounting only in MCTS search game_outcome *= 0.99  # discount the game outcome for each move
+            game_outcome *= 0.99  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         total_visits = sum(visit_count for _, visit_count in visit_counts)

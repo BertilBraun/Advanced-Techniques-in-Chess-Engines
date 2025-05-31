@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 from src.train.TrainingArgs import MCTSParams
 from src.util import lerp
-from src.mcts.MCTSNode import MCTSNode, ucb
-from src.settings import CurrentBoard, CurrentGame
+from src.mcts.MCTSNode import MCTSNode
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 from src.Encoding import MoveScore, get_board_result_score
 from src.util.tensorboard import log_scalar
@@ -200,7 +200,18 @@ class MCTS:
         #             f'{root.children_policies[i]:.2f} -> {root.children_number_of_visits[i] / root.number_of_visits:.2f} ({divmod(root.children[i].encoded_move_to_get_here,  HEX_SIZE)})'
         #         )
 
-        # self.display_node(roots[0], inspect_or_search=False)
+        DISPLAY = False
+        if DISPLAY:
+            if CURRENT_GAME == 'hex':
+                from src.games.hex.HexVisuals import display_node
+
+                display_node(roots[0], inspect_or_search=False, search_function=self.search)
+            elif CURRENT_GAME == 'chess':
+                from src.games.chess.ChessVisuals import display_node
+
+                display_node(roots[0], inspect_or_search=False, search_function=self.search)
+            else:
+                raise NotImplementedError(f'Visualization for {CURRENT_GAME} is not implemented')
 
         return [
             MCTSResult(
@@ -211,114 +222,6 @@ class MCTS:
             )
             for root, is_full_search in zip(roots, should_run_full_search)
         ]
-
-    def display_node(self, root: MCTSNode, inspect_or_search: bool) -> None:
-        import time
-        from src.games.hex.HexVisuals import HexGridGameGUI
-        from src.games.hex.HexGame import SIZE as HEX_SIZE
-
-        gui = HexGridGameGUI(HEX_SIZE, HEX_SIZE)
-
-        def draw():
-            for i in range(HEX_SIZE):
-                for j in range(HEX_SIZE):
-                    gui.draw_hex_cell(i, j, 'lightgrey')
-
-            for i in range(HEX_SIZE):
-                for j in range(HEX_SIZE):
-                    if root.board.board[i, j] == 1:
-                        gui.draw_hex_cell(i, j, 'blue')
-                    elif root.board.board[i, j] == -1:
-                        gui.draw_hex_cell(i, j, 'green')
-            for i in range(HEX_SIZE):
-                for j in range(HEX_SIZE):
-                    if root.board.board[i, j] == 0:
-                        max_policy = max(root.children_number_of_visits)
-                        for k, child in enumerate(root.children):
-                            if child.encoded_move_to_get_here == CurrentGame.encode_move(i * HEX_SIZE + j, root.board):
-                                # highest policy should be pure red, lowest should be pure white
-                                color = lerp(
-                                    np.array([255, 255, 255]),
-                                    np.array([255, 0, 0]),
-                                    root.children_number_of_visits[k] / max_policy,
-                                )
-                                gui.draw_hex_cell(i, j, color)  # type: ignore
-                                gui.draw_text(i, j, f'pol:{root.children_policies[k]:.2f}', offset=(0, -30))
-                                total = sum(
-                                    vis for vis in root.children_number_of_visits if vis >= root.number_of_visits * 0.01
-                                )
-                                if root.children_number_of_visits[k] >= root.number_of_visits * 0.01:
-                                    gui.draw_text(
-                                        i, j, f'res:{root.children_number_of_visits[k] / total:.2f}', offset=(0, -10)
-                                    )
-                                gui.draw_text(
-                                    i,
-                                    j,
-                                    f'{root.children_result_scores[k]/root.children_number_of_visits[k]:.2f}@{root.children_number_of_visits[k]}',
-                                    offset=(0, 10),
-                                )
-                                gui.draw_text(
-                                    i,
-                                    j,
-                                    f'ucb:{ucb(root.children[k], 1.7, root.result_score if not root.parent else 1.0):.2f}',
-                                    offset=(0, 30),
-                                )
-                                txt = ''
-                                if root.children[k].is_fully_expanded:
-                                    txt = 'F'
-                                if root.children[k].board and root.children[k].is_terminal_node:
-                                    txt += 'T'
-                                gui.draw_text(i, j, txt, offset=(0, 50))
-                                break
-            gui.update_window_title(
-                'Current Player: '
-                + ('blue' if root.board.current_player == 1 else 'green')
-                + '@'
-                + str(root.result_score)
-                + ' MCTS result Score - '
-                + ('Inspect' if inspect_or_search else 'Search')
-            )
-            gui.update_display()
-
-        print('Sum of all policies:', sum(root.children_policies))
-        print('Sum of all visit counts:', sum(root.children_number_of_visits))
-        print('Visit counts of root:', root.number_of_visits)
-        while True:
-            time.sleep(0.2)
-            draw()
-            events = gui.events_occurred()
-            if events.quit:
-                exit()
-            if events.left:
-                return
-            if events.right:
-                inspect_or_search = not inspect_or_search
-            if events.clicked:
-                cell = gui.get_cell_from_click()
-                if cell is not None:
-                    move = cell[0] * HEX_SIZE + cell[1]
-                    print(
-                        cell,
-                        move,
-                        CurrentGame.encode_move(move, root.board),
-                        CurrentGame.decode_move(CurrentGame.encode_move(move, root.board), root.board),
-                        [child.encoded_move_to_get_here for child in root.children],
-                    )
-                    for k, child in enumerate(root.children):
-                        if child.encoded_move_to_get_here == CurrentGame.encode_move(move, root.board):
-                            print(
-                                f'Child {k}: {child.encoded_move_to_get_here}, {child.number_of_visits}, {child.result_score}'
-                            )
-                            if inspect_or_search:
-                                if child.is_fully_expanded and child.number_of_visits > 1:
-                                    self.display_node(child, inspect_or_search)
-                                else:
-                                    print('Child is not fully expanded')
-                            else:
-                                self.search([(child.board, None)])
-                            break
-                    else:
-                        print('No child found')
 
     @timeit
     def parallel_iterate(self, roots: list[MCTSNode]) -> None:
@@ -370,52 +273,26 @@ if __name__ == '__main__':
     from src.cluster.InferenceClient import InferenceClient
     from src.settings import CurrentBoard, TRAINING_ARGS
     from src.util.save_paths import model_save_path
-    from src.games.hex.HexBoard import SIZE
 
     client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
-    client.load_model(model_save_path(1200, TRAINING_ARGS.save_path))
+    client.load_model(model_save_path(0, TRAINING_ARGS.save_path))
     board = CurrentBoard()
-    board.board = np.array(
-        [
-            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, -1, -1, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, -1, 1, 0, -1, 0, 0, 0],
-            [0, 0, -1, 1, 1, 1, -1, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 1, -1, 0, 0, 0, 0],
-            [0, 0, 1, -1, -1, 0, 0, 0, 0, 0, 0],
-            [0, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    )
-    # board.board = np.array(
-    #     [
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, -1, -1, -1, -1, 1, 0, 0, -1, -1, 0],
-    #         [-1, -1, 0, 0, 0, 1, 0, 0, 0, -1, -1],
-    #         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    #     ]
-    # )
-    board.board = np.zeros((SIZE, SIZE), dtype=np.int8)
 
-    params = MCTSParams(
-        num_searches_per_turn=500,
-        dirichlet_epsilon=TRAINING_ARGS.self_play.mcts.dirichlet_epsilon,
-        dirichlet_alpha=TRAINING_ARGS.self_play.mcts.dirichlet_alpha,
-        c_param=TRAINING_ARGS.self_play.mcts.c_param,
-        num_parallel_searches=TRAINING_ARGS.self_play.mcts.num_parallel_searches,
-        min_visit_count=TRAINING_ARGS.self_play.mcts.min_visit_count,
-        full_search_probability=TRAINING_ARGS.self_play.mcts.full_search_probability,
-    )
+    if CURRENT_GAME == 'hex':
+        board.board = np.array(
+            [
+                [0, 0, 0, 0, 0, 0, 0],
+                [0, 0, -1, -1, 1, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0],
+                [0, 0, -1, 1, 0, -1, 0],
+                [-1, 1, 1, 1, -1, 0, 0],
+                [0, -1, 0, 1, -1, 0, 0],
+                [0, -1, -1, 0, 0, 0, 0],
+            ]
+        )
+    elif CURRENT_GAME == 'chess':
+        for _ in range(60):
+            board.make_move(random.choice(board.get_valid_moves()))
 
-    mcts = MCTS(client, params)
+    mcts = MCTS(client, TRAINING_ARGS.self_play.mcts)
     mcts.search([(board, None)])

@@ -50,7 +50,9 @@ class ChessBoard(Board[ChessMove]):
             return None
 
     def get_valid_moves(self) -> List[ChessMove]:
-        return list(self.board.legal_moves)
+        legal_moves = list(self.board.legal_moves)
+        # Filter out non-queen promotions
+        return [move for move in legal_moves if not move.promotion or move.promotion == chess.QUEEN]
 
     def copy(self) -> ChessBoard:
         game = ChessBoard()

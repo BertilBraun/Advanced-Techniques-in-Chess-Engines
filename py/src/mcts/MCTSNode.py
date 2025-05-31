@@ -107,6 +107,7 @@ class MCTSNode:
         node = self
 
         # TODO more virtual loss, to avoid the same node being selected multiple times (i.e. muliply delta by 100?)
+        delta *= 3
 
         while node.parent:
             node.parent.children_virtual_losses[node.my_child_index] += delta
@@ -133,7 +134,7 @@ class MCTSNode:
             children_policies=self.children_policies,
             own_number_of_visits=self.number_of_visits,
             # Fix: use parent's result score if this is the root node, else init to loss (-1.0 (the own result score is inverted in the UCB1 formula))
-            own_result_score=self.result_score if self.parent is None else 1.0,
+            own_result_score=self.result_score if self.parent is None else -1.0,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()
@@ -218,7 +219,7 @@ def _best_child_index(
     # Q score based on foersterrobert
     # Q store should now be between 0 and 1, where 0 is a loss and 1 is a win for the current player
     q_score[visited_mask] = 1 - ((((result_scores + virtual_losses) / number_of_visits) + 1) / 2)
-    q_score[unvisited_mask] = 0  # Init to loss (0.0) for unvisited moves
+    q_score[unvisited_mask] = -own_result_score  # Init to loss (0.0) for unvisited moves
 
     visits_quotient = np.sqrt(own_number_of_visits) / (1 + children_number_of_visits)
 
@@ -242,7 +243,10 @@ def ucb(node: MCTSNode, c_param: float, own_result_score: float) -> float:
     number_of_visits = node.parent.children_number_of_visits[node.my_child_index]
     policy = node.parent.children_policies[node.my_child_index]
 
-    q_score = (-(result_score + virtual_loss) / number_of_visits) if number_of_visits > 0 else -own_result_score
+    if number_of_visits == 0:
+        q_score = -own_result_score  # Init to loss (-1.0) for unvisited moves
+    else:
+        q_score = 1 - ((((result_score + virtual_loss) / number_of_visits) + 1) / 2)
 
     visits_quotient = np.sqrt(number_of_visits) / (1 + node.parent.number_of_visits)
 

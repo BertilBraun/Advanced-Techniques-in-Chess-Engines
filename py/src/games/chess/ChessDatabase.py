@@ -1,4 +1,5 @@
 import io
+import random
 import sys
 import chess.pgn
 import numpy as np
@@ -54,14 +55,15 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             board = ChessBoard()
             for move in game.mainline_moves():
-                visit_counts = [(chess_game.encode_move(move, board), 1)]
+                if random.random() < 0.2:
+                    visit_counts = [(chess_game.encode_move(move, board), 1)]
 
-                for board_variation, visits in chess_game.symmetric_variations(board, visit_counts):
-                    dataset.add_sample(
-                        board_variation.copy().astype(np.int8),
-                        visits,
-                        winner * board.current_player,
-                    )
+                    for board_variation, visits in chess_game.symmetric_variations(board, visit_counts):
+                        dataset.add_sample(
+                            board_variation.copy().astype(np.int8),
+                            visits,
+                            winner * board.current_player,
+                        )
 
                 board.make_move(move)
 
