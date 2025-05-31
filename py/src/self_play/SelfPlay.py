@@ -269,5 +269,11 @@ class SelfPlay:
         return visit_counts
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
-        moves = ','.join([str(CurrentGame.encode_move(move, spg.board)) for move in spg.played_moves])
-        log_text(f'moves/{self.iteration}/{hash(moves)}', f'{result}:{moves}')
+        moves: list[str] = []
+        board = CurrentGame.get_initial_board()
+        for move in spg.played_moves:
+            encoded_move = CurrentGame.encode_move(move, board)
+            moves.append(str(encoded_move))
+            board.make_move(move)
+        moves_str = ','.join(moves)
+        log_text(f'moves/{self.iteration}/{hash(moves_str)}', f'{result}:{moves_str}')
