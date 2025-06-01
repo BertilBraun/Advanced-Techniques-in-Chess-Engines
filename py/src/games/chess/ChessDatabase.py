@@ -78,6 +78,9 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             log(f'Error in game: {game}', level=LogLevel.WARNING)
             log(e)
+            import traceback
+
+            traceback.print_exc()
 
         if dataset.stats.num_samples >= 20000:
             output_paths.append(dataset.save('reference/chess_database', year * 100 + month))

@@ -78,7 +78,7 @@ def main(dataset_paths: list[str]):
             num_workers=1,
         )
 
-        train_dataset = RollingSelfPlayBuffer()
+        train_dataset = RollingSelfPlayBuffer(max_buffer_samples=4_000_000)
         train_dataset.update(0, 1, [Path(p) for p in dataset_paths])
         train_dataset.log_all_dataset_stats(run_id)
         train_stats = train_dataset.stats

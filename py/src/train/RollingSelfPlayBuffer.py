@@ -15,9 +15,6 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
-MAX_BUFFER_SAMPLES = 400_000  # hard ceiling
-
-
 class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     """
     Keeps a sliding window of recent SelfPlayDataset objects in RAM.
@@ -25,10 +22,11 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     • The window size in *samples* is never allowed to exceed MAX_BUFFER_SAMPLES
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_buffer_samples: int) -> None:
         self._buf: deque[tuple[int, SelfPlayDataset]] = deque()  # (iteration, dataset)
         self._prefix: list[int] = [0]  # len prefix sums
         self._num_samples = 0
+        self._max_buffer_samples = max_buffer_samples
 
     # ---------- public API used by TrainerProcess ------------------------- #
     def update(self, iteration: int, window_iter: int, files: list[Path]) -> None:
@@ -43,7 +41,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             self._drop_left()
 
         # 2) enforce sample-count ceiling
-        while self._num_samples > MAX_BUFFER_SAMPLES and len(self._buf) > 1:
+        while self._num_samples > self._max_buffer_samples and len(self._buf) > 1:
             self._drop_left()
 
         self._rebuild_prefix()
