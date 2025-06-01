@@ -74,6 +74,7 @@ def display_node(
     from src.games.chess.ChessVisuals import ChessVisuals
     from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame
     from src.mcts.MCTSNode import ucb
+    from src.settings import TRAINING_ARGS
 
     visuals = ChessVisuals()
     gui = BaseGridGameGUI(BOARD_LENGTH, BOARD_LENGTH)
@@ -128,14 +129,13 @@ def display_node(
                 for k, child in enumerate(root.children)
                 if game.decode_move(child.encoded_move_to_get_here, root.board).from_square == selected_from_square
             ]
-            assert matching_indices, 'No matching children found for selected_from_square'
-
+            min_visits = TRAINING_ARGS.self_play.mcts.min_visit_count
             total_vis_over_thresh = 0.0
             # Precompute the denominator for normalized "res:" if needed (only among matching children)
             for k in range(len(root.children)):
                 vis_k = root.children_number_of_visits[k]
-                if vis_k >= root.number_of_visits * 0.01:
-                    total_vis_over_thresh += vis_k
+                if vis_k > min_visits:
+                    total_vis_over_thresh += vis_k - min_visits
 
             for k in matching_indices:
                 child = root.children[k]
@@ -145,7 +145,9 @@ def display_node(
 
                 # 3a) Color based on child's individual policy
                 pol_k = root.children_policies[k]
-                normalized = root.children_number_of_visits[k] / total_vis_over_thresh
+                vis_k = root.children_number_of_visits[k] - min_visits
+
+                normalized = vis_k / total_vis_over_thresh
                 color_rgb = lerp(np.array([255, 255, 255]), np.array([255, 0, 0]), normalized)
                 color_tuple = tuple(color_rgb.astype(int).tolist())
 
@@ -156,15 +158,14 @@ def display_node(
                 gui.draw_text(r_to, c_to, f'pol:{pol_k:.2f}', offset=(0, -30))
 
                 #    - normalized result share (only if visits ≥ 1% of root)
-                vis_k = root.children_number_of_visits[k]
-                if total_vis_over_thresh > 0 and vis_k >= root.number_of_visits * 0.01:
+                if total_vis_over_thresh > 0 and vis_k > 0:
                     res_share = vis_k / total_vis_over_thresh
                     gui.draw_text(r_to, c_to, f'res:{res_share:.2f}', offset=(0, -10))
 
                 #    - average value @ raw visits
                 avg_val = 0.0
                 if vis_k > 0:
-                    avg_val = root.children_result_scores[k] / vis_k
+                    avg_val = root.children_result_scores[k] / (vis_k + min_visits)
                 gui.draw_text(r_to, c_to, f'{avg_val:.2f}@{vis_k}', offset=(0, 10))
 
                 #    - UCB score

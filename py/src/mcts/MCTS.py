@@ -46,9 +46,16 @@ class MCTS:
         self.args = args
 
     @timeit
-    def search(self, inputs: list[tuple[CurrentBoard, MCTSNode | None]]) -> list[MCTSResult]:
+    def search(
+        self, inputs: list[tuple[CurrentBoard, MCTSNode | None]], should_run_full_search: list[bool] | None = None
+    ) -> list[MCTSResult]:
         if not inputs:
             return []
+
+        if should_run_full_search is None:
+            should_run_full_search = [True] * len(inputs)
+
+        assert len(inputs) == len(should_run_full_search), 'Inputs and should_run_full_search must have the same length'
 
         # TODO Already expanded nodes currently dont properly work. Issues:
         #  - The addition of noise to the policies does not seem to retroactively affect the exploration of other nodes enough
@@ -92,11 +99,8 @@ class MCTS:
 
             moves_index += 1
 
-        """Run full searches for a subset of the roots, and fast searches for the rest. The fast searches should run 1/10th of the number of iterations as the full searches."""
-        should_run_full_search = [random.random() < self.args.full_search_probability for _ in range(len(roots))]
-
         num_iterations_for_full_search = self.args.num_searches_per_turn // self.args.num_parallel_searches
-        num_iterations_for_fast_search = num_iterations_for_full_search // 10
+        num_iterations_for_fast_search = num_iterations_for_full_search // 4
 
         assert num_iterations_for_fast_search > 0, 'num_iterations_for_fast_search must be greater than 0'
 

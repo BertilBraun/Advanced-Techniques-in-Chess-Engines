@@ -45,7 +45,6 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.2,  # Average of 50 moves possible per turn -> 10/50 = 0.2
             c_param=2,
-            full_search_probability=0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),

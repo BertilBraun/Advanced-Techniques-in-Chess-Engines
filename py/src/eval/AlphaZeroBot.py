@@ -24,7 +24,6 @@ class AlphaZeroBot(Bot):
             dirichlet_epsilon=0.0,
             c_param=PLAY_C_PARAM,
             min_visit_count=0,
-            full_search_probability=1.0,
         )
         self.mcts = MCTS(self.inference_client, self.mcts_args)
 
@@ -40,7 +39,7 @@ class AlphaZeroBot(Bot):
         if self.network_eval_only:
             encoded_moves, value = self.inference_client.inference_batch([board])[0]
             encoded_move, policy = max(encoded_moves, key=lambda move: move[1])
-            move = CurrentGame.decode_move(encoded_move)
+            move = CurrentGame.decode_move(encoded_move, board)
 
             log('---------------------- Alpha Zero Best Move ----------------------')
             log('Best move:', move)
@@ -78,4 +77,4 @@ class AlphaZeroBot(Bot):
         log('Child priors:', np.round(root.children_policies, 2))
         log('------------------------------------------------------------------')
 
-        return CurrentGame.decode_move(best_child.encoded_move_to_get_here)
+        return CurrentGame.decode_move(best_child.encoded_move_to_get_here, board)

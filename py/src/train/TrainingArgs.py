@@ -24,9 +24,6 @@ class MCTSParams:
     c_param: float
     """This is the c parameter to use for the UCB1 formula in the MCTS algorithm in self-play. It is used to balance exploration and exploitation in the MCTS algorithm. Values between 1 and 6 seem sensible. The higher the value the more exploration is favored over exploitation."""
 
-    full_search_probability: float
-    """This is the probability to use for the full search in self-play. The full search is a search that runs the MCTS for the full number of searches to get the best move to play. For all other searches the MCTS is run for a 10th of the number of searches. This is used to get a better move to play in self-play. The higher the value the more often the full search is used. The lower the value the less often the full search is used. Typically 0.1-0.5 for self-play."""
-
     min_visit_count: int = 0
     """The minimum number of visits that each root child should recieve. Typically this value is < 5 or in proportion to the num_searches_per_turn. This is used to ensure that the MCTS algorithm has explored the search tree enough to make a good decision. If the number of visits is too low, the MCTS algorithm might not explore enough to learn the best moves to play."""
 
@@ -49,6 +46,12 @@ class SelfPlayParams:
 
     num_moves_after_which_to_play_greedy: int
     """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
+
+    portion_of_samples_to_keep: float
+    """This is the portion of samples to keep in the self-play dataset. This is used to reduce the size of the dataset and to keep only some of the moves that were played in self-play. This reduces the risk of overfitting to given lines of play and keeps the dataset diverse. This comes at the cost of longer self-play times, as fewer samples are kept. Typically 0.1-0.3 for games like Hex, Connect4, Go, as their board positions are very static and slightly larger 0.4-0.7 for games like Chess, as their board positions are more dynamic and the dataset is larger. A value of 1.0 means that all samples are kept, which is not recommended as it leads to overfitting and a very large dataset."""
+
+    only_store_sampled_moves: bool = False
+    """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""
 
     temperature: float = 1.25
     """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""

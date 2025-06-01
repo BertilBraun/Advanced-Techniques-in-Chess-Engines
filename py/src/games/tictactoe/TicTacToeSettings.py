@@ -52,7 +52,6 @@ TRAINING_ARGS = TrainingArgs(
             c_param=2,
             num_parallel_searches=1,  # TODO 2,
             min_visit_count=2,
-            full_search_probability=1.0,
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=1),

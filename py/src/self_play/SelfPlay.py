@@ -96,7 +96,6 @@ class SelfPlay:
             dirichlet_alpha=self.args.mcts.dirichlet_alpha,
             dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
             c_param=self.args.mcts.c_param,
-            full_search_probability=self.args.mcts.full_search_probability,
             min_visit_count=self.args.mcts.min_visit_count,
         )
         self.mcts = MCTS(self.client, mcts_args)
@@ -104,10 +103,20 @@ class SelfPlay:
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        mcts_results = self.mcts.search([(spg.board, spg.already_expanded_node) for spg in self.self_play_games])
+        mcts_results = self.mcts.search(
+            [(spg.board, spg.already_expanded_node) for spg in self.self_play_games],
+            should_run_full_search=[
+                not self.args.only_store_sampled_moves
+                or len(spg.played_moves) < self.args.num_moves_after_which_to_play_greedy
+                for spg in self.self_play_games
+            ],
+        )
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results)):
-            if mcts_result.is_full_search:
+            if mcts_result.is_full_search and (
+                not self.args.only_store_sampled_moves
+                or len(spg.played_moves) <= self.args.num_moves_after_which_to_play_greedy
+            ):
                 spg.memory.append(
                     SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
                 )
@@ -262,9 +271,12 @@ class SelfPlay:
             game_outcome *= 0.99  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
-        total_visits = sum(visit_count for _, visit_count in visit_counts)
-        # Remove moves with less than 1% of the total visits
-        visit_counts = [(move, count) for move, count in visit_counts if count >= total_visits * 0.01]
+        # Remove moves which were only visited exactly as many times as required, never more
+        visit_counts = [
+            (move, count - self.args.mcts.min_visit_count)
+            for move, count in visit_counts
+            if count > self.args.mcts.min_visit_count
+        ]
 
         return visit_counts
 

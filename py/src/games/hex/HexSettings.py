@@ -51,6 +51,7 @@ TRAINING_ARGS = TrainingArgs(
         resignation_threshold=-1.0,  # TODO -0.9,
         temperature=1.0,
         num_games_after_which_to_write=4,
+        portion_of_samples_to_keep=0.2,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
@@ -58,7 +59,6 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_alpha=10 / (SIZE * SIZE),
             c_param=2.5,  # Higher to encourage exploration without adding too much noise through Dirichlet noise
             min_visit_count=MIN_VISIT_COUNT,
-            full_search_probability=1.0,  # TODO? 0.2,  # Based on Paper "Accelerating Self-Play Learning in GO"
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),

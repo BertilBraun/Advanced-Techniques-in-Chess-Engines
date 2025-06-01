@@ -70,7 +70,6 @@ def objective(trial: optuna.Trial) -> float:
         c_param=mcts_c_param,
         num_parallel_searches=8,
         min_visit_count=mcts_num_searches_per_turn // 50,
-        full_search_probability=1.0,
     )
 
     network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size)
@@ -80,6 +79,7 @@ def objective(trial: optuna.Trial) -> float:
         result_score_weight=self_play_weighting,
         mcts=mcts_params,
         num_moves_after_which_to_play_greedy=10,
+        portion_of_samples_to_keep=0.5,
     )
 
     training_params = TrainingParams(

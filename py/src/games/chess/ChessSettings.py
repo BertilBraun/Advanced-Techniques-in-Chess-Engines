@@ -66,11 +66,13 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=60,  # even number - no bias towards white
-        result_score_weight=0.3,
-        resignation_threshold=-0.85,
+        num_moves_after_which_to_play_greedy=30,  # even number - no bias towards white
+        result_score_weight=0.2,
+        resignation_threshold=-1.0,
         temperature=1.0,
         num_games_after_which_to_write=4,
+        portion_of_samples_to_keep=0.7,
+        only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,
@@ -78,7 +80,6 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_alpha=0.3,  # Based on AZ Paper
             c_param=1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
-            full_search_probability=1.0,  # 0.2, Based on Paper "Accelerating Self-Play Learning in GO"
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),

@@ -148,7 +148,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         )
         return sampled_dataset
 
-    def choose_only_samples_with_high_policy_spikyness(self) -> SelfPlayDataset:
+    def choose_only_samples_with_high_policy_spikyness(self, num_samples: int) -> SelfPlayDataset:
         """Choose only samples where the policy targets have a high spikyness, i.e. where one move has a much higher probability than the others."""
         spiky_dataset = SelfPlayDataset()
         non_spiky_dataset = SelfPlayDataset()
@@ -164,12 +164,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
                 non_spiky_dataset.visit_counts.append(visit_counts)
                 non_spiky_dataset.value_targets.append(value_target)
 
-        target_dataset_size = int(len(self) * 0.2)
-
-        if len(spiky_dataset) > target_dataset_size:
-            new_dataset = spiky_dataset.sample(target_dataset_size)
+        if len(spiky_dataset) > num_samples:
+            new_dataset = spiky_dataset.sample(num_samples)
         else:
-            new_dataset = spiky_dataset + non_spiky_dataset.sample(target_dataset_size - len(spiky_dataset))
+            new_dataset = spiky_dataset + non_spiky_dataset.sample(num_samples - len(spiky_dataset))
 
         new_dataset.stats = SelfPlayDatasetStats(
             num_samples=len(new_dataset),
