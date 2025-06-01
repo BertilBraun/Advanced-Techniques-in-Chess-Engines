@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import torch
 import torch.multiprocessing as mp
@@ -18,13 +19,13 @@ from src.util.save_paths import model_save_path
 def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
     assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
 
-    # if device_id == 0:
-    #     start_cpu_usage_logger(run, 'self_play_cpu_usage')
-
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)
 
+    # Seed for random number generation
+    random.seed(mp.current_process().pid)
+    torch.manual_seed(mp.current_process().pid)
     np.random.seed(mp.current_process().pid)
 
     client = InferenceClient(device_id, args.network, args.save_path)
@@ -80,6 +81,9 @@ class SelfPlayProcess:
                     if old_current_iteration != current_iteration:
                         self._save_dataset(current_iteration)
                         self.self_play.update_iteration(current_iteration)
+                elif message.startswith('START USAGE LOGGER:'):
+                    run_id = int(message.split(':')[-1])
+                    start_cpu_usage_logger(run_id, 'self_play')
 
         log('Self play process stopped.')
 

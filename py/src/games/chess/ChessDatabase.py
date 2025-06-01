@@ -43,6 +43,7 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessGame import ChessGame
     from src.self_play.SelfPlayDataset import SelfPlayDataset
+    from src.settings import TRAINING_ARGS
 
     chess_game = ChessGame()
     dataset = SelfPlayDataset()
@@ -55,7 +56,7 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             board = ChessBoard()
             for move in game.mainline_moves():
-                if random.random() < 0.2:
+                if random.random() < TRAINING_ARGS.self_play.portion_of_samples_to_keep:
                     visit_counts = [(chess_game.encode_move(move, board), 1)]
 
                     for board_variation, visits in chess_game.symmetric_variations(board, visit_counts):

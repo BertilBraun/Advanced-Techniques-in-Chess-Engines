@@ -75,6 +75,9 @@ class CommanderProcess:
         self._setup_connections()
         log('Connections set up.')
 
+        # Start CPU usage logger for one SelfPlay process
+        self.commander_self_play_pipes[0].send(f'START USAGE LOGGER:{self.run_id}')
+
         starting_iteration = get_latest_model_iteration(self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
 

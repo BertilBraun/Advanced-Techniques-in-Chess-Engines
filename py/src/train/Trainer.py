@@ -35,6 +35,9 @@ class Trainer:
         base_lr = self.args.learning_rate(iteration, self.args.optimizer)
         log_scalar('learning_rate', base_lr, iteration)
 
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = base_lr
+
         self.model.train()
 
         out_value_mean = torch.tensor(0.0, device=self.model.device)
@@ -123,12 +126,6 @@ class Trainer:
             nonlocal out_value_mean, out_value_std
             out_value_mean += torch.tanh(value_logits.detach()).mean()
             out_value_std += torch.tanh(value_logits.detach()).std()
-            # NOTE: Taking the log of the policy targets is necessary because the cross entropy loss expects the logit values, which can be reverted from the softmax distribution in the policy targets by applying the log function: https://math.stackexchange.com/a/3162684
-            # optimal_policy_input = torch.full(policy_targets.shape, -1e6, device=self.model.device)
-            # mask = policy_targets != 0
-            # optimal_policy_input[mask] = torch.log(policy_targets[mask])
-            # optimal_policy_loss += F.cross_entropy(optimal_policy_input, policy_targets).detach()
-            # current_policy_loss += F.cross_entropy(out_policy, policy_targets).detach()
 
             # Apparently just as in AZ Paper, give more weight to the policy loss
             # loss = torch.lerp(value_loss, policy_loss, 0.66)

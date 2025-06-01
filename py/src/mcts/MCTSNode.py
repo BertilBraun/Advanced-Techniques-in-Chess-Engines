@@ -120,7 +120,7 @@ class MCTSNode:
         while node.parent:
             node.parent.children_number_of_visits[node.my_child_index] += 1
             node.parent.children_result_scores[node.my_child_index] += result
-            result = -result  # TODO * 0.99  # Discount the result for the parent node
+            result = -result * 0.99  # Discount the result for the parent node
             node = node.parent
 
     def best_child(self, c_param: float) -> MCTSNode:

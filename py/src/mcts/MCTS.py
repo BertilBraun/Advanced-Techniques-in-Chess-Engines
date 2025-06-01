@@ -100,7 +100,7 @@ class MCTS:
             moves_index += 1
 
         num_iterations_for_full_search = self.args.num_searches_per_turn // self.args.num_parallel_searches
-        num_iterations_for_fast_search = num_iterations_for_full_search // 4
+        num_iterations_for_fast_search = num_iterations_for_full_search // 2
 
         assert num_iterations_for_fast_search > 0, 'num_iterations_for_fast_search must be greater than 0'
 

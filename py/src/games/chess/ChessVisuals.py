@@ -145,13 +145,14 @@ def display_node(
 
                 # 3a) Color based on child's individual policy
                 pol_k = root.children_policies[k]
-                vis_k = root.children_number_of_visits[k] - min_visits
+                vis_k = max(root.children_number_of_visits[k] - min_visits, 0)
 
-                normalized = vis_k / total_vis_over_thresh
-                color_rgb = lerp(np.array([255, 255, 255]), np.array([255, 0, 0]), normalized)
-                color_tuple = tuple(color_rgb.astype(int).tolist())
+                if total_vis_over_thresh > 0:
+                    normalized = vis_k / total_vis_over_thresh
+                    color_rgb = lerp(np.array([255, 255, 255]), np.array([255, 0, 0]), normalized)
+                    color_tuple = tuple(color_rgb.astype(int).tolist())
 
-                gui.draw_cell(r_to, c_to, color_tuple)
+                    gui.draw_cell(r_to, c_to, color_tuple)
 
                 # 3b) Overlay text in vertical stack
                 #    - policy
