@@ -21,7 +21,7 @@ from src.util.save_paths import (
     save_model_and_optimizer,
 )
 
-NUM_EPOCHS = 15
+NUM_EPOCHS = 6
 
 
 def train_model(
@@ -54,8 +54,7 @@ def train_model(
     )
 
     for epoch in range(num_epochs):
-        stats = trainer.train(dataloader, test_dataloader, iteration)
-        log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
+        trainer.train(dataloader, test_dataloader, iteration)
 
 
 def main(dataset_paths: list[str]):

@@ -44,7 +44,7 @@ class TrainerProcess:
 
         self.commander_pipe = commander_pipe
 
-        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=1_000_000)
+        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=400_000)
 
     def run(self):
         while True:
