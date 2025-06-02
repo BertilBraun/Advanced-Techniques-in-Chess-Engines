@@ -1,3 +1,4 @@
+import os
 import time
 import torch
 from tqdm import tqdm
@@ -188,5 +189,6 @@ def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_worker
         persistent_workers=num_workers > 0,
         pin_memory=True,
         prefetch_factor=8 if num_workers > 0 else None,
-        multiprocessing_context='fork' if num_workers > 0 else None,
+        # fork is not available on Windows
+        multiprocessing_context='fork' if num_workers > 0 and os.name != 'nt' else None,
     )

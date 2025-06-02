@@ -17,6 +17,8 @@ from src.games.chess.ChessVisuals import ChessVisuals
 
 
 def on_startup():
+    if evaluation is None:
+        return
     ensure_eval_dataset_exists(evaluation.dataset_path)
 
 
@@ -50,14 +52,17 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 32
+PARALLEL_GAMES = 64
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
+PARALLEL_SEARCHES = 4
 
 if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 2
-    NUM_SEARCHES_PER_TURN = 640
+    NUM_SEARCHES_PER_TURN = 40
     MIN_VISIT_COUNT = 1
+    PARALLEL_SEARCHES = 1
+    evaluation = None  # No evaluation in CPU mode
 
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
@@ -75,7 +80,7 @@ TRAINING_ARGS = TrainingArgs(
         only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
-            num_parallel_searches=4,
+            num_parallel_searches=PARALLEL_SEARCHES,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.3,  # Based on AZ Paper
             c_param=1.5,  # 1.7 Based on MiniGO Paper
