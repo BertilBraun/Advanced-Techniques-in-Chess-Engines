@@ -106,17 +106,15 @@ class SelfPlay:
         mcts_results = self.mcts.search(
             [(spg.board, spg.already_expanded_node) for spg in self.self_play_games],
             should_run_full_search=[
-                not self.args.only_store_sampled_moves
-                or len(spg.played_moves) < self.args.num_moves_after_which_to_play_greedy
+                not self.args.only_store_sampled_moves  # If all moves are stored, run full search
+                or len(spg.played_moves)
+                < self.args.num_moves_after_which_to_play_greedy  # or if the game is still in the early phase
                 for spg in self.self_play_games
             ],
         )
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results)):
-            if mcts_result.is_full_search and (
-                not self.args.only_store_sampled_moves
-                or len(spg.played_moves) <= self.args.num_moves_after_which_to_play_greedy
-            ):
+            if mcts_result.is_full_search:
                 spg.memory.append(
                     SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
                 )
@@ -138,7 +136,12 @@ class SelfPlay:
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if (white_pieces < 4 or black_pieces < 4) and len(spg.played_moves) >= 80 and random.random() < 0.2:
+                if (
+                    False
+                    and (white_pieces < 4 or black_pieces < 4)
+                    and len(spg.played_moves) >= 80
+                    and random.random() < 0.2
+                ):
                     # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
                     from src.games.chess.ChessBoard import PIECE_VALUE
 

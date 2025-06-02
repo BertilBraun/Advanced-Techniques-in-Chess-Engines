@@ -50,8 +50,8 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 32
-NUM_SEARCHES_PER_TURN = 800
+PARALLEL_GAMES = 42
+NUM_SEARCHES_PER_TURN = 1000
 MIN_VISIT_COUNT = 2
 
 if not USE_GPU:  # TODO remove
@@ -66,12 +66,12 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=30,  # even number - no bias towards white
-        result_score_weight=0.2,
-        resignation_threshold=-1.0,
+        num_moves_after_which_to_play_greedy=40,  # even number - no bias towards white
+        result_score_weight=0.15,
+        resignation_threshold=-0.92,
         temperature=1.0,
         num_games_after_which_to_write=4,
-        portion_of_samples_to_keep=0.7,
+        portion_of_samples_to_keep=0.5,
         only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
