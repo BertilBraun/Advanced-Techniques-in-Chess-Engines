@@ -72,8 +72,10 @@ class Trainer:
             # Non-saturated logits: 0.95 corresponds to logit ≈ +2.94, 0.05 to logit ≈ −2.94 – well inside the linear part of tanh. The gradient w.r.t. the logits is therefore still ≈ 0.05–0.1 instead of ≈ 0.001.
             value_targets = 0.95 * value_targets
 
-            value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
-            value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
+            # BCE is not suitable for regression tasks and produces spikey outputs at the extremes, so we use MSE instead
+            # value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
+            # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
+            value_loss = F.mse_loss(torch.tanh(value_logits), value_targets)
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
@@ -128,8 +130,7 @@ class Trainer:
             out_value_std += torch.tanh(value_logits.detach()).std()
 
             # Apparently just as in AZ Paper, give more weight to the policy loss
-            # loss = torch.lerp(value_loss, policy_loss, 0.66)
-            loss = policy_loss + 0.4 * value_loss
+            loss = torch.lerp(value_loss, policy_loss, 0.66)
 
             return policy_loss, value_loss, loss
 

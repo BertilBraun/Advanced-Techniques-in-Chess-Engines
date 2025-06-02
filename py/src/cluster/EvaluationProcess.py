@@ -45,57 +45,23 @@ def _eval_vs_dataset(run: int, model_evaluation: ModelEvaluation, iteration: int
         log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
 
 
-def _eval_vs_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
-    if iteration < 2:
+def _eval_vs_previous(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    save_path: str,
+    how_many_previous: int,
+):
+    if iteration < how_many_previous + 1:
         return
 
     with TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        previous_model_path = model_save_path(iteration - 1, save_path)
+        previous_model_path = model_save_path(iteration - how_many_previous, save_path)
         results = model_evaluation.play_two_models_search(previous_model_path)
-        log(f'Results after playing two most recent models at iteration {iteration}:', results)
+        log(f'Results after playing {iteration} vs {iteration - how_many_previous}:', results)
 
         log_scalars(
-            'evaluation/vs_previous_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
-
-def _eval_vs_five_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
-    if iteration < 6:
-        return
-
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        previous_model_path = model_save_path(iteration - 5, save_path)
-        results = model_evaluation.play_two_models_search(previous_model_path)
-        log(f'Results after playing {iteration} vs {iteration - 5}:', results)
-
-        log_scalars(
-            'evaluation/vs_five_previous_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
-
-def _eval_vs_ten_previous(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
-    if iteration < 11:
-        return
-
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        previous_model_path = model_save_path(iteration - 10, save_path)
-        results = model_evaluation.play_two_models_search(previous_model_path)
-        log(f'Results after playing {iteration} vs {iteration - 10}:', results)
-
-        log_scalars(
-            'evaluation/vs_ten_previous_model',
+            f'evaluation/vs_{how_many_previous}_previous_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,
@@ -205,13 +171,18 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
+        for how_many_previous in [1, 5, 10]:
+            p = mp.Process(
+                target=_eval_vs_previous,
+                args=(run, model_evaluation, iteration, self.args.save_path, how_many_previous),
+            )
+            p.start()
+            processes.append(p)
+
         for fn in [
-            _eval_vs_previous,
-            _eval_vs_five_previous,
-            _eval_vs_ten_previous,
             _eval_vs_reference,
             _eval_vs_random,
-            # _eval_policy_vs_random,
+            _eval_policy_vs_random,
         ]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
             p.start()

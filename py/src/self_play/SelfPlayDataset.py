@@ -178,6 +178,50 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         )
         return new_dataset
 
+    def sample_by_policy_spikyness(self, num_samples: int, min_eps: float = 1e-6) -> SelfPlayDataset:
+        """
+        Sample `num_samples` positions, giving higher probability to positions
+        whose policy targets are spikier (larger max-probability move).
+
+        Args
+        ----
+        num_samples : int
+            Number of positions to return.
+        min_eps : float, default 1e-6
+            Added to every weight so even very flat policies can still be drawn.
+
+        Returns
+        -------
+        SelfPlayDataset
+            A dataset of size `num_samples` with the same metadata as `self`.
+        """
+        n = len(self.encoded_states)
+        assert num_samples <= n, 'Cannot take more samples than we have'
+
+        weights = [np.max(action_probabilities(vc)) for vc in self.visit_counts]
+
+        # add a tiny epsilon so flat positions still have a chance
+        weights = np.asarray(weights, dtype=np.float64) + min_eps
+        weights /= weights.sum()  # turn into a proper pmf
+
+        idx = np.random.choice(n, size=num_samples, replace=False, p=weights)
+
+        new_ds = SelfPlayDataset()
+        for i in idx:
+            new_ds.encoded_states.append(self.encoded_states[i])
+            new_ds.visit_counts.append(self.visit_counts[i])
+            new_ds.value_targets.append(self.value_targets[i])
+
+        # carry over / patch stats
+        new_ds.stats = SelfPlayDatasetStats(
+            num_samples=num_samples,
+            num_games=self.stats.num_games,
+            game_lengths=self.stats.game_lengths,
+            total_generation_time=self.stats.total_generation_time,
+            resignations=self.stats.resignations,
+        )
+        return new_ds
+
     @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:

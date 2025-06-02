@@ -91,8 +91,8 @@ class SelfPlayProcess:
         if not len(self.self_play.dataset):
             return
 
-        self.self_play.dataset = self.self_play.dataset.choose_only_samples_with_high_policy_spikyness(
-            int(self.args.portion_of_samples_to_keep * len(self.self_play.dataset))
-        )
-        self.self_play.dataset.save(self.save_path, iteration)
+        subsampled_size = int(self.args.portion_of_samples_to_keep * len(self.self_play.dataset))
+        # subsampled_dataset = self.self_play.dataset.choose_only_samples_with_high_policy_spikyness(subsampled_size)
+        subsampled_dataset = self.self_play.dataset.sample_by_policy_spikyness(subsampled_size)
+        subsampled_dataset.save(self.save_path, iteration)
         self.self_play.dataset = SelfPlayDataset()

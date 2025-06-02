@@ -165,11 +165,11 @@ class ModelEvaluation:
         opponent = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         opponent.load_model(model_path)
 
-        # def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-        #     results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
-        #     return [action_probabilities(result.visit_counts) for result in results]
+        def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
+            return [action_probabilities(result.visit_counts) for result in results]
 
-        opponent_evaluator = policy_evaluator(opponent)
+        # opponent_evaluator = policy_evaluator(opponent)
 
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
 
@@ -202,11 +202,11 @@ class ModelEvaluation:
         current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
-        # def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-        #     results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
-        #     return [action_probabilities(result.visit_counts) for result in results]
+        def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
+            return [action_probabilities(result.visit_counts) for result in results]
 
-        model1 = policy_evaluator(current_model)
+        # model1 = policy_evaluator(current_model)
 
         num_games = num_games or self.num_games
 

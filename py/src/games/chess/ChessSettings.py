@@ -44,14 +44,14 @@ training = TrainingParams(
     learning_rate_scheduler=learning_rate_scheduler,
 )
 evaluation = EvaluationParams(
-    num_searches_per_turn=1,
-    num_games=100,
+    num_searches_per_turn=100,
+    num_games=50,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 42
-NUM_SEARCHES_PER_TURN = 1000
+PARALLEL_GAMES = 64
+NUM_SEARCHES_PER_TURN = 1600
 MIN_VISIT_COUNT = 2
 
 if not USE_GPU:  # TODO remove
@@ -68,7 +68,7 @@ TRAINING_ARGS = TrainingArgs(
         num_parallel_games=PARALLEL_GAMES,
         num_moves_after_which_to_play_greedy=40,  # even number - no bias towards white
         result_score_weight=0.15,
-        resignation_threshold=-0.92,
+        resignation_threshold=-1.0,  # TODO -0.92,
         temperature=1.0,
         num_games_after_which_to_write=4,
         portion_of_samples_to_keep=0.5,
