@@ -85,7 +85,6 @@ class ModelEvaluation:
     def __init__(
         self, iteration: int, args: TrainingArgs, num_games: int = 64, num_searches_per_turn: int = 20
     ) -> None:
-        assert num_searches_per_turn == 1, 'ModelEvaluation does not support MCTS, num_searches_per_turn must be 1'
         self.iteration = iteration
         self.num_games = num_games
         self.num_searches_per_turn = num_searches_per_turn
