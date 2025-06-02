@@ -65,11 +65,14 @@ class ChessBoard(Board[ChessMove]):
     def get_approximate_result_score(self) -> float:
         """Returns a score between -1 and 1, where 1 means white is winning, -1 means black is winning, and 0 is a draw."""
         mat_value = 0
+        sum_mat_value = 0
         for piece in chess.PIECE_TYPES:
-            mat_value += len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]
-            mat_value -= len(self.board.pieces(piece, chess.BLACK)) * PIECE_VALUE[piece]
+            white_value = len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]
+            black_value = len(self.board.pieces(piece, chess.BLACK)) * PIECE_VALUE[piece]
+            sum_mat_value += white_value + black_value
+            mat_value += white_value - black_value
 
-        return mat_value / MAX_MATERIAL_VALUE
+        return mat_value / sum_mat_value if sum_mat_value != 0 else 0.0
 
     def set_fen(self, fen: str) -> None:
         self.board.set_fen(fen)
