@@ -74,8 +74,13 @@ def _eval_vs_previous(
 def _eval_vs_iteration(
     run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
 ):
+    model_path = model_save_path(iteration, save_path)
+    if not model_path.exists():
+        log(f'Model for iteration {iteration} does not exist at {model_path}. Skipping evaluation.')
+        return
+
     with TensorboardWriter(run, 'evaluation', postfix_pid=False):
-        results = model_evaluation.play_two_models_search(model_save_path(iteration, save_path))
+        results = model_evaluation.play_two_models_search(model_path)
         log(f'Results after playing vs model {iteration} at iteration {current_iteration}:', results)
 
         log_scalars(
