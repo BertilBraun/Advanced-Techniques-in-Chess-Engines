@@ -34,7 +34,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=15, hidden_size=192)
+network = NetworkParams(num_layers=12, hidden_size=128)
 training = TrainingParams(
     num_epochs=2,
     optimizer='adamw',  # 'sgd',
@@ -50,8 +50,8 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 64
-NUM_SEARCHES_PER_TURN = 1600
+PARALLEL_GAMES = 32
+NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
 
 if not USE_GPU:  # TODO remove
@@ -66,7 +66,7 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=40,  # even number - no bias towards white
+        num_moves_after_which_to_play_greedy=60,  # even number - no bias towards white
         result_score_weight=0.1,  # TODO increase?
         resignation_threshold=-1.0,  # TODO -0.92,
         temperature=1.0,
@@ -78,7 +78,7 @@ TRAINING_ARGS = TrainingArgs(
             num_parallel_searches=4,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.3,  # Based on AZ Paper
-            c_param=1.7,  # Based on MiniGO Paper
+            c_param=1.5,  # 1.7 Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
         ),
     ),

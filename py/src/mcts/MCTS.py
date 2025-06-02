@@ -100,7 +100,7 @@ class MCTS:
             moves_index += 1
 
         num_iterations_for_full_search = self.args.num_searches_per_turn // self.args.num_parallel_searches
-        num_iterations_for_fast_search = num_iterations_for_full_search // 2
+        num_iterations_for_fast_search = num_iterations_for_full_search // 4
 
         assert num_iterations_for_fast_search > 0, 'num_iterations_for_fast_search must be greater than 0'
 
@@ -173,7 +173,7 @@ class MCTS:
         log_scalar('dataset/average_search_entropy', average_entropy)
 
         # KL divergence between the children policies and the visit counts
-        def _kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
+        def kl_divergence(p: np.ndarray, q: np.ndarray, eps: float = 1e-12) -> float:
             """
             p, q: 1-D arrays containing non-negative numbers.
             Returns KL(p || q) with safe epsilon smoothing.
@@ -193,7 +193,7 @@ class MCTS:
             priors = root.children_policies
             visit_counts = root.children_number_of_visits
 
-            kl_divs.append(_kl_divergence(priors, visit_counts))
+            kl_divs.append(kl_divergence(priors, visit_counts))
 
         average_kl_div = sum(kl_divs) / len(kl_divs)
         log_scalar('dataset/average_search_kl_divergence', average_kl_div)
