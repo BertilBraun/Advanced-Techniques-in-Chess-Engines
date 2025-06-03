@@ -52,7 +52,7 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 64
+PARALLEL_GAMES = 32
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
