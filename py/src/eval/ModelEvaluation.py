@@ -87,7 +87,6 @@ class ModelEvaluation:
     ) -> None:
         self.iteration = iteration
         self.num_games = num_games
-        self.num_searches_per_turn = num_searches_per_turn
         self.args = args
 
         self.mcts_args = MCTSParams(

@@ -58,7 +58,7 @@ MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
 
 if not USE_GPU:  # TODO remove
-    PARALLEL_GAMES = 2
+    PARALLEL_GAMES = 4
     NUM_SEARCHES_PER_TURN = 40
     MIN_VISIT_COUNT = 1
     PARALLEL_SEARCHES = 1
@@ -71,9 +71,9 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=80,  # even number - no bias towards white
+        num_moves_after_which_to_play_greedy=60,  # even number - no bias towards white
         result_score_weight=0.1,  # TODO increase?
-        resignation_threshold=-1.0,  # TODO -0.92,
+        resignation_threshold=-0.95,
         temperature=1.0,
         num_games_after_which_to_write=4,
         portion_of_samples_to_keep=0.5,

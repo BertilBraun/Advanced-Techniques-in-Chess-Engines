@@ -75,9 +75,12 @@ class SelfPlayProcess:
                 if message == 'STOP':
                     break
                 elif message.startswith('START AT ITERATION:'):
-                    old_current_iteration = current_iteration
+                    self._save_dataset(current_iteration)
                     current_iteration = int(message.split(':')[-1])
                     running = True
+                elif message.startswith('LOAD MODEL:'):
+                    old_current_iteration = current_iteration
+                    current_iteration = int(message.split(':')[-1])
                     if old_current_iteration != current_iteration:
                         self._save_dataset(current_iteration)
                         self.self_play.update_iteration(current_iteration)

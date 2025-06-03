@@ -6,6 +6,7 @@ import chess
 import numpy as np
 from dataclasses import dataclass
 
+from src.games.Board import Player
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import clamp, lerp
 from src.mcts.MCTS import MCTS, action_probabilities
@@ -16,7 +17,7 @@ from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMov
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import MCTSParams, SelfPlayParams
 from src.util.log import log
-from src.util.tensorboard import log_scalar
+from src.util.tensorboard import log_scalar, log_scalars
 from src.util.timing import reset_times, timeit
 
 
@@ -35,6 +36,11 @@ class SelfPlayGame:
         self.already_expanded_node: MCTSNode | None = None
         self.start_generation_time = time.time()
 
+        # The move at which the player resigned, if any. None if the game is still ongoing.
+        self.resigned_at_move: int | None = None
+        # The player who resigned, if any. None if the game is still ongoing.
+        self.resignee: Player | None = None
+
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
         new_game.board.make_move(move)
@@ -47,6 +53,8 @@ class SelfPlayGame:
         game.memory = self.memory.copy()
         game.played_moves = self.played_moves.copy()
         game.start_generation_time = self.start_generation_time
+        game.resigned_at_move = self.resigned_at_move
+        game.resignee = self.resignee
         return game
 
     def __hash__(self) -> int:
@@ -106,9 +114,13 @@ class SelfPlay:
         mcts_results = self.mcts.search(
             [(spg.board, spg.already_expanded_node) for spg in self.self_play_games],
             should_run_full_search=[
-                not self.args.only_store_sampled_moves  # If all moves are stored, run full search
-                or len(spg.played_moves)
-                < self.args.num_moves_after_which_to_play_greedy  # or if the game is still in the early phase
+                (
+                    not self.args.only_store_sampled_moves  # If all moves are stored, run full search
+                    or len(spg.played_moves)
+                    < self.args.num_moves_after_which_to_play_greedy  # or if the game is still in the early phase
+                    or len(spg.board.board.piece_map()) > 10  # or if there are many pieces on the board
+                )
+                and spg.resigned_at_move is None  # and the game has not been resigned
                 for spg in self.self_play_games
             ],
         )
@@ -119,18 +131,23 @@ class SelfPlay:
                     SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
                 )
 
-            if mcts_result.result_score < self.args.resignation_threshold:
+            if mcts_result.result_score < self.args.resignation_threshold and spg.resigned_at_move is None:
                 # Resignation if most of the mcts searches result in a loss
-                self._add_training_data(spg, mcts_result.result_score, resignation=True)
-                self.self_play_games[i] = SelfPlayGame()
-                continue
+                self.dataset.stats += SelfPlayDatasetStats(resignations=1)
+
+                if random.random() < 0.1:
+                    # With 10% chance, play out the game to the end to see if it was winnable
+                    spg.resigned_at_move = len(spg.played_moves)
+                    spg.resignee = spg.board.current_player
+                else:
+                    self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result_score)
+                    continue
 
             if CURRENT_GAME == 'chess':
                 if len(spg.played_moves) >= 250:
                     # If the game is too long, end it and add it to the dataset
-                    self._add_training_data(spg, 0.0, resignation=False)
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                    self.self_play_games[i] = SelfPlayGame()
+                    self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
                     continue
 
                 pieces = list(spg.board.board.piece_map().values())
@@ -165,7 +182,7 @@ class SelfPlay:
                             game_outcome = 0.0
 
                     game_outcome *= 0.9  # somewhat unsure about the game outcome, therefore discount if with 0.9
-                    self._add_training_data(spg, game_outcome, resignation=False)
+                    self._add_training_data(spg, game_outcome)
                     self.self_play_games[i] = SelfPlayGame()
                     continue
 
@@ -175,7 +192,7 @@ class SelfPlay:
                 new_spg, move = self._sample_self_play_game(spg, spg_action_probabilities, mcts_result.children)
 
                 is_duplicate = any(hash(game) == hash(new_spg) for game in self.self_play_games)
-                is_repetition = move in spg.played_moves[-16:]
+                is_repetition = move in spg.played_moves[-8:]
                 if is_duplicate or is_repetition:
                     # don't play the same move twice in a row
                     # Already exploring this state, so remove the probability of this move and try again
@@ -185,8 +202,7 @@ class SelfPlay:
                         # Game is over, add the game to the dataset
                         result = get_board_result_score(new_spg.board)
                         assert result is not None, 'Game should not be over if result is None'
-                        self._add_training_data(new_spg, result, resignation=False)
-                        self.self_play_games[i] = SelfPlayGame()
+                        self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
                     else:
                         self.self_play_games[i] = new_spg
                     break
@@ -201,12 +217,34 @@ class SelfPlay:
                     # Game is over, add the game to the dataset
                     result = get_board_result_score(new_spg.board)
                     assert result is not None, 'Game should not be over if result is None'
-                    self._add_training_data(new_spg, result, resignation=False)
-                    self.self_play_games[i] = SelfPlayGame()
+                    self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
                 else:
                     self.self_play_games[i] = new_spg
 
         reset_times()
+
+    def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
+        self._add_training_data(spg, game_outcome)
+
+        if spg.resigned_at_move is not None:
+            self.dataset.stats += SelfPlayDatasetStats(
+                num_resignations_evaluated_to_end=1,
+                num_winnable_resignations=1 if game_outcome > 0.5 and spg.resignee == spg.board.current_player else 0,
+                num_moves_after_resignation=len(spg.played_moves) - spg.resigned_at_move,
+            )
+
+        return self._new_game()
+
+    def _new_game(self) -> SelfPlayGame:
+        # Create a new game instance
+        new_game = SelfPlayGame()
+
+        # Play a random moves to start the game in different states
+        random_moves_to_play = int(random.random() * 5)
+        for _ in range(random_moves_to_play):
+            new_game = new_game.expand(random.choice(new_game.board.get_valid_moves()))
+
+        return new_game
 
     @timeit
     def _sample_self_play_game(
@@ -243,17 +281,14 @@ class SelfPlay:
         return CurrentGame.decode_move(action, board)
 
     @timeit
-    def _add_training_data(self, spg: SelfPlayGame, game_outcome: float, resignation: bool) -> None:
+    def _add_training_data(self, spg: SelfPlayGame, game_outcome: float) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
-        if random.random() < 0.01:
-            # log a game every 1% of the time
-            self._log_game(spg, game_outcome)
+        self._log_game(spg, game_outcome)
 
         self.dataset.add_generation_stats(
             game_length=len(spg.played_moves),
             generation_time=time.time() - spg.start_generation_time,
-            resignation=resignation,
         )
 
         for mem in spg.memory[::-1]:
@@ -290,5 +325,13 @@ class SelfPlay:
             encoded_move = CurrentGame.encode_move(move, board)
             moves.append(str(encoded_move))
             board.make_move(move)
-        moves_str = ','.join(moves)
-        log_text(f'moves/{self.iteration}/{hash(moves_str)}', f'{result}:{moves_str}')
+
+        starting_line = moves[:5]  # first 5 moves
+        starting_hash = sum(ord(c) * i for i, c in enumerate(''.join(starting_line)))
+        log_scalars('self_play/starting_line', {str(starting_hash): 1}, self.iteration)
+        log_text(f'starting_hash/{starting_hash}', ','.join(starting_line), self.iteration)
+
+        if random.random() < 0.01:
+            # log a game every 1% of the time
+            moves_str = ','.join(moves)
+            log_text(f'moves/{self.iteration}/{hash(moves_str)}', f'{result}:{moves_str}')

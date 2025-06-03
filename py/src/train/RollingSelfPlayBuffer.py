@@ -10,7 +10,7 @@ from torch.multiprocessing import Process
 
 from src.mcts.MCTS import action_probabilities
 from src.settings import log_histogram, log_scalar
-from src.util.tensorboard import TensorboardWriter
+from src.util.tensorboard import TensorboardWriter, log_scalars
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
@@ -85,10 +85,21 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             # dataset.deduplicate()
             # log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))
 
-            log_scalar('dataset/num_games', accumulated_stats.num_games)
-            log_scalar('dataset/average_game_length', accumulated_stats.game_lengths / accumulated_stats.num_games)
-            log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
+            # log game length and std
+            log_scalars(
+                'dataset/game_length',
+                {
+                    'mean': np.mean(accumulated_stats.game_lengths),
+                    'max': np.max(accumulated_stats.game_lengths),
+                    'min': np.min(accumulated_stats.game_lengths),
+                    'std': np.std(accumulated_stats.game_lengths),
+                },
+            )
 
+            if accumulated_stats.num_too_long_games > 0:
+                log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
+
+            log_scalar('dataset/num_games', accumulated_stats.num_games)
             log_scalar('dataset/num_samples', accumulated_stats.num_samples)
             log_scalar(
                 'dataset/average_generation_time',
@@ -96,10 +107,27 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
             )
 
             if accumulated_stats.resignations > 0:
-                log_scalar('dataset/num_resignations', accumulated_stats.resignations)
                 log_scalar(
-                    'dataset/average_resignation_percent',
+                    'resignation/average_resignation_percent',
                     accumulated_stats.resignations / accumulated_stats.num_games * 100,
+                )
+                # winnable resignations
+                log_scalar(
+                    'resignation/average_winnable_resignations',
+                    (
+                        accumulated_stats.num_winnable_resignations
+                        / accumulated_stats.num_resignations_evaluated_to_end
+                        * 100
+                    )
+                    if accumulated_stats.num_resignations_evaluated_to_end > 0
+                    else 0,
+                )
+                # average moves after resignation
+                log_scalar(
+                    'resignation/average_moves_after_resignation',
+                    accumulated_stats.num_moves_after_resignation / accumulated_stats.num_resignations_evaluated_to_end
+                    if accumulated_stats.num_resignations_evaluated_to_end > 0
+                    else 0,
                 )
 
     # ---------- helpers --------------------------------------------------- #

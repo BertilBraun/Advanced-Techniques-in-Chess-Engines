@@ -175,7 +175,7 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
-        for how_many_previous in [1, 5, 10]:
+        for how_many_previous in [5, 10]:
             p = mp.Process(
                 target=_eval_vs_previous,
                 args=(run, model_evaluation, iteration, self.args.save_path, how_many_previous),
@@ -183,11 +183,7 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
-        for fn in [
-            _eval_vs_reference,
-            _eval_vs_random,
-            _eval_policy_vs_random,
-        ]:
+        for fn in [_eval_vs_reference, _eval_vs_random, _eval_policy_vs_random]:
             p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
             p.start()
             processes.append(p)

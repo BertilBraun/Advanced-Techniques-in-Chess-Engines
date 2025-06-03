@@ -96,7 +96,7 @@ class TrainerProcess:
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
 
-            if epoch_valid_stats.value_std < 0.01:
+            if epoch_train_stats.value_std < 0.01:
                 log('Training stopped early due to low value std deviation.')
                 exit()
 

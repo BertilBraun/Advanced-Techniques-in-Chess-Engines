@@ -41,12 +41,11 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
         self.value_targets: list[float] = []
         self.stats = SelfPlayDatasetStats()
 
-    def add_generation_stats(self, game_length: int, generation_time: float, resignation: bool) -> None:
+    def add_generation_stats(self, game_length: int, generation_time: float) -> None:
         self.stats += SelfPlayDatasetStats(
             num_games=1,
-            game_lengths=game_length,
+            game_lengths=[game_length],
             total_generation_time=generation_time,
-            resignations=int(resignation),
         )
 
     def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:

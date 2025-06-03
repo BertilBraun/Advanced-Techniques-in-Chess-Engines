@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import multiprocessing
 from tensorboardX import SummaryWriter
+from typing import SupportsFloat
 
 
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
@@ -32,13 +33,14 @@ def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
     _TB_SUMMARY.add_scalar(name, value, iteration)
 
 
-def log_scalars(name: str, values: dict[str, float | int], iteration: int | None = None) -> None:
+def log_scalars(name: str, values: dict[str, SupportsFloat], iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
-    _TB_SUMMARY.add_scalars(name, values, iteration)
+    values_float = {k: float(v) for k, v in values.items()}  # Ensure all values are floats
+    _TB_SUMMARY.add_scalars(name, values_float, iteration)
 
 
 def log_text(name: str, text: str, iteration: int | None = None) -> None:

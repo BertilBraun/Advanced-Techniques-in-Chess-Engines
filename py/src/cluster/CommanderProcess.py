@@ -3,16 +3,18 @@ import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
-from src.util.save_paths import get_latest_model_iteration
+from src.util.save_paths import get_latest_model_iteration, model_save_path
 from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
+from src.util.tensorboard import TensorboardWriter, log_scalar, log_scalars
 
 
 class CommanderProcess:
@@ -81,21 +83,58 @@ class CommanderProcess:
         starting_iteration = get_latest_model_iteration(self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
 
+        current_best_iteration = starting_iteration
+
+        for pipe in self.commander_self_play_pipes:
+            with log_exceptions('SelfPlay setup'):
+                pipe.send(f'LOAD MODEL: {current_best_iteration}')
+                pipe.send(f'START AT ITERATION: {starting_iteration}')
+
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
-                for pipe in self._all_pipes():
-                    try:
+                print(f'Starting iteration {iteration}.')
+                self.commander_trainer_pipe.send(f'START AT ITERATION: {iteration}')
+                for pipe in self.commander_self_play_pipes:
+                    with log_exceptions('SelfPlay setup'):
                         pipe.send(f'START AT ITERATION: {iteration}')
-                    except BrokenPipeError:
-                        if pipe is self.commander_trainer_pipe:
-                            raise
-                log(f'All processes started at iteration {iteration}.')
 
                 # Wait for Trainer to finish
                 train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
                 assert self.commander_trainer_pipe.recv() == 'FINISHED'
                 yield iteration, train_stats
+
+                # gating
+                with TensorboardWriter(self.run_id, 'gating', postfix_pid=False):
+                    gating_evaluation = ModelEvaluation(iteration, self.args, num_games=100, num_searches_per_turn=100)
+                    results = gating_evaluation.play_two_models_search(
+                        model_save_path(current_best_iteration, self.args.save_path)
+                    )
+
+                    log_scalars(
+                        'gating/gating',
+                        {
+                            'wins': results.wins,
+                            'losses': results.losses,
+                            'draws': results.draws,
+                        },
+                        iteration,
+                    )
+
+                    result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
+                    log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score.')
+                    if result_score > 0.55:  # 55% win rate
+                        log(f'Gating evaluation passed at iteration {iteration}.')
+                        current_best_iteration = iteration
+                        for pipe in self.commander_self_play_pipes:
+                            pipe.send(f'LOAD MODEL: {current_best_iteration}')
+                    else:
+                        log(
+                            f'Gating evaluation failed at iteration {iteration}. Keeping current best model {current_best_iteration}.'
+                        )
+
+                    log_scalar('gating/current_best_iteration', current_best_iteration, iteration)
+                    log_scalar('gating/gating_score', result_score, iteration)
 
                 # start EvaluationProcess
                 p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration))
