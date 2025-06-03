@@ -49,8 +49,7 @@ else
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
-    # Start should call git pull, then "nohup python3.11 train.py > train.log 2>&1 &" and then "tail -f train.log"
-    echo "alias start='git pull && nohup python3.11 train.py > train.log 2>&1 &'" >> ~/.bashrc
+    echo "alias start='git pull && nohup python3.11 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
     
 
