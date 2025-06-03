@@ -60,8 +60,8 @@ class SelfPlayProcess:
                     >= TRAINING_ARGS.num_games_per_iteration * 5
                 ):
                     log(f'Iteration {current_iteration} has enough games.')
+                    self._save_dataset(current_iteration)
                     running = False
-                    self.self_play.dataset = SelfPlayDataset()
 
             if self.commander_pipe.poll():
                 message = self.commander_pipe.recv()
@@ -73,11 +73,8 @@ class SelfPlayProcess:
                     current_iteration = int(message.split(':')[-1])
                     running = True
                 elif message.startswith('LOAD MODEL:'):
-                    old_current_iteration = current_iteration
-                    current_iteration = int(message.split(':')[-1])
-                    if old_current_iteration != current_iteration:
-                        self._save_dataset(current_iteration)
-                        self.self_play.update_iteration(current_iteration)
+                    self._save_dataset(current_iteration)
+                    self.self_play.update_iteration(current_iteration)
                 elif message.startswith('START USAGE LOGGER:'):
                     run_id = int(message.split(':')[-1])
                     start_cpu_usage_logger(run_id, 'self_play')

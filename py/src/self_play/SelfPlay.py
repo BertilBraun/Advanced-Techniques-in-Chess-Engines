@@ -240,7 +240,7 @@ class SelfPlay:
         new_game = SelfPlayGame()
 
         # Play a random moves to start the game in different states
-        random_moves_to_play = int(random.random() * 5)
+        random_moves_to_play = int(random.random() * 8)
         for _ in range(random_moves_to_play):
             new_game = new_game.expand(random.choice(new_game.board.get_valid_moves()))
 
