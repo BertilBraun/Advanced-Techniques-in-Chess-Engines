@@ -18,7 +18,13 @@ if [ -d "../../miniconda3" ]; then
   echo "Conda environment already exists."
 else
     mkdir -p ~/miniconda3
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+    if [[ "$(uname -m)" == "aarch64" ]]; then
+        # if on arm64 use the arm64 version of miniconda
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh -O ~/miniconda3/miniconda.sh
+    else
+        # otherwise use the x86_64 version
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+    fi
     bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
     rm -rf ~/miniconda3/miniconda.sh
 
@@ -29,7 +35,7 @@ else
     conda create -n Chess python=3.11 -y
     conda activate Chess
 
-    pip install -r requirements.txt
+    pip3 install -r requirements.txt
 
     # Add to .bashrc
     echo "module purge" >> ~/.bashrc

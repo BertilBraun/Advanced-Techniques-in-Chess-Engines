@@ -87,7 +87,7 @@ class SelfPlay:
         # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
         num_searches_per_turn = int(
             lerp(
-                self.args.mcts.num_searches_per_turn / 20,
+                self.args.mcts.num_searches_per_turn / 5,
                 self.args.mcts.num_searches_per_turn,
                 clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
             )
