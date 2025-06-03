@@ -2,6 +2,7 @@ from __future__ import annotations
 from itertools import chain
 from os import PathLike
 import os
+from pathlib import Path
 import random
 
 import numpy as np
@@ -160,6 +161,10 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
+        if not Path(model_path).exists():
+            print(f'Model path {model_path} does not exist. Skipping evaluation.')
+            return Results(self.num_games, 0, 0)
+
         opponent = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         opponent.load_model(model_path)
 
