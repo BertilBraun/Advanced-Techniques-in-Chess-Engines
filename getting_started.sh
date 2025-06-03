@@ -5,14 +5,25 @@ git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.gi
 
 cd Advanced-Techniques-in-Chess-Engines/py
 
-source setup.sh
+# if on aarch64
+if [[ "$(uname -m)" == "aarch64" ]]; then
+    echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
     echo "alias start='git pull && nohup python3 train.py > train.log 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
     echo "alias log='tail -f train.log'" >> ~/.bashrc
+
+    echo "cd Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
+
+    python3 -m venv .venv
+    
+    echo "source .venv/bin/activate" >> ~/.bashrc
+
+    source ~/.bashrc
         
+    pip3 install --upgrade pip
     pip3 install -r requirements.txt
 
     start
