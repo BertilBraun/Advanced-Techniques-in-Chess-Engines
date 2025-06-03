@@ -112,7 +112,9 @@ class CommanderProcess:
                         pipe.send('STOP SELF PLAY')
 
                     # TODO gating params into args
-                    gating_evaluation = ModelEvaluation(iteration, self.args, num_games=100, num_searches_per_turn=16)
+                    gating_evaluation = ModelEvaluation(
+                        iteration + 1, self.args, num_games=100, num_searches_per_turn=16
+                    )
                     results = gating_evaluation.play_two_models_search(
                         model_save_path(current_best_iteration, self.args.save_path)
                     )
@@ -132,7 +134,7 @@ class CommanderProcess:
                     # TODO make this a parameter in args
                     if result_score > 0.53:  # 55% win rate
                         log(f'Gating evaluation passed at iteration {iteration}.')
-                        current_best_iteration = iteration
+                        current_best_iteration = iteration + 1
                         for pipe in self.commander_self_play_pipes:
                             pipe.send(f'LOAD MODEL: {current_best_iteration}')
                     else:
@@ -144,7 +146,7 @@ class CommanderProcess:
                     log_scalar('gating/gating_score', result_score, iteration)
 
                 # start EvaluationProcess
-                p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration))
+                p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration + 1))
                 p.start()
                 print(f'Started evaluation process for iteration {iteration}.')
                 # p.join()

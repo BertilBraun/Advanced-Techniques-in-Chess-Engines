@@ -326,10 +326,7 @@ class SelfPlay:
             moves.append(str(encoded_move))
             board.make_move(move)
 
-        starting_line = moves[:5]  # first 5 moves
-        starting_hash = sum(ord(c) * i for i, c in enumerate(''.join(starting_line)))
-        log_scalars('starting_line', {str(starting_hash): 1}, self.iteration)
-        log_text(f'starting_hash/{starting_hash}', ','.join(starting_line), self.iteration)
+        log_text('starting_line', ','.join(moves[:7]), self.iteration)
 
         if random.random() < 0.01:
             # log a game every 1% of the time
