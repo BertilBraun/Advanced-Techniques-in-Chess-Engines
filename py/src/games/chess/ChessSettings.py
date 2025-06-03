@@ -46,8 +46,8 @@ training = TrainingParams(
     learning_rate_scheduler=learning_rate_scheduler,
 )
 evaluation = EvaluationParams(
-    num_searches_per_turn=100,
-    num_games=50,
+    num_searches_per_turn=32,
+    num_games=100,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )

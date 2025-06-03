@@ -55,6 +55,7 @@ class Trainer:
             value_targets = value_targets.unsqueeze(1)
 
             policy_logits, value_logits = self.model(state, return_logits=True)
+            value_output = torch.tanh(value_logits)
 
             # Binary cross entropy loss for the policy is definitely not correct, as the policy has multiple classes
             # torch.cross_entropy applies softmax internally, so we don't need to apply it to the output
@@ -75,7 +76,7 @@ class Trainer:
             # BCE is not suitable for regression tasks and produces spikey outputs at the extremes, so we use MSE instead
             # value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
             # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
-            value_loss = F.mse_loss(torch.tanh(value_logits), value_targets)
+            value_loss = F.mse_loss(value_output, value_targets)
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
@@ -126,11 +127,11 @@ class Trainer:
                         print()
 
             nonlocal out_value_mean, out_value_std
-            out_value_mean += torch.tanh(value_logits.detach()).mean()
-            out_value_std += torch.tanh(value_logits.detach()).std()
+            out_value_mean += value_output.detach().mean()
+            out_value_std += value_output.detach().std()
 
             # Apparently just as in AZ Paper, give more weight to the policy loss
-            loss = torch.lerp(value_loss, policy_loss, 0.66)
+            loss = policy_loss + 0.3 * value_loss  # TODO move to hyperparameters
 
             return policy_loss, value_loss, loss
 

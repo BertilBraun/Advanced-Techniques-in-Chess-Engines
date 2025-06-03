@@ -45,7 +45,7 @@ class TrainerProcess:
 
         self.commander_pipe = commander_pipe
 
-        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=400_000)
+        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=2_000_000)
 
     def run(self):
         while True:
@@ -77,21 +77,20 @@ class TrainerProcess:
         self._wait_for_enough_training_samples(iteration)
         validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
 
+        dataloader = as_dataloader(
+            self.rolling_buffer,
+            self.args.training.batch_size,
+            self.args.training.num_workers,
+        )
+        validation_dataloader = as_dataloader(
+            validation_dataset,
+            self.args.training.batch_size,
+            self.args.training.num_workers,
+        )
         train_stats: list[TrainingStats] = []
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
-            dataloader = as_dataloader(
-                self.rolling_buffer,
-                self.args.training.batch_size,
-                self.args.training.num_workers,
-            )
-            validation_dataloader = as_dataloader(
-                validation_dataset,
-                self.args.training.batch_size,
-                self.args.training.num_workers,
-            )
-
             epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
@@ -179,7 +178,7 @@ class TrainerProcess:
 
 def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
     assert num_workers > 0, 'num_workers must be greater than 0'
-    num_workers = 1  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
+    num_workers = 2  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,

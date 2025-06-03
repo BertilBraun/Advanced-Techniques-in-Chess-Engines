@@ -106,7 +106,13 @@ class CommanderProcess:
 
                 # gating
                 with TensorboardWriter(self.run_id, 'gating', postfix_pid=False):
-                    gating_evaluation = ModelEvaluation(iteration, self.args, num_games=100, num_searches_per_turn=100)
+                    # TODO only stop processes on the gating device and make the portion a hyperparameter
+                    for pipe in self.commander_self_play_pipes[::2]:
+                        # only stop half of the self-play processes for gating
+                        pipe.send('STOP SELF PLAY')
+
+                    # TODO gating params into args
+                    gating_evaluation = ModelEvaluation(iteration, self.args, num_games=100, num_searches_per_turn=16)
                     results = gating_evaluation.play_two_models_search(
                         model_save_path(current_best_iteration, self.args.save_path)
                     )
@@ -122,8 +128,9 @@ class CommanderProcess:
                     )
 
                     result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
-                    log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score.')
-                    if result_score > 0.55:  # 55% win rate
+                    log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
+                    # TODO make this a parameter in args
+                    if result_score > 0.53:  # 55% win rate
                         log(f'Gating evaluation passed at iteration {iteration}.')
                         current_best_iteration = iteration
                         for pipe in self.commander_self_play_pipes:

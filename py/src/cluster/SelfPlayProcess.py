@@ -87,6 +87,9 @@ class SelfPlayProcess:
                 elif message.startswith('START USAGE LOGGER:'):
                     run_id = int(message.split(':')[-1])
                     start_cpu_usage_logger(run_id, 'self_play')
+                elif message == 'STOP SELF PLAY':
+                    self._save_dataset(current_iteration)
+                    running = False
 
         log('Self play process stopped.')
 

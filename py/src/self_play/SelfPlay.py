@@ -306,7 +306,7 @@ class SelfPlay:
                     ),
                 )
 
-            game_outcome *= 0.99  # discount the game outcome for each move
+            # TODO game_outcome *= 0.995  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more
@@ -328,7 +328,7 @@ class SelfPlay:
 
         starting_line = moves[:5]  # first 5 moves
         starting_hash = sum(ord(c) * i for i, c in enumerate(''.join(starting_line)))
-        log_scalars('self_play/starting_line', {str(starting_hash): 1}, self.iteration)
+        log_scalars('starting_line', {str(starting_hash): 1}, self.iteration)
         log_text(f'starting_hash/{starting_hash}', ','.join(starting_line), self.iteration)
 
         if random.random() < 0.01:
