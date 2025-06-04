@@ -74,7 +74,8 @@ class SelfPlayProcess:
                     running = True
                 elif message.startswith('LOAD MODEL:'):
                     self._save_dataset(current_iteration)
-                    self.self_play.update_iteration(current_iteration)
+                    model_iteration = int(message.split(':')[-1])
+                    self.self_play.update_iteration(model_iteration)
                 elif message.startswith('START USAGE LOGGER:'):
                     run_id = int(message.split(':')[-1])
                     start_cpu_usage_logger(run_id, 'self_play')
