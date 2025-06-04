@@ -116,12 +116,13 @@ endif()
 
 # --- Fetch pybind11 for Python bindings ---
 include(FetchContent)
+
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE BOOL "No dev warnings")
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
     GIT_TAG v2.13.6
 )
-FetchContent_MakeAvailable(pybind11)
 
 # --- Fetch tensorboard_logger ---
 # FetchContent_Declare(
@@ -129,21 +130,47 @@ FetchContent_MakeAvailable(pybind11)
 #     GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
 #     GIT_TAG master
 # )
-# FetchContent_MakeAvailable(tensorboard_logger)
+
+# --- Fetch Stockfish ---
+FetchContent_Declare(
+    Stockfish
+    GIT_REPOSITORY https://github.com/official-stockfish/Stockfish.git
+    GIT_TAG master
+)
+
+# --- Fetch Nlohmann JSON ---
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG master
+)
+
+FetchContent_MakeAvailable(pybind11 Stockfish nlohmann_json) # tensorboard_logger)
+
 
 # find_package(Protobuf REQUIRED)
 
 # --- Include directories ---
 include_directories(src)
+# include Stockfish include directory
+include_directories(${stockfish_SOURCE_DIR}/src)
+include_directories(${nlohmann_json_SOURCE_DIR}/single_include/nlohmann)
 
-# --- Collect all source files from src/ ---
-file(GLOB_RECURSE ALL_SOURCES "src/*.cpp")
-
+# --- Collect all source files from src/ and Stockfish/src/ ---
+file(GLOB_RECURSE ALL_SOURCES
+    "src/*.cpp"
+    "src/*.h"
+    "src/*.hpp"
+    "${Stockfish_SOURCE_DIR}/src/*.cpp"
+    "${Stockfish_SOURCE_DIR}/src/*.h"
+)
 # Build the Python module from the binding entry point and shared sources
 pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
 
+target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
+
 # target_link_libraries(AlphaZeroCpp PRIVATE ${Protobuf_LIBRARIES} tensorboard_logger "${TORCH_LIBRARIES}")
 
 # target_include_directories(AlphaZeroCpp PRIVATE ${Protobuf_INCLUDE_DIRS})

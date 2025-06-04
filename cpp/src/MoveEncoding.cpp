@@ -1,15 +1,24 @@
 #include "MoveEncoding.hpp"
 
+typedef std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, BOARD_SIZE>, BOARD_SIZE>
+    MoveMapping;
+
 namespace defines {
 const std::vector<std::pair<int, int>> DIRECTIONS = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
                                                      {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
 const std::vector<std::pair<int, int>> KNIGHT_MOVES = {{2, 1},   {1, 2},   {-1, 2}, {-2, 1},
                                                        {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
-const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN, PieceType::ROOK,
-                                                 PieceType::BISHOP, PieceType::KNIGHT};
+const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN};
+// Note: not relevant for strong amateur play: PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT};
 } // namespace defines
 
-std::pair<MoveMapping, int> precalculateMoveMappings() {
+
+inline std::pair<int, int> squareToIndex(int square) {
+    return {square / BOARD_LENGTH, square % BOARD_LENGTH};
+}
+
+
+MoveMapping precalculateMoveMappings() {
     MoveMapping moveMappings{};
     // fill with -1
     for (auto &fromSquare : moveMappings) {
@@ -48,12 +57,11 @@ std::pair<MoveMapping, int> precalculateMoveMappings() {
         }
 
         // Calculate pawn promotion moves from this square
-        if (row == 1 || row == 6) {
-            int toRow = row == 1 ? 0 : 7;
-
+        // Note: we dont need blacks promotion moves anymore, as black moves are always mirrored to the equivalent white moves before
+        if (row == 6) {
             for (int offset : {-1, 0, 1}) {
                 if (0 <= col + offset && col + offset < BOARD_LENGTH) {
-                    int toSquare = square(col + offset, toRow);
+                    int toSquare = square(col + offset, 6 + 1);
                     for (PieceType promotionType : defines::PROMOTION_PIECES) {
                         addMove(fromSquare, toSquare, promotionType);
                     }
@@ -62,7 +70,7 @@ std::pair<MoveMapping, int> precalculateMoveMappings() {
         }
     }
 
-    return {moveMappings, index};
+    return moveMappings;
 }
 
 std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE>
@@ -84,7 +92,7 @@ precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
     return reverseMoveMappings;
 }
 
-const auto MOVE_MAPPINGS = precalculateMoveMappings().first;
+const auto MOVE_MAPPINGS = precalculateMoveMappings();
 const auto REVERSE_MOVE_MAPPINGS = precalculateReverseMoveMappings(MOVE_MAPPINGS);
 
 int encodeMove(const Move &move) {
@@ -202,113 +210,6 @@ std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Ten
     // :return: The list of moves with their corresponding probabilities.
 
     auto filteredPolicy = filterPolicyWithLegalMoves(policy, board);
-    auto movesWithProbabilities = mapPolicyToMoves(filteredPolicy);
-    return movesWithProbabilities;
-}
-
-std::vector<MoveScore> filterMovesWithLegalMoves(const std::vector<MoveScore> &moves,
-                                                 Board &board) {
-    // Filters a list of moves with the legal moves of a chess board.
-    //
-    // The list of moves is a list of tuples, where each tuple contains a move
-    // and its corresponding probability. The legal moves are encoded in a 1D tensor,
-    // where each entry is 1 if the corresponding move is legal, and 0 otherwise.
-    // The list of moves is then filtered to only include the legal moves.
-
-    if (moves.empty()) {
-        return {};
-    }
-
-    std::unordered_set<int> legalMovesSet;
-    for (const Move &move : board.legalMoves()) {
-        legalMovesSet.insert(encodeMove(move));
-    }
-
-    float totalProbability = 0.0f;
-    std::vector<MoveScore> filteredMoves;
-    filteredMoves.reserve(moves.size());
-    for (const auto &[move, probability] : moves) {
-        if (legalMovesSet.find(move) != legalMovesSet.end()) {
-            filteredMoves.emplace_back(move, probability);
-            totalProbability += probability;
-        }
-    }
-
-    // Ensure the filtered moves sum to 1.0
-    assert(totalProbability > 0.0f);
-    for (auto &[move, probability] : filteredMoves) {
-        probability /= totalProbability;
-    }
-
-    return filteredMoves;
-}
-
-const std::vector<Move> EN_PASSANT_MOVES = {
-    // White en passant moves
-    Move(A5, B6),
-    Move(B5, A6),
-    Move(B5, C6),
-    Move(C5, B6),
-    Move(C5, D6),
-    Move(D5, C6),
-    Move(D5, E6),
-    Move(E5, D6),
-    Move(E5, F6),
-    Move(F5, E6),
-    Move(F5, G6),
-    Move(G5, F6),
-    Move(G5, H6),
-    Move(H5, G6),
-    // Black en passant moves
-    Move(A4, B3),
-    Move(B4, A3),
-    Move(B4, C3),
-    Move(C4, B3),
-    Move(C4, D3),
-    Move(D4, C3),
-    Move(D4, E3),
-    Move(E4, D3),
-    Move(E4, F3),
-    Move(F4, E3),
-    Move(F4, G3),
-    Move(G4, F3),
-    Move(G4, H3),
-    Move(H4, G3),
-};
-
-torch::Tensor filterPolicyWithLegalMovesAndEnPassantMoves(const torch::Tensor &policy,
-                                                          Board &board) {
-    // Filters a policy with the legal moves of a chess board but also allows all en passant moves.
-
-    // The policy is a 1D tensor representing the probabilities of each move
-    // in the board. The legal moves are encoded in a 1D tensor, where each
-    // entry is 1 if the corresponding move is legal, and 0 otherwise. The policy
-    // is then filtered to only include the probabilities of the legal moves.
-
-    auto allMoves = board.legalMoves();
-    extend(allMoves, EN_PASSANT_MOVES);
-
-    torch::Tensor legalMovesEncoded = encodeMoves(allMoves);
-    torch::Tensor filteredPolicy = policy * legalMovesEncoded;
-    float policySum = filteredPolicy.sum().item<float>();
-    if (policySum == 0) {
-        filteredPolicy = legalMovesEncoded / legalMovesEncoded.sum();
-    } else {
-        filteredPolicy /= policySum;
-    }
-    return filteredPolicy;
-}
-
-std::vector<MoveScore>
-filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(const torch::Tensor &policy,
-                                                           Board &board) {
-    // Gets a list of moves with their corresponding probabilities from a policy.
-
-    // The policy is a 1D tensor representing the probabilities of each move
-    // in the board. The list of moves is a list of tuples, where each tuple contains
-    // a move and its corresponding probability.
-
-    auto filteredPolicy = filterPolicyWithLegalMovesAndEnPassantMoves(policy, board);
     auto movesWithProbabilities = mapPolicyToMoves(filteredPolicy);
     return movesWithProbabilities;
 }

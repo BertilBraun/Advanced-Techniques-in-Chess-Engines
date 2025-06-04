@@ -35,8 +35,7 @@ public:
      * @param savePath      Path used to resolve the model file.
      * @param maxBatchSize  Maximum number of requests to process in one batch.
      */
-    void init(const int device_id, const std::string &currentModelPath, const int maxBatchSize,
-              TensorBoardLogger *logger);
+    void init(int device_id, const std::string &currentModelPath, int maxBatchSize);
 
     /**
      * Synchronous interface: runs inference on a batch of boards and returns results
@@ -94,7 +93,6 @@ private:
     torch::jit::script::Module m_model;
     torch::Device m_device;
     torch::Dtype m_torchDtype;
-    TensorBoardLogger *m_logger;
 
     // Cache: iteration -> board hash -> InferenceResult.
     std::unordered_map<int, ShardedCache<int64_t, InferenceResult, 32>> m_cache;

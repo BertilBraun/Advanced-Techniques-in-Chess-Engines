@@ -11,15 +11,9 @@ typedef std::array<uint64, ENCODING_CHANNELS> CompressedEncodedBoard;
 
 CompressedEncodedBoard encodeBoard(const Board &board);
 
-CompressedEncodedBoard compress(const EncodedBoard &binary);
-
-EncodedBoard decompress(const CompressedEncodedBoard &compressed);
-
 torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device device);
 
 uint64 hash(const CompressedEncodedBoard &compressed);
-
-Board decodeBoard(const EncodedBoard &encodedBoard);
 
 float getMaterialScore(const Board &board);
 

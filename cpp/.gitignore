@@ -4,3 +4,4 @@ build/**
 .cache/**
 .vs/**
 out/**
+.idea/**

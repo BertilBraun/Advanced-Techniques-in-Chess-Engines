@@ -9,7 +9,7 @@ InferenceClient::InferenceClient()
 }
 
 void InferenceClient::init(const int device_id, const std::string &currentModelPath,
-                           const int maxBatchSize, TensorBoardLogger *logger) {
+                           const int maxBatchSize) {
     m_logger = logger;
     m_totalHits = 0;
     m_totalEvals = 0;
@@ -79,7 +79,7 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
 
         m_cache[myIteration].insert(
             hash(encodedBoards[i]),
-            {filterPolicyWithEnPassantMovesThenGetMovesAndProbabilities(policy, boards[i]), value});
+            {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
 
     // Wait for all futures in order.
@@ -91,8 +91,6 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
         if (!m_cache[myIteration].lookup(hash(encodedBoard), result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
-        // Filter the policy without en passant moves.
-        result.first = filterMovesWithLegalMoves(result.first, board);
         results.push_back(result);
     }
 

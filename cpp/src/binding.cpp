@@ -66,8 +66,30 @@ auto evaluate_model(int iteration, std::string const &save_path, int num_games, 
     return py::make_tuple(res.wins, res.losses, res.draws);
 }
 
+#include "bitboard.h"
+#include "misc.h"
+#include "position.h"
+#include "tune.h"
+#include "types.h"
+#include "uci.h"
+
+auto test() {
+
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
+
+    Stockfish::Position pos;
+    Stockfish::StateInfo si;
+    pos.set("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", false, &si);
+
+    // print all legal moves
+    // std::vector<Move> legal_moves = pos.legalMoves();
+}
+
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "AlphaZero C++ bindings for Python.";
+
+    m.def("test", &test, "Test function to initialize Bitboards and Position");
 
     m.def("self_play_main", &selfPlayMain,
           "Runs self-play on the given model save directory path and parameters", py::arg("run_id"),

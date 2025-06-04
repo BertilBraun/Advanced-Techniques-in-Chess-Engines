@@ -1,10 +1,34 @@
 #include "MCTS.hpp"
 
+#include "../BoardEncoding.hpp"
+#include "../MoveEncoding.hpp"
+
+
+thread_local std::mt19937 randomEngine(std::random_device{}());
+
+std::vector<float> dirichlet(float alpha, size_t n) {
+    // Sample from a Dirichlet distribution with parameter alpha.
+    std::gamma_distribution<float> gamma(alpha, 1.0);
+
+    std::vector<float> noise(n);
+    float sum = 0.0f;
+    for (size_t i = 0; i < n; i++) {
+        noise[i] = gamma(randomEngine);
+        sum += noise[i];
+    }
+
+    float norm = 1.0f / sum;
+    for (size_t i = 0; i < n; i++) {
+        noise[i] *= norm;
+    }
+
+    return noise;
+}
+
+
 std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
     if (boards.empty())
         return {};
-
-    TimeItGuard timer("MCTS::search");
 
     // Get policy moves (with noise) for the given boards.
     const std::vector<std::vector<MoveScore>> movesList = getPolicyWithNoise(boards);
@@ -39,8 +63,6 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
     return results;
 }
 void MCTS::parallelIterate(std::vector<MCTSNode> &roots) const {
-    TimeItGuard timer("MCTS::parallel_iterate");
-
     std::vector<MCTSNode *> nodes;
     nodes.reserve(roots.size() * m_args.num_parallel_searches);
     for (MCTSNode &root : roots) {
@@ -62,7 +84,7 @@ void MCTS::parallelIterate(std::vector<MCTSNode> &roots) const {
         boards.push_back(node->board);
 
     // Run inference in batch.
-    const std::vector<InferenceResult> results = m_client->inferenceBatch(boards);
+    const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
 
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
@@ -72,7 +94,7 @@ void MCTS::parallelIterate(std::vector<MCTSNode> &roots) const {
     }
 }
 std::vector<std::vector<MoveScore>> MCTS::getPolicyWithNoise(std::vector<Board> &boards) const {
-    const std::vector<InferenceResult> inferenceResults = m_client->inferenceBatch(boards);
+    const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(boards);
 
     std::vector<std::vector<MoveScore>> noisyMoves;
     noisyMoves.reserve(inferenceResults.size());
@@ -113,6 +135,7 @@ std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(MCTSNode &root, floa
     }
     return {node};
 }
+
 void MCTS::logMctsStatistics(const std::vector<MCTSNode> &roots) const {
     if (roots.empty() || !m_logger)
         return;

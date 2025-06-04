@@ -1,5 +1,7 @@
 #include "BoardEncoding.hpp"
 
+#include <types.h>
+
 CompressedEncodedBoard encodeBoard(const Board &board) {
     // Encodes a chess board into a 14x8x8 tensor.
     //
@@ -44,43 +46,7 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     return encodedBoard;
 }
-CompressedEncodedBoard compress(const EncodedBoard &binary) {
-    // Converts a binary array to a compressed 64-bit array.
-    //
-    // :param binary: The binary array to convert.
-    // :return: The 64-bit array.
 
-    CompressedEncodedBoard compressed{};
-
-    for (int channel : range(ENCODING_CHANNELS)) {
-        for (int row : range(BOARD_LENGTH)) {
-            for (int col : range(BOARD_LENGTH)) {
-                compressed[channel] |= (uint64) binary[channel][row][col]
-                                       << (row * BOARD_LENGTH + col);
-            }
-        }
-    }
-
-    return compressed;
-}
-EncodedBoard decompress(const CompressedEncodedBoard &compressed) {
-    // Converts a compressed 64-bit array to a binary array.
-    //
-    // :param compressed: The 64-bit array to convert.
-    // :return: The binary array.
-
-    EncodedBoard binary{};
-
-    for (int channel : range(ENCODING_CHANNELS)) {
-        for (int row : range(BOARD_LENGTH)) {
-            for (int col : range(BOARD_LENGTH)) {
-                binary[channel][row][col] = (compressed[channel] >> (row * BOARD_LENGTH + col)) & 1;
-            }
-        }
-    }
-
-    return binary;
-}
 torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device device) {
     // Converts a compressed 64-bit array to a uncompressed ENCODING_CHANNELS x 8 x 8 tensor.
     //
@@ -103,6 +69,7 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
 
     return tensor;
 }
+
 uint64 hash(const CompressedEncodedBoard &compressed) {
     // Computes the hash of a compressed 64-bit array.
     //
@@ -115,42 +82,8 @@ uint64 hash(const CompressedEncodedBoard &compressed) {
     }
     return hash;
 }
-chess::Board decodeBoard(const EncodedBoard &encodedBoard) {
-    // Decodes a 12x8x8 tensor into a chess board.
-    //
-    // Each layer in the first dimension represents one of the 12 distinct
-    // piece types (6 for each color). Each cell in the 8x8 board for each layer
-    // is 1 if a piece of the layer's type is present at that cell, and 0 otherwise.
-    //
-    // The board is always oriented so that the current player's pieces are at the bottom of the
-    // first dimension, and the opponent's pieces are at the top. The first 6 layers represent
-    // the current player's pieces, and the last 6 layers represent the opponent's pieces. The
-    // current player is always white.
-    //
-    // :param encodedBoard: The 12x8x8 tensor to decode.
-    // :return: The decoded chess board.
 
-    Board board(false);
-
-    for (Color color : COLORS) {
-        for (PieceType pieceType : PIECE_TYPES) {
-            int layerIndex = color * 6 + pieceType - 1;
-            const auto &layer = encodedBoard[layerIndex];
-
-            for (Square square : SQUARES) {
-                int row = squareRank(square);
-                int col = squareFile(square);
-                if (layer[row][col]) {
-                    board.setPieceAt(square, Piece(pieceType, color));
-                }
-            }
-        }
-    }
-
-    return board;
-}
-
-static const std::array<float, PieceType::NUM_PIECE_TYPES> PIECE_VALUES = {
+static const std::unordered_map<Stockfish::PieceType, float> PIECE_VALUES = {
     0.0f, // None
     1.0f, // Pawn
     3.0f, // Knight
