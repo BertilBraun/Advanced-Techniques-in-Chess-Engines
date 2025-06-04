@@ -177,10 +177,10 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
 
     def play_policy_vs_random(self) -> Results:
-        results = Results(0, 0, 0)
-
         current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
+
+        policy_model = policy_evaluator(current_model)
 
         def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_random_policy(board: CurrentBoard) -> np.ndarray:
@@ -188,33 +188,27 @@ class ModelEvaluation:
 
             return [get_random_policy(board) for board in boards]
 
-        results += self._play_two_models_search(
-            policy_evaluator(current_model), random_evaluator, self.num_games // 2, 'policy_vs_random'
-        )
-        results -= self._play_two_models_search(
-            random_evaluator, policy_evaluator(current_model), self.num_games // 2, 'random_vs_policy'
-        )
+        results = Results(0, 0, 0)
+
+        results += self._play_two_models_search(policy_model, random_evaluator, self.num_games // 2, 'policy_vs_random')
+        results -= self._play_two_models_search(random_evaluator, policy_model, self.num_games // 2, 'random_vs_policy')
 
         return results
 
-    def play_vs_evaluation_model(
-        self, evaluation_model: EvaluationModel, name: str, num_games: int | None = None
-    ) -> Results:
-        results = Results(0, 0, 0)
+    def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
+        client = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
+        client.update_iteration(self.iteration)
 
-        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
-        current_model.update_iteration(self.iteration)
-
-        def model1(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = MCTS(current_model, self.mcts_args).search([(board, None) for board in boards])
+        def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            results = MCTS(client, self.mcts_args).search([(board, None) for board in boards])
             return [action_probabilities(result.visit_counts) for result in results]
 
         # model1 = policy_evaluator(current_model)
 
-        num_games = num_games or self.num_games
+        results = Results(0, 0, 0)
 
-        results += self._play_two_models_search(model1, evaluation_model, num_games // 2, name + '_vs_current')
-        results -= self._play_two_models_search(evaluation_model, model1, num_games // 2, 'current_vs_' + name)
+        results += self._play_two_models_search(current_model, eval_model, self.num_games // 2, name + '_vs_current')
+        results -= self._play_two_models_search(eval_model, current_model, self.num_games // 2, 'current_vs_' + name)
 
         return results
 
@@ -272,9 +266,9 @@ class ModelEvaluation:
 
             for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
                 # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
-                for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
-                    if not move.startswith('FEN'):
-                        policy[int(move)] /= i + 1
+                # for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
+                #     if not move.startswith('FEN'):
+                #         policy[int(move)] /= i + 1
 
                 policy /= policy.sum()
 

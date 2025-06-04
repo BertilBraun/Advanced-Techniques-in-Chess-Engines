@@ -63,6 +63,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         state = decode_board_state(self.encoded_states[idx])
         probabilities = action_probabilities(self.visit_counts[idx])
+        assert 1 - 1e-4 <= np.sum(probabilities) <= 1 + 1e-4, 'Probabilities must sum to 1'
         return (
             torch.from_numpy(state).to(dtype=TORCH_DTYPE, non_blocking=True),
             torch.from_numpy(probabilities).to(dtype=TORCH_DTYPE, non_blocking=True),

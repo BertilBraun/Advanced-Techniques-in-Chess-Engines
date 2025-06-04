@@ -306,7 +306,7 @@ class SelfPlay:
                     ),
                 )
 
-            # TODO game_outcome *= 0.995  # discount the game outcome for each move
+            game_outcome *= 0.995  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more
