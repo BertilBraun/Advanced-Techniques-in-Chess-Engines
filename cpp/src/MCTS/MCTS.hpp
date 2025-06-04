@@ -3,9 +3,11 @@
 #include "common.hpp"
 
 #include "MCTSNode.hpp"
-#include "VisitCounts.hpp"
 
 #include "../InferenceClient.hpp"
+
+typedef std::pair<int, int> VisitCount;
+typedef std::vector<VisitCount> VisitCounts;
 
 struct MCTSResult {
     float result;

@@ -53,7 +53,7 @@ std::vector<MCTSResult> MCTS::search(std::vector<Board> &boards) const {
         VisitCounts visitCounts;
         visitCounts.reserve(root.children.size());
         for (const MCTSNode &child : root.children) {
-            visitCounts.emplace_back(child.encoded_move_to_get_here, child.number_of_visits);
+            visitCounts.emplace_back(child.move_to_get_here, child.number_of_visits);
         }
         results.push_back({-root.result_score / (float) root.number_of_visits, visitCounts});
     }

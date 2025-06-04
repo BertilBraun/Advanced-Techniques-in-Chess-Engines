@@ -1,18 +1,16 @@
 #include "BoardEncoding.hpp"
 
-#include <types.h>
-
 CompressedEncodedBoard encodeBoard(const Board &board) {
-    // Encodes a chess board into a 14x8x8 tensor.
+    // Encodes a chess board into a ENCODING_CHANNELSx8x8 tensor.
     //
     // Each layer in the first dimension represents one of the 12 distinct
     // piece types (6 for each color). Each cell in the 8x8 board for each layer
     // is 1 if a piece of the layer's type is present at that cell, and 0 otherwise.
     //
-    // On layer 12 are the castling right and 13 a color indicator.
+    // On layer 12-15 are the castling right and layer 16 contains the en-passant square.
     //
     // :param board: The chess board to encode.
-    // :return: A 14x8x8 tensor representing the encoded board.
+    // :return: A ENCODING_CHANNELSx8x8 tensor representing the encoded board.
 
     CompressedEncodedBoard encodedBoard{};
 

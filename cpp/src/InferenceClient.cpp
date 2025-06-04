@@ -1,6 +1,9 @@
 #include "InferenceClient.hpp"
 #include "util/ShardedCache.hpp"
 
+#include "BoardEncoding.hpp"
+#include "MoveEncoding.hpp"
+
 InferenceClient::InferenceClient()
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false), m_maxBatchSize(1) {
     // Initialize the model and other members.
@@ -10,7 +13,6 @@ InferenceClient::InferenceClient()
 
 void InferenceClient::init(const int device_id, const std::string &currentModelPath,
                            const int maxBatchSize) {
-    m_logger = logger;
     m_totalHits = 0;
     m_totalEvals = 0;
     m_shutdown = false;
@@ -31,8 +33,6 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
     if (boards.empty()) {
         return std::vector<InferenceResult>();
     }
-
-    TimeItGuard timer("InferenceClient::inference_batch");
 
     // Encode all boards.
     std::vector<CompressedEncodedBoard> encodedBoards;
@@ -188,7 +188,6 @@ void InferenceClient::inferenceWorker() {
 
 std::vector<std::pair<torch::Tensor, float>>
 InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
-    TimeItGuard timer("InferenceClient::modelInference");
     torch::NoGradGuard noGrad;
     std::unique_lock<std::mutex> lock(m_modelMutex);
 

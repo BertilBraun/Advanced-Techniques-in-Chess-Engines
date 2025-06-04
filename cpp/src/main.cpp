@@ -214,7 +214,7 @@ Move evalBoardIterate(const std::string &modelPath, const std::string &fen, bool
     for (const MCTSNode &child : roots[0].children) {
         if (child.number_of_visits > bestMoveVisits) {
             bestMoveVisits = child.number_of_visits;
-            bestMoveIndex = child.encoded_move_to_get_here;
+            bestMoveIndex = child.move_to_get_here;
         }
     }
     assert(bestMoveIndex != -1);

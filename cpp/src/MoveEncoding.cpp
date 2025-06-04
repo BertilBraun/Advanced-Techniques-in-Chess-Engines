@@ -1,6 +1,6 @@
 #include "MoveEncoding.hpp"
 
-typedef std::array<std::array<std::array<int, PieceType::NUM_PIECE_TYPES>, BOARD_SIZE>, BOARD_SIZE>
+typedef std::array<std::array<std::array<int, PieceType::PIECE_TYPE_NB>, BOARD_SIZE>, BOARD_SIZE>
     MoveMapping;
 
 namespace defines {
@@ -11,11 +11,6 @@ const std::vector<std::pair<int, int>> KNIGHT_MOVES = {{2, 1},   {1, 2},   {-1, 
 const std::vector<PieceType> PROMOTION_PIECES = {PieceType::QUEEN};
 // Note: not relevant for strong amateur play: PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT};
 } // namespace defines
-
-
-inline std::pair<int, int> squareToIndex(int square) {
-    return {square / BOARD_LENGTH, square % BOARD_LENGTH};
-}
 
 
 MoveMapping precalculateMoveMappings() {
@@ -39,30 +34,30 @@ MoveMapping precalculateMoveMappings() {
         const auto [row, col] = squareToIndex(fromSquare);
 
         for (const auto &[dr, dc] : defines::DIRECTIONS) {
-            for (int distance : range(1, BOARD_LENGTH)) {
-                int toRow = row + dr * distance;
-                int toCol = col + dc * distance;
+            for (const int distance : range(1, BOARD_LENGTH)) {
+                const int toRow = row + dr * distance;
+                const int toCol = col + dc * distance;
                 if (0 <= toRow && toRow < BOARD_LENGTH && 0 <= toCol && toCol < BOARD_LENGTH) {
-                    addMove(fromSquare, square(toCol, toRow), PieceType::NONE);
+                    addMove(fromSquare,  square(toCol, toRow), PieceType::NO_PIECE_TYPE);
                 }
             }
         }
 
         for (const auto &[dx, dy] : defines::KNIGHT_MOVES) {
-            int toRow = row + dx;
-            int toCol = col + dy;
+            const int toRow = row + dx;
+            const int toCol = col + dy;
             if (0 <= toRow && toRow < BOARD_LENGTH && 0 <= toCol && toCol < BOARD_LENGTH) {
-                addMove(fromSquare, square(toCol, toRow), PieceType::NONE);
+                addMove(fromSquare, square(toCol, toRow), PieceType::NO_PIECE_TYPE);
             }
         }
 
         // Calculate pawn promotion moves from this square
-        // Note: we dont need blacks promotion moves anymore, as black moves are always mirrored to the equivalent white moves before
+        // Note: we don't need blacks promotion moves anymore, as black moves are always mirrored to the equivalent white moves before
         if (row == 6) {
-            for (int offset : {-1, 0, 1}) {
+            for (const int offset : {-1, 0, 1}) {
                 if (0 <= col + offset && col + offset < BOARD_LENGTH) {
-                    int toSquare = square(col + offset, 6 + 1);
-                    for (PieceType promotionType : defines::PROMOTION_PIECES) {
+                    const int toSquare = square(col + offset, 6 + 1);
+                    for (const PieceType promotionType : defines::PROMOTION_PIECES) {
                         addMove(fromSquare, toSquare, promotionType);
                     }
                 }
@@ -78,9 +73,9 @@ precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 
     std::array<std::tuple<Square, Square, PieceType>, ACTION_SIZE> reverseMoveMappings;
 
-    for (Square fromSquare : SQUARES) {
-        for (Square toSquare : SQUARES) {
-            for (PieceType promotionType : PIECE_TYPES_AND_NONE) {
+    for (Square fromSquare : range(Square::SQUARE_NB)) {
+        for (Square toSquare : range(Square::SQUARE_NB)) {
+            for (PieceType promotionType : range(PieceType::PIECE_TYPE_NB)) {
                 int moveIndex = moveMappings[fromSquare][toSquare][(int) promotionType];
                 if (moveIndex != -1) {
                     reverseMoveMappings[moveIndex] = {fromSquare, toSquare, promotionType};
@@ -95,25 +90,29 @@ precalculateReverseMoveMappings(const MoveMapping &moveMappings) {
 const auto MOVE_MAPPINGS = precalculateMoveMappings();
 const auto REVERSE_MOVE_MAPPINGS = precalculateReverseMoveMappings(MOVE_MAPPINGS);
 
-int encodeMove(const Move &move) {
+int encodeMove(Move move, const Board& board) {
     // Encodes a chess move into a move index.
     //
     // :param move: The move to encode.
     // :return: The encoded move index.
 
-    int moveIndex = MOVE_MAPPINGS[move.fromSquare()][move.toSquare()][(int) move.promotion()];
+    if (board.)
+
+    int moveIndex = MOVE_MAPPINGS[move.from_sq()][move.to_sq()][(int) move.promotion_type()];
 
     return moveIndex;
 }
 
-Move decodeMove(int moveIndex) {
+Move decodeMove(int moveIndex, const Board& board) {
     // Decodes a move index into a chess move.
     //
     // :param move_index: The index of the move to decode.
     // :return: The decoded chess move.
 
     auto [from_square, to_square, promotion_type] = REVERSE_MOVE_MAPPINGS[moveIndex];
-    return Move(from_square, to_square, promotion_type);
+
+    // TODO warning, the flags have to be set manually, maybe directly when iterating through the valid moves, just taking the valid move from the move gen, if the squares and promotion matches
+    return Move::make(from_square, to_square, promotion_type);
 }
 
 torch::Tensor encodeMoves(const std::vector<Move> &moves) {

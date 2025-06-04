@@ -2,8 +2,6 @@
 
 #include "common.hpp"
 
-#include "BoardEncoding.hpp"
-#include "MoveEncoding.hpp"
 #include "util/ShardedCache.hpp"
 #include <ATen/core/TensorBody.h>
 
