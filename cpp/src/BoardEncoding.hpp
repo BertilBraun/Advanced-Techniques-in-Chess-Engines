@@ -15,4 +15,4 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
 
 uint64 hash(const CompressedEncodedBoard &compressed);
 
-std::optional<float> getBoardResultScore(Board &board);
+std::optional<float> getBoardResultScore(const Board &board);

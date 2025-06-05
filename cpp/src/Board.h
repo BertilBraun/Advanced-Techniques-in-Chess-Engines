@@ -1,59 +1,43 @@
 #pragma once
 
-
-#include "position.h"
 #include "bitboard.h"
 #include "movegen.h"
-#include "types.h"
+#include "position.h"
+#include "util/ChunkedList.h"
 
 using namespace Stockfish;
+
+static inline constexpr std::array COLORS = {Color::WHITE, Color::BLACK};
+static inline constexpr std::array PIECE_TYPES = {
+    PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN, PieceType::KING
+};
 
 
 // Material values matching the Python implementation
 static constexpr int PIECE_VALUE[PIECE_TYPE_NB] = {
-    0,  // No piece
-    1,  // Pawn
-    3,  // Knight
-    3,  // Bishop
-    5,  // Rook
-    9,  // Queen
-    0   // King (value treated as 0 for evaluation)
+    0, // No piece
+    1, // Pawn
+    3, // Knight
+    3, // Bishop
+    5, // Rook
+    9, // Queen
+    0  // King (value treated as 0 for evaluation)
 };
 
 // Maximum total material on the board (white minus black denominator)
-static constexpr int MAX_MATERIAL_VALUE =
-    PIECE_VALUE[PAWN]   * 8 +
-    PIECE_VALUE[KNIGHT] * 2 +
-    PIECE_VALUE[BISHOP] * 2 +
-    PIECE_VALUE[ROOK]   * 2 +
-    PIECE_VALUE[QUEEN]  * 1;
+static constexpr int MAX_MATERIAL_VALUE = PIECE_VALUE[PAWN] * 8 + PIECE_VALUE[KNIGHT] * 2 +
+                                          PIECE_VALUE[BISHOP] * 2 + PIECE_VALUE[ROOK] * 2 +
+                                          PIECE_VALUE[QUEEN] * 1;
 
 class Board {
 public:
-    Board() {
+    Board(const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
         // Initialize Position and StateInfo with the standard start position.
-        pos.set("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", false, &st);
-    }
-
-    /// Copy‐constructor for deep‐copy semantics
-    Board(const Board& other) {
-        // 1) Bit‐for‐bit copy ALL of `other.pos` into our `pos`.
-        std::memcpy(&pos, &other.pos, sizeof(Position));
-
-        // 2) Copy only the topmost StateInfo from `other` into our `st`.
-        std::memcpy(&st, other.pos.state(), sizeof(StateInfo));
-
-        // 3) Overwrite the private `pos.st` pointer (inside the new pos):
-        char* posBytes = reinterpret_cast<char*>(&pos);
-        StateInfo** stPtrInsidePos =
-            reinterpret_cast<StateInfo**>(posBytes + stOffset);
-        *stPtrInsidePos = &st;
+        setFen(fen);
     }
 
     /// Returns +1 if White to move, -1 if Black to move.
-    int current_player() const {
-        return (pos.side_to_move() == WHITE) ? +1 : -1;
-    }
+    int current_player() const { return (pos.side_to_move() == WHITE) ? +1 : -1; }
 
     /// Pushes a move onto the internal Position. Assumes move is legal.
     void make_move(Move m) {
@@ -62,13 +46,15 @@ public:
         // bool found = false;
         // for (Move mv : ml) if (mv == m) { found = true; break; }
         // assert(found && "Attempting to push an illegal move");
-        pos.do_move(m, st, nullptr);
+        moveHistory.add({m, StateInfo()});
+        pos.do_move(m, moveHistory[moveHistory.size()-1].second, nullptr);
     }
 
     /// Returns true if no legal moves are available (checkmate or stalemate).
     bool is_game_over() const {
         // 3-fold-repetition and 50 move rul draw is handled outside move generation
-        if (can_claim_3fold_repetition() || is_50_move_rule_draw() || draw_by_insufficient_material()) {
+        if (can_claim_3fold_repetition() || is_50_move_rule_draw() ||
+            draw_by_insufficient_material()) {
             return true;
         }
 
@@ -105,8 +91,8 @@ public:
      * promotions to Queen, or non‐promotion moves).
      */
     std::vector<Move> get_valid_moves() const {
+        const MoveList<LEGAL> ml(pos);
         std::vector<Move> filtered;
-        MoveList<LEGAL> ml(pos);
         filtered.reserve(ml.size());
         for (Move m : ml) {
             if (m.type_of() != PROMOTION || m.promotion_type() == QUEEN) {
@@ -117,15 +103,8 @@ public:
         return filtered;
     }
 
-    /// Produces a deep copy of this ChessBoard.
-    Board copy() const {
-        return Board(*this);
-    }
-
     /// Returns a 64‐bit Zobrist hash of the current position.
-    std::uint64_t quick_hash() const {
-        return pos.key();
-    }
+    std::uint64_t quick_hash() const { return pos.key(); }
 
     /**
      * Returns a material‐based heuristic score in [-1, +1]:
@@ -136,7 +115,7 @@ public:
     double get_approximate_result_score() const {
         int mat_value = 0;
         // For each piece type, count white pieces minus black pieces.
-        for (PieceType pt = PAWN; pt <= KING; ++pt) {
+        for (PieceType pt : PIECE_TYPES) {
             const Bitboard white_bb = pos.pieces(pt, WHITE);
             const Bitboard black_bb = pos.pieces(pt, BLACK);
 
@@ -148,16 +127,20 @@ public:
         return static_cast<double>(mat_value) / static_cast<double>(MAX_MATERIAL_VALUE);
     }
 
+    std::string fen() const {
+        // Returns the FEN string representation of the current position.
+        return pos.fen();
+    }
+
     /// Sets the internal Position from a FEN string.
-    void set_fen(const std::string& fen) {
+    void setFen(const std::string &fen) {
+        moveHistory.clear();
         pos.set(fen, false, &st);
     }
 
-    /// Static factory: creates a ChessBoard from a given FEN.
-    static Board from_fen(const std::string& fen) {
-        Board cb;
-        cb.set_fen(fen);
-        return cb;
+    const Position& position() const {
+        // Returns a reference to the internal Position object.
+        return pos;
     }
 
     /**
@@ -185,17 +168,14 @@ public:
             int rank = i + 1;
             oss << rank << " ";
             for (int file = 0; file < BOARD_LENGTH; ++file) {
-                Square sq = square( file, i);
-                Piece pc = pos.piece_on(sq);
+                const Piece pc = pos.piece_on(square(file, i));
                 if (pc != NO_PIECE) {
-                    Color c = color_of(pc);
-                    PieceType pt = type_of(pc);
-                    char symbol = piece_symbol(pt, c);
-                    oss << symbol;
+                    oss << piece_symbol(type_of(pc), color_of(pc));
                 } else {
                     oss << ".";
                 }
-                if (file < BOARD_LENGTH - 1) oss << " ";
+                if (file < BOARD_LENGTH - 1)
+                    oss << " ";
             }
             oss << " " << rank << "\n";
         }
@@ -205,33 +185,41 @@ public:
     }
 
 private:
-    Position   pos;
-    StateInfo  st;
+    Position pos;
+    StateInfo st;
+    ChunkedList<std::pair<Move, StateInfo>> moveHistory;
 
-    static char piece_symbol(const PieceType pt, const Color c) {
+    static constexpr const char* piece_symbol(const PieceType pt, const Color c) {
         switch (pt) {
-            case PAWN:   return (c == WHITE ? '♟' : '♙');
-            case KNIGHT: return (c == WHITE ? '♞' : '♘');
-            case BISHOP: return (c == WHITE ? '♝' : '♗');
-            case ROOK:   return (c == WHITE ? '♜' : '♖');
-            case QUEEN:  return (c == WHITE ? '♛' : '♕');
-            case KING:   return (c == WHITE ? '♚' : '♔');
-            default:     return '.';
+        case PAWN:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♟" : u8"♙");
+        case KNIGHT:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♞" : u8"♘");
+        case BISHOP:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♝" : u8"♗");
+        case ROOK:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♜" : u8"♖");
+        case QUEEN:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♛" : u8"♕");
+        case KING:
+            return reinterpret_cast<const char*>(c == WHITE ? u8"♚" : u8"♔");
+        default:
+            return ".";
         }
     }
 
-    bool Board::draw_by_insufficient_material() const {
+    bool draw_by_insufficient_material() const {
         // default early stopping
         if (pos.count<ALL_PIECES>() > 4) {
             return false;
         }
 
         // check for chess and atomic
-        return (pos.count<ALL_PIECES>() == 2) ||                                      // 1) KK
-               (pos.count<ALL_PIECES>() == 3 && pos.count<BISHOP>() == 1) ||        // 2) KB vs K
-               (pos.count<ALL_PIECES>() == 3 && pos.count<KNIGHT>() == 1) ||        // 3) KN vs K
+        return (pos.count<ALL_PIECES>() == 2) ||                             // 1) KK
+               (pos.count<ALL_PIECES>() == 3 && pos.count<BISHOP>() == 1) || // 2) KB vs K
+               (pos.count<ALL_PIECES>() == 3 && pos.count<KNIGHT>() == 1) || // 3) KN vs K
                (pos.count<ALL_PIECES>() == 4 &&
-               (pos.count<KNIGHT>(WHITE) == 2 || pos.count<KNIGHT>(BLACK) == 2));   // 4) KNN vs K
+                (pos.count<KNIGHT>(WHITE) == 2 || pos.count<KNIGHT>(BLACK) == 2)); // 4) KNN vs K
     }
 
     bool can_claim_3fold_repetition() const {
@@ -247,38 +235,10 @@ private:
         }
         return false;
     }
-
-    // At runtime, we find where `pos.st` lives by stuffing a known StateInfo* into
-    // a temporary Position and scanning the bytes.  That offset is computed once.
-    static std::size_t compute_st_offset() {
-        Position temp;
-        StateInfo dummy;
-        // Force temp.st = &dummy:
-        temp.set("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", false, &dummy);
-
-        // Scan temp’s bytes for the  pointer &dummy:
-        char* base = reinterpret_cast<char*>(&temp);
-        for (std::size_t i = 0; i + sizeof(void*) <= sizeof(Position); ++i) {
-            StateInfo* candidate;
-            std::memcpy(&candidate, base + i, sizeof(void*));
-            if (candidate == &dummy) {
-                return i;
-            }
-        }
-
-        assert(false && "Failed to locate StateInfo pointer inside Position");
-        return 0;
-    }
-
-    // Holds the offset of `st` within `Position`.  Computed once at startup.
-    static const std::size_t stOffset;
 };
 
-// Definition of the static member:
-const std::size_t Board::stOffset = Board::compute_st_offset();
-
 // Overload operator<< so you can do: std::cout << board << "\n";
-inline std::ostream& operator<<(std::ostream& os, const Board& board) {
+inline std::ostream &operator<<(std::ostream &os, const Board &board) {
     os << board.repr();
     return os;
 }
