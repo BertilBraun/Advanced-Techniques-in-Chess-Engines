@@ -4,32 +4,34 @@
 #include "BoardEncoding.hpp"
 #include "MoveEncoding.hpp"
 
-InferenceClient::InferenceClient()
-    : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false), m_maxBatchSize(1) {
+InferenceClient::InferenceClient(const InferenceClientParams &args)
+    : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false),
+      m_maxBatchSize(args.maxBatchSize) {
     // Initialize the model and other members.
     m_totalHits = 0;
     m_totalEvals = 0;
-}
-
-void InferenceClient::init(const int device_id, const std::string &currentModelPath,
-                           const int maxBatchSize) {
-    m_totalHits = 0;
-    m_totalEvals = 0;
-    m_shutdown = false;
-    m_maxBatchSize = maxBatchSize;
 
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
-        m_device = torch::Device(torch::kCUDA, device_id);
+        m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kFloat16; // Use half precision for inference.
     }
-    loadModel(currentModelPath);
+    loadModel(args.currentModelPath);
 
     // Start the worker thread that processes inference requests.
     m_inferenceThread = std::thread(&InferenceClient::inferenceWorker, this);
 }
 
-std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> &boards) {
+InferenceClient::~InferenceClient() {
+    m_shutdown = true;
+    m_queueCV.notify_all();
+    if (m_inferenceThread.joinable()) {
+        m_inferenceThread.join();
+    }
+}
+
+std::vector<InferenceResult>
+InferenceClient::inferenceBatch(const std::vector<const Board &> &boards) {
     if (boards.empty()) {
         return std::vector<InferenceResult>();
     }
@@ -49,14 +51,11 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
     std::vector<std::pair<size_t, std::future<ModelInferenceResult>>> futures;
     futures.reserve(boards.size());
 
-    int myIteration = m_currentIteration;
-
     for (size_t i : range(boards.size())) {
         // Check if the result is already cached.
         // If so, set the promise and continue.
         const uint64 encodedBoardHash = hash(encodedBoards[i]);
-        if (m_cache[myIteration].contains(encodedBoardHash) ||
-            enqueuedBoards.contains(encodedBoardHash)) {
+        if (m_cache.contains(encodedBoardHash) || enqueuedBoards.contains(encodedBoardHash)) {
             m_totalHits++;
             continue;
         }
@@ -77,18 +76,17 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
     for (auto &&[i, future] : futures) {
         auto [policy, value] = future.get(); // Make a copy of the result.
 
-        m_cache[myIteration].insert(
-            hash(encodedBoards[i]),
-            {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
+        m_cache.insert(hash(encodedBoards[i]),
+                       {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
 
     // Wait for all futures in order.
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
 
-    for (auto &&[board, encodedBoard] : zip(boards, encodedBoards)) {
+    for (const CompressedEncodedBoard encodedBoard : encodedBoards) {
         InferenceResult result;
-        if (!m_cache[myIteration].lookup(hash(encodedBoard), result))
+        if (!m_cache.lookup(hash(encodedBoard), result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
         results.push_back(result);
@@ -97,18 +95,35 @@ std::vector<InferenceResult> InferenceClient::inferenceBatch(std::vector<Board> 
     return results;
 }
 
-void InferenceClient::updateModel(const std::string &modelPath, int iteration) {
-    logCacheStatistics(m_currentIteration);
-    // remove all entries from the cache which are not the m_currentIteration
-    for (auto it = m_cache.begin(); it != m_cache.end();) {
-        if (it->first != m_currentIteration) {
-            it = m_cache.erase(it); // erase returns the next valid iterator
-        } else {
-            ++it;
-        }
+InferenceStatistics InferenceClient::getStatistics() const {
+    InferenceStatistics stats;
+
+    if (m_totalEvals == 0 || m_cache.empty()) {
+        log("No cache statistics to log.");
+        return stats; // Avoid division by zero.
     }
-    m_currentIteration = iteration;
-    loadModel(modelPath);
+
+    stats.cacheHitRate = (static_cast<float>(m_totalHits) / m_totalEvals) * 100.0f;
+    stats.uniquePositions = m_cache.size();
+
+    stats.nnOutputValueDistribution.reserve(m_cache.size());
+    for (const auto &entry : m_cache) {
+        stats.nnOutputValueDistribution.push_back(entry.second.second);
+    }
+
+    size_t sizeInBytes = 0;
+    for (const auto &entry : m_cache) {
+        sizeInBytes += sizeof(entry.first) + sizeof(entry.second);
+        sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
+    }
+    stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
+
+    log("Inference Client stats:");
+    log("  cache_hit_rate:", stats.cacheHitRate);
+    log("  unique_positions:", stats.uniquePositions);
+    log("  cache_size_mb:", stats.cacheSizeMB);
+
+    return stats;
 }
 
 void InferenceClient::loadModel(const std::string &modelPath) {
@@ -117,37 +132,6 @@ void InferenceClient::loadModel(const std::string &modelPath) {
     m_model = torch::jit::load(modelPath, m_device);
     m_model.to(m_torchDtype); // Use half precision for inference.
     m_model.eval();
-}
-
-void InferenceClient::logCacheStatistics(int iteration) {
-    if (m_totalEvals == 0 || !m_logger || m_cache[iteration].empty()) {
-        log("No cache statistics to log.");
-        return; // Avoid division by zero.
-    }
-
-    const double cacheHitRate = (static_cast<double>(m_totalHits) / m_totalEvals) * 100.0;
-    m_logger->addScalar("cache/hit_rate", iteration, cacheHitRate);
-    m_logger->addScalar("cache/unique_positions", iteration,
-                        static_cast<double>(m_cache[iteration].size()));
-    std::vector<float> nnOutputValues;
-    nnOutputValues.reserve(m_cache[iteration].size());
-    for (const auto &entry : m_cache[iteration]) {
-        nnOutputValues.push_back(entry.second.second);
-    }
-    m_logger->addHistogram("nn_output_value_distribution", iteration, nnOutputValues);
-
-    size_t sizeInBytes = 0;
-    for (const auto &entry : m_cache[iteration]) {
-        sizeInBytes += sizeof(entry.first) + sizeof(entry.second);
-        sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
-    }
-    const double sizeInMB = static_cast<double>(sizeInBytes) / (1024 * 1024);
-    m_logger->addScalar("cache/size_mb", iteration, sizeInMB);
-
-    log("Inference Client stats on iteration:", iteration);
-    log("  cache_hit_rate:", cacheHitRate);
-    log("  unique_positions:", m_cache[iteration].size());
-    log("  cache_size_mb:", sizeInMB);
 }
 
 void InferenceClient::inferenceWorker() {

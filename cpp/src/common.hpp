@@ -29,6 +29,7 @@
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <new> // for placement‐new
 #include <optional>
 #include <queue>
 #include <random>
@@ -81,7 +82,7 @@ template <typename T> inline void shuffle(std::vector<T> &vec) {
 
 #include "position.h"
 
-using namespace  Stockfish;
+using namespace Stockfish;
 
 // Calculated as output of __precalculateMoveMappings() but defined here to be able to use it as a
 // constexpr variable
@@ -106,7 +107,6 @@ inline Square square(const int col, const int row) {
 
 #include "Board.h"
 
-
 #ifdef _WIN32
 #pragma warning(push, 0)
 #endif
@@ -118,9 +118,7 @@ inline Square square(const int col, const int row) {
 #pragma warning(pop)
 #endif
 
-
 typedef std::pair<Move, float> MoveScore;
-
 
 inline std::string toString(const Square &square) {
     File file = file_of(square);
@@ -146,3 +144,7 @@ inline std::string toString(const Move &move) {
     }
     return ss.str();
 }
+
+// A 32‐bit index into the pool.
+using NodeId = uint32_t;
+static constexpr NodeId INVALID_NODE = std::numeric_limits<NodeId>::max();

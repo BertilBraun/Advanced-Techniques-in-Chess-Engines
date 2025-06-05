@@ -8,6 +8,19 @@
 // InferenceResult is defined as a pair: (vector of MoveScore, float value)
 typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
 
+struct InferenceStatistics {
+    float cacheHitRate = 0.0f;                    // Percentage of cache hits.
+    size_t uniquePositions = 0;                   // Number of unique positions in the cache.
+    size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
+    std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
+};
+
+struct InferenceClientParams {
+    int device_id;                // GPU device id to use (if available), else CPU.
+    std::string currentModelPath; // Path used to resolve the model file.
+    int maxBatchSize;             // Maximum number of requests to process in one batch.
+};
+
 /**
  * @brief InferenceClient batches and caches inference requests.
  *        It loads a TorchScript model (exported from Python) for inference.
@@ -18,35 +31,17 @@ typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
  */
 class InferenceClient {
 public:
-    InferenceClient();
+    explicit InferenceClient(const InferenceClientParams &args);
 
-    ~InferenceClient() {
-        m_shutdown = true;
-        m_queueCV.notify_all();
-        if (m_inferenceThread.joinable()) {
-            m_inferenceThread.join();
-        }
-    }
-
-    /**
-     * @param device_id     GPU device id to use (if available), else CPU.
-     * @param savePath      Path used to resolve the model file.
-     * @param maxBatchSize  Maximum number of requests to process in one batch.
-     */
-    void init(int device_id, const std::string &currentModelPath, int maxBatchSize);
+    ~InferenceClient();
 
     /**
      * Synchronous interface: runs inference on a batch of boards and returns results
      * in the same order as the input.
      */
-    std::vector<InferenceResult> inferenceBatch(std::vector<Board> &boards);
+    std::vector<InferenceResult> inferenceBatch(const std::vector<const Board &> &boards);
 
-    /**
-     * Reloads the model from the latest file in the save path.
-     * Logs cache statistics and clears the cache.
-     * This should be called when the model is updated.
-     */
-    void updateModel(const std::string &modelPath, int iteration);
+    InferenceStatistics getStatistics() const;
 
 private:
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;
@@ -63,11 +58,6 @@ private:
      * Assumes the model file is valid.
      */
     void loadModel(const std::string &modelPath);
-
-    /**
-     * Logs cache statistics.
-     */
-    void logCacheStatistics(int iteration);
 
     /**
      * The dedicated worker thread function.
@@ -92,11 +82,10 @@ private:
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
-    // Cache: iteration -> board hash -> InferenceResult.
-    std::unordered_map<int, ShardedCache<int64_t, InferenceResult, 32>> m_cache;
+    // Cache: board hash -> InferenceResult.
+    ShardedCache<int64_t, InferenceResult, 32> m_cache;
     int m_totalHits;
     int m_totalEvals;
-    int m_currentIteration;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

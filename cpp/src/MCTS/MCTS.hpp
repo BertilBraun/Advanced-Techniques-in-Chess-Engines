@@ -6,7 +6,7 @@
 
 #include "../InferenceClient.hpp"
 
-typedef std::pair<int, int> VisitCount;
+typedef std::pair<Move, int> VisitCount;
 typedef std::vector<VisitCount> VisitCounts;
 
 struct MCTSResult {
@@ -14,23 +14,12 @@ struct MCTSResult {
     VisitCounts visits;
     std::vector<MCTSNode> children;
     bool fullSearch;
-
-    MCTSResult(float result_, const VisitCounts &visits_, std::vector<MCTSNode> children_ = {},
-               bool fullSearch_ = false)
-        : result(result_), visits(visits_), children(std::move(children_)), fullSearch(fullSearch_) {}
 };
 
 struct MCTSStatistics {
-    float averageDepth;
-    float averageEntropy;
-    float averageKLDivergence;
-};
-
-struct InferenceStatistics {
-    float cacheHitRate;
-    size_t uniquePositions;
-    size_t cacheSizeMB;
-    std::vector<float> nnOutputValueDistribution;
+    float averageDepth = 0.0f;        // Average depth of the search trees.
+    float averageEntropy = 0.0f;      // Average entropy of the visit counts.
+    float averageKLDivergence = 0.0f; // Average KL divergence of the visit counts.
 };
 
 struct MCTSResults {
@@ -40,28 +29,24 @@ struct MCTSResults {
 
 class MCTS {
 public:
-    MCTS(const InferenceClientParams& clientArgs, const MCTSParams &mctsArgs)
+    MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs)
         : m_client(clientArgs), m_args(mctsArgs) {}
 
-    std::vector<MCTSResult> search(std::vector<std::pair<std::string, std::shared_ptr<MCTSNode>>> &boards) const;
+    MCTSResults search(std::vector<std::tuple<std::string, MCTSNode, bool>> &boards);
 
     InferenceStatistics getInferenceStatistics() const;
+
 private:
     InferenceClient m_client;
     MCTSParams m_args;
 
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(std::vector<MCTSNode> &roots) const;
+    void parallelIterate(std::vector<MCTSNode> &roots);
 
     // Get policy moves with added Dirichlet noise.
-    std::vector<std::vector<MoveScore>> getPolicyWithNoise(std::vector<Board> &boards) const;
+    std::vector<std::vector<MoveScore>>
+    getPolicyWithNoise(const std::vector<const Board &> &boards);
 
     // Add Dirichlet noise to a vector of MoveScore.
     std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
-
-    // Traverse the tree to find the best child or, if the node is terminal,
-    // back-propagate the board’s result.
-    std::optional<MCTSNode *> getBestChildOrBackPropagate(MCTSNode &root, float c_param) const;
-
-    void logMctsStatistics(const std::vector<MCTSNode> &roots) const;
 };

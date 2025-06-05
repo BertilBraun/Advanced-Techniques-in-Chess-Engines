@@ -1,44 +1,31 @@
 #include "MCTSNode.hpp"
 
-// #include "../MoveEncoding.hpp"
+#include "NodePool.h"
 
-
-MCTSNode MCTSNode::root(Board board) {
-    MCTSNode instance(std::move(board), 1.0, Move::null(), nullptr);
-    instance.number_of_visits = 1;
-    return instance;
+NodeId MCTSNode::root(const std::string &boardFen, NodePool *pool) {
+    const NodeId instanceId = pool->allocateNode(boardFen, 1.0, Move::null(), INVALID_NODE, pool);
+    MCTSNode &instance = pool->get(instanceId);
+    instance.myId = instanceId;
+    instance.number_of_visits = 1; // Initialize visits to 1 for the root node
+    return instanceId;
 }
 
-MCTSNode::MCTSNode(Board board, float policy, Move move_to_get_here, MCTSNode *parent)
-    : board(std::move(board)), parent(parent), move_to_get_here(move_to_get_here),
-       policy(policy) {}
+MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
+                   const NodeId parent, NodePool *pool)
+    : parent(parent), myId(INVALID_NODE), pool(pool), board(boardFen),
+      move_to_get_here(move_to_get_here), policy(policy) {}
 
-float MCTSNode::ucb(float cParam) const {
-    if (!parent) {
-        throw std::logic_error("Node must have a parent");
-    }
+float MCTSNode::ucb(const float uCommon) const {
+    const float uScore = policy * uCommon / (1 + number_of_visits);
 
-    float uScore = policy * cParam * std::sqrt(parent->number_of_visits) / (1 + number_of_visits);
-
-    float qScore = 0.0;
+    float qScore = -1.0; // Default to loss for unvisited moves
+    // TODO most seem to init to 0.0
+    // CrazyAra inits to -1
     if (number_of_visits > 0) {
         qScore = -1 * (result_score + virtual_loss) / number_of_visits;
-    } else {
-        qScore = -1.0; // Default to loss for unvisited moves
     }
 
     return uScore + qScore;
-}
-
-MCTSNode::MCTSNode(MCTSNode &&other)
-    : board(std::move(other.board)), parent(other.parent), children(std::move(other.children)),
-      move_to_get_here(other.move_to_get_here), number_of_visits(other.number_of_visits),
-      virtual_loss(other.virtual_loss), result_score(other.result_score), policy(other.policy) {
-    // NOTE: For some reason this move constructor is required to set the parent pointer
-    // correctly in some part of the MCTS search.
-    for (MCTSNode &child : children) {
-        child.parent = this;
-    }
 }
 
 void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
@@ -48,57 +35,60 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
     children.reserve(moves_with_scores.size());
 
     for (const auto &[move, score] : moves_with_scores) {
-        Board newBoard = board.copy();
-        try {
-            newBoard.push(move);
+        Board moveBoard(board.fen());
+        moveBoard.make_move(move);
 
-            children.emplace_back(std::move(newBoard), score, move, this);
-        } catch (std::invalid_argument &e) {
-            // Ignore invalid moves (e.g., castling when the king is in check)
-            log("Invalid move: ", e.what(), " for move: ", move, " in board: ", board.fen());
-        }
+        NodeId childId = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
+        pool->get(childId).myId = childId;
+
+        children.emplace_back(childId);
     }
 }
 
-void MCTSNode::backPropagate(float result) {
-    MCTSNode* node = this;
+void MCTSNode::backPropagate(float result) const {
+    NodeId nodeId = myId;
 
-    while (node) {
-        node->result_score += result;
-        node->number_of_visits += 1;
+    while (nodeId != INVALID_NODE) {
+        MCTSNode &node = pool->get(nodeId);
+        node.result_score += result; // Add the result to the node's score
+        node.number_of_visits += 1;  // Increment the visit count
 
         result = -result * 0.99; // Discount the result for the parent
-        node = node->parent;
+        nodeId = node.parent;
     }
 }
 
-void MCTSNode::updateVirtualLoss(int delta) {
-    MCTSNode* node = this;
+void MCTSNode::updateVirtualLoss(int delta) const {
+    NodeId nodeId = myId;
 
-    // NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. muliply delta by 100?)
+    // NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. multiply
+    // delta by 100?)
     delta *= 3;
 
-    while (node) {
-        node->virtual_loss += delta;
-        node->number_of_visits += delta;
+    while (nodeId != INVALID_NODE) {
+        MCTSNode &node = pool->get(nodeId);
+        node.virtual_loss += delta;
+        node.number_of_visits += delta;
 
-        node = node->parent;
+        nodeId = node.parent;
     }
 }
 
-MCTSNode &MCTSNode::bestChild(float cParam) {
+NodeId MCTSNode::bestChild(const float cParam) const {
     assert(!children.empty() && "Node has no children");
 
-    MCTSNode *bestChild = &children[0];
-    float bestScore = children[0].ucb(cParam);
+    const float uCommon = cParam * std::sqrt(number_of_visits);
+
+    NodeId bestChildId = children[0];
+    float bestScore = pool->get(children[0]).ucb(uCommon);
 
     for (size_t i = 1; i < children.size(); ++i) {
-        float score = children[i].ucb(cParam);
+        const float score = pool->get(children[i]).ucb(uCommon);
         if (score > bestScore) {
             bestScore = score;
-            bestChild = &children[i];
+            bestChildId = children[i];
         }
     }
 
-    return *bestChild;
+    return bestChildId;
 }
