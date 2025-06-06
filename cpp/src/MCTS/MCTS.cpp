@@ -116,16 +116,15 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
         } else {
             // If the node is already expanded, we can use it directly.
 
-            std::function<void(const NodeId, const NodeId)> free = [&](const NodeId root,
-                                                                       const NodeId excluded) {
+            std::function<void(NodeId, NodeId)> free = [&](const NodeId root,
+                                                           const NodeId excluded) {
                 // Free the node and all its children, except the excluded one.
                 if (root == excluded)
                     return;
 
-                const MCTSNode *node = m_pool.get(root);
-                for (const NodeId childId : node->children) {
+                for (const NodeId childId : m_pool.get(root)->children)
                     free(childId, excluded);
-                }
+
                 m_pool.deallocateNode(root);
             };
 
@@ -138,8 +137,9 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
             // Add Dirichlet noise to the node's policy.
             const std::vector<float> noise =
                 dirichlet(m_args.dirichlet_alpha, root->children.size());
-            for (size_t i = 0; i < root->children.size(); ++i) {
-                MCTSNode *child = m_pool.get(root->children[i]);
+
+            for (const auto [i, childId] : enumerate(root->children)) {
+                MCTSNode *child = m_pool.get(childId);
                 child->policy = lerp(child->policy, noise[i], m_args.dirichlet_epsilon);
             }
 
@@ -147,10 +147,8 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
                 // Discount the node's score and visits.
                 node->result_score *= m_args.node_reuse_discount;
                 node->number_of_visits *= m_args.node_reuse_discount;
-                for (const NodeId childId : node->children) {
-                    MCTSNode *child = m_pool.get(childId);
-                    discount(child);
-                }
+                for (const NodeId childId : node->children)
+                    discount(m_pool.get(childId));
             };
 
             // Discount the node's score and visits.
@@ -165,52 +163,44 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
 
     size_t moveIndex = 0;
 
-    for (const auto [i, val] : enumerate(boards)) {
-        const auto &[fen, id, _] = val;
-        if (id == INVALID_NODE) {
+    for (const auto root : roots) {
+        if (!root->isFullyExpanded()) {
             // If the node is not pre-expanded, we need to expand it with the moves.
-            roots[i]->expand(movesList[moveIndex]);
+            root->expand(movesList[moveIndex]);
 
             moveIndex++;
         }
     }
 
-    std::vector<MCTSNode *> activeRoots = roots;
-    std::vector<int> numSearches;
-    numSearches.reserve(roots.size());
-    for (auto [_, __, searches] : boards) {
-        numSearches.push_back(searches);
-    }
-    while (activeRoots.size()) {
-        parallelIterate(activeRoots);
-        // Remove nodes that have more than their assigned number of searches.
-        std::vector<MCTSNode *> nextActiveRoots;
-        std::vector<int> nextNumSearches;
+    const std::size_t N = boards.size();
+    std::vector<std::future<MCTSResult>> futures;
+    futures.reserve(N);
 
-        for (auto [root, searches] : zip(activeRoots, numSearches)) {
-            if (root->number_of_visits < searches) {
-                nextActiveRoots.push_back(root);
-                nextNumSearches.push_back(searches);
-            }
-        }
+    for (const auto &[root, tup] : zip(roots, boards))
+        futures.emplace_back(m_threadPool.enqueue(
+            [this](MCTSNode *node, int number_of_searches) {
+                // Run the MCTS iterations until the root node has enough visits.
+                while (node->number_of_visits < number_of_searches) {
+                    parallelIterate(node);
+                }
 
-        activeRoots = std::move(nextActiveRoots);
-        numSearches = std::move(nextNumSearches);
-    }
+                // Gather the visit counts and result score for the root node.
+                VisitCounts visitCounts;
+                visitCounts.reserve(node->children.size());
+                for (const NodeId childId : node->children) {
+                    MCTSNode *child = m_pool.get(childId);
+                    visitCounts.emplace_back(child->move_to_get_here, child->number_of_visits);
+                }
 
-    // Build and return the results.
+                return MCTSResult(node->result_score / static_cast<float>(node->number_of_visits),
+                                  visitCounts, node->children);
+            },
+            root, get<2>(tup)));
+
     std::vector<MCTSResult> results;
-    results.reserve(roots.size());
-    for (const MCTSNode *root : roots) {
-        VisitCounts visitCounts;
-        visitCounts.reserve(root->children.size());
-        for (const NodeId childId : root->children) {
-            MCTSNode *child = m_pool.get(childId);
-            visitCounts.emplace_back(child->move_to_get_here, child->number_of_visits);
-        }
-        results.emplace_back(root->result_score / static_cast<float>(root->number_of_visits),
-                             visitCounts, root->children);
-    }
+    results.reserve(N);
+    for (auto &fut : futures)
+        results.emplace_back(fut.get());
 
     return {
         .results = results,
@@ -218,16 +208,14 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     };
 }
 
-void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
+void MCTS::parallelIterate(const MCTSNode *root) {
     std::vector<MCTSNode *> nodes;
-    nodes.reserve(roots.size() * m_args.num_parallel_searches);
-    for (const MCTSNode *root : roots) {
-        for (int _ : range(m_args.num_parallel_searches)) {
-            std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
-            if (node.has_value()) {
-                node.value()->updateVirtualLoss(1);
-                nodes.push_back(node.value());
-            }
+    nodes.reserve(m_args.num_parallel_searches);
+    for (int _ : range(m_args.num_parallel_searches)) {
+        std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
+        if (node.has_value()) {
+            node.value()->updateVirtualLoss(1);
+            nodes.push_back(node.value());
         }
     }
     if (nodes.empty())

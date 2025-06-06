@@ -59,7 +59,7 @@ else
     echo "bind C-a send-prefix # Bind the new prefix key" >> ~/.tmux.conf
 
 
-    echo "cd Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
+    echo "cd ~/Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
 
     echo "conda activate Chess" >> ~/.bashrc
 fi

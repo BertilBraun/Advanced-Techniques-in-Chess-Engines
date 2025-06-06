@@ -63,24 +63,24 @@ private:
 };
 
 template <typename... Args> NodeId NodePool::allocateNode(Args &&...args) {
-    std::lock_guard<std::mutex> lock(pool_mutex_);
+    NodeId new_id = INVALID_NODE;
+    {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
 
-    if (!free_list_.empty()) {
-        NodeId reuse_id = free_list_.back();
-        free_list_.pop_back();
-        constructAt(reuse_id, std::forward<Args>(args)...);
-        return reuse_id;
+        if (!free_list_.empty()) {
+            new_id = free_list_.back();
+            free_list_.pop_back();
+        } else {
+            // No free slot: get the next fresh ID
+            new_id = next_fresh_id_++;
+            const size_t chunk_idx = static_cast<size_t>(new_id) / CHUNK_SIZE;
+            if (chunk_idx >= chunks_.size()) {
+                addChunk();
+            }
+        }
     }
-
-    // No free slot: get the next fresh ID
-    const NodeId id = next_fresh_id_;
-    const size_t chunk_idx = static_cast<size_t>(id) / CHUNK_SIZE;
-    if (chunk_idx >= chunks_.size()) {
-        addChunk();
-    }
-    ++next_fresh_id_;
-    constructAt(id, std::forward<Args>(args)...);
-    return id;
+    constructAt(new_id, std::forward<Args>(args)...);
+    return new_id;
 }
 
 template <typename... Args> void NodePool::constructAt(NodeId id, Args &&...args) {

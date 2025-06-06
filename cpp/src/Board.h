@@ -29,6 +29,24 @@ static constexpr int MAX_MATERIAL_VALUE = PIECE_VALUE[PAWN] * 8 + PIECE_VALUE[KN
                                           PIECE_VALUE[BISHOP] * 2 + PIECE_VALUE[ROOK] * 2 +
                                           PIECE_VALUE[QUEEN] * 1;
 
+static inline constexpr int BOARD_LENGTH = 8;
+static inline constexpr int BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH;
+
+inline std::pair<int, int> squareToIndex(const int square) {
+    return {square / BOARD_LENGTH, square % BOARD_LENGTH};
+}
+
+inline Square square(const int col, const int row) {
+    // Converts a column and row to a square index.
+    // param col: The column index (0-7).
+    // param row: The row index (0-7).
+    // :return: The square index.
+    assert(col >= 0 && col < BOARD_LENGTH && "Column index out of bounds");
+    assert(row >= 0 && row < BOARD_LENGTH && "Row index out of bounds");
+    return static_cast<Square>(row * BOARD_LENGTH + col);
+}
+
+
 class Board {
 public:
     Board(const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
@@ -46,15 +64,13 @@ public:
         // bool found = false;
         // for (Move mv : ml) if (mv == m) { found = true; break; }
         // assert(found && "Attempting to push an illegal move");
-        moveHistory.add({m, StateInfo()});
-        pos.do_move(m, moveHistory[moveHistory.size()-1].second, nullptr);
+        pos.do_move(m);
     }
 
     /// Returns true if no legal moves are available (checkmate or stalemate).
     bool is_game_over() const {
         // 3-fold-repetition and 50 move rul draw is handled outside move generation
-        if (can_claim_3fold_repetition() || is_50_move_rule_draw() ||
-            draw_by_insufficient_material()) {
+        if (pos.is_draw() || draw_by_insufficient_material()) {
             return true;
         }
 
@@ -134,8 +150,7 @@ public:
 
     /// Sets the internal Position from a FEN string.
     void setFen(const std::string &fen) {
-        moveHistory.clear();
-        pos.set(fen, false, &st);
+        pos.set(fen, false);
     }
 
     const Position& position() const {
@@ -160,7 +175,6 @@ public:
      */
     std::string repr() const {
         std::ostringstream oss;
-        constexpr int BOARD_LENGTH = 8;
         // File header
         oss << "  a b c d e f g h\n";
         // For i = 0..7, treat i as rank index 0=rank1, 7=rank8
@@ -186,8 +200,6 @@ public:
 
 private:
     Position pos;
-    StateInfo st;
-    ChunkedList<std::pair<Move, StateInfo>> moveHistory;
 
     static constexpr const char* piece_symbol(const PieceType pt, const Color c) {
         switch (pt) {
@@ -220,20 +232,6 @@ private:
                (pos.count<ALL_PIECES>() == 3 && pos.count<KNIGHT>() == 1) || // 3) KN vs K
                (pos.count<ALL_PIECES>() == 4 &&
                 (pos.count<KNIGHT>(WHITE) == 2 || pos.count<KNIGHT>(BLACK) == 2)); // 4) KNN vs K
-    }
-
-    bool can_claim_3fold_repetition() const {
-        // The repetition info stores the ply distance to the next previous
-        // occurrence of the same position.
-        // It is negative in the 3-fold case, or zero if the position was not repeated.
-        return st.repetition < 0;
-    }
-
-    bool is_50_move_rule_draw() const {
-        if (st.rule50 > 99 && (!pos.checkers() || MoveList<LEGAL>(pos).size())) {
-            return true;
-        }
-        return false;
     }
 };
 

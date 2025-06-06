@@ -134,7 +134,7 @@ FetchContent_Declare(
 # --- Fetch Stockfish ---
 FetchContent_Declare(
         Stockfish
-        GIT_REPOSITORY https://github.com/official-stockfish/Stockfish.git
+        GIT_REPOSITORY https://github.com/BertilBraun/Stockfish.git
         GIT_TAG master
 )
 
@@ -164,9 +164,6 @@ file(GLOB_RECURSE ALL_SOURCES
         "${stockfish_SOURCE_DIR}/src/*.cpp"
         "${stockfish_SOURCE_DIR}/src/*.h"
 )
-
-# Filter out NNUE files
-list(FILTER ALL_SOURCES EXCLUDE REGEX ".*/nnue/.*\\.cpp$")
 
 # Build the Python module from the binding entry point and shared sources
 pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})

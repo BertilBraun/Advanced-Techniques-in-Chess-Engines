@@ -7,6 +7,7 @@
 #include "MCTSNode.hpp"
 
 #include "../InferenceClient.hpp"
+#include "util/ThreadPool.h"
 
 typedef std::pair<Move, int> VisitCount;
 typedef std::vector<VisitCount> VisitCounts;
@@ -28,7 +29,9 @@ struct MCTSParams {
 
     float node_reuse_discount; // Discount factor for node reuse in MCTS.
 
-    int min_visit_count; // Minimum visit count for a child of a root node.
+    uint8 min_visit_count; // Minimum visit count for a child of a root node.
+
+    uint8 num_threads; // Number of threads to use for parallel processing.
 };
 
 struct MCTSResult {
@@ -74,12 +77,16 @@ struct MCTSResults {
  *
  */
 
+using BoardTuple = std::tuple<std::string /*FEN*/,
+                              NodeId      /*prev child or INVALID_NODE*/,
+                              int         /*num searches*/>;
+
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs)
-        : m_client(clientArgs), m_args(mctsArgs) {}
+        : m_client(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads) {}
 
-    MCTSResults search(const std::vector<std::tuple<std::string, NodeId, int>> &boards);
+    MCTSResults search(const std::vector<BoardTuple> &boards);
 
     InferenceStatistics getInferenceStatistics() { return m_client.getStatistics(); }
 
@@ -88,8 +95,10 @@ private:
     MCTSParams m_args;
     NodePool m_pool;
 
+    ThreadPool m_threadPool; // For parallel processing.
+
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(const std::vector<MCTSNode *> &roots);
+    void parallelIterate(const MCTSNode * root);
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>>

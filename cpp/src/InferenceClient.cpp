@@ -33,7 +33,7 @@ InferenceClient::~InferenceClient() {
 std::vector<InferenceResult>
 InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     if (boards.empty()) {
-        return std::vector<InferenceResult>();
+        return {};
     }
 
     // Encode all boards.
@@ -140,7 +140,7 @@ void InferenceClient::inferenceWorker() {
     while (true) {
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
-            m_queueCV.wait_for(lock, std::chrono::milliseconds(2),
+            m_queueCV.wait_for(lock, std::chrono::microseconds(200),
                                [this] { return !m_requestQueue.empty() || m_shutdown; });
             if (m_shutdown && m_requestQueue.empty())
                 break;

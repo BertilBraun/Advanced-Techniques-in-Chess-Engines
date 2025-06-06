@@ -1,6 +1,8 @@
 # NOTE: Only if on lambdalabs, run:
 curl -L https://lambdalabs-guest-agent.s3.us-west-2.amazonaws.com/scripts/install.sh | sudo bash
 
+cd ~
+
 git clone https://github.com/BertilBraun/Advanced-Techniques-in-Chess-Engines.git
 
 cd Advanced-Techniques-in-Chess-Engines/py
@@ -15,7 +17,7 @@ if [[ "$(uname -m)" == "aarch64" ]]; then
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
     echo "alias log='tail -f train.log'" >> ~/.bashrc
 
-    echo "cd Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
+    echo "cd ~/Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
 
     python3 -m venv .venv
     

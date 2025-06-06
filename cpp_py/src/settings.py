@@ -109,7 +109,7 @@ evaluation = EvaluationParams(
     num_games=40,
     dataset_path='reference/chess_database/iteration_202410/0',
 )
-ensure_eval_dataset_exists(evaluation.dataset_path)
+# ensure_eval_dataset_exists(evaluation.dataset_path)
 
 PARALLEL_GAMES = 16
 
