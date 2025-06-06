@@ -2,14 +2,6 @@
 
 #include "NodePool.h"
 
-NodeId MCTSNode::root(const std::string &boardFen, NodePool *pool) {
-    const NodeId instanceId = pool->allocateNode(boardFen, 1.0, Move::null(), INVALID_NODE, pool);
-    MCTSNode &instance = pool->get(instanceId);
-    instance.myId = instanceId;
-    instance.number_of_visits = 1; // Initialize visits to 1 for the root node
-    return instanceId;
-}
-
 MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
                    const NodeId parent, NodePool *pool)
     : parent(parent), myId(INVALID_NODE), pool(pool), board(boardFen),
@@ -39,7 +31,7 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
         moveBoard.make_move(move);
 
         NodeId childId = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
-        pool->get(childId).myId = childId;
+        pool->get(childId)->myId = childId;
 
         children.emplace_back(childId);
     }
@@ -49,12 +41,12 @@ void MCTSNode::backPropagate(float result) const {
     NodeId nodeId = myId;
 
     while (nodeId != INVALID_NODE) {
-        MCTSNode &node = pool->get(nodeId);
-        node.result_score += result; // Add the result to the node's score
-        node.number_of_visits += 1;  // Increment the visit count
+        MCTSNode *node = pool->get(nodeId);
+        node->result_score += result; // Add the result to the node's score
+        node->number_of_visits += 1;  // Increment the visit count
 
         result = -result * 0.99; // Discount the result for the parent
-        nodeId = node.parent;
+        nodeId = node->parent;
     }
 }
 
@@ -66,11 +58,11 @@ void MCTSNode::updateVirtualLoss(int delta) const {
     delta *= 3;
 
     while (nodeId != INVALID_NODE) {
-        MCTSNode &node = pool->get(nodeId);
-        node.virtual_loss += delta;
-        node.number_of_visits += delta;
+        MCTSNode *node = pool->get(nodeId);
+        node->virtual_loss += delta;
+        node->number_of_visits += delta;
 
-        nodeId = node.parent;
+        nodeId = node->parent;
     }
 }
 
@@ -80,10 +72,10 @@ NodeId MCTSNode::bestChild(const float cParam) const {
     const float uCommon = cParam * std::sqrt(number_of_visits);
 
     NodeId bestChildId = children[0];
-    float bestScore = pool->get(children[0]).ucb(uCommon);
+    float bestScore = pool->get(children[0])->ucb(uCommon);
 
     for (size_t i = 1; i < children.size(); ++i) {
-        const float score = pool->get(children[i]).ucb(uCommon);
+        const float score = pool->get(children[i])->ucb(uCommon);
         if (score > bestScore) {
             bestScore = score;
             bestChildId = children[i];

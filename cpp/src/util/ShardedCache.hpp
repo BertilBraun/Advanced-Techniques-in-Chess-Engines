@@ -63,9 +63,6 @@ public:
         return true;
     }
 
-public:
-    // Add this to your ShardedCache class
-public:
     // Iterator that locks all buckets during iteration
     class LockedIterator {
     private:
@@ -83,7 +80,7 @@ public:
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::forward_iterator_tag;
 
-        LockedIterator(ShardedCache &c, bool isEnd = false) : m_cache(c) {
+        explicit LockedIterator(ShardedCache &c, bool isEnd = false) : m_cache(c) {
             // Lock all buckets
             for (size_t i = 0; i < NumBuckets; ++i) {
                 m_locks.emplace_back(m_cache.m_buckets[i].mutex);

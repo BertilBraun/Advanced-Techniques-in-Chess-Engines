@@ -22,7 +22,7 @@ NodePool::~NodePool() {
     chunks_.clear();
 }
 
-void NodePool::deallocateNode(NodeId id) {
+void NodePool::deallocateNode(const NodeId id) {
     std::lock_guard<std::mutex> lock(pool_mutex_);
     assert(id < next_fresh_id_);
     MCTSNode *ptr = slotPointer(id);
@@ -30,14 +30,14 @@ void NodePool::deallocateNode(NodeId id) {
     free_list_.push_back(id);
 }
 
-MCTSNode &NodePool::get(NodeId id) {
+MCTSNode *NodePool::get(const NodeId id) {
     assert(id < next_fresh_id_);
-    return *slotPointer(id);
+    return slotPointer(id);
 }
 
-const MCTSNode &NodePool::get(NodeId id) const {
+const MCTSNode *NodePool::get(const NodeId id) const {
     assert(id < next_fresh_id_);
-    return *slotPointer(id);
+    return slotPointer(id);
 }
 
 size_t NodePool::capacity() const { return chunks_.size() * CHUNK_SIZE; }
@@ -47,8 +47,8 @@ size_t NodePool::liveNodeCount() const {
     return next_fresh_id_ - free_list_.size();
 }
 
-bool NodePool::isFreed(NodeId id) const {
-    assert(id < next_fresh_id_, "NodeId out of range");
+bool NodePool::isFreed(const NodeId id) const {
+    assert(id < next_fresh_id_ && "NodeId out of range");
     return contains(free_list_, id);
 }
 
@@ -56,7 +56,7 @@ void NodePool::addChunk() {
     chunks_.push_back(std::make_unique<std::array<MCTSNode, CHUNK_SIZE>>());
 }
 
-MCTSNode *NodePool::slotPointer(NodeId id) const {
+MCTSNode *NodePool::slotPointer(const NodeId id) const {
     const size_t chunk_idx = static_cast<size_t>(id) / CHUNK_SIZE;
     const size_t slot_idx = static_cast<size_t>(id) % CHUNK_SIZE;
     // chunks_[chunk_idx] is a unique_ptr<std::array<MCTSNode,CHUNK_SIZE>>

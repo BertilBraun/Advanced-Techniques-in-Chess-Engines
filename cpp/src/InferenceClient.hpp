@@ -39,9 +39,9 @@ public:
      * Synchronous interface: runs inference on a batch of boards and returns results
      * in the same order as the input.
      */
-    std::vector<InferenceResult> inferenceBatch(const std::vector<const Board &> &boards);
+    std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
 
-    InferenceStatistics getStatistics() const;
+    InferenceStatistics getStatistics();
 
 private:
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;

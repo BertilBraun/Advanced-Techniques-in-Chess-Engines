@@ -6,7 +6,7 @@ class NodePool;
 
 class MCTSNode {
 public:
-    static NodeId root(const std::string &boardFen, NodePool *pool);
+    MCTSNode() {}
 
     MCTSNode(const std::string &boardFen, float policy, Move move_to_get_here, NodeId parent,
              NodePool *pool);
@@ -31,13 +31,13 @@ public:
     }
 
     NodeId parent = INVALID_NODE;
-    NodeId myId;
+    NodeId myId = INVALID_NODE;
     std::vector<NodeId> children;
 
-    NodePool *pool;
+    NodePool *pool = nullptr;
 
     Board board;
-    Move move_to_get_here;
+    Move move_to_get_here = Move::null();
     int number_of_visits = 0;
     float virtual_loss = 0.0;
     float result_score = 0.0;

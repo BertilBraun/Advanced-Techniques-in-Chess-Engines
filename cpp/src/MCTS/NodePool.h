@@ -26,9 +26,9 @@ public:
 
     // Get a mutable reference to a MCTSNode (not thread‐safe by itself;
     // if you mutate fields, you should lock node_mutex inside MCTSNode).
-    MCTSNode &get(NodeId id);
+    MCTSNode *get(NodeId id);
 
-    const MCTSNode &get(NodeId id) const;
+    const MCTSNode *get(NodeId id) const;
 
     // How many NodeIds have ever been “touched” (including freed)?
     size_t capacity() const;

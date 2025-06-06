@@ -15,8 +15,6 @@
 
 #include "util/py.hpp"
 
-#include "TrainingArgs.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -33,6 +31,7 @@
 #include <optional>
 #include <queue>
 #include <random>
+#include <ranges>
 #include <stddef.h>
 #include <stdexcept>
 #include <string>
@@ -100,8 +99,8 @@ inline Square square(const int col, const int row) {
     // param col: The column index (0-7).
     // param row: The row index (0-7).
     // :return: The square index.
-    assert(col >= 0 && col < BOARD_LENGTH, "Column index out of bounds");
-    assert(row >= 0 && row < BOARD_LENGTH, "Row index out of bounds");
+    assert(col >= 0 && col < BOARD_LENGTH && "Column index out of bounds");
+    assert(row >= 0 && row < BOARD_LENGTH && "Row index out of bounds");
     return static_cast<Square>(row * BOARD_LENGTH + col);
 }
 
@@ -140,7 +139,7 @@ inline std::string toString(const Move &move) {
     std::stringstream ss;
     ss << toString(move.from_sq()) << toString(move.to_sq());
     if (move.promotion_type() != PieceType::NO_PIECE_TYPE) {
-        ss << move.promotion_type();
+        ss << " pkbrqk"[move.promotion_type()];
     }
     return ss.str();
 }

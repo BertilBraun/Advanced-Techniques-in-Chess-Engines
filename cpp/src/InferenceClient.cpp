@@ -31,7 +31,7 @@ InferenceClient::~InferenceClient() {
 }
 
 std::vector<InferenceResult>
-InferenceClient::inferenceBatch(const std::vector<const Board &> &boards) {
+InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     if (boards.empty()) {
         return std::vector<InferenceResult>();
     }
@@ -39,7 +39,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board &> &boards) {
     // Encode all boards.
     std::vector<CompressedEncodedBoard> encodedBoards;
     encodedBoards.reserve(boards.size());
-    for (const Board &board : boards) {
+    for (const Board *board : boards) {
         encodedBoards.push_back(encodeBoard(board));
     }
 
@@ -95,7 +95,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board &> &boards) {
     return results;
 }
 
-InferenceStatistics InferenceClient::getStatistics() const {
+InferenceStatistics InferenceClient::getStatistics() {
     InferenceStatistics stats;
 
     if (m_totalEvals == 0 || m_cache.empty()) {
@@ -111,11 +111,7 @@ InferenceStatistics InferenceClient::getStatistics() const {
         stats.nnOutputValueDistribution.push_back(entry.second.second);
     }
 
-    size_t sizeInBytes = 0;
-    for (const auto &entry : m_cache) {
-        sizeInBytes += sizeof(entry.first) + sizeof(entry.second);
-        sizeInBytes += entry.second.first.size() * sizeof(MoveScore);
-    }
+    const size_t sizeInBytes = m_cache.size() * (sizeof(InferenceResult) + sizeof(uint64));
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
 
     log("Inference Client stats:");
@@ -129,6 +125,7 @@ InferenceStatistics InferenceClient::getStatistics() const {
 void InferenceClient::loadModel(const std::string &modelPath) {
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
+    std::cout << "Model Path:" << modelPath << std::endl;
     m_model = torch::jit::load(modelPath, m_device);
     m_model.to(m_torchDtype); // Use half precision for inference.
     m_model.eval();

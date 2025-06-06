@@ -1,37 +1,36 @@
 #include "BoardEncoding.hpp"
 
-
 // Flips position with the white and black sides reversed.
-std::string flip(const std::string& fen) {
+std::string flip(const std::string &fen) {
 
-    std::string       f, token;
+    std::string f, token;
     std::stringstream ss(fen);
 
-    for (Rank r = RANK_8; r >= RANK_1; --r)  // Piece placement
+    for (Rank r = RANK_8; r >= RANK_1; --r) // Piece placement
     {
         std::getline(ss, token, r > RANK_1 ? '/' : ' ');
         f.insert(0, token + (f.empty() ? " " : "/"));
     }
 
-    ss >> token;                        // Active color
-    f += (token == "w" ? "B " : "W ");  // Will be lowercased later
+    ss >> token;                       // Active color
+    f += (token == "w" ? "B " : "W "); // Will be lowercased later
 
-    ss >> token;  // Castling availability
+    ss >> token; // Castling availability
     f += token + " ";
 
     std::transform(f.begin(), f.end(), f.begin(),
                    [](char c) { return char(islower(c) ? toupper(c) : tolower(c)); });
 
-    ss >> token;  // En passant square
+    ss >> token; // En passant square
     f += (token == "-" ? token : token.replace(1, 1, token[1] == '3' ? "6" : "3"));
 
-    std::getline(ss, token);  // Half and full moves
+    std::getline(ss, token); // Half and full moves
     f += token;
 
     return f;
 }
 
-CompressedEncodedBoard encodeBoard(const Board &board) {
+CompressedEncodedBoard encodeBoard(const Board *board) {
     // Encodes a chess board into a ENCODING_CHANNELSx8x8 tensor.
     //
     // Each layer in the first dimension represents one of the 12 distinct
@@ -45,8 +44,8 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     CompressedEncodedBoard encodedBoard{};
 
-    const Board tmpBoard((board.current_player() == -1) ? flip(board.fen()) : board.fen());
-    const Position& tmp = tmpBoard.position();
+    const Board tmpBoard((board->current_player() == -1) ? flip(board->fen()) : board->fen());
+    const Position &tmp = tmpBoard.position();
 
     for (auto [i, color] : enumerate(COLORS)) {
         for (auto [j, piece_type] : enumerate(PIECE_TYPES)) {
@@ -59,10 +58,14 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     // The castling rights encoded
     constexpr uint64 allSet = 0xFFFFFFFFFFFFFFFF; // All bits set to 1
-    encodedBoard[12] = allSet * tmp.can_castle(CastlingRights::WHITE_OO); // Kingside castling rights for white
-    encodedBoard[13] = allSet * tmp.can_castle(CastlingRights::WHITE_OOO); // Queenside castling rights for white
-    encodedBoard[14] = allSet * tmp.can_castle(CastlingRights::BLACK_OO); // Kingside castling rights for black
-    encodedBoard[15] = allSet * tmp.can_castle(CastlingRights::BLACK_OOO); // Queenside castling rights for black
+    encodedBoard[12] =
+        allSet * tmp.can_castle(CastlingRights::WHITE_OO); // Kingside castling rights for white
+    encodedBoard[13] =
+        allSet * tmp.can_castle(CastlingRights::WHITE_OOO); // Queenside castling rights for white
+    encodedBoard[14] =
+        allSet * tmp.can_castle(CastlingRights::BLACK_OO); // Kingside castling rights for black
+    encodedBoard[15] =
+        allSet * tmp.can_castle(CastlingRights::BLACK_OOO); // Queenside castling rights for black
 
     if (tmp.ep_square()) {
         encodedBoard[16] = 1ULL << tmp.ep_square();
@@ -77,8 +80,8 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
     // param compressed: The 64-bit array to convert.
     // :return: The uncompressed tensor.
 
-    torch::Tensor tensor =
-        torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH}, torch::TensorOptions().dtype(torch::kUInt8).device(device));
+    torch::Tensor tensor = torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH},
+                                        torch::TensorOptions().dtype(torch::kUInt8).device(device));
 
     for (int channel = 0; channel < ENCODING_CHANNELS; ++channel) {
         const uint64 bits = compressed[channel];

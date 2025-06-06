@@ -2,11 +2,9 @@
 
 #include "../BoardEncoding.hpp"
 
-#include <ranges>
-
 thread_local std::mt19937 randomEngine(std::random_device{}());
 
-std::vector<float> dirichlet(float alpha, size_t n) {
+std::vector<float> dirichlet(const float alpha, const size_t n) {
     // Sample from a Dirichlet distribution with parameter alpha.
     std::gamma_distribution<float> gamma(alpha, 1.0);
 
@@ -25,36 +23,19 @@ std::vector<float> dirichlet(float alpha, size_t n) {
     return noise;
 }
 
-// Traverse the tree to find the best child or, if the node is terminal,
-// back-propagate the board’s result.
-std::optional<MCTSNode *> getBestChildOrBackPropagate(MCTSNode &root, float c_param) {
-    MCTSNode *node = &root;
-    while (node->isFullyExpanded()) {
-        node = &node->bestChild(c_param);
-    }
-
-    if (node->isTerminalNode()) {
-        const auto result = getBoardResultScore(node->board);
-        assert(result.has_value());
-        node->backPropagate(result.value());
-        return std::nullopt;
-    }
-    return {node};
-}
-
-MCTSStatistics mctsStatistics(const std::vector<MCTSNode> &roots) {
+MCTSStatistics mctsStatistics(const std::vector<MCTSNode *> &roots, NodePool *pool) {
     MCTSStatistics stats;
     if (roots.empty())
         return stats;
 
     {
         // Compute the depth of each search tree using a DFS.
-        auto dfs = [&](const MCTSNode &node, auto &dfs_ref) -> int {
-            if (!node.isFullyExpanded())
+        std::function<int(const MCTSNode *)> dfs = [&](const MCTSNode *node) -> int {
+            if (!node->isFullyExpanded())
                 return 0;
             int maxDepth = 0;
-            for (const MCTSNode &child : node.children) {
-                const int d = dfs_ref(child, dfs_ref);
+            for (const NodeId child : node->children) {
+                const int d = dfs(pool->get(child));
                 if (d > maxDepth)
                     maxDepth = d;
             }
@@ -62,19 +43,20 @@ MCTSStatistics mctsStatistics(const std::vector<MCTSNode> &roots) {
         };
         std::vector<int> depths;
         depths.reserve(roots.size());
-        for (const MCTSNode &root : roots) {
-            depths.push_back(dfs(root, dfs));
+        for (const MCTSNode *root : roots) {
+            depths.push_back(dfs(root));
         }
         stats.averageDepth = static_cast<float>(sum(depths)) / depths.size();
     }
     {
         // Compute the entropy of the visit counts.
-        auto entropy = [](const MCTSNode &node) -> float {
-            const int total = node.number_of_visits;
+        auto entropy = [&](const MCTSNode *node) -> float {
+            const int total = node->number_of_visits;
             float ent = 0.0f;
-            for (const MCTSNode &child : node.children) {
-                if (child.number_of_visits > 0) {
-                    const float p = static_cast<float>(child.number_of_visits) / total;
+            for (const NodeId childId : node->children) {
+                const MCTSNode *child = pool->get(childId);
+                if (child->number_of_visits > 0) {
+                    const float p = static_cast<float>(child->number_of_visits) / total;
                     ent -= p * std::log2(p);
                 }
             }
@@ -83,19 +65,20 @@ MCTSStatistics mctsStatistics(const std::vector<MCTSNode> &roots) {
 
         std::vector<float> entropies;
         entropies.reserve(roots.size());
-        for (const MCTSNode &root : roots) {
+        for (const MCTSNode *root : roots) {
             entropies.push_back(entropy(root));
         }
         stats.averageEntropy = sum(entropies) / entropies.size();
     }
     {
-        auto klDivergence = [](const MCTSNode &node) -> float {
-            const int total = node.number_of_visits;
+        auto klDivergence = [&](const MCTSNode *node) -> float {
+            const int total = node->number_of_visits;
             float kl = 0.0f;
-            for (const MCTSNode &child : node.children) {
-                if (child.number_of_visits > 0) {
-                    const float p = static_cast<float>(child.number_of_visits) / total;
-                    const float q = 1.0f / node.children.size(); // Uniform distribution
+            for (const NodeId childId : node->children) {
+                const MCTSNode *child = pool->get(childId);
+                if (child->number_of_visits > 0) {
+                    const float p = static_cast<float>(child->number_of_visits) / total;
+                    const float q = 1.0f / node->children.size(); // Uniform distribution
                     if (p > 0.0f)
                         kl += p * std::log2(p / q);
                 }
@@ -105,7 +88,7 @@ MCTSStatistics mctsStatistics(const std::vector<MCTSNode> &roots) {
 
         std::vector<float> klDivergences;
         klDivergences.reserve(roots.size());
-        for (const MCTSNode &root : roots) {
+        for (const MCTSNode *root : roots) {
             klDivergences.push_back(klDivergence(root));
         }
         stats.averageKLDivergence = sum(klDivergences) / klDivergences.size();
@@ -114,52 +97,131 @@ MCTSStatistics mctsStatistics(const std::vector<MCTSNode> &roots) {
     return stats;
 }
 
-MCTSResults MCTS::search(std::vector<std::tuple<std::string, MCTSNode, bool>> &boards) {
+MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>> &boards) {
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
 
-    // Get policy moves (with noise) for the given boards.
-    const std::vector<std::vector<MoveScore>> movesList = getPolicyWithNoise(boards);
-
-    std::vector<MCTSNode> roots;
+    std::vector<MCTSNode *> roots;
     roots.reserve(boards.size());
-    for (const auto &[board, moves] : zip(boards, movesList)) {
-        // Since no node is pre-expanded, create a new root.
-        roots.push_back(MCTSNode::root(board));
-        roots.back().expand(moves);
+
+    std::vector<const Board *> newBoards;
+    newBoards.reserve(boards.size());
+    for (const auto &[fen, id, _] : boards) {
+        if (id == INVALID_NODE) {
+            const NodeId newId = m_pool.allocateNode(fen, 1.0, Move::null(), INVALID_NODE, &m_pool);
+            MCTSNode *root = m_pool.get(newId);
+            root->myId = newId;
+            roots.push_back(root);
+            newBoards.emplace_back(&root->board);
+        } else {
+            // If the node is already expanded, we can use it directly.
+
+            std::function<void(const NodeId, const NodeId)> free = [&](const NodeId root,
+                                                                       const NodeId excluded) {
+                // Free the node and all its children, except the excluded one.
+                if (root == excluded)
+                    return;
+
+                const MCTSNode *node = m_pool.get(root);
+                for (const NodeId childId : node->children) {
+                    free(childId, excluded);
+                }
+                m_pool.deallocateNode(root);
+            };
+
+            MCTSNode *root = m_pool.get(id);
+
+            // Remove the nodes parent and all its children from the pool.
+            free(root->parent, root->myId);
+            root->parent = INVALID_NODE;
+
+            // Add Dirichlet noise to the node's policy.
+            const std::vector<float> noise =
+                dirichlet(m_args.dirichlet_alpha, root->children.size());
+            for (size_t i = 0; i < root->children.size(); ++i) {
+                MCTSNode *child = m_pool.get(root->children[i]);
+                child->policy = lerp(child->policy, noise[i], m_args.dirichlet_epsilon);
+            }
+
+            std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
+                // Discount the node's score and visits.
+                node->result_score *= m_args.node_reuse_discount;
+                node->number_of_visits *= m_args.node_reuse_discount;
+                for (const NodeId childId : node->children) {
+                    MCTSNode *child = m_pool.get(childId);
+                    discount(child);
+                }
+            };
+
+            // Discount the node's score and visits.
+            discount(root);
+
+            roots.push_back(root);
+        }
     }
 
-    int iterations = m_args.num_searches_per_turn / m_args.num_parallel_searches;
-    for (int _ : range(iterations)) {
-        parallelIterate(roots);
+    // Get policy moves (with noise) for the given boards.
+    const std::vector<std::vector<MoveScore>> movesList = getPolicyWithNoise(newBoards);
+
+    size_t moveIndex = 0;
+
+    for (const auto [i, val] : enumerate(boards)) {
+        const auto &[fen, id, _] = val;
+        if (id == INVALID_NODE) {
+            // If the node is not pre-expanded, we need to expand it with the moves.
+            roots[i]->expand(movesList[moveIndex]);
+
+            moveIndex++;
+        }
+    }
+
+    std::vector<MCTSNode *> activeRoots = roots;
+    std::vector<int> numSearches;
+    numSearches.reserve(roots.size());
+    for (auto [_, __, searches] : boards) {
+        numSearches.push_back(searches);
+    }
+    while (activeRoots.size()) {
+        parallelIterate(activeRoots);
+        // Remove nodes that have more than their assigned number of searches.
+        std::vector<MCTSNode *> nextActiveRoots;
+        std::vector<int> nextNumSearches;
+
+        for (auto [root, searches] : zip(activeRoots, numSearches)) {
+            if (root->number_of_visits < searches) {
+                nextActiveRoots.push_back(root);
+                nextNumSearches.push_back(searches);
+            }
+        }
+
+        activeRoots = std::move(nextActiveRoots);
+        numSearches = std::move(nextNumSearches);
     }
 
     // Build and return the results.
     std::vector<MCTSResult> results;
     results.reserve(roots.size());
-    for (const MCTSNode &root : roots) {
+    for (const MCTSNode *root : roots) {
         VisitCounts visitCounts;
-        visitCounts.reserve(root.children.size());
-        for (const MCTSNode &child : root.children) {
-            visitCounts.emplace_back(child.move_to_get_here, child.number_of_visits);
+        visitCounts.reserve(root->children.size());
+        for (const NodeId childId : root->children) {
+            MCTSNode *child = m_pool.get(childId);
+            visitCounts.emplace_back(child->move_to_get_here, child->number_of_visits);
         }
-        results.emplace_back(root.result_score / static_cast<float>(root.number_of_visits),
-                             visitCounts, root.children, // TODO
-        );
+        results.emplace_back(root->result_score / static_cast<float>(root->number_of_visits),
+                             visitCounts, root->children);
     }
 
     return {
         .results = results,
-        .mctsStats = mctsStatistics(roots),
+        .mctsStats = mctsStatistics(roots, &m_pool),
     };
 }
 
-InferenceStatistics MCTS::getInferenceStatistics() const { return m_client.getStatistics(); }
-
-void MCTS::parallelIterate(std::vector<MCTSNode> &roots) {
+void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     std::vector<MCTSNode *> nodes;
     nodes.reserve(roots.size() * m_args.num_parallel_searches);
-    for (MCTSNode &root : roots) {
+    for (const MCTSNode *root : roots) {
         for (int _ : range(m_args.num_parallel_searches)) {
             std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
             if (node.has_value()) {
@@ -172,10 +234,10 @@ void MCTS::parallelIterate(std::vector<MCTSNode> &roots) {
         return;
 
     // Gather boards for inference.
-    std::vector<const Board &> boards;
+    std::vector<const Board *> boards;
     boards.reserve(nodes.size());
     for (const MCTSNode *node : nodes)
-        boards.push_back(node->board);
+        boards.emplace_back(&node->board);
 
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
@@ -189,7 +251,7 @@ void MCTS::parallelIterate(std::vector<MCTSNode> &roots) {
 }
 
 std::vector<std::vector<MoveScore>>
-MCTS::getPolicyWithNoise(const std::vector<const Board &> &boards) {
+MCTS::getPolicyWithNoise(const std::vector<const Board *> &boards) {
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(boards);
 
     std::vector<std::vector<MoveScore>> noisyMoves;
@@ -215,4 +277,42 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
     }
 
     return noisyMoves;
+}
+
+// Traverse the tree to find the best child or, if the node is terminal,
+// back-propagate the board’s result.
+std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(const MCTSNode *root,
+                                                            const float cParam) {
+
+    MCTSNode *finalNode = nullptr;
+    for (const NodeId childId : root->children) {
+        MCTSNode *child = m_pool.get(childId);
+        if (child->number_of_visits < m_args.min_visit_count) {
+            // If the child has not been visited enough, we can return it directly.
+            finalNode = child;
+            break;
+        }
+    }
+
+    if (finalNode == nullptr) {
+        NodeId nodeId = root->myId;
+        while (true) {
+            const MCTSNode *node = m_pool.get(nodeId);
+
+            if (!node->isFullyExpanded())
+                break;
+
+            nodeId = node->bestChild(cParam);
+        }
+
+        finalNode = m_pool.get(nodeId);
+    }
+
+    if (finalNode->isTerminalNode()) {
+        const auto result = getBoardResultScore(finalNode->board);
+        assert(result.has_value());
+        finalNode->backPropagate(result.value());
+        return std::nullopt;
+    }
+    return {finalNode};
 }

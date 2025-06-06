@@ -1,3 +1,4 @@
+import os
 import torch
 from os import PathLike
 from pathlib import Path
@@ -10,11 +11,17 @@ from src.util.log import LogLevel, log
 
 
 def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    return Path(save_folder) / f'model_{iteration}.pt'
+    path = Path(save_folder) / f'model_{iteration}.pt'
+    if not path.exists():
+        os.makedirs(path.parent, exist_ok=True)
+    return path
 
 
 def optimizer_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    return Path(save_folder) / f'optimizer_{iteration}.pt'
+    path = Path(save_folder) / f'optimizer_{iteration}.pt'
+    if not path.exists():
+        os.makedirs(path.parent, exist_ok=True)
+    return path
 
 
 def create_model(args: NetworkParams, device: torch.device) -> Network:
