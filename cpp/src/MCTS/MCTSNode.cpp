@@ -27,42 +27,40 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
     children.reserve(moves_with_scores.size());
 
     for (const auto &[move, score] : moves_with_scores) {
-        Board moveBoard(board.fen());
+        Board moveBoard = board; // Create a copy of the board to make the move
         moveBoard.make_move(move);
 
-        NodeId childId = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
-        pool->get(childId)->myId = childId;
+        MCTSNode *child = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
 
-        children.emplace_back(childId);
+        children.emplace_back(child->myId);
     }
 }
 
-void MCTSNode::backPropagate(float result) const {
-    NodeId nodeId = myId;
+void MCTSNode::backPropagate(float result) {
+    MCTSNode *node = this;
 
-    while (nodeId != INVALID_NODE) {
-        MCTSNode *node = pool->get(nodeId);
+    while (node) {
         node->result_score += result; // Add the result to the node's score
         node->number_of_visits += 1;  // Increment the visit count
 
         result = -result * 0.99; // Discount the result for the parent
-        nodeId = node->parent;
+        node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }
 }
 
-void MCTSNode::updateVirtualLoss(int delta) const {
-    NodeId nodeId = myId;
-
+void MCTSNode::updateVirtualLoss(int delta) {
+    assert(delta != 0 && "Delta must not be zero");
     // NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. multiply
     // delta by 100?)
     delta *= 3;
 
-    while (nodeId != INVALID_NODE) {
-        MCTSNode *node = pool->get(nodeId);
-        node->virtual_loss += delta;
-        node->number_of_visits += delta;
+    MCTSNode *node = this;
 
-        nodeId = node->parent;
+    while (node) {
+        node->virtual_loss += delta;     // Update the virtual loss
+        node->number_of_visits += delta; // Update the visit count
+
+        node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }
 }
 

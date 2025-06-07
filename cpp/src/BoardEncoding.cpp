@@ -1,35 +1,5 @@
 #include "BoardEncoding.hpp"
 
-// Flips position with the white and black sides reversed.
-std::string flip(const std::string &fen) {
-
-    std::string f, token;
-    std::stringstream ss(fen);
-
-    for (Rank r = RANK_8; r >= RANK_1; --r) // Piece placement
-    {
-        std::getline(ss, token, r > RANK_1 ? '/' : ' ');
-        f.insert(0, token + (f.empty() ? " " : "/"));
-    }
-
-    ss >> token;                       // Active color
-    f += (token == "w" ? "B " : "W "); // Will be lowercased later
-
-    ss >> token; // Castling availability
-    f += token + " ";
-
-    std::transform(f.begin(), f.end(), f.begin(),
-                   [](char c) { return char(islower(c) ? toupper(c) : tolower(c)); });
-
-    ss >> token; // En passant square
-    f += (token == "-" ? token : token.replace(1, 1, token[1] == '3' ? "6" : "3"));
-
-    std::getline(ss, token); // Half and full moves
-    f += token;
-
-    return f;
-}
-
 CompressedEncodedBoard encodeBoard(const Board *board) {
     // Encodes a chess board into a ENCODING_CHANNELSx8x8 tensor.
     //
@@ -44,7 +14,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
 
     CompressedEncodedBoard encodedBoard{};
 
-    const Board tmpBoard((board->current_player() == -1) ? flip(board->fen()) : board->fen());
+    const Board tmpBoard((board->current_player() == -1) ? board->position().flip() : board->fen());
     const Position &tmp = tmpBoard.position();
 
     for (auto [i, color] : enumerate(COLORS)) {

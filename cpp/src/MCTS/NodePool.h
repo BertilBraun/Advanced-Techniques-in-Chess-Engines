@@ -18,7 +18,7 @@ public:
 
     // Allocate a new node by forwarding to MCTSNode’s constructor. Returns its NodeId.
     // Thread‐safe: locks the internal mutex while modifying chunks_/free_list_/next_fresh_id_.
-    template <typename... Args> NodeId allocateNode(Args &&...args);
+    template <typename... Args> MCTSNode *allocateNode(Args &&...args);
 
     // Deallocate a node: call its destructor, then push its ID to free_list_.
     // Thread‐safe.
@@ -62,7 +62,7 @@ private:
     MCTSNode *slotPointer(NodeId id) const;
 };
 
-template <typename... Args> NodeId NodePool::allocateNode(Args &&...args) {
+template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
     NodeId new_id = INVALID_NODE;
     {
         std::lock_guard<std::mutex> lock(pool_mutex_);
@@ -80,10 +80,11 @@ template <typename... Args> NodeId NodePool::allocateNode(Args &&...args) {
         }
     }
     constructAt(new_id, std::forward<Args>(args)...);
-    return new_id;
+    return slotPointer(new_id);
 }
 
 template <typename... Args> void NodePool::constructAt(NodeId id, Args &&...args) {
     MCTSNode *ptr = slotPointer(id);
     new (ptr) MCTSNode(std::forward<Args>(args)...);
+    ptr->myId = id;
 }

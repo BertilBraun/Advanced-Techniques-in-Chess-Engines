@@ -19,9 +19,9 @@ public:
 
     void expand(const std::vector<MoveScore> &moves_with_scores);
 
-    void backPropagate(float result) const;
+    void backPropagate(float result);
 
-    void updateVirtualLoss(int delta) const;
+    void updateVirtualLoss(int delta);
 
     NodeId bestChild(float cParam) const;
 
