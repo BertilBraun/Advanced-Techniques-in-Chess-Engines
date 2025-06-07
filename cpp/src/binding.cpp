@@ -24,6 +24,13 @@ struct PyMCTSResults {
     PyMCTSStatistics mctsStats;
 };
 
+static void init() {
+    // We need to initialize the Stockfish engine before using it.
+    std::cout << "Initializing Stockfish engine..." << std::endl;
+    Bitboards::init();
+    Position::init();
+}
+
 // ——————————————————————————————————————————————
 // A little wrapper around your real MCTS::search(...) so we convert Move→string:
 static PyMCTSResults
@@ -56,19 +63,26 @@ mcts_search_wrapper(MCTS &self,
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "pybind11 bindings for custom MCTS + inference client";
 
+    init(); // Initialize Stockfish engine
+
     // --- (2.1) MCTSParams ---
     py::class_<MCTSParams>(m, "MCTSParams")
-        .def(py::init<>())
+        .def(py::init<int, float, float, float, float, uint8, uint8>(),
+             py::arg("num_parallel_searches"), py::arg("c_param"), py::arg("dirichlet_alpha"),
+             py::arg("dirichlet_epsilon"), py::arg("node_reuse_discount"),
+             py::arg("min_visit_count"), py::arg("num_threads"))
         .def_readwrite("num_parallel_searches", &MCTSParams::num_parallel_searches)
         .def_readwrite("c_param", &MCTSParams::c_param)
         .def_readwrite("dirichlet_alpha", &MCTSParams::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &MCTSParams::dirichlet_epsilon)
         .def_readwrite("node_reuse_discount", &MCTSParams::node_reuse_discount)
-        .def_readwrite("min_visit_count", &MCTSParams::min_visit_count);
+        .def_readwrite("min_visit_count", &MCTSParams::min_visit_count)
+        .def_readwrite("num_threads", &MCTSParams::num_threads);
 
     // --- (2.2) InferenceClientParams ---
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
-        .def(py::init<>())
+        .def(py::init<int, std::string, int>(), py::arg("device_id"), py::arg("currentModelPath"),
+             py::arg("maxBatchSize"))
         .def_readwrite("device_id", &InferenceClientParams::device_id)
         .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
         .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize);
@@ -76,11 +90,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     // --- (2.3) InferenceStatistics ---
     py::class_<InferenceStatistics>(m, "InferenceStatistics")
         .def(py::init<>())
-        .def_readwrite("cacheHitRate", &InferenceStatistics::cacheHitRate)
-        .def_readwrite("uniquePositions", &InferenceStatistics::uniquePositions)
-        .def_readwrite("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
-        .def_readwrite("nnOutputValueDistribution",
-                       &InferenceStatistics::nnOutputValueDistribution);
+        .def_readonly("cacheHitRate", &InferenceStatistics::cacheHitRate)
+        .def_readonly("uniquePositions", &InferenceStatistics::uniquePositions)
+        .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
+        .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution);
 
     // --- (2.4) MCTSResult (Python view) ---
     py::class_<PyMCTSResult>(m, "MCTSResult")
@@ -97,9 +110,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (2.6) MCTSResults (Python view) ---
     py::class_<PyMCTSResults>(m, "MCTSResults")
-        .def_readonly("results", &PyMCTSResults::results)     // vector<PyMCTSResult>
-        .def_readonly("mctsStats", &PyMCTSResults::mctsStats) // PyMCTSStatistics
-        ;
+        .def_readonly("results", &PyMCTSResults::results)      // vector<PyMCTSResult>
+        .def_readonly("mctsStats", &PyMCTSResults::mctsStats); // PyMCTSStatistics
 
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")

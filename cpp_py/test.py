@@ -43,18 +43,21 @@ model_path = model_save_path(0, 'models')
 model_path = model_path.with_suffix('.jit.pt')
 
 
-client_args = InferenceClientParams()
-client_args.device_id        = 0
-client_args.currentModelPath = str(model_path)
-client_args.maxBatchSize     = 256 # maybe 512
+client_args = InferenceClientParams(
+    device_id=0,
+    currentModelPath=str(model_path),
+    maxBatchSize=256,  # maybe 512
+)
 
-mcts_args = MCTSParams()
-mcts_args.num_parallel_searches = 8
-mcts_args.c_param              = 1.4
-mcts_args.dirichlet_alpha      = 0.03
-mcts_args.dirichlet_epsilon    = 0.25
-mcts_args.node_reuse_discount  = 0.8
-mcts_args.min_visit_count      = 5
+mcts_args = MCTSParams(
+    num_parallel_searches=4,
+    c_param=1.4,
+    dirichlet_alpha=0.03,
+    dirichlet_epsilon=0.25,
+    node_reuse_discount=0.8,
+    min_visit_count=5,
+    num_threads=8,
+)
 
 mcts = MCTS(client_args, mcts_args)
 

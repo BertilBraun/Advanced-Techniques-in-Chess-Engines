@@ -19,6 +19,10 @@ struct InferenceClientParams {
     int device_id;                // GPU device id to use (if available), else CPU.
     std::string currentModelPath; // Path used to resolve the model file.
     int maxBatchSize;             // Maximum number of requests to process in one batch.
+
+    InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize)
+        : device_id(device_id), currentModelPath(std::move(currentModelPath)),
+          maxBatchSize(maxBatchSize) {}
 };
 
 /**

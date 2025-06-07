@@ -1,4 +1,4 @@
-#include "ThreadPool.hpp"
+#include "ThreadPool.h"
 
 ThreadPool::ThreadPool(unsigned int nThreads)
 {

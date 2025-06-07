@@ -11,16 +11,28 @@ class MCTSParams:
     dirichlet_epsilon: float
     node_reuse_discount: float
     min_visit_count: int
+    num_threads: int
 
-    def __init__(self) -> None: ...
-    # All fields are read/write, so no additional methods are needed.
+    def __init__(self,
+                    num_parallel_searches: int,
+                    c_param: float,
+                    dirichlet_alpha: float,
+                    dirichlet_epsilon: float,
+                    node_reuse_discount: float,
+                    min_visit_count: int,
+                    num_threads: int) -> None:
+        ...
 
 class InferenceClientParams:
     device_id: int
     currentModelPath: str
     maxBatchSize: int
 
-    def __init__(self) -> None: ...
+    def __init__(self,
+                    device_id: int,
+                    currentModelPath: str,
+                    maxBatchSize: int) -> None:
+        ...
 
 class InferenceStatistics:
     cacheHitRate: float

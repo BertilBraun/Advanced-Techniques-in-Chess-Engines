@@ -32,6 +32,14 @@ struct MCTSParams {
     uint8 min_visit_count; // Minimum visit count for a child of a root node.
 
     uint8 num_threads; // Number of threads to use for parallel processing.
+
+    MCTSParams(int num_parallel_searches, float c_param, float dirichlet_alpha,
+               float dirichlet_epsilon, float node_reuse_discount, uint8 min_visit_count,
+               uint8 num_threads)
+        : num_parallel_searches(num_parallel_searches), c_param(c_param),
+          dirichlet_alpha(dirichlet_alpha), dirichlet_epsilon(dirichlet_epsilon),
+          node_reuse_discount(node_reuse_discount), min_visit_count(min_visit_count),
+          num_threads(num_threads) {}
 };
 
 struct MCTSResult {
@@ -77,9 +85,8 @@ struct MCTSResults {
  *
  */
 
-using BoardTuple = std::tuple<std::string /*FEN*/,
-                              NodeId      /*prev child or INVALID_NODE*/,
-                              int         /*num searches*/>;
+using BoardTuple =
+    std::tuple<std::string /*FEN*/, NodeId /*prev child or INVALID_NODE*/, int /*num searches*/>;
 
 class MCTS {
 public:
@@ -98,7 +105,7 @@ private:
     ThreadPool m_threadPool; // For parallel processing.
 
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(const MCTSNode * root);
+    void parallelIterate(const MCTSNode *root);
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>>
