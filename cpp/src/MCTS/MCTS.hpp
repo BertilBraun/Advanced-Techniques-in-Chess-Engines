@@ -9,7 +9,7 @@
 #include "../InferenceClient.hpp"
 #include "util/ThreadPool.h"
 
-typedef std::pair<Move, int> VisitCount;
+typedef std::pair<int, int> VisitCount; // Mapping from Encoded Move to visit count.
 typedef std::vector<VisitCount> VisitCounts;
 
 // Contains the arguments for the MCTS algorithm.
@@ -115,4 +115,7 @@ private:
     std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
     std::optional<MCTSNode *> getBestChildOrBackPropagate(const MCTSNode *root, float cParam);
+
+
+    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *node, int number_of_searches);
 };

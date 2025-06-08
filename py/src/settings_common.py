@@ -8,6 +8,8 @@ USE_GPU = torch.cuda.is_available()
 # Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
 TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
+USE_CPP = False  # TODO: set to True if you want to use the C++ self play implementation
+
 
 def get_run_id():
     for run in range(10000):

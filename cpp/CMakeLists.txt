@@ -186,9 +186,9 @@ set_target_properties(AlphaZeroCpp PROPERTIES
 
 # Optional: Post-build step to copy the module
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> "${CMAKE_CURRENT_BINARY_DIR}/../../cpp_py/"
-        COMMENT "Copying AlphaZeroCpp module to ../../cpp_py/"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../py/"
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> "${CMAKE_CURRENT_BINARY_DIR}/../../py/"
+        COMMENT "Copying AlphaZeroCpp module to ../../py/"
 )
 
 # --- Export compile commands ---

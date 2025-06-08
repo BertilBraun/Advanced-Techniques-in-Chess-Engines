@@ -35,7 +35,7 @@ from AlphaZeroCpp import (
 
 
 network = create_model(NetworkParams(2, 64), torch.device('cpu'))
-optimizer = create_optimizer(network)
+optimizer = create_optimizer(network, 'adamw')
 
 save_model_and_optimizer(network, optimizer, 0, 'models')
 
@@ -51,11 +51,11 @@ client_args = InferenceClientParams(
 
 mcts_args = MCTSParams(
     num_parallel_searches=4,
-    c_param=1.4,
-    dirichlet_alpha=0.03,
+    c_param=1.7,
+    dirichlet_alpha=0.3,
     dirichlet_epsilon=0.25,
     node_reuse_discount=0.8,
-    min_visit_count=5,
+    min_visit_count=2,
     num_threads=8,
 )
 
@@ -63,15 +63,10 @@ mcts = MCTS(client_args, mcts_args)
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:
-boards = [
-    ("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-     INVALID_NODE,
-     800)
-]
+boards = [('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', INVALID_NODE, 10)]
 
 results: MCTSResults = mcts.search(boards)
 for r in results.results:
-    print("eval =", r.result)
-    for (uci_move, cnt) in r.visits:
-        move_obj = chess.Move.from_uci(uci_move)
-        print(f"  {uci_move} visited {cnt} times → chess.Move = {move_obj}")
+    print('eval =', r.result)
+    for encoded_move, cnt in r.visits:
+        print(f'  {encoded_move} visited {cnt} times')

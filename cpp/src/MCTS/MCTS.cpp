@@ -1,6 +1,7 @@
 #include "MCTS.hpp"
 
 #include "../BoardEncoding.hpp"
+#include "MoveEncoding.hpp"
 
 thread_local std::mt19937 randomEngine(std::random_device{}());
 
@@ -123,67 +124,10 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     futures.reserve(N);
 
     for (const auto &[root, tup] : zip(roots, boards))
-        futures.emplace_back(m_threadPool.enqueue(
-            [this](MCTSNode *node, int number_of_searches) {
-                if (node->parent != INVALID_NODE) {
-                    // If the node has a parent, we need to clean it up first.
-                    std::function<void(NodeId, NodeId)> free = [&](const NodeId root,
-                                                                   const NodeId excluded) {
-                        // Free the node and all its children, except the excluded one.
-                        if (root == excluded)
-                            return;
-
-                        for (const NodeId childId : m_pool.get(root)->children)
-                            free(childId, excluded);
-
-                        m_pool.deallocateNode(root);
-                    };
-
-                    // Remove the nodes parent and all its children from the pool.
-                    free(node->parent, node->myId);
-                    node->parent = INVALID_NODE;
-
-                    // Add Dirichlet noise to the node's policy.
-                    const std::vector<float> noise =
-                        dirichlet(m_args.dirichlet_alpha, node->children.size());
-
-                    for (const auto [i, childId] : enumerate(node->children)) {
-                        MCTSNode *child = m_pool.get(childId);
-                        child->policy = lerp(child->policy, noise[i], m_args.dirichlet_epsilon);
-                    }
-
-                    std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
-                        // Discount the node's score and visits.
-                        node->result_score *= m_args.node_reuse_discount;
-                        node->number_of_visits *= m_args.node_reuse_discount;
-                        for (const NodeId childId : node->children)
-                            discount(m_pool.get(childId));
-                    };
-
-                    // Discount the node's score and visits.
-                    discount(node);
-                }
-
-                // Run the MCTS iterations until the root node has enough visits.
-                while (node->number_of_visits < number_of_searches) {
-                    parallelIterate(node);
-                }
-
-                // Gather the visit counts and result score for the root node.
-                VisitCounts visitCounts;
-                visitCounts.reserve(node->children.size());
-                for (const NodeId childId : node->children) {
-                    MCTSNode *child = m_pool.get(childId);
-                    visitCounts.emplace_back(child->move_to_get_here, child->number_of_visits);
-                }
-
-                return std::tuple{
-                    MCTSResult(node->result_score / static_cast<float>(node->number_of_visits),
-                               visitCounts, node->children),
-                    mctsStatistics(node, &m_pool),
-                };
-            },
-            root, get<2>(tup)));
+        futures.emplace_back(m_threadPool.enqueue([this](MCTSNode *root, const int number_of_searches) {
+            return searchOneGame(root, number_of_searches);
+        }
+            , root, get<2>(tup)));
 
     std::vector<MCTSResult> results;
     MCTSStatistics stats;
@@ -299,4 +243,63 @@ std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(const MCTSNode *root
         return std::nullopt;
     }
     return {finalNode};
+}
+
+std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int number_of_searches) {
+    if (root->parent != INVALID_NODE) {
+        // If the node has a parent, we need to clean it up first.
+        std::function<void(NodeId, NodeId)> free = [&](const NodeId node, const NodeId excluded) {
+            // Free the node and all its children, except the excluded one.
+            if (node == excluded)
+                return;
+
+            for (const NodeId childId : m_pool.get(node)->children)
+                free(childId, excluded);
+
+            m_pool.deallocateNode(node);
+        };
+
+        // Remove the nodes parent and all its children from the pool.
+        free(root->parent, root->myId);
+        root->parent = INVALID_NODE;
+
+        // Add Dirichlet noise to the node's policy.
+        const std::vector<float> noise = dirichlet(m_args.dirichlet_alpha, root->children.size());
+
+        for (const auto [i, childId] : enumerate(root->children)) {
+            MCTSNode *child = m_pool.get(childId);
+            child->policy = lerp(child->policy, noise[i], m_args.dirichlet_epsilon);
+        }
+
+        std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
+            // Discount the node's score and visits.
+            node->result_score *= m_args.node_reuse_discount;
+            node->number_of_visits *= m_args.node_reuse_discount;
+            for (const NodeId childId : node->children)
+                discount(m_pool.get(childId));
+        };
+
+        // Discount the node's score and visits.
+        discount(root);
+    }
+
+    // Run the MCTS iterations until the root node has enough visits.
+    while (root->number_of_visits < number_of_searches) {
+        parallelIterate(root);
+    }
+
+    // Gather the visit counts and result score for the root node.
+    VisitCounts visitCounts;
+    visitCounts.reserve(root->children.size());
+    for (const NodeId childId : root->children) {
+        MCTSNode *child = m_pool.get(childId);
+        int encodedMove = encodeMove(child->move_to_get_here, &root->board);
+        visitCounts.emplace_back(encodedMove, child->number_of_visits);
+    }
+
+    return std::tuple{
+        MCTSResult(root->result_score / static_cast<float>(root->number_of_visits), visitCounts,
+                   root->children),
+        mctsStatistics(root, &m_pool),
+    };
 }

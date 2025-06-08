@@ -1,9 +1,0 @@
-tqdm
-torch
-numpy
-numba
-optuna
-tensorboardX
-chess
-pygame
-GPUtil

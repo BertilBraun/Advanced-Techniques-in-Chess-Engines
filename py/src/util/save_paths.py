@@ -1,3 +1,4 @@
+import os
 import torch
 from os import PathLike
 from time import sleep
@@ -11,11 +12,17 @@ from src.util.log import LogLevel, log
 
 
 def model_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    return Path(save_folder) / f'model_{iteration}.pt'
+    path = Path(save_folder) / f'model_{iteration}.pt'
+    if not path.exists():
+        os.makedirs(path.parent, exist_ok=True)
+    return path
 
 
 def optimizer_save_path(iteration: int, save_folder: str | PathLike) -> Path:
-    return Path(save_folder) / f'optimizer_{iteration}.pt'
+    path = Path(save_folder) / f'optimizer_{iteration}.pt'
+    if not path.exists():
+        os.makedirs(path.parent, exist_ok=True)
+    return path
 
 
 def create_model(args: NetworkParams, device: torch.device) -> Network:
@@ -124,6 +131,8 @@ def save_model_and_optimizer(
 ) -> None:
     torch.save(model.state_dict(), model_save_path(iteration, save_folder))
     torch.save(optimizer.state_dict(), optimizer_save_path(iteration, save_folder))
+
+    torch.jit.script(model).save(model_save_path(iteration, save_folder).with_suffix('.jit.pt'))
 
 
 def get_latest_model_iteration(save_folder: str | PathLike) -> int:

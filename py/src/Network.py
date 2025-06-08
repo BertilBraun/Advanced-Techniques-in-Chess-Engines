@@ -65,7 +65,7 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
-    def forward(self, x: Tensor, *, return_logits=False) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, return_logits:bool=False) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)

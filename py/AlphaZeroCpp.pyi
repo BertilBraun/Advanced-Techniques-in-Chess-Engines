@@ -13,26 +13,23 @@ class MCTSParams:
     min_visit_count: int
     num_threads: int
 
-    def __init__(self,
-                    num_parallel_searches: int,
-                    c_param: float,
-                    dirichlet_alpha: float,
-                    dirichlet_epsilon: float,
-                    node_reuse_discount: float,
-                    min_visit_count: int,
-                    num_threads: int) -> None:
-        ...
+    def __init__(
+        self,
+        num_parallel_searches: int,
+        c_param: float,
+        dirichlet_alpha: float,
+        dirichlet_epsilon: float,
+        node_reuse_discount: float,
+        min_visit_count: int,
+        num_threads: int,
+    ) -> None: ...
 
 class InferenceClientParams:
     device_id: int
     currentModelPath: str
     maxBatchSize: int
 
-    def __init__(self,
-                    device_id: int,
-                    currentModelPath: str,
-                    maxBatchSize: int) -> None:
-        ...
+    def __init__(self, device_id: int, currentModelPath: str, maxBatchSize: int) -> None: ...
 
 class InferenceStatistics:
     cacheHitRate: float
@@ -44,7 +41,7 @@ class InferenceStatistics:
 
 class MCTSResult:
     result: float
-    visits: List[Tuple[str, int]]
+    visits: List[Tuple[int, int]]  # list of (Encoded Move Id, Visit Count)
     children: List[NodeId]
 
     # We only expose the attributes as read‐only in C++, but type checkers

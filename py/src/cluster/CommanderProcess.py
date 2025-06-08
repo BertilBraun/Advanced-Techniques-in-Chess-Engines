@@ -10,7 +10,12 @@ from src.settings import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.util.PipeConnection import PipeConnection
-from src.util.save_paths import get_latest_model_iteration, model_save_path
+from src.util.save_paths import (
+    get_latest_model_iteration,
+    load_model_and_optimizer,
+    model_save_path,
+    save_model_and_optimizer,
+)
 from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import run_trainer_process
@@ -82,6 +87,8 @@ class CommanderProcess:
 
         starting_iteration = get_latest_model_iteration(self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
+
+        self._ensure_model_exists(starting_iteration)
 
         current_best_iteration = starting_iteration
 
@@ -163,6 +170,16 @@ class CommanderProcess:
         for process in self.self_play_processes:
             process.join(timeout=10)
         exit()
+
+    def _ensure_model_exists(self, starting_iteration: int) -> None:
+        model, optimizer = load_model_and_optimizer(
+            starting_iteration,
+            self.args.network,
+            torch.device('cuda' if USE_GPU else 'cpu'),
+            self.args.save_path,
+            self.args.training.optimizer,
+        )
+        save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
     def _all_processes(self) -> list[Process]:
         return self.self_play_processes + [self.trainer_process]

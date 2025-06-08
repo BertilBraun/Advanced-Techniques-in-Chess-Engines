@@ -52,10 +52,14 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-PARALLEL_GAMES = 32
+PARALLEL_GAMES = 128
+NUM_SELF_PLAYERS = 4
+NUM_THREADS = 64 // NUM_SELF_PLAYERS
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
+
+USE_CPP = True
 
 if not USE_GPU:  # TODO remove
     PARALLEL_GAMES = 4
@@ -85,6 +89,8 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_alpha=0.3,  # Based on AZ Paper
             c_param=1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
+            node_reuse_discount=0.6,
+            num_threads=8,
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
