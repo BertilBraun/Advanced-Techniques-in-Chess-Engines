@@ -86,6 +86,10 @@ static inline constexpr int ACTION_SIZE = 1814;
 static inline constexpr int BOARD_LENGTH = 8;
 static inline constexpr int BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH;
 
+#include "types.h"
+
+using namespace Stockfish;
+
 inline std::pair<int, int> squareToIndex(const int square) {
     return {square / BOARD_LENGTH, square % BOARD_LENGTH};
 }
@@ -99,6 +103,11 @@ inline Square square(const int col, const int row) {
     assert(row >= 0 && row < BOARD_LENGTH && "Row index out of bounds");
     return static_cast<Square>(row * BOARD_LENGTH + col);
 }
+
+static inline constexpr std::array COLORS = {Color::WHITE, Color::BLACK};
+static inline constexpr std::array PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
+                                                  PieceType::BISHOP, PieceType::ROOK,
+                                                  PieceType::QUEEN,  PieceType::KING};
 
 #include "Board.h"
 
@@ -135,7 +144,7 @@ inline std::string toString(const Move &move) {
     std::stringstream ss;
     ss << toString(move.from_sq()) << toString(move.to_sq());
     if (move.promotion_type() != PieceType::NO_PIECE_TYPE) {
-        ss << " pkbrqk"[move.promotion_type()];
+        ss << " pkbrqK"[move.promotion_type()];
     }
     return ss.str();
 }

@@ -3,11 +3,6 @@
 #include "bitboard.h"
 #include "movegen.h"
 
-static inline constexpr std::array COLORS = {Color::WHITE, Color::BLACK};
-static inline constexpr std::array PIECE_TYPES = {PieceType::PAWN,   PieceType::KNIGHT,
-                                                  PieceType::BISHOP, PieceType::ROOK,
-                                                  PieceType::QUEEN,  PieceType::KING};
-
 // Material values matching the Python implementation
 static constexpr int PIECE_VALUE[PIECE_TYPE_NB] = {
     0, // No piece
@@ -76,6 +71,9 @@ std::vector<Move> Board::validMoves() const {
         }
     }
     std::cout << "Valid moves (" << m_pos.fen() << "): " << filtered.size() << "\n";
+    for (const auto &m : filtered) {
+        std::cout << "  " << toString(m) << "\n";
+    }
     return filtered;
 }
 double Board::approximateResultScore() const {
