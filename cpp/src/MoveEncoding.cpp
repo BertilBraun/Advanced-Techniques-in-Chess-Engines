@@ -109,7 +109,7 @@ int encodeMove(const Move move, const Board *board) {
     Square toSquare = move.to_sq();
     const PieceType promotionType = move.promotion_type();
 
-    if (board->current_player() == -1) {
+    if (board->currentPlayer() == -1) {
         // Flip the move to match the board's perspective.
         fromSquare = flip_file(fromSquare);
         toSquare = flip_file(toSquare);
@@ -149,7 +149,7 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *
         return {};
     }
 
-    const std::vector<Move> legalMoves = board->get_valid_moves();
+    const std::vector<Move> legalMoves = board->validMoves();
 
     std::vector<Move> moves;
     moves.reserve(moveIndices.size());
@@ -157,7 +157,7 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *
 
         auto [from_square, to_square, promotion_type] = REVERSE_MOVE_MAPPINGS[moveIndex];
 
-        if (board->current_player() == -1) {
+        if (board->currentPlayer() == -1) {
             from_square = flip_file(from_square);
             to_square = flip_file(to_square);
         }
@@ -184,7 +184,7 @@ torch::Tensor encodeLegalMoves(const Board *board) {
     //
     // param board: The chess board to encode.
     // :return: A 1D tensor representing the encoded legal moves.
-    return encodeMoves(board->get_valid_moves(), board);
+    return encodeMoves(board->validMoves(), board);
 }
 
 torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, const Board *board) {

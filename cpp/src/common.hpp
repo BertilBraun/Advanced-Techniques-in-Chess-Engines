@@ -83,6 +83,23 @@ template <typename T> inline void shuffle(std::vector<T> &vec) {
 // constexpr variable
 static inline constexpr int ACTION_SIZE = 1814;
 
+static inline constexpr int BOARD_LENGTH = 8;
+static inline constexpr int BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH;
+
+inline std::pair<int, int> squareToIndex(const int square) {
+    return {square / BOARD_LENGTH, square % BOARD_LENGTH};
+}
+
+inline Square square(const int col, const int row) {
+    // Converts a column and row to a square index.
+    // param col: The column index (0-7).
+    // param row: The row index (0-7).
+    // :return: The square index.
+    assert(col >= 0 && col < BOARD_LENGTH && "Column index out of bounds");
+    assert(row >= 0 && row < BOARD_LENGTH && "Row index out of bounds");
+    return static_cast<Square>(row * BOARD_LENGTH + col);
+}
+
 #include "Board.h"
 
 #ifdef _WIN32

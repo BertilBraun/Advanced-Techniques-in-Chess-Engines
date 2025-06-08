@@ -116,6 +116,5 @@ private:
 
     std::optional<MCTSNode *> getBestChildOrBackPropagate(const MCTSNode *root, float cParam);
 
-
-    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *node, int number_of_searches);
+    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *root, int number_of_searches);
 };

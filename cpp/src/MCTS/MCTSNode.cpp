@@ -28,7 +28,7 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 
     for (const auto &[move, score] : moves_with_scores) {
         Board moveBoard = board; // Create a copy of the board to make the move
-        moveBoard.make_move(move);
+        moveBoard.makeMove(move);
 
         MCTSNode *child = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
 

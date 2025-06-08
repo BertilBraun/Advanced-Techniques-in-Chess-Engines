@@ -124,10 +124,7 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     futures.reserve(N);
 
     for (const auto &[root, tup] : zip(roots, boards))
-        futures.emplace_back(m_threadPool.enqueue([this](MCTSNode *root, const int number_of_searches) {
-            return searchOneGame(root, number_of_searches);
-        }
-            , root, get<2>(tup)));
+        futures.emplace_back(m_threadPool.enqueue(&MCTS::searchOneGame, this, root, get<2>(tup)));
 
     std::vector<MCTSResult> results;
     MCTSStatistics stats;
@@ -149,23 +146,28 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
 }
 
 void MCTS::parallelIterate(const MCTSNode *root) {
-    std::vector<MCTSNode *> nodes;
+    // These variables are initialized only once per thread
+    // and retain their values between function calls
+    thread_local std::vector<MCTSNode *> nodes;
+    thread_local std::vector<const Board *> boards;
+
+    // Clear contents but maintain capacity
+    nodes.clear();
+    boards.clear();
     nodes.reserve(m_args.num_parallel_searches);
+    boards.reserve(m_args.num_parallel_searches);
+
     for (int _ : range(m_args.num_parallel_searches)) {
         std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
         if (node.has_value()) {
             node.value()->updateVirtualLoss(1);
             nodes.push_back(node.value());
+            boards.emplace_back(&node.value()->board);
         }
     }
+
     if (nodes.empty())
         return;
-
-    // Gather boards for inference.
-    std::vector<const Board *> boards;
-    boards.reserve(nodes.size());
-    for (const MCTSNode *node : nodes)
-        boards.emplace_back(&node->board);
 
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
@@ -201,7 +203,7 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
     for (const auto &[noise, moveScore] : zip(noiseList, moves)) {
         const auto &[move, score] = moveScore;
         float newScore = lerp(score, noise, m_args.dirichlet_epsilon);
-        noisyMoves.push_back({move, newScore});
+        noisyMoves.emplace_back(move, newScore);
     }
 
     return noisyMoves;
@@ -274,7 +276,8 @@ std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int n
         std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
             // Discount the node's score and visits.
             node->result_score *= m_args.node_reuse_discount;
-            node->number_of_visits *= m_args.node_reuse_discount;
+            node->number_of_visits = static_cast<int>(static_cast<float>(node->number_of_visits) *
+                                                      m_args.node_reuse_discount);
             for (const NodeId childId : node->children)
                 discount(m_pool.get(childId));
         };

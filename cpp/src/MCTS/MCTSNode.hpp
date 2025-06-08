@@ -11,7 +11,7 @@ public:
     MCTSNode(const std::string &boardFen, float policy, Move move_to_get_here, NodeId parent,
              NodePool *pool);
 
-    bool isTerminalNode() const { return board.is_game_over(); }
+    bool isTerminalNode() const { return board.isGameOver(); }
 
     bool isFullyExpanded() const { return !children.empty(); }
 
@@ -26,7 +26,7 @@ public:
     NodeId bestChild(float cParam) const;
 
     bool operator==(const MCTSNode &other) const {
-        return board.quick_hash() == other.board.quick_hash() &&
+        return board.quickHash() == other.board.quickHash() &&
                move_to_get_here == other.move_to_get_here;
     }
 

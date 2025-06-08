@@ -14,7 +14,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
 
     CompressedEncodedBoard encodedBoard{};
 
-    const Board tmpBoard((board->current_player() == -1) ? board->position().flip() : board->fen());
+    const Board tmpBoard((board->currentPlayer() == -1) ? board->position().flip() : board->fen());
     const Position &tmp = tmpBoard.position();
 
     for (auto [i, color] : enumerate(COLORS)) {
@@ -89,11 +89,11 @@ std::optional<float> getBoardResultScore(const Board &board) {
     // param board: The board to get the result score for.
     // :return: The result score for the given board.
 
-    if (!board.is_game_over())
+    if (!board.isGameOver())
         return std::nullopt;
 
-    if (const auto winner = board.check_winner()) {
-        assert(winner.value() != board.current_player());
+    if (const auto winner = board.checkWinner()) {
+        assert(winner.value() != board.currentPlayer());
         return {-1.0f}; // Our last move put us in checkmate
     }
 
@@ -101,5 +101,5 @@ std::optional<float> getBoardResultScore(const Board &board) {
     // The materialScore is positive if the white player has the advantage, and negative if the
     // black player has the advantage. Therefore, we need to negate the material score if the
     // black player is the current player.
-    return 0.5 * board.current_player() * board.get_approximate_result_score();
+    return 0.5 * board.currentPlayer() * board.approximateResultScore();
 }
