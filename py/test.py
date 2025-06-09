@@ -8,6 +8,7 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
 
 import os
+import pprint
 
 from src.train.TrainingArgs import NetworkParams
 from src.util.save_paths import create_model, create_optimizer, model_save_path, save_model_and_optimizer
@@ -25,13 +26,7 @@ torch.autograd.set_detect_anomaly(True)
 
 
 import chess
-from AlphaZeroCpp import (
-    MCTS,
-    MCTSParams,
-    InferenceClientParams,
-    MCTSResults,
-    INVALID_NODE,
-)
+from AlphaZeroCpp import MCTS, MCTSParams, InferenceClientParams, MCTSResults, INVALID_NODE
 
 
 network = create_model(NetworkParams(2, 64), torch.device('cpu'))
@@ -63,10 +58,14 @@ mcts = MCTS(client_args, mcts_args)
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:
-boards = [('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', INVALID_NODE, 10)]
+boards = [('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', INVALID_NODE, 801)] * 32
+# TODO check this for end game positions - does that find the mate moves?
 
 results: MCTSResults = mcts.search(boards)
 for r in results.results:
     print('eval =', r.result)
     for encoded_move, cnt in r.visits:
         print(f'  {encoded_move} visited {cnt} times')
+
+
+stats = mcts.get_inference_statistics()

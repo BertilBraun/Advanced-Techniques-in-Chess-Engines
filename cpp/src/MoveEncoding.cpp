@@ -223,31 +223,21 @@ torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, const Boar
     return filteredPolicy / filteredPolicy.sum();
 }
 
-std::vector<MoveScore> mapPolicyToMoves(const torch::Tensor &policy, const Board *board) {
+std::vector<EncodedMoveScore> mapPolicyToMoves(const torch::Tensor &policy) {
     const torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
     const size_t n = nonzeroIndices.size(0);
 
-    std::vector<int> encodedMoves;
-    encodedMoves.reserve(n);
+    std::vector<EncodedMoveScore> movesWithProbabilities;
+    movesWithProbabilities.reserve(n);
     for (const size_t i : range(n)) {
         const int encodedMove = nonzeroIndices[i].item<int>();
-        encodedMoves.push_back(encodedMove);
-    }
-
-    std::vector<Move> decodedMoves = decodeMoves(encodedMoves, board);
-
-    std::vector<MoveScore> movesWithProbabilities;
-    movesWithProbabilities.reserve(n);
-
-    for (const size_t i : range(n)) {
-        const float probability = policy[nonzeroIndices[i].item<int>()].item<float>();
-        movesWithProbabilities.emplace_back(decodedMoves[i], probability);
+        movesWithProbabilities.emplace_back(encodedMove, policy[encodedMove].item<float>());
     }
 
     return movesWithProbabilities;
 }
 
-std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+std::vector<EncodedMoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
                                                                 const Board *board) {
     // Gets a list of moves with their corresponding probabilities from a policy.
     //
@@ -260,5 +250,5 @@ std::vector<MoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Ten
     // :return: The list of moves with their corresponding probabilities.
 
     const torch::Tensor filteredPolicy = filterPolicyWithLegalMoves(policy, board);
-    return mapPolicyToMoves(filteredPolicy, board);
+    return mapPolicyToMoves(filteredPolicy);
 }

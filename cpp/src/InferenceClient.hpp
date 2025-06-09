@@ -15,6 +15,7 @@ struct InferenceStatistics {
     size_t uniquePositions = 0;                   // Number of unique positions in the cache.
     size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
     std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
+    float averageNumberOfPositionsInInferenceCall = 0.0f; // Average number of positions in an inference call.
 };
 
 struct InferenceClientParams {
@@ -50,6 +51,7 @@ public:
     InferenceStatistics getStatistics();
 
 private:
+    typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;
     /**
      * @brief Structure representing a single asynchronous inference request.
@@ -89,9 +91,10 @@ private:
     torch::Dtype m_torchDtype;
 
     // Cache: board -> InferenceResult.
-    ShardedCache<CompressedEncodedBoard, InferenceResult, 32, BoardHash> m_cache;
+    ShardedCache<CompressedEncodedBoard, CachedInferenceResult, 32, BoardHash> m_cache;
     int m_totalHits;
     int m_totalEvals;
+    int m_totalModelInferenceCalls = 0;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

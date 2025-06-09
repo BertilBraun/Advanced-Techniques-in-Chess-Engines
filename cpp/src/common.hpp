@@ -123,6 +123,7 @@ static inline constexpr std::array PIECE_TYPES = {PieceType::PAWN,   PieceType::
 #endif
 
 typedef std::pair<Move, float> MoveScore;
+typedef std::pair<int, float> EncodedMoveScore;
 
 inline std::string toString(const Square &square) {
     File file = file_of(square);

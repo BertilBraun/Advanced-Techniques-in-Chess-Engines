@@ -49,22 +49,24 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("cacheHitRate", &InferenceStatistics::cacheHitRate)
         .def_readonly("uniquePositions", &InferenceStatistics::uniquePositions)
         .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
-        .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution);
+        .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution)
+        .def_readonly("averageNumberOfPositionsInInferenceCall",
+                        &InferenceStatistics::averageNumberOfPositionsInInferenceCall);
 
-    // --- (2.4) MCTSResult (Python view) ---
+    // --- (2.4) MCTSResult ---
     py::class_<MCTSResult>(m, "MCTSResult")
         .def_readonly("result", &MCTSResult::result)
         .def_readonly("visits", &MCTSResult::visits)     // vector<tuple<string,int>>
         .def_readonly("children", &MCTSResult::children) // vector<NodeId>
         ;
 
-    // --- (2.5) MCTSStatistics (same as C++) ---
+    // --- (2.5) MCTSStatistics ---
     py::class_<MCTSStatistics>(m, "MCTSStatistics")
         .def_readonly("averageDepth", &MCTSStatistics::averageDepth)
         .def_readonly("averageEntropy", &MCTSStatistics::averageEntropy)
         .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence);
 
-    // --- (2.6) MCTSResults (Python view) ---
+    // --- (2.6) MCTSResults ---
     py::class_<MCTSResults>(m, "MCTSResults")
         .def_readonly("results", &MCTSResults::results)      // vector<PyMCTSResult>
         .def_readonly("mctsStats", &MCTSResults::mctsStats); // PyMCTSStatistics

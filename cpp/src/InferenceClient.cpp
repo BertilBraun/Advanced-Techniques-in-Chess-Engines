@@ -83,12 +83,32 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
 
-    for (const CompressedEncodedBoard &encodedBoard : encodedBoards) {
-        InferenceResult result;
+    for (const auto &&[encodedBoard, board] : zip(encodedBoards, boards)) {
+        CachedInferenceResult result;
         if (!m_cache.lookup(encodedBoard, result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
-        results.push_back(result);
+        const auto &[moves, value] = result;
+
+        // Decode the moves from the cached result using the board.
+        std::vector<int> encodedMoves;
+        std::vector<float> scores;
+        encodedMoves.reserve(moves.size());
+        scores.reserve(moves.size());
+        for (const auto &[encodedMove, score] : moves) {
+            encodedMoves.push_back(encodedMove);
+            scores.push_back(score);
+        }
+
+        const std::vector<Move> decodedMoves = decodeMoves(encodedMoves, board);
+
+        std::vector<MoveScore> decodedMovesScores;
+        decodedMovesScores.reserve(decodedMoves.size());
+        for (const auto &&[move, score] : zip(decodedMoves, scores)) {
+            decodedMovesScores.emplace_back(move, score);
+        }
+
+        results.emplace_back(decodedMovesScores, value);
     }
 
     return results;
@@ -110,13 +130,26 @@ InferenceStatistics InferenceClient::getStatistics() {
         stats.nnOutputValueDistribution.push_back(entry.second.second);
     }
 
-    const size_t sizeInBytes = m_cache.size() * (sizeof(InferenceResult) + sizeof(CompressedEncodedBoard));
+    const size_t sizeInBytes =
+        m_cache.size() * (sizeof(CachedInferenceResult) + sizeof(CompressedEncodedBoard));
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
+
+    stats.averageNumberOfPositionsInInferenceCall =
+        static_cast<float>(m_totalEvals) / m_totalModelInferenceCalls;
 
     log("Inference Client stats:");
     log("  cache_hit_rate:", stats.cacheHitRate);
     log("  unique_positions:", stats.uniquePositions);
     log("  cache_size_mb:", stats.cacheSizeMB);
+    log("  average_number_of_positions_in_inference_call:",
+        stats.averageNumberOfPositionsInInferenceCall);
+
+    std::cout << "Inference Client stats:" << std::endl;
+    std::cout << "  cache_hit_rate: " << stats.cacheHitRate << "%" << std::endl;
+    std::cout << "  unique_positions: " << stats.uniquePositions << std::endl;
+    std::cout << "  cache_size_mb: " << stats.cacheSizeMB << " MB" << std::endl;
+    std::cout << "  average_number_of_positions_in_inference_call: "
+              << stats.averageNumberOfPositionsInInferenceCall << std::endl;
 
     return stats;
 }
@@ -124,7 +157,6 @@ InferenceStatistics InferenceClient::getStatistics() {
 void InferenceClient::loadModel(const std::string &modelPath) {
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
-    std::cout << "Model Path:" << modelPath << std::endl;
     m_model = torch::jit::load(modelPath, m_device);
     m_model.to(m_torchDtype); // Use half precision for inference.
     m_model.eval();
@@ -153,8 +185,7 @@ void InferenceClient::inferenceWorker() {
         }
 
         if (!promises.empty()) {
-            const std::vector<std::pair<torch::Tensor, float>> inferenceResults =
-                modelInference(tensorBatch);
+            const std::vector<ModelInferenceResult> inferenceResults = modelInference(tensorBatch);
 
             for (auto &&[promise, res] : zip(promises, inferenceResults)) {
                 promise.set_value(res); // Set the promise for each request.
@@ -166,10 +197,12 @@ void InferenceClient::inferenceWorker() {
     }
 }
 
-std::vector<std::pair<torch::Tensor, float>>
+std::vector<InferenceClient::ModelInferenceResult>
 InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     torch::NoGradGuard noGrad;
     std::unique_lock<std::mutex> lock(m_modelMutex);
+
+    m_totalModelInferenceCalls++;
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).

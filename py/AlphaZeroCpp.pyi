@@ -36,6 +36,7 @@ class InferenceStatistics:
     uniquePositions: int
     cacheSizeMB: int
     nnOutputValueDistribution: List[float]
+    averageNumberOfPositionsInInferenceCall: float
 
     def __init__(self) -> None: ...
 

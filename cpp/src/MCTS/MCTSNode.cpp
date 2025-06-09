@@ -28,13 +28,7 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 
     for (const auto &[move, score] : moves_with_scores) {
         Board moveBoard = board; // Create a copy of the board to make the move
-        std::cout << repr() << "\n";
-        std::cout << "Making move: " << toString(move) << " in position: " << "\n"
-                  << moveBoard.repr() << "\n";
         moveBoard.makeMove(move);
-
-        assert(board.currentPlayer() != moveBoard.currentPlayer() &&
-               "Move should change the current player");
 
         MCTSNode *child = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
 
