@@ -143,9 +143,9 @@ class MCTS:
         #
         #     draw_mcts_graph(root, f'mcts_{num_placed_stones}.png')
 
-        assert all(
-            np.all(node.children_virtual_losses == 0) for node in roots
-        ), 'Virtual losses should be 0 after the search'
+        assert all(np.all(node.children_virtual_losses == 0) for node in roots), (
+            'Virtual losses should be 0 after the search'
+        )
 
         def dfs(node: MCTSNode) -> int:
             # depth dfs

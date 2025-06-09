@@ -1,4 +1,5 @@
-from typing import List, Tuple
+from __future__ import annotations
+from typing import List, Tuple, Optional
 
 # We treat NodeId as int in Python
 NodeId = int
@@ -66,3 +67,28 @@ class MCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None: ...
     def search(self, boards: List[Tuple[str, NodeId, int]]) -> MCTSResults: ...
     def get_inference_statistics(self) -> InferenceStatistics: ...
+    def get_node(self, node_id: NodeId) -> MCTSNode: ...
+
+class MCTSNode:
+    """Read‑only view of an MCTS node."""
+
+    # Tree structure ----------------------------------------------------------
+    @property
+    def parent(self) -> Optional[MCTSNode]: ...
+    @property
+    def children(self) -> List[MCTSNode]: ...
+
+    # Basic fields ------------------------------------------------------------
+    fen: str  # Board position (FEN)
+    move: str  # UCI move that leads to this node ("null" for root)
+    visits: int  # Number of simulations that visited this node
+    virtual_loss: float  # Virtual loss applied during parallel search
+    result: float  # Accumulated back‑propagated value (e.g. win prob)
+    policy: float  # Prior probability from neural network
+    is_terminal: bool  # True if this node is a terminal node (game over)
+    is_fully_expanded: bool  # True if this node has children (fully expanded)
+
+    def ucb(self, c_param: float, parent_number_of_visits: int) -> float: ...
+
+    # Convenience -------------------------------------------------------------
+    def __repr__(self) -> str: ...

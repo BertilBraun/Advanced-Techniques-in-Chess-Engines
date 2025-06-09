@@ -97,6 +97,8 @@ public:
 
     InferenceStatistics getInferenceStatistics() { return m_client.getStatistics(); }
 
+    NodePool* getNodePool() { return &m_pool; }
+
 private:
     InferenceClient m_client;
     MCTSParams m_args;

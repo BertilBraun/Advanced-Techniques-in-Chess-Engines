@@ -4,15 +4,15 @@
 
 MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
                    const NodeId parent, NodePool *pool)
-    : parent(parent), myId(INVALID_NODE), pool(pool), board(boardFen),
+    : parent(parent), pool(pool), board(boardFen),
       move_to_get_here(move_to_get_here), policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon) const {
     const float uScore = policy * uCommon / (1 + number_of_visits);
 
-    float qScore = -1.0; // Default to loss for unvisited moves
-    // TODO most seem to init to 0.0
-    // CrazyAra inits to -1
+    // most seem to init to 0.0
+    // CrazyAra inits to -1.0
+    float qScore = 0.0; // Default to loss for unvisited moves
     if (number_of_visits > 0) {
         qScore = -1 * (result_score + virtual_loss) / number_of_visits;
     }
@@ -58,7 +58,7 @@ void MCTSNode::updateVirtualLoss(int delta) {
 
     while (node) {
         node->virtual_loss += delta;     // Update the virtual loss
-        node->number_of_visits += delta; // Update the visit count
+        // node->number_of_visits += delta; // Update the visit count
 
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }

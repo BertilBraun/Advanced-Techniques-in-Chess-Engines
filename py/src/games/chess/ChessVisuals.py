@@ -196,10 +196,19 @@ def display_node(
     print('Sum of all policies:', sum(root.children_policies))
     print('Sum of all visit counts:', sum(root.children_number_of_visits))
     print('Visit counts of root:', root.number_of_visits)
+    for k, child in enumerate(root.children):
+        mv = game.decode_move(child.encoded_move_to_get_here, root.board)
+        print(
+            f'Child #{k} ({mv.from_square}→{mv.to_square}): '
+            f'visits={root.children_number_of_visits[k]}, '
+            f'policy={root.children_policies[k]:.2f}, '
+            f'result_score={child.result_score:.2f}, '
+            f'fully_expanded={child.is_fully_expanded}'
+        )
 
     # Main event loop
     while True:
-        time.sleep(0.2)
+        time.sleep(0.05)
         draw()
         events = gui.events_occurred()
 

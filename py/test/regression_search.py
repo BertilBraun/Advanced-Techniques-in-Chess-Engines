@@ -100,7 +100,7 @@ def run_mate_puzzle_regression():
                 break
             moves_str_list.append(f'{CurrentGame.decode_move(mv, board).uci()}: {visits:.4f} ({count})')
         moves_str = '\n\t'.join(moves_str_list)
-        ratio_str = f'(visit policy: {best_visits:.4f}) with all moves:\n\t{moves_str}\nFor Board with FEN:\n{board.board.fen()}\n{"==="*20}'
+        ratio_str = f'(visit policy: {best_visits:.4f}) with all moves:\n\t{moves_str}\nFor Board with FEN:\n{board.board.fen()}\n{"===" * 20}'
 
         def mates(move: chess.Move):
             b = board.copy()

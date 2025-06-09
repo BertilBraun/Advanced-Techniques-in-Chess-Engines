@@ -24,7 +24,7 @@ endif ()
 
 # Set default build type if not specified
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif ()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")

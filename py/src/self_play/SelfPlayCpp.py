@@ -1,4 +1,5 @@
 from __future__ import annotations
+import gc
 import random
 import time
 
@@ -103,6 +104,9 @@ class SelfPlayCpp:
                 iteration - 1,
             )
 
+            del self.mcts  # Clear the previous MCTS instance to free memory
+            gc.collect()  # Force garbage collection to free memory
+
         self._set_mcts(iteration)
 
     def _set_mcts(self, iteration: int) -> None:
@@ -183,42 +187,6 @@ class SelfPlayCpp:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
                     self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
-                    continue
-
-                pieces = list(spg.board.board.piece_map().values())
-                white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
-                black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if (
-                    False
-                    and (white_pieces < 4 or black_pieces < 4)
-                    and len(spg.played_moves) >= 80
-                    and random.random() < 0.2
-                ):
-                    # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
-                    from src.games.chess.ChessBoard import PIECE_VALUE
-
-                    white_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
-                    black_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
-
-                    # Convert to result from current player's perspective
-                    if spg.board.current_player == 1:  # White's perspective
-                        if white_value > black_value:
-                            game_outcome = 1.0
-                        elif black_value > white_value:
-                            game_outcome = -1.0
-                        else:
-                            game_outcome = 0.0
-                    else:  # Black's perspective
-                        if black_value > white_value:
-                            game_outcome = 1.0
-                        elif white_value > black_value:
-                            game_outcome = -1.0
-                        else:
-                            game_outcome = 0.0
-
-                    game_outcome *= 0.9  # somewhat unsure about the game outcome, therefore discount if with 0.9
-                    self._add_training_data(spg, game_outcome)
-                    self.self_play_games[i] = SelfPlayGame()
                     continue
 
             spg_action_probabilities = visit_count_probabilities(mcts_result.visits)

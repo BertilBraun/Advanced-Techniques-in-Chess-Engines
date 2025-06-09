@@ -111,7 +111,7 @@ class MCTSNode:
 
         while node.parent:
             node.parent.children_virtual_losses[node.my_child_index] += delta
-            node.parent.children_number_of_visits[node.my_child_index] += delta
+            # TODO node.parent.children_number_of_visits[node.my_child_index] += delta
             node = node.parent
 
     def back_propagate(self, result: float) -> None:
@@ -120,7 +120,7 @@ class MCTSNode:
         while node.parent:
             node.parent.children_number_of_visits[node.my_child_index] += 1
             node.parent.children_result_scores[node.my_child_index] += result
-            result = -result * 0.99  # Discount the result for the parent node
+            result = -1.0 * result * 0.99  # Discount the result for the parent node
             node = node.parent
 
     def best_child(self, c_param: float) -> MCTSNode:
@@ -134,7 +134,7 @@ class MCTSNode:
             children_policies=self.children_policies,
             own_number_of_visits=self.number_of_visits,
             # Fix: use parent's result score if this is the root node, else init to loss (-1.0 (the own result score is inverted in the UCB1 formula))
-            own_result_score=-1.0,  # TODO?? Apparently not, but once: self.result_score if self.parent is None else -1.0,
+            own_result_score=0.0,  # TODO -1.0,  # TODO?? Apparently not, but once: self.result_score if self.parent is None else -1.0,
         )
         best_child = self.children[best_child_index]
         best_child._maybe_init_board()

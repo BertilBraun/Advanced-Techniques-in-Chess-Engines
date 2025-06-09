@@ -53,9 +53,9 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 128
-NUM_SELF_PLAYERS = 4
-NUM_THREADS = 64 // NUM_SELF_PLAYERS
-NUM_SEARCHES_PER_TURN = 800
+NUM_SELF_PLAYERS = 8
+NUM_THREADS = int(64 // NUM_SELF_PLAYERS * 1.5)
+NUM_SEARCHES_PER_TURN = 1200
 MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
 
@@ -68,10 +68,15 @@ if not USE_GPU:  # TODO remove
     PARALLEL_SEARCHES = 1
     evaluation = None  # No evaluation in CPU mode
 
+    NUM_SEARCHES_PER_TURN = 800  # TODO remove
+    MIN_VISIT_COUNT = 2
+    PARALLEL_SEARCHES = 4
+    network = NetworkParams(num_layers=2, hidden_size=32)
+
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
@@ -89,8 +94,8 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_alpha=0.3,  # Based on AZ Paper
             c_param=1.7,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
-            node_reuse_discount=0.6,
-            num_threads=8,
+            node_reuse_discount=0.5,
+            num_threads=NUM_THREADS,
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
