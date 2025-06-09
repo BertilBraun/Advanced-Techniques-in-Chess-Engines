@@ -66,7 +66,7 @@ if not USE_GPU:  # TODO remove
     NUM_SEARCHES_PER_TURN = 40
     MIN_VISIT_COUNT = 1
     PARALLEL_SEARCHES = 1
-    evaluation = None  # No evaluation in CPU mode
+    # evaluation = None  # No evaluation in CPU mode
 
     NUM_SEARCHES_PER_TURN = 800  # TODO remove
     MIN_VISIT_COUNT = 2

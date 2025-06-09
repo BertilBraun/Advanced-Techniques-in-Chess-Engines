@@ -71,8 +71,6 @@ optimizer = create_optimizer(network, 'adamw')
 save_model_and_optimizer(network, optimizer, 0, 'models')
 
 model_path = model_save_path(0, 'models')
-model_path = model_path.with_suffix('.jit.pt')
-
 
 client_args = InferenceClientParams(
     device_id=0,
@@ -98,8 +96,8 @@ MATE_IN_TWO_FEN = 'r1bq2r1/b4pk1/p1pp1p2/1p2pP2/1P2P1PB/3P4/1PPQ2P1/R3K2R w - - 
 
 input_fens = [STARTING_FEN]
 
-# run_mcts_py(input_fens, str(model_save_path(0, 'models')))
-# run_mcts_cpp(input_fens, str(model_save_path(0, 'models').with_suffix('.jit.pt')))
+# run_mcts_py(input_fens, str(model_path))
+# run_mcts_cpp(input_fens, str(model_path))
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.eval.Bot import Bot
 from src.eval.GameManager import GameManager
-from src.eval.ModelEvaluation import Results
+from src.eval.ModelEvaluationPy import Results
 
 
 class TournamentManager:

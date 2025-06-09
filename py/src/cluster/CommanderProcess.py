@@ -3,7 +3,7 @@ import torch
 from torch.multiprocessing import Process, Pipe
 from pathlib import Path
 
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.eval.ModelEvaluationPy import ModelEvaluation
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU

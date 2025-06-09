@@ -155,9 +155,25 @@ InferenceStatistics InferenceClient::getStatistics() {
 }
 
 void InferenceClient::loadModel(const std::string &modelPath) {
+    std::string modelPathToLoad = modelPath;
+
+    // check if model ends with ".jit.pt" or ".pt", if not, throw an error.
+    assert((modelPathToLoad.ends_with(".jit.pt") || modelPathToLoad.ends_with(".pt")) &&
+           "Model path must end with '.jit.pt' or '.pt'");
+
+    // If it ends with ".pt", change the extension to ".jit.pt".
+    if (!modelPathToLoad.ends_with(".jit.pt")) {
+        // modelPath ends with ".pt", remove it, and append ".jit.pt" instead
+        modelPathToLoad = modelPathToLoad.substr(0, modelPathToLoad.size() - 3) + ".jit.pt";
+    }
+
+    // Assert that the model file exists.
+    assert(std::filesystem::exists(modelPathToLoad) &&
+           ("Model file does not exist: " + modelPathToLoad).c_str());
+
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
-    m_model = torch::jit::load(modelPath, m_device);
+    m_model = torch::jit::load(modelPathToLoad, m_device);
     m_model.to(m_torchDtype); // Use half precision for inference.
     m_model.eval();
 }

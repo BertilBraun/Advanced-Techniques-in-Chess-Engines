@@ -4,8 +4,7 @@
 
 MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
                    const NodeId parent, NodePool *pool)
-    : parent(parent), pool(pool), board(boardFen),
-      move_to_get_here(move_to_get_here), policy(policy) {}
+    : parent(parent), pool(pool), board(boardFen),      move_to_get_here(move_to_get_here), policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon) const {
     const float uScore = policy * uCommon / (1 + number_of_visits);

@@ -1,0 +1,183 @@
+from __future__ import annotations
+from os import PathLike
+import os
+from pathlib import Path
+import random
+
+import numpy as np
+
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+
+from src.Network import Network
+from src.eval.ModelEvaluationPy import EVAL_DEVICE, _play_two_models_search, policy_evaluator, Results, EvaluationModel
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
+from src.train.TrainingArgs import TrainingArgs
+from src.cluster.InferenceClient import InferenceClient
+from src.mcts.MCTS import action_probabilities
+from src.settings import USE_GPU, CurrentBoard, CurrentGame
+from src.util.save_paths import load_model, model_save_path
+
+
+class ModelEvaluation:
+    """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
+
+    def __init__(
+        self, iteration: int, args: TrainingArgs, num_games: int = 64, num_searches_per_turn: int = 20
+    ) -> None:
+        self.iteration = iteration
+        self.num_games = num_games
+        self.args = args
+
+        self.mcts_args = MCTSParams(
+            num_parallel_searches=args.self_play.mcts.num_parallel_searches,
+            c_param=1.7,
+            dirichlet_epsilon=0.0,
+            dirichlet_alpha=1.0,
+            min_visit_count=0,
+            num_threads=int(args.self_play.mcts.num_threads * args.cluster.num_self_play_nodes_on_cluster / 2),
+            node_reuse_discount=1.0,
+        )
+
+    def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
+        device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
+        model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
+
+        dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
+        return self._evaluate_model_vs_dataset(model, dataloader)
+
+    @staticmethod
+    def _evaluate_model_vs_dataset(model: Network, dataloader: DataLoader) -> tuple[float, float, float, float]:
+        model.eval()
+
+        total_top1_correct = 0
+        total_top5_correct = 0
+        total_top10_correct = 0
+        total_policy_total = 0
+        total_value_loss = 0.0
+
+        with torch.no_grad():
+            for batch in dataloader:
+                board, moves, outcome = batch
+                board = board.to(model.device)
+                moves = moves.to(model.device)
+                outcome = outcome.to(model.device).unsqueeze(1)
+
+                policy_pred, value_output = model(board)
+
+                for i in range(len(moves)):
+                    top1 = policy_pred[i].topk(1).indices
+                    top5 = policy_pred[i].topk(5).indices
+                    top10 = policy_pred[i].topk(10).indices
+                    true_moves = moves[i].nonzero().squeeze()
+
+                    if torch.any(top1 == true_moves):
+                        total_top1_correct += 1
+                    if torch.any(top5.unsqueeze(1) == true_moves):
+                        total_top5_correct += 1
+                    if torch.any(top10.unsqueeze(1) == true_moves):
+                        total_top10_correct += 1
+
+                    total_policy_total += 1
+
+                total_value_loss += F.mse_loss(value_output, outcome).item()
+
+        top1_accuracy = total_top1_correct / total_policy_total
+        top5_accuracy = total_top5_correct / total_policy_total
+        top10_accuracy = total_top10_correct / total_policy_total
+        avg_value_loss = total_value_loss / len(dataloader)
+
+        return top1_accuracy, top5_accuracy, top10_accuracy, avg_value_loss
+
+    def play_vs_random(self) -> Results:
+        # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
+
+        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            def get_random_policy(board: CurrentBoard) -> np.ndarray:
+                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+
+            return [get_random_policy(board) for board in boards]
+
+        return self.play_vs_evaluation_model(random_evaluator, 'random')
+
+    def play_two_models_search(self, model_path: str | PathLike) -> Results:
+        if not Path(model_path).exists():
+            print(f'Model path {model_path} does not exist. Skipping evaluation.')
+            return Results(self.num_games, 0, 0)
+
+        opponent = MCTS(InferenceClientParams(EVAL_DEVICE, str(model_path), 16), self.mcts_args)
+
+        def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
+            results = opponent.search(
+                [(board.board.fen(), INVALID_NODE, self.args.evaluation.num_searches_per_turn) for board in boards]
+            )
+            return [action_probabilities(result.visits) for result in results.results]
+
+        # opponent_evaluator = policy_evaluator(opponent)
+
+        res = self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
+
+        del opponent  # Free the memory used by the MCTS client
+
+        return res
+
+    def play_policy_vs_random(self) -> Results:
+        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
+        current_model.update_iteration(self.iteration)
+
+        policy_model = policy_evaluator(current_model)
+
+        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            def get_random_policy(board: CurrentBoard) -> np.ndarray:
+                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+
+            return [get_random_policy(board) for board in boards]
+
+        results = Results(0, 0, 0)
+
+        results += _play_two_models_search(
+            self.iteration, policy_model, random_evaluator, self.num_games // 2, 'policy_vs_random'
+        )
+        results -= _play_two_models_search(
+            self.iteration, random_evaluator, policy_model, self.num_games // 2, 'random_vs_policy'
+        )
+
+        return results
+
+    def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
+        current = MCTS(
+            InferenceClientParams(EVAL_DEVICE, str(model_save_path(self.iteration, self.args.save_path)), 16),
+            self.mcts_args,
+        )
+
+        def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
+            results = current.search(
+                [(board.board.fen(), INVALID_NODE, self.args.evaluation.num_searches_per_turn) for board in boards]
+            )
+            return [action_probabilities(result.visits) for result in results.results]
+
+        # model1 = policy_evaluator(current_model)
+
+        results = Results(0, 0, 0)
+
+        results += _play_two_models_search(
+            self.iteration, current_model, eval_model, self.num_games // 2, name + '_vs_current'
+        )
+        results -= _play_two_models_search(
+            self.iteration, eval_model, current_model, self.num_games // 2, 'current_vs_' + name
+        )
+
+        del current  # Free the memory used by the MCTS client
+
+        return results
+
+
+if __name__ == '__main__':
+    from src.settings import TRAINING_ARGS
+
+    evaluation = ModelEvaluation(0, TRAINING_ARGS, 100, 400)
+    print('Evaluation vs Random:', evaluation.play_vs_random())

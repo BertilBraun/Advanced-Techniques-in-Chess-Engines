@@ -21,7 +21,7 @@ def display_board(move_index: int, gui: GUI):
             board = CurrentGame.get_initial_board()
             board.set_fen(move[4:-1])
         else:
-            board.make_move(CurrentGame.decode_move(int(move)))
+            board.make_move(CurrentGame.decode_move(int(move), board))
 
     gui.clear_highlights_and_redraw(lambda: CurrentGameVisuals.draw_pieces(board, gui))
     gui.update_display()

@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.eval.ModelEvaluationPy import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
@@ -43,7 +43,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
 
     for epoch in range(num_epochs):
         stats = trainer.train(dataloader, dataloader, iteration)
-        log(f'Epoch {epoch+1}/{num_epochs} done: {stats}')
+        log(f'Epoch {epoch + 1}/{num_epochs} done: {stats}')
 
 
 def get_regression_dataset(path: str) -> SelfPlayDataset:
@@ -94,9 +94,9 @@ def main(dataset_path: str):
                 model, DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
             )
             log(f'Evaluation results at iteration {iter}:')
-            log(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
-            log(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
-            log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
+            log(f'    Policy accuracy @1: {policy_at_1 * 100:.2f}%')
+            log(f'    Policy accuracy @5: {policy_at_5 * 100:.2f}%')
+            log(f'    Policy accuracy @10: {policy_at_10 * 100:.2f}%')
             log(f'    Avg value loss: {avg_value_loss}')
 
         log('Training finished')

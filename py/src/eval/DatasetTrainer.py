@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from src.cluster.TrainerProcess import as_dataloader
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id, learning_rate
 from src.Network import Network
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.eval.ModelEvaluationPy import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.Trainer import Trainer
@@ -122,9 +122,9 @@ def main(dataset_paths: list[str]):
                 model, test_dataloader
             )
             log(f'Evaluation results at iteration {iter}:')
-            log(f'    Policy accuracy @1: {policy_at_1*100:.2f}%')
-            log(f'    Policy accuracy @5: {policy_at_5*100:.2f}%')
-            log(f'    Policy accuracy @10: {policy_at_10*100:.2f}%')
+            log(f'    Policy accuracy @1: {policy_at_1 * 100:.2f}%')
+            log(f'    Policy accuracy @5: {policy_at_5 * 100:.2f}%')
+            log(f'    Policy accuracy @10: {policy_at_10 * 100:.2f}%')
             log(f'    Avg value loss: {avg_value_loss}')
 
             save_model_and_optimizer(model, optimizer, iter, save_folder)

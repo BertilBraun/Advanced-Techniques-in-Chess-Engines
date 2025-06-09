@@ -97,6 +97,8 @@ class ModelEvaluation:
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
+            num_threads=2,
+            node_reuse_discount=1.0,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
@@ -190,8 +192,12 @@ class ModelEvaluation:
 
         results = Results(0, 0, 0)
 
-        results += self._play_two_models_search(policy_model, random_evaluator, self.num_games // 2, 'policy_vs_random')
-        results -= self._play_two_models_search(random_evaluator, policy_model, self.num_games // 2, 'random_vs_policy')
+        results += _play_two_models_search(
+            self.iteration, policy_model, random_evaluator, self.num_games // 2, 'policy_vs_random'
+        )
+        results -= _play_two_models_search(
+            self.iteration, random_evaluator, policy_model, self.num_games // 2, 'random_vs_policy'
+        )
 
         return results
 
@@ -207,87 +213,97 @@ class ModelEvaluation:
 
         results = Results(0, 0, 0)
 
-        results += self._play_two_models_search(current_model, eval_model, self.num_games // 2, name + '_vs_current')
-        results -= self._play_two_models_search(eval_model, current_model, self.num_games // 2, 'current_vs_' + name)
+        results += _play_two_models_search(
+            self.iteration, current_model, eval_model, self.num_games // 2, name + '_vs_current'
+        )
+        results -= _play_two_models_search(
+            self.iteration, eval_model, current_model, self.num_games // 2, 'current_vs_' + name
+        )
 
         return results
 
-    def _play_two_models_search(
-        self, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str
-    ) -> Results:
-        results = Results(0, 0, 0)
 
-        games = [CurrentBoard() for _ in range(num_games)]
+def _play_two_models_search(
+    iteration, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str
+) -> Results:
+    results = Results(0, 0, 0)
 
-        game_move_histories: list[list[str]] = [[] for _ in range(num_games)]
-        game_to_index = {game: i for i, game in enumerate(games)}
+    games = [CurrentBoard() for _ in range(num_games)]
 
-        # start from different starting positions, as the players are deterministic
-        if CURRENT_GAME == 'chess':
-            opening_fens = [
-                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
-                'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 3 3',  # Scotch Game
-                'rnbqkb1r/pp1ppppp/5n2/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 2 2',  # Sicilian Defense
-                'rnbqkb1r/pppp1ppp/4pn2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 3',  # French Defense
-                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Caro-Kann Defense
-                'rnbqkb1r/ppp1pppp/3p4/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Pirc Defense
-                'rnbqkb1r/ppp1pppp/3p4/8/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Modern Defense
-                'rnbqkb1r/pppp1ppp/8/4p3/3Pn3/5N2/PPP2PPP/RNBQKB1R w KQkq - 3 3',  # Alekhine’s Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # King's Indian Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 2 3',  # Grünfeld Defense
-                'rnbqkb1r/pp1ppppp/5n2/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Queen’s Gambit Declined
-                'rnbqkb1r/pp1ppppp/5n2/8/2pPP3/8/PP3PPP/RNBQKBNR w KQkq - 0 3',  # Queen’s Gambit Accepted
-                'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Slav Defense
-                'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
-                'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
-                'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
-                'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
-                'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
-                'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
-            ]
+    game_move_histories: list[list[str]] = [[] for _ in range(num_games)]
 
-            for game, fen in zip(games, opening_fens):
-                game.set_fen(fen)
-                game_move_histories[game_to_index[game]].append(f'FEN"{fen}"')
-        else:
-            for game in games:
-                for _ in range(3):
-                    move = random.choice(game.get_valid_moves())
-                    game_move_histories[game_to_index[game]].append(str(CurrentGame.encode_move(move, game)))
-                    game.make_move(move)
+    # start from different starting positions, as the players are deterministic
+    if CURRENT_GAME == 'chess':
+        opening_fens = [
+            'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 3',  # Ruy-Lopez (Spanish Game)
+            'rnbqkb1r/pppp1ppp/5n2/4p3/B3P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3',  # Italian Game
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 3 3',  # Scotch Game
+            'rnbqkb1r/pp1ppppp/5n2/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 2 2',  # Sicilian Defense
+            'rnbqkb1r/pppp1ppp/4pn2/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 3',  # French Defense
+            'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Caro-Kann Defense
+            'rnbqkb1r/ppp1pppp/3p4/8/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Pirc Defense
+            'rnbqkb1r/ppp1pppp/3p4/8/4P3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # Modern Defense
+            'rnbqkb1r/pppp1ppp/8/4p3/3Pn3/5N2/PPP2PPP/RNBQKB1R w KQkq - 3 3',  # Alekhine’s Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 2 3',  # King's Indian Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 2 3',  # Grünfeld Defense
+            'rnbqkb1r/pp1ppppp/5n2/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Queen’s Gambit Declined
+            'rnbqkb1r/pp1ppppp/5n2/8/2pPP3/8/PP3PPP/RNBQKBNR w KQkq - 0 3',  # Queen’s Gambit Accepted
+            'rnbqkb1r/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR w KQkq c6 2 2',  # Slav Defense
+            'rnbqkb1r/pppp1ppp/4pn2/8/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq - 2 3',  # Nimzo-Indian Defense
+            'rnbqkb1r/pppp1ppp/5n2/4p3/2P5/5NP1/PP1PPP1P/RNBQKB1R b KQkq - 2 3',  # Catalan Opening
+            'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 2 2',  # English Opening
+            'rnbqkb1r/pppppppp/5n2/8/4P2p/8/PPPP1PPP/RNBQKBNR w KQkq - 2 2',  # Dutch Defense
+            'rnbqkb1r/pppppppp/5n2/8/3PP3/4B3/PPP2PPP/RN1QKBNR b KQkq - 3 3',  # London System
+            'rnbqkb1r/pppppppp/5n2/8/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 2 2',  # Réti Opening
+        ]
 
-        while games:
-            games_for_player1 = [game for game in games if game.current_player == 1]
-            games_for_player2 = [game for game in games if game.current_player == -1]
+        for i, (game, fen) in enumerate(zip(games, opening_fens)):
+            game.set_fen(fen)
+            game_move_histories[i].append(f'FEN"{fen}"')
+    else:
+        for i, game in enumerate(games):
+            for _ in range(3):
+                move = random.choice(game.get_valid_moves())
+                game_move_histories[i].append(str(CurrentGame.encode_move(move, game)))
+                game.make_move(move)
 
-            policies1 = model1(games_for_player1)
-            policies2 = model2(games_for_player2)
+    while games:
+        games_for_player1 = [game for game in games if game.current_player == 1]
+        games_for_player1_indices = [i for i, game in enumerate(games) if game.current_player == 1]
+        games_for_player2 = [game for game in games if game.current_player == -1]
+        games_for_player2_indices = [i for i, game in enumerate(games) if game.current_player == -1]
 
-            for game, policy in chain(zip(games_for_player1, policies1), zip(games_for_player2, policies2)):
-                # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
-                # for i, move in enumerate(game_move_histories[game_to_index[game]][-10:]):
-                #     if not move.startswith('FEN'):
-                #         policy[int(move)] /= i + 1
+        policies1 = model1(games_for_player1)
+        policies2 = model2(games_for_player2)
 
-                policy /= policy.sum()
+        for game, policy, game_index in chain(
+            zip(games_for_player1, policies1, games_for_player1_indices),
+            zip(games_for_player2, policies2, games_for_player2_indices),
+        ):
+            # decrease the probability of playing the last 5 moves again by deviding the probability by 5, 4, 3, 2, 1
+            for i, move in enumerate(game_move_histories[game_index][-10:]):
+                if not move.startswith('FEN'):
+                    policy[int(move)] /= i + 1
 
-                move = np.argmax(policy).item()
-                game.make_move(CurrentGame.decode_move(move, game))
-                game_move_histories[game_to_index[game]].append(str(move))
+            policy /= policy.sum()
 
-                if game.is_game_over():
-                    results.update(game.check_winner(), main_player=1)
+            move = np.argmax(policy).item()
+            game.make_move(CurrentGame.decode_move(move, game))
+            game_move_histories[game_index].append(str(move))
 
-                    moves = ','.join(game_move_histories[game_to_index[game]])
-                    log_text(
-                        f'evaluation_moves/{self.iteration}/{name}',
-                        str(game.check_winner()) + ':' + moves,
-                    )
+            if game.is_game_over() or len(game_move_histories[game_index]) >= 200:
+                results.update(game.check_winner(), main_player=1)
 
-            games = [game for game in games if not game.is_game_over()]
+                moves = ','.join(game_move_histories[game_index])
+                print(str(game.check_winner()) + ':' + moves)
+                log_text(
+                    f'evaluation_moves/{iteration}/{name}',
+                    str(game.check_winner()) + ':' + moves,
+                )
 
-        return results
+        games = [game for i, game in enumerate(games) if not game.is_game_over() and len(game_move_histories[i]) < 200]
+
+    return results
 
 
 if __name__ == '__main__':

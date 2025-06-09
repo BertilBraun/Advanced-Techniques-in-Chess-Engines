@@ -1,7 +1,7 @@
 import os
 from torch import multiprocessing as mp
 
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.eval.ModelEvaluationPy import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import log_scalar, TensorboardWriter
 from src.util.exceptions import log_exceptions
