@@ -30,7 +30,7 @@ MoveMapping precalculateMoveMappings() {
     int index = 0;
 
     auto addMove = [&](int fromSquare, int toSquare, PieceType promotionType) {
-        moveMappings[fromSquare][toSquare][(int) promotionType] = index++;
+        moveMappings[fromSquare][toSquare][static_cast<int>(promotionType)] = index++;
     };
 
     for (const auto fromSquare : range(BOARD_SIZE)) {
@@ -107,15 +107,19 @@ int encodeMove(const Move move, const Board *board) {
 
     Square fromSquare = move.from_sq();
     Square toSquare = move.to_sq();
-    const PieceType promotionType = move.promotion_type();
+    const PieceType promotionType =
+        move.type_of() == PROMOTION ? move.promotion_type() : PieceType::NO_PIECE_TYPE;
 
     if (board->currentPlayer() == -1) {
         // Flip the move to match the board's perspective.
-        fromSquare = flip_file(fromSquare);
-        toSquare = flip_file(toSquare);
+        fromSquare = flip_rank(fromSquare);
+        toSquare = flip_rank(toSquare);
     }
 
-    return MOVE_MAPPINGS[fromSquare][toSquare][promotionType];
+    const int actionIndex = MOVE_MAPPINGS[fromSquare][toSquare][promotionType];
+    assert(0 <= actionIndex && actionIndex < ACTION_SIZE &&
+           "Encoded move index out of bounds in encodeMove");
+    return actionIndex;
 }
 
 torch::Tensor encodeMoves(const std::vector<Move> &moves, const Board *board) {
@@ -154,22 +158,37 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *
     std::vector<Move> moves;
     moves.reserve(moveIndices.size());
     for (const int moveIndex : moveIndices) {
+        assert(0 <= moveIndex && moveIndex < ACTION_SIZE &&
+               "Move index out of bounds in decodeMoves");
 
         auto [from_square, to_square, promotion_type] = REVERSE_MOVE_MAPPINGS[moveIndex];
 
         if (board->currentPlayer() == -1) {
-            from_square = flip_file(from_square);
-            to_square = flip_file(to_square);
+            from_square = flip_rank(from_square);
+            to_square = flip_rank(to_square);
         }
 
+        bool found = false;
         for (Move move : legalMoves) {
-            if (move.from_sq() == from_square && move.to_sq() == to_square &&
-                move.promotion_type() == promotion_type) {
+            const bool isCorrectPosition =
+                move.from_sq() == from_square && move.to_sq() == to_square;
+            const bool isPromotion = move.type_of() == PROMOTION;
+            const bool isCorrectPromotionType =
+                (isPromotion && move.promotion_type() == promotion_type) ||
+                (!isPromotion && promotion_type == PieceType::NO_PIECE_TYPE);
+            // Check if the move matches the from and to square and the promotion type.
+            // If the move is a promotion, we check if the promotion type matches.
+            // If the move is not a promotion, we check if the promotion type is NO_PIECE_TYPE.
+            if (isCorrectPosition &&
+
+                isCorrectPromotionType) {
                 // If the move matches the from and to square and the promotion type, we can use it.
                 moves.emplace_back(move);
+                found = true;
                 break; // No need to check further, we found the move.
             }
         }
+        assert(found && "Move not found in legal moves in decodeMoves");
     }
     return moves;
 }

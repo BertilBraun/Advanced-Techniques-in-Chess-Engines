@@ -45,7 +45,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
     m_totalEvals += boards.size();
 
-    std::set<uint64> enqueuedBoards; // Track enqueued boards.
+    std::set<CompressedEncodedBoard> enqueuedBoards; // Track enqueued boards.
     // Prepare a futures vector for the inference results.
     // This will be used to wait for the results of the inference requests.
     std::vector<std::pair<size_t, std::future<ModelInferenceResult>>> futures;
@@ -54,8 +54,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     for (size_t i : range(boards.size())) {
         // Check if the result is already cached.
         // If so, set the promise and continue.
-        const uint64 encodedBoardHash = hash(encodedBoards[i]);
-        if (m_cache.contains(encodedBoardHash) || enqueuedBoards.contains(encodedBoardHash)) {
+        if (m_cache.contains(encodedBoards[i]) || enqueuedBoards.contains(encodedBoards[i])) {
             m_totalHits++;
             continue;
         }
@@ -69,14 +68,14 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             m_requestQueue.push(std::move(req));
         }
         m_queueCV.notify_one();
-        enqueuedBoards.insert(encodedBoardHash); // Mark this board as enqueued.
+        enqueuedBoards.insert(encodedBoards[i]); // Mark this board as enqueued.
     }
 
     // Wait for all inference futures to complete.
     for (auto &&[i, future] : futures) {
         auto [policy, value] = future.get(); // Make a copy of the result.
 
-        m_cache.insert(hash(encodedBoards[i]),
+        m_cache.insert(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
 
@@ -84,9 +83,9 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
 
-    for (const CompressedEncodedBoard encodedBoard : encodedBoards) {
+    for (const CompressedEncodedBoard &encodedBoard : encodedBoards) {
         InferenceResult result;
-        if (!m_cache.lookup(hash(encodedBoard), result))
+        if (!m_cache.lookup(encodedBoard, result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
 
         results.push_back(result);
@@ -111,7 +110,7 @@ InferenceStatistics InferenceClient::getStatistics() {
         stats.nnOutputValueDistribution.push_back(entry.second.second);
     }
 
-    const size_t sizeInBytes = m_cache.size() * (sizeof(InferenceResult) + sizeof(uint64));
+    const size_t sizeInBytes = m_cache.size() * (sizeof(InferenceResult) + sizeof(CompressedEncodedBoard));
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
 
     log("Inference Client stats:");

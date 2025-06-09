@@ -143,7 +143,7 @@ inline std::string toString(const Move &move) {
 
     std::stringstream ss;
     ss << toString(move.from_sq()) << toString(move.to_sq());
-    if (move.promotion_type() != PieceType::NO_PIECE_TYPE) {
+    if (move.type_of() == PROMOTION) {
         ss << " pkbrqK"[move.promotion_type()];
     }
     return ss.str();

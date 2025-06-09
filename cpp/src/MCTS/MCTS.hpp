@@ -104,8 +104,12 @@ private:
 
     ThreadPool m_threadPool; // For parallel processing.
 
+    // This method performs a complete MCTS search of number_of_searches iterations for a single
+    // game.
+    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *root, int number_of_searches);
+
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(const MCTSNode *root);
+    void parallelIterate(MCTSNode *root);
 
     // Get policy moves with added Dirichlet noise.
     std::vector<std::vector<MoveScore>>
@@ -114,7 +118,5 @@ private:
     // Add Dirichlet noise to a vector of MoveScore.
     std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
-    std::optional<MCTSNode *> getBestChildOrBackPropagate(const MCTSNode *root, float cParam);
-
-    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *root, int number_of_searches);
+    std::optional<MCTSNode *> getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 };

@@ -30,6 +30,14 @@ public:
                move_to_get_here == other.move_to_get_here;
     }
 
+    std::string repr() const {
+        std::stringstream ss;
+        ss << "MCTSNode(" << board.fen() << ", Move: " << toString(move_to_get_here)
+           << ", Visits: " << number_of_visits << ", Score: " << result_score
+           << ", Policy: " << policy << ")";
+        return ss.str();
+    }
+
     NodeId parent = INVALID_NODE;
     NodeId myId = INVALID_NODE;
     std::vector<NodeId> children;

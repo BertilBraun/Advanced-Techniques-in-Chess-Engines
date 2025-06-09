@@ -25,13 +25,12 @@ Board::Board(const std::string &fen) {
 }
 
 void Board::makeMove(Move m) {
+
     // Optionally, one could assert that 'm' is legal:
-    // MoveList<LEGAL> ml(pos, st);
-    // bool found = false;
-    // for (Move mv : ml) if (mv == m) { found = true; break; }
-    // assert(found && "Attempting to push an illegal move");
+    assert(contains(validMoves(), m) && "Attempting to push an illegal move");
     m_pos.do_move(m);
 }
+
 bool Board::isGameOver() const {
     // 3-fold-repetition and 50 move rul draw is handled outside move generation
     if (m_pos.is_draw() || drawByInsufficientMaterial()) {
@@ -65,14 +64,11 @@ std::vector<Move> Board::validMoves() const {
     std::vector<Move> filtered;
     filtered.reserve(ml.size());
     for (auto m : ml) {
-        if (m.type_of() != PROMOTION || m.promotion_type() == QUEEN) {
+        const Move move(m.raw()); // Create a Move out of the ExtMove object just to be safe.
+        if (move.type_of() != PROMOTION || move.promotion_type() == QUEEN) {
             // If it's a promotion, only keep Queen promotions.
-            filtered.push_back(m);
+            filtered.push_back(move);
         }
-    }
-    std::cout << "Valid moves (" << m_pos.fen() << "): " << filtered.size() << "\n";
-    for (const auto &m : filtered) {
-        std::cout << "  " << toString(m) << "\n";
     }
     return filtered;
 }

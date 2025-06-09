@@ -28,7 +28,13 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 
     for (const auto &[move, score] : moves_with_scores) {
         Board moveBoard = board; // Create a copy of the board to make the move
+        std::cout << repr() << "\n";
+        std::cout << "Making move: " << toString(move) << " in position: " << "\n"
+                  << moveBoard.repr() << "\n";
         moveBoard.makeMove(move);
+
+        assert(board.currentPlayer() != moveBoard.currentPlayer() &&
+               "Move should change the current player");
 
         MCTSNode *child = pool->allocateNode(moveBoard.fen(), score, move, myId, pool);
 
@@ -43,7 +49,7 @@ void MCTSNode::backPropagate(float result) {
         node->result_score += result; // Add the result to the node's score
         node->number_of_visits += 1;  // Increment the visit count
 
-        result = -result * 0.99; // Discount the result for the parent
+        result = -1.0f * result * 0.99f; // Discount the result for the parent
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }
 }

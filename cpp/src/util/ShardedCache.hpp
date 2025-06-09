@@ -1,14 +1,22 @@
 #pragma once
 
 #include "common.hpp"
-
-template <typename KeyType, typename ValueType, size_t NumBuckets = 16> class ShardedCache {
+/* ────────────────────────────────────────────────────────────────
+ *  template parameters
+ *    KeyType      – key
+ *    ValueType    – mapped value
+ *    NumBuckets   – number of shards (compile-time constant)
+ *    Hash         – hasher   (defaults to std::hash<KeyType>)
+ *    KeyEqual     – equality (defaults to std::equal_to<KeyType>)
+ * ──────────────────────────────────────────────────────────────── */
+template <typename KeyType, typename ValueType, std::size_t NumBuckets = 16,
+          typename Hash = std::hash<KeyType>, typename KeyEqual = std::equal_to<KeyType>>
+class ShardedCache {
 public:
     ShardedCache() {
         // Initialize buckets.
-        for (auto &bucket : m_buckets) {
+        for (auto &bucket : m_buckets)
             bucket.map.reserve(1024); // Preallocate space for 1024 elements.
-        }
     }
 
     // Look up a value. Returns true and sets result if found.
@@ -68,7 +76,8 @@ public:
     private:
         ShardedCache &m_cache;
         std::vector<std::shared_lock<std::shared_mutex>> m_locks;
-        using MapIterator = typename std::unordered_map<KeyType, ValueType>::iterator;
+        using MapIterator =
+            typename std::unordered_map<KeyType, ValueType, Hash, KeyEqual>::iterator;
         size_t m_currentBucket = 0;
         MapIterator m_currentIt;
         MapIterator m_currentEnd;
@@ -141,15 +150,15 @@ public:
 
 private:
     struct Bucket {
-        std::unordered_map<KeyType, ValueType> map;
+        std::unordered_map<KeyType, ValueType, Hash, KeyEqual> map;
         mutable std::shared_mutex mutex;
     };
 
     std::array<Bucket, NumBuckets> m_buckets;
+    Hash m_hasher{}; // one copy – avoids constructing every call
 
     Bucket &getBucket(const KeyType &key) {
         // Simple hash to bucket index.
-        size_t bucketIndex = std::hash<KeyType>{}(key) % NumBuckets;
-        return m_buckets[bucketIndex];
+        return m_buckets[m_hasher(key) % NumBuckets];
     }
 };

@@ -67,19 +67,6 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
     return tensor;
 }
 
-uint64 hash(const CompressedEncodedBoard &compressed) {
-    // Computes the hash of a compressed 64-bit array.
-    //
-    // param compressed: The 64-bit array to hash.
-    // :return: The hash of the array.
-
-    uint64 hash = 0;
-    for (const int channel : range(ENCODING_CHANNELS)) {
-        hash ^= compressed[channel] + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-    }
-    return hash;
-}
-
 std::optional<float> getBoardResultScore(const Board &board) {
     // Returns the result score for the given board.
     //

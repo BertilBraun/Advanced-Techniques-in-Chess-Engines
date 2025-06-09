@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+#include "BoardEncoding.hpp"
+
 #include "util/ShardedCache.hpp"
 #include <ATen/core/TensorBody.h>
 
@@ -86,8 +88,8 @@ private:
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
-    // Cache: board hash -> InferenceResult.
-    ShardedCache<int64_t, InferenceResult, 32> m_cache;
+    // Cache: board -> InferenceResult.
+    ShardedCache<CompressedEncodedBoard, InferenceResult, 32, BoardHash> m_cache;
     int m_totalHits;
     int m_totalEvals;
 

@@ -16,7 +16,7 @@ std::vector<float> dirichlet(const float alpha, const size_t n) {
         sum += noise[i];
     }
 
-    float norm = 1.0f / sum;
+    const float norm = 1.0f / sum;
     for (size_t i = 0; i < n; i++) {
         noise[i] *= norm;
     }
@@ -111,7 +111,7 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     size_t moveIndex = 0;
 
     for (const auto root : roots) {
-        if (!root->isFullyExpanded()) {
+        if (root->parent == INVALID_NODE) {
             // If the node is not pre-expanded, we need to expand it with the moves.
             root->expand(movesList[moveIndex]);
 
@@ -145,7 +145,7 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     return {.results = results, .mctsStats = stats};
 }
 
-void MCTS::parallelIterate(const MCTSNode *root) {
+void MCTS::parallelIterate(MCTSNode *root) {
     // These variables are initialized only once per thread
     // and retain their values between function calls
     thread_local std::vector<MCTSNode *> nodes;
@@ -211,40 +211,30 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
 
 // Traverse the tree to find the best child or, if the node is terminal,
 // back-propagate the board’s result.
-std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(const MCTSNode *root,
-                                                            const float cParam) {
+std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
 
-    MCTSNode *finalNode = nullptr;
     for (const NodeId childId : root->children) {
         MCTSNode *child = m_pool.get(childId);
         if (child->number_of_visits < m_args.min_visit_count) {
-            // If the child has not been visited enough, we can return it directly.
-            finalNode = child;
+            // If the child has not been visited enough, we should traverse it.
+            root = child;
             break;
         }
     }
 
-    if (finalNode == nullptr) {
-        NodeId nodeId = root->myId;
-        while (true) {
-            const MCTSNode *node = m_pool.get(nodeId);
-
-            if (!node->isFullyExpanded())
-                break;
-
-            nodeId = node->bestChild(cParam);
-        }
-
-        finalNode = m_pool.get(nodeId);
+    // We need to traverse the tree until we find a node that is not fully expanded
+    MCTSNode *node = root;
+    while (node->isFullyExpanded()) {
+        node = m_pool.get(node->bestChild(cParam));
     }
 
-    if (finalNode->isTerminalNode()) {
-        const auto result = getBoardResultScore(finalNode->board);
+    if (node->isTerminalNode()) {
+        const auto result = getBoardResultScore(node->board);
         assert(result.has_value());
-        finalNode->backPropagate(result.value());
+        node->backPropagate(result.value());
         return std::nullopt;
     }
-    return {finalNode};
+    return {node};
 }
 
 std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int number_of_searches) {
