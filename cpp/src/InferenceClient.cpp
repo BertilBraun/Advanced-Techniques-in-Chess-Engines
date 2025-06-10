@@ -43,11 +43,8 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     // Encode all boards.
     std::vector<CompressedEncodedBoard> encodedBoards;
     encodedBoards.reserve(boards.size());
-    {
-        TimeItGuard timer("InferenceClient::inferenceBatch: encode boards");
-        for (const Board *board : boards) {
-            encodedBoards.push_back(encodeBoard(board));
-        }
+    for (const Board *board : boards) {
+        encodedBoards.push_back(encodeBoard(board));
     }
 
     m_totalEvals += boards.size();
@@ -58,7 +55,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     futures.reserve(boards.size());
 
     for (size_t i : range(boards.size())) {
-        TimeItGuard timer("InferenceClient::inferenceBatch: process board");
         // Check if the result is already cached.
         // If so, set the promise and continue.
         if (m_cache.contains(encodedBoards[i])) {
@@ -74,7 +70,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         req.boardTensor = toTensor(encodedBoards[i], m_device).to(m_torchDtype);
         futures.emplace_back(i, std::move(req.promise.get_future()));
         {
-            TimeItGuard timer("InferenceClient::inferenceBatch: put into queue");
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_requestQueue.push(std::move(req));
         }
@@ -83,18 +78,8 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
     // Wait for all inference futures to complete.
     for (auto &&[i, future] : futures) {
-        torch::Tensor policy;
-        float value = 0.0f;
+        const auto [policy, value] = future.get();
 
-        {
-            TimeItGuard timer("InferenceClient::inferenceBatch: wait for future");
-            auto result = future.get();
-            policy = std::move(result.first);
-            value = result.second;
-        }
-        // const auto [policy, value] = future.get();
-
-        TimeItGuard timer("InferenceClient::inferenceBatch: filter policy and get moves");
         m_cache.insert(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
@@ -102,8 +87,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     // Wait for all futures in order.
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
-
-    TimeItGuard timer2("InferenceClient::inferenceBatch: decode results");
 
     for (const auto &&[encodedBoard, board] : zip(encodedBoards, boards)) {
         CachedInferenceResult result;
@@ -142,75 +125,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     }
 
     return results;
-}
-
-InferenceResult InferenceClient::inference(const Board *board) {
-    TimeItGuard timer("InferenceClient::inferenceBatch");
-
-    // Encode all boards.
-    const CompressedEncodedBoard encodedBoard = encodeBoard(board);
-
-    m_totalEvals++;
-
-    // Check if the result is already cached.
-    // If so, set the promise and continue.
-    if (m_cache.contains(encodedBoard)) {
-        m_totalHits++;
-    } else {
-        // Insert a sentinel result to mark it as enqueued.
-        m_cache.insertIfNotPresent(encodedBoard, kSentinelResult);
-
-        // Create and enqueue a new request.
-        InferenceRequest req;
-        req.boardTensor = toTensor(encodedBoard, m_device).to(m_torchDtype);
-        auto future = std::move(req.promise.get_future());
-        {
-            std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_requestQueue.push(std::move(req));
-        }
-        m_queueCV.notify_one();
-
-        // Wait for the inference result.
-        const auto [policy, value] = future.get();
-
-        // Filter the policy and get moves and probabilities.
-        // Insert the result into the cache.
-        m_cache.insert(encodedBoard,
-                       {filterPolicyThenGetMovesAndProbabilities(policy, board), value});
-    }
-
-    CachedInferenceResult result;
-    while (true) {
-        if (!m_cache.lookup(encodedBoard, result))
-            throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
-        // Wait until the real result is available.
-        if (result != kSentinelResult) {
-            break; // We have a valid result.
-        }
-        std::this_thread::sleep_for(std::chrono::microseconds(10)); // Sleep to avoid busy-waiting.
-    }
-
-    const auto &[moves, value] = result;
-
-    // Decode the moves from the cached result using the board.
-    std::vector<int> encodedMoves;
-    std::vector<float> scores;
-    encodedMoves.reserve(moves.size());
-    scores.reserve(moves.size());
-    for (const auto &[encodedMove, score] : moves) {
-        encodedMoves.push_back(encodedMove);
-        scores.push_back(score);
-    }
-
-    const std::vector<Move> decodedMoves = decodeMoves(encodedMoves, board);
-
-    std::vector<MoveScore> decodedMovesScores;
-    decodedMovesScores.reserve(decodedMoves.size());
-    for (const auto &&[move, score] : zip(decodedMoves, scores)) {
-        decodedMovesScores.emplace_back(move, score);
-    }
-
-    return {decodedMovesScores, value};
 }
 
 InferenceStatistics InferenceClient::getStatistics() {

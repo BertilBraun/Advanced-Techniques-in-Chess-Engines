@@ -56,7 +56,9 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             board = ChessBoard()
             for move in game.mainline_moves():
-                if random.random() < TRAINING_ARGS.self_play.portion_of_samples_to_keep:
+                if random.random() < TRAINING_ARGS.self_play.portion_of_samples_to_keep and (
+                    move.promotion in (None, chess.QUEEN)
+                ):
                     visit_counts = [(chess_game.encode_move(move, board), 1)]
 
                     for board_variation, visits in chess_game.symmetric_variations(board, visit_counts):

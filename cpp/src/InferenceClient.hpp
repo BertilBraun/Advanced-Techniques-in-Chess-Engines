@@ -15,7 +15,8 @@ struct InferenceStatistics {
     size_t uniquePositions = 0;                   // Number of unique positions in the cache.
     size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
     std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
-    float averageNumberOfPositionsInInferenceCall = 0.0f; // Average number of positions in an inference call.
+    float averageNumberOfPositionsInInferenceCall =
+        0.0f; // Average number of positions in an inference call.
 };
 
 struct InferenceClientParams {
@@ -47,12 +48,6 @@ public:
      * in the same order as the input.
      */
     std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
-
-
-    /**
-     * Synchronous interface: runs inference for a board and returns result
-     */
-    InferenceResult inference(const Board * board);
 
     InferenceStatistics getStatistics();
 
