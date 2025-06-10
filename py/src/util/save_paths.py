@@ -27,7 +27,7 @@ def optimizer_save_path(iteration: int, save_folder: str | PathLike) -> Path:
 
 def create_model(args: NetworkParams, device: torch.device) -> Network:
     model = Network(args.num_layers, args.hidden_size, device)
-    model = try_compile(model)
+    # Not possible with JIT and model fusion model = try_compile(model)
     return model
 
 
