@@ -75,7 +75,15 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
     // Wait for all inference futures to complete.
     for (auto &&[i, future] : futures) {
-        auto [policy, value] = future.get(); // Make a copy of the result.
+        torch::Tensor policy;
+        float value = 0.0f;
+
+        {
+            TimeItGuard timer("InferenceClient::inferenceBatch: wait for future");
+            auto result = future.get();
+            policy       = std::move(result.first);
+            value        = result.second;
+        }
 
         m_cache.insert(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
