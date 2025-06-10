@@ -44,6 +44,15 @@ public:
         bucket.map[key] = result;
     }
 
+    // Insert a new key/value pair only if the key is not already present.
+    void insertIfNotPresent(const KeyType &key, const ValueType &result) {
+        auto &bucket = getBucket(key);
+        std::lock_guard lock(bucket.mutex); // Exclusive lock for writing.
+        if (bucket.map.find(key) == bucket.map.end()) {
+            bucket.map[key] = result;
+        }
+    }
+
     void clear() {
         for (auto &bucket : m_buckets) {
             std::lock_guard lock(bucket.mutex); // Exclusive lock for writing.

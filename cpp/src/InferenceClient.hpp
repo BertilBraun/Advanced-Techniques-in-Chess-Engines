@@ -48,11 +48,20 @@ public:
      */
     std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
 
+
+    /**
+     * Synchronous interface: runs inference for a board and returns result
+     */
+    InferenceResult inference(const Board * board);
+
     InferenceStatistics getStatistics();
 
 private:
     typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;
+    // Define a sentinel CachedInferenceResult type
+    static constexpr CachedInferenceResult kSentinelResult = {{}, -10.0f};
+
     /**
      * @brief Structure representing a single asynchronous inference request.
      */
