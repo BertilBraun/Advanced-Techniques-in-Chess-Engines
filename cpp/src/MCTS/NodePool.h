@@ -24,9 +24,15 @@ public:
 
     // Get a mutable reference to a MCTSNode (not thread‐safe by itself;
     // if you mutate fields, you should lock node_mutex inside MCTSNode).
-    [[nodiscard]] MCTSNode *get(NodeId id);
+    [[nodiscard]] inline MCTSNode *get(NodeId id) {
+        assert(id < m_nextFreshId);
+        return &slotPointer(id)->value();
+    }
 
-    [[nodiscard]] const MCTSNode *get(NodeId id) const;
+    [[nodiscard]] inline const MCTSNode *get(const NodeId id) const {
+        assert(id < m_nextFreshId);
+        return &slotPointer(id)->value();
+    }
 
     // How many NodeIds have ever been “touched” (including freed)?
     [[nodiscard]] size_t capacity() const;

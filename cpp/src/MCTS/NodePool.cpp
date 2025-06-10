@@ -18,16 +18,6 @@ void NodePool::deallocateNode(const NodeId id) {
     m_freeList.push_back(id);
 }
 
-MCTSNode *NodePool::get(const NodeId id) {
-    assert(id < m_nextFreshId);
-    return &slotPointer(id)->value();
-}
-
-const MCTSNode *NodePool::get(const NodeId id) const {
-    assert(id < m_nextFreshId);
-    return &slotPointer(id)->value();
-}
-
 size_t NodePool::capacity() const { return m_chunks.size() * CHUNK_SIZE; }
 
 size_t NodePool::liveNodeCount() const {
