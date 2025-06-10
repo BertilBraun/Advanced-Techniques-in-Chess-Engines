@@ -95,10 +95,6 @@ class TrainerProcess:
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
 
-            if epoch_train_stats.value_std < 0.01:
-                log('Training stopped early due to low value std deviation.')
-                exit()
-
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
             if number_of_games_in_iteration(iteration, self.args.save_path) >= self.args.num_games_per_iteration * 2:
                 log('Enough games played, stopping training for this iteration.')
@@ -149,9 +145,9 @@ class TrainerProcess:
             previous_iteration_files = SelfPlayDataset.get_files_to_load_for_iteration(
                 self.args.save_path, iteration - 1
             )
-            assert (
-                previous_iteration_files
-            ), f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
+            assert previous_iteration_files, (
+                f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
+            )
             while len(validation_dataset) == 0 and len(previous_iteration_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = previous_iteration_files.pop(-1)

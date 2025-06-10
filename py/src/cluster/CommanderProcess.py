@@ -97,6 +97,15 @@ class CommanderProcess:
                 pipe.send(f'LOAD MODEL: {current_best_iteration}')
                 pipe.send(f'START AT ITERATION: {starting_iteration}')
 
+        last_train_stats = TrainingStats(
+            policy_loss=0.0,
+            value_loss=0.0,
+            total_loss=0.0,
+            value_mean=0.0,
+            value_std=1.0,
+            grad_norm=0.0,
+        )
+
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
@@ -110,6 +119,12 @@ class CommanderProcess:
                 train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
                 assert self.commander_trainer_pipe.recv() == 'FINISHED'
                 yield iteration, train_stats
+
+                if train_stats.value_std < 0.01 and last_train_stats.value_std < 0.01:
+                    log('Training stopped early due to low value std deviation.')
+                    exit()
+
+                last_train_stats = train_stats
 
                 # gating
                 with TensorboardWriter(self.run_id, 'gating', postfix_pid=False):
