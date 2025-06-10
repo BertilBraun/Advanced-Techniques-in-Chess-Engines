@@ -55,6 +55,8 @@ void testInferenceSpeed(int numBoards, int numIterations) {
     std::cout << "Average time per iteration: " << (totalTime / numIterations) << " seconds\n";
     std::cout << "Average time per board: " << (totalTime / (numIterations * numBoards)) << " seconds\n";
     std::cout << std::endl;
+
+    resetTimes();
 }
 
 // -----------------------------------------------------------------------------
