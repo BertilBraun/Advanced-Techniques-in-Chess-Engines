@@ -16,6 +16,47 @@ static void init() {
     torch::set_num_threads(2); // Set the number of threads for PyTorch inference
 }
 
+void testInferenceSpeed(int numBoards, int numIterations) {
+    InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards);
+
+    InferenceClient client(params);
+
+    float totalTime = 0.0f;
+    for (int i = 0; i < numIterations; ++i) {
+        std::vector<const Board *> boards;
+        boards.reserve(numBoards);
+        while (boards.size() < numBoards) {
+            Board *board = new Board();
+            for (int k = 0; k < 30; ++k) {
+                auto moves = board->validMoves();
+                if (moves.empty())
+                    break; // No more valid moves, stop early
+                board->makeMove(moves[rand() % moves.size()]);
+            }
+            if (board->isGameOver()) {
+                delete board; // Clean up if the game is over
+                continue;
+            }
+            boards.push_back(board);
+        }
+
+        auto start = std::chrono::high_resolution_clock::now();
+        std::vector<InferenceResult> results = client.inferenceBatch(boards);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> duration = end - start;
+        totalTime += duration.count();
+        std::cout << "Iteration " << i + 1 << ": Inference time: " << duration.count() << " seconds\n";
+        for (const Board *board : boards) {
+            delete board; // Clean up the boards
+        }
+    }
+
+    std::cout << "Total time: " << totalTime << " seconds\n";
+    std::cout << "Average time per iteration: " << (totalTime / numIterations) << " seconds\n";
+    std::cout << "Average time per board: " << (totalTime / (numIterations * numBoards)) << " seconds\n";
+    std::cout << std::endl;
+}
+
 // -----------------------------------------------------------------------------
 // Thin Python handle giving *read‑only* access to a single node.
 // -----------------------------------------------------------------------------
@@ -72,6 +113,15 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "pybind11 bindings for custom MCTS + inference client";
 
     init(); // Initialize Stockfish engine
+
+    m.def("test_inference_speed_cpp", &testInferenceSpeed,
+          "Test the inference speed of the InferenceClient",
+          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
+          R"pbdoc(
+            Test the inference speed of the InferenceClient.
+            Runs inference on a specified number of boards for a given number of iterations.
+            Prints the average time taken per iteration and per board.
+          )pbdoc");
 
     // --- (2.1) MCTSParams ---
     py::class_<MCTSParams>(m, "MCTSParams")
