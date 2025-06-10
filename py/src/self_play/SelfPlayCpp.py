@@ -201,7 +201,7 @@ class SelfPlayCpp:
                     spg.resigned_at_move = len(spg.played_moves)
                     spg.resignee = spg.board.current_player
                 else:
-                    self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result)
+                    self.self_play_games[i] = self._handle_end_of_game(spg, -1.0)
                     continue
 
             if CURRENT_GAME == 'chess':
