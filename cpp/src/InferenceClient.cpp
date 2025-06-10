@@ -4,9 +4,6 @@
 #include "BoardEncoding.hpp"
 #include "MoveEncoding.hpp"
 
-// Define a sentinel CachedInferenceResult type
-static const InferenceClient::CachedInferenceResult kSentinelResult = {{}, -10.0f};
-
 InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false),
       m_maxBatchSize(args.maxBatchSize) {

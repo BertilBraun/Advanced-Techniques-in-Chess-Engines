@@ -56,9 +56,11 @@ public:
 
     InferenceStatistics getStatistics();
 
-    typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
 private:
+    typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;
+    // Define a sentinel CachedInferenceResult type
+    static inline const CachedInferenceResult kSentinelResult = {{}, -10.0f};
 
     /**
      * @brief Structure representing a single asynchronous inference request.
