@@ -26,7 +26,7 @@ else
     ~/miniconda3/bin/conda init bash
     source ~/.bashrc
 
-    conda create -n Chess python=3.11 -y
+    conda create -n Chess python=3.10 -y
     conda activate Chess
 
     pip3 install -r requirements.txt
@@ -43,13 +43,13 @@ else
     echo "alias b='sbatch'" >> ~/.bashrc
     echo "alias c='scancel'" >> ~/.bashrc
     echo "alias info='sinfo_t_idle'" >> ~/.bashrc
-    echo "alias python='python3.11'" >> ~/.bashrc
-    echo "alias pip='pip3.11'" >> ~/.bashrc
+    echo "alias python='python3.10'" >> ~/.bashrc
+    echo "alias pip='pip3.10'" >> ~/.bashrc
     echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
-    echo "alias start='git pull && nohup python3.11 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
+    echo "alias start='git pull && nohup python3.10 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
     echo "alias gpuH='salloc -p dev_accelerated-h100 --gres=gpu:1 -t 30'" >>  ~/.bashrc
     echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc
