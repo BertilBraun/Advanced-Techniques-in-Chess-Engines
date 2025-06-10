@@ -176,18 +176,15 @@ class SelfPlayCpp:
         log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
 
         inference_stats = self.mcts.get_inference_statistics()
-        log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate, self.iteration)
-        log_scalar('dataset/inference/unique_positions', inference_stats.uniquePositions, self.iteration)
-        log_scalar('dataset/inference/cache_size_mb', inference_stats.cacheSizeMB, self.iteration)
+        log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate)
+        log_scalar('dataset/inference/unique_positions', inference_stats.uniquePositions)
+        log_scalar('dataset/inference/cache_size_mb', inference_stats.cacheSizeMB)
         log_histogram(
-            'dataset/inference/nn_output_value_distribution',
-            np.array(inference_stats.nnOutputValueDistribution),
-            self.iteration,
+            'dataset/inference/nn_output_value_distribution', np.array(inference_stats.nnOutputValueDistribution)
         )
         log_scalar(
             'dataset/inference/average_number_of_positions_in_inference_call',
             inference_stats.averageNumberOfPositionsInInferenceCall,
-            self.iteration,
         )
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
