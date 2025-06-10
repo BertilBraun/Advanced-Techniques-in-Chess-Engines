@@ -13,6 +13,8 @@
 
 #include "util/Log.hpp"
 
+#include "util/TimeItGuard.h"
+
 #include "util/py.hpp"
 
 #include <algorithm>

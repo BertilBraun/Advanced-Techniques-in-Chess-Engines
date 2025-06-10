@@ -21,6 +21,8 @@ float MCTSNode::ucb(const float uCommon) const {
 }
 
 void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
+    TimeItGuard timer("MCTSNode::expand");
+
     if (isFullyExpanded() || moves_with_scores.empty())
         return;
 
@@ -37,6 +39,8 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 }
 
 void MCTSNode::backPropagate(float result) {
+    TimeItGuard timer("MCTSNode::backPropagate");
+
     MCTSNode *node = this;
 
     while (node) {
@@ -49,6 +53,8 @@ void MCTSNode::backPropagate(float result) {
 }
 
 void MCTSNode::updateVirtualLoss(int delta) {
+    TimeItGuard timer("MCTSNode::updateVirtualLoss");
+
     assert(delta != 0 && "Delta must not be zero");
     // NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. multiply
     // delta by 100?)
@@ -65,6 +71,8 @@ void MCTSNode::updateVirtualLoss(int delta) {
 }
 
 NodeId MCTSNode::bestChild(const float cParam) const {
+    TimeItGuard timer("MCTSNode::bestChild");
+
     assert(!children.empty() && "Node has no children");
 
     const float uCommon = cParam * std::sqrt(number_of_visits);

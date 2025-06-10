@@ -32,6 +32,8 @@ InferenceClient::~InferenceClient() {
 
 std::vector<InferenceResult>
 InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
+    TimeItGuard timer("InferenceClient::inferenceBatch");
+
     if (boards.empty()) {
         return {};
     }

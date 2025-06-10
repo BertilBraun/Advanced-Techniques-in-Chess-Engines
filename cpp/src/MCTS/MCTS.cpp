@@ -142,10 +142,14 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     stats.averageEntropy /= static_cast<float>(N);
     stats.averageKLDivergence /= static_cast<float>(N);
 
+    resetTimes();
+
     return {.results = results, .mctsStats = stats};
 }
 
 void MCTS::parallelIterate(MCTSNode *root) {
+    TimeItGuard timer("MCTS::parallelIterate");
+
     // These variables are initialized only once per thread
     // and retain their values between function calls
     thread_local std::vector<MCTSNode *> nodes;
