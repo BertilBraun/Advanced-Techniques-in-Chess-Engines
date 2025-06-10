@@ -36,7 +36,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=8, hidden_size=128)
+network = NetworkParams(num_layers=7, hidden_size=96)
 training = TrainingParams(
     num_epochs=2,
     optimizer='adamw',  # 'sgd',
@@ -53,7 +53,7 @@ evaluation = EvaluationParams(
 )
 
 PARALLEL_GAMES = 128
-NUM_SELF_PLAYERS = 8
+NUM_SELF_PLAYERS = 4
 NUM_THREADS = int(64 // NUM_SELF_PLAYERS * 1.5)
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
