@@ -64,6 +64,9 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             continue;
         }
 
+        // Insert a sentinel result to mark it as enqueued.
+        m_cache.insertIfNotPresent(encodedBoards[i], kSentinelResult);
+
         // Create and enqueue a new request.
         InferenceRequest req;
         req.boardTensor = toTensor(encodedBoards[i], m_device).to(m_torchDtype);
@@ -74,8 +77,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             m_requestQueue.push(std::move(req));
         }
         m_queueCV.notify_one();
-        m_cache.insert(encodedBoards[i],
-                       kSentinelResult); // Insert a sentinel result to mark it as enqueued.
     }
 
     // Wait for all inference futures to complete.
@@ -104,10 +105,15 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
     for (const auto &&[encodedBoard, board] : zip(encodedBoards, boards)) {
         CachedInferenceResult result;
-        do {
+        while (true) {
             if (!m_cache.lookup(encodedBoard, result))
                 throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
-        } while (result == kSentinelResult); // Wait until the real result is available.
+            // Wait until the real result is available.
+            if (result != kSentinelResult) {
+                break; // We have a valid result.
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(10)); // Sleep to avoid busy-waiting.
+        }
 
         const auto &[moves, value] = result;
 
@@ -171,10 +177,15 @@ InferenceResult InferenceClient::inference(const Board *board) {
     }
 
     CachedInferenceResult result;
-    do {
+    while (true) {
         if (!m_cache.lookup(encodedBoard, result))
             throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
-    } while (result == kSentinelResult); // Wait until the real result is available.
+        // Wait until the real result is available.
+        if (result != kSentinelResult) {
+            break; // We have a valid result.
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(10)); // Sleep to avoid busy-waiting.
+    }
 
     const auto &[moves, value] = result;
 
