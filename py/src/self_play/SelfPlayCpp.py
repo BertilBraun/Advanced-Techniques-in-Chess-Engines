@@ -251,6 +251,8 @@ class SelfPlayCpp:
         reset_times()
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
+        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+        self.mcts.get_inference_statistics()
         self._add_training_data(spg, game_outcome)
 
         if spg.resigned_at_move is not None:
