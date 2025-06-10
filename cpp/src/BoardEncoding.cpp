@@ -9,8 +9,10 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     //
     // On layer 12-15 are the castling right and layer 16 contains the en-passant square.
     //
-    // :param board: The chess board to encode.
+    // param board: The chess board to encode.
     // :return: A ENCODING_CHANNELSx8x8 tensor representing the encoded board.
+
+    TimeItGuard timer("encodeBoard");
 
     CompressedEncodedBoard encodedBoard{};
 
@@ -49,6 +51,8 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
     //
     // param compressed: The 64-bit array to convert.
     // :return: The uncompressed tensor.
+
+    TimeItGuard timer("toTensor");
 
     torch::Tensor tensor = torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH},
                                         torch::TensorOptions().dtype(torch::kUInt8).device(device));
