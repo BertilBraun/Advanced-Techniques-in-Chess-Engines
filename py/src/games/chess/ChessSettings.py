@@ -36,7 +36,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=10, hidden_size=128)
+network = NetworkParams(num_layers=8, hidden_size=128)
 training = TrainingParams(
     num_epochs=2,
     optimizer='adamw',  # 'sgd',
@@ -55,23 +55,24 @@ evaluation = EvaluationParams(
 PARALLEL_GAMES = 128
 NUM_SELF_PLAYERS = 8
 NUM_THREADS = int(64 // NUM_SELF_PLAYERS * 1.5)
-NUM_SEARCHES_PER_TURN = 1200
+NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
 
 USE_CPP = True
 
 if not USE_GPU:  # TODO remove
-    PARALLEL_GAMES = 4
+    PARALLEL_GAMES = 2
     NUM_SEARCHES_PER_TURN = 40
     MIN_VISIT_COUNT = 1
-    PARALLEL_SEARCHES = 1
-    # evaluation = None  # No evaluation in CPU mode
+    PARALLEL_SEARCHES = 2
+    evaluation = None  # No evaluation in CPU mode
 
     NUM_SEARCHES_PER_TURN = 800  # TODO remove
     MIN_VISIT_COUNT = 2
     PARALLEL_SEARCHES = 4
     network = NetworkParams(num_layers=2, hidden_size=32)
+    NUM_SELF_PLAYERS = 2
 
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,

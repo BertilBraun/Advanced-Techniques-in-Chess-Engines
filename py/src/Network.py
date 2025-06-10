@@ -65,7 +65,7 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
-    def forward(self, x: Tensor, return_logits:bool=False) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor, return_logits: bool = False) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
@@ -81,7 +81,7 @@ class Network(nn.Module):
 
     def fuse_model(self):
         for m in self.modules():
-            if type(m) == nn.Sequential:
+            if type(m) is nn.Sequential:
                 modules_to_fuse = [str(i) for i in range(min(3, len(m)))]  # Conv2d, BatchNorm2d, ReLU
                 torch.ao.quantization.fuse_modules(m, modules_to_fuse, inplace=True)
 

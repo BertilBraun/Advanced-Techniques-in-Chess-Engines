@@ -3,11 +3,9 @@ import gc
 import random
 import time
 
-import chess
 import numpy as np
 from dataclasses import dataclass
 
-from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, NodeId, MCTS, MCTSParams, MCTSResults
 from src.games.Board import Player
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import clamp, lerp
@@ -19,6 +17,8 @@ from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import reset_times, timeit
+
+from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, NodeId, MCTS, MCTSParams, MCTSResults
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class SelfPlayGame:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
+        self.encoded_moves: list[int] = []
         self.already_expanded_node: NodeId = INVALID_NODE
         self.start_generation_time = time.time()
 
@@ -43,6 +44,7 @@ class SelfPlayGame:
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
+        new_game.encoded_moves.append(CurrentGame.encode_move(move, new_game.board))
         new_game.board.make_move(move)
         new_game.played_moves.append(move)
         return new_game
@@ -52,6 +54,8 @@ class SelfPlayGame:
         game.board = self.board.copy()
         game.memory = self.memory.copy()
         game.played_moves = self.played_moves.copy()
+        game.encoded_moves = self.encoded_moves.copy()
+        game.already_expanded_node = self.already_expanded_node
         game.start_generation_time = self.start_generation_time
         game.resigned_at_move = self.resigned_at_move
         game.resignee = self.resignee
@@ -183,7 +187,7 @@ class SelfPlayCpp:
                     continue
 
             if CURRENT_GAME == 'chess':
-                if len(spg.played_moves) >= 250:
+                if len(spg.played_moves) >= 200:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
                     self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
@@ -197,7 +201,7 @@ class SelfPlayCpp:
                 )
 
                 is_duplicate = any(hash(game) == hash(new_spg) for game in self.self_play_games)
-                is_repetition = move in spg.played_moves[-8:]
+                is_repetition = move in spg.played_moves[-6:]
                 if is_duplicate or is_repetition:
                     # don't play the same move twice in a row
                     # Already exploring this state, so remove the probability of this move and try again
@@ -261,6 +265,13 @@ class SelfPlayCpp:
     ) -> tuple[SelfPlayGame, int, CurrentGameMove]:
         # Sample a move from the action probabilities then create a new game state with that move
         # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
+
+        # discourage moves which were only recently played
+        for i, move in enumerate(current.encoded_moves[-10:]):
+            for j, (child_move, count) in enumerate(visit_counts):
+                if move == child_move:
+                    visit_count_probabilities[j] /= i + 1  # discourage moves which were played recently
+        visit_count_probabilities /= np.sum(visit_count_probabilities)  # normalize probabilities
 
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
@@ -335,6 +346,6 @@ def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: fl
     temperature_action_probabilities = action_probabilities ** (1 / temperature)
     temperature_action_probabilities /= np.sum(temperature_action_probabilities)
 
-    action_index = np.random.choice(action_probabilities.shape, p=temperature_action_probabilities)
+    action_index = np.random.choice(len(action_probabilities), p=temperature_action_probabilities)
 
     return action_index

@@ -295,7 +295,6 @@ def _play_two_models_search(
                 results.update(game.check_winner(), main_player=1)
 
                 moves = ','.join(game_move_histories[game_index])
-                print(str(game.check_winner()) + ':' + moves)
                 log_text(
                     f'evaluation_moves/{iteration}/{name}',
                     str(game.check_winner()) + ':' + moves,
