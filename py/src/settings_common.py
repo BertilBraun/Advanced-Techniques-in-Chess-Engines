@@ -59,9 +59,9 @@ def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
     # based on https://lczero.org/dev/wiki/technical-explanation-of-leela-chess-zero/
     if optimizer == 'adamw':
         if current_iteration < 20:
-            return 0.02
+            return 0.003
         elif current_iteration < 250:
-            return 0.01
+            return 0.0015
         return 0.001
 
     if optimizer == 'adamw':

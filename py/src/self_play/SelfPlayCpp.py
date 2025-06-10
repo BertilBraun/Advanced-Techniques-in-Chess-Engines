@@ -327,6 +327,9 @@ class SelfPlayCpp:
             turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
 
             for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
+                if abs(mem.result_score) > 1.1:
+                    print(f'Warning: Result score {mem.result_score} is not in the range [-1, 1]. Clamping to [-1, 1].')
+
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
