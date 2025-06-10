@@ -54,21 +54,25 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
 
     TimeItGuard timer("toTensor");
 
+    // Create tensor on CPU first
     torch::Tensor tensor = torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH},
-                                        torch::TensorOptions().dtype(torch::kUInt8).device(device));
+                                        torch::TensorOptions().dtype(torch::kUInt8));
 
+    // Get CPU data pointer
+    uint8_t* data = tensor.data_ptr<uint8_t>();
+
+    // Fast CPU bit unpacking
     for (int channel = 0; channel < ENCODING_CHANNELS; ++channel) {
-        const uint64 bits = compressed[channel];
-        for (int row = 0; row < BOARD_LENGTH; ++row) {
-            for (int col = 0; col < BOARD_LENGTH; ++col) {
-                if ((bits >> (row * BOARD_LENGTH + col)) & 1) {
-                    tensor[channel][row][col] = 1;
-                }
-            }
+        const uint64_t bits = compressed[channel];
+        uint8_t* channel_data = data + channel * BOARD_LENGTH * BOARD_LENGTH;
+
+        for (int i = 0; i < 64; ++i) {
+            channel_data[i] = (bits >> i) & 1;
         }
     }
 
-    return tensor;
+    // Single GPU transfer
+    return tensor.to(device);
 }
 
 std::optional<float> getBoardResultScore(const Board &board) {
