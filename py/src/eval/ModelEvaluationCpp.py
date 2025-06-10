@@ -31,13 +31,17 @@ class ModelEvaluation:
         self.num_games = num_games
         self.args = args
 
-        self.mcts_args = MCTSParams(
-            num_parallel_searches=args.self_play.mcts.num_parallel_searches,
+    @property
+    def mcts_args(self) -> MCTSParams:
+        return MCTSParams(
+            num_parallel_searches=self.args.self_play.mcts.num_parallel_searches,
             c_param=1.7,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
-            num_threads=int(args.self_play.mcts.num_threads * args.cluster.num_self_play_nodes_on_cluster / 2),
+            num_threads=int(
+                self.args.self_play.mcts.num_threads * self.args.cluster.num_self_play_nodes_on_cluster / 2
+            ),
             node_reuse_discount=1.0,
         )
 
