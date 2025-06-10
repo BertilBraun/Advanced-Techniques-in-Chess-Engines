@@ -51,6 +51,11 @@ else
     echo "alias gp='git pull'" >> ~/.bashrc
     echo "alias start='git pull && nohup python3.11 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
+    echo "alias gpuH='salloc -p dev_accelerated-h100 --gres=gpu:1 -t 30'" >>  ~/.bashrc
+    echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc
+    echo "alias gpuH2='salloc -p dev_accelerated-h100 --gres=gpu:2 -t 30'" >> ~/.bashrc
+    echo "alias gpuA2='salloc -p dev_accelerated --gres=gpu:2 -t 30'" >>  ~/.bashrc
+
     
 
     echo "set -g mouse on #For tmux version 2.1 and up" >> ~/.tmux.conf
