@@ -13,7 +13,7 @@ static void init() {
     Bitboards::init();
     Position::init();
 
-    torch::set_num_threads(2); // Set the number of threads for PyTorch inference
+    torch::set_num_threads(4); // Set the number of threads for PyTorch inference
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
