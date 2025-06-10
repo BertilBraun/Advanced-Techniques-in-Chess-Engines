@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23.3 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.22.1 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
 # --- Export compile commands for Clang-Tidy ---

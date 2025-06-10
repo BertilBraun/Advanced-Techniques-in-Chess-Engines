@@ -4,7 +4,8 @@
 
 MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
                    const NodeId parent, NodePool *pool)
-    : parent(parent), pool(pool), board(boardFen),      move_to_get_here(move_to_get_here), policy(policy) {}
+    : parent(parent), pool(pool), board(boardFen), move_to_get_here(move_to_get_here),
+      policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon) const {
     const float uScore = policy * uCommon / (1 + number_of_visits);
@@ -56,7 +57,7 @@ void MCTSNode::updateVirtualLoss(int delta) {
     MCTSNode *node = this;
 
     while (node) {
-        node->virtual_loss += delta;     // Update the virtual loss
+        node->virtual_loss += delta; // Update the virtual loss
         // node->number_of_visits += delta; // Update the visit count
 
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
