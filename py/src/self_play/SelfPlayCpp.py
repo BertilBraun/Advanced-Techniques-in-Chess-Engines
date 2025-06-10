@@ -157,11 +157,17 @@ class SelfPlayCpp:
         boards: list[tuple[str, NodeId, int]] = []
         for spg in self.self_play_games:
             should_run_full_search = (
-                not self.args.only_store_sampled_moves  # If all moves are stored, run full search
-                or len(spg.played_moves)
-                < self.args.num_moves_after_which_to_play_greedy  # or if the game is still in the early phase
-                or len(spg.board.board.piece_map()) > 10  # or if there are many pieces on the board
-            ) and spg.resigned_at_move is None  # and the game has not been resigned
+                (
+                    not self.args.only_store_sampled_moves  # If all moves are stored, run full search
+                    # or if the game is still in the early phase
+                    or len(spg.played_moves) < self.args.num_moves_after_which_to_play_greedy
+                    or len(spg.board.board.piece_map()) > 10  # or if there are many pieces on the board
+                )
+                # and the game has not been resigned
+                and spg.resigned_at_move is None
+                # and the game has been played for a while
+                and len(spg.played_moves) > 10
+            )
 
             num_moves_to_search = self.args.mcts.num_searches_per_turn if should_run_full_search else 32
 
