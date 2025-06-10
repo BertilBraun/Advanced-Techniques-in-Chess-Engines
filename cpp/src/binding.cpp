@@ -12,6 +12,9 @@ static void init() {
     // We need to initialize the Stockfish engine before using it.
     Bitboards::init();
     Position::init();
+
+    torch::set_num_threads(2); // Set the number of threads for PyTorch inference
+    torch::set_num_interop_threads(2); // Set the number of interop threads for PyTorch
 }
 
 // -----------------------------------------------------------------------------

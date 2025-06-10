@@ -13,6 +13,8 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
 
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
+        assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
+               "Invalid device ID for CUDA");
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kFloat16; // Use half precision for inference.
     }
@@ -112,7 +114,8 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             if (result != kSentinelResult) {
                 break; // We have a valid result.
             }
-            std::this_thread::sleep_for(std::chrono::microseconds(10)); // Sleep to avoid busy-waiting.
+            // Sleep to avoid busy-waiting.
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
         }
 
         const auto &[moves, value] = result;
