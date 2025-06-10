@@ -13,8 +13,8 @@ static void init() {
     Bitboards::init();
     Position::init();
 
-    torch::set_num_threads(2); // Set the number of threads for PyTorch inference
     torch::set_num_interop_threads(2); // Set the number of interop threads for PyTorch
+    torch::set_num_threads(2); // Set the number of threads for PyTorch inference
 }
 
 // -----------------------------------------------------------------------------
