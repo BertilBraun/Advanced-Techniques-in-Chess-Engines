@@ -175,17 +175,17 @@ class SelfPlayCpp:
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
         log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
 
-        inference_stats = self.mcts.get_inference_statistics()
-        log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate)
-        log_scalar('dataset/inference/unique_positions', inference_stats.uniquePositions)
-        log_scalar('dataset/inference/cache_size_mb', inference_stats.cacheSizeMB)
-        log_histogram(
-            'dataset/inference/nn_output_value_distribution', np.array(inference_stats.nnOutputValueDistribution)
-        )
-        log_scalar(
-            'dataset/inference/average_number_of_positions_in_inference_call',
-            inference_stats.averageNumberOfPositionsInInferenceCall,
-        )
+        # inference_stats = self.mcts.get_inference_statistics()
+        # log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate)
+        # log_scalar('dataset/inference/unique_positions', inference_stats.uniquePositions)
+        # log_scalar('dataset/inference/cache_size_mb', inference_stats.cacheSizeMB)
+        # log_histogram(
+        #     'dataset/inference/nn_output_value_distribution', np.array(inference_stats.nnOutputValueDistribution)
+        # )
+        # log_scalar(
+        #     'dataset/inference/average_number_of_positions_in_inference_call',
+        #     inference_stats.averageNumberOfPositionsInInferenceCall,
+        # )
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
             was_full_searched = boards[i][2] == self.args.mcts.num_searches_per_turn

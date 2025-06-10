@@ -95,7 +95,7 @@ public:
 
     MCTSResults search(const std::vector<BoardTuple> &boards);
 
-    InferenceStatistics getInferenceStatistics() { return m_client.getStatistics(); }
+    InferenceStatistics getInferenceStatistics() { resetTimes(); return m_client.getStatistics(); }
 
     NodePool* getNodePool() { return &m_pool; }
 
