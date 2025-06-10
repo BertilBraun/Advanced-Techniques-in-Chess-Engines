@@ -18,13 +18,7 @@ cd ../cpp
 mkdir -p build
 cd build
 
-cmake .. \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_CXX_FLAGS="" \
-      -DUSE_CUDNN=True \
-      -DCAFFE2_USE_CUDNN=1 \
-      -DCUDNN_INCLUDE_DIR=/software/all/devel/cuda/12.4/include \
-      -DCUDNN_LIBRARY=/software/all/devel/cuda/12.4/lib64/libcudnn.so
+cmake .. -DCMAKE_BUILD_TYPE=Release
 
 make -j
 
