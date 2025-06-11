@@ -250,7 +250,7 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).
     const torch::Tensor inputTensor =
-        torch::stack(boards).to(torch::TensorOptions().device(m_device).device(m_torchDtype));
+        torch::stack(boards).to(torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(inputTensor);
 
