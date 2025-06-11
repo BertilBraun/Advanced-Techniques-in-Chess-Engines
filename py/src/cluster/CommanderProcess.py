@@ -41,6 +41,9 @@ class CommanderProcess:
 
         self.self_play_processes: list[Process] = []
         self.commander_self_play_pipes: list[PipeConnection] = []
+        self.commander_self_play_pipes_by_device: dict[int, list[PipeConnection]] = {}
+
+        self.trainer_device_id = torch.cuda.device_count() - 1 if USE_GPU else 0
 
     def _setup_connections(self) -> None:
         # The Trainer and Commander has a Pipe connection
@@ -48,27 +51,24 @@ class CommanderProcess:
         # The Commander has a Pipe connection to each SelfPlay and InferenceServer
 
         # Trainer and Commander
-        trainer_device_id = torch.cuda.device_count() - 1
         trainer_commander_pipe, self.commander_trainer_pipe = Pipe(duplex=True)
 
         self.trainer_process = Process(
-            target=run_trainer_process, args=(self.run_id, self.args, trainer_commander_pipe, trainer_device_id)
+            target=run_trainer_process, args=(self.run_id, self.args, trainer_commander_pipe, self.trainer_device_id)
         )
         self.trainer_process.start()
 
         self.commander_self_play_pipes: list[PipeConnection] = []
-        for device_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
+        for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
+            device_id = _get_device_id(node_id, self.args.cluster.num_self_play_nodes_on_cluster)
+
             self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
             self.commander_self_play_pipes.append(commander_self_play_pipe)
+            self.commander_self_play_pipes_by_device.setdefault(device_id, []).append(commander_self_play_pipe)
 
             process = Process(
                 target=run_self_play_process,
-                args=(
-                    self.run_id,
-                    self.args,
-                    self_play_commander_pipe,
-                    _get_device_id(device_id, self.args.cluster.num_self_play_nodes_on_cluster),
-                ),
+                args=(self.run_id, self.args, self_play_commander_pipe, device_id),
             )
             process.start()
             self.self_play_processes.append(process)
@@ -129,13 +129,17 @@ class CommanderProcess:
                 # gating
                 with TensorboardWriter(self.run_id, 'gating', postfix_pid=False):
                     # TODO only stop processes on the gating device and make the portion a hyperparameter
-                    for pipe in self.commander_self_play_pipes[::2]:
+                    for pipe in self.commander_self_play_pipes_by_device[self.trainer_device_id][::2]:
                         # only stop half of the self-play processes for gating
                         pipe.send('STOP SELF PLAY')
 
                     # TODO gating params into args
                     gating_evaluation = ModelEvaluation(
-                        iteration + 1, self.args, num_games=100, num_searches_per_turn=32
+                        iteration + 1,
+                        self.args,
+                        device_id=self.trainer_device_id,
+                        num_games=100,
+                        num_searches_per_turn=200,
                     )
                     results = gating_evaluation.play_two_models_search(
                         model_save_path(current_best_iteration, self.args.save_path)
@@ -219,7 +223,7 @@ def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_coun
     assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
 
     num_on_each_device = total / num_devices
-    num_on_last_device = round((2 * num_on_each_device) / 3)
+    num_on_last_device = round((num_on_each_device) / 2)
 
     if i < num_on_last_device:
         return torch.cuda.device_count() - 1

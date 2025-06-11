@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.eval.ModelEvaluationPy import EVAL_DEVICE, _play_two_models_search, policy_evaluator, Results, EvaluationModel
+from src.eval.ModelEvaluationPy import _play_two_models_search, policy_evaluator, Results, EvaluationModel
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
 from src.train.TrainingArgs import TrainingArgs
@@ -25,12 +25,13 @@ class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
     def __init__(
-        self, iteration: int, args: TrainingArgs, num_games: int = 64, num_searches_per_turn: int = 20
+        self, iteration: int, args: TrainingArgs, device_id: int, num_games: int = 64, num_searches_per_turn: int = 20
     ) -> None:
         self.iteration = iteration
         self.num_games = num_games
         self.args = args
         self.num_searches_per_turn = num_searches_per_turn
+        self.device_id = device_id
 
     @property
     def mcts_args(self) -> MCTSParams:
@@ -45,7 +46,7 @@ class ModelEvaluation:
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
-        device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
+        device = torch.device(f'cuda:{self.device_id}' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
         dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
@@ -110,7 +111,7 @@ class ModelEvaluation:
             print(f'Model path {model_path} does not exist. Skipping evaluation.')
             return Results(self.num_games, 0, 0)
 
-        opponent = MCTS(InferenceClientParams(EVAL_DEVICE, str(model_path), 16), self.mcts_args)
+        opponent = MCTS(InferenceClientParams(self.device_id, str(model_path), 16), self.mcts_args)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
@@ -128,7 +129,7 @@ class ModelEvaluation:
         return res
 
     def play_policy_vs_random(self) -> Results:
-        current_model = InferenceClient(EVAL_DEVICE, self.args.network, self.args.save_path)
+        current_model = InferenceClient(self.device_id, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         policy_model = policy_evaluator(current_model)
@@ -152,7 +153,7 @@ class ModelEvaluation:
 
     def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
         current = MCTS(
-            InferenceClientParams(EVAL_DEVICE, str(model_save_path(self.iteration, self.args.save_path)), 16),
+            InferenceClientParams(self.device_id, str(model_save_path(self.iteration, self.args.save_path)), 16),
             self.mcts_args,
         )
 
@@ -181,6 +182,7 @@ class ModelEvaluation:
 
 if __name__ == '__main__':
     from src.settings import TRAINING_ARGS
+    from src.eval.ModelEvaluationPy import EVAL_DEVICE
 
-    evaluation = ModelEvaluation(0, TRAINING_ARGS, 100, 400)
+    evaluation = ModelEvaluation(0, TRAINING_ARGS, EVAL_DEVICE, 100, 400)
     print('Evaluation vs Random:', evaluation.play_vs_random())

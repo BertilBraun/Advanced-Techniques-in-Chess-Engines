@@ -46,14 +46,13 @@ training = TrainingParams(
     learning_rate_scheduler=learning_rate_scheduler,
 )
 evaluation = EvaluationParams(
-    num_searches_per_turn=32,
+    num_searches_per_turn=64,
     num_games=100,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-NUM_SELF_PLAYERS = 4
-NUM_THREADS = int(64 // NUM_SELF_PLAYERS * 2)
+NUM_THREADS = int(multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 4)
 PARALLEL_GAMES = NUM_THREADS
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
@@ -77,15 +76,15 @@ if not USE_GPU:  # TODO remove
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 2,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=60,  # even number - no bias towards white
+        num_moves_after_which_to_play_greedy=70,  # even number - no bias towards white
         result_score_weight=0.0,  # TODO increase?
         resignation_threshold=-0.95,
         temperature=1.0,
-        num_games_after_which_to_write=4,
+        num_games_after_which_to_write=2,
         portion_of_samples_to_keep=0.7,
         only_store_sampled_moves=True,
         mcts=MCTSParams(

@@ -25,14 +25,9 @@ LOG_FOLDER = 'logs'
 SAVE_PATH = 'training_data'
 
 NUM_GPUS = torch.cuda.device_count()
-SELF_PLAYERS_PER_NODE = 45  # TODO 32?
-NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + (2 * SELF_PLAYERS_PER_NODE) // 3
+SELF_PLAYERS_PER_NODE = 4
+NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + (SELF_PLAYERS_PER_NODE) // 2
 NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
-NUM_SELF_PLAYERS = max(8, NUM_SELF_PLAYERS)  # TODO remove?
-
-# Leave 2 CPUs for Trainer, Dataloader, Evaluation, etc.
-NUM_SELF_PLAYERS = min(NUM_SELF_PLAYERS, multiprocessing.cpu_count() - 2)
-NUM_SELF_PLAYERS = multiprocessing.cpu_count() - 2  # TODO remove?
 
 PLAY_C_PARAM = 1.0
 
