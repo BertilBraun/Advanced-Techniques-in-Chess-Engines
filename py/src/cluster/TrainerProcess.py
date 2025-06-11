@@ -58,7 +58,6 @@ class TrainerProcess:
                 training_stats = self.train(iteration)
                 reset_times()
                 self.commander_pipe.send(training_stats)
-                self.commander_pipe.send('FINISHED')
 
         log('Training process stopped.')
 

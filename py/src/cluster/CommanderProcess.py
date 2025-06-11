@@ -108,7 +108,6 @@ class CommanderProcess:
 
                 # Wait for Trainer to finish
                 train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
-                assert self.commander_trainer_pipe.recv() == 'FINISHED'
                 yield iteration, train_stats
 
                 # gating
