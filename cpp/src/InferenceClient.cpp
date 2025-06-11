@@ -67,7 +67,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
         // Create and enqueue a new request.
         InferenceRequest req;
-        req.boardTensor = toTensor(encodedBoards[i], m_device).to(m_torchDtype);
+        req.boardTensor = toTensor(encodedBoards[i]);
         futures.emplace_back(i, std::move(req.promise.get_future()));
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -79,6 +79,20 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     // Wait for all inference futures to complete.
     for (auto &&[i, future] : futures) {
         const auto [policy, value] = future.get();
+
+        // TODO remove these once validated
+        if (value < -1.0f - 1e-3f || value > 1.0f + 1e-3f) {
+            throw std::runtime_error("InferenceClient::inference_batch: invalid value returned from model: " +
+                                     std::to_string(value));
+        }
+        // if any element in policy is negative, or the sum of the policy is not close to 1.0, throw an error.
+        if ((policy < 0).any().item<bool>()) {
+            throw std::runtime_error("InferenceClient::inference_batch: policy contains negative values");
+        }
+        if (std::abs(policy.sum().item<float>() - 1.0f) > 1e-3f) {
+            throw std::runtime_error("InferenceClient::inference_batch: policy does not sum to 1.0: " +
+                                     std::to_string(policy.sum().item<float>()));
+        }
 
         m_cache.insert(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
@@ -235,7 +249,8 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).
-    const torch::Tensor inputTensor = torch::stack(boards);
+    const torch::Tensor inputTensor =
+        torch::stack(boards).to(torch::TensorOptions().device(m_device).device(m_torchDtype));
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(inputTensor);
 

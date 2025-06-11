@@ -12,8 +12,6 @@ static void init() {
     // We need to initialize the Stockfish engine before using it.
     Bitboards::init();
     Position::init();
-
-    torch::set_num_threads(4); // Set the number of threads for PyTorch inference
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {

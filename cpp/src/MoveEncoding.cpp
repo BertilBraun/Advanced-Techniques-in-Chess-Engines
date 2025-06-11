@@ -220,7 +220,9 @@ torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, const Boar
 
     const torch::Tensor legalMovesEncoded = encodeLegalMoves(board);
     const torch::Tensor filteredPolicy = policy * legalMovesEncoded;
-    return filteredPolicy / filteredPolicy.sum();
+    const float filteredPolicySum = filteredPolicy.sum().item<float>();
+    if (filteredPolicySum < 0.00001) return legalMovesEncoded / legalMovesEncoded.sum();
+    return filteredPolicy / filteredPolicySum;
 }
 
 std::vector<EncodedMoveScore> mapPolicyToMoves(const torch::Tensor &policy) {

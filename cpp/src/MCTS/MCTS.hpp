@@ -120,5 +120,5 @@ private:
     // Add Dirichlet noise to a vector of MoveScore.
     std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
-    std::optional<MCTSNode *> getBestChildOrBackPropagate(MCTSNode *root, float cParam);
+    MCTSNode * getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 };

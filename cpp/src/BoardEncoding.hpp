@@ -30,6 +30,6 @@ struct BoardHash {
 
 CompressedEncodedBoard encodeBoard(const Board *board);
 
-torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device device);
+torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
 
-std::optional<float> getBoardResultScore(const Board &board);
+float getBoardResultScore(const Board &board);

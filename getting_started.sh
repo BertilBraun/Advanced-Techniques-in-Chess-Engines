@@ -37,20 +37,26 @@ else
     source setup.sh
 
     # download the chess database
-    python3.11 -m src.games.chess.ChessDatabase 30 2000
+    python3 -m src.games.chess.ChessDatabase 30 2000
 
     # pretrain the model on the chess database
-    python3.11 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
+    python3 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
+
+    mkdir -p training_data/chess
+    # initialize the training_data with some of the chess database to start training
+    mkdir -p training_data/chess/memory_0
+    mv reference/chess_database/memory_202409/* training_data/chess/memory_0/
 
     # copy the pretrained model to the training_data directory
-    mkdir -p training_data/chess
     cp reference/ChessGame/model_4.pt training_data/chess/model_15.pt
     cp reference/ChessGame/model_4.pt training_data/chess/reference_model.pt
+    cp reference/ChessGame/model_4.jit.pt training_data/chess/reference_model.jit.pt
     
     # run train.py based on the pretrained model
-    # python3.11 train.py
+    python3 train.py
 
     # Or run train.py in the background
-    nohup python3.11 train.py > train.log 2>&1 &
-    tail -f train.log
+    start
+    sleep 1
+    log
 fi

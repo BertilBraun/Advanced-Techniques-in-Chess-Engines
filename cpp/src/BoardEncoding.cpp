@@ -46,7 +46,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     return encodedBoard;
 }
 
-torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device device) {
+torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
     // Converts a compressed 64-bit array to an uncompressed ENCODING_CHANNELS x 8 x 8 tensor.
     //
     // param compressed: The 64-bit array to convert.
@@ -56,7 +56,7 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
 
     // Create tensor on CPU first
     torch::Tensor tensor = torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH},
-                                        torch::TensorOptions().dtype(torch::kUInt8));
+                                        torch::kUInt8);
 
     // Get CPU data pointer
     uint8_t* data = tensor.data_ptr<uint8_t>();
@@ -71,11 +71,10 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed, torch::Device d
         }
     }
 
-    // Single GPU transfer
-    return tensor.to(device);
+    return tensor;
 }
 
-std::optional<float> getBoardResultScore(const Board &board) {
+float getBoardResultScore(const Board &board) {
     // Returns the result score for the given board.
     //
     // The result score is -1.0 if the current player has lost, otherwise it must have been a
@@ -84,12 +83,11 @@ std::optional<float> getBoardResultScore(const Board &board) {
     // param board: The board to get the result score for.
     // :return: The result score for the given board.
 
-    if (!board.isGameOver())
-        return std::nullopt;
+    assert(board.isGameOver() && "Game was not over!");
 
     if (const auto winner = board.checkWinner()) {
         assert(winner.value() != board.currentPlayer());
-        return {-1.0f}; // Our last move put us in checkmate
+        return -1.0f; // Our last move put us in checkmate
     }
 
     // Draw -> Return a score between based on the remaining material

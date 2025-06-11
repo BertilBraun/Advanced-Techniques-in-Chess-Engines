@@ -86,7 +86,7 @@ private:
      * Applies softmax to the policies, moves policies and values to CPU (float32),
      * and returns a vector of (policy tensor, value) pairs.
      */
-    std::vector<std::pair<torch::Tensor, float>>
+    std::vector<ModelInferenceResult>
     modelInference(const std::vector<torch::Tensor> &boards);
 
     // Member variables.

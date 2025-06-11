@@ -54,7 +54,7 @@ class Trainer:
 
             value_targets = value_targets.unsqueeze(1)
 
-            policy_logits, value_logits = self.model(state, return_logits=True)
+            policy_logits, value_logits = self.model.logit_forward(state)
             value_output = torch.tanh(value_logits)
 
             # Binary cross entropy loss for the policy is definitely not correct, as the policy has multiple classes

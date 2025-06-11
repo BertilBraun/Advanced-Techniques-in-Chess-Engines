@@ -65,19 +65,25 @@ class Network(nn.Module):
 
         self.to(device=self.device, dtype=TORCH_DTYPE)
 
-    def forward(self, x: Tensor, return_logits: bool = False) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = self.startBlock(x)
         for block in self.backBone:
             x = block(x)
         policy_logits = self.policyHead(x)
         value_logits = self.valueHead(x)
 
-        if return_logits:
-            return policy_logits, value_logits
-
         policy = torch.softmax(policy_logits, dim=1)
         value = torch.tanh(value_logits)
         return policy, value
+
+    def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        x = self.startBlock(x)
+        for block in self.backBone:
+            x = block(x)
+        policy_logits = self.policyHead(x)
+        value_logits = self.valueHead(x)
+
+        return policy_logits, value_logits
 
     def fuse_model(self):
         for m in self.modules():

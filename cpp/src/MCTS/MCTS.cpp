@@ -160,11 +160,11 @@ void MCTS::parallelIterate(MCTSNode *root) {
     boards.reserve(m_args.num_parallel_searches);
 
     for (int _ : range(m_args.num_parallel_searches)) {
-        std::optional<MCTSNode *> node = getBestChildOrBackPropagate(root, m_args.c_param);
-        if (node.has_value()) {
-            node.value()->updateVirtualLoss(1);
-            nodes.push_back(node.value());
-            boards.emplace_back(&node.value()->board);
+        MCTSNode * node = getBestChildOrBackPropagate(root, m_args.c_param);
+        if (node != nullptr) {
+            node->updateVirtualLoss(1);
+            nodes.push_back(node);
+            boards.emplace_back(&node->board);
         }
     }
 
@@ -213,7 +213,7 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
 
 // Traverse the tree to find the best child or, if the node is terminal,
 // back-propagate the board’s result.
-std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
+MCTSNode * MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
 
     for (const NodeId childId : root->children) {
         MCTSNode *child = m_pool.get(childId);
@@ -231,12 +231,10 @@ std::optional<MCTSNode *> MCTS::getBestChildOrBackPropagate(MCTSNode *root, cons
     }
 
     if (node->isTerminalNode()) {
-        const auto result = getBoardResultScore(node->board);
-        assert(result.has_value());
-        node->backPropagate(result.value());
-        return std::nullopt;
+        node->backPropagate(getBoardResultScore(node->board));
+        return nullptr;
     }
-    return {node};
+    return node;
 }
 
 std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int number_of_searches) {

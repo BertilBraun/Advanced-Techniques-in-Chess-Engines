@@ -12,9 +12,9 @@ void NodePool::deallocateNode(const NodeId id) {
     std::lock_guard<std::mutex> lock(m_poolMutex);
     assert(id < m_nextFreshId);
     std::optional<MCTSNode> *ptr = slotPointer(id);
-    assert(ptr->has_value() && "Node is not allocated");
     // Call the destructor of the MCTSNode at this slot:
-    ptr->reset(); // This will call the destructor
+    if (ptr->has_value())
+        ptr->reset(); // This will call the destructor
     m_freeList.push_back(id);
 }
 

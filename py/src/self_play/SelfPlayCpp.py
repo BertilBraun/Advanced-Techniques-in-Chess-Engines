@@ -146,10 +146,16 @@ class SelfPlayCpp:
         self.mcts = MCTS(client_args, mcts_args)
 
     @timeit
-    def search(self, boards: list[tuple[str, NodeId, int]]) -> MCTSResults:
+    def search(self, boards: list[tuple[str, NodeId, int]], retries=5) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+        assert retries > 0, 'Retries must be greater than 0'
+        # TODO remove retries after debugging
 
-        return self.mcts.search(boards)
+        try:
+            return self.mcts.search(boards)
+        except Exception as e:
+            log(f'ERROR: Error during MCTS search: {e}')
+            return self.search(boards, retries - 1)  # Retry the search after resetting MCTS
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'

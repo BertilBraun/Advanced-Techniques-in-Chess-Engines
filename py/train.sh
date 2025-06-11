@@ -24,4 +24,5 @@ make -j
 
 cd ../../py
 
+start
 python3 train.py
