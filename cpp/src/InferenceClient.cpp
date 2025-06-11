@@ -16,7 +16,7 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
         assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
                "Invalid device ID for CUDA");
         m_device = torch::Device(torch::kCUDA, args.device_id);
-        m_torchDtype = torch::kFloat16; // Use half precision for inference.
+        m_torchDtype = torch::kBFloat16; // Use half precision for inference.
     }
     loadModel(args.currentModelPath);
 
