@@ -273,7 +273,7 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
             value = 0.0f;
         }
         // if policy contains NaN or Inf, set it to a uniform distribution
-        if (policy.isnan().item<bool>() || policy.isinf().item<bool>()) {
+        if (policy.isnan().any().item<bool>() || policy.isinf().any().item<bool>()) {
             log("Warning: InferenceClient::modelInference: policy contains NaN or Inf, setting to "
                 "uniform distribution");
             policy = torch::ones_like(policy) / policy.size(0);
