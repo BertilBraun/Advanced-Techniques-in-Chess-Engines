@@ -37,11 +37,11 @@ class ChessBoard(Board[ChessMove]):
         self.board.push(move)
 
     def is_game_over(self) -> bool:
-        return self.board.is_game_over()
+        return self.board.is_game_over(claim_draw=True)
 
     def check_winner(self) -> Optional[Player]:
         """Check if the game is over and return the winner."""
-        result = self.board.result()
+        result = self.board.result(claim_draw=True)
         if result == '1-0':
             return 1
         elif result == '0-1':
