@@ -52,6 +52,8 @@ struct MCTSStatistics {
     float averageDepth = 0.0f;        // Average depth of the search trees.
     float averageEntropy = 0.0f;      // Average entropy of the visit counts.
     float averageKLDivergence = 0.0f; // Average KL divergence of the visit counts.
+    int nodePoolCapacity = 0; // Total number of NodeIds that have ever been touched.
+    int liveNodeCount = 0;   // Number of currently live nodes in the pool.
 };
 
 struct MCTSResults {

@@ -78,6 +78,9 @@ MCTSStatistics mctsStatistics(const MCTSNode *root, NodePool *pool) {
         stats.averageKLDivergence = klDivergence(root);
     }
 
+    stats.nodePoolCapacity = pool->capacity();
+    stats.liveNodeCount = pool->liveNodeCount();
+
     return stats;
 }
 

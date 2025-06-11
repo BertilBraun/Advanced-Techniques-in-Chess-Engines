@@ -54,6 +54,8 @@ class MCTSStatistics:
     averageDepth: float
     averageEntropy: float
     averageKLDivergence: float
+    nodePoolCapacity: int
+    liveNodeCount: int
 
     def __init__(self) -> None: ...
 

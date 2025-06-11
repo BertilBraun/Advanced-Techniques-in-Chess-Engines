@@ -145,17 +145,17 @@ class SelfPlayCpp:
         )
         self.mcts = MCTS(client_args, mcts_args)
 
-    @timeit
-    def search(self, boards: list[tuple[str, NodeId, int]], retries=5) -> MCTSResults:
-        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        assert retries > 0, 'Retries must be greater than 0'
-        # TODO remove retries after debugging
+        # Reset the already expanded node for all self-play games
+        for spg in self.self_play_games:
+            spg.already_expanded_node = INVALID_NODE
 
-        try:
-            return self.mcts.search(boards)
-        except Exception as e:
-            log(f'ERROR: Error during MCTS search: {e}')
-            return self.search(boards, retries - 1)  # Retry the search after resetting MCTS
+        log(f'Set MCTS for iteration {iteration} with {self.num_searches_per_turn} searches per turn.')
+
+    @timeit
+    def search(self, boards: list[tuple[str, NodeId, int]]) -> MCTSResults:
+        assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+
+        return self.mcts.search(boards)
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
@@ -186,6 +186,8 @@ class SelfPlayCpp:
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
         log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
+        log_scalar('mcts/node_pool_capacity', stats.nodePoolCapacity)
+        log_scalar('mcts/live_node_count', stats.liveNodeCount)
 
         # inference_stats = self.mcts.get_inference_statistics()
         # log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate)

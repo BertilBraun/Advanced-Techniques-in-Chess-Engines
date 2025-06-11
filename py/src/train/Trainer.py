@@ -34,6 +34,7 @@ class Trainer:
         """
         base_lr = self.args.learning_rate(iteration, self.args.optimizer)
         log_scalar('learning_rate', base_lr, iteration)
+        log(f'Setting learning rate to {base_lr} for iteration {iteration}')
 
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = base_lr

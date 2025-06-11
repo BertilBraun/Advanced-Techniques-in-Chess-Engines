@@ -165,7 +165,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<MCTSStatistics>(m, "MCTSStatistics")
         .def_readonly("averageDepth", &MCTSStatistics::averageDepth)
         .def_readonly("averageEntropy", &MCTSStatistics::averageEntropy)
-        .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence);
+        .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence)
+        .def_readonly("nodePoolCapacity", &MCTSStatistics::nodePoolCapacity)
+        .def_readonly("liveNodeCount", &MCTSStatistics::liveNodeCount);
 
     // --- (2.6) MCTSResults ---
     py::class_<MCTSResults>(m, "MCTSResults")
