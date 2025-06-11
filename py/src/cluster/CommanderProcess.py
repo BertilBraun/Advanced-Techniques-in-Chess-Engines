@@ -139,7 +139,7 @@ class CommanderProcess:
                         self.args,
                         device_id=self.trainer_device_id,
                         num_games=100,
-                        num_searches_per_turn=200,
+                        num_searches_per_turn=100,
                     )
                     results = gating_evaluation.play_two_models_search(
                         model_save_path(current_best_iteration, self.args.save_path)
