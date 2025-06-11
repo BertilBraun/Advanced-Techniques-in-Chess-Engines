@@ -152,7 +152,10 @@ class CommanderProcess:
                     )
 
                     result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
-                    result_score = results.wins / (results.wins + results.losses)  # win rate with draws ignored
+                    # win rate with draws ignored
+                    result_score = (
+                        results.wins / (results.wins + results.losses) if results.wins + results.losses > 0 else 0.0
+                    )
                     log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
                     # TODO make this a parameter in args
                     if result_score > 0.53:  # 55% win rate
