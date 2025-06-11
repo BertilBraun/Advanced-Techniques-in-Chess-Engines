@@ -41,13 +41,13 @@ else
     # download the chess database
     python3 -m src.games.chess.ChessDatabase 30 2000
 
-    # pretrain the model on the chess database
-    python3 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
-
     mkdir -p training_data/chess
     # initialize the training_data with some of the chess database to start training
     mkdir -p training_data/chess/memory_0
     mv reference/chess_database/memory_202409/* training_data/chess/memory_0/
+
+    # pretrain the model on the chess database
+    python3 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
 
     # copy the pretrained model to the training_data directory
     cp reference/ChessGame/model_4.pt training_data/chess/model_15.pt
