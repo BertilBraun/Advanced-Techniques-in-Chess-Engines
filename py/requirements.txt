@@ -14,5 +14,6 @@ psutil
 
 numba==0.61.2
 numpy==2.2.6
-torch==2.7.0#+cu128
+#torch==2.7.0+cu128
+torch==2.7.0
 torchvision==0.22.0
