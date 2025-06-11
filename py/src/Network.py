@@ -24,7 +24,7 @@ class Network(nn.Module):
 
         num_policy_channels = 8
         num_value_channels = 4
-        value_fc_size = 128
+        value_fc_size = 64
 
         encoding_channels, row_count, column_count = CurrentGame.representation_shape
         action_size = CurrentGame.action_size
