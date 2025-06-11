@@ -3,6 +3,8 @@
 #include "bitboard.h"
 #include "movegen.h"
 
+#include "common.hpp"
+
 // Material values matching the Python implementation
 static constexpr int PIECE_VALUE[PIECE_TYPE_NB] = {
     0, // No piece

@@ -2,6 +2,14 @@
 
 #include "position.h"
 
+#include <optional>
+#include <string>
+#include <vector>
+#include <iostream>
+#include <sstream>
+#include <cstdint>
+
+
 using namespace Stockfish;
 
 class Board {
