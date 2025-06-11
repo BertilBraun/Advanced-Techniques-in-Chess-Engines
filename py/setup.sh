@@ -56,6 +56,7 @@ else
     echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc
     echo "alias gpuH2='salloc -p dev_accelerated-h100 --gres=gpu:2 -t 30'" >> ~/.bashrc
     echo "alias gpuA2='salloc -p dev_accelerated --gres=gpu:2 -t 30'" >>  ~/.bashrc
+    echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j && cd ../../py'" >> ~/.bashrc
 
     
 

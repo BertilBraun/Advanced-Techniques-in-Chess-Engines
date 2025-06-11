@@ -14,15 +14,6 @@
 
 source setup.sh
 
-cd ../cpp
-mkdir -p build
-cd build
-
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-make -j
-
-cd ../../py
-
+compile
 start
-python3 train.py
+# python3 train.py

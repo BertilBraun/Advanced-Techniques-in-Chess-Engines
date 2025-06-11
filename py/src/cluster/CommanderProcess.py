@@ -102,7 +102,7 @@ class CommanderProcess:
             value_loss=0.0,
             total_loss=0.0,
             value_mean=0.0,
-            value_std=1.0,
+            value_std=1.0,  # to avoid early stopping
             grad_norm=0.0,
         )
 

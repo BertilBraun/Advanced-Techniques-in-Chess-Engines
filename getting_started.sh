@@ -36,6 +36,8 @@ if [[ "$(uname -m)" == "aarch64" ]]; then
 else
     source setup.sh
 
+    compile
+
     # download the chess database
     python3 -m src.games.chess.ChessDatabase 30 2000
 
@@ -57,6 +59,5 @@ else
 
     # Or run train.py in the background
     start
-    sleep 1
-    log
+    # tail train_$(date +%Y%m%d_%H%M%S).log
 fi
