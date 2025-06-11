@@ -272,13 +272,19 @@ std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int n
             // Discount the node's score and visits.
             // 1. Calculates the discounted visits first
             // 2. Updates the visit count with rounding as before
-            // 3. Adjusts the result_score proportionally to maintain the same ratio after the integer
-            // rounding This ensures both values are affected by the same effective divisor,
+            // 3. Adjusts the result_score proportionally to maintain the same ratio after the
+            // integer rounding This ensures both values are affected by the same effective divisor,
             // including any rounding effects.
             const float discounted_visits =
                 static_cast<float>(node->number_of_visits) * m_args.node_reuse_discount;
             node->number_of_visits = static_cast<int>(discounted_visits);
-            node->result_score = (node->result_score / static_cast<float>(node->number_of_visits)) * discounted_visits;
+            if (node->number_of_visits == 0)
+                // If the node has no visits, we can skip discounting its score.
+                node->result_score = 0.0f;
+            else
+                node->result_score =
+                    (node->result_score / static_cast<float>(node->number_of_visits)) *
+                    discounted_visits;
 
             for (const NodeId childId : node->children)
                 discount(m_pool.get(childId));
