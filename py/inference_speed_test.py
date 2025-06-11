@@ -6,6 +6,7 @@ import src.environ_setup  # noqa # isort:skip # This import is necessary for set
 import os
 
 from src.games.chess.ChessSettings import TRAINING_ARGS, CurrentBoard
+from src.util.save_paths import create_model, create_optimizer, save_model_and_optimizer
 
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
 os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
@@ -69,6 +70,11 @@ if __name__ == '__main__':
     num_iterations = 10  # Number of iterations to run the test
     print(f'Number of boards: {num_boards}')
     print(f'Number of iterations: {num_iterations}')
+
+    network = create_model(TRAINING_ARGS.network, torch.device('cpu'))
+    optimizer = create_optimizer(network, TRAINING_ARGS.training.optimizer)
+    save_model_and_optimizer(network, optimizer, 0, TRAINING_ARGS.save_path)
+
     print('Python:', '=' * 20)
     test_inference_speed_py(num_boards, num_iterations)
     print('Finished Python inference speed test.')

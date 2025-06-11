@@ -171,10 +171,6 @@ target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 
-target_link_options(AlphaZeroCpp PRIVATE
-        "-static-libstdc++"
-        "-static-libgcc"
-)
 # target_link_libraries(AlphaZeroCpp PRIVATE ${Protobuf_LIBRARIES} tensorboard_logger "${TORCH_LIBRARIES}")
 
 # target_include_directories(AlphaZeroCpp PRIVATE ${Protobuf_INCLUDE_DIRS})

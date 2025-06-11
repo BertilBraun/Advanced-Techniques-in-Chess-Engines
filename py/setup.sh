@@ -28,6 +28,7 @@ else
 
     conda create -n Chess python=3.10 -y
     conda activate Chess
+    conda install -c conda-forge libstdcxx-ng libgcc-ng
 
     pip3 install -r requirements.txt
 
