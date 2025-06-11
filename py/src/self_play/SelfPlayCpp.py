@@ -286,6 +286,9 @@ class SelfPlayCpp:
         random_moves_to_play = int(random.random() * 8)
         for _ in range(random_moves_to_play):
             new_game = new_game.expand(random.choice(new_game.board.get_valid_moves()))
+            if new_game.board.is_game_over():
+                # If the game is over, start a new game
+                return self._new_game()
 
         return new_game
 
