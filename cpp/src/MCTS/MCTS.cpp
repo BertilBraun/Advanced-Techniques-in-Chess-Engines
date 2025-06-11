@@ -278,7 +278,7 @@ std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int n
             const float discounted_visits =
                 static_cast<float>(node->number_of_visits) * m_args.node_reuse_discount;
             node->number_of_visits = static_cast<int>(discounted_visits);
-            node->result_score = (node->result_score / node->number_of_visits) * discounted_visits;
+            node->result_score = (node->result_score / static_cast<float>(node->number_of_visits)) * discounted_visits;
 
             for (const NodeId childId : node->children)
                 discount(m_pool.get(childId));
