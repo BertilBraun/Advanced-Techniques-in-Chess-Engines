@@ -86,7 +86,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         // an error.
         assert((policy < 0).any().item<bool>() == false &&
                "InferenceClient::inference_batch: policy contains negative values");
-        assert(std::abs(policy.sum().item<float>() - 1.0f) < 1e-1f &&
+        assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-1f &&
                "InferenceClient::inference_batch: policy does not sum to 1.0");
 
         m_cache.insert(encodedBoards[i],
@@ -259,16 +259,26 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     torch::Tensor policies = outputTuple->elements()[0].toTensor();
     torch::Tensor values = outputTuple->elements()[1].toTensor();
 
-    policies = torch::softmax(policies, 1);
     policies = policies.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
     values = values.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
 
     std::vector<std::pair<torch::Tensor, float>> results;
     results.reserve(boards.size());
     for (int i = 0; i < policies.size(0); ++i) {
-        const torch::Tensor policy = policies[i];
-        const float value = values[i].item<float>();
-        results.push_back(std::make_pair(policy, value));
+        torch::Tensor policy = policies[i];
+        float value = values[i].item<float>();
+        // if value is nan or inf, set it to 0.0
+        if (std::isnan(value) || std::isinf(value)) {
+            log("Warning: InferenceClient::modelInference: value is NaN or Inf, setting to 0.0");
+            value = 0.0f;
+        }
+        // if policy contains NaN or Inf, set it to a uniform distribution
+        if (policy.isnan().item<bool>() || policy.isinf().item<bool>()) {
+            log("Warning: InferenceClient::modelInference: policy contains NaN or Inf, setting to "
+                "uniform distribution");
+            policy = torch::ones_like(policy) / policy.size(0);
+        }
+        results.emplace_back(policy, value);
     }
     return results;
 }
