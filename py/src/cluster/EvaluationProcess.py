@@ -1,9 +1,11 @@
 import os
 from torch import multiprocessing as mp
+import torch
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import log_scalar, TensorboardWriter
+from src.settings_common import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import TrainingArgs
@@ -160,6 +162,7 @@ class EvaluationProcess:
         model_evaluation = ModelEvaluation(
             iteration,
             self.args,
+            device_id=torch.cuda.device_count() - 1 if USE_GPU else 0,
             num_games=self.eval_args.num_games,
             num_searches_per_turn=self.eval_args.num_searches_per_turn,
         )
