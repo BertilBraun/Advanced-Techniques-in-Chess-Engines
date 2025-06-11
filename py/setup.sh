@@ -50,7 +50,7 @@ else
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
-    echo "alias start='git pull && nohup python3.10 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
+    echo "alias start='git pull && nohup python3 -O train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
     echo "alias gpuH='salloc -p dev_accelerated-h100 --gres=gpu:1 -t 30'" >>  ~/.bashrc
     echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc

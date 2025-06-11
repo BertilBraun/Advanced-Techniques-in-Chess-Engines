@@ -144,6 +144,8 @@ MCTSResults MCTS::search(const std::vector<std::tuple<std::string, NodeId, int>>
     stats.averageDepth /= static_cast<float>(N);
     stats.averageEntropy /= static_cast<float>(N);
     stats.averageKLDivergence /= static_cast<float>(N);
+    stats.nodePoolCapacity = m_pool.capacity();
+    stats.liveNodeCount = m_pool.liveNodeCount();
 
     return {.results = results, .mctsStats = stats};
 }
@@ -163,7 +165,7 @@ void MCTS::parallelIterate(MCTSNode *root) {
     boards.reserve(m_args.num_parallel_searches);
 
     for (int _ : range(m_args.num_parallel_searches)) {
-        MCTSNode * node = getBestChildOrBackPropagate(root, m_args.c_param);
+        MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
         if (node != nullptr) {
             node->updateVirtualLoss(1);
             nodes.push_back(node);
@@ -216,7 +218,7 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
 
 // Traverse the tree to find the best child or, if the node is terminal,
 // back-propagate the board’s result.
-MCTSNode * MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
+MCTSNode *MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
 
     for (const NodeId childId : root->children) {
         MCTSNode *child = m_pool.get(childId);
@@ -268,9 +270,16 @@ std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int n
 
         std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
             // Discount the node's score and visits.
-            node->result_score *= m_args.node_reuse_discount;
-            node->number_of_visits = static_cast<int>(static_cast<float>(node->number_of_visits) *
-                                                      m_args.node_reuse_discount);
+            // 1. Calculates the discounted visits first
+            // 2. Updates the visit count with rounding as before
+            // 3. Adjusts the result_score proportionally to maintain the same ratio after the integer
+            // rounding This ensures both values are affected by the same effective divisor,
+            // including any rounding effects.
+            const float discounted_visits =
+                static_cast<float>(node->number_of_visits) * m_args.node_reuse_discount;
+            node->number_of_visits = static_cast<int>(discounted_visits);
+            node->result_score = (node->result_score / node->number_of_visits) * discounted_visits;
+
             for (const NodeId childId : node->children)
                 discount(m_pool.get(childId));
         };

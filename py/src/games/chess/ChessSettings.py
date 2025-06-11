@@ -38,7 +38,7 @@ CurrentGameVisuals = ChessVisuals()
 
 network = NetworkParams(num_layers=7, hidden_size=96)
 training = TrainingParams(
-    num_epochs=2,
+    num_epochs=1,
     optimizer='adamw',  # 'sgd',
     batch_size=512,  # TODO 2048,
     sampling_window=sampling_window,
@@ -77,7 +77,7 @@ if not USE_GPU:  # TODO remove
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 4,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,

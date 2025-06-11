@@ -123,6 +123,7 @@ class SelfPlayCpp:
                 clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
             )
         )
+        self.num_searches_per_turn = self.args.mcts.num_searches_per_turn  # TODO just disable scaling for now
         assert self.num_searches_per_turn > self.args.mcts.num_parallel_searches, (
             f'Number of searches per turn ({self.num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
         )

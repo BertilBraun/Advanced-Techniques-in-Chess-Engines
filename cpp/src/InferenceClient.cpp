@@ -80,19 +80,14 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     for (auto &&[i, future] : futures) {
         const auto [policy, value] = future.get();
 
-        // TODO remove these once validated
-        if (std::abs(value) > 1.0f + 1e-1f) {
-            throw std::runtime_error("InferenceClient::inference_batch: invalid value returned from model: " +
-                                     std::to_string(value));
-        }
-        // if any element in policy is negative, or the sum of the policy is not close to 1.0, throw an error.
-        if ((policy < 0).any().item<bool>()) {
-            throw std::runtime_error("InferenceClient::inference_batch: policy contains negative values");
-        }
-        if (std::abs(policy.sum().item<float>()) > 1.0f + 1e-1f) {
-            throw std::runtime_error("InferenceClient::inference_batch: policy does not sum to 1.0: " +
-                                     std::to_string(policy.sum().item<float>()));
-        }
+        assert(std::abs(value) <= 1.0f + 1e-1f &&
+               "InferenceClient::inference_batch: value out of bounds");
+        // if any element in policy is negative, or the sum of the policy is not close to 1.0, throw
+        // an error.
+        assert((policy < 0).any().item<bool>() == false &&
+               "InferenceClient::inference_batch: policy contains negative values");
+        assert(std::abs(policy.sum().item<float>() - 1.0f) < 1e-1f &&
+               "InferenceClient::inference_batch: policy does not sum to 1.0");
 
         m_cache.insert(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
