@@ -39,7 +39,7 @@ else
     compile
 
     # download the chess database
-    python3 -m src.games.chess.ChessDatabase 30 2000
+    python3 -m src.games.chess.ChessDatabase 5 2000
 
     mkdir -p training_data/chess
     # initialize the training_data with some of the chess database to start training

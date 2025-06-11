@@ -76,7 +76,7 @@ if not USE_GPU:  # TODO remove
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 4,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 6,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
