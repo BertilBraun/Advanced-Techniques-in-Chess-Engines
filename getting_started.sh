@@ -15,7 +15,6 @@ if [[ "$(uname -m)" == "aarch64" ]]; then
     echo "alias gp='git pull'" >> ~/.bashrc
     echo "alias start='git pull && nohup python3 train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py'" >> ~/.bashrc
-    echo "alias log='tail -f train.log'" >> ~/.bashrc
 
     echo "cd ~/Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
 
@@ -29,14 +28,13 @@ if [[ "$(uname -m)" == "aarch64" ]]; then
     pip3 install -r requirements.txt
 
     start
-
-    sleep 1
-
-    log
+    # tail train_$(date +%Y%m%d_%H%M%S).log
 else
     source setup.sh
 
     compile
+
+    python3 inference_speed_test.py
 
     # download the chess database
     python3 -m src.games.chess.ChessDatabase 5 2000
