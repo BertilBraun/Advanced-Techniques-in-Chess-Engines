@@ -80,13 +80,13 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     for (auto &&[i, future] : futures) {
         const auto [policy, value] = future.get();
 
-        assert(std::abs(value) <= 1.0f + 1e-1f &&
+        assert(std::abs(value) <= 1.0f + 1e-2f &&
                "InferenceClient::inference_batch: value out of bounds");
         // if any element in policy is negative, or the sum of the policy is not close to 1.0, throw
         // an error.
         assert((policy < 0).any().item<bool>() == false &&
                "InferenceClient::inference_batch: policy contains negative values");
-        assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-1f &&
+        assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
                "InferenceClient::inference_batch: policy does not sum to 1.0");
 
         m_cache.insert(encodedBoards[i],
@@ -265,19 +265,8 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     std::vector<std::pair<torch::Tensor, float>> results;
     results.reserve(boards.size());
     for (int i = 0; i < policies.size(0); ++i) {
-        torch::Tensor policy = policies[i];
-        float value = values[i].item<float>();
-        // if value is nan or inf, set it to 0.0
-        if (std::isnan(value) || std::isinf(value)) {
-            log("Warning: InferenceClient::modelInference: value is NaN or Inf, setting to 0.0");
-            value = 0.0f;
-        }
-        // if policy contains NaN or Inf, set it to a uniform distribution
-        if (policy.isnan().any().item<bool>() || policy.isinf().any().item<bool>()) {
-            log("Warning: InferenceClient::modelInference: policy contains NaN or Inf, setting to "
-                "uniform distribution");
-            policy = torch::ones_like(policy) / policy.size(0);
-        }
+        const torch::Tensor policy = policies[i];
+        const float value = values[i].item<float>();
         results.emplace_back(policy, value);
     }
     return results;

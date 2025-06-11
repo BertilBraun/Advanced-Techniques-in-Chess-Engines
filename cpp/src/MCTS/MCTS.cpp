@@ -308,22 +308,6 @@ std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root, int n
         visitCounts.emplace_back(encodedMove, child->number_of_visits);
     }
 
-    if (!root->children.size()) {
-        log("Warning: MCTS root node has no children. This is unexpected.");
-        log("BoardFen:", root->board.fen());
-    }
-
-    if (root->number_of_visits == 0) {
-        log("Warning: MCTS root node has zero visits. This is unexpected.");
-        log("BoardFen:", root->board.fen());
-    }
-
-    // if result_score is nan warn
-    if (std::isnan(root->result_score)) {
-        log("Warning: MCTS root node has NaN result score. This is unexpected.");
-        log("BoardFen:", root->board.fen());
-    }
-
     return std::tuple{
         MCTSResult(root->result_score / static_cast<float>(root->number_of_visits), visitCounts,
                    root->children),
