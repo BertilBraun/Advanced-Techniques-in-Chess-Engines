@@ -30,6 +30,7 @@ class ModelEvaluation:
         self.iteration = iteration
         self.num_games = num_games
         self.args = args
+        self.num_searches_per_turn = num_searches_per_turn
 
     @property
     def mcts_args(self) -> MCTSParams:
@@ -39,9 +40,7 @@ class ModelEvaluation:
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
-            num_threads=int(
-                self.args.self_play.mcts.num_threads * self.args.cluster.num_self_play_nodes_on_cluster / 2
-            ),
+            num_threads=self.args.self_play.mcts.num_threads * self.args.cluster.num_self_play_nodes_on_cluster // 2,
             node_reuse_discount=1.0,
         )
 
@@ -116,7 +115,7 @@ class ModelEvaluation:
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search(
-                [(board.board.fen(), INVALID_NODE, self.args.evaluation.num_searches_per_turn) for board in boards]
+                [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 
@@ -160,7 +159,7 @@ class ModelEvaluation:
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search(
-                [(board.board.fen(), INVALID_NODE, self.args.evaluation.num_searches_per_turn) for board in boards]
+                [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 

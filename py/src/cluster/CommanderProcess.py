@@ -135,7 +135,7 @@ class CommanderProcess:
 
                     # TODO gating params into args
                     gating_evaluation = ModelEvaluation(
-                        iteration + 1, self.args, num_games=100, num_searches_per_turn=16
+                        iteration + 1, self.args, num_games=100, num_searches_per_turn=32
                     )
                     results = gating_evaluation.play_two_models_search(
                         model_save_path(current_best_iteration, self.args.save_path)
@@ -152,6 +152,7 @@ class CommanderProcess:
                     )
 
                     result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
+                    result_score = results.wins / (results.wins + results.losses)  # win rate with draws ignored
                     log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
                     # TODO make this a parameter in args
                     if result_score > 0.53:  # 55% win rate
