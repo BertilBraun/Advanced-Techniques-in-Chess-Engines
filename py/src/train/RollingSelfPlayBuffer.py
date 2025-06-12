@@ -15,7 +15,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
-class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
+class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """
     Keeps a sliding window of recent SelfPlayDataset objects in RAM.
     • The window size in *iterations* comes from  args.training.sampling_window(i)

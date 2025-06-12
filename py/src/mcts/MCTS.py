@@ -209,11 +209,11 @@ class MCTS:
             if CURRENT_GAME == 'hex':
                 from src.games.hex.HexVisuals import display_node
 
-                display_node(roots[0], inspect_or_search=False, search_function=self.search)
+                display_node(roots[0], inspect_or_search=False, search_function=self.search)  # type: ignore
             elif CURRENT_GAME == 'chess':
                 from src.games.chess.ChessVisuals import display_node
 
-                display_node(roots[0], inspect_or_search=False, search_function=self.search)
+                display_node(roots[0], inspect_or_search=False, search_function=self.search)  # type: ignore
             else:
                 raise NotImplementedError(f'Visualization for {CURRENT_GAME} is not implemented')
 
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     board = CurrentBoard()
 
     if CURRENT_GAME == 'hex':
-        board.board = np.array(
+        board.board = np.array(  # type: ignore
             [
                 [0, 0, 0, 0, 0, 0, 0],
                 [0, 0, -1, -1, 1, 0, 0],

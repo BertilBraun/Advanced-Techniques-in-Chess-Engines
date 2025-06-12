@@ -18,7 +18,7 @@ from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
-class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, float]]):
+class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Each sample is represented by:
     state: torch.Tensor
     policy_targets: torch.Tensor

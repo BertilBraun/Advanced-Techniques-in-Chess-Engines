@@ -239,16 +239,16 @@ def ucb(node: MCTSNode, c_param: float, own_result_score: float) -> float:
     :return: The UCB1 score for the node.
     """
     result_score = node.result_score
-    virtual_loss = node.parent.children_virtual_losses[node.my_child_index]
-    number_of_visits = node.parent.children_number_of_visits[node.my_child_index]
-    policy = node.parent.children_policies[node.my_child_index]
+    virtual_loss = node.parent.children_virtual_losses[node.my_child_index]  # type: ignore
+    number_of_visits = node.parent.children_number_of_visits[node.my_child_index]  # type: ignore
+    policy = node.parent.children_policies[node.my_child_index]  # type: ignore
 
     if number_of_visits == 0:
         q_score = -own_result_score  # Init to loss (-1.0) for unvisited moves
     else:
         q_score = 1 - ((((result_score + virtual_loss) / number_of_visits) + 1) / 2)
 
-    visits_quotient = np.sqrt(number_of_visits) / (1 + node.parent.number_of_visits)
+    visits_quotient = np.sqrt(number_of_visits) / (1 + node.parent.number_of_visits)  # type: ignore
 
     u_score = c_param * policy * visits_quotient
 
