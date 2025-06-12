@@ -49,7 +49,10 @@ class SelfPlayProcess:
 
         while True:
             if running:
-                self.self_play.self_play()
+                try:
+                    self.self_play.self_play()
+                except Exception as e:
+                    log(f'Self playing failed with error: {e}')
 
                 if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)
