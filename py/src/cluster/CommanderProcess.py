@@ -1,15 +1,16 @@
+import time
 from typing import Generator
 import torch
-from torch.multiprocessing import Process, Pipe
+from torch.multiprocessing import Process
 from pathlib import Path
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
+from src.util.communication import Communication
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.util.PipeConnection import PipeConnection
 from src.util.save_paths import (
     get_latest_model_iteration,
     load_model_and_optimizer,
@@ -36,12 +37,14 @@ class CommanderProcess:
         self.run_id = run
         self.args = args
 
-        self.trainer_process: Process
-        self.commander_trainer_pipe: PipeConnection
+        self.communication_folder = f'communication/{self.run_id}'
+        self.communication = Communication(self.communication_folder)
+        self.communication.clear_all()
 
+        self.trainer_process: Process
         self.self_play_processes: list[Process] = []
-        self.commander_self_play_pipes: list[PipeConnection] = []
-        self.commander_self_play_pipes_by_device: dict[int, list[PipeConnection]] = {}
+
+        self.self_play_nodes_on_trainer_device: list[int] = []
 
         self.trainer_device_id = torch.cuda.device_count() - 1 if USE_GPU else 0
 
@@ -51,39 +54,30 @@ class CommanderProcess:
         # The Commander has a Pipe connection to each SelfPlay and InferenceServer
 
         # Trainer and Commander
-        trainer_commander_pipe, self.commander_trainer_pipe = Pipe(duplex=True)
-
         self.trainer_process = Process(
-            target=run_trainer_process, args=(self.run_id, self.args, trainer_commander_pipe, self.trainer_device_id)
+            target=run_trainer_process, args=(self.run_id, self.args, self.communication_folder, self.trainer_device_id)
         )
         self.trainer_process.start()
 
-        self.commander_self_play_pipes: list[PipeConnection] = []
         for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
             device_id = _get_device_id(node_id, self.args.cluster.num_self_play_nodes_on_cluster)
 
-            self_play_commander_pipe, commander_self_play_pipe = Pipe(duplex=False)
-            self.commander_self_play_pipes.append(commander_self_play_pipe)
-            self.commander_self_play_pipes_by_device.setdefault(device_id, []).append(commander_self_play_pipe)
-
             process = Process(
                 target=run_self_play_process,
-                args=(self.run_id, self.args, self_play_commander_pipe, device_id),
+                args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
             )
             process.start()
             self.self_play_processes.append(process)
+
+            if device_id == self.trainer_device_id:
+                self.self_play_nodes_on_trainer_device.append(node_id)
+
+        log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
 
     def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
 
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
-
-        log('Setting up connections...')
-        self._setup_connections()
-        log('Connections set up.')
-
-        # Start CPU usage logger for one SelfPlay process
-        self.commander_self_play_pipes[0].send(f'START USAGE LOGGER:{self.run_id}')
 
         starting_iteration = get_latest_model_iteration(self.args.save_path)
         log(f'Starting training at iteration {starting_iteration}.')
@@ -92,23 +86,26 @@ class CommanderProcess:
 
         current_best_iteration = starting_iteration
 
-        for pipe in self.commander_self_play_pipes:
-            with log_exceptions('SelfPlay setup'):
-                pipe.send(f'LOAD MODEL: {current_best_iteration}')
-                pipe.send(f'START AT ITERATION: {starting_iteration}')
+        log('Setting up connections...')
+        self._setup_connections()
+        log('Connections set up.')
+
+        # Start CPU usage logger for one SelfPlay process
+        self.communication.send_to_id('START USAGE LOGGER', self.self_play_nodes_on_trainer_device[0])
+
+        # NOTE: Order is important here for the SelfPlayProcess communication.
+        self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
+        self.communication.boardcast(f'START AT ITERATION: {starting_iteration}')
 
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 log(f'Starting iteration {iteration}.')
-                self.commander_trainer_pipe.send(f'START AT ITERATION: {iteration}')
-                for pipe in self.commander_self_play_pipes:
-                    with log_exceptions('SelfPlay setup'):
-                        pipe.send(f'START AT ITERATION: {iteration}')
+                self.communication.boardcast(f'START AT ITERATION: {iteration}')
 
                 # Wait for Trainer to finish
-                train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
-                yield iteration, train_stats
+                while not self.communication.is_received(f'TRAINING FINISHED: {iteration}'):
+                    time.sleep(0.1)
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
@@ -120,11 +117,7 @@ class CommanderProcess:
                 # lot(f'Finished evaluation process for iteration {iteration}.')
 
         log('Training complete. Sending STOP to all processes.')
-        for pipe in self._all_pipes():
-            try:
-                pipe.send('STOP')
-            except BrokenPipeError:
-                pass
+        self.communication.boardcast('STOP')
 
         self.trainer_process.kill()
         for process in self.self_play_processes:
@@ -141,19 +134,13 @@ class CommanderProcess:
         )
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
-    def _all_processes(self) -> list[Process]:
-        return self.self_play_processes + [self.trainer_process]
-
-    def _all_pipes(self) -> list[PipeConnection]:
-        return self.commander_self_play_pipes + [self.commander_trainer_pipe]
-
     def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
         # gating
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
             # TODO only stop processes on the gating device and make the portion a hyperparameter
-            for pipe in self.commander_self_play_pipes_by_device[self.trainer_device_id][::2]:
+            for node_id in self.self_play_nodes_on_trainer_device[::2]:
                 # only stop half of the self-play processes for gating
-                pipe.send('STOP SELF PLAY')
+                self.communication.send_to_id('STOP SELF PLAY', node_id)
 
             # TODO gating params into args
             gating_evaluation = ModelEvaluation(
@@ -185,11 +172,11 @@ class CommanderProcess:
             if result_score > 0.53:  # 55% win rate
                 log(f'Gating evaluation passed at iteration {iteration}.')
                 current_best_iteration = iteration + 1
-                for pipe in self.commander_self_play_pipes:
-                    pipe.send(f'LOAD MODEL: {current_best_iteration}')
+                self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
             else:
                 log(
-                    f'Gating evaluation failed at iteration {iteration}. Keeping current best model {current_best_iteration}.'
+                    f'Gating evaluation failed at iteration {iteration}.'
+                    f'Keeping current best model {current_best_iteration}.'
                 )
 
             log_scalar('gating/current_best_iteration', current_best_iteration, iteration)

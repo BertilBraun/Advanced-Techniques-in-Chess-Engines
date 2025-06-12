@@ -150,8 +150,6 @@ class SelfPlayCpp:
         for spg in self.self_play_games:
             spg.already_expanded_node = INVALID_NODE
 
-        log(f'Set MCTS for iteration {iteration} with {self.num_searches_per_turn} searches per turn.')
-
     @timeit
     def search(self, boards: list[tuple[str, NodeId, int]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'

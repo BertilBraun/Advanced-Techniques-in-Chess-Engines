@@ -6,10 +6,10 @@ import torch.multiprocessing as mp
 from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS
+from src.util.communication import Communication
 from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
-from src.util.PipeConnection import PipeConnection
 from src.util.profiler import start_cpu_usage_logger
 
 if USE_CPP:
@@ -18,9 +18,9 @@ else:
     from src.self_play.SelfPlayPy import SelfPlayPy as SelfPlay
 
 
-def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int):
-    assert commander_pipe.readable and not commander_pipe.writable, 'Commander pipe must be readable and not writable.'
-
+def run_self_play_process(
+    run: int, args: TrainingArgs, communication_folder: str, device_id: int, node_id: int
+) -> None:
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)
@@ -30,7 +30,7 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
     torch.manual_seed(mp.current_process().pid)
     np.random.seed(mp.current_process().pid)
 
-    self_play_process = SelfPlayProcess(args, commander_pipe, device_id)
+    self_play_process = SelfPlayProcess(args, communication_folder, device_id=device_id, node_id=node_id, run_id=run)
     with log_exceptions(f'Self play process {device_id} crashed.'), TensorboardWriter(run, 'self_play'):
         self_play_process.run()
 
@@ -38,10 +38,14 @@ def run_self_play_process(run: int, args: TrainingArgs, commander_pipe: PipeConn
 class SelfPlayProcess:
     """This class provides functionality to run the self play process. It runs self play games and saves the dataset to disk. It listens to the commander for messages to start and stop the self play process."""
 
-    def __init__(self, args: TrainingArgs, commander_pipe: PipeConnection, device_id: int) -> None:
+    def __init__(
+        self, args: TrainingArgs, communication_folder: str, device_id: int, node_id: int, run_id: int
+    ) -> None:
         self.args = args
         self.self_play = SelfPlay(device_id, args)
-        self.commander_pipe = commander_pipe
+        self.communication = Communication(communication_folder)
+        self.node_id = node_id
+        self.run_id = run_id
 
     def run(self):
         current_iteration = -1
@@ -65,25 +69,22 @@ class SelfPlayProcess:
                     self._save_dataset(current_iteration)
                     running = False
 
-            if self.commander_pipe.poll():
-                message = self.commander_pipe.recv()
-                assert isinstance(message, str), f'Expected message to be a string, got {message}'
-                if message == 'STOP':
-                    break
-                elif message.startswith('START AT ITERATION:'):
+            if self.communication.is_received('STOP'):
+                break
+            if self.communication.try_receive_from_id('START USAGE LOGGER', self.node_id):
+                start_cpu_usage_logger(self.run_id, 'self_play')
+            if self.communication.try_receive_from_id('STOP SELF PLAY', self.node_id):
+                self._save_dataset(current_iteration)
+                running = False
+
+            for iteration in range(current_iteration + 1, self.args.num_iterations):
+                if self.communication.is_received(f'START AT ITERATION: {iteration}'):
                     self._save_dataset(current_iteration)
-                    current_iteration = int(message.split(':')[-1])
+                    current_iteration = iteration
                     running = True
-                elif message.startswith('LOAD MODEL:'):
+                if self.communication.is_received(f'LOAD MODEL: {iteration}'):
                     self._save_dataset(current_iteration)
-                    model_iteration = int(message.split(':')[-1])
-                    self.self_play.update_iteration(model_iteration)
-                elif message.startswith('START USAGE LOGGER:'):
-                    run_id = int(message.split(':')[-1])
-                    start_cpu_usage_logger(run_id, 'self_play')
-                elif message == 'STOP SELF PLAY':
-                    self._save_dataset(current_iteration)
-                    running = False
+                    self.self_play.update_iteration(iteration)
 
         log('Self play process stopped.')
 

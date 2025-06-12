@@ -107,6 +107,15 @@ private:
 
 PyMCTSNode get_node(MCTS &self, NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
 
+
+MCTSResults pySearch(MCTS &self, const std::vector<std::tuple<std::string, NodeId, int>> &boards) {
+    try {
+        return self.search(boards);
+    } catch (const std::exception &e) {
+        throw py::value_error(e.what());
+    }
+}
+
 // ——————————————————————————————————————————————
 // Bind everything with pybind11:
 PYBIND11_MODULE(AlphaZeroCpp, m) {
@@ -179,7 +188,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),
              py::arg("mcts_args"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("search", &MCTS::search, py::arg("boards"),
+        .def("search", &pySearch, py::arg("boards"),
              R"pbdoc(
                  Run MCTS search on a list of boards.
                  `boards` should be a list of tuples: (fen_str: str, prev_node: int, num_searches: int).
