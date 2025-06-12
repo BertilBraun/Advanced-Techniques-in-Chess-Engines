@@ -100,7 +100,7 @@ class CommanderProcess:
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
-                lot(f'Starting iteration {iteration}.')
+                log(f'Starting iteration {iteration}.')
                 self.commander_trainer_pipe.send(f'START AT ITERATION: {iteration}')
                 for pipe in self.commander_self_play_pipes:
                     with log_exceptions('SelfPlay setup'):
