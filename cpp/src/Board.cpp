@@ -85,9 +85,9 @@ std::vector<Move> Board::validMoves() const {
 double Board::approximateResultScore() const {
     int materialValue = 0;
     // For each piece type, count white pieces minus black pieces.
-    for (PieceType pt : PIECE_TYPES) {
-        const Bitboard whiteBB = m_pos.pieces(pt, WHITE);
-        const Bitboard blackBB = m_pos.pieces(pt, BLACK);
+    for (const PieceType pt : PIECE_TYPES) {
+        const Bitboard whiteBB = m_pos.pieces(WHITE, pt);
+        const Bitboard blackBB = m_pos.pieces(BLACK, pt);
 
         const int white_count = popcount(whiteBB);
         const int black_count = popcount(blackBB);
