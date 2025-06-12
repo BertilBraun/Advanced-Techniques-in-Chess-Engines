@@ -100,7 +100,7 @@ class CommanderProcess:
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
-                print(f'Starting iteration {iteration}.')
+                lot(f'Starting iteration {iteration}.')
                 self.commander_trainer_pipe.send(f'START AT ITERATION: {iteration}')
                 for pipe in self.commander_self_play_pipes:
                     with log_exceptions('SelfPlay setup'):
@@ -110,61 +110,14 @@ class CommanderProcess:
                 train_stats: TrainingStats = self.commander_trainer_pipe.recv()  # type: ignore
                 yield iteration, train_stats
 
-                # gating
-                with TensorboardWriter(self.run_id, 'gating', postfix_pid=False):
-                    # TODO only stop processes on the gating device and make the portion a hyperparameter
-                    for pipe in self.commander_self_play_pipes_by_device[self.trainer_device_id][::2]:
-                        # only stop half of the self-play processes for gating
-                        pipe.send('STOP SELF PLAY')
-
-                    # TODO gating params into args
-                    gating_evaluation = ModelEvaluation(
-                        iteration + 1,
-                        self.args,
-                        device_id=self.trainer_device_id,
-                        num_games=100,
-                        num_searches_per_turn=64,
-                    )
-                    results = gating_evaluation.play_two_models_search(
-                        model_save_path(current_best_iteration, self.args.save_path)
-                    )
-
-                    log_scalars(
-                        'gating/gating',
-                        {
-                            'wins': results.wins,
-                            'losses': results.losses,
-                            'draws': results.draws,
-                        },
-                        iteration,
-                    )
-
-                    result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
-                    # win rate with draws ignored
-                    result_score = (
-                        results.wins / (results.wins + results.losses) if results.wins + results.losses > 0 else 0.0
-                    )
-                    log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
-                    # TODO make this a parameter in args
-                    if result_score > 0.53:  # 55% win rate
-                        log(f'Gating evaluation passed at iteration {iteration}.')
-                        current_best_iteration = iteration + 1
-                        for pipe in self.commander_self_play_pipes:
-                            pipe.send(f'LOAD MODEL: {current_best_iteration}')
-                    else:
-                        log(
-                            f'Gating evaluation failed at iteration {iteration}. Keeping current best model {current_best_iteration}.'
-                        )
-
-                    log_scalar('gating/current_best_iteration', current_best_iteration, iteration)
-                    log_scalar('gating/gating_score', result_score, iteration)
+                current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
                 # start EvaluationProcess
                 p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration + 1))
                 p.start()
-                print(f'Started evaluation process for iteration {iteration}.')
+                log(f'Started evaluation process for iteration {iteration}.')
                 # p.join()
-                # print(f'Finished evaluation process for iteration {iteration}.')
+                # lot(f'Finished evaluation process for iteration {iteration}.')
 
         log('Training complete. Sending STOP to all processes.')
         for pipe in self._all_pipes():
@@ -193,6 +146,56 @@ class CommanderProcess:
 
     def _all_pipes(self) -> list[PipeConnection]:
         return self.commander_self_play_pipes + [self.commander_trainer_pipe]
+
+    def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
+        # gating
+        with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
+            # TODO only stop processes on the gating device and make the portion a hyperparameter
+            for pipe in self.commander_self_play_pipes_by_device[self.trainer_device_id][::2]:
+                # only stop half of the self-play processes for gating
+                pipe.send('STOP SELF PLAY')
+
+            # TODO gating params into args
+            gating_evaluation = ModelEvaluation(
+                iteration + 1,
+                self.args,
+                device_id=self.trainer_device_id,
+                num_games=100,
+                num_searches_per_turn=64,
+            )
+            results = gating_evaluation.play_two_models_search(
+                model_save_path(current_best_iteration, self.args.save_path)
+            )
+
+            log_scalars(
+                'gating/gating',
+                {
+                    'wins': results.wins,
+                    'losses': results.losses,
+                    'draws': results.draws,
+                },
+                iteration,
+            )
+
+            result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
+            # win rate with draws ignored
+            result_score = results.wins / (results.wins + results.losses) if results.wins + results.losses > 0 else 0.0
+            log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
+            # TODO make this a parameter in args
+            if result_score > 0.53:  # 55% win rate
+                log(f'Gating evaluation passed at iteration {iteration}.')
+                current_best_iteration = iteration + 1
+                for pipe in self.commander_self_play_pipes:
+                    pipe.send(f'LOAD MODEL: {current_best_iteration}')
+            else:
+                log(
+                    f'Gating evaluation failed at iteration {iteration}. Keeping current best model {current_best_iteration}.'
+                )
+
+            log_scalar('gating/current_best_iteration', current_best_iteration, iteration)
+            log_scalar('gating/gating_score', result_score, iteration)
+
+        return current_best_iteration
 
 
 def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_count()) -> int:
