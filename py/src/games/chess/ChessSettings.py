@@ -36,7 +36,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=7, hidden_size=96)
+network = NetworkParams(num_layers=8, hidden_size=96)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
@@ -93,7 +93,7 @@ TRAINING_ARGS = TrainingArgs(
             num_parallel_searches=PARALLEL_SEARCHES,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.3,  # Based on AZ Paper
-            c_param=1.7,  # Based on MiniGO Paper
+            c_param=1.9,  # Based on MiniGO Paper
             min_visit_count=MIN_VISIT_COUNT,
             node_reuse_discount=0.5,
             num_threads=NUM_THREADS,
