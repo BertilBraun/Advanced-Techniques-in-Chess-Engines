@@ -52,8 +52,8 @@ struct MCTSStatistics {
     float averageDepth = 0.0f;        // Average depth of the search trees.
     float averageEntropy = 0.0f;      // Average entropy of the visit counts.
     float averageKLDivergence = 0.0f; // Average KL divergence of the visit counts.
-    int nodePoolCapacity = 0; // Total number of NodeIds that have ever been touched.
-    int liveNodeCount = 0;   // Number of currently live nodes in the pool.
+    int nodePoolCapacity = 0;         // Total number of NodeIds that have ever been touched.
+    int liveNodeCount = 0;            // Number of currently live nodes in the pool.
 };
 
 struct MCTSResults {
@@ -97,9 +97,12 @@ public:
 
     MCTSResults search(const std::vector<BoardTuple> &boards);
 
-    InferenceStatistics getInferenceStatistics() { resetTimes(); return m_client.getStatistics(); }
+    InferenceStatistics getInferenceStatistics() {
+        // resetTimes();
+        return m_client.getStatistics();
+    }
 
-    NodePool* getNodePool() { return &m_pool; }
+    NodePool *getNodePool() { return &m_pool; }
 
 private:
     InferenceClient m_client;
@@ -122,5 +125,5 @@ private:
     // Add Dirichlet noise to a vector of MoveScore.
     std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
-    MCTSNode * getBestChildOrBackPropagate(MCTSNode *root, float cParam);
+    MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 };

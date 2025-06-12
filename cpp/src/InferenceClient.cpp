@@ -159,19 +159,19 @@ InferenceStatistics InferenceClient::getStatistics() {
     stats.averageNumberOfPositionsInInferenceCall =
         static_cast<float>(m_totalEvals) / m_totalModelInferenceCalls;
 
-    log("Inference Client stats:");
-    log("  cache_hit_rate:", stats.cacheHitRate);
-    log("  unique_positions:", stats.uniquePositions);
-    log("  cache_size_mb:", stats.cacheSizeMB);
-    log("  average_number_of_positions_in_inference_call:",
-        stats.averageNumberOfPositionsInInferenceCall);
-
-    std::cout << "Inference Client stats:" << std::endl;
-    std::cout << "  cache_hit_rate: " << stats.cacheHitRate << "%" << std::endl;
-    std::cout << "  unique_positions: " << stats.uniquePositions << std::endl;
-    std::cout << "  cache_size_mb: " << stats.cacheSizeMB << " MB" << std::endl;
-    std::cout << "  average_number_of_positions_in_inference_call: "
-              << stats.averageNumberOfPositionsInInferenceCall << std::endl;
+    // log("Inference Client stats:");
+    // log("  cache_hit_rate:", stats.cacheHitRate);
+    // log("  unique_positions:", stats.uniquePositions);
+    // log("  cache_size_mb:", stats.cacheSizeMB);
+    // log("  average_number_of_positions_in_inference_call:",
+    //     stats.averageNumberOfPositionsInInferenceCall);
+    //
+    // std::cout << "Inference Client stats:" << std::endl;
+    // std::cout << "  cache_hit_rate: " << stats.cacheHitRate << "%" << std::endl;
+    // std::cout << "  unique_positions: " << stats.uniquePositions << std::endl;
+    // std::cout << "  cache_size_mb: " << stats.cacheSizeMB << " MB" << std::endl;
+    // std::cout << "  average_number_of_positions_in_inference_call: "
+    //           << stats.averageNumberOfPositionsInInferenceCall << std::endl;
 
     return stats;
 }
