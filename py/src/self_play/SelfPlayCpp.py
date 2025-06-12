@@ -156,7 +156,11 @@ class SelfPlayCpp:
     def search(self, boards: list[tuple[str, NodeId, int]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        return self.mcts.search(boards)
+        try:
+            return self.mcts.search(boards)
+        except Exception as e:
+            log(f'Error during MCTS search: {e}')
+            return self.search([(board[0], INVALID_NODE, board[2]) for board in boards])
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
