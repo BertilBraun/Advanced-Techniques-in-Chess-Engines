@@ -34,7 +34,7 @@ def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
 
 
 def log_scalars(name: str, values: dict[str, SupportsFloat], iteration: int | None = None) -> None:
-    if not _tb_check_active():
+    if not _tb_check_active() or not values:
         return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
@@ -58,6 +58,8 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int |
     values = values.reshape(-1)
     if isinstance(values, torch.Tensor):
         values = values.cpu().numpy()
+    if not values.size:
+        return
     assert _TB_SUMMARY is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
