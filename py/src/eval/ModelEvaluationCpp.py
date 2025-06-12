@@ -115,7 +115,7 @@ class ModelEvaluation:
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
-            results = opponent.search(
+            results = opponent.search(  # noqa: F821
                 [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
@@ -159,7 +159,7 @@ class ModelEvaluation:
 
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
-            results = current.search(
+            results = current.search(  # noqa: F821
                 [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]

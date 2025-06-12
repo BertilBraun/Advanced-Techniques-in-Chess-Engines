@@ -101,6 +101,7 @@ def main(dataset_paths: list[str]):
 
         os.makedirs(save_folder, exist_ok=True)
 
+        pre_iter = 0
         for pre_iter in range(NUM_EPOCHS - 1, -1, -1):
             if model_save_path(pre_iter, save_folder).exists():
                 model, optimizer = load_model_and_optimizer(

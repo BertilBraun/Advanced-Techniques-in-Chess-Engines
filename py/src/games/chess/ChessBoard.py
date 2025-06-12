@@ -29,7 +29,7 @@ class ChessBoard(Board[ChessMove]):
         self.board = chess.Board()
 
     @property
-    def current_player(self) -> Player:
+    def current_player(self) -> Player:  # type: ignore
         return 1 if self.board.turn == chess.WHITE else -1
 
     def make_move(self, move: ChessMove) -> None:

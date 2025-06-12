@@ -23,7 +23,7 @@ def display_board(move_index: int, gui: GUI):
         else:
             board.make_move(CurrentGame.decode_move(int(move), board))
 
-    gui.clear_highlights_and_redraw(lambda: CurrentGameVisuals.draw_pieces(board, gui))
+    gui.clear_highlights_and_redraw(lambda: CurrentGameVisuals.draw_pieces(board, gui))  # type: ignore
     gui.update_display()
 
 
