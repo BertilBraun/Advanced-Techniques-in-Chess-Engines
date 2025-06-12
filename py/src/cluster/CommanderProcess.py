@@ -60,19 +60,22 @@ class CommanderProcess:
         self.trainer_process.start()
 
         for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
-            device_id = _get_device_id(node_id, self.args.cluster.num_self_play_nodes_on_cluster)
+            self.self_play_processes.append(self._start_self_play_processes(node_id))
 
-            process = Process(
-                target=run_self_play_process,
-                args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
-            )
-            process.start()
-            self.self_play_processes.append(process)
-
-            if device_id == self.trainer_device_id:
+            if self._get_device_id(node_id) == self.trainer_device_id:
                 self.self_play_nodes_on_trainer_device.append(node_id)
 
         log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
+
+    def _start_self_play_processes(self, node_id: int) -> Process:
+        """Starts a SelfPlay process for the given node_id and returns the process."""
+        device_id = self._get_device_id(node_id)
+        process = Process(
+            target=run_self_play_process,
+            args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
+        )
+        process.start()
+        return process
 
     def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
@@ -99,6 +102,12 @@ class CommanderProcess:
 
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
+                for i, process in enumerate(list(self.self_play_processes)):
+                    if not process.is_alive():
+                        log(f'SelfPlay process {process.pid} is not alive. Restarting...')
+                        process.join(timeout=10)
+                        self.self_play_processes[i] = self._start_self_play_processes(i)
+
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 log(f'Starting iteration {iteration}.')
                 self.communication.boardcast(f'START AT ITERATION: {iteration}')
@@ -184,23 +193,25 @@ class CommanderProcess:
 
         return current_best_iteration
 
+    def _get_device_id(self, i: int) -> int:
+        # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
+        if not USE_GPU:
+            return 0
 
-def _get_device_id(i: int, total: int, num_devices: int = torch.cuda.device_count()) -> int:
-    # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
-    if not USE_GPU:
-        return 0
+        total: int = self.args.cluster.num_self_play_nodes_on_cluster
+        num_devices: int = torch.cuda.device_count()
 
-    if num_devices == 1:
-        log('Warning: Only one device available. Using device 0.')
-        return 0
+        if num_devices == 1:
+            log('Warning: Only one device available. Using device 0.')
+            return 0
 
-    assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
+        assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
 
-    num_on_each_device = total / num_devices
-    num_on_last_device = round((num_on_each_device) / 2)
+        num_on_each_device = total / num_devices
+        num_on_last_device = round((num_on_each_device) / 2)
 
-    if i < num_on_last_device:
-        return torch.cuda.device_count() - 1
+        if i < num_on_last_device:
+            return torch.cuda.device_count() - 1
 
-    device_id = (i - num_on_last_device) % (num_devices - 1)
-    return device_id
+        device_id = (i - num_on_last_device) % (num_devices - 1)
+        return device_id
