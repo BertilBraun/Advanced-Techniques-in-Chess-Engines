@@ -29,6 +29,8 @@ else
     conda create -n Chess python=3.10 -y
     conda activate Chess
     conda install -c conda-forge libstdcxx-ng libgcc-ng -y
+    conda install -c conda-forge 'cmake>=3.27' make gxx_linux-64 -y
+
 
     pip3 install -r requirements.txt
 
@@ -64,6 +66,8 @@ else
     echo "unbind C-b # Unbind the default prefix" >> ~/.tmux.conf
     echo "set -g prefix C-a # Set new prefix to Ctrl+a" >> ~/.tmux.conf
     echo "bind C-a send-prefix # Bind the new prefix key" >> ~/.tmux.conf
+
+    tmux source-file ~/.tmux.conf
 
 
     echo "cd ~/Advanced-Techniques-in-Chess-Engines/py" >> ~/.bashrc
