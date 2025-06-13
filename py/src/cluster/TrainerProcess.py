@@ -9,7 +9,7 @@ from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, TensorboardWriter
 from src.util.communication import Communication
 from src.util.exceptions import log_exceptions
-from src.util.log import log
+from src.util.log import error, log
 from src.util.profiler import start_cpu_usage_logger
 from src.util.timing import reset_times, timeit
 from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
@@ -56,11 +56,15 @@ class TrainerProcess:
 
             for iteration in range(last_iteration + 1, self.args.num_iterations):
                 if self.communication.is_received(f'START AT ITERATION: {iteration}'):
-                    training_stats = self.train(iteration)
-                    reset_times()
-                    log(f'Training finished for iteration {iteration}:', training_stats)
-                    self.communication.boardcast(f'TRAINING FINISHED: {iteration}')
-                    last_iteration = iteration
+                    try:
+                        training_stats = self.train(iteration)
+                        reset_times()
+                        log(f'Training finished for iteration {iteration}:', training_stats)
+                        self.communication.boardcast(f'TRAINING FINISHED: {iteration}')
+                        last_iteration = iteration
+                    except Exception as e:
+                        error(f'Error during training for iteration {iteration}: {e}')
+                        self.communication.boardcast('STOP')
 
             time.sleep(0.1)  # Prevent busy waiting
 
