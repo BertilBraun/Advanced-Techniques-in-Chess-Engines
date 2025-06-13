@@ -8,7 +8,7 @@ from src.Network import Network
 from src.settings import TORCH_DTYPE, log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import TrainingStats
-from src.util.log import log
+from src.util.log import error, log
 from src.util.timing import timeit
 
 
@@ -77,7 +77,18 @@ class Trainer:
             # BCE is not suitable for regression tasks and produces spikey outputs at the extremes, so we use MSE instead
             # value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
             # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
-            value_loss = F.mse_loss(value_output, value_targets)
+            try:
+                value_loss = F.mse_loss(value_output, value_targets)
+            except:
+                error('Value loss calculation failed.')
+                error(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
+                error('Value output:')
+                for i, v in enumerate(value_output):
+                    error(f'Value output[{i}]: {v.item()}')
+                error('Value targets:')
+                for i, v in enumerate(value_targets):
+                    error(f'Value targets[{i}]: {v.item()}')
+                raise
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
