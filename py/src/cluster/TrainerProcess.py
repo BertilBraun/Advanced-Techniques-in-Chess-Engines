@@ -62,6 +62,8 @@ class TrainerProcess:
                     self.communication.boardcast(f'TRAINING FINISHED: {iteration}')
                     last_iteration = iteration
 
+            time.sleep(0.1)  # Prevent busy waiting
+
         log('Training process stopped.')
 
     @timeit

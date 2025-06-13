@@ -1,4 +1,5 @@
 import random
+import time
 import numpy as np
 import torch
 import torch.multiprocessing as mp
@@ -68,6 +69,8 @@ class SelfPlayProcess:
                     log(f'Iteration {current_iteration} has enough games.')
                     self._save_dataset(current_iteration)
                     running = False
+            else:
+                time.sleep(0.1)  # Sleep to avoid busy waiting
 
             if self.communication.is_received('STOP'):
                 break

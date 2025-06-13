@@ -14,6 +14,7 @@ from src.Encoding import decode_board_state, encode_board_state
 from src.mcts.MCTS import action_probabilities
 from src.settings import TORCH_DTYPE, CurrentGame
 from src.util import random_id
+from src.util.log import warn
 from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
@@ -51,6 +52,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:
         assert len(visit_counts) > 0, 'Visit counts must not be empty'
         assert -1 - 1e-2 <= value_target <= 1 + 1e-2, f'Value target ({value_target}) must be in the range [-1, 1]'
+        # if value target is nan or inf, we skip the sample
+        if not (-1 - 1e-2 <= value_target <= 1 + 1e-2) or np.isnan(value_target) or np.isinf(value_target):
+            warn('Skipping sample with invalid value target:', value_target)
+            return
 
         self.encoded_states.append(encode_board_state(state))
         self.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
@@ -216,13 +221,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             new_ds.value_targets.append(self.value_targets[i])
 
         # carry over / patch stats
-        new_ds.stats = SelfPlayDatasetStats(
-            num_samples=num_samples,
-            num_games=self.stats.num_games,
-            game_lengths=self.stats.game_lengths,
-            total_generation_time=self.stats.total_generation_time,
-            resignations=self.stats.resignations,
-        )
+        new_ds.stats = self.stats.overwrite(num_samples=num_samples)
         return new_ds
 
     @timeit
@@ -240,6 +239,18 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
                     for visit_count in file['visit_counts']  # type: ignore
                 ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
+
+                # filter out all samples with empty visit counts or nan/inf value targets
+                filtered_indices = [
+                    i
+                    for i, vc in enumerate(dataset.visit_counts)
+                    if len(vc) > 0 and not np.isnan(dataset.value_targets[i] and not np.isinf(dataset.value_targets[i]))
+                ]
+                dataset.encoded_states = [dataset.encoded_states[i] for i in filtered_indices]
+                dataset.visit_counts = [dataset.visit_counts[i] for i in filtered_indices]
+                dataset.value_targets = [dataset.value_targets[i] for i in filtered_indices]
+
+                dataset.stats = dataset.stats.overwrite(num_samples=len(dataset.encoded_states))
 
                 return dataset
         except Exception as e:

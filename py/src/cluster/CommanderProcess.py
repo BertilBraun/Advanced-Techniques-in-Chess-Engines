@@ -114,7 +114,7 @@ class CommanderProcess:
 
                 # Wait for Trainer to finish
                 while not self.communication.is_received(f'TRAINING FINISHED: {iteration}'):
-                    time.sleep(0.1)
+                    time.sleep(0.1)  # Prevent busy waiting
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
