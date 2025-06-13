@@ -43,7 +43,8 @@ void testInferenceSpeed(int numBoards, int numIterations) {
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<float> duration = end - start;
         totalTime += duration.count();
-        std::cout << "Iteration " << i + 1 << ": Inference time: " << duration.count() << " seconds\n";
+        std::cout << "Iteration " << i + 1 << ": Inference time: " << duration.count()
+                  << " seconds\n";
         for (const Board *board : boards) {
             delete board; // Clean up the boards
         }
@@ -51,7 +52,8 @@ void testInferenceSpeed(int numBoards, int numIterations) {
 
     std::cout << "Total time: " << totalTime << " seconds\n";
     std::cout << "Average time per iteration: " << (totalTime / numIterations) << " seconds\n";
-    std::cout << "Average time per board: " << (totalTime / (numIterations * numBoards)) << " seconds\n";
+    std::cout << "Average time per board: " << (totalTime / (numIterations * numBoards))
+              << " seconds\n";
     std::cout << std::endl;
 
     resetTimes();
@@ -107,7 +109,6 @@ private:
 
 PyMCTSNode get_node(MCTS &self, NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
 
-
 MCTSResults pySearch(MCTS &self, const std::vector<std::tuple<std::string, NodeId, int>> &boards) {
     try {
         return self.search(boards);
@@ -124,8 +125,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     init(); // Initialize Stockfish engine
 
     m.def("test_inference_speed_cpp", &testInferenceSpeed,
-          "Test the inference speed of the InferenceClient",
-          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
+          "Test the inference speed of the InferenceClient", py::arg("numBoards") = 100,
+          py::arg("numIterations") = 10,
           R"pbdoc(
             Test the inference speed of the InferenceClient.
             Runs inference on a specified number of boards for a given number of iterations.
@@ -201,7 +202,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def("get_node", &get_node, py::arg("id"), R"pbdoc(
             Get a read-only handle to a specific MCTS node by its ID.
             Returns a `MCTSNode` object.
-        )pbdoc");
+        )pbdoc")
+        .def("clear_node_pool", &MCTS::clearNodePool,
+             R"pbdoc(
+                 Clear the MCTS node pool, releasing all nodes.
+             )pbdoc");
 
     // set NodeId type
     m.attr("NodeId") = py::int_(INVALID_NODE); // Use int type for NodeId
@@ -223,11 +228,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  to the parent node.
              )pbdoc")
         .def_property_readonly("is_terminal", &PyMCTSNode::is_terminal,
-                             R"pbdoc(
+                               R"pbdoc(
                                  Check if this node is a terminal node (game over).
                              )pbdoc")
         .def_property_readonly("is_fully_expanded", &PyMCTSNode::is_fully_expanded,
-                             R"pbdoc(
+                               R"pbdoc(
                                  Check if this node is fully expanded (has children).
                              )pbdoc")
         .def("__repr__", &PyMCTSNode::repr);

@@ -104,6 +104,10 @@ public:
 
     NodePool *getNodePool() { return &m_pool; }
 
+    void clearNodePool() {
+        m_pool.clear(); // Reset the node pool to a new instance.
+    }
+
 private:
     InferenceClient m_client;
     MCTSParams m_args;

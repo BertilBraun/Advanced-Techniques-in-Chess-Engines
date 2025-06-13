@@ -40,6 +40,14 @@ public:
     // How many nodes are currently live (allocated but not freed)?
     [[nodiscard]] size_t liveNodeCount() const;
 
+    void clear() {
+        std::lock_guard<std::mutex> lock(m_poolMutex);
+        m_chunks.clear();
+        m_freeList.clear();
+        m_nextFreshId = 0;
+        addChunk(); // Always keep at least one chunk
+    }
+
 private:
     // Each entry is a unique_ptr to a heap‐allocated
     // std::array<std::optional<MCTSNode>,CHUNK_SIZE>.

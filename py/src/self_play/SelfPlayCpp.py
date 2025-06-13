@@ -158,6 +158,7 @@ class SelfPlayCpp:
             return self.mcts.search(boards)
         except Exception as e:
             warn(f'Error during MCTS search: {e}')
+            self.mcts.clear_node_pool()  # Clear the node pool to free memory
             return self.search([(board[0], INVALID_NODE, board[2]) for board in boards])
 
     def self_play(self) -> None:
