@@ -53,7 +53,7 @@ evaluation = EvaluationParams(
 )
 
 NUM_SELF_PLAYERS = 3 * torch.cuda.device_count() if USE_GPU else 2
-NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 4
+NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
 PARALLEL_GAMES = NUM_THREADS
 NUM_SEARCHES_PER_TURN = 800
 MIN_VISIT_COUNT = 2
