@@ -79,16 +79,17 @@ class Trainer:
             # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
             try:
                 value_loss = F.mse_loss(value_output, value_targets)
-            except:
-                error('Value loss calculation failed.')
-                error(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
-                error('Value output:')
+            except Exception as e:
+                print(f'Error calculating value loss: {e}')
+                print('Value loss calculation failed.')
+                print(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
+                print('Value output:')
                 for i, v in enumerate(value_output):
-                    error(f'Value output[{i}]: {v.item()}')
-                error('Value targets:')
+                    print(f'Value output[{i}]: {v.item()}')
+                print('Value targets:')
                 for i, v in enumerate(value_targets):
-                    error(f'Value targets[{i}]: {v.item()}')
-                raise
+                    print(f'Value targets[{i}]: {v.item()}')
+                exit()
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
