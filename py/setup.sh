@@ -53,7 +53,7 @@ else
     echo "alias tb='tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
     echo "alias start='git pull && nohup python3 -O train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
-    echo "alias stop='pkill -f train.py'" >> ~/.bashrc
+    echo "alias stop='pkill -f train.py && pkill -f \"python3 -O -c from multiprocessing.spawn import spawn_main\"'" >> ~/.bashrc
     echo "alias gpuH='salloc -p dev_accelerated-h100 --gres=gpu:1 -t 30'" >>  ~/.bashrc
     echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc
     echo "alias gpuH2='salloc -p dev_accelerated-h100 --gres=gpu:2 -t 30'" >> ~/.bashrc

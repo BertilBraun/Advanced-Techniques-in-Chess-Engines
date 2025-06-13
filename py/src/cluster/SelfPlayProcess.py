@@ -88,6 +88,7 @@ class SelfPlayProcess:
                 if self.communication.is_received(f'LOAD MODEL: {iteration}'):
                     self._save_dataset(current_iteration)
                     self.self_play.update_iteration(iteration)
+                    current_iteration = iteration
 
             self.communication.send_heartbeat(f'SELF PLAY {self.node_id}')
 
