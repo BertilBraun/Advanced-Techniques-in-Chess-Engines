@@ -52,7 +52,6 @@ if __name__ == '__main__':
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
     commander = CommanderProcess(run, TRAINING_ARGS)
-    for iteration, stats in commander.run():
-        log(f'Trainer finished at iteration {iteration}.')
+    commander.run()
 
     log('Training finished')

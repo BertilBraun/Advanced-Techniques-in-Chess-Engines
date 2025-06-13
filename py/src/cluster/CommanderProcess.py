@@ -77,7 +77,7 @@ class CommanderProcess:
         process.start()
         return process
 
-    def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
+    def run(self) -> None:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
 
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
@@ -115,6 +115,9 @@ class CommanderProcess:
                 # Wait for Trainer to finish
                 while not self.communication.is_received(f'TRAINING FINISHED: {iteration}'):
                     time.sleep(0.1)  # Prevent busy waiting
+                    if self.communication.is_received('STOP'):
+                        log('Received STOP command. Stopping training.')
+                        return
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
