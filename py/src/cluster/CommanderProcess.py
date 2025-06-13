@@ -167,8 +167,9 @@ class CommanderProcess:
             current_best_iteration = iteration + 1
             self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
             log(f'Gating evaluation skipped at iteration {iteration}. Using model {current_best_iteration}.')
-        else:
-            log(f'Running gating evaluation at iteration {iteration}.')
+            return current_best_iteration
+
+        log(f'Running gating evaluation at iteration {iteration}.')
 
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
             # TODO only stop processes on the gating device and make the portion a hyperparameter
@@ -205,9 +206,8 @@ class CommanderProcess:
             # TODO make this a parameter in args
             if result_score > 0.53:  # 55% win rate
                 log(f'Gating evaluation passed at iteration {iteration}.')
-                if not SKIP_GATING_EVALUATION:
-                    current_best_iteration = iteration + 1
-                    self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
+                current_best_iteration = iteration + 1
+                self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
             else:
                 log(
                     f'Gating evaluation failed at iteration {iteration}.'
