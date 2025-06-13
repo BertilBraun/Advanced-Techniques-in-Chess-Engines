@@ -203,7 +203,7 @@ class Trainer:
             except Exception as e:
                 print(f'Error calculating value loss: {e}')
                 print('Value loss calculation failed.')
-                exit()
+                raise e
 
         train_stats = TrainingStats(
             total_policy_loss.item(),
