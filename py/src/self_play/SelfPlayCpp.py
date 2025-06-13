@@ -13,7 +13,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
-from src.util.log import log
+from src.util.log import log, warn
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import reset_times, timeit
@@ -157,7 +157,7 @@ class SelfPlayCpp:
         try:
             return self.mcts.search(boards)
         except Exception as e:
-            log(f'Error during MCTS search: {e}')
+            warn(f'Error during MCTS search: {e}')
             return self.search([(board[0], INVALID_NODE, board[2]) for board in boards])
 
     def self_play(self) -> None:

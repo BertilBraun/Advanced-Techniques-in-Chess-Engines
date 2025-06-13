@@ -10,7 +10,7 @@ from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
 from src.util.communication import Communication
 from src.util.exceptions import log_exceptions
-from src.util.log import log
+from src.util.log import log, warn
 from src.util.save_paths import (
     get_latest_model_iteration,
     load_model_and_optimizer,
@@ -104,7 +104,7 @@ class CommanderProcess:
             for iteration in range(starting_iteration, self.args.num_iterations):
                 for i, process in enumerate(list(self.self_play_processes)):
                     if not process.is_alive():
-                        log(f'SelfPlay process {process.pid} is not alive. Restarting...')
+                        warn(f'SelfPlay process {process.pid} is not alive. Restarting...')
                         process.join(timeout=10)
                         self.self_play_processes[i] = self._start_self_play_processes(i)
 
@@ -144,7 +144,7 @@ class CommanderProcess:
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
     def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
-        # gating
+        log(f'Running gating evaluation at iteration {iteration}.')
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
             # TODO only stop processes on the gating device and make the portion a hyperparameter
             for node_id in self.self_play_nodes_on_trainer_device[::2]:

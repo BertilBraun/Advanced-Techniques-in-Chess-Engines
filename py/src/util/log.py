@@ -71,5 +71,15 @@ def log(
         log_file.close()
 
 
+def warn(*args, use_pprint: bool = False, **kwargs) -> None:
+    """Log a warning message."""
+    log(*args, level=LogLevel.WARNING, use_pprint=use_pprint, **kwargs)
+
+
+def error(*args, use_pprint: bool = False, **kwargs) -> None:
+    """Log an error message."""
+    log(*args, level=LogLevel.ERROR, use_pprint=use_pprint, **kwargs)
+
+
 def ratio(a: int, b: int) -> str:
     return f'{a}/{b} ({(a / b) * 100:.2f}%)'

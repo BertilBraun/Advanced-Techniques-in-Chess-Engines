@@ -13,7 +13,7 @@ from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
 from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.ZobristHasherNumpy import ZobristHasherNumpy
-from src.util.log import LogLevel, log
+from src.util.log import LogLevel, error, log, warn
 from src.util.timing import timeit
 from src.util.save_paths import load_model, model_save_path
 
@@ -64,8 +64,8 @@ class InferenceClient:
                 self.model.eval()
                 self.model.fuse_model()
                 break
-            except RuntimeError:
-                # log(f'Failed to load model: "{e}" retrying...', level=LogLevel.ERROR)
+            except RuntimeError as e:
+                warn(f'Failed to load model: "{e}" retrying...')
                 sleep(random() * 60)  # sleep for a random amount of time to avoid overloading the GPU VRAM
         else:
             raise RuntimeError('Failed to load model after 5 retries')
@@ -141,7 +141,7 @@ class InferenceClient:
         if self.model is None:
             if not hasattr(self, 'WARNING_SHOWN'):
                 self.WARNING_SHOWN = True
-                log('Model not loaded', level=LogLevel.ERROR)
+                error('Model not loaded')
             return [(np.full((CurrentGame.action_size,), 1 / CurrentGame.action_size), 0.0) for _ in boards]
 
         input_tensor = torch.from_numpy(np.array(boards)).to(dtype=TORCH_DTYPE, device=self.device, non_blocking=True)

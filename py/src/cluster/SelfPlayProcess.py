@@ -7,7 +7,7 @@ from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS
 from src.util.communication import Communication
-from src.util.log import log
+from src.util.log import log, warn
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
 from src.util.profiler import start_cpu_usage_logger
@@ -56,7 +56,7 @@ class SelfPlayProcess:
                 try:
                     self.self_play.self_play()
                 except Exception as e:
-                    log(f'Self playing failed with error: {e}')
+                    warn(f'Self playing failed with error: {e}')
 
                 if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)
