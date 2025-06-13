@@ -44,6 +44,8 @@ class Trainer:
         out_value_mean = torch.tensor(0.0, device=self.model.device)
         out_value_std = torch.tensor(0.0, device=self.model.device)
 
+        torch.autograd.set_detect_anomaly(True)
+
         def calculate_loss_for_batch(
             batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -80,6 +82,10 @@ class Trainer:
             value_loss = F.mse_loss(value_output, value_targets)
 
             print(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
+            # is finite check
+            print(
+                f'Value output finite: {torch.isfinite(value_output).all()}, value targets finite: {torch.isfinite(value_targets).all()}'
+            )
             print('Value output:')
             for i, v in enumerate(value_output):
                 print(f'Value output[{i}]: {v.item()}')
