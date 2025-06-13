@@ -77,19 +77,15 @@ class Trainer:
             # BCE is not suitable for regression tasks and produces spikey outputs at the extremes, so we use MSE instead
             # value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
             # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
-            try:
-                value_loss = F.mse_loss(value_output, value_targets)
-            except Exception as e:
-                print(f'Error calculating value loss: {e}')
-                print('Value loss calculation failed.')
-                print(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
-                print('Value output:')
-                for i, v in enumerate(value_output):
-                    print(f'Value output[{i}]: {v.item()}')
-                print('Value targets:')
-                for i, v in enumerate(value_targets):
-                    print(f'Value targets[{i}]: {v.item()}')
-                exit()
+            value_loss = F.mse_loss(value_output, value_targets)
+
+            print(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
+            print('Value output:')
+            for i, v in enumerate(value_output):
+                print(f'Value output[{i}]: {v.item()}')
+            print('Value targets:')
+            for i, v in enumerate(value_targets):
+                print(f'Value targets[{i}]: {v.item()}')
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
@@ -154,26 +150,31 @@ class Trainer:
         total_gradient_norm = torch.tensor(0.0, device=self.model.device)
 
         for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
-            policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
+            try:
+                policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
-            # Update learning rate before stepping the optimizer
-            # TODO? if batchIdx % 100 == 0:
-            # TODO?     batch_percentage = batchIdx / len(dataloader)
-            # TODO?     lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
-            # TODO?     for param_group in self.optimizer.param_groups:
-            # TODO?         param_group['lr'] = lr
+                # Update learning rate before stepping the optimizer
+                # TODO? if batchIdx % 100 == 0:
+                # TODO?     batch_percentage = batchIdx / len(dataloader)
+                # TODO?     lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
+                # TODO?     for param_group in self.optimizer.param_groups:
+                # TODO?         param_group['lr'] = lr
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            # TODO magic hyperparameter and sensible like this?
-            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            total_gradient_norm += norm.detach()
+                self.optimizer.zero_grad()
+                loss.backward()
+                # TODO magic hyperparameter and sensible like this?
+                norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                total_gradient_norm += norm.detach()
 
-            self.optimizer.step()
+                self.optimizer.step()
 
-            total_policy_loss += policy_loss.detach()
-            total_value_loss += value_loss.detach()
-            total_loss += loss.detach()
+                total_policy_loss += policy_loss.detach()
+                total_value_loss += value_loss.detach()
+                total_loss += loss.detach()
+            except Exception as e:
+                print(f'Error calculating value loss: {e}')
+                print('Value loss calculation failed.')
+                exit()
 
         train_stats = TrainingStats(
             total_policy_loss.item(),
