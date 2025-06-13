@@ -8,7 +8,7 @@ from src.Network import Network
 from src.settings import TORCH_DTYPE, log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import TrainingStats
-from src.util.log import error, log
+from src.util.log import log
 from src.util.timing import timeit
 
 

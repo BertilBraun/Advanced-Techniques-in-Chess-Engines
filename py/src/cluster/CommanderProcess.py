@@ -54,10 +54,7 @@ class CommanderProcess:
         # The Commander has a Pipe connection to each SelfPlay and InferenceServer
 
         # Trainer and Commander
-        self.trainer_process = Process(
-            target=run_trainer_process, args=(self.run_id, self.args, self.communication_folder, self.trainer_device_id)
-        )
-        self.trainer_process.start()
+        self.trainer_process = self._start_trainer_process()
 
         for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
             self.self_play_processes.append(self._start_self_play_processes(node_id))
@@ -73,6 +70,15 @@ class CommanderProcess:
         process = Process(
             target=run_self_play_process,
             args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
+        )
+        process.start()
+        return process
+
+    def _start_trainer_process(self) -> Process:
+        """Starts the Trainer process and returns the process."""
+        process = Process(
+            target=run_trainer_process,
+            args=(self.run_id, self.args, self.communication_folder, self.trainer_device_id),
         )
         process.start()
         return process
@@ -102,11 +108,7 @@ class CommanderProcess:
 
         with log_exceptions('Commander process'):
             for iteration in range(starting_iteration, self.args.num_iterations):
-                for i, process in enumerate(list(self.self_play_processes)):
-                    if not process.is_alive():
-                        warn(f'SelfPlay process {process.pid} is not alive. Restarting...')
-                        process.join(timeout=10)
-                        self.self_play_processes[i] = self._start_self_play_processes(i)
+                self._ensure_processes_are_running()
 
                 # send START AT ITERATION: iteration to Trainer and InferenceServers and SelfPlayers
                 log(f'Starting iteration {iteration}.')
@@ -136,6 +138,18 @@ class CommanderProcess:
             process.join(timeout=10)
         exit()
 
+    def _ensure_processes_are_running(self):
+        for i, process in enumerate(list(self.self_play_processes)):
+            if not process.is_alive() or not self.communication.is_alive(f'SELF PLAY {i}', timeout=2 * 60):
+                warn(f'SelfPlay process {process.pid} is not alive. Restarting...')
+                process.join(timeout=10)
+                self.self_play_processes[i] = self._start_self_play_processes(i)
+
+        if not self.trainer_process.is_alive() or not self.communication.is_alive('TRAINER', timeout=20 * 60):
+            warn(f'Trainer process {self.trainer_process.pid} is not alive. Restarting...')
+            self.trainer_process.join(timeout=10)
+            self.trainer_process = self._start_trainer_process()
+
     def _ensure_model_exists(self, starting_iteration: int) -> None:
         model, optimizer = load_model_and_optimizer(
             starting_iteration,
@@ -147,7 +161,15 @@ class CommanderProcess:
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
     def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
-        log(f'Running gating evaluation at iteration {iteration}.')
+        SKIP_GATING_EVALUATION = True  # TODO: make this a parameter in args
+        if SKIP_GATING_EVALUATION:
+            # for now, ignore gating, always update the model as quickly as possible
+            current_best_iteration = iteration + 1
+            self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
+            log(f'Gating evaluation skipped at iteration {iteration}. Using model {current_best_iteration}.')
+        else:
+            log(f'Running gating evaluation at iteration {iteration}.')
+
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
             # TODO only stop processes on the gating device and make the portion a hyperparameter
             for node_id in self.self_play_nodes_on_trainer_device[::2]:
@@ -183,8 +205,9 @@ class CommanderProcess:
             # TODO make this a parameter in args
             if result_score > 0.53:  # 55% win rate
                 log(f'Gating evaluation passed at iteration {iteration}.')
-                current_best_iteration = iteration + 1
-                self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
+                if not SKIP_GATING_EVALUATION:
+                    current_best_iteration = iteration + 1
+                    self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
             else:
                 log(
                     f'Gating evaluation failed at iteration {iteration}.'

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
 
 class Communication:
@@ -32,6 +33,15 @@ class Communication:
         file_path.unlink()
         return content
 
+    def try_read(self, identifier: str) -> str | None:
+        """Tries to read a message without raising an error if the file does not exist."""
+        file_path = self._file_path(identifier)
+        if not file_path.exists():
+            return None
+
+        with open(file_path, 'r') as f:
+            return f.read()
+
     def send_to_id(self, identifier: str, node_id: int) -> None:
         """Sends a message to a specific node by creating a file with the identifier and node ID."""
         file_path = self.folder / f'{identifier}_node_{node_id}.txt'
@@ -51,6 +61,18 @@ class Communication:
         """Clears all messages by removing all files in the folder."""
         for file in self.folder.glob('*.txt'):
             file.unlink()
+
+    def send_heartbeat(self, identifier: str) -> None:
+        """Sends a heartbeat message by creating a file with the identifier."""
+        self.boardcast(f'HEARTBEAT_{identifier}', str(time.time()))
+
+    def is_alive(self, identifier: str, timeout: float) -> bool:
+        """Checks if a heartbeat message has been received for the given identifier."""
+        content = self.try_read(f'HEARTBEAT_{identifier}')
+        if content is None:
+            return True
+
+        return float(content) > time.time() - timeout
 
     def _file_path(self, identifier: str) -> Path:
         """Returns the file path for a given identifier."""

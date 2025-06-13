@@ -89,6 +89,8 @@ class SelfPlayProcess:
                     self._save_dataset(current_iteration)
                     self.self_play.update_iteration(iteration)
 
+            self.communication.send_heartbeat(f'SELF PLAY {self.node_id}')
+
         log('Self play process stopped.')
 
     def _save_dataset(self, iteration: int):

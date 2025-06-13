@@ -67,6 +67,7 @@ class TrainerProcess:
                         self.communication.boardcast('STOP')
 
             time.sleep(0.1)  # Prevent busy waiting
+            self.communication.send_heartbeat('TRAINER')
 
         log('Training process stopped.')
 
