@@ -81,20 +81,6 @@ class Trainer:
             # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
             value_loss = F.mse_loss(value_output, value_targets)
 
-            print(f'Value output shape: {value_output.shape}, value targets shape: {value_targets.shape}')
-            # is finite check
-            print(
-                f'Value output finite: {torch.isfinite(value_output).all()}, value targets finite: {torch.isfinite(value_targets).all()}'
-            )
-            print('Value output:')
-            for i, v in enumerate(value_output):
-                if abs(v.item()) > 1.0 or not torch.isfinite(v):
-                    error(f'Value output[{i}] is out of bounds: {v.item()}')
-            print('Value targets:')
-            for i, v in enumerate(value_targets):
-                if abs(v.item()) > 1.0 or not torch.isfinite(v):
-                    error(f'Value targets[{i}] is out of bounds: {v.item()}')
-
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
                 count_unique_values_in_out_value = torch.unique(value_logits.to(torch.float32)).numel()
@@ -158,52 +144,27 @@ class Trainer:
         total_gradient_norm = torch.tensor(0.0, device=self.model.device)
 
         for batchIdx, batch in enumerate(tqdm(dataloader, desc='Training batches')):
-            try:
-                policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
+            policy_loss, value_loss, loss = calculate_loss_for_batch(batch)
 
-                # Update learning rate before stepping the optimizer
-                # TODO? if batchIdx % 100 == 0:
-                # TODO?     batch_percentage = batchIdx / len(dataloader)
-                # TODO?     lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
-                # TODO?     for param_group in self.optimizer.param_groups:
-                # TODO?         param_group['lr'] = lr
+            # Update learning rate before stepping the optimizer
+            # TODO? if batchIdx % 100 == 0:
+            # TODO?     batch_percentage = batchIdx / len(dataloader)
+            # TODO?     lr = self.args.learning_rate_scheduler(batch_percentage, base_lr)
+            # TODO?     for param_group in self.optimizer.param_groups:
+            # TODO?         param_group['lr'] = lr
 
-                # 0️⃣  make sure the forward pass was clean
-                if not torch.isfinite(loss):
-                    raise RuntimeError(f'NaN in forward loss at batch {batchIdx}')
+            self.optimizer.zero_grad()
+            loss.backward()
 
-                self.optimizer.zero_grad()
-                loss.backward()
+            # TODO magic hyperparameter and sensible like this?
+            norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            total_gradient_norm += norm.detach()
 
-                # 2️⃣  raw gradients (before clipping!)
-                for n, p in self.model.named_parameters():
-                    if p.grad is not None and not torch.isfinite(p.grad).all():
-                        raise RuntimeError(f'🚨 non-finite grad in {n} at batch {batchIdx}')
+            self.optimizer.step()
 
-                # TODO magic hyperparameter and sensible like this?
-                norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                total_gradient_norm += norm.detach()
-
-                self.optimizer.step()
-
-                # 5️⃣  parameters *after* the update
-                for n, p in self.model.named_parameters():
-                    if not torch.isfinite(p).all():
-                        raise RuntimeError(f'🚨 non-finite param {n} right after step at batch {batchIdx}')
-
-                # 6️⃣  Adam / RMSProp 1st-&-2nd-moment buffers
-                for n, p in self.model.named_parameters():
-                    for k, v in self.optimizer.state[p].items():
-                        if torch.is_tensor(v) and not torch.isfinite(v).all():
-                            raise RuntimeError(f'🚨 non-finite Adam state {k} for {n} at batch {batchIdx}')
-
-                total_policy_loss += policy_loss.detach()
-                total_value_loss += value_loss.detach()
-                total_loss += loss.detach()
-            except Exception as e:
-                print(f'Error calculating value loss: {e}')
-                print('Value loss calculation failed.')
-                raise e
+            total_policy_loss += policy_loss.detach()
+            total_value_loss += value_loss.detach()
+            total_loss += loss.detach()
 
         train_stats = TrainingStats(
             total_policy_loss.item(),

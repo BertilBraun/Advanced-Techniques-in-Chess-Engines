@@ -240,18 +240,6 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
                 ]
                 dataset.value_targets = [value_target for value_target in file['value_targets']]  # type: ignore
 
-                # filter out all samples with empty visit counts or nan/inf value targets
-                filtered_indices = [
-                    i
-                    for i, vc in enumerate(dataset.visit_counts)
-                    if len(vc) > 0 and not np.isnan(dataset.value_targets[i] and not np.isinf(dataset.value_targets[i]))
-                ]
-                dataset.encoded_states = [dataset.encoded_states[i] for i in filtered_indices]
-                dataset.visit_counts = [dataset.visit_counts[i] for i in filtered_indices]
-                dataset.value_targets = [dataset.value_targets[i] for i in filtered_indices]
-
-                dataset.stats = dataset.stats.overwrite(num_samples=len(dataset.encoded_states))
-
                 return dataset
         except Exception as e:
             from src.util.log import log, LogLevel
