@@ -168,13 +168,34 @@ class Trainer:
                 # TODO?     for param_group in self.optimizer.param_groups:
                 # TODO?         param_group['lr'] = lr
 
+                # 0️⃣  make sure the forward pass was clean
+                if not torch.isfinite(loss):
+                    raise RuntimeError(f'NaN in forward loss at batch {batchIdx}')
+
                 self.optimizer.zero_grad()
                 loss.backward()
+
+                # 2️⃣  raw gradients (before clipping!)
+                for n, p in self.model.named_parameters():
+                    if p.grad is not None and not torch.isfinite(p.grad).all():
+                        raise RuntimeError(f'🚨 non-finite grad in {n} at batch {batchIdx}')
+
                 # TODO magic hyperparameter and sensible like this?
                 norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 total_gradient_norm += norm.detach()
 
                 self.optimizer.step()
+
+                # 5️⃣  parameters *after* the update
+                for n, p in self.model.named_parameters():
+                    if not torch.isfinite(p).all():
+                        raise RuntimeError(f'🚨 non-finite param {n} right after step at batch {batchIdx}')
+
+                # 6️⃣  Adam / RMSProp 1st-&-2nd-moment buffers
+                for n, p in self.model.named_parameters():
+                    for k, v in self.optimizer.state[p].items():
+                        if torch.is_tensor(v) and not torch.isfinite(v).all():
+                            raise RuntimeError(f'🚨 non-finite Adam state {k} for {n} at batch {batchIdx}')
 
                 total_policy_loss += policy_loss.detach()
                 total_value_loss += value_loss.detach()
