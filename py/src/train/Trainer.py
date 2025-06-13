@@ -83,9 +83,13 @@ class Trainer:
             print('Value output:')
             for i, v in enumerate(value_output):
                 print(f'Value output[{i}]: {v.item()}')
+                if abs(v.item()) > 1.0:
+                    error(f'Value output[{i}] is out of bounds: {v.item()}')
             print('Value targets:')
             for i, v in enumerate(value_targets):
                 print(f'Value targets[{i}]: {v.item()}')
+                if abs(v.item()) > 1.0:
+                    error(f'Value targets[{i}] is out of bounds: {v.item()}')
 
             if False and (batchIdx % 50 == 1 or True):
                 count_unique_values_in_value_targets = torch.unique(value_targets.to(torch.float32)).numel()
