@@ -54,7 +54,7 @@ class TrainerProcess:
                 log('Received STOP command.')
                 break
 
-            for iteration in range(last_iteration + 1, self.args.num_iterations):
+            for iteration in range(self.args.num_iterations, last_iteration, -1):
                 if self.communication.is_received(f'START AT ITERATION: {iteration}'):
                     try:
                         training_stats = self.train(iteration)

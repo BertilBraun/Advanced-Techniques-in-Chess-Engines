@@ -288,9 +288,14 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     def save_to_path(self, file_path: Path) -> bool:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
+        tmp_folder = file_path.parent.parent / 'tmp'
+        tmp_folder.mkdir(parents=True, exist_ok=True)
+
+        tmp_file_path = tmp_folder / file_path.name
+
         # write a h5py file with states, policy targets and value targets in it
         try:
-            with h5py.File(file_path, 'w') as file:
+            with h5py.File(tmp_file_path, 'w') as file:
                 file.create_dataset('states', data=np.array(self.encoded_states))
                 max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
                 # padd all visit counts to the same length
@@ -305,11 +310,18 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
                 # write the stats information about the dataset, num_games, total_generation_time
                 file.attrs['stats'] = str(self.stats._asdict())
 
+            # move the tmp file to the final location
+            tmp_file_path.rename(file_path)
+
+            # if we reach this point, we successfully saved the dataset
             return True
         except Exception as e:
             from src.util.log import log, LogLevel
 
             log(f'Error saving dataset to {file_path}: {e}', level=LogLevel.DEBUG)
+            # if we fail to save, we delete the tmp file
+            if tmp_file_path.exists():
+                tmp_file_path.unlink()
             return False
 
     def save(self, folder_path: str | PathLike, iteration: int, suffix: str | None = None) -> Path:

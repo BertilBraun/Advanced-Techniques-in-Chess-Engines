@@ -1,12 +1,10 @@
 import time
-from typing import Generator
 import torch
 from torch.multiprocessing import Process
 from pathlib import Path
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 from src.train.TrainingArgs import TrainingArgs
-from src.train.TrainingStats import TrainingStats
 from src.settings import USE_GPU
 from src.util.communication import Communication
 from src.util.exceptions import log_exceptions
@@ -140,12 +138,14 @@ class CommanderProcess:
 
     def _ensure_processes_are_running(self):
         for i, process in enumerate(list(self.self_play_processes)):
+            # 2 minutes since we check in after every move was played, so not very long timeouts required
             if not process.is_alive() or not self.communication.is_alive(f'SELF PLAY {i}', timeout=2 * 60):
                 warn(f'SelfPlay process {process.pid} is not alive. Restarting...')
                 process.join(timeout=10)
                 self.self_play_processes[i] = self._start_self_play_processes(i)
 
-        if not self.trainer_process.is_alive() or not self.communication.is_alive('TRAINER', timeout=20 * 60):
+        # 2 hours since trainer is waiting for the games to be played for that iteration, and that can take a long time, then training may take an additional ~10 minutes
+        if not self.trainer_process.is_alive() or not self.communication.is_alive('TRAINER', timeout=2 * 60 * 60):
             warn(f'Trainer process {self.trainer_process.pid} is not alive. Restarting...')
             self.trainer_process.join(timeout=10)
             self.trainer_process = self._start_trainer_process()

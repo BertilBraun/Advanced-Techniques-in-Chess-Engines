@@ -80,7 +80,7 @@ class SelfPlayProcess:
                 self._save_dataset(current_iteration)
                 running = False
 
-            for iteration in range(current_iteration + 1, self.args.num_iterations):
+            for iteration in range(self.args.num_iterations, current_iteration, -1):
                 if self.communication.is_received(f'START AT ITERATION: {iteration}'):
                     self._save_dataset(current_iteration)
                     current_iteration = iteration
