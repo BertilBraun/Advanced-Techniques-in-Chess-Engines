@@ -100,6 +100,7 @@ class TrainerProcess:
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
+            self.communication.send_heartbeat('TRAINER')
             epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
@@ -133,6 +134,7 @@ class TrainerProcess:
 
             while current_games < target_games:
                 time.sleep(10)
+                self.communication.send_heartbeat('TRAINER')
                 new_games = games(iteration) + 0.5 * games(iteration - 1)
                 if new_games > current_games:
                     pbar.update(int(new_games - current_games))

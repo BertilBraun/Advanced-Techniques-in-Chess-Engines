@@ -131,24 +131,33 @@ class CommanderProcess:
         log('Training complete. Sending STOP to all processes.')
         self.communication.boardcast('STOP')
 
-        self.trainer_process.kill()
+        self.trainer_process.terminate()
         for process in self.self_play_processes:
-            process.join(timeout=10)
+            process.terminate()
         exit()
 
     def _ensure_processes_are_running(self):
         for i, process in enumerate(list(self.self_play_processes)):
-            # 2 minutes since we check in after every move was played, so not very long timeouts required
-            if not process.is_alive() or not self.communication.is_alive(f'SELF PLAY {i}', timeout=2 * 60):
-                warn(f'SelfPlay process {process.pid} is not alive. Restarting...')
-                process.join(timeout=10)
+            # 10 minutes since we check in after every move was played, so not very long timeouts required
+            if self._ensure_process_is_running(process, f'SELF PLAY {i}', timeout=10 * 60):
+                # if the process is not alive, restart it
                 self.self_play_processes[i] = self._start_self_play_processes(i)
 
-        # 2 hours since trainer is waiting for the games to be played for that iteration, and that can take a long time, then training may take an additional ~10 minutes
-        if not self.trainer_process.is_alive() or not self.communication.is_alive('TRAINER', timeout=2 * 60 * 60):
-            warn(f'Trainer process {self.trainer_process.pid} is not alive. Restarting...')
-            self.trainer_process.join(timeout=10)
+        # 30 minutes since training may take ~10 minutes and we want to make sure, not to restart the Trainer process too often
+        if self._ensure_process_is_running(self.trainer_process, 'TRAINER', timeout=30 * 60):
+            # if the Trainer process is not alive, restart it
             self.trainer_process = self._start_trainer_process()
+
+    def _ensure_process_is_running(self, process: Process, name: str, timeout: int) -> bool:
+        """Ensures that the given process is running and alive. If not, it returns true, to indicate that the process should be restarted."""
+        alive = process.is_alive()
+        heartbeat = self.communication.is_alive(name, timeout=timeout)
+        if not alive or not heartbeat:
+            warn(f'{name} process {process.pid} is not alive ({alive}) and heartbeat ({heartbeat}). Restarting...')
+            process.terminate()  # terminate the process
+            process.join(timeout=10)  # wait for the process to finish
+            return True
+        return False
 
     def _ensure_model_exists(self, starting_iteration: int) -> None:
         model, optimizer = load_model_and_optimizer(
