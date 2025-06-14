@@ -170,7 +170,7 @@ class CommanderProcess:
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
     def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
-        SKIP_GATING_EVALUATION = True  # TODO: make this a parameter in args
+        SKIP_GATING_EVALUATION = False  # TODO: make this a parameter in args
         if SKIP_GATING_EVALUATION:
             # for now, ignore gating, always update the model as quickly as possible
             current_best_iteration = iteration + 1
@@ -191,7 +191,7 @@ class CommanderProcess:
                 iteration + 1,
                 self.args,
                 device_id=self.trainer_device_id,
-                num_games=100,
+                num_games=200,
                 num_searches_per_turn=64,
             )
             results = gating_evaluation.play_two_models_search(
