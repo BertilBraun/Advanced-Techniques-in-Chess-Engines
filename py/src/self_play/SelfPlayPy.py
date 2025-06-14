@@ -19,7 +19,7 @@ from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.tensorboard import log_scalar
-from src.util.timing import reset_times, timeit
+from src.util.timing import timeit
 
 
 @dataclass(frozen=True)
@@ -215,8 +215,6 @@ class SelfPlayPy:
                     self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
                 else:
                     self.self_play_games[i] = new_spg
-
-        reset_times()
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
         self._add_training_data(spg, game_outcome)

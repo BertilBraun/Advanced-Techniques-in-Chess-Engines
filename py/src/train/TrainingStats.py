@@ -45,7 +45,9 @@ class TrainingStats:
         log_scalar(f'{prefix}/total_loss', self.total_loss, iteration)
         log_scalar(f'{prefix}/value_mean', self.value_mean, iteration)
         log_scalar(f'{prefix}/value_std', self.value_std, iteration)
-        log_scalar(f'{prefix}/gradient_norm', self.gradient_norm, iteration)
+        if self.gradient_norm > 0:
+            # Only log gradient norm if it's greater than 0 to avoid cluttering the logs
+            log_scalar(f'{prefix}/gradient_norm', self.gradient_norm, iteration)
 
     def __init__(
         self,

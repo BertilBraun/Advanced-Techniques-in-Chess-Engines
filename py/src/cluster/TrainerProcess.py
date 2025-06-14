@@ -152,10 +152,11 @@ class TrainerProcess:
 
         validation_dataset = SelfPlayDataset()
         if dataset_files:
-            while len(validation_dataset) == 0 and len(dataset_files) > 0:
+            # TODO validation dataset size in settings
+            while len(validation_dataset) < 2048 and len(dataset_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = dataset_files.pop(-1)
-                validation_dataset = SelfPlayDataset.load(validation_dataset_file)
+                validation_dataset += SelfPlayDataset.load(validation_dataset_file)
         else:
             previous_iteration_files = SelfPlayDataset.get_files_to_load_for_iteration(
                 self.args.save_path, iteration - 1
@@ -163,10 +164,10 @@ class TrainerProcess:
             assert previous_iteration_files, (
                 f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
             )
-            while len(validation_dataset) == 0 and len(previous_iteration_files) > 0:
+            while len(validation_dataset) < 2048 and len(previous_iteration_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = previous_iteration_files.pop(-1)
-                validation_dataset = SelfPlayDataset.load(validation_dataset_file)
+                validation_dataset += SelfPlayDataset.load(validation_dataset_file)
 
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer
@@ -189,7 +190,7 @@ class TrainerProcess:
 
 def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
     assert num_workers > 0, 'num_workers must be greater than 0'
-    num_workers = 2  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
+    num_workers = 4  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -198,7 +199,7 @@ def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_worker
         drop_last=False,
         persistent_workers=num_workers > 0,
         pin_memory=True,
-        prefetch_factor=8 if num_workers > 0 else None,
+        prefetch_factor=16 if num_workers > 0 else None,
         # fork is not available on Windows
         multiprocessing_context='fork' if num_workers > 0 and os.name != 'nt' else None,
     )

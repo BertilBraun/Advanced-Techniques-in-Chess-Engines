@@ -12,6 +12,7 @@ from src.util.log import log, warn
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
 from src.util.profiler import start_cpu_usage_logger
+from src.util.timing import reset_times
 
 if USE_CPP:
     from src.self_play.SelfPlayCpp import SelfPlayCpp as SelfPlay
@@ -85,6 +86,7 @@ class SelfPlayProcess:
                     self._save_dataset(current_iteration)
                     current_iteration = iteration
                     running = True
+                    reset_times()
                 if self.communication.is_received(f'LOAD MODEL: {iteration}'):
                     self._save_dataset(current_iteration)
                     self.self_play.update_iteration(iteration)

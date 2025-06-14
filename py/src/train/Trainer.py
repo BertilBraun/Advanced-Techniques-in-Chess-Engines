@@ -44,8 +44,6 @@ class Trainer:
         out_value_mean = torch.tensor(0.0, device=self.model.device)
         out_value_std = torch.tensor(0.0, device=self.model.device)
 
-        torch.autograd.set_detect_anomaly(True)
-
         def calculate_loss_for_batch(
             batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

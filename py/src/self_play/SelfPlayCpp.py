@@ -16,7 +16,7 @@ from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log, warn
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
-from src.util.timing import reset_times, timeit
+from src.util.timing import timeit
 
 from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, NodeId, MCTS, MCTSParams, MCTSResults
 
@@ -265,8 +265,6 @@ class SelfPlayCpp:
                     self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
                 else:
                     self.self_play_games[i] = new_spg
-
-        reset_times()
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
