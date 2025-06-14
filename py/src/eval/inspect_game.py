@@ -17,11 +17,7 @@ moves = moves.split(',')
 def display_board(move_index: int, gui: GUI):
     board = CurrentGame.get_initial_board()
     for move in moves[:move_index]:
-        if move.startswith('FEN'):
-            board = CurrentGame.get_initial_board()
-            board.set_fen(move[4:-1])
-        else:
-            board.make_move(CurrentGame.decode_move(int(move), board))
+        board.make_move(CurrentGame.decode_move(int(move), board))
 
     gui.clear_highlights_and_redraw(lambda: CurrentGameVisuals.draw_pieces(board, gui))  # type: ignore
     gui.update_display()

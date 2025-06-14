@@ -95,6 +95,7 @@ class TrainerProcess:
             validation_dataset,
             self.args.training.batch_size,
             self.args.training.num_workers,
+            drop_last=True,
         )
         train_stats: list[TrainingStats] = []
         valid_stats: list[TrainingStats] = []
@@ -188,7 +189,9 @@ class TrainerProcess:
         return validation_dataset
 
 
-def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int) -> torch.utils.data.DataLoader:
+def as_dataloader(
+    dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int, drop_last: bool = False
+) -> torch.utils.data.DataLoader:
     assert num_workers > 0, 'num_workers must be greater than 0'
     num_workers = 4  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
     return torch.utils.data.DataLoader(
@@ -196,7 +199,7 @@ def as_dataloader(dataset: torch.utils.data.Dataset, batch_size: int, num_worker
         batch_size=batch_size,
         num_workers=num_workers,
         shuffle=True,
-        drop_last=False,
+        drop_last=drop_last,
         persistent_workers=num_workers > 0,
         pin_memory=True,
         prefetch_factor=16 if num_workers > 0 else None,
