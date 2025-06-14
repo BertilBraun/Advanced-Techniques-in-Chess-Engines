@@ -98,7 +98,7 @@ class CommanderProcess:
         log('Connections set up.')
 
         # Start CPU usage logger for one SelfPlay process
-        self.communication.send_to_id('START USAGE LOGGER', self.self_play_nodes_on_trainer_device[0])
+        self.communication.send_to_id('START USAGE LOGGER', node_id=0)
 
         # NOTE: Order is important here for the SelfPlayProcess communication.
         self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
@@ -244,7 +244,7 @@ class CommanderProcess:
 
         num_on_each_device = total / num_devices
         num_on_last_device = round((num_on_each_device) / 2)
-        num_on_last_device = 1  # TODO temporarily run only trainer on the last device
+        num_on_last_device = 0  # TODO temporarily run only trainer on the last device
 
         if i < num_on_last_device:
             return torch.cuda.device_count() - 1
