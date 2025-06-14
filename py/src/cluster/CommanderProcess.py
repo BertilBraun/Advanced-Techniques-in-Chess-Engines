@@ -153,7 +153,7 @@ class CommanderProcess:
         alive = process.is_alive()
         heartbeat = self.communication.is_alive(name, timeout=timeout)
         if not alive or not heartbeat:
-            warn(f'{name} process {process.pid} is not alive ({alive}) and heartbeat ({heartbeat}). Restarting...')
+            warn(f'{name} process {process.pid} is alive ({alive}) and heartbeat ({heartbeat}). Restarting...')
             process.terminate()  # terminate the process
             process.join(timeout=10)  # wait for the process to finish
             return True
@@ -245,7 +245,7 @@ class CommanderProcess:
         num_on_each_device = total / num_devices
         num_on_last_device = round((num_on_each_device) / 2)
 
-        if i < num_on_last_device:
+        if i < num_on_last_device and False:  # TODO temporarily run only trainer on the last device
             return torch.cuda.device_count() - 1
 
         device_id = (i - num_on_last_device) % (num_devices - 1)
