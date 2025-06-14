@@ -244,8 +244,9 @@ class CommanderProcess:
 
         num_on_each_device = total / num_devices
         num_on_last_device = round((num_on_each_device) / 2)
+        num_on_last_device = 1  # TODO temporarily run only trainer on the last device
 
-        if i < num_on_last_device and False:  # TODO temporarily run only trainer on the last device
+        if i < num_on_last_device:
             return torch.cuda.device_count() - 1
 
         device_id = (i - num_on_last_device) % (num_devices - 1)
