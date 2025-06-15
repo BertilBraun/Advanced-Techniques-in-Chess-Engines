@@ -14,7 +14,7 @@ float MCTSNode::ucb(const float uCommon, const float parentScore) const {
     // most seem to init to 0.0
     // CrazyAra inits to -1.0
     // some init to -parentScore
-    float qScore = -1.0f;
+    float qScore = 0.0f;
     if (number_of_visits > 0) {
         qScore = -1 * (result_score + virtual_loss) / number_of_visits;
     }
