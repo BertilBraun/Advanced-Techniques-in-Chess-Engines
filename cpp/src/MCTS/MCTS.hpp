@@ -108,6 +108,8 @@ public:
         m_pool.clear(); // Reset the node pool to a new instance.
     }
 
+    InferenceClient *getInferenceClient() { return &m_client; }
+
 private:
     InferenceClient m_client;
     MCTSParams m_args;

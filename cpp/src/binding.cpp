@@ -2,6 +2,7 @@
 
 #include "InferenceClient.hpp"
 #include "MCTS/MCTS.hpp"
+#include "MoveEncoding.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -98,6 +99,7 @@ public:
             out.emplace_back(m_pool, cid);
         return out;
     }
+    NodeId id() const { return m_id; }
 
     std::string repr() const { return m_node->repr(); }
 
@@ -110,11 +112,31 @@ private:
 PyMCTSNode get_node(MCTS &self, NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
 
 MCTSResults pySearch(MCTS &self, const std::vector<std::tuple<std::string, NodeId, int>> &boards) {
+    // TODO: NOTE: for some reason, sometimes a bad optional access happens...
     try {
         return self.search(boards);
     } catch (const std::exception &e) {
         throw py::value_error(e.what());
     }
+}
+
+std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
+    const Board board(fen);
+
+    std::vector<const Board *> boards;
+    boards.push_back(&board);
+
+    const auto result = self.getInferenceClient()->inferenceBatch(boards);
+    assert(result.size() == 1 && "Inference should return exactly one result for one board");
+    const auto &[moves, value] = result[0];
+
+    std::vector<std::pair<int, float>> encodedMoves;
+    encodedMoves.reserve(moves.size());
+    for (const auto &[move, score] : moves) {
+        encodedMoves.emplace_back(encodeMove(move, &board), score);
+    }
+
+    return {encodedMoves, value};
 }
 
 // ——————————————————————————————————————————————
@@ -206,6 +228,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def("clear_node_pool", &MCTS::clearNodePool,
              R"pbdoc(
                  Clear the MCTS node pool, releasing all nodes.
+             )pbdoc")
+        .def("inference", &inference, py::arg("fen"),
+             R"pbdoc(
+                 Run inference on a given FEN string.
+                 Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
+                 The encoded moves are pairs of (encoded_move: int, score: float).
              )pbdoc");
 
     // set NodeId type
@@ -213,6 +241,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.attr("INVALID_NODE") = INVALID_NODE;
 
     py::class_<PyMCTSNode>(m, "MCTSNode")
+        .def_property_readonly("id", &PyMCTSNode::id)
         .def_property_readonly("parent", &PyMCTSNode::parent)
         .def_property_readonly("children", &PyMCTSNode::children)
         .def_property_readonly("fen", &PyMCTSNode::fen)

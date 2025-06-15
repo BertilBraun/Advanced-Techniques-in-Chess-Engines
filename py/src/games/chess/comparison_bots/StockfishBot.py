@@ -8,7 +8,6 @@ from src.games.chess.comparison_bots.util import *
 
 
 class ChessStockfishBot(Bot):
-    # 200ms of thinking time
     def __init__(self, skill_level: int = 4, max_time_to_think: float = 0.2) -> None:
         """Initializes the Stockfish player."""
         self.engine = chess.engine.SimpleEngine.popen_uci('stockfish')
@@ -25,7 +24,13 @@ class ChessStockfishBot(Bot):
         """Selects a move based on stockfish's evaluation."""
 
         result = self.engine.play(board.board, self.limit)
-        if not result.move:
+        move = result.move
+
+        if not move:
             raise ValueError('Stockfish did not return a move.')
 
-        return result.move
+        if move.promotion is not None:
+            # Handle promotion moves
+            move = Move(move.from_square, move.to_square, promotion=chess.QUEEN)
+
+        return move

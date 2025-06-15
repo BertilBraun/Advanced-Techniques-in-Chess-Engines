@@ -9,6 +9,7 @@ class Events:
     quit: bool
     left: bool
     right: bool
+    up: bool
 
 
 class BaseGridGameGUI:
@@ -96,7 +97,7 @@ class BaseGridGameGUI:
 
     def events_occurred(self) -> Events:
         # Poll for events
-        events = Events(False, False, False, False)
+        events = Events(False, False, False, False, False)
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 events.clicked = True
@@ -108,6 +109,8 @@ class BaseGridGameGUI:
                     events.left = True
                 if event.key == pygame.K_RIGHT:
                     events.right = True
+                if event.key == pygame.K_UP:
+                    events.up = True
 
         return events
 

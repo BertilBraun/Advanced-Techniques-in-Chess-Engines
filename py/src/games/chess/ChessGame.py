@@ -154,7 +154,27 @@ class ChessGame(Game[ChessMove]):
 
         return board
 
+    # TODO add the why for the castling moves
     def encode_move(self, move: ChessMove, board: ChessBoard) -> int:
+        # Handle castling moves
+        if board.board.is_castling(move):
+            # In python-chess, castling moves are represented as king moving two squares
+            # Need to convert to our representation format before lookup
+            king_square = move.from_square
+            # Determine if it's kingside or queenside castling
+            if move.to_square > king_square:  # Kingside
+                rook_square = king_square | 7  # h1 or h8
+            else:  # Queenside
+                rook_square = king_square & ~7  # a1 or a8
+
+            # If black is moving, mirror the move
+            if board.board.turn == chess.BLACK:
+                king_square = chess.square_mirror(king_square)
+                rook_square = chess.square_mirror(rook_square)
+
+            return self.move2index[DictMove(king_square, rook_square, None)]
+
+        # Handle non-castling moves
         if board.board.turn == chess.BLACK:
             move = chess.Move(
                 chess.square_mirror(move.from_square),
@@ -163,8 +183,37 @@ class ChessGame(Game[ChessMove]):
             )
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]
 
+    # TODO add the why
     def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:
         m = self.index2move[idx]
+
+        # Check if this is a castling move (king to rook)
+        king_square = m.from_square
+        rook_square = m.to_square
+
+        if board.board.turn == chess.BLACK:
+            king_square = chess.square_mirror(king_square)
+            rook_square = chess.square_mirror(rook_square)
+
+        # Check if move looks like a castling pattern
+        king_piece = board.board.piece_at(king_square)
+        rook_piece = board.board.piece_at(rook_square)
+
+        if (
+            king_piece
+            and king_piece.piece_type == chess.KING
+            and rook_piece
+            and rook_piece.piece_type == chess.ROOK
+            and king_piece.color == rook_piece.color
+        ):
+            # It's a castling move, compute the right destination square for the king
+            if rook_square > king_square:  # Kingside
+                king_dest = king_square + 2
+            else:  # Queenside
+                king_dest = king_square - 2
+            return chess.Move(king_square, king_dest)
+
+        # Handle regular moves
         if board.board.turn == chess.BLACK:
             return chess.Move(
                 chess.square_mirror(m.from_square),

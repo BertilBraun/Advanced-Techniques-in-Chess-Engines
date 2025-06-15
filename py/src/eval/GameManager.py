@@ -23,7 +23,7 @@ class GameManager:
             move = current_player.think(self.board)
 
             if verify_moves and move not in self.board.get_valid_moves():
-                raise ValueError(f'Invalid move {move} for player {current_player.name}')
+                raise ValueError(f'Invalid move {move} for player {current_player.name} on board:\n{self.board}')
 
             self.board.make_move(move)
             print(repr(self.board))

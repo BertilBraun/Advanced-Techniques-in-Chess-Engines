@@ -65,9 +65,12 @@ class SelfPlayGame:
         return self.board.quick_hash()
 
 
-def visit_count_probabilities(visit_counts: list[tuple[int, int]]) -> np.ndarray:
+def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
     """Convert visit counts to probabilities."""
-    assert visit_counts, 'Visit counts must not be empty'
+    if not visit_counts:
+        if not board.get_valid_moves() or board.is_game_over():
+            raise ValueError(f'No valid moves available to sample from: {board.board.fen()}')
+        return np.zeros(len(visit_counts), dtype=np.float32)
 
     probabilities = np.zeros(len(visit_counts), dtype=np.float32)
     for i, (_, count) in enumerate(visit_counts):
@@ -229,7 +232,7 @@ class SelfPlayCpp:
                     self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
                     continue
 
-            spg_action_probabilities = visit_count_probabilities(mcts_result.visits)
+            spg_action_probabilities = visit_count_probabilities(mcts_result.visits, spg.board)
 
             while np.sum(spg_action_probabilities) > 0:
                 new_spg, child_index, move = self._sample_self_play_game(
@@ -256,7 +259,10 @@ class SelfPlayCpp:
                 # No valid moves left which are not already being explored
                 # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
                 new_spg, _, _ = self._sample_self_play_game(
-                    spg, visit_count_probabilities(mcts_result.visits), mcts_result.children, mcts_result.visits
+                    spg,
+                    visit_count_probabilities(mcts_result.visits, spg.board),
+                    mcts_result.children,
+                    mcts_result.visits,
                 )
                 if new_spg.board.is_game_over():
                     # Game is over, add the game to the dataset
@@ -278,21 +284,7 @@ class SelfPlayCpp:
                 num_moves_after_resignation=len(spg.played_moves) - spg.resigned_at_move,
             )
 
-        return self._new_game()
-
-    def _new_game(self) -> SelfPlayGame:
-        # Create a new game instance
-        new_game = SelfPlayGame()
-
-        # Play a random moves to start the game in different states
-        random_moves_to_play = int(random.random() * 8)
-        for _ in range(random_moves_to_play):
-            new_game = new_game.expand(random.choice(new_game.board.get_valid_moves()))
-            if new_game.board.is_game_over():
-                # If the game is over, start a new game
-                return self._new_game()
-
-        return new_game
+        return new_game()
 
     @timeit
     def _sample_self_play_game(
@@ -388,3 +380,18 @@ def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: fl
     action_index = np.random.choice(len(action_probabilities), p=temperature_action_probabilities)
 
     return action_index
+
+
+def new_game() -> SelfPlayGame:
+    # Create a new game instance
+    game = SelfPlayGame()
+
+    # Play a random moves to start the game in different states
+    random_moves_to_play = int(random.random() * 8)
+    for _ in range(random_moves_to_play):
+        game = game.expand(random.choice(game.board.get_valid_moves()))
+        if game.board.is_game_over():
+            # If the game is over, start a new game
+            return new_game()
+
+    return game

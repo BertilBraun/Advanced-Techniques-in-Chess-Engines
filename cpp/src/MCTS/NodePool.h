@@ -70,7 +70,7 @@ private:
     void addChunk();
 
     // Placement‐construct a MCTSNode at slot `id`.
-    template <typename... Args> void constructAt(NodeId id, Args &&...args);
+    template <typename... Args> MCTSNode* constructAt(NodeId id, Args &&...args);
 
     // Given a NodeId, return the address of its slot in the correct chunk:
     [[nodiscard]] std::optional<MCTSNode> *slotPointer(NodeId id) const;
@@ -93,13 +93,13 @@ template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
             }
         }
     }
-    constructAt(newId, std::forward<Args>(args)...);
-    return get(newId);
+    return constructAt(newId, std::forward<Args>(args)...);
 }
 
-template <typename... Args> void NodePool::constructAt(NodeId id, Args &&...args) {
+template <typename... Args> MCTSNode* NodePool::constructAt(NodeId id, Args &&...args) {
     std::optional<MCTSNode> *opt = slotPointer(id);
     assert(!opt->has_value() && "Node already allocated at this ID");
     opt->emplace(std::forward<Args>(args)...);
     opt->value().myId = id;
+    return &opt->value();
 }

@@ -140,7 +140,6 @@ InferenceStatistics InferenceClient::getStatistics() {
     InferenceStatistics stats;
 
     if (m_totalEvals == 0 || m_cache.empty()) {
-        log("No cache statistics to log.");
         return stats; // Avoid division by zero.
     }
 

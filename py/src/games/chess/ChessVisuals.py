@@ -220,6 +220,16 @@ def display_node(
         if events.right:
             # Toggle between Inspect/Search modes
             inspect_or_search = not inspect_or_search
+        if events.up:
+            # Run search from the most visited child
+            if root.children:
+                most_visited_child = max(root.children, key=lambda child: child.number_of_visits, default=None)
+                if most_visited_child:
+                    print(
+                        f'Searching from most visited child: {most_visited_child.encoded_move_to_get_here} '
+                        f'with visits={most_visited_child.number_of_visits}'
+                    )
+                    search_function([(most_visited_child.board, None)])
 
         if events.clicked:
             clicked_cell = gui.get_cell_from_click()  # (row, col) or None
