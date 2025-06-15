@@ -193,7 +193,7 @@ def as_dataloader(
     dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int, drop_last: bool = False
 ) -> torch.utils.data.DataLoader:
     assert num_workers > 0, 'num_workers must be greater than 0'
-    num_workers = 4  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
+    num_workers = 2  # Since the Dataset is already loaded into memory and loading each sample is cheap, multiple workers are unnecessary
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
