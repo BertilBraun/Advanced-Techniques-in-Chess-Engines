@@ -7,12 +7,14 @@ MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move m
     : parent(parent), pool(pool), board(boardFen), move_to_get_here(move_to_get_here),
       policy(policy) {}
 
-float MCTSNode::ucb(const float uCommon) const {
+float MCTSNode::ucb(const float uCommon, const float parentScore) const {
     const float uScore = policy * uCommon / (1 + number_of_visits);
 
+    // TODO which is the best initializer for qScore?
     // most seem to init to 0.0
     // CrazyAra inits to -1.0
-    float qScore = 0.0; // Default to loss for unvisited moves
+    // some init to -parentScore
+    float qScore = -parentScore;
     if (number_of_visits > 0) {
         qScore = -1 * (result_score + virtual_loss) / number_of_visits;
     }
@@ -76,12 +78,13 @@ NodeId MCTSNode::bestChild(const float cParam) const {
     assert(!children.empty() && "Node has no children");
 
     const float uCommon = cParam * std::sqrt(number_of_visits);
+    const float parentScore = result_score / static_cast<float>(number_of_visits);
 
     NodeId bestChildId = children[0];
-    float bestScore = pool->get(children[0])->ucb(uCommon);
+    float bestScore = pool->get(children[0])->ucb(uCommon, parentScore);
 
     for (size_t i = 1; i < children.size(); ++i) {
-        const float score = pool->get(children[i])->ucb(uCommon);
+        const float score = pool->get(children[i])->ucb(uCommon, parentScore);
         if (score > bestScore) {
             bestScore = score;
             bestChildId = children[i];

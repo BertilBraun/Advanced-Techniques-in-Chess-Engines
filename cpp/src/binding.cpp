@@ -80,8 +80,10 @@ public:
     float virtual_loss() const { return m_node->virtual_loss; }
     float result() const { return m_node->result_score; }
     float policy() const { return m_node->policy; }
-    float ucb(float cParam, int parentNumberOfVisits) const {
-        return m_node->ucb(cParam * std::sqrt(parentNumberOfVisits));
+    float ucb(const float cParam) const {
+        const MCTSNode *parent = m_pool->get(m_node->parent);
+        return m_node->ucb(cParam * std::sqrt(parent->number_of_visits),
+                           parent->result_score / static_cast<float>(parent->number_of_visits));
     }
     bool is_terminal() const { return m_node->isTerminalNode(); }
     bool is_fully_expanded() const { return m_node->isFullyExpanded(); }
@@ -250,11 +252,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_property_readonly("virtual_loss", &PyMCTSNode::virtual_loss)
         .def_property_readonly("result", &PyMCTSNode::result)
         .def_property_readonly("policy", &PyMCTSNode::policy)
-        .def("ucb", &PyMCTSNode::ucb, py::arg("cParam"), py::arg("parentNumberOfVisits"),
+        .def("ucb", &PyMCTSNode::ucb, py::arg("cParam"),
              R"pbdoc(
-                 Calculate the UCB score for this node.
-                 `cParam` is the exploration parameter, and `parentNumberOfVisits` is the number of visits
-                 to the parent node.
+                 Calculate the UCB score for this node. `cParam` is the exploration parameter.
              )pbdoc")
         .def_property_readonly("is_terminal", &PyMCTSNode::is_terminal,
                                R"pbdoc(

@@ -15,7 +15,7 @@ public:
 
     bool isFullyExpanded() const { return !children.empty(); }
 
-    float ucb(float uCommon) const;
+    float ucb(float uCommon, float parentScore) const;
 
     void expand(const std::vector<MoveScore> &moves_with_scores);
 

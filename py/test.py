@@ -351,8 +351,7 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
                 gui.draw_text(r_to, c_to, f'{avg_val:.2f}@{vis_k}', offset=(0, 10))
 
                 #    - UCB score
-                parent_score = child.result if not root.parent else 1.0
-                ucb_score = child.ucb(1.7, root.visits)
+                ucb_score = child.ucb(1.7)
                 gui.draw_text(r_to, c_to, f'ucb:{ucb_score:.2f}', offset=(0, 30))
 
                 #    - Flags: 'F' if fully expanded, 'T' if terminal
