@@ -48,9 +48,10 @@ else
     python3 -m src.eval.DatasetTrainer reference/chess_database/memory_*/*.hdf5
 
     # copy the pretrained model to the training_data directory
-    cp reference/ChessGame/model_4.pt training_data/chess/model_15.pt
-    cp reference/ChessGame/model_4.pt training_data/chess/reference_model.pt
-    cp reference/ChessGame/model_4.jit.pt training_data/chess/reference_model.jit.pt
+    cp reference/ChessGame/model_5.pt training_data/chess/model_1.pt
+    cp reference/ChessGame/model_5.jit.pt training_data/chess/model_1.jit.pt
+    cp reference/ChessGame/model_5.pt training_data/chess/reference_model.pt
+    cp reference/ChessGame/model_5.jit.pt training_data/chess/reference_model.jit.pt
     
     # run train.py based on the pretrained model
     python3 train.py
