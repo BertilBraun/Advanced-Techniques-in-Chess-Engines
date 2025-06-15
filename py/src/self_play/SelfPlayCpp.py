@@ -3,6 +3,7 @@ import gc
 import random
 import time
 
+import chess
 import numpy as np
 from dataclasses import dataclass
 
@@ -63,6 +64,16 @@ class SelfPlayGame:
 
     def __hash__(self) -> int:
         return self.board.quick_hash()
+
+    def approximate_result_score(self) -> float:
+        """Get an approximate result score for the game from the perspective of the current player."""
+        # discount the score to account for uncertainty in the result
+        return sign(self.board.get_approximate_result_score()) * self.board.current_player * 0.8
+
+
+def sign(x: float) -> int:
+    """Return the sign of x as an integer."""
+    return (x > 0) - (x < 0)  # Returns 1 for positive, -1 for negative, 0 for zero
 
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
@@ -226,10 +237,19 @@ class SelfPlayCpp:
                     continue
 
             if CURRENT_GAME == 'chess':
+                # TODO make this a parameter
                 if len(spg.played_moves) >= 200:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                    self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
+                    self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
+                    continue
+
+                pieces = list(spg.board.board.piece_map().values())
+                white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
+                black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
+                if (white_pieces < 4 or black_pieces < 4) and len(spg.played_moves) >= 80 and random.random() < 0.2:
+                    # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
+                    self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
                     continue
 
             spg_action_probabilities = visit_count_probabilities(mcts_result.visits, spg.board)
