@@ -87,7 +87,7 @@ def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: Curren
     for i, (_, count) in enumerate(visit_counts):
         probabilities[i] = count
 
-    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()}'
+    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()} - visit_counts: {visit_counts}'
     return probabilities / np.sum(probabilities)
 
 
@@ -97,7 +97,7 @@ class SelfPlayCpp:
         self.args = args.self_play
         self.save_path = args.save_path
 
-        self.self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
+        self.self_play_games: list[SelfPlayGame] = [new_game() for _ in range(self.args.num_parallel_games)]
         self.dataset = SelfPlayDataset()
 
         self.iteration = 0
@@ -417,7 +417,7 @@ def new_game() -> SelfPlayGame:
     game = SelfPlayGame()
 
     # Play a random moves to start the game in different states
-    random_moves_to_play = int(random.random() * 8)
+    random_moves_to_play = 2 + int(random.random() * 6)
     for _ in range(random_moves_to_play):
         game = game.expand(random.choice(game.board.get_valid_moves()))
         if game.board.is_game_over():
