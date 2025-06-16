@@ -216,9 +216,8 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
-        # TODO eval against stockfish levels
         for level in (0, 1, 2, 3):
-            p = mp.Process(target=_eval_vs_stockfish, args=(level, run, iteration))
+            p = mp.Process(target=_eval_vs_stockfish, args=(run, model_evaluation, level, iteration))
             p.start()
             processes.append(p)
 
