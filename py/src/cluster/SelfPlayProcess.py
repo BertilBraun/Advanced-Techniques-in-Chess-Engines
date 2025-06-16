@@ -59,6 +59,9 @@ class SelfPlayProcess:
                     self.self_play.self_play()
                 except Exception as e:
                     warn(f'Self playing failed with error: {e}')
+                    import traceback
+
+                    traceback.print_exc()
 
                 if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
                     self._save_dataset(current_iteration)
