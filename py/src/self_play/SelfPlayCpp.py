@@ -81,7 +81,7 @@ def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: Curren
     if not visit_counts:
         if not board.get_valid_moves() or board.is_game_over():
             raise ValueError(f'No valid moves available to sample from: {board.board.fen()}')
-        return np.zeros(len(visit_counts), dtype=np.float32)
+        return np.ones(len(visit_counts), dtype=np.float32) / len(visit_counts)
 
     probabilities = np.zeros(len(visit_counts), dtype=np.float32)
     for i, (_, count) in enumerate(visit_counts):
