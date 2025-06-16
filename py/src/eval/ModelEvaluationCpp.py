@@ -157,7 +157,6 @@ class ModelEvaluation:
         engine = chess.engine.SimpleEngine.popen_uci('stockfish')
         engine.configure({'Skill Level': level})
         engine.configure({'Threads': 1})  # Limit to one thread for consistency
-        engine.configure({'MultiPV': 1})  # Only return the best move
         engine.configure({'Hash': 1024})  # Set hash size to 1GB
 
         def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:

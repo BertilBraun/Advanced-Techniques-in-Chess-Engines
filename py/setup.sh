@@ -31,6 +31,8 @@ else
     conda install -c conda-forge libstdcxx-ng libgcc-ng -y
     conda install -c conda-forge 'cmake>=3.27' make gxx_linux-64 -y
 
+    sudo apt install stockfish nano htop -y
+    echo "export PATH=\"\$PATH:/usr/games\"" >> ~/.bashrc
 
     pip3 install -r requirements.txt
 
