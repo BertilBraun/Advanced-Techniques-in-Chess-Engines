@@ -151,6 +151,38 @@ class ModelEvaluation:
 
         return results
 
+    def play_vs_stockfish(self, level: int) -> Results:
+        import chess.engine
+
+        engine = chess.engine.SimpleEngine.popen_uci('stockfish')
+        engine.configure({'Skill Level': level})
+        engine.configure({'Threads': 1})  # Limit to one thread for consistency
+        engine.configure({'MultiPV': 1})  # Only return the best move
+        engine.configure({'Hash': 1024})  # Set hash size to 1GB
+
+        def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+            def get_stockfish_policy(board: CurrentBoard) -> np.ndarray:
+                # Use Stockfish to get the best move
+                result = engine.play(board.board, chess.engine.Limit(time=0.01))
+                move = result.move
+
+                if not move:
+                    raise ValueError('Stockfish did not return a move.')
+
+                if move.promotion is not None:
+                    # Handle promotion moves
+                    move = chess.Move(move.from_square, move.to_square, promotion=chess.QUEEN)
+
+                return CurrentGame.encode_moves([move], board)
+
+            return [get_stockfish_policy(board) for board in boards]
+
+        results = self.play_vs_evaluation_model(stockfish_evaluator, f'stockfish_level_{level}')
+
+        engine.quit()  # Clean up the Stockfish engine
+
+        return results
+
     def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
         current = MCTS(
             InferenceClientParams(self.device_id, str(model_save_path(self.iteration, self.args.save_path)), 16),

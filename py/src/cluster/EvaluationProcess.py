@@ -20,7 +20,7 @@ def run_evaluation_process(run: int, args: TrainingArgs, iteration: int):
 
 
 def _eval_vs_dataset(run: int, model_evaluation: ModelEvaluation, iteration: int, dataset_path: str):
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, 'evaluation_dataset', postfix_pid=False):
         dataset = SelfPlayDataset.load(dataset_path)
         (
             policy_accuracy_at_1,
@@ -58,7 +58,7 @@ def _eval_vs_previous(
     if not previous_model_path.exists():
         return
 
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, f'evaluation_vs_{how_many_previous}_previous_model', postfix_pid=False):
         results = model_evaluation.play_two_models_search(previous_model_path)
         log(f'Results after playing {iteration} vs {iteration - how_many_previous}:', results)
 
@@ -80,12 +80,12 @@ def _eval_vs_iteration(
     if not model_path.exists():
         return
 
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, f'evaluation_vs_{iteration}_model', postfix_pid=False):
         results = model_evaluation.play_two_models_search(model_path)
         log(f'Results after playing vs model {iteration} at iteration {current_iteration}:', results)
 
         log_scalars(
-            f'evaluation/vs_model_{iteration}',
+            f'evaluation/vs_{iteration}_model',
             {
                 'wins': results.wins,
                 'losses': results.losses,
@@ -100,7 +100,7 @@ def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: i
     if not os.path.exists(reference_model_path):
         return
 
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, 'evaluation_vs_reference', postfix_pid=False):
         results = model_evaluation.play_two_models_search(reference_model_path)
         log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
 
@@ -116,7 +116,7 @@ def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: i
 
 
 def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str):
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, 'evaluation_vs_random', postfix_pid=False):
         results = model_evaluation.play_vs_random()
         log(f'Results after playing vs random at iteration {iteration}:', results)
 
@@ -132,12 +132,28 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
 
 
 def _eval_policy_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
-    with TensorboardWriter(run, 'evaluation', postfix_pid=False):
+    with TensorboardWriter(run, 'evaluation_policy_vs_random', postfix_pid=False):
         results = model_evaluation.play_policy_vs_random()
         log(f'Results after playing the current policy only vs random at iteration {iteration}:', results)
 
         log_scalars(
             'evaluation/policy_vs_random',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
+
+
+def _eval_vs_stockfish(run: int, model_evaluation: ModelEvaluation, level: int, iteration: int):
+    with TensorboardWriter(run, f'evaluation_vs_stockfish_level_{level}', postfix_pid=False):
+        results = model_evaluation.play_vs_stockfish(level)
+        log(f'Results after playing vs stockfish level {level} at iteration {iteration}:', results)
+
+        log_scalars(
+            f'evaluation/vs_stockfish_level_{level}',
             {
                 'wins': results.wins,
                 'losses': results.losses,
@@ -191,12 +207,18 @@ class EvaluationProcess:
             p.start()
             processes.append(p)
 
-        for iter in range(10, self.args.num_iterations + 1, 20):
+        for iter in range(10, self.args.num_iterations + 1, 10):
             if iter >= iteration:
                 continue
             p = mp.Process(
                 target=_eval_vs_iteration, args=(run, model_evaluation, iter, self.args.save_path, iteration)
             )
+            p.start()
+            processes.append(p)
+
+        # TODO eval against stockfish levels
+        for level in (0, 1, 2, 3):
+            p = mp.Process(target=_eval_vs_stockfish, args=(level, run, iteration))
             p.start()
             processes.append(p)
 
