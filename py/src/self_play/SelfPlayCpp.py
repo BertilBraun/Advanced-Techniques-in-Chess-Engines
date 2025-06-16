@@ -87,6 +87,7 @@ def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: Curren
     for i, (_, count) in enumerate(visit_counts):
         probabilities[i] = count
 
+    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()}'
     return probabilities / np.sum(probabilities)
 
 
