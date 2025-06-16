@@ -87,7 +87,7 @@ def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: Curren
     for i, (_, count) in enumerate(visit_counts):
         probabilities[i] = count
 
-    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()} - visit_counts: {visit_counts}'
+    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()}'
     return probabilities / np.sum(probabilities)
 
 
@@ -197,7 +197,7 @@ class SelfPlayCpp:
             num_moves_to_search = (
                 self.args.mcts.num_searches_per_turn
                 if should_run_full_search
-                else self.args.mcts.num_parallel_searches // 10
+                else self.args.mcts.num_searches_per_turn // 10
             )
 
             boards.append((spg.board.board.fen(), spg.already_expanded_node, num_moves_to_search))
