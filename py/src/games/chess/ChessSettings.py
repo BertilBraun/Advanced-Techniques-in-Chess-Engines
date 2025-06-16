@@ -47,7 +47,7 @@ training = TrainingParams(
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=64,
-    num_games=100,
+    num_games=200,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
@@ -55,7 +55,7 @@ evaluation = EvaluationParams(
 NUM_SELF_PLAYERS = 3 * torch.cuda.device_count() if USE_GPU else 2
 NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
 PARALLEL_GAMES = NUM_THREADS
-NUM_SEARCHES_PER_TURN = 800
+NUM_SEARCHES_PER_TURN = 1600
 MIN_VISIT_COUNT = 2
 PARALLEL_SEARCHES = 4
 
@@ -77,7 +77,7 @@ if not USE_GPU:  # TODO remove
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 32,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,

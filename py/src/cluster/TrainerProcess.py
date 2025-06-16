@@ -45,7 +45,8 @@ class TrainerProcess:
 
         self.communication = Communication(communication_folder)
 
-        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=2_000_000)
+        # TODO make max_buffer_samples configurable
+        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=4_000_000)
 
     def run(self):
         last_iteration = -1

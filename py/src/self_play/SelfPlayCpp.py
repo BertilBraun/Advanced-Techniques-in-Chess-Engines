@@ -68,7 +68,7 @@ class SelfPlayGame:
     def approximate_result_score(self) -> float:
         """Get an approximate result score for the game from the perspective of the current player."""
         # discount the score to account for uncertainty in the result
-        return sign(self.board.get_approximate_result_score()) * self.board.current_player * 0.8
+        return sign(self.board.get_approximate_result_score()) * self.board.current_player * 0.5
 
 
 def sign(x: float) -> int:
@@ -193,7 +193,11 @@ class SelfPlayCpp:
                 and len(spg.played_moves) > 10
             )
 
-            num_moves_to_search = self.args.mcts.num_searches_per_turn if should_run_full_search else 32
+            num_moves_to_search = (
+                self.args.mcts.num_searches_per_turn
+                if should_run_full_search
+                else self.args.mcts.num_parallel_searches // 10
+            )
 
             boards.append((spg.board.board.fen(), spg.already_expanded_node, num_moves_to_search))
 
@@ -247,7 +251,12 @@ class SelfPlayCpp:
                 pieces = list(spg.board.board.piece_map().values())
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if (white_pieces < 4 or black_pieces < 4) and len(spg.played_moves) >= 80 and random.random() < 0.2:
+                if (
+                    False
+                    and (white_pieces < 4 or black_pieces < 4)
+                    and len(spg.played_moves) >= 80
+                    and random.random() < 0.2
+                ):
                     # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
                     self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
                     continue
@@ -383,7 +392,7 @@ class SelfPlayCpp:
             moves.append(str(encoded_move))
             board.make_move(move)
 
-        log_text('starting_line', ','.join(moves[:7]), self.iteration)
+        log_text('starting_line', ','.join(moves[:7]))
 
         if random.random() < 0.01:
             # log a game every 1% of the time
