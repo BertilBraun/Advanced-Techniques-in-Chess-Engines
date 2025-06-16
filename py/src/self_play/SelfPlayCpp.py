@@ -337,7 +337,16 @@ class SelfPlayCpp:
         # only use temperature for the first X moves, then simply use the most likely move
         # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
         if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
-            child_index = np.argmax(visit_count_probabilities).item()
+            try:
+                child_index = np.argmax(visit_count_probabilities).item()
+            except ValueError:
+                warn(
+                    f'No valid moves available to sample from: {current.board.board.fen()}. '
+                    f'Visit counts: {visit_counts}. Visit count probabilities: {visit_count_probabilities}. '
+                )
+                # If there are no valid moves, just return the first child
+                child_index = 0
+
         else:
             child_index = _sample_from_probabilities(visit_count_probabilities, self.args.temperature)
 
