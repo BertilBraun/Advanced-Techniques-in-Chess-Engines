@@ -83,7 +83,7 @@ class Trainer:
         stats = TrainingStats(self.model.device)
         scaler = GradScaler()
 
-        for batch in tqdm(dataloader, desc='Training batches'):
+        for batch in tqdm(dataloader, desc='Train batches'):
             self.optimizer.zero_grad()
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
@@ -111,7 +111,7 @@ class Trainer:
         stats = TrainingStats(self.model.device)
 
         with torch.no_grad(), torch.autocast(dtype=torch.bfloat16, device_type=self.model.device.type):
-            for batch in tqdm(validation_dataloader, desc='Validation batches'):
+            for batch in tqdm(validation_dataloader, desc='Valid batches'):
                 policy_loss, value_loss, total_loss, value_output = self._calculate_loss_for_batch(batch)
 
                 # Collect statistics (no gradient norm for validation)

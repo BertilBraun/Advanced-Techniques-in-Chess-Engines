@@ -8,10 +8,10 @@ from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU, TensorboardWriter
 from src.util.exceptions import log_exceptions
-from src.util.log import log
+from src.util.log import error, log
 from src.util.profiler import start_cpu_usage_logger
 from src.util.timing import reset_times, timeit
-from src.util.save_paths import load_model_and_optimizer, save_model_and_optimizer
+from src.util.save_paths import load_model_and_optimizer, optimizer_save_path, save_model_and_optimizer
 from src.train.Trainer import Trainer
 from src.train.TrainingStats import TrainingStats
 
@@ -75,12 +75,22 @@ class TrainerProcess:
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
-            epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
+            try:
+                epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
+            except RuntimeError as e:
+                if 'returned nan values' in str(e):
+                    error('Training failed due to NaN values in the model output. Retrying with a fresh optimizer.')
+                    # Reset optimizer to avoid NaN issues
+                    optimizer_save_path(iteration, self.args.save_path).unlink(missing_ok=True)
+                    return self._train(iteration)
+                else:
+                    raise e
+
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
 
-            log('Training stats  : ', epoch_train_stats)
-            log('Validation stats: ', epoch_valid_stats)
+            log('Train stats  : ', epoch_train_stats)
+            log('Valid stats: ', epoch_valid_stats)
 
             if epoch_train_stats.value_std < 0.01:
                 log('Training stopped early due to low value std deviation.')
