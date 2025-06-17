@@ -41,12 +41,12 @@ class TrainerProcess:
 
     def run(self, iteration: int):
         with log_exceptions('Trainer process'), TensorboardWriter(self.run_id, 'trainer', postfix_pid=False):
-            training_stats = self._train(iteration)
+            self._train(iteration)
             reset_times()
-            log(f'Training finished for iteration {iteration}:', training_stats)
+            log(f'Training finished for iteration {iteration}')
 
     @timeit
-    def _train(self, iteration: int) -> TrainingStats:
+    def _train(self, iteration: int) -> None:
         model, optimizer = load_model_and_optimizer(
             iteration,
             self.args.network,
@@ -79,6 +79,9 @@ class TrainerProcess:
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
 
+            log('Training stats  : ', epoch_train_stats)
+            log('Validation stats: ', epoch_valid_stats)
+
             if epoch_train_stats.value_std < 0.01:
                 log('Training stopped early due to low value std deviation.')
                 exit()
@@ -88,12 +91,8 @@ class TrainerProcess:
                 log('Enough games played, stopping training for this iteration.')
                 break
 
-        combined_train_stats = TrainingStats.combine(train_stats)
-        combined_valid_stats = TrainingStats.combine(valid_stats)
-        combined_train_stats.log_to_tensorboard(iteration, 'train')
-        combined_valid_stats.log_to_tensorboard(iteration, 'validation')
-
-        return combined_train_stats
+        TrainingStats.combine(train_stats).log_to_tensorboard(iteration, 'train')
+        TrainingStats.combine(valid_stats).log_to_tensorboard(iteration, 'validation')
 
     @timeit
     def _wait_for_enough_training_samples(self, iteration):

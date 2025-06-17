@@ -138,10 +138,8 @@ class Trainer:
 
         # Training phase
         train_stats: TrainingStats = self._train_epoch(dataloader)
-        log(f'Training stats: {train_stats}')
 
         # Validation phase
         validation_stats: TrainingStats = self._validate_epoch(validation_dataloader)
-        log(f'Validation stats: {validation_stats}')
 
         return train_stats, validation_stats
