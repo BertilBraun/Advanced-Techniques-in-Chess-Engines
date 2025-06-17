@@ -119,6 +119,11 @@ class SelfPlayCpp:
                 np.array(inference_stats.nnOutputValueDistribution),
                 iteration - 1,
             )
+            log_scalar(
+                'inference/average_number_of_positions_in_inference_call',
+                inference_stats.averageNumberOfPositionsInInferenceCall,
+                iteration - 1,
+            )
 
             del self.mcts  # Clear the previous MCTS instance to free memory
             gc.collect()  # Force garbage collection to free memory

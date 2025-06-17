@@ -18,6 +18,7 @@ from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import TrainerProcess
 from src.util.tensorboard import TensorboardWriter, log_scalar, log_scalars
+from src.util.timing import reset_times
 
 
 class CommanderProcess:
@@ -97,7 +98,19 @@ class CommanderProcess:
                 self.communication.boardcast(f'START AT ITERATION: {iteration}')
 
                 # Wait for Trainer to finish
-                trainer.run(iteration)
+                with TensorboardWriter(self.run_id, 'trainer', postfix_pid=False):
+                    trainer.wait_for_enough_training_samples(iteration)
+                    trainer.load_all_memories_to_train_on_for_iteration(iteration)
+
+                    # TODO make the portion a hyperparameter
+                    for node_id in self.self_play_nodes_on_trainer_device[::2]:
+                        # only stop half of the self-play processes for gating
+                        self.communication.send_to_id('STOP SELF PLAY', node_id)
+
+                    trainer.train(iteration)
+                    log(f'Training finished for iteration {iteration}')
+
+                    reset_times()
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
@@ -156,11 +169,6 @@ class CommanderProcess:
         log(f'Running gating evaluation at iteration {iteration}.')
 
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
-            # TODO make the portion a hyperparameter
-            for node_id in self.self_play_nodes_on_trainer_device[::2]:
-                # only stop half of the self-play processes for gating
-                self.communication.send_to_id('STOP SELF PLAY', node_id)
-
             # TODO gating params into args
             gating_evaluation = ModelEvaluation(
                 iteration + 1,

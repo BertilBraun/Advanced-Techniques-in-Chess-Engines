@@ -6,11 +6,10 @@ from tqdm import tqdm
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU, TensorboardWriter
-from src.util.exceptions import log_exceptions
+from src.settings import USE_GPU
 from src.util.log import error, log
 from src.util.profiler import start_cpu_usage_logger
-from src.util.timing import reset_times, timeit
+from src.util.timing import timeit
 from src.util.save_paths import load_model_and_optimizer, optimizer_save_path, save_model_and_optimizer
 from src.train.Trainer import Trainer
 from src.train.TrainingStats import TrainingStats
@@ -38,15 +37,10 @@ class TrainerProcess:
 
         # TODO make max_buffer_samples configurable
         self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=4_000_000)
-
-    def run(self, iteration: int):
-        with log_exceptions('Trainer process'), TensorboardWriter(self.run_id, 'trainer', postfix_pid=False):
-            self._train(iteration)
-            reset_times()
-            log(f'Training finished for iteration {iteration}')
+        self.validation_dataset = SelfPlayDataset()
 
     @timeit
-    def _train(self, iteration: int) -> None:
+    def train(self, iteration: int) -> None:
         model, optimizer = load_model_and_optimizer(
             iteration,
             self.args.network,
@@ -57,16 +51,13 @@ class TrainerProcess:
 
         trainer = Trainer(model, optimizer, self.args.training)
 
-        self._wait_for_enough_training_samples(iteration)
-        validation_dataset = self._load_all_memories_to_train_on_for_iteration(iteration)
-
         dataloader = as_dataloader(
             self.rolling_buffer,
             self.args.training.batch_size,
             self.args.training.num_workers,
         )
         validation_dataloader = as_dataloader(
-            validation_dataset,
+            self.validation_dataset,
             self.args.training.batch_size,
             self.args.training.num_workers,
             drop_last=True,
@@ -82,7 +73,7 @@ class TrainerProcess:
                     error('Training failed due to NaN values in the model output. Retrying with a fresh optimizer.')
                     # Reset optimizer to avoid NaN issues
                     optimizer_save_path(iteration, self.args.save_path).unlink(missing_ok=True)
-                    return self._train(iteration)
+                    return self.train(iteration)
                 else:
                     raise e
 
@@ -105,7 +96,7 @@ class TrainerProcess:
         TrainingStats.combine(valid_stats).log_to_tensorboard(iteration, 'validation')
 
     @timeit
-    def _wait_for_enough_training_samples(self, iteration):
+    def wait_for_enough_training_samples(self, iteration):
         def games(iteration: int) -> int:
             """Returns the number of games in the given iteration."""
             return number_of_games_in_iteration(iteration, self.args.save_path)
@@ -123,7 +114,7 @@ class TrainerProcess:
                     current_games = new_games
 
     @timeit
-    def _load_all_memories_to_train_on_for_iteration(self, iteration: int) -> SelfPlayDataset:
+    def load_all_memories_to_train_on_for_iteration(self, iteration: int) -> None:
         window_size = self.args.training.sampling_window(iteration)
 
         log(
@@ -132,13 +123,13 @@ class TrainerProcess:
 
         dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
 
-        validation_dataset = SelfPlayDataset()
+        self.validation_dataset = SelfPlayDataset()
         if dataset_files:
             # TODO validation dataset size in settings
-            while len(validation_dataset) < 2048 and len(dataset_files) > 0:
+            while len(self.validation_dataset) < 2048 and len(dataset_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = dataset_files.pop(-1)
-                validation_dataset += SelfPlayDataset.load(validation_dataset_file)
+                self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
         else:
             previous_iteration_files = SelfPlayDataset.get_files_to_load_for_iteration(
                 self.args.save_path, iteration - 1
@@ -146,10 +137,10 @@ class TrainerProcess:
             assert previous_iteration_files, (
                 f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
             )
-            while len(validation_dataset) < 2048 and len(previous_iteration_files) > 0:
+            while len(self.validation_dataset) < 2048 and len(previous_iteration_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = previous_iteration_files.pop(-1)
-                validation_dataset += SelfPlayDataset.load(validation_dataset_file)
+                self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
 
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer
@@ -166,8 +157,6 @@ class TrainerProcess:
         self.rolling_buffer.log_all_dataset_stats(self.run_id)
 
         log(f'Loaded {self.rolling_buffer.stats.num_samples} samples from {self.rolling_buffer.stats.num_games} games')
-
-        return validation_dataset
 
 
 def as_dataloader(
