@@ -24,15 +24,15 @@ public:
 
     // Get a mutable reference to a MCTSNode (not thread‐safe by itself;
     // if you mutate fields, you should lock node_mutex inside MCTSNode).
-    [[nodiscard]] MCTSNode *get(NodeId id) {
+    [[nodiscard]] MCTSNode *get(const NodeId id) {
         TIMEIT("NodePool::get");
-        assert(isLive(id));
+        assert(isLive(id) && slotPointer(id)->has_value() && "NodeId is not live");
         return &slotPointer(id)->value();
     }
 
     [[nodiscard]] const MCTSNode *get(const NodeId id) const {
         TIMEIT("NodePool::get const");
-        assert(isLive(id));
+        assert(isLive(id) && slotPointer(id)->has_value() && "NodeId is not live");
         return &slotPointer(id)->value();
     }
 
@@ -99,7 +99,7 @@ template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
 template <typename... Args> MCTSNode* NodePool::constructAt(const NodeId id, Args &&...args) {
     assert(!isLive(id) && "Node already allocated at this ID");
     std::optional<MCTSNode> *opt = slotPointer(id);
-    if (opt->has_value()) opt->reset(); // TODO hack
+    assert(!opt->has_value() && "Node already allocated at this ID");
     opt->emplace(std::forward<Args>(args)...);
     opt->value().myId = id;
     return &opt->value();

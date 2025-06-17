@@ -10,11 +10,11 @@ NodePool::NodePool() {
 
 void NodePool::deallocateNode(const NodeId id) {
     std::lock_guard<std::mutex> lock(m_poolMutex);
-    assert(isLive(id));
+    assert(isLive(id) && "NodePool::deallocateNode: NodeId is not live");
     std::optional<MCTSNode> *ptr = slotPointer(id);
     // Call the destructor of the MCTSNode at this slot:
-    if (ptr->has_value())
-        ptr->reset(); // This will call the destructor
+    assert(ptr->has_value() && "NodePool::deallocateNode: NodeId is not live");
+    ptr->reset(); // This will call the destructor
     m_freeList.push_back(id);
 }
 
@@ -52,7 +52,8 @@ void NodePool::purge(const std::vector<NodeId> &idsToKeep) {
     for (NodeId id = 0; id < m_nextFreshId; ++id) {
         if (!present[id]) {
             const auto slot = slotPointer(id);
-            if (slot->has_value()) slot->reset();
+            if (slot->has_value())
+                slot->reset();
             m_freeList.push_back(id);
         }
     }

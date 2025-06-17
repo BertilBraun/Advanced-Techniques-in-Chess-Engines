@@ -109,15 +109,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     newBoardIndices.reserve(boards.size());
     newBoards.reserve(boards.size());
 
-    std::cout << "MCTS::searchGames: Preparing " << boards.size() << " boards for search."
-              << std::endl;
-
     for (const auto &[i, board] : enumerate(boards)) {
         const auto &[fen, id, runFullSearch] = board;
         if (id == INVALID_NODE || !m_pool.isLive(id)) {
-            std::cout << "MCTS::searchGames: Creating new root node for board " << fen
-                      << " (id: " << id << ", runFullSearch: " << runFullSearch << ")."
-                      << std::endl;
             MCTSNode *root = m_pool.allocateNode(fen, 1.0, Move::null(), INVALID_NODE, &m_pool);
 
             roots.push_back(root);
@@ -134,13 +128,7 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         }
     }
 
-    std::cout << "MCTS::searchGames: Prepared " << roots.size() << " roots for search."
-              << std::endl;
-
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
-
-    std::cout << "MCTS::searchGames: Inference completed for " << inferenceResults.size()
-              << " boards." << std::endl;
 
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
         const bool shouldRunFullSearch = get<2>(boards[rootIndex]);
@@ -154,9 +142,6 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
             roots[rootIndex]->expand(moves);
         }
     }
-
-    std::cout << "MCTS::searchGames: Expanded " << roots.size() << " root nodes." << std::endl;
-    std::cout << "MCTS::searchGames: Starting main search loop." << std::endl;
 
     // -----------------------------------------------------------------
     // 3.  Main search loop – several games in **this** thread.
@@ -180,12 +165,7 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         }
 
         parallelIterate(rootsToSearch);
-
-        std::cout << "MCTS::searchGames: Iterated over " << rootsToSearch.size()
-                  << " roots in this iteration." << std::endl;
     }
-
-    std::cout << "MCTS::searchGames: Main search loop finished." << std::endl;
 
     // -----------------------------------------------------------------
     // 4.  Collect the final best-move + statistics for every root.
@@ -195,8 +175,6 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     for (const auto *root : roots)
         results.emplace_back(gatherResult(root), mctsStatistics(root, &m_pool));
 
-    std::cout << "MCTS::searchGames: Gathered results for " << results.size() << " roots."
-              << std::endl;
     return results;
 }
 
@@ -218,8 +196,6 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
 
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
-
-    std::cout << "MCTS::search: Starting search for " << boards.size() << " boards." << std::endl;
 
     std::vector<NodeId> treeNodesToKeep;
 
@@ -245,9 +221,6 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
         futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
     }
 
-    std::cout << "MCTS::search: Waiting for " << futures.size() << " futures to complete."
-              << std::endl;
-
     std::vector<MCTSResult> results;
     MCTSStatistics stats;
     results.reserve(N);
@@ -260,8 +233,6 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
             results.emplace_back(result);
         }
     }
-
-    std::cout << "MCTS::search: Finished gathering results." << std::endl;
 
     stats.averageDepth /= static_cast<float>(N);
     stats.averageEntropy /= static_cast<float>(N);
@@ -331,31 +302,16 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     nodes.reserve(m_args.num_parallel_searches * roots.size());
     boards.reserve(m_args.num_parallel_searches * roots.size());
 
-    std::cout << "MCTS::parallelIterate: Starting parallel iteration for " << roots.size()
-              << " roots." << std::endl;
-
     for (MCTSNode *root : roots) {
-        if (root->myId == root->parent) {
-            throw std::runtime_error("MCTS::parallelIterate: The root node must have a parent. "
-                                     "This is likely a bug in the MCTS implementation.");
-        }
-        std::cout << "MCTS::parallelIterate: Processing root node: " << root->repr() << std::endl;
         for (int _ : range(m_args.num_parallel_searches)) {
             MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
             if (node != nullptr) {
-                std::cout << "MCTS::parallelIterate: Processing node: " << node->repr()
-                          << std::endl;
                 node->addVirtualLoss();
-                std::cout << "MCTS::parallelIterate: Added virtual loss to node: " << node->repr()
-                          << std::endl;
                 nodes.push_back(node);
                 boards.emplace_back(&node->board);
             }
         }
     }
-
-    std::cout << "MCTS::parallelIterate: Prepared " << nodes.size()
-              << " nodes for parallel inference." << std::endl;
 
     if (nodes.empty())
         return;
@@ -363,23 +319,11 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
 
-    std::cout << "MCTS::parallelIterate: Inference completed for " << results.size() << " nodes."
-              << std::endl;
-
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
-        std::cout << "MCTS::parallelIterate: Expanding node: " << node->repr()
-                  << " with moves size: " << moves.size() << " and value: " << value << std::endl;
         node->expand(moves);
-        std::cout << "MCTS::parallelIterate: Back propagating value: " << value
-                  << " for node: " << node->repr() << std::endl;
         node->backPropagateAndRemoveVirtualLoss(value);
-        std::cout << "MCTS::parallelIterate: Back propagation completed for node: " << node->repr()
-                  << std::endl;
     }
-
-    std::cout << "MCTS::parallelIterate: Finished parallel iteration for " << roots.size()
-              << " roots." << std::endl;
 }
 
 std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const {

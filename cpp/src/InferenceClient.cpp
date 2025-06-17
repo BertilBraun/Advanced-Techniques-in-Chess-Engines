@@ -108,8 +108,6 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             }
             // Sleep to avoid busy-waiting.
             std::this_thread::sleep_for(std::chrono::microseconds(10));
-            std::cout << "InferenceClient::inference_batch: waiting for result for board "
-                      << board->fen() << std::endl;
         }
 
         const auto &[moves, value] = result;
