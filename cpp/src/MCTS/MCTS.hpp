@@ -130,12 +130,14 @@ private:
     searchGames(const std::vector<BoardTuple> &boards);
 
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(const std::vector<MCTSNode *>& roots);
+    void parallelIterate(const std::vector<MCTSNode *> &roots);
 
     // Add Dirichlet noise to a vector of MoveScore.
     [[nodiscard]] std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
     [[nodiscard]] MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 
-    [[nodiscard]] std::vector<NodeId> setupNodeForTreeReuse(MCTSNode *root, bool shouldRunFullSearch);
+    void setupNodeForTreeReuse(MCTSNode *root, bool shouldRunFullSearch);
+
+    void addToNodesToKeep(std::vector<NodeId> &nodesToKeep, NodeId nodeId);
 };

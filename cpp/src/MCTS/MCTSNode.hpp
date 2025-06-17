@@ -43,6 +43,7 @@ public:
         if (!children.empty()) {
             ss.seekp(-2, ss.cur); // Remove the last comma and space
         }
+        ss << "])";
         return ss.str();
     }
 

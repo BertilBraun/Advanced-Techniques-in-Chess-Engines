@@ -187,7 +187,7 @@ class SelfPlayCpp:
             return self.mcts.search(boards)
         except Exception as e:
             warn(f'Error during MCTS search: {e}')
-            import traceback
+            import traceback  # TODO remove
 
             traceback.print_exc()
             self.mcts.clear_node_pool()  # Clear the node pool to free memory
@@ -221,7 +221,7 @@ class SelfPlayCpp:
 
         mcts_results = self.search(boards)
 
-        self.mcts.get_inference_statistics()
+        self.mcts.get_inference_statistics()  # TODO remove
         stats = mcts_results.mctsStats
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
@@ -276,7 +276,7 @@ class SelfPlayCpp:
     def _sample_self_play_game(
         self,
         current: SelfPlayGame,
-        children: list['NodeId'],
+        children: list[NodeId],
         visit_counts: list[tuple[int, int]],
     ) -> SelfPlayGame:
         # Sample a move from the action probabilities then create a new game state with that move
@@ -412,7 +412,7 @@ def new_game() -> SelfPlayGame:
     return game
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # TODO remove
     # Example usage
     print('Starting self-play with C++ backend...')
     sp = SelfPlayCpp(device_id=0, args=TRAINING_ARGS)

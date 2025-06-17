@@ -109,8 +109,6 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     newBoardIndices.reserve(boards.size());
     newBoards.reserve(boards.size());
 
-    std::vector<NodeId> treeNodesToKeep;
-
     std::cout << "MCTS::searchGames: Preparing " << boards.size() << " boards for search."
               << std::endl;
 
@@ -126,25 +124,18 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
 
             newBoardIndices.push_back(i);
             newBoards.emplace_back(&root->board);
-            treeNodesToKeep.push_back(root->myId);
         } else {
             // If the node is already expanded, we can use it directly.
             // It will have to be cleaned up later. (i.e. its parent and siblings will be removed
             // and visits discounted)
             MCTSNode *root = m_pool.get(id);
-            auto nodesToKeep = setupNodeForTreeReuse(root, runFullSearch);
-            treeNodesToKeep.insert(treeNodesToKeep.end(), nodesToKeep.begin(), nodesToKeep.end());
+            setupNodeForTreeReuse(root, runFullSearch);
             roots.push_back(root);
         }
     }
 
     std::cout << "MCTS::searchGames: Prepared " << roots.size() << " roots for search."
               << std::endl;
-
-    m_pool.purge(treeNodesToKeep);
-
-    std::cout << "MCTS::searchGames: Purged the node pool, keeping " << treeNodesToKeep.size()
-              << " nodes." << std::endl;
 
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
 
@@ -209,6 +200,19 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     return results;
 }
 
+void MCTS::addToNodesToKeep(std::vector<NodeId> &nodesToKeep, const NodeId nodeId) {
+    assert(m_pool.isLive(nodeId) &&
+           "MCTS::addToNodesToKeep: NodeId is not live, cannot add to nodesToKeep");
+    assert(nodeId != INVALID_NODE &&
+           "MCTS::addToNodesToKeep: NodeId is invalid, cannot add to nodesToKeep");
+
+    nodesToKeep.push_back(nodeId);
+
+    // Recursively add all children of the node to the list.
+    for (const NodeId childId : m_pool.get(nodeId)->children)
+        addToNodesToKeep(nodesToKeep, childId);
+}
+
 MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::search");
 
@@ -217,65 +221,55 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
 
     std::cout << "MCTS::search: Starting search for " << boards.size() << " boards." << std::endl;
 
-    try {
-        const std::size_t N = boards.size();
-        const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
-        const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
+    std::vector<NodeId> treeNodesToKeep;
 
-        std::vector<std::future<std::vector<std::tuple<MCTSResult, MCTSStatistics>>>> futures;
-        futures.reserve(P);
-
-        for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
-            auto begin = boards.begin() + slice * sliceSize;
-            auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
-            std::vector<BoardTuple> myBoards(begin, end);
-
-            futures.emplace_back(
-                m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
-        }
-
-        std::cout << "MCTS::search: Waiting for " << futures.size() << " futures to complete."
-                  << std::endl;
-
-        std::vector<MCTSResult> results;
-        MCTSStatistics stats;
-        results.reserve(N);
-        for (auto &fut : futures) {
-            for (const auto &[result, rootStats] : fut.get()) {
-                stats.averageDepth += rootStats.averageDepth;
-                stats.averageEntropy += rootStats.averageEntropy;
-                stats.averageKLDivergence += rootStats.averageKLDivergence;
-
-                results.emplace_back(result);
-            }
-        }
-
-        std::cout << "MCTS::search: Finished gathering results." << std::endl;
-
-        stats.averageDepth /= static_cast<float>(N);
-        stats.averageEntropy /= static_cast<float>(N);
-        stats.averageKLDivergence /= static_cast<float>(N);
-        stats.nodePoolCapacity = m_pool.capacity();
-        stats.liveNodeCount = m_pool.liveNodeCount();
-
-        return {.results = results, .mctsStats = stats};
-    } catch (const std::exception &e) {
-        // If an exception occurs, we print everything possible to debug to the console.
-        std::cerr << "MCTS::search: Exception occurred: " << e.what() << std::endl;
-        std::cerr << "MCTS::search: Boards size: " << boards.size() << std::endl;
-        for (const auto &[fen, id, _] : boards) {
-            std::cerr << "MCTS::search: Board FEN: " << fen << ", NodeId: " << id << std::endl;
-        }
-
-        // print the stacktrace
-        try {
-            throw; // Re-throw the exception to get the stack trace.
-        } catch (const std::exception &e) {
-            std::cerr << "MCTS::search: Stack trace: " << e.what() << std::endl;
-        }
-
-        throw; // Re-throw the exception to let the caller handle it.
+    for (const auto &[_, prevNodeId, ___] : boards) {
+        if (prevNodeId != INVALID_NODE)
+            addToNodesToKeep(treeNodesToKeep, prevNodeId);
     }
+
+    m_pool.purge(treeNodesToKeep);
+
+    const std::size_t N = boards.size();
+    const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
+    const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
+
+    std::vector<std::future<std::vector<std::tuple<MCTSResult, MCTSStatistics>>>> futures;
+    futures.reserve(P);
+
+    for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
+        auto begin = boards.begin() + slice * sliceSize;
+        auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
+        std::vector<BoardTuple> myBoards(begin, end);
+
+        futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
+    }
+
+    std::cout << "MCTS::search: Waiting for " << futures.size() << " futures to complete."
+              << std::endl;
+
+    std::vector<MCTSResult> results;
+    MCTSStatistics stats;
+    results.reserve(N);
+    for (auto &fut : futures) {
+        for (const auto &[result, rootStats] : fut.get()) {
+            stats.averageDepth += rootStats.averageDepth;
+            stats.averageEntropy += rootStats.averageEntropy;
+            stats.averageKLDivergence += rootStats.averageKLDivergence;
+
+            results.emplace_back(result);
+        }
+    }
+
+    std::cout << "MCTS::search: Finished gathering results." << std::endl;
+
+    stats.averageDepth /= static_cast<float>(N);
+    stats.averageEntropy /= static_cast<float>(N);
+    stats.averageKLDivergence /= static_cast<float>(N);
+    stats.nodePoolCapacity = m_pool.capacity();
+    stats.liveNodeCount = m_pool.liveNodeCount();
+
+    return {.results = results, .mctsStats = stats};
 }
 
 void freeNodeAndChildren(NodePool &pool, const MCTSNode *node, const NodeId excluded) {
@@ -342,9 +336,8 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
 
     for (MCTSNode *root : roots) {
         if (root->myId == root->parent) {
-            throw std::runtime_error(
-                "MCTS::parallelIterate: The root node must have a parent. "
-                "This is likely a bug in the MCTS implementation.");
+            throw std::runtime_error("MCTS::parallelIterate: The root node must have a parent. "
+                                     "This is likely a bug in the MCTS implementation.");
         }
         std::cout << "MCTS::parallelIterate: Processing root node: " << root->repr() << std::endl;
         for (int _ : range(m_args.num_parallel_searches)) {
@@ -353,8 +346,8 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
                 std::cout << "MCTS::parallelIterate: Processing node: " << node->repr()
                           << std::endl;
                 node->addVirtualLoss();
-                std::cout << "MCTS::parallelIterate: Added virtual loss to node: "
-                          << node->repr() << std::endl;
+                std::cout << "MCTS::parallelIterate: Added virtual loss to node: " << node->repr()
+                          << std::endl;
                 nodes.push_back(node);
                 boards.emplace_back(&node->board);
             }
@@ -381,8 +374,8 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
         std::cout << "MCTS::parallelIterate: Back propagating value: " << value
                   << " for node: " << node->repr() << std::endl;
         node->backPropagateAndRemoveVirtualLoss(value);
-        std::cout << "MCTS::parallelIterate: Back propagation completed for node: "
-                  << node->repr() << std::endl;
+        std::cout << "MCTS::parallelIterate: Back propagation completed for node: " << node->repr()
+                  << std::endl;
     }
 
     std::cout << "MCTS::parallelIterate: Finished parallel iteration for " << roots.size()
@@ -433,7 +426,7 @@ MCTSNode *MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) 
     return node;
 }
 
-std::vector<NodeId> MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch) {
+void MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch) {
     assert(root->parent != INVALID_NODE && "MCTS::setupRoot: The root node must have a parent");
     // If the node has a parent, we need to clean it up first.
     // Remove the nodes parent and all its children from the pool.
@@ -450,8 +443,6 @@ std::vector<NodeId> MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shoul
         }
     }
 
-    std::vector<NodeId> nodesToKeep;
-
     std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
         // Discount the node's score and visits. - Problem same divisor is not given because of
         // integer rounding
@@ -463,14 +454,10 @@ std::vector<NodeId> MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shoul
         node->result_score = clamp(node->result_score, static_cast<float>(-node->number_of_visits),
                                    static_cast<float>(node->number_of_visits));
 
-        nodesToKeep.push_back(node->myId);
-
         for (const NodeId childId : node->children)
             discount(m_pool.get(childId));
     };
 
     // Discount the node's score and visits.
     discount(root);
-
-    return std::move(nodesToKeep);
 }
