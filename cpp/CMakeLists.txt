@@ -24,17 +24,17 @@ endif ()
 
 # Set default build type if not specified
 if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE) # TODO: Change to Release for production
 endif ()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 # Add debug flags
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(STATUS "Adding debug flags (-g -O0)")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -fsanitize=address -fno-omit-frame-pointer")
+    message(STATUS "Adding debug flags (-g -O1)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O1 -fsanitize=address -fsanitize=thread -fsanitize=undefined -D_GLIBCXX_ASSERTIONS -fno-omit-frame-pointer")
     if (CMAKE_CUDA_COMPILER)
-        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -O0")
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -O1")
     endif ()
 elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Adding release flags (-O3)")
