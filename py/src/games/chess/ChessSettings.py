@@ -59,6 +59,13 @@ NUM_SEARCHES_PER_TURN = 400  # More searches? 500-800? # NOTE: if KL divergence 
 MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 8
 
+NUM_SELF_PLAYERS = 1
+NUM_THREADS = 2
+PARALLEL_GAMES = 8
+NUM_SEARCHES_PER_TURN = 400  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
+MIN_VISIT_COUNT = 1
+PARALLEL_SEARCHES = 8
+
 USE_CPP = True
 
 if not USE_GPU:
