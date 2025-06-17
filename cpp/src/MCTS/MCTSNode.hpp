@@ -36,7 +36,13 @@ public:
         std::stringstream ss;
         ss << "MCTSNode(" << board.fen() << ", Move: " << toString(move_to_get_here)
            << ", Visits: " << number_of_visits << ", Score: " << result_score
-           << ", Policy: " << policy << ")";
+           << ", Policy: " << policy << ", Virtual Loss: " << virtual_loss << ", Parent: " << parent << ", MyId: " << myId << ", Children: [";
+        for (const NodeId child : children) {
+            ss << child << ", ";
+        }
+        if (!children.empty()) {
+            ss.seekp(-2, ss.cur); // Remove the last comma and space
+        }
         return ss.str();
     }
 
