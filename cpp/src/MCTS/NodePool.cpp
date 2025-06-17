@@ -38,7 +38,7 @@ bool NodePool::isLive(const NodeId id) const {
     return id < m_nextFreshId && !isFreed(id);
 }
 
-void NodePool::purge(const std::vector<NodeId> &idsToKeep) {
+void NodePool::purge(std::vector<NodeId> idsToKeep) {
     // sort idsToKeep, then add all IDs that are not in idsToKeep to m_freeList
     std::lock_guard<std::mutex> lock(m_poolMutex);
     std::sort(idsToKeep.begin(), idsToKeep.end());

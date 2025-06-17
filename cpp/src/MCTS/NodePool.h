@@ -44,7 +44,7 @@ public:
 
     [[nodiscard]] bool isLive(NodeId id) const;
 
-    void purge(const std::vector<NodeId> &idsToKeep);
+    void purge(std::vector<NodeId> idsToKeep);
 
 private:
     // Each entry is a unique_ptr to a heap‐allocated
