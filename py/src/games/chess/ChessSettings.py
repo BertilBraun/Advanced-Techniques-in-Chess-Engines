@@ -52,8 +52,8 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-NUM_SELF_PLAYERS = 2 * torch.cuda.device_count() if USE_GPU else 2
-NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 5
+NUM_SELF_PLAYERS = 4 * torch.cuda.device_count() if USE_GPU else 2
+NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
 PARALLEL_GAMES = NUM_THREADS
 NUM_SEARCHES_PER_TURN = 320  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
 MIN_VISIT_COUNT = 1
@@ -72,7 +72,7 @@ if not USE_GPU:
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 12,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,

@@ -107,7 +107,7 @@ class TrainerProcess:
             pbar.update(int(current_games))
 
             while current_games < target_games:
-                time.sleep(10)
+                time.sleep(1)
                 new_games = games(iteration) + 0.5 * games(iteration - 1)
                 if new_games > current_games:
                     pbar.update(int(new_games - current_games))
