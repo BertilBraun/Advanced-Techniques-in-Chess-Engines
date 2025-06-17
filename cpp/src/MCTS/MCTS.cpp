@@ -349,11 +349,17 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
         }
     }
 
+    std::cout << "MCTS::parallelIterate: Prepared " << nodes.size()
+              << " nodes for parallel inference." << std::endl;
+
     if (nodes.empty())
         return;
 
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
+
+    std::cout << "MCTS::parallelIterate: Inference completed for " << results.size()
+              << " nodes." << std::endl;
 
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
