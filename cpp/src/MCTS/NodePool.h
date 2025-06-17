@@ -96,7 +96,7 @@ template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
     return constructAt(newId, std::forward<Args>(args)...);
 }
 
-template <typename... Args> MCTSNode* NodePool::constructAt(NodeId id, Args &&...args) {
+template <typename... Args> MCTSNode* NodePool::constructAt(const NodeId id, Args &&...args) {
     assert(!isLive(id) && "Node already allocated at this ID");
     std::optional<MCTSNode> *opt = slotPointer(id);
     assert(!opt->has_value() && "Node already allocated at this ID");

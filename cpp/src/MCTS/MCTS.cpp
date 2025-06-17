@@ -341,6 +341,11 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
               << " roots." << std::endl;
 
     for (MCTSNode *root : roots) {
+        if (root->myId == root->parent) {
+            throw std::runtime_error(
+                "MCTS::parallelIterate: The root node must have a parent. "
+                "This is likely a bug in the MCTS implementation.");
+        }
         std::cout << "MCTS::parallelIterate: Processing root node: " << root->repr() << std::endl;
         for (int _ : range(m_args.num_parallel_searches)) {
             MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
