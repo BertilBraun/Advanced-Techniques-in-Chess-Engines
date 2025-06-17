@@ -33,6 +33,8 @@ class TrainerProcess:
         if USE_GPU:
             torch.cuda.set_device(device_id)
 
+        torch.set_num_threads(8)  # Set number of threads for CPU operations
+
         start_cpu_usage_logger(self.run_id, 'trainer')
 
         # TODO make max_buffer_samples configurable
