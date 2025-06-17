@@ -117,6 +117,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     for (const auto &[i, board] : enumerate(boards)) {
         const auto &[fen, id, runFullSearch] = board;
         if (id == INVALID_NODE || !m_pool.isLive(id)) {
+            std::cout << "MCTS::searchGames: Creating new root node for board " << fen
+                      << " (id: " << id << ", runFullSearch: " << runFullSearch << ")."
+                      << std::endl;
             MCTSNode *root = m_pool.allocateNode(fen, 1.0, Move::null(), INVALID_NODE, &m_pool);
 
             roots.push_back(root);
