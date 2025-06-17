@@ -52,10 +52,10 @@ evaluation = EvaluationParams(
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
 
-NUM_SELF_PLAYERS = 5 * torch.cuda.device_count() if USE_GPU else 2
-NUM_THREADS = round(multiprocessing.cpu_count() / NUM_SELF_PLAYERS * 3.5)
-PARALLEL_GAMES = NUM_THREADS
-NUM_SEARCHES_PER_TURN = 320  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
+NUM_SELF_PLAYERS = 8 * torch.cuda.device_count() if USE_GPU else 2
+NUM_THREADS = round(multiprocessing.cpu_count() / NUM_SELF_PLAYERS * 4)
+PARALLEL_GAMES = NUM_THREADS * 2
+NUM_SEARCHES_PER_TURN = 600  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
 MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 8
 
@@ -81,7 +81,7 @@ TRAINING_ARGS = TrainingArgs(
         resignation_threshold=-5.0,  # TODO -0.9 or so
         temperature=1.0,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
         num_games_after_which_to_write=2,
-        portion_of_samples_to_keep=0.85,  # To not keep all symmetries
+        portion_of_samples_to_keep=0.75,  # To not keep all symmetries
         only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,
