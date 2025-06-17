@@ -23,7 +23,7 @@ class Network(nn.Module):
         hidden_size: int,
         device: torch.device,
         # TODO make these parameters configurable?
-        se_positions: tuple[int, ...] = (1, 4),  # 0‑based indices of ResBlocks to upgrade
+        se_positions: tuple[int, ...] = (1, 3),  # 0‑based indices of ResBlocks to upgrade
     ) -> None:
         super().__init__()
 

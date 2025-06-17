@@ -20,7 +20,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
-from src.util.log import log, warn
+from src.util.log import log, error
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import timeit
@@ -186,10 +186,7 @@ class SelfPlayCpp:
         try:
             return self.mcts.search(boards)
         except Exception as e:
-            warn(f'Error during MCTS search: {e}')
-            import traceback  # TODO remove
-
-            traceback.print_exc()
+            error(f'Error during MCTS search: {e}')
             self.mcts.clear_node_pool()  # Clear the node pool to free memory
             return self.search([(fen, INVALID_NODE, num_searches) for fen, old_node_id, num_searches in boards])
 
@@ -221,7 +218,6 @@ class SelfPlayCpp:
 
         mcts_results = self.search(boards)
 
-        self.mcts.get_inference_statistics()  # TODO remove
         stats = mcts_results.mctsStats
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
@@ -410,17 +406,3 @@ def new_game() -> SelfPlayGame:
             return new_game()
 
     return game
-
-
-if __name__ == '__main__':  # TODO remove
-    # Example usage
-    print('Starting self-play with C++ backend...')
-    sp = SelfPlayCpp(device_id=0, args=TRAINING_ARGS)
-    print(f'Initial iteration: {sp.iteration}, Dataset size: {len(sp.dataset)}')
-    sp.update_iteration(0)
-    print('Self-play initialized.')
-    for i in range(10):
-        print(f'Starting self-play {i}...')
-        sp.self_play()
-        print(f'Iteration {sp.iteration}, Dataset size: {len(sp.dataset)}')
-        sp.update_iteration(sp.iteration + 1)

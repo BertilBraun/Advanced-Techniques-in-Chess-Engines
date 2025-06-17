@@ -46,7 +46,7 @@ else
 
     sudo add-apt-repository ppa:ubuntu-toolchain-r/test
     sudo apt update
-    sudo apt install gcc-11 g++-11
+    sudo apt install gcc-11 g++-11 -y
 
 
     sudo apt install stockfish nano htop -y
@@ -54,6 +54,11 @@ else
     echo "export OMP_NUM_THREADS=1" >> ~/.bashrc
     echo "export MKL_NUM_THREADS=1" >> ~/.bashrc
     echo "export TORCH_NUM_THREADS=1" >> ~/.bashrc
+
+    echo "export CMAKE_INCLUDE_PATH=/usr/include/x86_64-linux-gnu:\$CMAKE_INCLUDE_PATH" >> ~/.bashrc
+    echo "export CMAKE_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:\$CMAKE_LIBRARY_PATH" >> ~/.bashrc
+    echo "export PATH=/usr/local/cuda-12/bin:\$PATH" >> ~/.bashrc
+    echo "export LD_LIBRARY_PATH=/usr/local/cuda-12/lib64:\$LD_LIBRARY_PATH" >> ~/.bashrc
 
     pip3 install -r requirements.txt
 
@@ -69,8 +74,8 @@ else
     echo "alias b='sbatch'" >> ~/.bashrc
     echo "alias c='scancel'" >> ~/.bashrc
     echo "alias info='sinfo_t_idle'" >> ~/.bashrc
-    echo "alias python='python3.10'" >> ~/.bashrc
-    echo "alias pip='pip3.10'" >> ~/.bashrc
+    echo "alias python='python3'" >> ~/.bashrc
+    echo "alias pip='pip3'" >> ~/.bashrc
     echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
     echo "alias tb='ulimit -n 50000 && tensorboard --port 8080 --logdir'" >> ~/.bashrc
@@ -81,9 +86,9 @@ else
     echo "alias gpuA='salloc -p dev_accelerated --gres=gpu:1 -t 30'" >> ~/.bashrc
     echo "alias gpuH2='salloc -p dev_accelerated-h100 --gres=gpu:2 -t 30'" >> ~/.bashrc
     echo "alias gpuA2='salloc -p dev_accelerated --gres=gpu:2 -t 30'" >>  ~/.bashrc
-    echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j && cd ../../py'" >> ~/.bashrc
-    echo "alias compileDebug='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j && cd ../../py'" >> ~/.bashrc
-    echo "alias compileRel='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make -j && cd ../../py'" >> ~/.bashrc
+    echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
+    echo "alias compileDebug='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
+    echo "alias compileRel='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
     
     
 
