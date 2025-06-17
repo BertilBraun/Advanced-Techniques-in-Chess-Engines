@@ -54,7 +54,7 @@ evaluation = EvaluationParams(
 
 NUM_SELF_PLAYERS = 3 * (torch.cuda.device_count() - 1) if USE_GPU else 2
 NUM_THREADS = round(multiprocessing.cpu_count() / NUM_SELF_PLAYERS * 2)
-PARALLEL_GAMES = NUM_THREADS * 64
+PARALLEL_GAMES = 128
 NUM_SEARCHES_PER_TURN = 400  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
 MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 8
