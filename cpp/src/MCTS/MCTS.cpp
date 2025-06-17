@@ -335,6 +335,9 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     nodes.reserve(m_args.num_parallel_searches * roots.size());
     boards.reserve(m_args.num_parallel_searches * roots.size());
 
+    std::cout << "MCTS::parallelIterate: Starting parallel iteration for "
+              << roots.size() << " roots." << std::endl;
+
     for (MCTSNode *root : roots) {
         for (int _ : range(m_args.num_parallel_searches)) {
             MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
@@ -357,6 +360,9 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
         node->expand(moves);
         node->backPropagateAndRemoveVirtualLoss(value);
     }
+
+    std::cout << "MCTS::parallelIterate: Finished parallel iteration for "
+              << roots.size() << " roots." << std::endl;
 }
 
 std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const {
