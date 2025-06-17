@@ -241,7 +241,7 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
         MCTSStatistics stats;
         results.reserve(N);
         for (auto &fut : futures) {
-            for (const auto [result, rootStats] : fut.get()) {
+            for (const auto &[result, rootStats] : fut.get()) {
                 stats.averageDepth += rootStats.averageDepth;
                 stats.averageEntropy += rootStats.averageEntropy;
                 stats.averageKLDivergence += rootStats.averageKLDivergence;
@@ -291,7 +291,7 @@ void freeNodeAndChildren(NodePool &pool, const MCTSNode *node, const NodeId excl
 
 void MCTS::freeTree(const NodeId nodeId, const NodeId excluded) {
     // Free the node, its parent and all its children, except the excluded one and its children.
-    MCTSNode *root = m_pool.get(nodeId);
+    const MCTSNode *root = m_pool.get(nodeId);
     while (root->parent != INVALID_NODE)
         // If the root has a parent, we need to walk up the tree to find the root node.
         root = m_pool.get(root->parent);
@@ -341,9 +341,12 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
               << " roots." << std::endl;
 
     for (MCTSNode *root : roots) {
+        std::cout << "MCTS::parallelIterate: Processing root node: " << root->repr() << std::endl;
         for (int _ : range(m_args.num_parallel_searches)) {
             MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
             if (node != nullptr) {
+                std::cout << "MCTS::parallelIterate: Processing node: " << node->repr()
+                          << std::endl;
                 node->addVirtualLoss();
                 nodes.push_back(node);
                 boards.emplace_back(&node->board);
