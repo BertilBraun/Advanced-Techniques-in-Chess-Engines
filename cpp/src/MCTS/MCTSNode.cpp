@@ -87,10 +87,16 @@ void MCTSNode::addVirtualLoss() {
     MCTSNode *node = this;
 
     while (node) {
+        std::cout << "MCTSNode::addVirtualLoss: Adding virtual loss to node: " << node->repr()
+                  << std::endl;
         node->virtual_loss += VIRTUAL_LOSS_DELTA; // Update the virtual loss
         node->number_of_visits += 1;              // Increment the visit count
 
+        std::cout << "MCTSNode::addVirtualLoss: Updated node: " << node->repr()
+                  << std::endl;
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
+        std::cout << "MCTSNode::addVirtualLoss: Moving to parent node: "
+                  << (node ? node->repr() : "nullptr") << std::endl;
     }
 }
 
