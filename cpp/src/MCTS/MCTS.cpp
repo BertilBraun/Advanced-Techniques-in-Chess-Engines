@@ -335,6 +335,9 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     nodes.reserve(m_args.num_parallel_searches * roots.size());
     boards.reserve(m_args.num_parallel_searches * roots.size());
 
+    std::cout << "MCTS::parallelIterate: Starting parallel iteration for "
+              << roots.size() << " roots." << std::endl;
+
     for (MCTSNode *root : roots) {
         for (int _ : range(m_args.num_parallel_searches)) {
             MCTSNode *node = getBestChildOrBackPropagate(root, m_args.c_param);
@@ -346,17 +349,26 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
         }
     }
 
+    std::cout << "MCTS::parallelIterate: Collected " << nodes.size()
+              << " nodes and " << boards.size() << " boards for inference." << std::endl;
+
     if (nodes.empty())
         return;
 
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
 
+    std::cout << "MCTS::parallelIterate: Inference completed for " << results.size()
+              << " boards." << std::endl;
+
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
         node->expand(moves);
         node->backPropagateAndRemoveVirtualLoss(value);
     }
+
+    std::cout << "MCTS::parallelIterate: Backpropagation completed for " << nodes.size()
+              << " nodes." << std::endl;
 }
 
 std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const {
