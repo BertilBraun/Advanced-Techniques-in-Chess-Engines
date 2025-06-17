@@ -49,6 +49,8 @@ void NodePool::purge(std::vector<NodeId> idsToKeep) {
         if (index < static_cast<int>(idsToKeep.size()) && idsToKeep[index] == id) {
             index++;
         } else {
+            const auto slot = slotPointer(id);
+            if (slot->has_value()) slot->reset();
             m_freeList.push_back(id);
         }
     }
