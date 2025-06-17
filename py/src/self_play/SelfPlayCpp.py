@@ -211,6 +211,7 @@ class SelfPlayCpp:
 
         mcts_results = self.search(boards)
 
+        self.mcts.get_inference_statistics()
         stats = mcts_results.mctsStats
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
