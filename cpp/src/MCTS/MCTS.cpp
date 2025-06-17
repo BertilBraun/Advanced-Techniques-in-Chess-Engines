@@ -279,7 +279,7 @@ MCTSResult MCTS::evalSearch(const std::string &fen, const NodeId prevNodeId,
     return gatherResult(root);
 }
 
-void MCTS::parallelIterate(const std::span<MCTSNode *const> roots) {
+void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     TIMEIT("MCTS::parallelIterate");
 
     // These variables are initialized only once per thread
