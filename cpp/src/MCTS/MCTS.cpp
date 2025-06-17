@@ -170,13 +170,13 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     std::vector<MCTSNode *> rootsToSearch;
     rootsToSearch.reserve(roots.size());
     while (true) {
-        for (const int i : range(roots.size())) {
+        for (const auto [root, board] : zip(roots, boards)) {
             const auto limit =
-                get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
+                get<2>(board) ? m_args.num_full_searches : m_args.num_fast_searches;
 
-            if (roots[i]->number_of_visits < limit) {
+            if (root->number_of_visits < limit) {
                 // If the root has not enough visits, we will search it.
-                rootsToSearch.emplace_back(roots[i]);
+                rootsToSearch.emplace_back(root);
             }
         }
 
@@ -186,6 +186,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         }
 
         parallelIterate(rootsToSearch);
+
+        std::cout << "MCTS::searchGames: Iterated over " << rootsToSearch.size()
+                  << " roots in this iteration." << std::endl;
     }
 
     std::cout << "MCTS::searchGames: Main search loop finished." << std::endl;
