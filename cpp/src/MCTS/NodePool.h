@@ -46,7 +46,7 @@ public:
 
     [[nodiscard]] bool isLive(NodeId id) const;
 
-    void purge(std::vector<NodeId> idsToKeep);
+    void purge(const std::vector<NodeId> &idsToKeep);
 
 private:
     // Each entry is a unique_ptr to a heap‐allocated
@@ -102,7 +102,5 @@ template <typename... Args> MCTSNode* NodePool::constructAt(const NodeId id, Arg
     assert(!opt->has_value() && "Node already allocated at this ID");
     opt->emplace(std::forward<Args>(args)...);
     opt->value().myId = id;
-
-    if (opt->value().parent == id) throw std::runtime_error("Node cannot be its own parent");
     return &opt->value();
 }

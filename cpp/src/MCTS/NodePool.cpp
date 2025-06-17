@@ -38,17 +38,19 @@ bool NodePool::isLive(const NodeId id) const {
     return id < m_nextFreshId && !isFreed(id);
 }
 
-void NodePool::purge(std::vector<NodeId> idsToKeep) {
-    // sort idsToKeep, then add all IDs that are not in idsToKeep to m_freeList
+void NodePool::purge(const std::vector<NodeId> &idsToKeep) {
     std::lock_guard<std::mutex> lock(m_poolMutex);
-    std::sort(idsToKeep.begin(), idsToKeep.end());
+
+    std::vector<bool> present(m_nextFreshId, false);
+    for (const NodeId id : idsToKeep) {
+        assert(id < m_nextFreshId && "NodeId out of range");
+        present[id] = true;
+    }
+
     m_freeList.clear();
     m_freeList.reserve(m_nextFreshId - idsToKeep.size());
-    int index = 0;
     for (NodeId id = 0; id < m_nextFreshId; ++id) {
-        if (index < static_cast<int>(idsToKeep.size()) && idsToKeep[index] == id) {
-            index++;
-        } else {
+        if (!present[id]) {
             const auto slot = slotPointer(id);
             if (slot->has_value()) slot->reset();
             m_freeList.push_back(id);
