@@ -16,7 +16,7 @@ public:
 
     // Allocate a new node by forwarding to MCTSNode’s constructor. Returns its NodeId.
     // Thread‐safe: locks the internal mutex while modifying m_chunks/m_freeList/m_nextFreshId.
-    template <typename... Args> MCTSNode *allocateNode(Args &&...args);
+    template <typename... Args> [[nodiscard]] MCTSNode *allocateNode(Args &&...args);
 
     // Deallocate a node: call its destructor, then push its ID to m_freeList.
     // Thread‐safe.
@@ -24,13 +24,13 @@ public:
 
     // Get a mutable reference to a MCTSNode (not thread‐safe by itself;
     // if you mutate fields, you should lock node_mutex inside MCTSNode).
-    [[nodiscard]] inline MCTSNode *get(NodeId id) {
-        assert(id < m_nextFreshId);
+    [[nodiscard]] MCTSNode *get(NodeId id) {
+        assert(isLive(id));
         return &slotPointer(id)->value();
     }
 
-    [[nodiscard]] inline const MCTSNode *get(const NodeId id) const {
-        assert(id < m_nextFreshId);
+    [[nodiscard]] const MCTSNode *get(const NodeId id) const {
+        assert(isLive(id));
         return &slotPointer(id)->value();
     }
 
@@ -40,13 +40,9 @@ public:
     // How many nodes are currently live (allocated but not freed)?
     [[nodiscard]] size_t liveNodeCount() const;
 
-    void clear() {
-        std::lock_guard<std::mutex> lock(m_poolMutex);
-        m_chunks.clear();
-        m_freeList.clear();
-        m_nextFreshId = 0;
-        addChunk(); // Always keep at least one chunk
-    }
+    void clear();
+
+    [[nodiscard]] bool isLive(NodeId id) const;
 
 private:
     // Each entry is a unique_ptr to a heap‐allocated
@@ -70,7 +66,7 @@ private:
     void addChunk();
 
     // Placement‐construct a MCTSNode at slot `id`.
-    template <typename... Args> MCTSNode* constructAt(NodeId id, Args &&...args);
+    template <typename... Args> [[nodiscard]] MCTSNode* constructAt(NodeId id, Args &&...args);
 
     // Given a NodeId, return the address of its slot in the correct chunk:
     [[nodiscard]] std::optional<MCTSNode> *slotPointer(NodeId id) const;
@@ -97,6 +93,7 @@ template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
 }
 
 template <typename... Args> MCTSNode* NodePool::constructAt(NodeId id, Args &&...args) {
+    assert(!isLive(id) && "Node already allocated at this ID");
     std::optional<MCTSNode> *opt = slotPointer(id);
     assert(!opt->has_value() && "Node already allocated at this ID");
     opt->emplace(std::forward<Args>(args)...);

@@ -16,7 +16,7 @@ static void init() {
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
-    InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards);
+    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards);
 
     InferenceClient client(params);
 
@@ -65,7 +65,7 @@ void testInferenceSpeed(int numBoards, int numIterations) {
 // -----------------------------------------------------------------------------
 class PyMCTSNode {
 public:
-    PyMCTSNode(NodePool *pool, NodeId id) : m_pool(pool), m_id(id) {
+    PyMCTSNode(NodePool *pool, const NodeId id) : m_pool(pool), m_id(id) {
         if (!m_pool)
             throw std::runtime_error("NodePool* is null");
         m_node = m_pool->get(m_id);
@@ -111,16 +111,7 @@ private:
     MCTSNode *m_node; // cached for speed
 };
 
-PyMCTSNode get_node(MCTS &self, NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
-
-MCTSResults pySearch(MCTS &self, const std::vector<std::tuple<std::string, NodeId, int>> &boards) {
-    // TODO: NOTE: for some reason, sometimes a bad optional access happens...
-    try {
-        return self.search(boards);
-    } catch (const std::exception &e) {
-        throw py::value_error(e.what());
-    }
-}
+PyMCTSNode get_node(MCTS &self, const NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
 
 std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
     const Board board(fen);
@@ -159,17 +150,20 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (2.1) MCTSParams ---
     py::class_<MCTSParams>(m, "MCTSParams")
-        .def(py::init<int, float, float, float, float, uint8, uint8>(),
+        .def(py::init<int, float, float, float, float, uint8, uint8, uint32, uint32>(),
              py::arg("num_parallel_searches"), py::arg("c_param"), py::arg("dirichlet_alpha"),
              py::arg("dirichlet_epsilon"), py::arg("node_reuse_discount"),
-             py::arg("min_visit_count"), py::arg("num_threads"))
+             py::arg("min_visit_count"), py::arg("num_threads"), py::arg("num_full_searches"),
+             py::arg("num_fast_searches"))
         .def_readwrite("num_parallel_searches", &MCTSParams::num_parallel_searches)
         .def_readwrite("c_param", &MCTSParams::c_param)
         .def_readwrite("dirichlet_alpha", &MCTSParams::dirichlet_alpha)
         .def_readwrite("dirichlet_epsilon", &MCTSParams::dirichlet_epsilon)
         .def_readwrite("node_reuse_discount", &MCTSParams::node_reuse_discount)
         .def_readwrite("min_visit_count", &MCTSParams::min_visit_count)
-        .def_readwrite("num_threads", &MCTSParams::num_threads);
+        .def_readwrite("num_threads", &MCTSParams::num_threads)
+        .def_readwrite("num_full_searches", &MCTSParams::num_full_searches)
+        .def_readwrite("num_fast_searches", &MCTSParams::num_fast_searches);
 
     // --- (2.2) InferenceClientParams ---
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
@@ -213,10 +207,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),
              py::arg("mcts_args"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("search", &pySearch, py::arg("boards"),
+        .def("search", &MCTS::search, py::arg("boards"),
              R"pbdoc(
                  Run MCTS search on a list of boards.
-                 `boards` should be a list of tuples: (fen_str: str, prev_node: int, num_searches: int).
+                 `boards` should be a list of tuples: (fen_str: str, prev_node: NodeId, full_search: bool).
                  Returns an `MCTSResults` object, whose `.results` is a list of `MCTSResult`:
                      - result: float
                      - visits: List of (encoded_move: int, visit_count: int)
@@ -236,6 +230,17 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  Run inference on a given FEN string.
                  Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
                  The encoded moves are pairs of (encoded_move: int, score: float).
+             )pbdoc")
+        .def("free_tree", &MCTS::freeTree, py::arg("nodeId"), py::arg("excluded") = INVALID_NODE,
+             R"pbdoc(
+                 Free the MCTS tree starting from the given node ID.
+                 This will deallocate the node and all its children.
+             )pbdoc")
+        .def("eval_search", &MCTS::evalSearch, py::arg("fen"), py::arg("prevNodeId"),
+             py::arg("numberOfSearches"),
+             R"pbdoc(
+                 Evaluate a search starting from the given FEN string.
+                 Returns a `MCTSResult` object containing the average result score and visit counts.
              )pbdoc");
 
     // set NodeId type

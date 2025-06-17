@@ -8,11 +8,12 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
 
 import os
+import random
 import time
 from typing import Any, Callable
 
+from src.Encoding import decode_board_state, encode_board_state
 from src.games.chess.ChessBoard import ChessBoard
-from src.train.TrainingArgs import NetworkParams
 from src.util import lerp
 from src.util.save_paths import create_model, create_optimizer, model_save_path, save_model_and_optimizer
 
@@ -28,6 +29,31 @@ torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 fo
 torch.autograd.set_detect_anomaly(True)
 
 from src.settings import TRAINING_ARGS, CurrentGame
+
+
+game = CurrentGame
+
+board = game.get_initial_board()
+
+for i in range(100):
+    if (
+        game.get_canonical_board(board) != decode_board_state(encode_board_state(game.get_canonical_board(board)))
+    ).any():
+        print('Canonical board does not match after encoding/decoding!')
+        print('Current board FEN:', board.board.fen())
+        print('Original board:', board)
+        print('Canonical board:')
+        for layer in game.get_canonical_board(board):
+            print(layer)
+        print('Encoded board:', encode_board_state(game.get_canonical_board(board)))
+        print('Decoded board:')
+        for layer in decode_board_state(encode_board_state(game.get_canonical_board(board))):
+            print(layer)
+
+        exit()
+
+    move = random.choice(board.get_valid_moves())
+    board.make_move(move)
 
 
 def run_mcts_py(fens: list[str], model_path: str):

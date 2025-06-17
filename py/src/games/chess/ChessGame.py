@@ -10,7 +10,10 @@ from src.games.chess.ChessBoard import ChessBoard, ChessMove
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-ENCODING_CHANNELS = 12 + 4 + 1  # 12 for pieces + 4 for castling rights + 1 for en passant square
+# 12 piece types, 4 castling rights, 2 player pieces, 1 checkers, 6 material difference channels
+ENCODING_CHANNELS = 12 + 4 + 2 + 1 + 6
+BINARY_CHANNELS = tuple(range(12 + 4 + 2 + 1))  # All channels are binary except the material difference channels
+SCALAR_CHANNELS = tuple(range(max(BINARY_CHANNELS) + 1, ENCODING_CHANNELS))  # Material difference channels
 
 
 def square_to_index(square: int) -> tuple[int, int]:
@@ -90,7 +93,7 @@ def _bitfield_to_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.in
     # Extract bits for each channel
     bits = ((encoded_array & _BIT_MASK) > 0).astype(np.int8)
 
-    return bits.reshape(_REPRESENTATION_SHAPE)
+    return bits.reshape((BINARY_CHANNELS[-1] + 1, BOARD_LENGTH, BOARD_LENGTH))
 
 
 class ChessGame(Game[ChessMove]):
@@ -104,7 +107,17 @@ class ChessGame(Game[ChessMove]):
     def representation_shape(self) -> tuple[int, int, int]:
         return (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
-    def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
+    @property
+    def binary_channels(self) -> tuple[int, ...]:
+        """Returns which channels of the board state are binary."""
+        return BINARY_CHANNELS
+
+    @property
+    def scalar_channels(self) -> tuple[int, ...]:
+        """Returns which channels of the board state are scalar."""
+        return SCALAR_CHANNELS
+
+    def get_canonical_board(self, board: ChessBoard) -> np.ndarray:  # type: ignore[override]
         """Returns a canonical representation of the board from the perspective of the white player."""
 
         # 1. If Black to move, mirror first
@@ -134,107 +147,141 @@ class ChessGame(Game[ChessMove]):
             for right in (tmp.has_kingside_castling_rights(co), tmp.has_queenside_castling_rights(co))
         ]
 
-        ep_bit = (1 << tmp.ep_square) if tmp.ep_square else 0
+        # ep_bit = (1 << tmp.ep_square) if tmp.ep_square else 0 # EP bit is so rarely used that we can just ignore it for now
+        # based on: https://arxiv.org/html/2304.14918v2
+        p1_pieces = tmp.occupied_co[chess.WHITE]
+        p2_pieces = tmp.occupied_co[chess.BLACK]
+        material_difference = [
+            chess.popcount(p1_bb) - chess.popcount(p2_bb)
+            for p1_bb, p2_bb in zip(encoded_pieces[:6], encoded_pieces[6:])
+        ]
+        checkers = tmp.checkers().mask
 
-        state = np.array(encoded_pieces + castling_bits + [ep_bit], dtype=np.uint64)
-        return _bitfield_to_board_state(state)
+        state = np.array(encoded_pieces + castling_bits + [p1_pieces, p2_pieces, checkers], dtype=np.uint64)
+        binary_state = _bitfield_to_board_state(state)
+        # scalar state should be a array of BOARD_LENGTH x BOARD_LENGTH with the material difference for each square
+        scalar_state = np.zeros((len(SCALAR_CHANNELS), BOARD_LENGTH, BOARD_LENGTH), dtype=np.int8)
+        for i, diff in enumerate(material_difference):
+            scalar_state[i, :, :] = diff
+        state = np.concatenate((binary_state, scalar_state), axis=0)
+        return state  # shape: (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
-    def decode_canonical_board(self, canonical_board: np.ndarray) -> ChessBoard:
-        board = self.get_initial_board()
-        board.board.clear()
+    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:  # type: ignore[override]
+        """Encodes a chess move into an integer index based on the predefined move2index mapping.
+        Notably:
+        - Black moves are mirrored to the equivalent white moves before encoding. This is because we always represent the current player's perspective as white.
+        - Castling moves are handled separately, because the Cpp-Stockfish engine encodes castling moves differently than python-chess does. This function converts the castling move to the format used by stockfish before encoding.
+        - Only queen promotions are supported in this encoding, as the level of play we are targeting does not require knight, rook, or bishop promotions.
+        """
+        assert move.promotion in (None, chess.QUEEN), 'Only queen promotions are supported in this encoding.'
 
-        colors = (chess.WHITE, chess.BLACK)
-
-        for i, color in enumerate(colors):
-            for j, piece in enumerate((chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING)):
-                for row in range(8):
-                    for col in range(8):
-                        if canonical_board[i * 6 + j, row, col] == 1:
-                            board.board.set_piece_at(chess.square(col, row), chess.Piece(piece, color))
-
-        return board
-
-    # TODO add the why for the castling moves
-    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:
-        # Handle castling moves
-        if board.board.is_castling(move):
-            # In python-chess, castling moves are represented as king moving two squares
-            # Need to convert to our representation format before lookup
-            king_square = move.from_square
-            # Determine if it's kingside or queenside castling
-            if move.to_square > king_square:  # Kingside
-                rook_square = king_square | 7  # h1 or h8
-            else:  # Queenside
-                rook_square = king_square & ~7  # a1 or a8
-
-            # If black is moving, mirror the move
-            if board.board.turn == chess.BLACK:
-                king_square = chess.square_mirror(king_square)
-                rook_square = chess.square_mirror(rook_square)
-
-            return self.move2index[DictMove(king_square, rook_square, None)]
-
-        # Handle non-castling moves
         if board.board.turn == chess.BLACK:
             move = chess.Move(
                 chess.square_mirror(move.from_square),
                 chess.square_mirror(move.to_square),
                 promotion=move.promotion,
             )
+
+        # Handle castling moves
+        if _is_castling_move(move, board):
+            assert move.promotion is None, 'Castling moves should not have a promotion.'
+            # In python-chess, castling moves are represented as king moving two squares
+            # Need to convert to our representation format before lookup
+
+            king_square = move.from_square
+
+            # Determine if it's kingside or queenside castling
+            if move.to_square > king_square:  # Kingside
+                rook_square = chess.H1  # only ever white side castling is relevant
+            else:  # Queenside
+                rook_square = chess.A1
+
+            move = chess.Move(king_square, rook_square)
+
+        # Handle non-castling moves
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]
 
-    # TODO add the why
-    def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:
+    def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:  # type: ignore[override]
+        """Decodes an integer index back to a chess move. See `encode_move` for details on how moves are encoded."""
+
         m = self.index2move[idx]
 
-        # Check if this is a castling move (king to rook)
-        king_square = m.from_square
-        rook_square = m.to_square
-
-        if board.board.turn == chess.BLACK:
-            king_square = chess.square_mirror(king_square)
-            rook_square = chess.square_mirror(rook_square)
+        move = chess.Move(m.from_square, m.to_square, promotion=m.promotion)
 
         # Check if move looks like a castling pattern
-        king_piece = board.board.piece_at(king_square)
-        rook_piece = board.board.piece_at(rook_square)
+        if _is_castling_move(move, board):
+            assert move.promotion is None, 'Castling moves should not have a promotion.'
 
-        if (
-            king_piece
-            and king_piece.piece_type == chess.KING
-            and rook_piece
-            and rook_piece.piece_type == chess.ROOK
-            and king_piece.color == rook_piece.color
-        ):
+            king_square = move.from_square
+
             # It's a castling move, compute the right destination square for the king
-            if rook_square > king_square:  # Kingside
-                king_dest = king_square + 2
+            if move.to_square > king_square:  # Kingside
+                king_dest = chess.G1  # only ever white side castling is relevant
             else:  # Queenside
-                king_dest = king_square - 2
-            return chess.Move(king_square, king_dest)
+                king_dest = chess.C1
+
+            move = chess.Move(king_square, king_dest)
 
         # Handle regular moves
         if board.board.turn == chess.BLACK:
-            return chess.Move(
-                chess.square_mirror(m.from_square),
-                chess.square_mirror(m.to_square),
-                promotion=m.promotion,
-            )
-        return chess.Move(m.from_square, m.to_square, m.promotion)
+            # Mirror the move for black
+            move = _mirror_move_for_black(move)
 
-    def symmetric_variations(
+        return move
+
+    def symmetric_variations(  # type: ignore[override]
         self, board: ChessBoard, visit_counts: list[tuple[int, int]]
     ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         encoded_board = self.get_canonical_board(board)
 
+        def mirror_left_right(square: int) -> int:
+            row, col = square_to_index(square)
+            mirrored_col = BOARD_LENGTH - 1 - col  # flip column, keep row
+            return index_to_square(row, mirrored_col)
+
+        def mirror_move(encoded_move: int) -> int:
+            move = self.decode_move(encoded_move, board)
+            mirrored_move = chess.Move(
+                mirror_left_right(move.from_square),
+                mirror_left_right(move.to_square),
+                promotion=move.promotion,
+            )
+            return self.encode_move(mirrored_move, board)
+
         return [
             # Original board
             (encoded_board, visit_counts),
-            # Mirrored board around the vertical axis (i.e. left-right mirroring)
+            # Mirrored board around the horizontal axis (i.e. left-right mirroring)
+            (
+                np.flip(encoded_board, axis=2),
+                [(mirror_move(move), count) for move, count in visit_counts],
+            ),
         ]
 
     def get_initial_board(self) -> ChessBoard:
         return ChessBoard()
+
+
+def _is_castling_move(move: ChessMove, board: ChessBoard) -> bool:
+    """Checks if a move is a castling move."""
+    from_piece = board.board.piece_at(move.from_square)
+    to_piece = board.board.piece_at(move.to_square)
+    return bool(
+        from_piece
+        and to_piece
+        and from_piece.piece_type == chess.KING
+        and to_piece.piece_type == chess.ROOK
+        and from_piece.color == to_piece.color
+        and move.from_square == chess.E1
+        and move.to_square in (chess.G1, chess.C1)
+    )
+
+
+def _mirror_move_for_black(move: ChessMove) -> ChessMove:
+    """Mirrors a move for the black player."""
+    from_square = chess.square_mirror(move.from_square)
+    to_square = chess.square_mirror(move.to_square)
+    return chess.Move(from_square, to_square, promotion=move.promotion)
 
 
 _REPRESENTATION_SHAPE = ChessGame().representation_shape

@@ -36,11 +36,11 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=8, hidden_size=96)
+network = NetworkParams(num_layers=6, hidden_size=64)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
-    batch_size=512,  # TODO 2048,
+    batch_size=2048,
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
@@ -55,47 +55,42 @@ evaluation = EvaluationParams(
 NUM_SELF_PLAYERS = 3 * torch.cuda.device_count() if USE_GPU else 2
 NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
 PARALLEL_GAMES = NUM_THREADS
-NUM_SEARCHES_PER_TURN = 1600
-MIN_VISIT_COUNT = 2
+NUM_SEARCHES_PER_TURN = 256  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
+MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 4
 
 USE_CPP = True
 
-if not USE_GPU:  # TODO remove
+if not USE_GPU:
     PARALLEL_GAMES = 2
-    NUM_SEARCHES_PER_TURN = 40
+    NUM_SEARCHES_PER_TURN = 128
     MIN_VISIT_COUNT = 1
     PARALLEL_SEARCHES = 2
     evaluation = None  # No evaluation in CPU mode
 
-    NUM_SEARCHES_PER_TURN = 800  # TODO remove
-    MIN_VISIT_COUNT = 2
-    PARALLEL_SEARCHES = 4
-    network = NetworkParams(num_layers=2, hidden_size=32)
-    NUM_SELF_PLAYERS = 2
 
 TRAINING_ARGS = TrainingArgs(
     num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 16,
+    num_games_per_iteration=PARALLEL_GAMES * NUM_SELF_PLAYERS * 8,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        num_moves_after_which_to_play_greedy=70,  # even number - no bias towards white
-        result_score_weight=0.0,  # TODO increase?
+        num_moves_after_which_to_play_greedy=50,  # even number - no bias towards white
+        result_score_weight=0.1,
         resignation_threshold=-5.0,  # TODO -0.9 or so
-        temperature=1.0,
+        temperature=1.0,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
         num_games_after_which_to_write=2,
-        portion_of_samples_to_keep=0.7,
+        portion_of_samples_to_keep=0.85,  # To not keep all symmetries
         only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,
             num_parallel_searches=PARALLEL_SEARCHES,
             dirichlet_epsilon=0.25,
             dirichlet_alpha=0.3,  # Based on AZ Paper
-            c_param=1.7,  # Based on MiniGO Paper
+            c_param=1.5,  # Range 1.25-1.5
             min_visit_count=MIN_VISIT_COUNT,
-            node_reuse_discount=0.5,
+            percentage_of_node_visits_to_keep=1.0,  # 0.8?
             num_threads=NUM_THREADS,
         ),
     ),

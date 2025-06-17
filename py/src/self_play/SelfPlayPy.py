@@ -34,7 +34,6 @@ class SelfPlayGame:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
-        self.already_expanded_node: MCTSNode | None = None
         self.start_generation_time = time.time()
 
         # The move at which the player resigned, if any. None if the game is still ongoing.
@@ -107,7 +106,7 @@ class SelfPlayPy:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
         mcts_results = self.mcts.search(
-            [(spg.board, spg.already_expanded_node) for spg in self.self_play_games],
+            [spg.board for spg in self.self_play_games],
             should_run_full_search=[
                 (
                     not self.args.only_store_sampled_moves  # If all moves are stored, run full search
@@ -259,10 +258,6 @@ class SelfPlayPy:
         new_spg = current.expand(move)
 
         return new_spg, move
-        # TODO encoded_move = CurrentGame.encode_move(move)
-        # TODO new_spg.already_expanded_node = next(
-        # TODO     child for child in children if child.encoded_move_to_get_here == encoded_move
-        # TODO ).copy(parent=None)  # remove parent to avoid memory leaks
 
     def _sample_move(
         self, action_probabilities: np.ndarray, board: CurrentBoard, temperature: float = 1.0

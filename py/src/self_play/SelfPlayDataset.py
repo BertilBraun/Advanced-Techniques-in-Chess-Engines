@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, encode_board_state
 from src.mcts.MCTS import action_probabilities
-from src.settings import TORCH_DTYPE, CurrentGame
+from src.settings import CurrentGame, USE_GPU
 from src.util import random_id
 from src.util.log import warn
 from src.util.timing import timeit
@@ -72,8 +72,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         assert 1 - 1e-2 <= np.sum(probabilities) <= 1 + 1e-2, 'Probabilities must sum to 1'
 
         return (
-            torch.from_numpy(state).to(dtype=TORCH_DTYPE, non_blocking=True),
-            torch.from_numpy(probabilities).to(dtype=TORCH_DTYPE, non_blocking=True),
+            torch.from_numpy(state).to(dtype=torch.float32, non_blocking=USE_GPU),
+            torch.from_numpy(probabilities).to(dtype=torch.float32, non_blocking=USE_GPU),
             torch.tensor(self.value_targets[idx], dtype=torch.float32),
         )
 

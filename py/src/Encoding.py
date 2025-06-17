@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 
 
 from src.games.Game import Board
@@ -9,32 +10,76 @@ from src.util.timing import timeit
 C, H, W = CurrentGame.representation_shape
 NUM_BITS = C * H * W
 
+BINARY_CHANNELS = CurrentGame.binary_channels
+SCALAR_CHANNELS = CurrentGame.scalar_channels
 
-def encode_board_state(state: np.ndarray) -> bytes:
-    """
-    state: np.ndarray of shape (C, H, W), values are 0 or 1 (any integer dtype).
-    Returns a bytes object of length ceil(C*H*W/8).
-    """
-    flat = (state.reshape(-1) & 1).astype(np.uint8)
-    packed = np.packbits(flat)
-    return packed.tobytes()
+N_BB = len(BINARY_CHANNELS)  # 19
+N_SCALAR = len(SCALAR_CHANNELS)  # 6
+ENCODED_BYTES = N_BB * 8 + N_SCALAR  # 158
+
+assert set(BINARY_CHANNELS).isdisjoint(SCALAR_CHANNELS)
+assert N_BB * 8 + N_SCALAR == ENCODED_BYTES, 'Encoded bytes must match the sum of bit-board and scalar channels'
+assert N_BB + N_SCALAR == C, 'Total number of channels must match the representation shape C'
 
 
-def decode_board_state(b: bytes) -> np.ndarray:
-    """
-    b: bytes previously returned by encode_board_bytes
-    shape: the original (C, H, W)
-    Returns an np.int8 array of 0/1 with that shape.
-    """
-    expected_n_bytes = (NUM_BITS + 7) // 8
+def _plane_to_u64(plane: npt.NDArray[np.int8]) -> np.uint64:
+    """Pack an (8,8) binary plane into a uint64 (little-endian bit order)."""
+    bits = np.packbits(plane.reshape(-1).astype(np.uint8), bitorder='little')
+    # packbits gave us 8 bytes → interpret them as one little-endian uint64
+    return np.frombuffer(bits, dtype='<u8', count=1)[0]
 
-    packed = np.frombuffer(b, dtype=np.uint8)
-    if packed.size < expected_n_bytes:
-        packed = np.concatenate([packed, np.zeros(expected_n_bytes - packed.size, dtype=np.uint8)])
-    else:
-        packed = packed[:expected_n_bytes]
-    flat = np.unpackbits(packed)[:NUM_BITS]
-    return flat.reshape(C, H, W).astype(np.int8)
+
+def _u64_to_plane(bb: np.uint64) -> npt.NDArray[np.int8]:
+    """Unpack uint64 back into an (8,8) binary plane."""
+    bytes_ = np.asarray([bb], dtype='<u8').view(np.uint8)
+    bits = np.unpackbits(bytes_, bitorder='little')[:64]
+    return bits.astype(np.int8).reshape(8, 8)
+
+
+# ---------- public API ---------------------------------------------------------
+def encode_board_state(state: npt.NDArray[np.int8]) -> bytes:
+    """
+    Compress a canonical board tensor (C,W,H) into bytes.
+    Bit-board channels → one uint64 each, scalar channels → one int8 each.
+    """
+    assert state.shape == (C, H, W)
+
+    # 1. bit-board part --------------------------------------------------------
+    bb_arr = np.empty(N_BB, dtype='<u8')
+    for out_i, ch in enumerate(BINARY_CHANNELS):
+        bb_arr[out_i] = _plane_to_u64(state[ch])
+
+    # 2. scalar part -----------------------------------------------------------
+    scalars = state[np.array(SCALAR_CHANNELS), 0, 0].astype(np.int8)
+
+    # 3. concatenate and return -----------------------------------------------
+    return bb_arr.tobytes() + scalars.tobytes()
+
+
+def decode_board_state(buf: bytes) -> npt.NDArray[np.int8]:
+    """
+    Decompress bytes produced by `encode_board_state` back to (C,W,H) int8 tensor.
+    Works even if trailing zero-bytes were stripped.
+    """
+    if len(buf) < ENCODED_BYTES:  # ← ❶ auto-pad if necessary
+        buf = buf + b'\x00' * (ENCODED_BYTES - len(buf))
+    else:  # ← ❷ or clip a too-long slice
+        buf = buf[:ENCODED_BYTES]
+
+    # --- split the buffer ----------------------------------------------------
+    bb_arr = np.frombuffer(buf, dtype='<u8', count=N_BB)
+    scalars = np.frombuffer(buf[N_BB * 8 :], dtype=np.int8, count=N_SCALAR)
+
+    # --- rebuild the (C,H,W) tensor -----------------------------------------
+    out = np.zeros((C, H, W), dtype=np.int8)
+
+    for i, ch in enumerate(BINARY_CHANNELS):
+        out[ch] = _u64_to_plane(bb_arr[i])  # unpack the bit-boards
+
+    for i, ch in enumerate(SCALAR_CHANNELS):
+        out[ch, :, :] = scalars[i]  # broadcast the scalars
+
+    return out
 
 
 def get_board_result_score(board: Board) -> float | None:

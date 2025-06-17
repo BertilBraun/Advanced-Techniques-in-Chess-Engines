@@ -1,3 +1,4 @@
+import multiprocessing
 import numpy as np
 
 from src.self_play.SelfPlayCpp import new_game
@@ -17,12 +18,14 @@ class AlphaZeroBot(Bot):
 
         mcts_args = MCTSParams(
             num_parallel_searches=NUM_PARALLEL_SEARCHES,
-            dirichlet_alpha=0.5,  # irrelevant
-            dirichlet_epsilon=0.0,
+            dirichlet_alpha=0.5,  # irrelevant for eval
+            dirichlet_epsilon=0.0,  # irrelevant for eval
             c_param=PLAY_C_PARAM,
             min_visit_count=2,
-            node_reuse_discount=1.0,
-            num_threads=1,
+            node_reuse_discount=1.0,  # irrelevant for eval
+            num_threads=multiprocessing.cpu_count(),
+            num_full_searches=0,  # irrelevant for eval
+            num_fast_searches=0,  # irrelevant for eval
         )
         inference_args = InferenceClientParams(
             device_id=device_id,
@@ -36,7 +39,7 @@ class AlphaZeroBot(Bot):
 
         # run some inferences to compile and warm up the model
         for _ in range(5):
-            self.mcts.search([(new_game().board.board.fen(), INVALID_NODE, 64) for _ in range(4)])
+            self.mcts.search([(new_game().board.board.fen(), INVALID_NODE, False) for _ in range(4)])
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
@@ -56,27 +59,21 @@ class AlphaZeroBot(Bot):
         board_fen = board.board.fen()
         num_searches = 512
 
-        res = self.mcts.search([(board_fen, INVALID_NODE, num_searches)])
-        root = self.mcts.get_node(res.results[0].children[0]).parent
+        res = self.mcts.eval_search(board_fen, INVALID_NODE, num_searches)
+        root = self.mcts.get_node(res.children[0]).parent
         assert root is not None, 'MCTS search returned no parent node'
 
         while not self.time_is_up:
-            num_searches += 512
-            res = self.mcts.search([(board_fen, root.id, num_searches)])
+            res = self.mcts.eval_search(board_fen, root.id, num_searches)
 
         # visits are a list of (Encoded Move Id, Visit Count)
-        visits = res.results[0].visits
-        best_move_index = np.argmax([visit[1] for visit in visits])
-        best_move = CurrentGame.decode_move(visits[best_move_index][0], board)
+        best_move_index = np.argmax([count for encoded_move, count in res.visits])
+        best_move = CurrentGame.decode_move(res.visits[best_move_index][0], board)
 
-        legal_moves = board.get_valid_moves()
-        while best_move not in legal_moves:
+        if best_move not in board.get_valid_moves():
             raise Exception(f'Best move {best_move} is not legal, trying next best move...')
-            visits[best_move_index] = (-1, 0)
-            best_move_index = np.argmax([visit[1] for visit in visits])
-            best_move = CurrentGame.decode_move(visits[best_move_index][0], board)
 
-        best_child = self.mcts.get_node(res.results[0].children[best_move_index])
+        best_child = self.mcts.get_node(res.children[best_move_index])
 
         def max_depth(node: MCTSNode) -> int:
             if not node.children:
@@ -87,7 +84,7 @@ class AlphaZeroBot(Bot):
 
         log('---------------------- Alpha Zero Best Move ----------------------')
         log('Total number of searches:', root.visits)
-        log(f'Results of the search: {res.results[0].result:.4f}')
+        log(f'Results of the search: {res.result:.4f}')
         log('Max depth:', max_depth(root))
         log('Best move:', best_move)
         log('Best child index:', best_move_index)
@@ -100,5 +97,7 @@ class AlphaZeroBot(Bot):
         log('Current board FEN:', board_fen)
         print(repr(board))
         log('------------------------------------------------------------------')
+
+        self.mcts.free_tree(root.id)
 
         return best_move

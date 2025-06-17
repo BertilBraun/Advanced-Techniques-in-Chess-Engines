@@ -11,21 +11,23 @@ public:
     MCTSNode(const std::string &boardFen, float policy, Move move_to_get_here, NodeId parent,
              NodePool *pool);
 
-    bool isTerminalNode() const { return board.isGameOver(); }
+    [[nodiscard]] bool isTerminalNode() const { return board.isGameOver(); }
 
-    bool isFullyExpanded() const { return !children.empty(); }
+    [[nodiscard]] bool isFullyExpanded() const { return !children.empty(); }
 
-    float ucb(float uCommon, float parentScore) const;
+    [[nodiscard]] float ucb(float uCommon, float parentScore) const;
 
     void expand(const std::vector<MoveScore> &moves_with_scores);
 
     void backPropagate(float result);
 
-    void updateVirtualLoss(int delta);
+    void backPropagateAndRemoveVirtualLoss(float result);
 
-    NodeId bestChild(float cParam) const;
+    void addVirtualLoss();
 
-    bool operator==(const MCTSNode &other) const {
+    [[nodiscard]] NodeId bestChild(float cParam) const;
+
+    [[nodiscard]] bool operator==(const MCTSNode &other) const {
         return board.quickHash() == other.board.quickHash() &&
                move_to_get_here == other.move_to_get_here;
     }

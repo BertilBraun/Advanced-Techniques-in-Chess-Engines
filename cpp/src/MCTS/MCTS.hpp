@@ -33,13 +33,18 @@ struct MCTSParams {
 
     uint8 num_threads; // Number of threads to use for parallel processing.
 
+    uint32 num_full_searches; // Number of searches to perform if full searches are requested.
+
+    uint32 num_fast_searches; // Number of searches to perform if fast searches are requested.
+
     MCTSParams(int num_parallel_searches, float c_param, float dirichlet_alpha,
                float dirichlet_epsilon, float node_reuse_discount, uint8 min_visit_count,
-               uint8 num_threads)
+               uint8 num_threads, uint32 num_full_searches, uint32 num_fast_searches)
         : num_parallel_searches(num_parallel_searches), c_param(c_param),
           dirichlet_alpha(dirichlet_alpha), dirichlet_epsilon(dirichlet_epsilon),
           node_reuse_discount(node_reuse_discount), min_visit_count(min_visit_count),
-          num_threads(num_threads) {}
+          num_threads(num_threads), num_full_searches(num_full_searches),
+          num_fast_searches(num_fast_searches) {}
 };
 
 struct MCTSResult {
@@ -87,28 +92,32 @@ struct MCTSResults {
  *
  */
 
-using BoardTuple =
-    std::tuple<std::string /*FEN*/, NodeId /*prev child or INVALID_NODE*/, int /*num searches*/>;
+using BoardTuple = std::tuple<std::string /*FEN*/, NodeId /*prev child or INVALID_NODE*/,
+                              bool /*should run full searches*/>;
 
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs)
         : m_client(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads) {}
 
-    MCTSResults search(const std::vector<BoardTuple> &boards);
+    [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards);
 
-    InferenceStatistics getInferenceStatistics() {
+    [[nodiscard]] InferenceStatistics getInferenceStatistics() {
         // resetTimes();
         return m_client.getStatistics();
     }
 
-    NodePool *getNodePool() { return &m_pool; }
+    [[nodiscard]] NodePool *getNodePool() { return &m_pool; }
 
-    void clearNodePool() {
-        m_pool.clear(); // Reset the node pool to a new instance.
-    }
+    // Reset the node pool to a new instance.
+    void clearNodePool() { m_pool.clear(); }
 
-    InferenceClient *getInferenceClient() { return &m_client; }
+    [[nodiscard]] InferenceClient *getInferenceClient() { return &m_client; }
+
+    // Free the node, its parent and all its children, except the excluded one and its children.
+    void freeTree(NodeId nodeId, NodeId excluded = INVALID_NODE);
+
+    MCTSResult evalSearch(const std::string &fen, NodeId prevNodeId, int numberOfSearches);
 
 private:
     InferenceClient m_client;
@@ -119,17 +128,14 @@ private:
 
     // This method performs a complete MCTS search of number_of_searches iterations for a single
     // game.
-    std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *root, int number_of_searches);
+    [[nodiscard]] std::tuple<MCTSResult, MCTSStatistics> searchOneGame(MCTSNode *root,
+                                                                       bool shouldRunFullSearch);
 
     // This method performs several iterations of tree search in parallel.
     void parallelIterate(MCTSNode *root);
 
-    // Get policy moves with added Dirichlet noise.
-    std::vector<std::vector<MoveScore>>
-    getPolicyWithNoise(const std::vector<const Board *> &boards);
-
     // Add Dirichlet noise to a vector of MoveScore.
-    std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
+    [[nodiscard]] std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
 
-    MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
+    [[nodiscard]] MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 };

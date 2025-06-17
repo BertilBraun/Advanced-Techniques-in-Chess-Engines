@@ -5,10 +5,8 @@ from src.util import lerp
 from src.util.tensorboard import *
 
 USE_GPU = torch.cuda.is_available()
-# Note CPU only seems to work for float32, on the GPU float16 and bfloat16 give no descerable difference in speed
-TORCH_DTYPE = torch.bfloat16 if USE_GPU else torch.float32
 
-USE_CPP = False  # TODO: set to True if you want to use the C++ self play implementation
+USE_CPP = False  # NOTE: set to True if you want to use the C++ self play implementation (only available for chess at the moment)
 
 
 def get_run_id():
@@ -51,7 +49,8 @@ def learning_rate(current_iteration: int, optimizer: OptimizerType) -> float:
         return 0.00002
 
     # AdamW
-    # based on https://lczero.org/dev/wiki/technical-explanation-of-leela-chess-zero/
+    # based on https://lczero.org/dev/wiki/technical-explanation-of-leela-chess-zero/#:~:text=or%20with%20too%20low%20learning%20rate
+    # too low learning rate can lead to overfitting
     if optimizer == 'adamw':
         if current_iteration < 60:
             return 0.005

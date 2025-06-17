@@ -78,10 +78,7 @@ def sign(x: float) -> int:
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
     """Convert visit counts to probabilities."""
-    if not visit_counts:
-        if not board.get_valid_moves() or board.is_game_over():
-            raise ValueError(f'No valid moves available to sample from: {board.board.fen()}')
-        return np.ones(len(visit_counts), dtype=np.float32) / len(visit_counts)
+    assert len(visit_counts) > 0, f'No visit counts found for board: {board.board.fen()}'
 
     probabilities = np.zeros(len(visit_counts), dtype=np.float32)
     for i, (_, count) in enumerate(visit_counts):
@@ -133,12 +130,12 @@ class SelfPlayCpp:
         # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
         self.num_searches_per_turn = int(
             lerp(
-                self.args.mcts.num_searches_per_turn / 5,
+                self.args.mcts.num_searches_per_turn / 2,
                 self.args.mcts.num_searches_per_turn,
+                # TODO make this a parameter
                 clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
             )
         )
-        self.num_searches_per_turn = self.args.mcts.num_searches_per_turn  # TODO just disable scaling for now
         assert self.num_searches_per_turn > self.args.mcts.num_parallel_searches, (
             f'Number of searches per turn ({self.num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
         )
@@ -151,8 +148,10 @@ class SelfPlayCpp:
             dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
             c_param=self.args.mcts.c_param,
             min_visit_count=self.args.mcts.min_visit_count,
-            node_reuse_discount=self.args.mcts.node_reuse_discount,
+            node_reuse_discount=self.args.mcts.percentage_of_node_visits_to_keep,
             num_threads=self.args.mcts.num_threads,
+            num_full_searches=self.num_searches_per_turn,
+            num_fast_searches=self.num_searches_per_turn // 4,  # TODO make this a parameter
         )
         client_args = InferenceClientParams(
             self.device_id,
@@ -166,7 +165,7 @@ class SelfPlayCpp:
             spg.already_expanded_node = INVALID_NODE
 
     @timeit
-    def search(self, boards: list[tuple[str, NodeId, int]]) -> MCTSResults:
+    def search(self, boards: list[tuple[str, NodeId, bool]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
         try:
@@ -174,58 +173,45 @@ class SelfPlayCpp:
         except Exception as e:
             warn(f'Error during MCTS search: {e}')
             self.mcts.clear_node_pool()  # Clear the node pool to free memory
-            return self.search([(board[0], INVALID_NODE, board[2]) for board in boards])
+            return self.search([(fen, INVALID_NODE, num_searches) for fen, old_node_id, num_searches in boards])
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        boards: list[tuple[str, NodeId, int]] = []
+        boards: list[tuple[str, NodeId, bool]] = []
         for spg in self.self_play_games:
             should_run_full_search = (
                 (
                     not self.args.only_store_sampled_moves  # If all moves are stored, run full search
                     # or if the game is still in the early phase
                     or len(spg.played_moves) < self.args.num_moves_after_which_to_play_greedy
-                    or len(spg.board.board.piece_map()) > 10  # or if there are many pieces on the board
+                    or len(spg.board.board.piece_map()) > 8  # or if there are many pieces on the board
                 )
                 # and the game has not been resigned
                 and spg.resigned_at_move is None
-                # and the game has been played for a while
-                and len(spg.played_moves) > 10
+                # Playout-Cap Randomization (KataGo "RPC")
+                and random.random() < 0.25  # TODO make this a parameter
             )
 
-            num_moves_to_search = (
-                self.args.mcts.num_searches_per_turn
-                if should_run_full_search
-                else self.args.mcts.num_searches_per_turn // 10
-            )
+            # NOTE: Disabled for now - think about whether to re-enable this (probably not necessary for amateur games)
+            # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
+            # if should_run_full_search and spg.already_expanded_node != INVALID_NODE:
+            #     self.mcts.free_tree(spg.already_expanded_node)  # Free the node to avoid memory leaks
+            #     spg.already_expanded_node = INVALID_NODE
 
-            boards.append((spg.board.board.fen(), spg.already_expanded_node, num_moves_to_search))
+            boards.append((spg.board.board.fen(), spg.already_expanded_node, should_run_full_search))
 
-        mcts_results: MCTSResults = self.search(boards)
+        mcts_results = self.search(boards)
 
         stats = mcts_results.mctsStats
-        # depth, entropy, kl_divergence
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
         log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
         log_scalar('mcts/node_pool_capacity', stats.nodePoolCapacity)
         log_scalar('mcts/live_node_count', stats.liveNodeCount)
 
-        # inference_stats = self.mcts.get_inference_statistics()
-        # log_scalar('dataset/inference/cache_hit_rate', inference_stats.cacheHitRate)
-        # log_scalar('dataset/inference/unique_positions', inference_stats.uniquePositions)
-        # log_scalar('dataset/inference/cache_size_mb', inference_stats.cacheSizeMB)
-        # log_histogram(
-        #     'dataset/inference/nn_output_value_distribution', np.array(inference_stats.nnOutputValueDistribution)
-        # )
-        # log_scalar(
-        #     'dataset/inference/average_number_of_positions_in_inference_call',
-        #     inference_stats.averageNumberOfPositionsInInferenceCall,
-        # )
-
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
-            was_full_searched = boards[i][2] == self.args.mcts.num_searches_per_turn
+            was_full_searched = boards[i][2]
             if was_full_searched:
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
 
@@ -238,7 +224,7 @@ class SelfPlayCpp:
                     spg.resigned_at_move = len(spg.played_moves)
                     spg.resignee = spg.board.current_player
                 else:
-                    self.self_play_games[i] = self._handle_end_of_game(spg, -1.0)
+                    self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result)
                     continue
 
             if CURRENT_GAME == 'chess':
@@ -253,54 +239,64 @@ class SelfPlayCpp:
                 white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
                 black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
                 if (
-                    False
-                    and (white_pieces < 4 or black_pieces < 4)
-                    and len(spg.played_moves) >= 80
+                    (white_pieces < 4 or black_pieces < 4)
+                    and len(spg.played_moves) >= self.args.num_moves_after_which_to_play_greedy
                     and random.random() < 0.2
                 ):
                     # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
                     self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
                     continue
 
-            spg_action_probabilities = visit_count_probabilities(mcts_result.visits, spg.board)
+            self.self_play_games[i] = self._sample_self_play_game(
+                spg,
+                mcts_result.children,
+                mcts_result.visits,
+            )
 
-            while np.sum(spg_action_probabilities) > 0:
-                new_spg, child_index, move = self._sample_self_play_game(
-                    spg, spg_action_probabilities, mcts_result.children, mcts_result.visits
-                )
+    @timeit
+    def _sample_self_play_game(
+        self,
+        current: SelfPlayGame,
+        children: list[NodeId],
+        visit_counts: list[tuple[int, int]],
+    ) -> SelfPlayGame:
+        # Sample a move from the action probabilities then create a new game state with that move
+        # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
 
-                is_duplicate = any(hash(game) == hash(new_spg) for game in self.self_play_games)
-                is_repetition = move in spg.played_moves[-6:]
-                if is_duplicate or is_repetition:
-                    # don't play the same move twice in a row
-                    # Already exploring this state, so remove the probability of this move and try again
-                    spg_action_probabilities[child_index] = 0
-                else:
-                    if new_spg.board.is_game_over():
-                        # Game is over, add the game to the dataset
-                        result = get_board_result_score(new_spg.board)
-                        assert result is not None, 'Game should not be over if result is None'
-                        self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
-                    else:
-                        self.self_play_games[i] = new_spg
-                    break
+        children_probabilities = visit_count_probabilities(visit_counts, current.board)
+        children_encoded_moves = [move for move, _ in visit_counts]
 
-            else:
-                # No valid moves left which are not already being explored
-                # Therefore simply pick the most likely move, and expand to different states from the most likely next state in the next iteration
-                new_spg, _, _ = self._sample_self_play_game(
-                    spg,
-                    visit_count_probabilities(mcts_result.visits, spg.board),
-                    mcts_result.children,
-                    mcts_result.visits,
-                )
-                if new_spg.board.is_game_over():
-                    # Game is over, add the game to the dataset
-                    result = get_board_result_score(new_spg.board)
-                    assert result is not None, 'Game should not be over if result is None'
-                    self.self_play_games[i] = self._handle_end_of_game(new_spg, result)
-                else:
-                    self.self_play_games[i] = new_spg
+        # discourage moves which were only recently played
+        for i, move in enumerate(current.encoded_moves[-10:]):
+            for j, child_move in enumerate(children_encoded_moves):
+                if move == child_move:
+                    children_probabilities[j] /= i + 1  # discourage moves which were played recently
+        children_probabilities /= np.sum(children_probabilities)  # normalize probabilities
+
+        # only use temperature for the first X moves, then simply use the most likely move
+        # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
+        if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
+            child_index = np.argmax(children_probabilities).item()
+        else:
+            # Scale down temperature from self.args.temperature to 0.1 as we approach num_moves_after_which_to_play_greedy
+            temperature = lerp(
+                self.args.temperature,  # Starting temperature
+                0.1,  # Target temperature # TODO make this a parameter?
+                len(current.played_moves) / self.args.num_moves_after_which_to_play_greedy,  # Progress ratio
+            )
+            child_index = _sample_from_probabilities(children_probabilities, temperature)
+
+        move = CurrentGame.decode_move(children_encoded_moves[child_index], current.board)
+        new_spg = current.expand(move)
+        new_spg.already_expanded_node = children[child_index]
+
+        if not new_spg.board.is_game_over():
+            return new_spg
+
+        # Game is over, add the game to the dataset and return a new game state
+        result = get_board_result_score(new_spg.board)
+        assert result is not None, 'Game should not be over if result is None'
+        return self._handle_end_of_game(new_spg, result)
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
@@ -315,46 +311,6 @@ class SelfPlayCpp:
             )
 
         return new_game()
-
-    @timeit
-    def _sample_self_play_game(
-        self,
-        current: SelfPlayGame,
-        visit_count_probabilities: np.ndarray,
-        children: list[NodeId],
-        visit_counts: list[tuple[int, int]],
-    ) -> tuple[SelfPlayGame, int, CurrentGameMove]:
-        # Sample a move from the action probabilities then create a new game state with that move
-        # If the game is over, add the game to the dataset and return a new game state, thereby initializing a new game
-
-        # discourage moves which were only recently played
-        for i, move in enumerate(current.encoded_moves[-10:]):
-            for j, (child_move, count) in enumerate(visit_counts):
-                if move == child_move:
-                    visit_count_probabilities[j] /= i + 1  # discourage moves which were played recently
-        visit_count_probabilities /= np.sum(visit_count_probabilities)  # normalize probabilities
-
-        # only use temperature for the first X moves, then simply use the most likely move
-        # Keep exploration high for the first X moves, then play out as well as possible to reduce noise in the backpropagated final game results
-        if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
-            try:
-                child_index = np.argmax(visit_count_probabilities).item()
-            except ValueError:
-                warn(
-                    f'No valid moves available to sample from: {current.board.board.fen()}. '
-                    f'Visit counts: {visit_counts}. Visit count probabilities: {visit_count_probabilities}. '
-                )
-                # If there are no valid moves, just return the first child
-                child_index = 0
-
-        else:
-            child_index = _sample_from_probabilities(visit_count_probabilities, self.args.temperature)
-
-        move = CurrentGame.decode_move(visit_counts[child_index][0], current.board)
-        new_spg = current.expand(move)
-        new_spg.already_expanded_node = children[child_index]
-
-        return new_spg, child_index, move
 
     @timeit
     def _add_training_data(self, spg: SelfPlayGame, game_outcome: float) -> None:
@@ -377,11 +333,13 @@ class SelfPlayCpp:
                     lerp(
                         turn_game_outcome,
                         mem.result_score,
+                        # TODO parameter?
                         clamp(self.iteration * 10 / TRAINING_ARGS.num_iterations, 0.0, 1.0)
                         * self.args.result_score_weight,
                     ),
                 )
 
+            # TODO parameter?
             game_outcome *= 0.995  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -404,8 +362,7 @@ class SelfPlayCpp:
 
         log_text('starting_line', ','.join(moves[:7]))
 
-        if random.random() < 0.01:
-            # log a game every 1% of the time
+        if random.random() < 0.01:  # log about 1% of games
             moves_str = ','.join(moves)
             log_text(f'moves/{self.iteration}/{hash(moves_str)}', f'{result}:{moves_str}')
 
@@ -426,7 +383,7 @@ def new_game() -> SelfPlayGame:
     game = SelfPlayGame()
 
     # Play a random moves to start the game in different states
-    random_moves_to_play = 2 + int(random.random() * 6)
+    random_moves_to_play = 2 + int(random.random() * 2)  # Play 2-4 random moves to start the game
     for _ in range(random_moves_to_play):
         game = game.expand(random.choice(game.board.get_valid_moves()))
         if game.board.is_game_over():

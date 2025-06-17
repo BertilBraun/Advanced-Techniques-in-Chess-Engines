@@ -35,7 +35,7 @@ def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimiz
     if type == 'sgd':
         return torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.001, nesterov=True)
     elif type == 'adamw':
-        return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.001, amsgrad=True, eps=1e-5)
+        return torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001, amsgrad=True, eps=1e-5)
     raise ValueError(f'Optimizer type {type} not supported. Supported types: adamw, sgd')
 
 

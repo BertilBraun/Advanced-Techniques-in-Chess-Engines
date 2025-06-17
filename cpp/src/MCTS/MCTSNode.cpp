@@ -2,21 +2,32 @@
 
 #include "NodePool.h"
 
+// NOTE: more virtual loss, to avoid the same node being selected multiple times?
+// (i.e. multiply delta by 2-5?)
+constexpr int VIRTUAL_LOSS_DELTA = 1; // How much to increase the virtual loss by each time
+
+constexpr float TURN_DISCOUNT = 0.99f; // Discount factor for the result score when backpropagating
+// this makes the result score decay over time, simulating the fact that very long searches add
+// more uncertainty to the result.
+
+constexpr float FPU_REDUCTION = 0.10f;      // ≈-10 centipawns
+
+
 MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move move_to_get_here,
                    const NodeId parent, NodePool *pool)
     : parent(parent), pool(pool), board(boardFen), move_to_get_here(move_to_get_here),
       policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon, const float parentScore) const {
-    const float uScore = policy * uCommon / (1 + number_of_visits);
+    const float uScore = policy * uCommon / static_cast<float>(1 + number_of_visits);
 
     // TODO which is the best initializer for qScore?
     // most seem to init to 0.0
     // CrazyAra inits to -1.0
-    // some init to -parentScore
-    float qScore = -1.0f * parentScore; // Default to -parentScore
+    // LeelaZero inits to parentScore
+    float qScore = parentScore - FPU_REDUCTION;
     if (number_of_visits > 0) {
-        qScore = -1 * (result_score + virtual_loss) / number_of_visits;
+        qScore = -1 * (result_score + virtual_loss) / static_cast<float>(number_of_visits);
     }
 
     return uScore + qScore;
@@ -49,24 +60,34 @@ void MCTSNode::backPropagate(float result) {
         node->result_score += result; // Add the result to the node's score
         node->number_of_visits += 1;  // Increment the visit count
 
-        result = -1.0f * result * 0.99f; // Discount the result for the parent
+        result = -1.0f * result * TURN_DISCOUNT; // Discount the result for the parent
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }
 }
 
-void MCTSNode::updateVirtualLoss(int delta) {
-    TimeItGuard timer("MCTSNode::updateVirtualLoss");
-
-    assert(delta != 0 && "Delta must not be zero");
-    // NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. multiply
-    // delta by 100?)
-    delta *= 3;
+void MCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
+    TimeItGuard timer("MCTSNode::backPropagateAndRemoveVirtualLoss");
 
     MCTSNode *node = this;
 
     while (node) {
-        node->virtual_loss += delta; // Update the virtual loss
-        // node->number_of_visits += delta; // Update the visit count
+        node->result_score += result;             // Add the result to the node's score
+        node->virtual_loss -= VIRTUAL_LOSS_DELTA; // Remove the virtual loss
+        // NOTE: Do not change the visit count here, as that is already done in addVirtualLoss
+
+        result = -1.0f * result * TURN_DISCOUNT; // Discount the result for the parent
+        node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
+    }
+}
+
+void MCTSNode::addVirtualLoss() {
+    TimeItGuard timer("MCTSNode::updateVirtualLoss");
+
+    MCTSNode *node = this;
+
+    while (node) {
+        node->virtual_loss += VIRTUAL_LOSS_DELTA; // Update the virtual loss
+        node->number_of_visits += 1;              // Increment the visit count
 
         node = (node->parent == INVALID_NODE) ? nullptr : pool->get(node->parent);
     }

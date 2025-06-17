@@ -26,8 +26,8 @@ class MCTSParams:
 
     num_threads: int
     """The number of parallel search threads on the Cpp side"""
-    
-    node_reuse_discount: float
+
+    percentage_of_node_visits_to_keep: float
     """Factor by which the visits and result score of a reused Tree Node should be discounted by. In range [0..1]"""
 
     min_visit_count: int = 0

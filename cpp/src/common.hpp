@@ -127,7 +127,7 @@ static inline constexpr std::array PIECE_TYPES = {PieceType::PAWN,   PieceType::
 typedef std::pair<Move, float> MoveScore;
 typedef std::pair<int, float> EncodedMoveScore;
 
-inline std::string toString(const Square &square) {
+inline std::string toString(const Square square) {
     File file = file_of(square);
     Rank rank = rank_of(square);
 
@@ -136,7 +136,7 @@ inline std::string toString(const Square &square) {
     return ss.str();
 }
 
-inline std::string toString(const Move &move) {
+inline std::string toString(const Move move) {
     // Converts a Move to a string representation.
     // Since Stockfish does not provide a direct way to convert Move to string,
     // we use the UCI format.

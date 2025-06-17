@@ -1,77 +1,97 @@
 #include "BoardEncoding.hpp"
 
+constexpr int pieceCount(const Bitboard bb) noexcept { return std::popcount(bb); }
+
+constexpr uint64 splitmix64(uint64 x) noexcept {
+    x += 0x9E3779B97F4A7C15ull;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+    return x ^ (x >> 31);
+}
+
+std::size_t BoardHash::operator()(CompressedEncodedBoard const &b) const noexcept {
+    uint64 h = 0xcbf29ce484222325ull;
+    for (const uint64 v : b.bits)
+        h = splitmix64(h ^ splitmix64(v));
+    for (const int8 v : b.scal)
+        h = splitmix64(h ^ static_cast<uint64>(v));
+    return static_cast<size_t>(h);
+}
+
 CompressedEncodedBoard encodeBoard(const Board *board) {
-    // Encodes a chess board into a ENCODING_CHANNELSx8x8 tensor.
-    //
-    // Each layer in the first dimension represents one of the 12 distinct
-    // piece types (6 for each color). Each cell in the 8x8 board for each layer
-    // is 1 if a piece of the layer's type is present at that cell, and 0 otherwise.
-    //
-    // On layer 12-15 are the castling right and layer 16 contains the en-passant square.
-    //
-    // param board: The chess board to encode.
-    // :return: A ENCODING_CHANNELSx8x8 tensor representing the encoded board.
+    CompressedEncodedBoard out{};
 
-    TimeItGuard timer("encodeBoard");
-
-    CompressedEncodedBoard encodedBoard{};
-
+    // ---- 1) normalise position so it's *always white to move* -------------
     const Board tmpBoard((board->currentPlayer() == -1) ? board->position().flip() : board->fen());
     const Position &tmp = tmpBoard.position();
 
-    for (auto [i, color] : enumerate(COLORS)) {
-        for (auto [j, piece_type] : enumerate(PIECE_TYPES)) {
-            const Bitboard pieces = tmp.pieces(color, piece_type);
-            const uint64 layerIndex = i * 6 + j;
-
-            encodedBoard[layerIndex] = pieces;
+    // ---- 2) piece-type channels -------------------------------------------
+    int ch = 0;
+    for (const int color : {WHITE, BLACK}) {
+        for (const int piece : PIECE_TYPES) {
+            out.bits[ch++] = tmp.pieces(color, piece);
         }
     }
 
-    // The castling rights encoded
-    constexpr uint64 allSet = 0xFFFFFFFFFFFFFFFF; // All bits set to 1
-    encodedBoard[12] =
-        allSet * tmp.can_castle(CastlingRights::WHITE_OO); // Kingside castling rights for white
-    encodedBoard[13] =
-        allSet * tmp.can_castle(CastlingRights::WHITE_OOO); // Queenside castling rights for white
-    encodedBoard[14] =
-        allSet * tmp.can_castle(CastlingRights::BLACK_OO); // Kingside castling rights for black
-    encodedBoard[15] =
-        allSet * tmp.can_castle(CastlingRights::BLACK_OOO); // Queenside castling rights for black
+    // ---- 3) castling rights ------------------------------------------------
+    constexpr uint64 ALL_SET = 0xFFFF'FFFF'FFFF'FFFFull;
+    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::WHITE_OO);
+    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::WHITE_OOO);
+    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::BLACK_OO);
+    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::BLACK_OOO);
 
-    if (tmp.ep_square()) {
-        encodedBoard[16] = 1ULL << tmp.ep_square();
+    // ---- 4) occupancy planes ----------------------------------------------
+    out.bits[ch++] = tmp.pieces(Color::WHITE);
+    out.bits[ch++] = tmp.pieces(Color::BLACK);
+
+    // ---- 5) “checkers” mask (attackers of side-to-move’s king) ------------
+    out.bits[ch++] = tmp.checkers();
+
+    static_assert(BINARY_C == 19);
+
+    // ---- 6) material-difference scalars -----------------------------------
+    for (int i = 0; i < 6; ++i) {
+        const Bitboard white = tmp.pieces(WHITE, PIECE_TYPES[i]);
+        const Bitboard black = tmp.pieces(BLACK, PIECE_TYPES[i]);
+        out.scal[i] = static_cast<int8>(pieceCount(white) - pieceCount(black));
     }
 
-    return encodedBoard;
+    return out;
 }
 
 torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
-    // Converts a compressed 64-bit array to an uncompressed ENCODING_CHANNELS x 8 x 8 tensor.
-    //
-    // param compressed: The 64-bit array to convert.
-    // :return: The uncompressed tensor.
+    auto t =
+        torch::empty({BOARD_C, BOARD_LEN, BOARD_LEN}, torch::TensorOptions().dtype(torch::kInt8));
 
-    TimeItGuard timer("toTensor");
+    int8 *dst = t.data_ptr<int8>();
 
-    // Create tensor on CPU first
-    torch::Tensor tensor = torch::zeros({ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH},
-                                        torch::kUInt8);
+    // -------- binary planes -------------------------------------------------
+    for (int ch = 0; ch < BINARY_C; ++ch) {
+        const uint64 bits = compressed.bits[ch];
+        int8 *d = dst + ch * 64;
 
-    // Get CPU data pointer
-    uint8_t* data = tensor.data_ptr<uint8_t>();
-
-    // Fast CPU bit unpacking
-    for (int channel = 0; channel < ENCODING_CHANNELS; ++channel) {
-        const uint64_t bits = compressed[channel];
-        uint8_t* channel_data = data + channel * BOARD_LENGTH * BOARD_LENGTH;
-
-        for (int i = 0; i < 64; ++i) {
-            channel_data[i] = (bits >> i) & 1;
+        // unroll for speed: eight bytes at a time
+        for (int byte = 0; byte < 8; ++byte) {
+            const uint8 b = (bits >> (byte * 8)) & 0xFFu;
+            // expand 8 bits → 8 bytes
+            d[byte * 8 + 0] = b & 1;
+            d[byte * 8 + 1] = (b >> 1) & 1;
+            d[byte * 8 + 2] = (b >> 2) & 1;
+            d[byte * 8 + 3] = (b >> 3) & 1;
+            d[byte * 8 + 4] = (b >> 4) & 1;
+            d[byte * 8 + 5] = (b >> 5) & 1;
+            d[byte * 8 + 6] = (b >> 6) & 1;
+            d[byte * 8 + 7] = (b >> 7) & 1;
         }
     }
 
-    return tensor;
+    // -------- scalar planes -------------------------------------------------
+    for (int i = 0; i < SCALAR_C; ++i) {
+        int8 *d = dst + (BINARY_C + i) * 64;
+        std::memset(d, compressed.scal[i], 64); // broadcast 1 byte → 64 bytes
+    }
+
+    return t;
 }
 
 float getBoardResultScore(const Board &board) {

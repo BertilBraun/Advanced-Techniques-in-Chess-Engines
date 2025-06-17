@@ -33,11 +33,31 @@ class ChessBoard(Board[ChessMove]):
         return 1 if self.board.turn == chess.WHITE else -1
 
     def make_move(self, move: ChessMove) -> None:
-        # TODO? assert move in self.board.legal_moves
+        assert move in self.board.legal_moves
         self.board.push(move)
 
     def is_game_over(self) -> bool:
-        return self.board.is_game_over(claim_draw=True)
+        return self.board.is_game_over(claim_draw=True) or self._is_draw_by_insufficient_material()
+
+    def _is_draw_by_insufficient_material(self) -> bool:
+        """Check if the game is a draw by insufficient material. Copy to the one in Board.cpp"""
+        if len(self.board.piece_map()) > 4:
+            return False
+
+        # Check for the following cases:
+        # 1) King vs King
+        if len(self.board.piece_map()) == 2:
+            return True
+        # 2) King and Bishop vs King
+        if len(self.board.piece_map()) == 3 and len(self.board.piece_map(mask=self.board.bishops)) == 1:
+            return True
+        # 3) King and Knight vs King
+        if len(self.board.piece_map()) == 3 and len(self.board.piece_map(mask=self.board.knights)) == 1:
+            return True
+        # 4) King and two Knights vs King
+        if len(self.board.piece_map()) == 4 and len(self.board.piece_map(mask=self.board.knights)) == 2:
+            return True
+        return False
 
     def check_winner(self) -> Optional[Player]:
         """Check if the game is over and return the winner."""

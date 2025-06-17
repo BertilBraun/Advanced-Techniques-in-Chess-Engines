@@ -13,6 +13,8 @@ class MCTSParams:
     node_reuse_discount: float
     min_visit_count: int
     num_threads: int
+    num_full_searches: int
+    num_fast_searches: int
 
     def __init__(
         self,
@@ -23,6 +25,8 @@ class MCTSParams:
         node_reuse_discount: float,
         min_visit_count: int,
         num_threads: int,
+        num_full_searches: int,
+        num_fast_searches: int,
     ) -> None: ...
 
 class InferenceClientParams:
@@ -67,12 +71,18 @@ class MCTSResults:
 
 class MCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None: ...
-    def search(self, boards: List[Tuple[str, NodeId, int]]) -> MCTSResults: ...
+    def search(self, boards: List[Tuple[str, NodeId, bool]]) -> MCTSResults: ...
     def get_inference_statistics(self) -> InferenceStatistics: ...
     def get_node(self, node_id: NodeId) -> MCTSNode: ...
     def clear_node_pool(self) -> None: ...
     def inference(self, board: str) -> Tuple[List[Tuple[int, float]], float]:
         """Returns a tuple of (encoded moves with probabilities, value) for the given board position."""
+        ...
+    def free_tree(self, node_id: NodeId) -> None:
+        """Frees the tree starting from the given node ID."""
+        ...
+    def eval_search(self, fen: str, node_id: NodeId, num_searches: int) -> MCTSResult:
+        """Performs a search and returns the result for the given FEN and node ID."""
         ...
 
 class MCTSNode:

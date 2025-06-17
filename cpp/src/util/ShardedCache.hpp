@@ -31,7 +31,7 @@ public:
         return false;
     }
 
-    bool contains(const KeyType &key) {
+    [[nodiscard]] bool contains(const KeyType &key) {
         auto &bucket = getBucket(key);
         std::shared_lock lock(bucket.mutex); // Allow concurrent reads.
         return bucket.map.find(key) != bucket.map.end();
@@ -60,7 +60,7 @@ public:
         }
     }
 
-    size_t size() const {
+    [[nodiscard]] size_t size() const {
         size_t totalSize = 0;
         for (const auto &bucket : m_buckets) {
             std::shared_lock lock(bucket.mutex); // Allow concurrent reads.
@@ -70,7 +70,7 @@ public:
     }
 
     // Check if the cache is empty.
-    bool empty() const {
+    [[nodiscard]] bool empty() const {
         for (const auto &bucket : m_buckets) {
             std::shared_lock lock(bucket.mutex); // Allow concurrent reads.
             if (!bucket.map.empty()) {
@@ -154,8 +154,8 @@ public:
         // Locks are automatically released when iterator is destroyed
     };
 
-    LockedIterator begin() { return LockedIterator(*this); }
-    LockedIterator end() { return LockedIterator(*this, true); }
+    [[nodiscard]] LockedIterator begin() { return LockedIterator(*this); }
+    [[nodiscard]] LockedIterator end() { return LockedIterator(*this, true); }
 
 private:
     struct Bucket {
@@ -166,7 +166,7 @@ private:
     std::array<Bucket, NumBuckets> m_buckets;
     Hash m_hasher{}; // one copy – avoids constructing every call
 
-    Bucket &getBucket(const KeyType &key) {
+    [[nodiscard]] Bucket &getBucket(const KeyType &key) {
         // Simple hash to bucket index.
         return m_buckets[m_hasher(key) % NumBuckets];
     }

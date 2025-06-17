@@ -11,7 +11,7 @@ from typing import TypeVar
 from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
-from src.settings import TORCH_DTYPE, USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
+from src.settings import USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
 from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 from src.util.log import LogLevel, error, log, warn
 from src.util.timing import timeit
@@ -32,6 +32,8 @@ class InferenceClient:
         self.save_path = save_path
         self.model: Network = None  # type: ignore
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
+        self.dtype = torch.bfloat16 if USE_GPU else torch.float32  # Use bfloat16 on GPU for better performance
+        # NOTE: There does not seem to be a significant performance difference between bfloat16 and float16 on the GPU
 
         self.inference_cache: dict[int, tuple[MoveList, float]] = {}
         self.total_hits = 0
@@ -59,7 +61,7 @@ class InferenceClient:
                     torch.cuda.synchronize()
 
                 self.model = load_model(model_path, self.network_args, self.device)
-                self.model.to(self.device)  # just to be sure
+                self.model.to(dtype=self.dtype, device=self.device, non_blocking=True)
                 self.model.disable_auto_grad()
                 self.model.eval()
                 self.model.fuse_model()
@@ -144,7 +146,7 @@ class InferenceClient:
                 error('Model not loaded')
             return [(np.full((CurrentGame.action_size,), 1 / CurrentGame.action_size), 0.0) for _ in boards]
 
-        input_tensor = torch.from_numpy(np.array(boards)).to(dtype=TORCH_DTYPE, device=self.device, non_blocking=True)
+        input_tensor = torch.from_numpy(np.array(boards)).to(dtype=self.dtype, device=self.device, non_blocking=True)
 
         policies, values = self.model(input_tensor)
 

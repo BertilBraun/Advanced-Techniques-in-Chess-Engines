@@ -47,9 +47,9 @@ public:
      * Synchronous interface: runs inference on a batch of boards and returns results
      * in the same order as the input.
      */
-    std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
+    [[nodiscard]] std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
 
-    InferenceStatistics getStatistics();
+    [[nodiscard]] InferenceStatistics getStatistics();
 
 private:
     typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
@@ -86,7 +86,7 @@ private:
      * Applies softmax to the policies, moves policies and values to CPU (float32),
      * and returns a vector of (policy tensor, value) pairs.
      */
-    std::vector<ModelInferenceResult>
+    [[nodiscard]] std::vector<ModelInferenceResult>
     modelInference(const std::vector<torch::Tensor> &boards);
 
     // Member variables.

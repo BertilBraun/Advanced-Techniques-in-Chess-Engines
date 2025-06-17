@@ -10,7 +10,7 @@ NodePool::NodePool() {
 
 void NodePool::deallocateNode(const NodeId id) {
     std::lock_guard<std::mutex> lock(m_poolMutex);
-    assert(id < m_nextFreshId);
+    assert(isLive(id));
     std::optional<MCTSNode> *ptr = slotPointer(id);
     // Call the destructor of the MCTSNode at this slot:
     if (ptr->has_value())
@@ -23,6 +23,19 @@ size_t NodePool::capacity() const { return m_chunks.size() * CHUNK_SIZE; }
 size_t NodePool::liveNodeCount() const {
     std::lock_guard<std::mutex> lock(m_poolMutex);
     return m_nextFreshId - m_freeList.size();
+}
+
+void NodePool::clear() {
+    std::lock_guard<std::mutex> lock(m_poolMutex);
+    m_chunks.clear();
+    m_freeList.clear();
+    m_nextFreshId = 0;
+    addChunk(); // Always keep at least one chunk
+}
+
+bool NodePool::isLive(const NodeId id) const {
+    std::lock_guard<std::mutex> lock(m_poolMutex);
+    return id < m_nextFreshId && !isFreed(id);
 }
 
 bool NodePool::isFreed(const NodeId id) const {

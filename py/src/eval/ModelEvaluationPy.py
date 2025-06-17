@@ -18,7 +18,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import MCTSParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
-from src.settings import CURRENT_GAME, USE_GPU, CurrentBoard, CurrentGame
+from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
@@ -56,7 +56,7 @@ class Results:
         return Results(self.losses, self.wins, self.draws)
 
     def __str__(self) -> str:
-        return f'Wins: {self.wins}, Losses: {self.losses}, Draws: {self.draws}'
+        return f'W/D/L: {self.wins}/{self.draws}/{self.losses}'
 
 
 EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
@@ -98,7 +98,7 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
             min_visit_count=0,
             num_threads=2,
-            node_reuse_discount=1.0,
+            percentage_of_node_visits_to_keep=1.0,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
@@ -171,7 +171,7 @@ class ModelEvaluation:
         opponent.load_model(model_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = MCTS(opponent, self.mcts_args).search([(board, None) for board in boards])
+            results = MCTS(opponent, self.mcts_args).search(boards)
             return [action_probabilities(result.visit_counts) for result in results]
 
         # opponent_evaluator = policy_evaluator(opponent)
@@ -206,7 +206,7 @@ class ModelEvaluation:
         client.update_iteration(self.iteration)
 
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            results = MCTS(client, self.mcts_args).search([(board, None) for board in boards])
+            results = MCTS(client, self.mcts_args).search(boards)
             return [action_probabilities(result.visit_counts) for result in results]
 
         # model1 = policy_evaluator(current_model)

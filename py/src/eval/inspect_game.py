@@ -7,7 +7,7 @@ if CURRENT_GAME == 'hex':
 else:
     from src.eval.GridGUI import BaseGridGameGUI as GUI
 
-# TODO Copy this move list from tensorboard
+# NOTE: Copy this move list from tensorboard
 move_list = '1:2,3,1,7,5,4,8'  # example move list
 
 result, moves = move_list.split(':', maxsplit=1)

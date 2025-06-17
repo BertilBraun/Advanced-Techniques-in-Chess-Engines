@@ -1,4 +1,3 @@
-import time
 import torch
 from torch.multiprocessing import Process
 from pathlib import Path
@@ -17,7 +16,7 @@ from src.util.save_paths import (
 )
 from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
-from src.cluster.TrainerProcess import run_trainer_process
+from src.cluster.TrainerProcess import TrainerProcess
 from src.util.tensorboard import TensorboardWriter, log_scalar, log_scalars
 
 
@@ -39,7 +38,6 @@ class CommanderProcess:
         self.communication = Communication(self.communication_folder)
         self.communication.clear_all()
 
-        self.trainer_process: Process
         self.self_play_processes: list[Process] = []
 
         self.self_play_nodes_on_trainer_device: list[int] = []
@@ -47,13 +45,6 @@ class CommanderProcess:
         self.trainer_device_id = torch.cuda.device_count() - 1 if USE_GPU else 0
 
     def _setup_connections(self) -> None:
-        # The Trainer and Commander has a Pipe connection
-        # Each SelfPlay and InferenceServer has a Pipe connection to the LoadBalancer
-        # The Commander has a Pipe connection to each SelfPlay and InferenceServer
-
-        # Trainer and Commander
-        self.trainer_process = self._start_trainer_process()
-
         for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
             self.self_play_processes.append(self._start_self_play_processes(node_id))
 
@@ -72,15 +63,6 @@ class CommanderProcess:
         process.start()
         return process
 
-    def _start_trainer_process(self) -> Process:
-        """Starts the Trainer process and returns the process."""
-        process = Process(
-            target=run_trainer_process,
-            args=(self.run_id, self.args, self.communication_folder, self.trainer_device_id),
-        )
-        process.start()
-        return process
-
     def run(self) -> None:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
 
@@ -95,6 +77,8 @@ class CommanderProcess:
 
         log('Setting up connections...')
         self._setup_connections()
+
+        trainer = TrainerProcess(self.args, self.run_id, self.trainer_device_id)
         log('Connections set up.')
 
         # Start CPU usage logger for one SelfPlay process
@@ -113,11 +97,7 @@ class CommanderProcess:
                 self.communication.boardcast(f'START AT ITERATION: {iteration}')
 
                 # Wait for Trainer to finish
-                while not self.communication.is_received(f'TRAINING FINISHED: {iteration}'):
-                    time.sleep(0.1)  # Prevent busy waiting
-                    if self.communication.is_received('STOP'):
-                        log('Received STOP command. Stopping training.')
-                        return
+                trainer.train(iteration)
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 
@@ -131,22 +111,16 @@ class CommanderProcess:
         log('Training complete. Sending STOP to all processes.')
         self.communication.boardcast('STOP')
 
-        self.trainer_process.terminate()
         for process in self.self_play_processes:
             process.terminate()
         exit()
 
     def _ensure_processes_are_running(self):
         for i, process in enumerate(list(self.self_play_processes)):
-            # 10 minutes since we check in after every move was played, so not very long timeouts required
-            if self._ensure_process_is_running(process, f'SELF PLAY {i}', timeout=10 * 60):
+            # 15 minutes since we check in after every move was played, so not very long timeouts required
+            if self._ensure_process_is_running(process, f'SELF PLAY {i}', timeout=15 * 60):
                 # if the process is not alive, restart it
                 self.self_play_processes[i] = self._start_self_play_processes(i)
-
-        # 30 minutes since training may take ~10 minutes and we want to make sure, not to restart the Trainer process too often
-        if self._ensure_process_is_running(self.trainer_process, 'TRAINER', timeout=30 * 60):
-            # if the Trainer process is not alive, restart it
-            self.trainer_process = self._start_trainer_process()
 
     def _ensure_process_is_running(self, process: Process, name: str, timeout: int) -> bool:
         """Ensures that the given process is running and alive. If not, it returns true, to indicate that the process should be restarted."""
@@ -170,7 +144,8 @@ class CommanderProcess:
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
     def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
-        SKIP_GATING_EVALUATION = True  # TODO: make this a parameter in args
+        # TODO in gating process auslagern?
+        SKIP_GATING_EVALUATION = False  # TODO: make this a parameter in args
         if SKIP_GATING_EVALUATION:
             # for now, ignore gating, always update the model as quickly as possible
             current_best_iteration = iteration + 1
@@ -181,7 +156,7 @@ class CommanderProcess:
         log(f'Running gating evaluation at iteration {iteration}.')
 
         with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
-            # TODO only stop processes on the gating device and make the portion a hyperparameter
+            # TODO make the portion a hyperparameter
             for node_id in self.self_play_nodes_on_trainer_device[::2]:
                 # only stop half of the self-play processes for gating
                 self.communication.send_to_id('STOP SELF PLAY', node_id)
@@ -192,7 +167,7 @@ class CommanderProcess:
                 self.args,
                 device_id=self.trainer_device_id,
                 num_games=200,
-                num_searches_per_turn=64,
+                num_searches_per_turn=100,
             )
             results = gating_evaluation.play_two_models_search(
                 model_save_path(current_best_iteration, self.args.save_path)
@@ -213,7 +188,7 @@ class CommanderProcess:
             result_score = results.wins / (results.wins + results.losses) if results.wins + results.losses > 0 else 0.0
             log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
             # TODO make this a parameter in args
-            if result_score > 0.53:  # 55% win rate
+            if result_score > 0.50:  # 50% win rate
                 log(f'Gating evaluation passed at iteration {iteration}.')
                 current_best_iteration = iteration + 1
                 self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')

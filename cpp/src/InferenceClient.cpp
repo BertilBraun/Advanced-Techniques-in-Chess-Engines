@@ -143,7 +143,7 @@ InferenceStatistics InferenceClient::getStatistics() {
         return stats; // Avoid division by zero.
     }
 
-    stats.cacheHitRate = (static_cast<float>(m_totalHits) / m_totalEvals) * 100.0f;
+    stats.cacheHitRate = static_cast<float>(m_totalHits) / static_cast<float>(m_totalEvals) * 100.0f;
     stats.uniquePositions = m_cache.size();
 
     stats.nnOutputValueDistribution.reserve(m_cache.size());
@@ -156,21 +156,7 @@ InferenceStatistics InferenceClient::getStatistics() {
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
 
     stats.averageNumberOfPositionsInInferenceCall =
-        static_cast<float>(m_totalEvals) / m_totalModelInferenceCalls;
-
-    // log("Inference Client stats:");
-    // log("  cache_hit_rate:", stats.cacheHitRate);
-    // log("  unique_positions:", stats.uniquePositions);
-    // log("  cache_size_mb:", stats.cacheSizeMB);
-    // log("  average_number_of_positions_in_inference_call:",
-    //     stats.averageNumberOfPositionsInInferenceCall);
-    //
-    // std::cout << "Inference Client stats:" << std::endl;
-    // std::cout << "  cache_hit_rate: " << stats.cacheHitRate << "%" << std::endl;
-    // std::cout << "  unique_positions: " << stats.uniquePositions << std::endl;
-    // std::cout << "  cache_size_mb: " << stats.cacheSizeMB << " MB" << std::endl;
-    // std::cout << "  average_number_of_positions_in_inference_call: "
-    //           << stats.averageNumberOfPositionsInInferenceCall << std::endl;
+        static_cast<float>(m_totalEvals) / static_cast<float>(m_totalModelInferenceCalls);
 
     return stats;
 }
@@ -195,7 +181,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
     std::lock_guard<std::mutex> lock(m_modelMutex);
 
     m_model = torch::jit::load(modelPathToLoad, m_device);
-    m_model.to(m_torchDtype); // Use half precision for inference.
+    m_model.to(m_torchDtype);
     m_model.eval();
 }
 

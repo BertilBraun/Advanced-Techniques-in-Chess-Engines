@@ -2,7 +2,6 @@ import chess
 from datasets import load_dataset
 
 from src.mcts.MCTS import MCTS, action_probabilities
-from src.mcts.MCTSNode import MCTSNode
 from src.settings import TRAINING_ARGS, CurrentBoard, CurrentGame
 from src.cluster.InferenceClient import InferenceClient
 
@@ -16,7 +15,7 @@ def get_testing_inference_client() -> InferenceClient:
     """
     # Load the model from the default path.
     client = InferenceClient(0, TRAINING_ARGS.network, f'reference/{CurrentGame.__class__.__name__}')
-    # TODO client.load_model('reference/sft_chess.pt')
+    # NOTE if a pretrained model exists: client.load_model('reference/sft_chess.pt')
     return client
 
 
@@ -51,7 +50,7 @@ def run_mate_puzzle_regression():
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
 
-    inputs: list[tuple[CurrentBoard, MCTSNode | None]] = []
+    inputs: list[CurrentBoard] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
     for puzzle in mate_puzzles:
@@ -71,7 +70,7 @@ def run_mate_puzzle_regression():
         else:
             expected_move = moves[0]
 
-        inputs.append((board, None))
+        inputs.append(board)
         metadata.append((puzzle_id, expected_move, puzzle))
 
     # Run batch MCTS search.
@@ -79,7 +78,7 @@ def run_mate_puzzle_regression():
     results = mcts.search(inputs)
 
     failures = []
-    for (puzzle_id, expected_move, puzzle), result, (board, _) in zip(metadata, results, inputs):
+    for (puzzle_id, expected_move, puzzle), result, board in zip(metadata, results, inputs):
         # Apply a softmax to the visit counts.
         probs = action_probabilities(result.visit_counts)
         moves = [(move, probs[move], visit_count) for move, visit_count in result.visit_counts]

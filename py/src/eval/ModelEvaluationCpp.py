@@ -17,7 +17,7 @@ from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import action_probabilities
-from src.settings import USE_GPU, CurrentBoard, CurrentGame
+from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
 from src.util.save_paths import load_model, model_save_path
 
 
@@ -37,12 +37,14 @@ class ModelEvaluation:
     def mcts_args(self) -> MCTSParams:
         return MCTSParams(
             num_parallel_searches=self.args.self_play.mcts.num_parallel_searches,
-            c_param=1.7,
+            c_param=PLAY_C_PARAM,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
-            num_threads=self.args.self_play.mcts.num_threads * self.args.cluster.num_self_play_nodes_on_cluster // 2,
+            num_threads=self.num_games // 2,
             node_reuse_discount=1.0,
+            num_full_searches=self.num_searches_per_turn,
+            num_fast_searches=self.num_searches_per_turn,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
@@ -116,11 +118,9 @@ class ModelEvaluation:
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search(  # noqa: F821
-                [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
+                [(board.board.fen(), INVALID_NODE, False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
-
-        # opponent_evaluator = policy_evaluator(opponent)
 
         res = self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
 
@@ -162,7 +162,7 @@ class ModelEvaluation:
         def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_stockfish_policy(board: CurrentBoard) -> np.ndarray:
                 # Use Stockfish to get the best move
-                result = engine.play(board.board, chess.engine.Limit(time=0.01))
+                result = engine.play(board.board, chess.engine.Limit(time=0.01, depth=level))
                 move = result.move
 
                 if not move:
@@ -191,11 +191,9 @@ class ModelEvaluation:
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search(  # noqa: F821
-                [(board.board.fen(), INVALID_NODE, self.num_searches_per_turn) for board in boards]
+                [(board.board.fen(), INVALID_NODE, False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
-
-        # model1 = policy_evaluator(current_model)
 
         results = Results(0, 0, 0)
 

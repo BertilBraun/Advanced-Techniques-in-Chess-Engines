@@ -7,6 +7,10 @@ from src.Encoding import MoveScore
 from src.settings import CurrentBoard, CurrentGame
 
 
+# NOTE: more virtual loss, to avoid the same node being selected multiple times (i.e. muliply delta by 2-5?)
+VIRTUAL_LOSS_DELTA = 1  # How much to increase the virtual loss by when selecting a node
+
+
 class MCTSNode:
     @classmethod
     def root(cls, board: CurrentBoard) -> MCTSNode:
@@ -103,15 +107,12 @@ class MCTSNode:
         self.children_virtual_losses = np.zeros(len(self.children), dtype=np.int32)
         self.children_policies = np.array([score for _, score in encoded_moves_with_scores], dtype=np.float32)
 
-    def update_virtual_losses(self, delta: int) -> None:
+    def add_virtual_loss(self) -> None:
         node = self
 
-        # TODO more virtual loss, to avoid the same node being selected multiple times (i.e. muliply delta by 100?)
-        delta *= 3
-
         while node.parent:
-            node.parent.children_virtual_losses[node.my_child_index] += delta
-            # TODO node.parent.children_number_of_visits[node.my_child_index] += delta
+            node.parent.children_virtual_losses[node.my_child_index] += VIRTUAL_LOSS_DELTA
+            node.parent.children_number_of_visits[node.my_child_index] += 1
             node = node.parent
 
     def back_propagate(self, result: float) -> None:
@@ -120,6 +121,16 @@ class MCTSNode:
         while node.parent:
             node.parent.children_number_of_visits[node.my_child_index] += 1
             node.parent.children_result_scores[node.my_child_index] += result
+            result = -1.0 * result * 0.99  # Discount the result for the parent node
+            node = node.parent
+
+    def back_propagate_and_remove_virtual_loss(self, result: float) -> None:
+        node = self
+
+        while node.parent:
+            node.parent.children_result_scores[node.my_child_index] += result
+            node.parent.children_virtual_losses[node.my_child_index] -= VIRTUAL_LOSS_DELTA
+            # NOTE: We do not increment the number of visits here, as this is already done in add_virtual_loss
             result = -1.0 * result * 0.99  # Discount the result for the parent node
             node = node.parent
 
@@ -148,14 +159,6 @@ class MCTSNode:
         children = list(
             sorted(self.children, key=lambda child: self.children_policies[child.my_child_index], reverse=True)
         )
-
-        visits = ', '.join(str(round(child.number_of_visits, 2)) for child in children)
-        new_policy = ', '.join(str(round(child.number_of_visits / self.number_of_visits, 2)) for child in children)
-        policies = ', '.join(str(round(self.children_policies[child.my_child_index], 2)) for child in children)
-        moves = ', '.join(
-            str(CurrentGame.decode_move(child.encoded_move_to_get_here, self.board)) for child in children
-        )
-        scores = ', '.join(str(round(self.children_result_scores[child.my_child_index], 2)) for child in children)
 
         def entropy(node: MCTSNode) -> float:
             # calculate the entropy of the nodes visit counts

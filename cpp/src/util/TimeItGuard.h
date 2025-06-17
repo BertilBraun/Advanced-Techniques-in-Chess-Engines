@@ -13,7 +13,7 @@ public:
     // On exit, calculate the elapsed time and update globals.
     ~TimeItGuard();
 
-    float elapsed() const;
+    [[nodiscard]] float elapsed() const;
 
 private:
     std::string m_funcName;

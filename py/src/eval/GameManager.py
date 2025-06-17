@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,6 +17,8 @@ class GameManager:
     def play_game(self, verify_moves=True) -> Optional[Player]:
         """Manages the gameplay loop until the game is over or a player quits."""
         self.board = CurrentGame.get_initial_board()
+        for _ in range(2):
+            self.board.make_move(random.choice(self.board.get_valid_moves()))
         while not self.board.is_game_over():
             current_player = self.players[self.board.current_player]
 

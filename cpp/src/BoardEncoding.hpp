@@ -2,34 +2,36 @@
 
 #include "common.hpp"
 
-// 6 types for each color + 4 for castling rights + 1 for en passant
-static constexpr int ENCODING_CHANNELS = 6 + 6 + 4 + 1;
+// ------------ board layout --------------------------------------------------
+// 12 piece-type bit-boards  (6 white + 6 black)
+// 4  castling-rights planes
+// 2  occupancy planes       (all white pieces, all black pieces)
+// 1  "checkers" plane
+// 6  material-difference scalar planes
+static constexpr int BOARD_LEN = 8;
+static constexpr int BOARD_C = 25;  // total channels
+static constexpr int BINARY_C = 19; // stored as one u64 each
+static constexpr int SCALAR_C = 6;  // stored as one  int8 each
+static_assert(BOARD_C == BINARY_C + SCALAR_C);
 
-typedef std::array<std::array<std::array<int8, BOARD_LENGTH>, BOARD_LENGTH>, ENCODING_CHANNELS>
-    EncodedBoard;
-typedef std::array<uint64, ENCODING_CHANNELS> CompressedEncodedBoard;
+// ---------------------------------------------------------------------------
+// in-memory compressed format
+// ---------------------------------------------------------------------------
+struct CompressedEncodedBoard {
+    std::array<uint64, BINARY_C> bits; // 19 × 8  B
+    std::array<int8, SCALAR_C> scal;   //  6 × 1  B
 
-// A decent 64-bit hash for CompressedEncdodedBoard.
-static constexpr uint64 splitmix64(uint64 x) noexcept {
-    x += 0x9E3779B97F4A7C15ull;
-    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-    return x ^ (x >> 31);
-}
-
-struct BoardHash {
-    size_t operator()(const CompressedEncodedBoard &b) const noexcept {
-        uint64 h = 0xcbf29ce484222325ull; // seed
-        for (uint64 v : b) {              // mix each channel
-            h ^= splitmix64(v);
-            h = splitmix64(h);
-        }
-        return static_cast<size_t>(h); // must return size_t
+    [[nodiscard]] bool operator==(const CompressedEncodedBoard &other) const noexcept {
+        return bits == other.bits && scal == other.scal;
     }
 };
 
-CompressedEncodedBoard encodeBoard(const Board *board);
+struct BoardHash {
+    [[nodiscard]] std::size_t operator()(CompressedEncodedBoard const &b) const noexcept;
+};
 
-torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
+[[nodiscard]] CompressedEncodedBoard encodeBoard(const Board *board);
 
-float getBoardResultScore(const Board &board);
+[[nodiscard]] torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
+
+[[nodiscard]] float getBoardResultScore(const Board &board);
