@@ -21,3 +21,10 @@ private:
 };
 
 void resetTimes();
+
+#define ENABLE_TIMING
+#ifdef ENABLE_TIMING
+#define TIMEIT(name) TimeItGuard timer(name);
+#else
+#define TIMEIT(name)
+#endif

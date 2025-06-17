@@ -98,6 +98,8 @@ MCTSStatistics mctsStatistics(const MCTSNode *root, NodePool *pool) {
 }
 
 MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
+    TIMEIT("MCTS::search");
+
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
 
@@ -213,7 +215,7 @@ MCTSResult MCTS::evalSearch(const std::string &fen, const NodeId prevNodeId,
 }
 
 void MCTS::parallelIterate(MCTSNode *root) {
-    TimeItGuard timer("MCTS::parallelIterate");
+    TIMEIT("MCTS::parallelIterate");
 
     // These variables are initialized only once per thread
     // and retain their values between function calls
@@ -268,6 +270,7 @@ std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const
 // Traverse the tree to find the best child or, if the node is terminal,
 // back-propagate the board’s result.
 MCTSNode *MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) {
+    TIMEIT("MCTS::getBestChildOrBackPropagate");
 
     for (const NodeId childId : root->children) {
         MCTSNode *child = m_pool.get(childId);
@@ -293,6 +296,8 @@ MCTSNode *MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) 
 
 std::tuple<MCTSResult, MCTSStatistics> MCTS::searchOneGame(MCTSNode *root,
                                                            const bool shouldRunFullSearch) {
+    TIMEIT("MCTS::searchOneGame");
+
     if (root->parent != INVALID_NODE) {
         // If the node has a parent, we need to clean it up first.
         // Remove the nodes parent and all its children from the pool.

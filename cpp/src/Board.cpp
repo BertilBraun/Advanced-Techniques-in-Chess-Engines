@@ -27,7 +27,7 @@ Board::Board(const std::string &fen) {
 }
 
 void Board::makeMove(Move m) {
-    TimeItGuard timer("Board::makeMove");
+    TIMEIT("Board::makeMove");
 
     // Optionally, one could assert that 'm' is legal:
     assert(contains(validMoves(), m) && "Attempting to push an illegal move");
@@ -35,7 +35,7 @@ void Board::makeMove(Move m) {
 }
 
 bool Board::isGameOver() const {
-    TimeItGuard timer("Board::isGameOver");
+    TIMEIT("Board::isGameOver");
 
     // 3-fold-repetition and 50 move rul draw is handled outside move generation
     if (m_pos.is_draw() || drawByInsufficientMaterial()) {
@@ -47,7 +47,7 @@ bool Board::isGameOver() const {
 }
 
 std::optional<int> Board::checkWinner() const {
-    TimeItGuard timer("Board::checkWinner");
+    TIMEIT("Board::checkWinner");
 
     // If there is at least one legal move, the game is not over.
     if (MoveList<LEGAL>(m_pos).size() > 0) {
@@ -67,7 +67,7 @@ std::optional<int> Board::checkWinner() const {
     }
 }
 std::vector<Move> Board::validMoves() const {
-    TimeItGuard timer("Board::validMoves");
+    TIMEIT("Board::validMoves");
 
     const MoveList<LEGAL> ml(m_pos);
     std::vector<Move> filtered;

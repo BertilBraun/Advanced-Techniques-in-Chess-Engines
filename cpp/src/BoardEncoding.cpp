@@ -19,6 +19,7 @@ std::size_t BoardHash::operator()(CompressedEncodedBoard const &b) const noexcep
 }
 
 CompressedEncodedBoard encodeBoard(const Board *board) {
+    TIMEIT("encodeBoard");
     CompressedEncodedBoard out{};
 
     // ---- 1) normalise position so it's *always white to move* -------------
@@ -60,6 +61,8 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
 }
 
 torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
+    TIMEIT("toTensor");
+
     auto t =
         torch::empty({BOARD_C, BOARD_LEN, BOARD_LEN}, torch::TensorOptions().dtype(torch::kInt8));
 

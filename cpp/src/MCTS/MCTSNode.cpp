@@ -19,6 +19,7 @@ MCTSNode::MCTSNode(const std::string &boardFen, const float policy, const Move m
       policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon, const float parentScore) const {
+    TIMEIT("MCTSNode::ucb");
     const float uScore = policy * uCommon / static_cast<float>(1 + number_of_visits);
 
     // TODO which is the best initializer for qScore?
@@ -34,7 +35,7 @@ float MCTSNode::ucb(const float uCommon, const float parentScore) const {
 }
 
 void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
-    TimeItGuard timer("MCTSNode::expand");
+    TIMEIT("MCTSNode::expand");
 
     if (isFullyExpanded() || moves_with_scores.empty())
         return;
@@ -52,7 +53,7 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
 }
 
 void MCTSNode::backPropagate(float result) {
-    TimeItGuard timer("MCTSNode::backPropagate");
+    TIMEIT("MCTSNode::backPropagate");
 
     MCTSNode *node = this;
 
@@ -66,7 +67,7 @@ void MCTSNode::backPropagate(float result) {
 }
 
 void MCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
-    TimeItGuard timer("MCTSNode::backPropagateAndRemoveVirtualLoss");
+    TIMEIT("MCTSNode::backPropagateAndRemoveVirtualLoss");
 
     MCTSNode *node = this;
 
@@ -81,7 +82,7 @@ void MCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
 }
 
 void MCTSNode::addVirtualLoss() {
-    TimeItGuard timer("MCTSNode::updateVirtualLoss");
+    TIMEIT("MCTSNode::updateVirtualLoss");
 
     MCTSNode *node = this;
 
@@ -94,7 +95,7 @@ void MCTSNode::addVirtualLoss() {
 }
 
 NodeId MCTSNode::bestChild(const float cParam) const {
-    TimeItGuard timer("MCTSNode::bestChild");
+    TIMEIT("MCTSNode::bestChild");
 
     assert(!children.empty() && "Node has no children");
 
