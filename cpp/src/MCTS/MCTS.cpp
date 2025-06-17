@@ -109,6 +109,8 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     newBoardIndices.reserve(boards.size());
     newBoards.reserve(boards.size());
 
+    std::vector<NodeId> treeNodesToKeep;
+
     for (const auto &[i, board] : enumerate(boards)) {
         const auto &[fen, id, runFullSearch] = board;
         if (id == INVALID_NODE || !m_pool.isLive(id)) {
@@ -118,15 +120,19 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
 
             newBoardIndices.push_back(i);
             newBoards.emplace_back(&root->board);
+            treeNodesToKeep.push_back(root->myId);
         } else {
             // If the node is already expanded, we can use it directly.
             // It will have to be cleaned up later. (i.e. its parent and siblings will be removed
             // and visits discounted)
             MCTSNode *root = m_pool.get(id);
-            setupNodeForTreeReuse(root, runFullSearch);
+            auto nodesToKeep = setupNodeForTreeReuse(root, runFullSearch);
+            treeNodesToKeep.insert(treeNodesToKeep.end(), nodesToKeep.begin(), nodesToKeep.end());
             roots.push_back(root);
         }
     }
+
+    m_pool.purge(treeNodesToKeep);
 
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
 
@@ -150,7 +156,8 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     rootsToSearch.reserve(roots.size());
     while (true) {
         for (const int i : range(roots.size())) {
-            const auto limit = get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
+            const auto limit =
+                get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
 
             if (roots[i]->number_of_visits < limit) {
                 // If the root has not enough visits, we will search it.
@@ -195,7 +202,8 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
             auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
             std::vector<BoardTuple> myBoards(begin, end);
 
-            futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
+            futures.emplace_back(
+                m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
         }
 
         std::vector<MCTSResult> results;
@@ -365,11 +373,10 @@ MCTSNode *MCTS::getBestChildOrBackPropagate(MCTSNode *root, const float cParam) 
     return node;
 }
 
-void MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch) {
+std::vector<NodeId> MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch) {
     assert(root->parent != INVALID_NODE && "MCTS::setupRoot: The root node must have a parent");
     // If the node has a parent, we need to clean it up first.
     // Remove the nodes parent and all its children from the pool.
-    freeTree(root->parent, root->myId);
     root->parent = INVALID_NODE;
 
     // Add Dirichlet noise to the node's policy only if it's a full search, don't add noise for
@@ -383,6 +390,8 @@ void MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch)
         }
     }
 
+    std::vector<NodeId> nodesToKeep;
+
     std::function<void(MCTSNode *)> discount = [&](MCTSNode *node) {
         // Discount the node's score and visits. - Problem same divisor is not given because of
         // integer rounding
@@ -394,10 +403,14 @@ void MCTS::setupNodeForTreeReuse(MCTSNode *root, const bool shouldRunFullSearch)
         node->result_score = clamp(node->result_score, static_cast<float>(-node->number_of_visits),
                                    static_cast<float>(node->number_of_visits));
 
+        nodesToKeep.push_back(node->myId);
+
         for (const NodeId childId : node->children)
             discount(m_pool.get(childId));
     };
 
     // Discount the node's score and visits.
     discount(root);
+
+    return std::move(nodesToKeep);
 }

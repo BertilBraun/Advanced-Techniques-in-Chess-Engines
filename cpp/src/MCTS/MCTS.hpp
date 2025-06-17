@@ -137,5 +137,5 @@ private:
 
     [[nodiscard]] MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
 
-    void setupNodeForTreeReuse(MCTSNode *root, bool shouldRunFullSearch);
+    [[nodiscard]] std::vector<NodeId> setupNodeForTreeReuse(MCTSNode *root, bool shouldRunFullSearch);
 };
