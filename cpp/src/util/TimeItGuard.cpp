@@ -33,8 +33,6 @@ TimeItGuard::TimeItGuard(const std::string &name)
     }
     // Push the current function name onto the call stack.
     callStack.push_back(m_funcName);
-
-    std::cout << "Entering function: " << m_funcName << std::endl;
 }
 
 TimeItGuard::~TimeItGuard() {
