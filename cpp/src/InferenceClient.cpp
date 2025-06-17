@@ -194,7 +194,7 @@ void InferenceClient::inferenceWorker() {
     while (true) {
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
-            m_queueCV.wait_for(lock, std::chrono::microseconds(500),
+            m_queueCV.wait_for(lock, std::chrono::milliseconds(2), // TODO make this configurable
                                [this] { return !m_requestQueue.empty() || m_shutdown; });
             if (m_shutdown && m_requestQueue.empty())
                 break;
