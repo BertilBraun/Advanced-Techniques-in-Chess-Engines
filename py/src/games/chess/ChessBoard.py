@@ -33,7 +33,7 @@ class ChessBoard(Board[ChessMove]):
         return 1 if self.board.turn == chess.WHITE else -1
 
     def make_move(self, move: ChessMove) -> None:
-        assert move in self.board.legal_moves
+        assert move in self.get_valid_moves(), f'Invalid move: {move} for board:\n{self}'
         self.board.push(move)
 
     def is_game_over(self) -> bool:
