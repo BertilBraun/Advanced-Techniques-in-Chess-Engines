@@ -140,8 +140,8 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
 
     m_pool.purge(treeNodesToKeep);
 
-    std::cout << "MCTS::searchGames: Purged the node pool, keeping "
-              << treeNodesToKeep.size() << " nodes." << std::endl;
+    std::cout << "MCTS::searchGames: Purged the node pool, keeping " << treeNodesToKeep.size()
+              << " nodes." << std::endl;
 
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
 
@@ -172,8 +172,7 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     while (true) {
         rootsToSearch.clear();
         for (const auto [root, board] : zip(roots, boards)) {
-            const auto limit =
-                get<2>(board) ? m_args.num_full_searches : m_args.num_fast_searches;
+            const auto limit = get<2>(board) ? m_args.num_full_searches : m_args.num_fast_searches;
 
             if (root->number_of_visits < limit) {
                 // If the root has not enough visits, we will search it.
@@ -213,7 +212,7 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
 
-       std::cout << "MCTS::search: Starting search for " << boards.size() << " boards." << std::endl;
+    std::cout << "MCTS::search: Starting search for " << boards.size() << " boards." << std::endl;
 
     try {
         const std::size_t N = boards.size();
@@ -322,13 +321,12 @@ MCTSResult MCTS::evalSearch(const std::string &fen, const NodeId prevNodeId,
     return gatherResult(root);
 }
 
-
 void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     TIMEIT("MCTS::parallelIterate");
-// These variables are initialized only once per thread
-// and retain their values between function calls
-thread_local std::vector<MCTSNode *> nodes;
-thread_local std::vector<const Board *> boards;
+    // These variables are initialized only once per thread
+    // and retain their values between function calls
+    thread_local std::vector<MCTSNode *> nodes;
+    thread_local std::vector<const Board *> boards;
 
     // Clear contents but maintain capacity
     nodes.clear();
@@ -336,8 +334,8 @@ thread_local std::vector<const Board *> boards;
     nodes.reserve(m_args.num_parallel_searches * roots.size());
     boards.reserve(m_args.num_parallel_searches * roots.size());
 
-    std::cout << "MCTS::parallelIterate: Starting parallel iteration for "
-              << roots.size() << " roots." << std::endl;
+    std::cout << "MCTS::parallelIterate: Starting parallel iteration for " << roots.size()
+              << " roots." << std::endl;
 
     for (MCTSNode *root : roots) {
         for (int _ : range(m_args.num_parallel_searches)) {
@@ -359,8 +357,8 @@ thread_local std::vector<const Board *> boards;
     // Run inference in batch.
     const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
 
-    std::cout << "MCTS::parallelIterate: Inference completed for " << results.size()
-              << " nodes." << std::endl;
+    std::cout << "MCTS::parallelIterate: Inference completed for " << results.size() << " nodes."
+              << std::endl;
 
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
@@ -368,8 +366,8 @@ thread_local std::vector<const Board *> boards;
         node->backPropagateAndRemoveVirtualLoss(value);
     }
 
-    std::cout << "MCTS::parallelIterate: Finished parallel iteration for "
-              << roots.size() << " roots." << std::endl;
+    std::cout << "MCTS::parallelIterate: Finished parallel iteration for " << roots.size()
+              << " roots." << std::endl;
 }
 
 std::vector<MoveScore> MCTS::addNoise(const std::vector<MoveScore> &moves) const {
