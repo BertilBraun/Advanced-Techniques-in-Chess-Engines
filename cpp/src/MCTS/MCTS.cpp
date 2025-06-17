@@ -348,6 +348,8 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
                 std::cout << "MCTS::parallelIterate: Processing node: " << node->repr()
                           << std::endl;
                 node->addVirtualLoss();
+                std::cout << "MCTS::parallelIterate: Added virtual loss to node: "
+                          << node->repr() << std::endl;
                 nodes.push_back(node);
                 boards.emplace_back(&node->board);
             }
@@ -368,8 +370,14 @@ void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
 
     for (auto [node, result] : zip(nodes, results)) {
         const auto &[moves, value] = result;
+        std::cout << "MCTS::parallelIterate: Expanding node: " << node->repr()
+                  << " with moves size: " << moves.size() << " and value: " << value << std::endl;
         node->expand(moves);
+        std::cout << "MCTS::parallelIterate: Back propagating value: " << value
+                  << " for node: " << node->repr() << std::endl;
         node->backPropagateAndRemoveVirtualLoss(value);
+        std::cout << "MCTS::parallelIterate: Back propagation completed for node: "
+                  << node->repr() << std::endl;
     }
 
     std::cout << "MCTS::parallelIterate: Finished parallel iteration for " << roots.size()

@@ -25,11 +25,13 @@ public:
     // Get a mutable reference to a MCTSNode (not thread‐safe by itself;
     // if you mutate fields, you should lock node_mutex inside MCTSNode).
     [[nodiscard]] MCTSNode *get(NodeId id) {
+        TIMEIT("NodePool::get");
         assert(isLive(id));
         return &slotPointer(id)->value();
     }
 
     [[nodiscard]] const MCTSNode *get(const NodeId id) const {
+        TIMEIT("NodePool::get const");
         assert(isLive(id));
         return &slotPointer(id)->value();
     }
