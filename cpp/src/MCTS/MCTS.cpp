@@ -170,6 +170,7 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     std::vector<MCTSNode *> rootsToSearch;
     rootsToSearch.reserve(roots.size());
     while (true) {
+        rootsToSearch.clear();
         for (const auto [root, board] : zip(roots, boards)) {
             const auto limit =
                 get<2>(board) ? m_args.num_full_searches : m_args.num_fast_searches;
