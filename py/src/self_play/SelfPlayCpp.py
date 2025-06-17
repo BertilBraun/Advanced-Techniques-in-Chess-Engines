@@ -400,3 +400,13 @@ def new_game() -> SelfPlayGame:
             return new_game()
 
     return game
+
+
+if __name__ == '__main__':
+    # Example usage
+    sp = SelfPlayCpp(device_id=0, args=TRAINING_ARGS)
+    sp.update_iteration(0)
+    for _ in range(10):
+        sp.self_play()
+        print(f'Iteration {sp.iteration}, Dataset size: {len(sp.dataset)}')
+        sp.update_iteration(sp.iteration + 1)
