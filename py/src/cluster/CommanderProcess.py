@@ -97,7 +97,7 @@ class CommanderProcess:
                 self.communication.boardcast(f'START AT ITERATION: {iteration}')
 
                 # Wait for Trainer to finish
-                trainer.train(iteration)
+                trainer.run(iteration)
 
                 current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
 

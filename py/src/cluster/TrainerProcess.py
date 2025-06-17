@@ -41,12 +41,12 @@ class TrainerProcess:
 
     def run(self, iteration: int):
         with log_exceptions('Trainer process'), TensorboardWriter(self.run_id, 'trainer', postfix_pid=False):
-            training_stats = self.train(iteration)
+            training_stats = self._train(iteration)
             reset_times()
             log(f'Training finished for iteration {iteration}:', training_stats)
 
     @timeit
-    def train(self, iteration: int) -> TrainingStats:
+    def _train(self, iteration: int) -> TrainingStats:
         model, optimizer = load_model_and_optimizer(
             iteration,
             self.args.network,
