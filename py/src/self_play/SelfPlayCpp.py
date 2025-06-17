@@ -177,6 +177,9 @@ class SelfPlayCpp:
             return self.mcts.search(boards)
         except Exception as e:
             warn(f'Error during MCTS search: {e}')
+            import traceback
+
+            traceback.print_exc()
             self.mcts.clear_node_pool()  # Clear the node pool to free memory
             return self.search([(fen, INVALID_NODE, num_searches) for fen, old_node_id, num_searches in boards])
 

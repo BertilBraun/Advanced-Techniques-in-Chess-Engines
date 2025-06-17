@@ -147,37 +147,23 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     // 3.  Main search loop – several games in **this** thread.
     // -----------------------------------------------------------------
     std::vector<MCTSNode *> rootsToSearch;
-    std::vector<bool> wantFull(roots.size());
-
     rootsToSearch.reserve(roots.size());
-    wantFull.reserve(roots.size());
+    while (true) {
+        for (const int i : range(roots.size())) {
+            const auto limit = get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
 
-    for (const int i : range(roots.size())) {
-        rootsToSearch.emplace_back(roots[i]);
-        wantFull.emplace_back(get<2>(boards[i])); // Whether this root should run a full search.
-    }
-
-    while (rootsToSearch.size() > 0) {
-        parallelIterate(rootsToSearch);
-        // Remove roots that have enough visits.
-        std::vector<MCTSNode *> newRootsToSearch;
-        std::vector<bool> newWantFull;
-        newRootsToSearch.reserve(rootsToSearch.size());
-        newWantFull.reserve(rootsToSearch.size());
-
-        for (const int i : range(rootsToSearch.size())) {
-            MCTSNode *root = rootsToSearch[i];
-            const auto limit = wantFull[i] ? m_args.num_full_searches : m_args.num_fast_searches;
-            if (root->number_of_visits >= limit) {
-                // If the root has enough visits, we can stop searching it.
-                continue;
+            if (roots[i]->number_of_visits < limit) {
+                // If the root has not enough visits, we will search it.
+                rootsToSearch.emplace_back(roots[i]);
             }
-            newRootsToSearch.emplace_back(root);
-            newWantFull.emplace_back(wantFull[i]);
         }
 
-        rootsToSearch.swap(newRootsToSearch);
-        wantFull.swap(newWantFull);
+        if (rootsToSearch.empty()) {
+            // If there are no roots to search, we can stop.
+            break;
+        }
+
+        parallelIterate(rootsToSearch);
     }
 
     // -----------------------------------------------------------------
@@ -196,41 +182,59 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
 
-    const std::size_t N = boards.size();
-    const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
-    const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
+    try {
+        const std::size_t N = boards.size();
+        const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
+        const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
 
-    std::vector<std::future<std::vector<std::tuple<MCTSResult, MCTSStatistics>>>> futures;
-    futures.reserve(P);
+        std::vector<std::future<std::vector<std::tuple<MCTSResult, MCTSStatistics>>>> futures;
+        futures.reserve(P);
 
-    for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
-        auto begin = boards.begin() + slice * sliceSize;
-        auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
-        std::vector<BoardTuple> myBoards(begin, end);
+        for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
+            auto begin = boards.begin() + slice * sliceSize;
+            auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
+            std::vector<BoardTuple> myBoards(begin, end);
 
-        futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
-    }
-
-    std::vector<MCTSResult> results;
-    MCTSStatistics stats;
-    results.reserve(N);
-    for (auto &fut : futures) {
-        for (const auto [result, rootStats] : fut.get()) {
-            stats.averageDepth += rootStats.averageDepth;
-            stats.averageEntropy += rootStats.averageEntropy;
-            stats.averageKLDivergence += rootStats.averageKLDivergence;
-
-            results.emplace_back(result);
+            futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
         }
+
+        std::vector<MCTSResult> results;
+        MCTSStatistics stats;
+        results.reserve(N);
+        for (auto &fut : futures) {
+            for (const auto [result, rootStats] : fut.get()) {
+                stats.averageDepth += rootStats.averageDepth;
+                stats.averageEntropy += rootStats.averageEntropy;
+                stats.averageKLDivergence += rootStats.averageKLDivergence;
+
+                results.emplace_back(result);
+            }
+        }
+
+        stats.averageDepth /= static_cast<float>(N);
+        stats.averageEntropy /= static_cast<float>(N);
+        stats.averageKLDivergence /= static_cast<float>(N);
+        stats.nodePoolCapacity = m_pool.capacity();
+        stats.liveNodeCount = m_pool.liveNodeCount();
+
+        return {.results = results, .mctsStats = stats};
+    } catch (const std::exception &e) {
+        // If an exception occurs, we print everything possible to debug to the console.
+        std::cerr << "MCTS::search: Exception occurred: " << e.what() << std::endl;
+        std::cerr << "MCTS::search: Boards size: " << boards.size() << std::endl;
+        for (const auto &[fen, id, _] : boards) {
+            std::cerr << "MCTS::search: Board FEN: " << fen << ", NodeId: " << id << std::endl;
+        }
+
+        // print the stacktrace
+        try {
+            throw; // Re-throw the exception to get the stack trace.
+        } catch (const std::exception &e) {
+            std::cerr << "MCTS::search: Stack trace: " << e.what() << std::endl;
+        }
+
+        throw; // Re-throw the exception to let the caller handle it.
     }
-
-    stats.averageDepth /= static_cast<float>(N);
-    stats.averageEntropy /= static_cast<float>(N);
-    stats.averageKLDivergence /= static_cast<float>(N);
-    stats.nodePoolCapacity = m_pool.capacity();
-    stats.liveNodeCount = m_pool.liveNodeCount();
-
-    return {.results = results, .mctsStats = stats};
 }
 
 void freeNodeAndChildren(NodePool &pool, const MCTSNode *node, const NodeId excluded) {
@@ -279,19 +283,19 @@ MCTSResult MCTS::evalSearch(const std::string &fen, const NodeId prevNodeId,
     return gatherResult(root);
 }
 
+// These variables are initialized only once per thread
+// and retain their values between function calls
+thread_local std::vector<MCTSNode *> nodes;
+thread_local std::vector<const Board *> boards;
+
 void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     TIMEIT("MCTS::parallelIterate");
-
-    // These variables are initialized only once per thread
-    // and retain their values between function calls
-    thread_local std::vector<MCTSNode *> nodes;
-    thread_local std::vector<const Board *> boards;
 
     // Clear contents but maintain capacity
     nodes.clear();
     boards.clear();
-    nodes.reserve(m_args.num_parallel_searches);
-    boards.reserve(m_args.num_parallel_searches);
+    nodes.reserve(m_args.num_parallel_searches * roots.size());
+    boards.reserve(m_args.num_parallel_searches * roots.size());
 
     for (MCTSNode *root : roots) {
         for (int _ : range(m_args.num_parallel_searches)) {

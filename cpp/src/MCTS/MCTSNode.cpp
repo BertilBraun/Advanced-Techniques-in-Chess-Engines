@@ -82,7 +82,7 @@ void MCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
 }
 
 void MCTSNode::addVirtualLoss() {
-    TIMEIT("MCTSNode::updateVirtualLoss");
+    TIMEIT("MCTSNode::addVirtualLoss");
 
     MCTSNode *node = this;
 
