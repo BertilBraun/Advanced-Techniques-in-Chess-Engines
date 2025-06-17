@@ -111,6 +111,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
 
     std::vector<NodeId> treeNodesToKeep;
 
+    std::cout << "MCTS::searchGames: Preparing " << boards.size() << " boards for search."
+              << std::endl;
+
     for (const auto &[i, board] : enumerate(boards)) {
         const auto &[fen, id, runFullSearch] = board;
         if (id == INVALID_NODE || !m_pool.isLive(id)) {
@@ -132,9 +135,18 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         }
     }
 
+    std::cout << "MCTS::searchGames: Prepared " << roots.size() << " roots for search."
+              << std::endl;
+
     m_pool.purge(treeNodesToKeep);
 
+    std::cout << "MCTS::searchGames: Purged the node pool, keeping "
+              << treeNodesToKeep.size() << " nodes." << std::endl;
+
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
+
+    std::cout << "MCTS::searchGames: Inference completed for " << inferenceResults.size()
+              << " boards." << std::endl;
 
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
         const bool shouldRunFullSearch = get<2>(boards[rootIndex]);
@@ -148,6 +160,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
             roots[rootIndex]->expand(moves);
         }
     }
+
+    std::cout << "MCTS::searchGames: Expanded " << roots.size() << " root nodes." << std::endl;
+    std::cout << "MCTS::searchGames: Starting main search loop." << std::endl;
 
     // -----------------------------------------------------------------
     // 3.  Main search loop – several games in **this** thread.
@@ -171,7 +186,12 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         }
 
         parallelIterate(rootsToSearch);
+
+        std::cout << "MCTS::searchGames: Completed a search iteration for "
+                  << rootsToSearch.size() << " roots." << std::endl;
     }
+
+    std::cout << "MCTS::searchGames: Main search loop finished." << std::endl;
 
     // -----------------------------------------------------------------
     // 4.  Collect the final best-move + statistics for every root.
@@ -180,6 +200,9 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     results.reserve(roots.size());
     for (const auto *root : roots)
         results.emplace_back(gatherResult(root), mctsStatistics(root, &m_pool));
+
+    std::cout << "MCTS::searchGames: Gathered results for " << results.size() << " roots."
+              << std::endl;
     return results;
 }
 
@@ -188,6 +211,8 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
 
     if (boards.empty())
         return {.results = {}, .mctsStats = {}};
+
+       std::cout << "MCTS::search: Starting search for " << boards.size() << " boards." << std::endl;
 
     try {
         const std::size_t N = boards.size();
@@ -206,6 +231,9 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
                 m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
         }
 
+        std::cout << "MCTS::search: Waiting for " << futures.size() << " futures to complete."
+                  << std::endl;
+
         std::vector<MCTSResult> results;
         MCTSStatistics stats;
         results.reserve(N);
@@ -218,6 +246,8 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
                 results.emplace_back(result);
             }
         }
+
+        std::cout << "MCTS::search: Finished gathering results." << std::endl;
 
         stats.averageDepth /= static_cast<float>(N);
         stats.averageEntropy /= static_cast<float>(N);

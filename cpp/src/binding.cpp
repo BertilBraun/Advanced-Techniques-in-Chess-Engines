@@ -14,9 +14,9 @@ static void init() {
     Bitboards::init();
     Position::init();
 
-    torch::set_num_threads(2); // Set the number of threads for PyTorch to 1 to avoid conflicts.
-    torch::set_num_interop_threads(2); // inter-op
-    setenv("OMP_NUM_THREADS", "1", 2); // for MKL / OpenBLAS just in case
+    torch::set_num_threads(1); // Set the number of threads for PyTorch to 1 to avoid conflicts.
+    torch::set_num_interop_threads(1); // inter-op
+    setenv("OMP_NUM_THREADS", "1", 1); // for MKL / OpenBLAS just in case
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
