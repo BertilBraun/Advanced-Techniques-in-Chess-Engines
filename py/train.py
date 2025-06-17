@@ -16,7 +16,7 @@ init()
 
 torch.manual_seed(42)  # Set the random seed for PyTorch
 torch.set_num_threads(1)  # Limit the number of threads to 1 for PyTorch
-torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
+# torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
 
 torch.autograd.set_detect_anomaly(True)
 
