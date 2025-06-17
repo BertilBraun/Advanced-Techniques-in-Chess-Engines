@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 import random
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from AlphaZeroCpp import MCTSParams
+
 import numpy as np
 
 import torch
@@ -13,7 +18,6 @@ from torch.utils.data import DataLoader
 from src.Network import Network
 from src.eval.ModelEvaluationPy import _play_two_models_search, policy_evaluator, Results, EvaluationModel
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import action_probabilities
@@ -35,6 +39,8 @@ class ModelEvaluation:
 
     @property
     def mcts_args(self) -> MCTSParams:
+        from AlphaZeroCpp import MCTSParams
+
         return MCTSParams(
             num_parallel_searches=self.args.self_play.mcts.num_parallel_searches,
             c_param=PLAY_C_PARAM,
@@ -109,6 +115,8 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
+        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS
+
         if not Path(model_path).exists():
             print(f'Model path {model_path} does not exist. Skipping evaluation.')
             return Results(self.num_games, 0, 0)
@@ -183,6 +191,8 @@ class ModelEvaluation:
         return results
 
     def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
+        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS
+
         current = MCTS(
             InferenceClientParams(self.device_id, str(model_save_path(self.iteration, self.args.save_path)), 16),
             self.mcts_args,

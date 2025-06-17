@@ -3,6 +3,7 @@ from torch import multiprocessing as mp
 import torch
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
+
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import log_scalar, TensorboardWriter
 from src.settings_common import USE_GPU

@@ -3,6 +3,12 @@ import gc
 import random
 import time
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from AlphaZeroCpp import NodeId, MCTSResults, MCTS
+
+
 import chess
 import numpy as np
 from dataclasses import dataclass
@@ -19,8 +25,6 @@ from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import timeit
 
-from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, NodeId, MCTS, MCTSParams, MCTSResults
-
 
 @dataclass(frozen=True)
 class SelfPlayGameMemory:
@@ -31,6 +35,8 @@ class SelfPlayGameMemory:
 
 class SelfPlayGame:
     def __init__(self) -> None:
+        from AlphaZeroCpp import INVALID_NODE
+
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
@@ -99,7 +105,7 @@ class SelfPlayCpp:
 
         self.iteration = 0
 
-        self.mcts: MCTS | None = None
+        self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
         self.num_searches_per_turn = 0
 
     def update_iteration(self, iteration: int) -> None:
@@ -131,6 +137,8 @@ class SelfPlayCpp:
         self._set_mcts(iteration)
 
     def _set_mcts(self, iteration: int) -> None:
+        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
+
         """Set the MCTS parameters for the current iteration."""
         # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
         self.num_searches_per_turn = int(
@@ -171,6 +179,8 @@ class SelfPlayCpp:
 
     @timeit
     def search(self, boards: list[tuple[str, NodeId, bool]]) -> MCTSResults:
+        from AlphaZeroCpp import INVALID_NODE
+
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
         try:
@@ -266,7 +276,7 @@ class SelfPlayCpp:
     def _sample_self_play_game(
         self,
         current: SelfPlayGame,
-        children: list[NodeId],
+        children: list['NodeId'],
         visit_counts: list[tuple[int, int]],
     ) -> SelfPlayGame:
         # Sample a move from the action probabilities then create a new game state with that move
