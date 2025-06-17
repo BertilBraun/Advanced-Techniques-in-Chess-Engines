@@ -211,6 +211,8 @@ class CommanderProcess:
         total: int = self.args.cluster.num_self_play_nodes_on_cluster
         num_devices: int = torch.cuda.device_count()
 
+        return i % num_devices
+
         if num_devices == 1:
             log('Warning: Only one device available. Using device 0.')
             return 0
