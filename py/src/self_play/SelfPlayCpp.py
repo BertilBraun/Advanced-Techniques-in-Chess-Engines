@@ -404,9 +404,13 @@ def new_game() -> SelfPlayGame:
 
 if __name__ == '__main__':
     # Example usage
+    print('Starting self-play with C++ backend...')
     sp = SelfPlayCpp(device_id=0, args=TRAINING_ARGS)
+    print(f'Initial iteration: {sp.iteration}, Dataset size: {len(sp.dataset)}')
     sp.update_iteration(0)
-    for _ in range(10):
+    print('Self-play initialized.')
+    for i in range(10):
+        print(f'Starting self-play {i}...')
         sp.self_play()
         print(f'Iteration {sp.iteration}, Dataset size: {len(sp.dataset)}')
         sp.update_iteration(sp.iteration + 1)
