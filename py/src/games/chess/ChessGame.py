@@ -183,7 +183,7 @@ class ChessGame(Game[ChessMove]):
             )
 
         # Handle castling moves
-        if _is_castling_move(move, board):
+        if is_castling_move(move, board):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
             # In python-chess, castling moves are represented as king moving two squares
             # Need to convert to our representation format before lookup
@@ -209,7 +209,7 @@ class ChessGame(Game[ChessMove]):
         move = chess.Move(m.from_square, m.to_square, promotion=m.promotion)
 
         # Check if move looks like a castling pattern
-        if _is_castling_move(move, board):
+        if is_castling_move(move, board):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
 
             king_square = move.from_square
@@ -225,7 +225,7 @@ class ChessGame(Game[ChessMove]):
         # Handle regular moves
         if board.board.turn == chess.BLACK:
             # Mirror the move for black
-            move = _mirror_move_for_black(move)
+            move = mirror_move_for_black(move)
 
         return move
 
@@ -262,7 +262,7 @@ class ChessGame(Game[ChessMove]):
         return ChessBoard()
 
 
-def _is_castling_move(move: ChessMove, board: ChessBoard) -> bool:
+def is_castling_move(move: ChessMove, board: ChessBoard) -> bool:
     """Checks if a move is a castling move."""
     from_piece = board.board.piece_at(move.from_square)
     to_piece = board.board.piece_at(move.to_square)
@@ -277,7 +277,7 @@ def _is_castling_move(move: ChessMove, board: ChessBoard) -> bool:
     )
 
 
-def _mirror_move_for_black(move: ChessMove) -> ChessMove:
+def mirror_move_for_black(move: ChessMove) -> ChessMove:
     """Mirrors a move for the black player."""
     from_square = chess.square_mirror(move.from_square)
     to_square = chess.square_mirror(move.to_square)

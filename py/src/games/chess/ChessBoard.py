@@ -34,6 +34,23 @@ class ChessBoard(Board[ChessMove]):
 
     def make_move(self, move: ChessMove) -> None:
         assert move in self.get_valid_moves(), f'Invalid move: {move} for board:\n{self}'
+
+        from src.games.chess.ChessGame import is_castling_move, mirror_move_for_black
+
+        # if castling move, map it back to a chess Move from a stockfish move
+        if self.current_player == -1:
+            move = mirror_move_for_black(move)
+
+        if is_castling_move(move, self):
+            # Castling move is a special case, we need to handle it differently
+            if move.from_square == chess.E1 and move.to_square == chess.A1:
+                move = chess.Move(chess.E1, chess.C1)
+            elif move.from_square == chess.E1 and move.to_square == chess.H1:
+                move = chess.Move(chess.E1, chess.G1)
+
+        if self.current_player == -1:
+            move = mirror_move_for_black(move)
+
         self.board.push(move)
 
     def is_game_over(self) -> bool:
