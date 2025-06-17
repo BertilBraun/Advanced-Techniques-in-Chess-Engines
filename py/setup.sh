@@ -33,6 +33,9 @@ else
 
     sudo apt install stockfish nano htop -y
     echo "export PATH=\"\$PATH:/usr/games\"" >> ~/.bashrc
+    echo "export OMP_NUM_THREADS=1" >> ~/.bashrc
+    echo "export MKL_NUM_THREADS=1" >> ~/.bashrc
+    echo "export TORCH_NUM_THREADS=1" >> ~/.bashrc
 
     pip3 install -r requirements.txt
 
