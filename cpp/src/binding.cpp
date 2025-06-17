@@ -141,7 +141,11 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "pybind11 bindings for custom MCTS + inference client";
 
-    init(); // Initialize Stockfish engine
+    m.def("init", &init, "Initialize the module and set up the environment",
+          R"pbdoc(
+            Initialize the module and set up the environment.
+            This function should be called before using any other functions in this module.
+          )pbdoc");
 
     m.def("test_inference_speed_cpp", &testInferenceSpeed,
           "Test the inference speed of the InferenceClient", py::arg("numBoards") = 100,
