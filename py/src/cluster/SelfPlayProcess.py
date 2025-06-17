@@ -23,10 +23,6 @@ else:
 def run_self_play_process(
     run: int, args: TrainingArgs, communication_folder: str, device_id: int, node_id: int
 ) -> None:
-    from AlphaZeroCpp import init
-
-    init()
-
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)

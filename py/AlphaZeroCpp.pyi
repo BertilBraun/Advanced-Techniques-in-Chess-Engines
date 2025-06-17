@@ -5,8 +5,6 @@ from typing import List, Tuple, Optional
 NodeId = int
 INVALID_NODE: NodeId
 
-def init() -> None: ...
-
 class MCTSParams:
     num_parallel_searches: int
     c_param: float
