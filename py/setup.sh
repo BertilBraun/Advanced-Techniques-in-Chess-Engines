@@ -31,6 +31,24 @@ else
     conda install -c conda-forge libstdcxx-ng libgcc-ng -y
     conda install -c conda-forge 'cmake>=3.27' make gxx_linux-64 -y
 
+    # 1) add / refresh NVIDIA’s CUDA repo for Ubuntu 20.04
+    sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
+    sudo add-apt-repository \
+      "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+    sudo apt-get update
+
+    # 2) pull in NVTX + cuDNN 9 for CUDA 12.x
+    CUDA_REL=12-8              # 12-6, 12-7, … use whatever tool-kit minor you’re building against
+    sudo apt-get install -y \
+        cuda-nvtx-${CUDA_REL} \
+        libcudnn9-cuda-12 \
+        libcudnn9-dev-cuda-12
+
+    sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+    sudo apt update
+    sudo apt install gcc-11 g++-11
+
+
     sudo apt install stockfish nano htop -y
     echo "export PATH=\"\$PATH:/usr/games\"" >> ~/.bashrc
     echo "export OMP_NUM_THREADS=1" >> ~/.bashrc
@@ -64,7 +82,9 @@ else
     echo "alias gpuH2='salloc -p dev_accelerated-h100 --gres=gpu:2 -t 30'" >> ~/.bashrc
     echo "alias gpuA2='salloc -p dev_accelerated --gres=gpu:2 -t 30'" >>  ~/.bashrc
     echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j && cd ../../py'" >> ~/.bashrc
-
+    echo "alias compileDebug='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j && cd ../../py'" >> ~/.bashrc
+    echo "alias compileRel='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && make -j && cd ../../py'" >> ~/.bashrc
+    
     
 
     echo "set -g mouse on #For tmux version 2.1 and up" >> ~/.tmux.conf
