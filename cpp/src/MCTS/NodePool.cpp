@@ -26,6 +26,8 @@ size_t NodePool::liveNodeCount() const {
 }
 
 void NodePool::clear() {
+    std::cout << "NodePool::clear: clearing pool with " << m_chunks.size() << " chunks and "
+              << m_freeList.size() << " free slots." << std::endl;
     std::lock_guard lock(m_poolMutex);
     for (const auto &chunk : m_chunks) {
         // Free the memory allocated for each chunk

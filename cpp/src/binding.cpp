@@ -115,7 +115,10 @@ private:
     MCTSNode *m_node; // cached for speed
 };
 
-PyMCTSNode get_node(MCTS &self, const NodeId id) { return PyMCTSNode(self.getNodePool(), id); }
+PyMCTSNode get_node(MCTS &self, const NodeId id) {
+    std::cout << "get_node(" << id << ")" << std::endl;
+    return PyMCTSNode(self.getNodePool(), id);
+}
 
 std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
     const Board board(fen);
