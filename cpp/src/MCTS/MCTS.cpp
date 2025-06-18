@@ -99,7 +99,7 @@ MCTSStatistics mctsStatistics(const MCTSNode *root, NodePool *pool) {
 
 struct RootTask {
     MCTSNode *root;
-    uin32 limit; // visit budget for this root
+    uint32 limit; // visit budget for this root
 };
 
 std::vector<std::tuple<MCTSResult, MCTSStatistics>>
