@@ -204,8 +204,8 @@ void MCTS::addToNodesToKeep(std::vector<NodeId> &nodesToKeep, const NodeId nodeI
 
 MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::search");
-
-    if (boards.empty())
+try
+   { if (boards.empty())
         return {.results = {}, .mctsStats = {}};
 
     std::vector<NodeId> treeNodesToKeep;
@@ -251,7 +251,11 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     stats.nodePoolCapacity = m_pool.capacity();
     stats.liveNodeCount = m_pool.liveNodeCount();
 
-    return {.results = results, .mctsStats = stats};
+    return {.results = results, .mctsStats = stats};} catch (const std::exception &e) {
+        std::cerr << "MCTS::search: Exception caught: " << e.what() << std::endl;
+        std::cerr << "MCTS::search: Returning empty results." << std::endl;
+        throw; // Re-throw the exception to be handled by the caller.
+    }
 }
 
 void freeNodeAndChildren(NodePool &pool, const MCTSNode *node, const NodeId excluded) {
