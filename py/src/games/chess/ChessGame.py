@@ -182,7 +182,7 @@ class ChessGame(Game[ChessMove]):
             board_to_check = board.board
 
         # Handle castling moves
-        if is_castling_move(move, board_to_check):
+        if is_castling_move(move, board_to_check) and move.to_square in (chess.G1, chess.C1):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
             # In python-chess, castling moves are represented as king moving to B1 or G1, but in the Cpp-Stockfish engine, they are represented as the king moving to C1 or H1.
             # Need to convert to our representation format before lookup
@@ -212,7 +212,7 @@ class ChessGame(Game[ChessMove]):
             board_to_check = board.board
 
         # Check if move looks like a castling pattern
-        if is_castling_move(move, board_to_check):
+        if is_castling_move(move, board_to_check) and move.to_square in (chess.H1, chess.A1):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
 
             king_square = move.from_square
@@ -276,7 +276,6 @@ def is_castling_move(move: ChessMove, board: chess.Board) -> bool:
         and to_piece.piece_type == chess.ROOK
         and from_piece.color == to_piece.color
         and move.from_square == chess.E1
-        and move.to_square in (chess.G1, chess.C1)
     )
 
 
