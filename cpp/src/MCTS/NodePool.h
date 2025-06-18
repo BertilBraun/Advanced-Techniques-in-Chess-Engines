@@ -31,12 +31,26 @@ public:
     [[nodiscard]] MCTSNode *get(const NodeId id) {
         TIMEIT("NodePool::get");
         assert(isLive(id) && slotPointer(id)->has_value() && "NodeId is not live");
+        if (!slotPointer(id)->has_value()) {
+            std::cerr << "NodePool::get: NodeId is not live" << std::endl;
+            std::cerr << "NodeId: " << id << ", m_nextFreshId: " << m_nextFreshId
+                      << ", m_freeList size: " << m_freeList.size() << std::endl;
+            std::cerr << "m_chunks size: " << m_chunks.size() << std::endl;
+            throw std::runtime_error("NodeId is not live");
+        }
         return &slotPointer(id)->value();
     }
 
     [[nodiscard]] const MCTSNode *get(const NodeId id) const {
         TIMEIT("NodePool::get const");
         assert(isLive(id) && slotPointer(id)->has_value() && "NodeId is not live");
+        if (!slotPointer(id)->has_value()) {
+            std::cerr << "NodePool::get const: NodeId is not live" << std::endl;
+            std::cerr << "NodeId: " << id << ", m_nextFreshId: " << m_nextFreshId
+                      << ", m_freeList size: " << m_freeList.size() << std::endl;
+            std::cerr << "m_chunks size: " << m_chunks.size() << std::endl;
+            throw std::runtime_error("NodeId is not live");
+        }
         return &slotPointer(id)->value();
     }
 
@@ -105,6 +119,13 @@ template <typename... Args> MCTSNode* NodePool::constructAt(const NodeId id, Arg
     std::optional<MCTSNode> *opt = slotPointer(id);
     assert(!opt->has_value() && "Node already allocated at this ID");
     opt->emplace(std::forward<Args>(args)...);
+    if (!slotPointer(id)->has_value()) {
+        std::cerr << "NodePool::construct: NodeId is not live" << std::endl;
+        std::cerr << "NodeId: " << id << ", m_nextFreshId: " << m_nextFreshId
+                  << ", m_freeList size: " << m_freeList.size() << std::endl;
+        std::cerr << "m_chunks size: " << m_chunks.size() << std::endl;
+        throw std::runtime_error("NodeId is not live");
+    }
     opt->value().myId = id;
     return &opt->value();
 }

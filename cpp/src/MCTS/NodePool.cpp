@@ -28,12 +28,9 @@ size_t NodePool::liveNodeCount() const {
 void NodePool::clear() {
     std::lock_guard lock(m_poolMutex);
     for (const auto &chunk : m_chunks) {
-        for (auto &slot : *chunk) {
-            if (slot.has_value()) {
-                slot.reset();
-            }
-        }
-        delete chunk; // Free the memory allocated for each chunk
+        // Free the memory allocated for each chunk
+        // - will call the destructor of each optional<MCTSNode> in the chunk
+        delete chunk;
     }
     m_chunks.clear();
     m_freeList.clear();
