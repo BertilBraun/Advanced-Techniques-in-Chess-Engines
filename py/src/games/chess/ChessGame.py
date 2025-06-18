@@ -270,8 +270,8 @@ def is_castling_move(move: ChessMove, board: chess.Board) -> bool:
     from_piece = board.piece_at(move.from_square)
     to_piece = board.piece_at(move.to_square)
     return bool(
-        from_piece
-        and to_piece
+        from_piece is not None
+        and to_piece is not None
         and from_piece.piece_type == chess.KING
         and to_piece.piece_type == chess.ROOK
         and from_piece.color == to_piece.color
