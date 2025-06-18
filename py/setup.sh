@@ -51,9 +51,6 @@ else
 
     sudo apt install stockfish nano htop -y
     echo "export PATH=\"\$PATH:/usr/games\"" >> ~/.bashrc
-    echo "export OMP_NUM_THREADS=1" >> ~/.bashrc
-    echo "export MKL_NUM_THREADS=1" >> ~/.bashrc
-    echo "export TORCH_NUM_THREADS=1" >> ~/.bashrc
 
     echo "export CMAKE_INCLUDE_PATH=/usr/include/x86_64-linux-gnu:\$CMAKE_INCLUDE_PATH" >> ~/.bashrc
     echo "export CMAKE_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:\$CMAKE_LIBRARY_PATH" >> ~/.bashrc
@@ -66,7 +63,6 @@ else
     echo "module purge" >> ~/.bashrc
     echo "module load compiler/intel/2024.0_llvm" >> ~/.bashrc
     echo "module load devel/cuda/12.4" >> ~/.bashrc
-    echo "export OMP_NUM_THREADS=8" >> ~/.bashrc
     
     echo "alias q='squeue --long'" >> ~/.bashrc
     echo "alias qs='watch \"squeue --start\"'" >> ~/.bashrc

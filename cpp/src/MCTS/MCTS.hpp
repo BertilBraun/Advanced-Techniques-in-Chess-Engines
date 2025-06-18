@@ -103,6 +103,9 @@ public:
     [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards);
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics() {
+        // print number of threads and number of interop threads of torch
+        std::cout << "Num Threads: " << torch::get_num_threads() << std::endl;
+        std::cout << "Num Interop Threads: " << torch::get_num_interop_threads() << std::endl;
         return {m_client.getStatistics(), resetTimes()};
     }
 

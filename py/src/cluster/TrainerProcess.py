@@ -30,8 +30,8 @@ class TrainerProcess:
         self.run_id = run_id
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        torch.set_num_threads(8)  # Set number of threads for CPU operations
-        torch.set_num_interop_threads(8)  # Set number of threads for interop operations
+        torch.set_num_threads(4)  # Set number of threads for CPU operations
+        torch.set_num_interop_threads(1)  # Set number of threads for interop operations
 
         if USE_GPU:
             torch.cuda.set_device(device_id)
@@ -69,6 +69,10 @@ class TrainerProcess:
         valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
+            # print num threads and interop threads
+            log(
+                f'Epoch {epoch + 1}/{self.args.training.num_epochs} - Num threads: {torch.get_num_threads()}, Interop threads: {torch.get_num_interop_threads()}'
+            )
             try:
                 epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
             except RuntimeError as e:
