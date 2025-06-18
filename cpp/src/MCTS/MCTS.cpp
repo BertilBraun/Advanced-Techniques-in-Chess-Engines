@@ -156,7 +156,8 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     active.reserve(roots.size());
 
     for (std::size_t i = 0; i < roots.size(); ++i) {
-        const uint32 limit = get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
+        const uint32 limit =
+            get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
         active.emplace_back(roots[i], limit);
     }
 
@@ -201,58 +202,71 @@ void MCTS::addToNodesToKeep(std::vector<NodeId> &nodesToKeep, const NodeId nodeI
     for (const NodeId childId : m_pool.get(nodeId)->children)
         addToNodesToKeep(nodesToKeep, childId);
 }
+#include <execinfo.h>
+#include <unistd.h>
 
+void print_backtrace() {
+    void* callstack[128];
+    int frames = backtrace(callstack, 128);
+    char** strs = backtrace_symbols(callstack, frames);
+    for (int i = 0; i < frames; ++i)
+        std::cerr << strs[i] << std::endl;
+    free(strs);
+}
 MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::search");
-try
-   { if (boards.empty())
-        return {.results = {}, .mctsStats = {}};
+    try {
+        if (boards.empty())
+            return {.results = {}, .mctsStats = {}};
 
-    std::vector<NodeId> treeNodesToKeep;
+        std::vector<NodeId> treeNodesToKeep;
 
-    for (const auto &[_, prevNodeId, ___] : boards) {
-        if (prevNodeId != INVALID_NODE)
-            addToNodesToKeep(treeNodesToKeep, prevNodeId);
-    }
-
-    m_pool.purge(treeNodesToKeep);
-
-    const std::size_t N = boards.size();
-    const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
-    const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
-
-    std::vector<std::future<std::vector<std::pair<MCTSResult, MCTSStatistics>>>> futures;
-    futures.reserve(P);
-
-    for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
-        auto begin = boards.begin() + slice * sliceSize;
-        auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
-        std::vector<BoardTuple> myBoards(begin, end);
-
-        futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
-    }
-
-    std::vector<MCTSResult> results;
-    MCTSStatistics stats;
-    results.reserve(N);
-    for (auto &fut : futures) {
-        for (const auto &[result, rootStats] : fut.get()) {
-            stats.averageDepth += rootStats.averageDepth;
-            stats.averageEntropy += rootStats.averageEntropy;
-            stats.averageKLDivergence += rootStats.averageKLDivergence;
-
-            results.emplace_back(result);
+        for (const auto &[_, prevNodeId, ___] : boards) {
+            if (prevNodeId != INVALID_NODE)
+                addToNodesToKeep(treeNodesToKeep, prevNodeId);
         }
-    }
 
-    stats.averageDepth /= static_cast<float>(N);
-    stats.averageEntropy /= static_cast<float>(N);
-    stats.averageKLDivergence /= static_cast<float>(N);
-    stats.nodePoolCapacity = m_pool.capacity();
-    stats.liveNodeCount = m_pool.liveNodeCount();
+        m_pool.purge(treeNodesToKeep);
 
-    return {.results = results, .mctsStats = stats};} catch (const std::exception &e) {
+        const std::size_t N = boards.size();
+        const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
+        const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
+
+        std::vector<std::future<std::vector<std::pair<MCTSResult, MCTSStatistics>>>> futures;
+        futures.reserve(P);
+
+        for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
+            auto begin = boards.begin() + slice * sliceSize;
+            auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
+            std::vector<BoardTuple> myBoards(begin, end);
+
+            futures.emplace_back(
+                m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
+        }
+
+        std::vector<MCTSResult> results;
+        MCTSStatistics stats;
+        results.reserve(N);
+        for (auto &fut : futures) {
+            for (const auto &[result, rootStats] : fut.get()) {
+                stats.averageDepth += rootStats.averageDepth;
+                stats.averageEntropy += rootStats.averageEntropy;
+                stats.averageKLDivergence += rootStats.averageKLDivergence;
+
+                results.emplace_back(result);
+            }
+        }
+
+        stats.averageDepth /= static_cast<float>(N);
+        stats.averageEntropy /= static_cast<float>(N);
+        stats.averageKLDivergence /= static_cast<float>(N);
+        stats.nodePoolCapacity = m_pool.capacity();
+        stats.liveNodeCount = m_pool.liveNodeCount();
+
+        return {.results = results, .mctsStats = stats};
+    } catch (const std::exception &e) {
         std::cerr << "MCTS::search: Exception caught: " << e.what() << std::endl;
+        print_backtrace();
         std::cerr << "MCTS::search: Returning empty results." << std::endl;
         throw; // Re-throw the exception to be handled by the caller.
     }
