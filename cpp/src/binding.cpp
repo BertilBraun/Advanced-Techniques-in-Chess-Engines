@@ -206,6 +206,17 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("results", &MCTSResults::results)      // vector<PyMCTSResult>
         .def_readonly("mctsStats", &MCTSResults::mctsStats); // PyMCTSStatistics
 
+    py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
+        .def_readonly("name", &FunctionTimeInfo::name)
+        .def_readonly("percent", &FunctionTimeInfo::percent)
+        .def_readonly("total", &FunctionTimeInfo::total)
+        .def_readonly("invocations", &FunctionTimeInfo::invocations);
+
+    py::class_<TimeInfo>(m, "TimeInfo")
+        .def_readonly("totalTime", &TimeInfo::totalTime)
+        .def_readonly("percentRecorded", &TimeInfo::percentRecorded)
+        .def_readonly("functionTimes", &TimeInfo::functionTimes);
+
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),

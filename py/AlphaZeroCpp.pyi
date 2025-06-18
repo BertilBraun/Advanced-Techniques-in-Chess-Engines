@@ -63,6 +63,21 @@ class MCTSStatistics:
 
     def __init__(self) -> None: ...
 
+class FunctionTimeInfo:
+    name: str  # Name of the function
+    percent: float  # Percentage of total time spent in this function
+    total: float  # Total time spent in this function (in seconds)
+    invocations: int  # Number of times this function was invoked
+
+    def __init__(self) -> None: ...
+
+class TimeInfo:
+    totalTime: float  # Total time spent in the MCTS search (in seconds)
+    percentRecorded: float  # Percentage of total time recorded
+    functionTimes: List[FunctionTimeInfo]  # List of function time info
+
+    def __init__(self) -> None: ...
+
 class MCTSResults:
     results: List[MCTSResult]
     mctsStats: MCTSStatistics
@@ -72,7 +87,7 @@ class MCTSResults:
 class MCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None: ...
     def search(self, boards: List[Tuple[str, NodeId, bool]]) -> MCTSResults: ...
-    def get_inference_statistics(self) -> InferenceStatistics: ...
+    def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
     def get_node(self, node_id: NodeId) -> MCTSNode: ...
     def clear_node_pool(self) -> None: ...
     def inference(self, board: str) -> Tuple[List[Tuple[int, float]], float]:

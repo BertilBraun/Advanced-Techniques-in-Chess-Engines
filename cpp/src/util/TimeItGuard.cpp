@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 // Global timing results and a mutex to protect them.
 std::unordered_map<std::string, float> functionTimes;
 std::unordered_map<std::string, float> globalFunctionTimes;
@@ -24,8 +23,8 @@ bool startTimingTimeInitialized = false;
 // Thread-local call stack to keep track of nested calls.
 thread_local std::vector<std::string> callStack;
 
-TimeItGuard::TimeItGuard(const std::string &name)
-    : m_funcName(name), m_start(std::chrono::high_resolution_clock::now()) {
+TimeItGuard::TimeItGuard(std::string name)
+    : m_funcName(std::move(name)), m_start(std::chrono::high_resolution_clock::now()) {
     // Set global start time on first invocation.
     if (!startTimingTimeInitialized) {
         startTimingTime = m_start;
@@ -49,12 +48,12 @@ TimeItGuard::~TimeItGuard() {
 
     // If we are inside a parent function, subtract the elapsed time from its total.
     if (!callStack.empty()) {
-        const std::string parent = callStack.back();
+        const std::string &parent = callStack.back();
         functionTimes[parent] -= elapsedSeconds;
     }
 }
 
-void resetTimes() {
+TimeInfo resetTimes() {
     std::lock_guard<std::mutex> lock(timeMutex);
 
     // Sum the times recorded in function_times.
@@ -74,35 +73,47 @@ void resetTimes() {
         globalTotalTime += value;
     }
 
+    TimeInfo info{};
+    info.totalTime = totalTime;
+
     if (totalTime > 0) {
         // Prepare a sorted vector of (function name, accumulated time) pairs.
         std::vector<std::pair<std::string, float>> sorted;
+        sorted.reserve(globalFunctionTimes.size());
         for (const auto &[key, value] : globalFunctionTimes) {
             sorted.emplace_back(key, value);
         }
-        std::ranges::sort(sorted,
-                  [](const auto &a, const auto &b) { return a.second > b.second; });
+        std::ranges::sort(sorted, [](const auto &a, const auto &b) { return a.second > b.second; });
 
         // Log scalar metrics for each function.
         for (const auto &[key, totalFuncTime] : sorted) {
-            const float percent = totalFuncTime / globalTotalTime * 100.0;
+            const float percent = totalFuncTime / globalTotalTime * 100.0f;
 
             // Calculate local percentage for the function, if it exists in function_times.
             const float localPercent =
-                functionTimes.contains(key) ? functionTimes[key] / totalTime * 100.0 : 0.0;
-            log(localPercent, "% (total", percent, "% on", globalFunctionInvocations[key],
-                "invocations)", key);
+                functionTimes.contains(key) ? functionTimes[key] / totalTime * 100.0f : 0.0f;
+            // log(localPercent, "% (total", percent, "% on", globalFunctionInvocations[key],
+            //     "invocations)", key);
+
+            FunctionTimeInfo functionTimeInfo{};
+            functionTimeInfo.name = key;
+            functionTimeInfo.percent = percent;
+            functionTimeInfo.total = totalFuncTime;
+            functionTimeInfo.invocations = globalFunctionInvocations[key];
+            info.functionTimes.emplace_back(functionTimeInfo);
         }
 
         const float totalElapsed = std::chrono::duration<float>(
-                                 std::chrono::high_resolution_clock::now() - startTimingTime)
-                                 .count();
+                                       std::chrono::high_resolution_clock::now() - startTimingTime)
+                                       .count();
 
-        log("In total:", globalTotalTime / totalElapsed * 100.f, "% recorded");
+        // log("In total:", globalTotalTime / totalElapsed * 100.f, "% recorded");
+        info.percentRecorded = globalTotalTime / totalElapsed * 100.0f;
     }
 
     // Clear the temporary function timing data.
     functionTimes.clear();
+    return info;
 }
 
 float TimeItGuard::elapsed() const {

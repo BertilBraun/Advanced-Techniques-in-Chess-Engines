@@ -8,7 +8,7 @@ class TensorBoardLogger;
 class TimeItGuard {
 public:
     // On entry, record the function name and start time.
-    explicit TimeItGuard(const std::string &name);
+    explicit TimeItGuard(std::string name);
 
     // On exit, calculate the elapsed time and update globals.
     ~TimeItGuard();
@@ -20,7 +20,21 @@ private:
     std::chrono::high_resolution_clock::time_point m_start;
 };
 
-void resetTimes();
+struct FunctionTimeInfo {
+    std::string name; // Name of the function
+    float percent; // Percentage of total time spent in this function
+    float total;   // Total time spent in this function
+    int invocations; // Number of times this function was invoked
+};
+
+struct TimeInfo {
+    float totalTime;
+    float percentRecorded;
+    std::vector<FunctionTimeInfo> functionTimes;
+};
+
+
+TimeInfo resetTimes();
 
 #define ENABLE_TIMING
 #ifdef ENABLE_TIMING

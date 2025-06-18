@@ -22,7 +22,7 @@ from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log, error
 from src.util.save_paths import model_save_path
-from src.util.tensorboard import log_histogram, log_scalar
+from src.util.tensorboard import log_histogram, log_scalar, log_scalars
 from src.util.timing import timeit
 
 
@@ -116,7 +116,7 @@ class SelfPlayCpp:
 
         if self.mcts is not None:
             # log inference statistics from the previous iteration
-            inference_stats = self.mcts.get_inference_statistics()
+            inference_stats, time_info = self.mcts.get_inference_statistics()
             log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, iteration - 1)
             log_scalar('inference/unique_positions', inference_stats.uniquePositions, iteration - 1)
             log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, iteration - 1)
@@ -130,6 +130,15 @@ class SelfPlayCpp:
                 inference_stats.averageNumberOfPositionsInInferenceCall,
                 iteration - 1,
             )
+
+            if time_info.functionTimes:
+                for element in time_info.functionTimes:
+                    log_scalars('timing/percent_of_execution_time_cpp', {element.name: element.percent})
+                    log_scalars('timing/total_time_cpp', {element.name: element.total})
+                    log_scalars('timing/total_invocations_cpp', {element.name: element.invocations})
+
+                log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
+                log_scalar('timing/total_time_cpp', time_info.totalTime)
 
             del self.mcts  # Clear the previous MCTS instance to free memory
             gc.collect()  # Force garbage collection to free memory

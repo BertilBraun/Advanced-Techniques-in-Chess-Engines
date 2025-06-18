@@ -102,9 +102,8 @@ public:
 
     [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards);
 
-    [[nodiscard]] InferenceStatistics getInferenceStatistics() {
-        resetTimes(); // TODO remove or log better to tensorboard
-        return m_client.getStatistics();
+    [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics() {
+        return {m_client.getStatistics(), resetTimes()};
     }
 
     [[nodiscard]] NodePool *getNodePool() { return &m_pool; }
