@@ -97,6 +97,11 @@ MCTSStatistics mctsStatistics(const MCTSNode *root, NodePool *pool) {
     return stats;
 }
 
+struct RootTask {
+    MCTSNode *root;
+    uin32 limit; // visit budget for this root
+};
+
 std::vector<std::tuple<MCTSResult, MCTSStatistics>>
 MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::searchGames");
@@ -144,31 +149,39 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     }
 
     // -----------------------------------------------------------------
-    // 3.  Main search loop – several games in **this** thread.
+    // Pre-compute the per-root visit limit and build the active list
     // -----------------------------------------------------------------
-    std::vector<MCTSNode *> rootsToSearch;
-    rootsToSearch.reserve(roots.size());
-    while (true) {
-        rootsToSearch.clear();
-        for (const auto [root, board] : zip(roots, boards)) {
-            const auto limit = get<2>(board) ? m_args.num_full_searches : m_args.num_fast_searches;
 
-            if (root->number_of_visits < limit) {
-                // If the root has not enough visits, we will search it.
-                rootsToSearch.emplace_back(root);
-            }
-        }
+    std::vector<RootTask> active;
+    active.reserve(roots.size());
 
-        if (rootsToSearch.empty()) {
-            // If there are no roots to search, we can stop.
-            break;
-        }
-
-        parallelIterate(rootsToSearch);
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        const uint32 limit = get<2>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
+        active.emplace_back(roots[i], limit);
     }
 
     // -----------------------------------------------------------------
-    // 4.  Collect the final best-move + statistics for every root.
+    // Main search loop – continues until every root reaches its limit
+    // -----------------------------------------------------------------
+    while (!active.empty()) {
+
+        // Expose just the raw node pointers to the parallel routine.
+        std::vector<MCTSNode *> batch;
+        batch.reserve(active.size());
+        for (auto &t : active)
+            batch.emplace_back(t.root);
+
+        parallelIterate(batch);
+
+        // Keep only the roots that still need work.
+        active.erase(
+            std::remove_if(active.begin(), active.end(),
+                           [](const RootTask &t) { return t.root->number_of_visits >= t.limit; }),
+            active.end());
+    }
+
+    // -----------------------------------------------------------------
+    // Collect the final best-move + statistics for every root.
     // -----------------------------------------------------------------
     std::vector<std::tuple<MCTSResult, MCTSStatistics>> results;
     results.reserve(roots.size());
@@ -289,12 +302,13 @@ MCTSResult MCTS::evalSearch(const std::string &fen, const NodeId prevNodeId,
     return gatherResult(root);
 }
 
+// These variables are initialized only once per thread
+// and retain their values between function calls
+thread_local std::vector<MCTSNode *> nodes;
+thread_local std::vector<const Board *> boards;
+
 void MCTS::parallelIterate(const std::vector<MCTSNode *> &roots) {
     TIMEIT("MCTS::parallelIterate");
-    // These variables are initialized only once per thread
-    // and retain their values between function calls
-    thread_local std::vector<MCTSNode *> nodes;
-    thread_local std::vector<const Board *> boards;
 
     // Clear contents but maintain capacity
     nodes.clear();

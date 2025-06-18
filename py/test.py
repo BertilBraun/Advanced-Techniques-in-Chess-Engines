@@ -8,6 +8,16 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
 
 import os
+
+os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
+os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
+
+import torch
+
+import chess
+from AlphaZeroCpp import MCTS, MCTSNode, MCTSParams, InferenceClientParams, MCTSResults, INVALID_NODE, NodeId
+
+
 import random
 import time
 from typing import Any, Callable
@@ -16,17 +26,6 @@ from src.Encoding import decode_board_state, encode_board_state
 from src.games.chess.ChessBoard import ChessBoard
 from src.util import lerp
 from src.util.save_paths import create_model, create_optimizer, model_save_path, save_model_and_optimizer
-
-os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
-os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
-
-import torch
-
-torch.manual_seed(42)  # Set the random seed for PyTorch
-torch.set_num_threads(1)  # Limit the number of threads to 1 for PyTorch
-torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
-
-torch.autograd.set_detect_anomaly(True)
 
 from src.settings import TRAINING_ARGS, CurrentGame
 
@@ -87,10 +86,6 @@ def run_mcts_cpp(fens: list[str], model_path: str):
     print(f'CPP: Search took {end - start:.2f} seconds for {len(inputs)} boards.')
 
 
-import chess
-from AlphaZeroCpp import MCTS, MCTSNode, MCTSParams, InferenceClientParams, MCTSResults, INVALID_NODE, NodeId
-
-
 network = create_model(TRAINING_ARGS.network, torch.device('cpu'))
 optimizer = create_optimizer(network, 'adamw')
 
@@ -112,6 +107,8 @@ mcts_args = MCTSParams(
     node_reuse_discount=0.8,
     min_visit_count=2,
     num_threads=8,
+    num_fast_searches=800,
+    num_full_searches=800,
 )
 
 mcts = MCTS(client_args, mcts_args)
@@ -176,7 +173,7 @@ def run_mate_puzzle_regression():
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
 
-    inputs: list[tuple[str, NodeId, int]] = []
+    inputs: list[tuple[str, NodeId, bool]] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
     for puzzle in mate_puzzles:
@@ -196,7 +193,7 @@ def run_mate_puzzle_regression():
         else:
             expected_move = moves[0]
 
-        inputs.append((board.board.fen(), INVALID_NODE, 800))
+        inputs.append((board.board.fen(), INVALID_NODE, True))
         metadata.append((puzzle_id, expected_move, puzzle))
 
     # Run batch MCTS search.
@@ -461,7 +458,7 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
 
 
 def dis(fen: str, id: NodeId) -> None:
-    inp = [(fen, id, 2600)]  # Use the FEN string to create the input for MCTS
+    inp = [(fen, id, True)]  # Use the FEN string to create the input for MCTS
     results: MCTSResults = mcts.search(inp)
     # get the id of the root node of the first result
     root = mcts.get_node(results.results[0].children[0]).parent
@@ -480,6 +477,6 @@ def dis(fen: str, id: NodeId) -> None:
     )
 
 
-dis(MATE_IN_TWO_FEN, INVALID_NODE)
+dis(MATE_IN_ONE_FEN, INVALID_NODE)
 
 input('Press Enter to exit...')  # Keep the script running to see the output in the console.
