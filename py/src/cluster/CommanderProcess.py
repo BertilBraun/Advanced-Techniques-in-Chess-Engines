@@ -217,7 +217,7 @@ class CommanderProcess:
             return 0
 
         total: int = self.args.cluster.num_self_play_nodes_on_cluster
-        num_devices: int = max(torch.cuda.device_count() - 1, 1)
+        num_devices: int = max(torch.cuda.device_count(), 1)
 
         return i % num_devices
 
