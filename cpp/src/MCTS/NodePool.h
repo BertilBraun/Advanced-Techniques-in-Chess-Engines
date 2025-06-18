@@ -14,6 +14,10 @@ class NodePool {
 public:
     NodePool();
 
+    ~NodePool() {
+        clear();
+    }
+
     // Allocate a new node by forwarding to MCTSNode’s constructor. Returns its NodeId.
     // Thread‐safe: locks the internal mutex while modifying m_chunks/m_freeList/m_nextFreshId.
     template <typename... Args> [[nodiscard]] MCTSNode *allocateNode(Args &&...args);
@@ -51,7 +55,7 @@ public:
 private:
     // Each entry is a unique_ptr to a heap‐allocated
     // std::array<std::optional<MCTSNode>,CHUNK_SIZE>.
-    std::vector<std::unique_ptr<std::array<std::optional<MCTSNode>, CHUNK_SIZE>>> m_chunks;
+    std::vector<std::array<std::optional<MCTSNode>, CHUNK_SIZE>*> m_chunks;
 
     // IDs that have been freed and can be reused.
     std::vector<NodeId> m_freeList;
@@ -79,7 +83,7 @@ private:
 template <typename... Args> MCTSNode *NodePool::allocateNode(Args &&...args) {
     NodeId newId;
     {
-        std::lock_guard<std::mutex> lock(m_poolMutex);
+        std::lock_guard lock(m_poolMutex);
 
         if (!m_freeList.empty()) {
             newId = m_freeList.back();

@@ -9,7 +9,7 @@ NodePool::NodePool() {
 }
 
 void NodePool::deallocateNode(const NodeId id) {
-    std::lock_guard<std::mutex> lock(m_poolMutex);
+    std::lock_guard lock(m_poolMutex);
     assert(isLive(id) && "NodePool::deallocateNode: NodeId is not live");
     std::optional<MCTSNode> *ptr = slotPointer(id);
     // Call the destructor of the MCTSNode at this slot:
@@ -21,12 +21,20 @@ void NodePool::deallocateNode(const NodeId id) {
 size_t NodePool::capacity() const { return m_chunks.size() * CHUNK_SIZE; }
 
 size_t NodePool::liveNodeCount() const {
-    std::lock_guard<std::mutex> lock(m_poolMutex);
+    std::lock_guard lock(m_poolMutex);
     return m_nextFreshId - m_freeList.size();
 }
 
 void NodePool::clear() {
-    std::lock_guard<std::mutex> lock(m_poolMutex);
+    std::lock_guard lock(m_poolMutex);
+    for (const auto &chunk : m_chunks) {
+        for (auto &slot : *chunk) {
+            if (slot.has_value()) {
+                slot.reset();
+            }
+        }
+        delete chunk; // Free the memory allocated for each chunk
+    }
     m_chunks.clear();
     m_freeList.clear();
     m_nextFreshId = 0;
@@ -34,12 +42,12 @@ void NodePool::clear() {
 }
 
 bool NodePool::isLive(const NodeId id) const {
-    std::lock_guard<std::mutex> lock(m_poolMutex);
+    std::lock_guard lock(m_poolMutex);
     return id < m_nextFreshId && !isFreed(id);
 }
 
 void NodePool::purge(const std::vector<NodeId> &idsToKeep) {
-    std::lock_guard<std::mutex> lock(m_poolMutex);
+    std::lock_guard lock(m_poolMutex);
 
     std::vector<bool> present(m_nextFreshId, false);
     for (const NodeId id : idsToKeep) {
@@ -65,7 +73,7 @@ bool NodePool::isFreed(const NodeId id) const {
 }
 
 void NodePool::addChunk() {
-    m_chunks.push_back(std::make_unique<std::array<std::optional<MCTSNode>, CHUNK_SIZE>>());
+    m_chunks.push_back(new std::array<std::optional<MCTSNode>, CHUNK_SIZE>());
 }
 
 std::optional<MCTSNode> *NodePool::slotPointer(const NodeId id) const {
