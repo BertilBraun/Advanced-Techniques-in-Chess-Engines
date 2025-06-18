@@ -116,16 +116,15 @@ public:
     // Free the node, its parent and all its children, except the excluded one and its children.
     void freeTree(NodeId nodeId, NodeId excluded = INVALID_NODE);
 
-    MCTSResult evalSearch(const std::string &fen, NodeId prevNodeId, int numberOfSearches);
+    [[nodiscard]] MCTSResult evalSearch(const std::string &fen, NodeId prevNodeId, int numberOfSearches);
 
 private:
     InferenceClient m_client;
     MCTSParams m_args;
     NodePool m_pool;
+    ThreadPool m_threadPool;
 
-    ThreadPool m_threadPool; // For parallel processing.
-
-    [[nodiscard]] std::vector<std::tuple<MCTSResult, MCTSStatistics>>
+    [[nodiscard]] std::vector<std::pair<MCTSResult, MCTSStatistics>>
     searchGames(const std::vector<BoardTuple> &boards);
 
     // This method performs several iterations of tree search in parallel.

@@ -102,7 +102,7 @@ struct RootTask {
     uint32 limit; // visit budget for this root
 };
 
-std::vector<std::tuple<MCTSResult, MCTSStatistics>>
+std::vector<std::pair<MCTSResult, MCTSStatistics>>
 MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::searchGames");
 
@@ -168,22 +168,20 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
         // Expose just the raw node pointers to the parallel routine.
         std::vector<MCTSNode *> batch;
         batch.reserve(active.size());
-        for (auto &t : active)
-            batch.emplace_back(t.root);
+        for (auto &[root, limit] : active)
+            batch.emplace_back(root);
 
         parallelIterate(batch);
 
         // Keep only the roots that still need work.
-        active.erase(
-            std::remove_if(active.begin(), active.end(),
-                           [](const RootTask &t) { return t.root->number_of_visits >= t.limit; }),
-            active.end());
+        std::erase_if(active,
+                      [](const RootTask &t) { return t.root->number_of_visits >= t.limit; });
     }
 
     // -----------------------------------------------------------------
     // Collect the final best-move + statistics for every root.
     // -----------------------------------------------------------------
-    std::vector<std::tuple<MCTSResult, MCTSStatistics>> results;
+    std::vector<std::pair<MCTSResult, MCTSStatistics>> results;
     results.reserve(roots.size());
     for (const auto *root : roots)
         results.emplace_back(gatherResult(root), mctsStatistics(root, &m_pool));
@@ -223,7 +221,7 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     const std::size_t P = std::max<std::size_t>(1, m_threadPool.numThreads());
     const std::size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
 
-    std::vector<std::future<std::vector<std::tuple<MCTSResult, MCTSStatistics>>>> futures;
+    std::vector<std::future<std::vector<std::pair<MCTSResult, MCTSStatistics>>>> futures;
     futures.reserve(P);
 
     for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {

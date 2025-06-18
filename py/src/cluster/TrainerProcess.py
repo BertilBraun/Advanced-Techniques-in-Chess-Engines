@@ -83,7 +83,7 @@ class TrainerProcess:
             train_stats.append(epoch_train_stats)
             valid_stats.append(epoch_valid_stats)
 
-            log('Train stats  : ', epoch_train_stats)
+            log('Train stats: ', epoch_train_stats)
             log('Valid stats: ', epoch_valid_stats)
 
             if epoch_train_stats.value_std < 0.01:

@@ -176,18 +176,16 @@ class ChessGame(Game[ChessMove]):
         assert move.promotion in (None, chess.QUEEN), 'Only queen promotions are supported in this encoding.'
 
         if board.board.turn == chess.BLACK:
-            move = chess.Move(
-                chess.square_mirror(move.from_square),
-                chess.square_mirror(move.to_square),
-                promotion=move.promotion,
-            )
+            move = mirror_move_for_black(move)
+            board_to_check = board.board.mirror()
+        else:
+            board_to_check = board.board
 
         # Handle castling moves
-        if is_castling_move(move, board):
+        if is_castling_move(move, board_to_check):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
-            # In python-chess, castling moves are represented as king moving two squares
+            # In python-chess, castling moves are represented as king moving to B1 or G1, but in the Cpp-Stockfish engine, they are represented as the king moving to C1 or H1.
             # Need to convert to our representation format before lookup
-
             king_square = move.from_square
 
             # Determine if it's kingside or queenside castling
@@ -208,8 +206,13 @@ class ChessGame(Game[ChessMove]):
 
         move = chess.Move(m.from_square, m.to_square, promotion=m.promotion)
 
+        if board.board.turn == chess.BLACK:
+            board_to_check = board.board.mirror()
+        else:
+            board_to_check = board.board
+
         # Check if move looks like a castling pattern
-        if is_castling_move(move, board):
+        if is_castling_move(move, board_to_check):
             assert move.promotion is None, 'Castling moves should not have a promotion.'
 
             king_square = move.from_square
@@ -262,10 +265,10 @@ class ChessGame(Game[ChessMove]):
         return ChessBoard()
 
 
-def is_castling_move(move: ChessMove, board: ChessBoard) -> bool:
+def is_castling_move(move: ChessMove, board: chess.Board) -> bool:
     """Checks if a move is a castling move."""
-    from_piece = board.board.piece_at(move.from_square)
-    to_piece = board.board.piece_at(move.to_square)
+    from_piece = board.piece_at(move.from_square)
+    to_piece = board.piece_at(move.to_square)
     return bool(
         from_piece
         and to_piece
@@ -284,4 +287,30 @@ def mirror_move_for_black(move: ChessMove) -> ChessMove:
     return chess.Move(from_square, to_square, promotion=move.promotion)
 
 
-_REPRESENTATION_SHAPE = ChessGame().representation_shape
+if __name__ == '__main__':
+    import random
+
+    # Example usage
+    game = ChessGame()
+
+    for _ in range(200):
+        board = game.get_initial_board()
+        while not board.is_game_over():
+            valid_moves = board.get_valid_moves()
+            assert valid_moves, 'No valid moves available, game should not be over yet.'
+            for move in valid_moves:
+                encoded_move = game.encode_move(move, board)
+                decoded_move = game.decode_move(encoded_move, board)
+                if move != decoded_move:
+                    print(f'Encoding/decoding mismatch: {move} != {decoded_move}')
+                    print(f'Encoded move: {encoded_move}, Decoded move: {decoded_move}')
+                    print(f'Board FEN: {board.board.fen()}')
+                    print(board)
+                    print('Valid moves:', valid_moves)
+            # Make a random move
+            move = random.choice(valid_moves)
+            board.make_move(move)
+
+        print(f'Game over: {board.board.result()}')
+
+    print('All moves encoded and decoded correctly.')
