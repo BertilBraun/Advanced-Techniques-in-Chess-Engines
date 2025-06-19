@@ -179,7 +179,7 @@ class EvaluationProcess:
         model_evaluation = ModelEvaluation(
             iteration,
             self.args,
-            device_id=torch.cuda.device_count() - 1 if USE_GPU else 0,
+            device_id=0,  # torch.cuda.device_count() - 1 if USE_GPU else 0,
             num_games=self.eval_args.num_games,
             num_searches_per_turn=self.eval_args.num_searches_per_turn,
         )
