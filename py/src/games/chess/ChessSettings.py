@@ -44,7 +44,7 @@ training = TrainingParams(
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
-    num_workers=8,
+    num_workers=16,
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=64,
