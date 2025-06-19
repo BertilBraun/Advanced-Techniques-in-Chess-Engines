@@ -15,19 +15,69 @@ os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
 import torch
 
 import chess
-from AlphaZeroCpp import MCTS, MCTSNode, MCTSParams, InferenceClientParams, MCTSResults, INVALID_NODE, NodeId
-
-
 import random
+from AlphaZeroCpp import MCTS, MCTSNode, MCTSParams, InferenceClientParams, MCTSResults, new_root, test_encode
+from src.settings import TRAINING_ARGS, CurrentGame
+from src.games.chess.ChessBoard import ChessBoard
+from src.Encoding import decode_board_state, encode_board_state
+
+for _ in range(100):
+    # generate a random board state and check if the flipped fen is the same as if python chess flipped it
+    board = chess.Board()
+    for _ in range(50):
+        move = random.choice(list(board.legal_moves))
+        board.push(move)
+        if board.is_game_over():
+            print('Game over, skipping to next iteration.')
+            break
+        fen = board.fen()
+        encoded_cpp = test_encode(fen)
+        encoded_py = CurrentGame.get_canonical_board(ChessBoard.from_fen(fen))
+
+        re_encoded_py = decode_board_state(encode_board_state(encoded_py))
+
+        if not (encoded_py == re_encoded_py).all():
+            print('Encoded board does not match after encoding/decoding!')
+            print('Current board FEN:', fen)
+            print('Original board:', encoded_py)
+            print('Encoded board:', encoded_cpp)
+            print('Decoded board:', re_encoded_py)
+            print('Difference:', (encoded_py != re_encoded_py).sum())
+
+        any_different = False
+        for i in range(len(encoded_cpp)):
+            for j in range(len(encoded_cpp[i])):
+                for k in range(len(encoded_cpp[i][j])):
+                    if encoded_cpp[i][j][k] != encoded_py[i][j][k]:
+                        any_different = True
+                        print(
+                            f'Difference at layer {i}, row {j}, col {k}: {encoded_cpp[i][j][k]} != {encoded_py[i][j][k]}'
+                        )
+        if any_different:
+            print('Encoded board does not match after encoding/decoding!')
+            print('Current board FEN:', fen)
+            print('Encoded board:', encoded_cpp)
+            print('Decoded board:', encoded_py)
+
+            # print them nicly next to each other
+            for i in range(len(encoded_cpp)):
+                print(f'Layer {i}:')
+                for j in range(len(encoded_cpp[i])):
+                    row_cpp = ' '.join(str(round(x)) if x else '.' for x in encoded_cpp[i][j])
+                    row_py = ' '.join(str(round(x)) if x else '.' for x in encoded_py[i][j])
+                    print(f'  Cpp: {row_cpp}', end=' ')
+                    print(f'  Py : {row_py}')
+                print()
+
+            print('Differences found, exiting.')
+exit()
+
+
 import time
 from typing import Any, Callable
 
-from src.Encoding import decode_board_state, encode_board_state
-from src.games.chess.ChessBoard import ChessBoard
 from src.util import lerp
 from src.util.save_paths import create_model, create_optimizer, model_save_path, save_model_and_optimizer
-
-from src.settings import TRAINING_ARGS, CurrentGame
 
 
 game = CurrentGame
@@ -124,18 +174,18 @@ input_fens = [STARTING_FEN]
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:
-boards = [(STARTING_FEN, INVALID_NODE, 80)] * 12
+boards = [(new_root(STARTING_FEN), True)] * 12
 # TODO check this for end game positions - does that find the mate moves?
 # TODO check the node reuse, does it work as expected?
 
-results: MCTSResults = mcts.search(boards)
-for r in results.results:
-    print('eval =', r.result)
-    for encoded_move, cnt in r.visits:
-        print(f'  {encoded_move} visited {cnt} times')
-
-
-stats = mcts.get_inference_statistics()
+# results: MCTSResults = mcts.search(boards)
+# for r in results.results:
+#     print('eval =', r.result)
+#     for encoded_move, cnt in r.visits:
+#         print(f'  {encoded_move} visited {cnt} times')
+#
+#
+# stats = mcts.get_inference_statistics()
 
 
 from datasets import load_dataset
@@ -173,7 +223,7 @@ def run_mate_puzzle_regression():
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
 
-    inputs: list[tuple[str, NodeId, bool]] = []
+    inputs: list[tuple[MCTSNode, bool]] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
     for puzzle in mate_puzzles:
@@ -193,7 +243,7 @@ def run_mate_puzzle_regression():
         else:
             expected_move = moves[0]
 
-        inputs.append((board.board.fen(), INVALID_NODE, True))
+        inputs.append((new_root(board.board.fen()), True))
         metadata.append((puzzle_id, expected_move, puzzle))
 
     # Run batch MCTS search.
@@ -202,8 +252,8 @@ def run_mate_puzzle_regression():
     results = res.results
 
     failures = []
-    for (puzzle_id, expected_move, puzzle), result, (fen, _, _) in zip(metadata, results, inputs):
-        board = CurrentBoard.from_fen(fen)
+    for (puzzle_id, expected_move, puzzle), result, (node, _) in zip(metadata, results, inputs):
+        board = CurrentBoard.from_fen(node.fen)
 
         # Apply a softmax to the visit counts.
         probs = action_probabilities(result.visits)
@@ -214,7 +264,7 @@ def run_mate_puzzle_regression():
         sorted_moves = list(sorted(moves, key=lambda x: -x[1]))
 
         print(f'Puzzle {puzzle_id} with expected move {expected_move} and themes {puzzle["Themes"]}')
-        print(f'FEN: {fen}')
+        print(f'FEN: {node.fen}')
         print(f'Board:\n{repr(board)}')
         print(f'Expected move: {expected_move}')
         print(f'Result: {result.result:.2f}')
@@ -370,7 +420,7 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
                 #    - average value @ raw visits
                 avg_val = 0.0
                 if vis_k > 0:
-                    avg_val = child.result / (vis_k + min_visits)
+                    avg_val = child.result_sum / (vis_k + min_visits)
                 gui.draw_text(r_to, c_to, f'{avg_val:.2f}@{vis_k}', offset=(0, 10))
 
                 #    - UCB score
@@ -379,7 +429,7 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
 
                 #    - Flags: 'F' if fully expanded, 'T' if terminal
                 flags = ''
-                if child.is_fully_expanded:
+                if child.is_expanded:
                     flags += 'F'
                 if child.is_terminal:
                     flags += 'T'
@@ -393,7 +443,9 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
         # 5) Update window title
         player_name = 'White' if board.current_player == 1 else 'Black'
         mode_name = 'Inspect' if inspect_or_search else 'Search'
-        gui.update_window_title(f'Current Player: {player_name} @ {root.result:.2f}  MCTS Score  –  {mode_name}')
+        gui.update_window_title(
+            f'Current Player: {player_name} @ {root.result_sum / root.visits:.2f}  MCTS Score  –  {mode_name}'
+        )
 
         gui.update_display()
 
@@ -439,12 +491,12 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
                     if mv.from_square == from_sq and mv.to_square == to_sq:
                         print(
                             f'Clicked move: from {from_sq} to {to_sq}  '
-                            f'(child #{k}/#{len(root.children)}): visits={child.visits}, score={child.result:.2f}, policy={child.policy:.2f}'
+                            f'(child #{k}/#{len(root.children)}): visits={child.visits}, score={child.result_sum:.2f}, policy={child.policy:.2f}'
                         )
 
                         if inspect_or_search:
                             # In Inspect mode, recuse only if fully expanded & >1 visit
-                            if child.is_fully_expanded and child.visits > 1:
+                            if child.is_expanded and child.visits > 1:
                                 display_node(child, inspect_or_search, search_function)
                             else:
                                 print('Child is not fully expanded')
@@ -457,18 +509,16 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
                     print('No child found corresponding to that move')
 
 
-def dis(fen: str, id: NodeId) -> None:
-    inp = [(fen, id, True)]  # Use the FEN string to create the input for MCTS
+def dis(node: MCTSNode) -> None:
+    inp = [(node, True)]  # Use the FEN string to create the input for MCTS
     results: MCTSResults = mcts.search(inp)
-    # get the id of the root node of the first result
-    root = mcts.get_node(results.results[0].children[0]).parent
-    assert root is not None, 'Root node should not be None'
+    root = results.results[0].root
 
     def search_function(fen: str) -> None:
         # find out the node id of the child node with the given fen
-        for child, childId in zip(root.children, results.results[0].children):
+        for child in root.children:
             if child.fen == fen:
-                dis(child.fen, childId)
+                dis(child)
 
     display_node(
         root,
@@ -477,6 +527,6 @@ def dis(fen: str, id: NodeId) -> None:
     )
 
 
-dis(MATE_IN_ONE_FEN, INVALID_NODE)
+dis(new_root(MATE_IN_ONE_FEN))
 
 input('Press Enter to exit...')  # Keep the script running to see the output in the console.

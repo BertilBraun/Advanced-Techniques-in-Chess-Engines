@@ -28,8 +28,8 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
 
     // ---- 2) piece-type channels -------------------------------------------
     int ch = 0;
-    for (const int color : {WHITE, BLACK}) {
-        for (const int piece : PIECE_TYPES) {
+    for (const Color color : {WHITE, BLACK}) {
+        for (const PieceType piece : PIECE_TYPES) {
             out.bits[ch++] = tmp.pieces(color, piece);
         }
     }
