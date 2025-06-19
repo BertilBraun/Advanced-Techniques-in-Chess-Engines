@@ -12,6 +12,12 @@ class MCTSParams:
     I.e. we continue to play the game util one of the players wins or the game is a draw. At each move we run the MCTS algorithm to get the next move to play for the current player. Here we run the MCTS algorithm num_searches times to get the next move to play.
     """
 
+    fast_searches_proportion_of_full_searches: float
+    """This is the proportion of searches that a fast search should take compared to a full search. I.e. if this is 0.5, then a fast search will take half the time of a full search. This is used to speed up the MCTS algorithm by using a fast search for certain moves, e.g. when the game is in a late stage - these fast searched moves will not be used as training data, but will speed up the game generation, allowing to play more games in the same time. Typically 1/2 - 1/10."""
+
+    playout_cap_randomization: float
+    """This is the proportion of searches that should be searched completely, i.e. with a full search. This is used to complete games faster, as a good proportion of the moves can be searched quickly, and only moves which are selected for full searches will be searched with the full MCTS budget and therefore also added as training data. For fast searches, the complete Search Tree is reused and no new noise is added. For full searches, the node is also reused, but discouted by `percentage_of_node_visits_to_keep` and new noise is added to the root node. Typically 0.1-0.5."""
+
     num_parallel_searches: int
     """This is the number of parallel strands which should parallelize the MCTS algorithm. Higher values enable more parallelism and thus faster search. However, it also increases the exploration of the search tree. Values between 1 and 16 seem sensible."""
 
@@ -42,6 +48,13 @@ class NetworkParams:
     hidden_size: int
     """This is the dimension of the hidden layers to use for the neural network. Typically 32-64 for simpler games like TicTacToe, 128-256 for medium complexity games like Connect4 and 512-1024 for complex games like Chess"""
 
+    se_positions: tuple[int, ...]
+    """This is the positions of the residual blocks to upgrade to Squeeze-and-Excitation blocks. This is used to improve the performance of the neural network by adding a Squeeze-and-Excitation block after each residual block in the specified positions. The positions are 0-based indices of the residual blocks, e.g. (0, 2, 4) means that the first, third and fifth residual blocks will be upgraded to Squeeze-and-Excitation blocks."""
+
+    num_policy_channels: int = 4
+    num_value_channels: int = 2
+    value_fc_size: int = 48
+
 
 @dataclass
 class SelfPlayParams:
@@ -59,8 +72,14 @@ class SelfPlayParams:
     only_store_sampled_moves: bool = False
     """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""
 
-    temperature: float = 1.25
-    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation"""
+    starting_temperature: float = 1.25
+    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation. This value is linearly interpolated to the final_temperature over the first num_moves_after_which_to_play_greedy moves."""
+
+    game_outcome_discount_per_move: float = 0.00
+    """This is the discount factor to use for the game outcome per move. This is used to reduce the impact of the game outcome on the score of the moves played in the very beginning of the game, as the game outcome (especially in amateur games) is not very correlated with the moves played in the beginning of the game. The higher the value, the more the game outcome is discounted. Typically 0.001-0.01 for self-play."""
+
+    final_temperature: float = 0.1
+    """This is the final temperature to use for in self-play to sample new moves from the policy after num_moves_after_which_to_play_greedy moves. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. See ``starting_temperature`` for more details."""
 
     result_score_weight: float = 0.5
     """This is the weight to use for the interpolation between final game outcome as score and the mcts result score. Weight of 0 is only the final game outcome, weight of 1 is only the mcts result score."""
@@ -120,6 +139,20 @@ class TrainingParams:
         return lerp(min_lr, base_lr, batch_percentage)
     """
 
+    validation_percentage: float = 0.01
+    """This is the percentage of the training data to use for validation. This is used to validate the model during training to see how well it is doing. The higher the percentage the more data is used for validation but the less data is used for training. Typically 0.01-0.1 for training"""
+
+    max_buffer_samples: int = 4_000_000
+    """This is the maximum size of the training buffer to use for the training. This is used to limit the size of the training buffer to prevent memory issues. The higher the value the more stable the training but the slower the training. Typically 1_000_000-10_000_000 for training"""
+
+    max_grad_norm: float = 0.5
+    """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
+
+    value_loss_weight: float = 0.5
+    """This is the weight to use for the value loss in the training. The value loss is the mean squared error between the predicted value and the actual value. The higher the weight the more important the value loss is in the training. Typically 0.5-1.0 for training"""
+    policy_loss_weight: float = 1.0
+    """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
+
     num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
 
@@ -140,6 +173,21 @@ class EvaluationParams:
 
 
 @dataclass
+class GatingParams:
+    num_games: int = 100
+    """This is the number of games to play for the gating. The more games the more accurate the gating but the longer the gating. Typically 100-1000 for gating"""
+
+    num_searches_per_turn: int = 100
+    """This is the number of searches to run the MCTS algorithm in the gating. This is used to evaluate the model against itself to see how well it is doing. The higher the number the more accurate the evaluation but the slower the evaluation. Typically 32-800 for gating"""
+
+    ignore_draws: bool = True
+    """This is a flag to indicate whether draws should be ignored in the gating. If this is set to True, the gating score will be calculated as wins / (wins + losses) instead of (wins + draws * 0.5) / num_games. This is used to ignore draws in the gating, as they are not relevant for the gating. Typically True for gating."""
+
+    gating_threshold: float = 0.55
+    """This is the threshold to use for the gating. If the model's win rate is above this threshold, it is considered to be better than the current model. The higher the threshold the more strict the gating is. Typically 0.50-0.55 for gating."""
+
+
+@dataclass
 class TrainingArgs:
     save_path: str
     """This is the path to save the model, datasamples, training logs, etc. to after each iteration"""
@@ -155,6 +203,7 @@ class TrainingArgs:
     training: TrainingParams
     cluster: ClusterParams
     evaluation: Optional[EvaluationParams] = None
+    gating: Optional[GatingParams] = None
 
     on_startup: Optional[Callable[[], None]] = None
     """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

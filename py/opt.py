@@ -65,14 +65,16 @@ def objective(trial: optuna.Trial) -> float:
     # Configure TrainingArgs
     mcts_params = MCTSParams(
         num_searches_per_turn=mcts_num_searches_per_turn,
+        num_parallel_searches=8,
         dirichlet_epsilon=0.25,
         dirichlet_alpha=mcts_dirichlet_alpha,
         c_param=mcts_c_param,
-        num_parallel_searches=8,
         min_visit_count=mcts_num_searches_per_turn // 50,
+        percentage_of_node_visits_to_keep=0.6,
+        num_threads=8,  # Adjust based on your hardware
     )
 
-    network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size)
+    network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size, se_positions=())
 
     self_play_params = SelfPlayParams(
         num_parallel_games=128,
@@ -105,14 +107,14 @@ def objective(trial: optuna.Trial) -> float:
     log(trial.params, use_pprint=True)
 
     commander = CommanderProcess(trial.number, training_args)
-    for iteration, stats in commander.run():
-        trial.report(stats.total_loss, step=iteration)
+    for iteration, (training_stats, validation_stats) in commander.run():
+        trial.report(training_stats.total_loss, step=iteration)
 
         if trial.should_prune():
             raise optuna.TrialPruned()
 
     # Extract the final total_loss
-    return stats.total_loss
+    return training_stats.total_loss  # type: ignore[return-value]
 
 
 def optimizer() -> None:

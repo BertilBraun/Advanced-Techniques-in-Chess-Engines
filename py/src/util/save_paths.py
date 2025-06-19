@@ -26,7 +26,7 @@ def optimizer_save_path(iteration: int, save_folder: str | PathLike) -> Path:
 
 
 def create_model(args: NetworkParams, device: torch.device) -> Network:
-    model = Network(args.num_layers, args.hidden_size, device)
+    model = Network(args, device)
     # Not possible with JIT and model fusion model = try_compile(model)
     return model
 
@@ -135,7 +135,7 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), optimizer_save_path(iteration, save_folder))
 
     # Create a copy of the model, then set that to eval mode, fuse it, and save it as a JIT script
-    fused_model = Network(TRAINING_ARGS.network.num_layers, TRAINING_ARGS.network.hidden_size, model.device)
+    fused_model = Network(TRAINING_ARGS.network, model.device)
     fused_model.load_state_dict(model.state_dict())
     fused_model.eval()
     fused_model.fuse_model()

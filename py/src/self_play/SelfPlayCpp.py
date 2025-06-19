@@ -142,7 +142,7 @@ class SelfPlayCpp:
         from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams
 
         """Set the MCTS parameters for the current iteration."""
-        # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
+        # start with 10% of the searches, scale up to 100% over the first 5% of total iterations
         self.num_searches_per_turn = int(
             lerp(
                 self.args.mcts.num_searches_per_turn / 2,
@@ -155,12 +155,14 @@ class SelfPlayCpp:
             f'Number of searches per turn ({self.num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
         )
 
-        log_scalar('dataset/num_searches_per_turn', self.num_searches_per_turn, iteration)
+        log_scalar('training/num_searches_per_turn', self.num_searches_per_turn, iteration)
 
         mcts_args = MCTSParams(
             num_parallel_searches=self.args.mcts.num_parallel_searches,
             num_full_searches=self.num_searches_per_turn,
-            num_fast_searches=self.num_searches_per_turn // 4,  # TODO make this a parameter
+            num_fast_searches=int(
+                self.num_searches_per_turn * self.args.mcts.fast_searches_proportion_of_full_searches
+            ),
             dirichlet_alpha=self.args.mcts.dirichlet_alpha,
             dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
             c_param=self.args.mcts.c_param,
@@ -201,7 +203,7 @@ class SelfPlayCpp:
                 # and the game has not been resigned
                 and spg.resigned_at_move is None
                 # Playout-Cap Randomization (KataGo "RPC")
-                and random.random() < 0.25  # TODO make this a parameter
+                and random.random() < self.args.mcts.playout_cap_randomization
             )
 
             if spg.already_expanded_node is None:
@@ -219,9 +221,9 @@ class SelfPlayCpp:
         mcts_results = self.search(boards)
 
         stats = mcts_results.mctsStats
-        log_scalar('dataset/average_search_depth', stats.averageDepth)
-        log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
-        log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
+        log_scalar('mcts/average_search_depth', stats.averageDepth)
+        log_scalar('mcts/average_search_entropy', mcts_results.mctsStats.averageEntropy)
+        log_scalar('mcts/average_search_kl_divergence', stats.averageKLDivergence)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
             was_full_searched = boards[i][1]
@@ -241,7 +243,6 @@ class SelfPlayCpp:
                     continue
 
             if CURRENT_GAME == 'chess':
-                # TODO make this a parameter
                 if len(spg.played_moves) >= 200:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
@@ -293,11 +294,8 @@ class SelfPlayCpp:
             child_index = np.argmax(children_probabilities).item()
         else:
             # Scale down temperature from self.args.temperature to 0.1 as we approach num_moves_after_which_to_play_greedy
-            temperature = lerp(
-                self.args.temperature,  # Starting temperature
-                0.1,  # Target temperature # TODO make this a parameter?
-                len(current.played_moves) / self.args.num_moves_after_which_to_play_greedy,  # Progress ratio
-            )
+            game_progress = len(current.played_moves) / self.args.num_moves_after_which_to_play_greedy
+            temperature = lerp(self.args.starting_temperature, self.args.final_temperature, game_progress)
             child_index = _sample_from_probabilities(children_probabilities, temperature)
 
         move = CurrentGame.decode_move(children_encoded_moves[child_index], current.board)
@@ -348,13 +346,15 @@ class SelfPlayCpp:
                         turn_game_outcome,
                         mem.result_score,
                         # TODO parameter?
+                        # Scale up the proportion of the mcts result score based on the iteration number
+                        # This is to ensure that the mcts result score is less significant in the early iterations where the value network is not yet well trained
                         clamp(self.iteration * 10 / TRAINING_ARGS.num_iterations, 0.0, 1.0)
                         * self.args.result_score_weight,
                     ),
                 )
 
-            # TODO parameter?
-            game_outcome *= 0.995  # discount the game outcome for each move
+            # Discount the game outcome for each move in the game
+            game_outcome *= 1 - self.args.game_outcome_discount_per_move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more

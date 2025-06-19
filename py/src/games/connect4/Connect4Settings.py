@@ -28,7 +28,7 @@ TRAINING_ARGS = TrainingArgs(
     network=NetworkParams(num_layers=9, hidden_size=64),
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
-        temperature=1.25,
+        starting_temperature=1.25,
         num_moves_after_which_to_play_greedy=10,
         mcts=MCTSParams(
             num_searches_per_turn=600,

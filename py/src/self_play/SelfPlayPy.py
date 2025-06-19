@@ -253,7 +253,7 @@ class SelfPlayPy:
         if len(current.played_moves) >= self.args.num_moves_after_which_to_play_greedy:
             move = CurrentGame.decode_move(np.argmax(action_probabilities).item(), current.board)
         else:
-            move = self._sample_move(action_probabilities, current.board, self.args.temperature)
+            move = self._sample_move(action_probabilities, current.board, self.args.starting_temperature)
 
         new_spg = current.expand(move)
 

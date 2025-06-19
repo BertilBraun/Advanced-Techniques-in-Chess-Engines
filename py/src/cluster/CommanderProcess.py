@@ -1,23 +1,20 @@
+from typing import Generator
 import torch
 from torch.multiprocessing import Process
 from pathlib import Path
 
-from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.cluster.GatingProcess import GatingProcess
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
+from src.train.TrainingStats import TrainingStats
 from src.util.communication import Communication
 from src.util.exceptions import log_exceptions
 from src.util.log import log, warn
-from src.util.save_paths import (
-    get_latest_model_iteration,
-    load_model_and_optimizer,
-    model_save_path,
-    save_model_and_optimizer,
-)
+from src.util.save_paths import get_latest_model_iteration, load_model_and_optimizer, save_model_and_optimizer
 from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import TrainerProcess
-from src.util.tensorboard import TensorboardWriter, log_scalar, log_scalars
+from src.util.tensorboard import TensorboardWriter
 from src.util.timing import reset_times
 
 
@@ -45,26 +42,7 @@ class CommanderProcess:
 
         self.trainer_device_id = torch.cuda.device_count() - 1 if USE_GPU else 0
 
-    def _setup_connections(self) -> None:
-        for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
-            self.self_play_processes.append(self._start_self_play_processes(node_id))
-
-            if self._get_device_id(node_id) == self.trainer_device_id:
-                self.self_play_nodes_on_trainer_device.append(node_id)
-
-        log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
-
-    def _start_self_play_processes(self, node_id: int) -> Process:
-        """Starts a SelfPlay process for the given node_id and returns the process."""
-        device_id = self._get_device_id(node_id)
-        process = Process(
-            target=run_self_play_process,
-            args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
-        )
-        process.start()
-        return process
-
-    def run(self) -> None:
+    def run(self) -> Generator[tuple[int, tuple[TrainingStats, TrainingStats]], None, None]:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
 
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
@@ -80,6 +58,7 @@ class CommanderProcess:
         self._setup_connections()
 
         trainer = TrainerProcess(self.args, self.run_id, self.trainer_device_id)
+        gating = GatingProcess(self.args, self.run_id, self.trainer_device_id)
         log('Connections set up.')
 
         # Start CPU usage logger for one SelfPlay process
@@ -102,23 +81,21 @@ class CommanderProcess:
                     trainer.wait_for_enough_training_samples(iteration)
                     trainer.load_all_memories_to_train_on_for_iteration(iteration)
 
-                    # TODO make the portion a hyperparameter
+                    # TODO make the portion a hyperparameter?
                     for node_id in self.self_play_nodes_on_trainer_device[::2]:
                         # only stop half of the self-play processes for gating
                         self.communication.send_to_id('STOP SELF PLAY', node_id)
 
-                    trainer.train(iteration)
+                    yield iteration, trainer.train(iteration)
                     log(f'Training finished for iteration {iteration}')
 
                     reset_times()
 
-                current_best_iteration = self._run_gating_evaluation(iteration, current_best_iteration)
+                current_best_iteration = gating.run(iteration, current_best_iteration)
 
                 # start EvaluationProcess
-                p = Process(target=run_evaluation_process, args=(self.run_id, self.args, iteration + 1))
-                p.start()
+                self._start_evaluation_process(iteration)
                 log(f'Started evaluation process for iteration {iteration}.')
-                # p.join()
                 # lot(f'Finished evaluation process for iteration {iteration}.')
 
         log('Training complete. Sending STOP to all processes.')
@@ -126,7 +103,34 @@ class CommanderProcess:
 
         for process in self.self_play_processes:
             process.terminate()
-        exit()
+
+    def _start_evaluation_process(self, iteration: int) -> Process:
+        """Starts an EvaluationProcess for the given iteration and returns the process."""
+        process = Process(
+            target=run_evaluation_process,
+            args=(self.run_id, self.args, iteration + 1),
+        )
+        process.start()
+        return process
+
+    def _setup_connections(self) -> None:
+        for node_id in range(self.args.cluster.num_self_play_nodes_on_cluster):
+            self.self_play_processes.append(self._start_self_play_processes(node_id))
+
+            if self._get_device_id(node_id) == self.trainer_device_id:
+                self.self_play_nodes_on_trainer_device.append(node_id)
+
+        log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
+
+    def _start_self_play_processes(self, node_id: int) -> Process:
+        """Starts a SelfPlay process for the given node_id and returns the process."""
+        device_id = self._get_device_id(node_id)
+        process = Process(
+            target=run_self_play_process,
+            args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
+        )
+        process.start()
+        return process
 
     def _ensure_processes_are_running(self):
         for i, process in enumerate(list(self.self_play_processes)):
@@ -156,61 +160,6 @@ class CommanderProcess:
         )
         save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
 
-    def _run_gating_evaluation(self, iteration: int, current_best_iteration: int) -> int:
-        # TODO in gating process auslagern?
-        SKIP_GATING_EVALUATION = True  # TODO: make this a parameter in args
-        if SKIP_GATING_EVALUATION:
-            # for now, ignore gating, always update the model as quickly as possible
-            current_best_iteration = iteration + 1
-            self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
-            log(f'Gating evaluation skipped at iteration {iteration}. Using model {current_best_iteration}.')
-            return current_best_iteration
-
-        log(f'Running gating evaluation at iteration {iteration}.')
-
-        with TensorboardWriter(self.run_id, 'gating', postfix_pid=False), log_exceptions('Gating evaluation'):
-            # TODO gating params into args
-            gating_evaluation = ModelEvaluation(
-                iteration + 1,
-                self.args,
-                device_id=self.trainer_device_id,
-                num_games=100,
-                num_searches_per_turn=100,
-            )
-            results = gating_evaluation.play_two_models_search(
-                model_save_path(current_best_iteration, self.args.save_path)
-            )
-
-            log_scalars(
-                'gating/gating',
-                {
-                    'wins': results.wins,
-                    'losses': results.losses,
-                    'draws': results.draws,
-                },
-                iteration,
-            )
-
-            result_score = (results.wins + results.draws * 0.5) / gating_evaluation.num_games
-            # win rate with draws ignored
-            result_score = results.wins / (results.wins + results.losses) if results.wins + results.losses > 0 else 0.0
-            log(f'Gating evaluation at iteration {iteration} resulted in {result_score} score ({results}).')
-            # TODO make this a parameter in args
-            if result_score > 0.50:  # 50% win rate
-                log(f'Gating evaluation passed at iteration {iteration}.')
-                current_best_iteration = iteration + 1
-                self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
-            else:
-                log(
-                    f'Gating evaluation failed at iteration {iteration}.'
-                    f'Keeping current best model {current_best_iteration}.'
-                )
-
-            log_scalar('gating/current_best_iteration', current_best_iteration, iteration)
-            log_scalar('gating/gating_score', result_score, iteration)
-
-        return current_best_iteration
-
     def _get_device_id(self, i: int) -> int:
         # device 0 should have only half the processes of the other devices as device 0 is 50% occupied by the Trainer
         if not USE_GPU:
@@ -226,7 +175,7 @@ class CommanderProcess:
         assert num_devices > 1, 'There must be at least 2 devices to distribute the processes.'
 
         num_on_each_device = total / num_devices
-        num_on_last_device = round((num_on_each_device) / 2)
+        num_on_last_device = round((num_on_each_device) / 2)  # TODO parametrize this?
 
         if i < num_on_last_device:
             return torch.cuda.device_count() - 1

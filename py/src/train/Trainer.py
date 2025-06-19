@@ -52,6 +52,7 @@ class Trainer:
         policy_loss = F.cross_entropy(policy_logits, policy_targets)
         # KL divergence and cross entropy are in principle equivalent, but cross entropy is more numerically stable and slightly faster
         # policy_loss = F.kl_div(F.log_softmax(out_policy, dim=1), policy_targets, reduction='batchmean')
+        # MSE loss can work for policy targets, but it is not ideal and does not converge as well as cross entropy
         # policy_loss = F.mse_loss(F.softmax(out_policy, dim=1), policy_targets)
 
         # NOTE: At |logit| ≈ 4 the derivative of tanh is already < 0.002, so the gradient almost vanishes.
@@ -64,11 +65,9 @@ class Trainer:
         # value_targets = (value_targets + 1.0) / 2.0  # Convert from [-1, 1] to [0, 1] range for binary cross entropy
         # value_loss = F.binary_cross_entropy_with_logits(value_logits, value_targets)
         # value_loss = F.l1_loss(out_value, value_targets)  # l1_loss = mean_absolute_error
-        # value_loss = F.mse_loss(out_value, value_targets)  # mse_loss = mean_squared_error
         value_loss = F.mse_loss(value_output, value_targets)
 
-        # Apparently just as in AZ Paper, give more weight to the policy loss
-        total_loss = policy_loss + 0.5 * value_loss  # TODO move to hyperparameters
+        total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * value_loss
 
         return _LossResult(
             policy_loss=policy_loss,
@@ -92,10 +91,9 @@ class Trainer:
             # Backward pass with scaling
             scaler.scale(total_loss).backward()
 
-            # TODO magic hyperparameter and sensible like this?
             # Gradient clipping with unscaling
             scaler.unscale_(self.optimizer)
-            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+            grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
 
             scaler.step(self.optimizer)
             scaler.update()
@@ -130,7 +128,7 @@ class Trainer:
         """
         # Set learning rate
         base_lr: float = self.args.learning_rate(iteration, self.args.optimizer)
-        log_scalar('learning_rate', base_lr, iteration)
+        log_scalar('training/learning_rate', base_lr, iteration)
         log(f'Setting learning rate to {base_lr} for iteration {iteration}')
 
         for param_group in self.optimizer.param_groups:

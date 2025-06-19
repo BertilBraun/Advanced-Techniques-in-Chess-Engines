@@ -9,6 +9,7 @@ from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.util.log import error, log
 from src.util.profiler import start_cpu_usage_logger
+from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
 from src.util.save_paths import load_model_and_optimizer, optimizer_save_path, save_model_and_optimizer
 from src.train.Trainer import Trainer
@@ -41,12 +42,11 @@ class TrainerProcess:
 
         start_cpu_usage_logger(self.run_id, 'trainer')
 
-        # TODO make max_buffer_samples configurable
-        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=4_000_000)
+        self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=args.training.max_buffer_samples)
         self.validation_dataset = SelfPlayDataset()
 
     @timeit
-    def train(self, iteration: int) -> None:
+    def train(self, iteration: int) -> tuple[TrainingStats, TrainingStats]:
         model, optimizer = load_model_and_optimizer(
             iteration,
             self.args.network,
@@ -99,8 +99,12 @@ class TrainerProcess:
                 log('Enough games played, stopping training for this iteration.')
                 break
 
-        TrainingStats.combine(train_stats).log_to_tensorboard(iteration, 'train')
-        TrainingStats.combine(valid_stats).log_to_tensorboard(iteration, 'validation')
+        training_stats = TrainingStats.combine(train_stats)
+        validation_stats = TrainingStats.combine(valid_stats)
+        training_stats.log_to_tensorboard(iteration, 'train')
+        validation_stats.log_to_tensorboard(iteration, 'validation')
+
+        return training_stats, validation_stats
 
     @timeit
     def wait_for_enough_training_samples(self, iteration):
@@ -125,13 +129,17 @@ class TrainerProcess:
         log(
             f'Loading memories for iteration {iteration} with window size {window_size} ({max(iteration - window_size, 0)}-{iteration})'
         )
+        log_scalar('training/window_size', window_size, iteration)
 
         dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
 
+        dataset_stats = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration)
+
+        required_validation_samples = dataset_stats.num_samples * self.args.training.validation_percentage
+
         self.validation_dataset = SelfPlayDataset()
         if dataset_files:
-            # TODO validation dataset size in settings
-            while len(self.validation_dataset) < 2048 and len(dataset_files) > 0:
+            while len(self.validation_dataset) < required_validation_samples and len(dataset_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = dataset_files.pop(-1)
                 self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
@@ -142,7 +150,7 @@ class TrainerProcess:
             assert previous_iteration_files, (
                 f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
             )
-            while len(self.validation_dataset) < 2048 and len(previous_iteration_files) > 0:
+            while len(self.validation_dataset) < required_validation_samples and len(previous_iteration_files) > 0:
                 # The newest file is the validation dataset
                 validation_dataset_file = previous_iteration_files.pop(-1)
                 self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)

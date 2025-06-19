@@ -50,6 +50,7 @@ if __name__ == '__main__':
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
     commander = CommanderProcess(run, TRAINING_ARGS)
-    commander.run()
+    for _ in commander.run():
+        pass  # This loop will run until the training is finished
 
     log('Training finished')

@@ -3,6 +3,7 @@ import torch
 from torch import nn, Tensor
 
 from src.settings import CurrentGame
+from src.train.TrainingArgs import NetworkParams
 from src.util.log import log
 
 
@@ -17,54 +18,42 @@ class Network(nn.Module):
     The output of the network is a policy over all possible moves and a value for the current board state.
     """
 
-    def __init__(
-        self,
-        num_res_blocks: int,
-        hidden_size: int,
-        device: torch.device,
-        # TODO make these parameters configurable?
-        se_positions: tuple[int, ...] = (1, 3),  # 0‑based indices of ResBlocks to upgrade
-    ) -> None:
+    def __init__(self, args: NetworkParams, device: torch.device) -> None:
         super().__init__()
 
         self.device = device
-
-        # TODO make these parameters configurable?
-        num_policy_channels = 4
-        num_value_channels = 2
-        value_fc_size = 48
 
         encoding_channels, row_count, column_count = CurrentGame.representation_shape
         action_size = CurrentGame.action_size
 
         self.startBlock = nn.Sequential(
-            nn.Conv2d(encoding_channels, hidden_size, kernel_size=3, padding='same', bias=False),
-            nn.BatchNorm2d(hidden_size),
+            nn.Conv2d(encoding_channels, args.hidden_size, kernel_size=3, padding='same', bias=False),
+            nn.BatchNorm2d(args.hidden_size),
             nn.ReLU(inplace=True),
         )
 
         self.backBone = nn.ModuleList()
-        for i in range(num_res_blocks):
-            self.backBone.append(ResBlock(hidden_size))
-            if i in se_positions:
-                self.backBone.append(SE1x1(hidden_size))  # Add SE block after ResBlock
+        for i in range(args.num_layers):
+            self.backBone.append(ResBlock(args.hidden_size))
+            if i in args.se_positions:
+                self.backBone.append(SE1x1(args.hidden_size))  # Add SE block after ResBlock
 
         self.policyHead = nn.Sequential(
-            nn.Conv2d(hidden_size, num_policy_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(num_policy_channels),
+            nn.Conv2d(args.hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(args.num_policy_channels),
             nn.ReLU(inplace=True),
             nn.Flatten(),
-            nn.Linear(num_policy_channels * row_count * column_count, action_size),
+            nn.Linear(args.num_policy_channels * row_count * column_count, action_size),
         )
 
         self.valueHead = nn.Sequential(
-            nn.Conv2d(hidden_size, num_value_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(num_value_channels),
+            nn.Conv2d(args.hidden_size, args.num_value_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(args.num_value_channels),
             nn.ReLU(inplace=True),
             nn.Flatten(),
-            nn.Linear(num_value_channels * row_count * column_count, value_fc_size),
+            nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
             nn.ReLU(inplace=True),
-            nn.Linear(value_fc_size, 1),
+            nn.Linear(args.value_fc_size, 1),
         )
 
         # init weights

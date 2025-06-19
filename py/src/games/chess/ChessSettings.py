@@ -2,6 +2,7 @@ import os
 from src.train.TrainingArgs import (
     ClusterParams,
     EvaluationParams,
+    GatingParams,
     MCTSParams,
     NetworkParams,
     SelfPlayParams,
@@ -36,7 +37,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=8, hidden_size=96)
+network = NetworkParams(num_layers=8, hidden_size=96, se_positions=(1, 3))
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
@@ -52,6 +53,16 @@ evaluation = EvaluationParams(
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )
+
+if USE_GATING := False:
+    gating = GatingParams(
+        num_games=100,
+        num_searches_per_turn=64,
+        ignore_draws=True,
+        gating_threshold=0.5,
+    )
+else:
+    gating = None
 
 NUM_SELF_PLAYERS_PER_GPU = 16
 NUM_SELF_PLAYERS = NUM_SELF_PLAYERS_PER_GPU * (torch.cuda.device_count() - 1) + (NUM_SELF_PLAYERS_PER_GPU // 2)
@@ -81,10 +92,11 @@ TRAINING_ARGS = TrainingArgs(
         num_moves_after_which_to_play_greedy=50,  # even number - no bias towards white
         result_score_weight=0.1,
         resignation_threshold=-5.0,  # TODO -0.9 or so
-        temperature=1.3,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
+        starting_temperature=1.3,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
         num_games_after_which_to_write=2,
         portion_of_samples_to_keep=0.75,  # To not keep all symmetries
         only_store_sampled_moves=True,
+        game_outcome_discount_per_move=0.005,  # Discount per move for game outcome
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,
             num_parallel_searches=PARALLEL_SEARCHES,
@@ -94,10 +106,13 @@ TRAINING_ARGS = TrainingArgs(
             min_visit_count=MIN_VISIT_COUNT,
             percentage_of_node_visits_to_keep=0.6,
             num_threads=NUM_THREADS,
+            fast_searches_proportion_of_full_searches=1 / 4,
+            playout_cap_randomization=0.25,
         ),
     ),
     cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
     training=training,
     evaluation=evaluation,
+    gating=gating,
     on_startup=on_startup,
 )

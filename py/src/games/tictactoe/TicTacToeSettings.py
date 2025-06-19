@@ -41,7 +41,7 @@ TRAINING_ARGS = TrainingArgs(
     num_games_per_iteration=300,
     network=NetworkParams(num_layers=8, hidden_size=16),
     self_play=SelfPlayParams(
-        temperature=1.25,
+        starting_temperature=1.25,
         num_parallel_games=1,  # TODO 5,
         num_moves_after_which_to_play_greedy=5,
         result_score_weight=0.15,
