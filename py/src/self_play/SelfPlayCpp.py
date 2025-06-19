@@ -72,7 +72,7 @@ class SelfPlayGame:
     def approximate_result_score(self) -> float:
         """Get an approximate result score for the game from the perspective of the current player."""
         # discount the score to account for uncertainty in the result
-        return self.board.get_approximate_result_score() * self.board.current_player * 0.5
+        return self.board.get_approximate_result_score() * self.board.current_player
 
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
@@ -245,7 +245,8 @@ class SelfPlayCpp:
                 if len(spg.played_moves) >= 200:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                    self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
+                    game_result = spg.approximate_result_score() * 0.5  # Handle as approximately a draw
+                    self.self_play_games[i] = self._handle_end_of_game(spg, game_result)
                     continue
 
                 pieces = list(spg.board.board.piece_map().values())
