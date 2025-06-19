@@ -22,7 +22,7 @@ from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
-from src.util.tensorboard import log_histogram, log_scalar, log_scalars
+from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import timeit
 
 
@@ -131,9 +131,9 @@ class SelfPlayCpp:
 
             if time_info.functionTimes:
                 for element in time_info.functionTimes:
-                    log_scalars('timing/percent_of_execution_time_cpp', {element.name: element.percent})
-                    log_scalars('timing/total_time_cpp', {element.name: element.total})
-                    log_scalars('timing/total_invocations_cpp', {element.name: element.invocations})
+                    log_scalar(f'timing/{element.name}_percent_of_execution_time', element.percent)
+                    log_scalar(f'timing/{element.name}_total_time', element.total)
+                    log_scalar(f'timing/{element.name}_total_invocations', element.invocations)
 
                 log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
                 log_scalar('timing/total_time_cpp', time_info.totalTime)

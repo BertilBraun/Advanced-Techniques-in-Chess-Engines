@@ -2,8 +2,6 @@ import time
 
 from functools import wraps
 
-from src.util.tensorboard import log_scalars
-
 
 # Global variables to accumulate times
 function_times = {}
@@ -53,11 +51,9 @@ def reset_times():
 
     if total_time > 0:
         for key in sorted(global_function_times.keys(), key=lambda x: global_function_times[x], reverse=True):
-            log_scalars(
-                'timing/percent_of_execution_time_py', {key: global_function_times[key] / global_total_time * 100}
-            )
-            log_scalars('timing/total_time_py', {key: global_function_times[key]})
-            log_scalars('timing/total_invocations_py', {key: global_function_invocations[key]})
+            log_scalar(f'timing/{key}_percent_of_execution_time', global_function_times[key] / global_total_time * 100)
+            log_scalar(f'timing/{key}_total_time', global_function_times[key])
+            log_scalar(f'timing/{key}_total_invocations', global_function_invocations[key])
             log(
                 f'{function_times.get(key, 0.0) / total_time:.2%} (total {global_function_times[key] / global_total_time:.2%} on {global_function_invocations[key]} invocations) {key}',
                 level=LogLevel.DEBUG,

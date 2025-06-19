@@ -74,7 +74,7 @@ else
     echo "alias pip='pip3'" >> ~/.bashrc
     echo "alias tail='tail -f -n 2000'" >> ~/.bashrc
     echo "alias ch='chmod +x *.sh'" >> ~/.bashrc
-    echo "alias tb='ulimit -n 50000 && tensorboard --port 8080 --logdir'" >> ~/.bashrc
+    echo "alias tb='ulimit -n 50000 && tensorboard --port 6007 --logdir'" >> ~/.bashrc
     echo "alias gp='git pull'" >> ~/.bashrc
     echo "alias start='git pull && nohup python3 -O train.py > \"train_\$(date +%Y%m%d_%H%M%S).log\" 2>&1 &'" >> ~/.bashrc
     echo "alias stop='pkill -f train.py && pkill -f \"python3 -O -c from multiprocessing.spawn import spawn_main\"'" >> ~/.bashrc
@@ -85,6 +85,8 @@ else
     echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
     echo "alias compileDebug='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
     echo "alias compileRel='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
+
+    echo "ulimit -n 4096" >> ~/.bashrc
     
     
 
