@@ -48,7 +48,6 @@ class ModelEvaluation:
             dirichlet_alpha=1.0,
             min_visit_count=0,
             num_threads=self.num_games // 2,
-            node_reuse_discount=1.0,
             num_full_searches=self.num_searches_per_turn,
             num_fast_searches=self.num_searches_per_turn,
         )
@@ -115,7 +114,7 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
-        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS
+        from AlphaZeroCpp import InferenceClientParams, MCTS, new_root
 
         if not Path(model_path).exists():
             print(f'Model path {model_path} does not exist. Skipping evaluation.')
@@ -126,7 +125,7 @@ class ModelEvaluation:
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search(  # noqa: F821
-                [(board.board.fen(), INVALID_NODE, False) for board in boards]
+                [(new_root(board.board.fen()), False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 
@@ -191,7 +190,7 @@ class ModelEvaluation:
         return results
 
     def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
-        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS
+        from AlphaZeroCpp import new_root, InferenceClientParams, MCTS
 
         current = MCTS(
             InferenceClientParams(self.device_id, str(model_save_path(self.iteration, self.args.save_path)), 16),
@@ -201,7 +200,7 @@ class ModelEvaluation:
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search(  # noqa: F821
-                [(board.board.fen(), INVALID_NODE, False) for board in boards]
+                [(new_root(board.board.fen()), False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 

@@ -180,16 +180,34 @@ set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20
         PREFIX ""
         SUFFIX ".so"
-        INSTALL_RPATH "$ORIGIN"
+        INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
         BUILD_WITH_INSTALL_RPATH TRUE
 )
 
-# Optional: Post-build step to copy the module
+# Post-build step to copy the module and generate the stubs
+set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../py")
+set(STUB_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/stubs/AlphaZeroCpp.pyi")
+
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/../../py/"
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> "${CMAKE_CURRENT_BINARY_DIR}/../../py/"
-        COMMENT "Copying AlphaZeroCpp module to ../../py/"
+        COMMENT "Copying AlphaZeroCpp.so and generating stubs..."
+
+        # Make sure the output Python directory exists
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${PYTHON_MODULE_OUTPUT_DIR}
+
+        # Copy the compiled .so to the Python project directory
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> ${PYTHON_MODULE_OUTPUT_DIR}
+
+        # Generate the stub with correct PYTHONPATH
+        COMMAND ${CMAKE_COMMAND} -E env
+        PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
+        pybind11-stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
+
+        # Copy the generated AlphaZeroCpp.pyi into the same dir as the .so
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${STUB_OUTPUT_FILE}
+        ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
 )
+
 
 # --- Export compile commands ---
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

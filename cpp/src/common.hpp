@@ -152,6 +152,3 @@ inline std::string toString(const Move move) {
     return ss.str();
 }
 
-// A 32‐bit index into the pool.
-using NodeId = uint32_t;
-static constexpr NodeId INVALID_NODE = std::numeric_limits<NodeId>::max();

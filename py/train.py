@@ -4,7 +4,7 @@ import os
 
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
 os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
-os.environ['TORCH_NUM_THREADS'] = '1'
+# os.environ['TORCH_NUM_THREADS'] = '1'
 
 # This ensures, that the seperate processes spawned by torch.multiprocessing do not interfere with each other by using more than one core. Since we are using as many processes as cores for workers, we need to limit the number of threads to 1 for each process. Otherwise, we would use more than one core per process, which would lead to a lot of context switching and slow down the training.
 

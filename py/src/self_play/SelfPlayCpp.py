@@ -3,10 +3,10 @@ import gc
 import random
 import time
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import NodeId, MCTSResults, MCTS
+    from AlphaZeroCpp import MCTSNode, MCTSResults, MCTS
 
 
 import chess
@@ -20,7 +20,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
-from src.util.log import log, error
+from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar, log_scalars
 from src.util.timing import timeit
@@ -35,13 +35,11 @@ class SelfPlayGameMemory:
 
 class SelfPlayGame:
     def __init__(self) -> None:
-        from AlphaZeroCpp import INVALID_NODE
-
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.encoded_moves: list[int] = []
-        self.already_expanded_node: NodeId = INVALID_NODE
+        self.already_expanded_node: Optional[MCTSNode] = None
         self.start_generation_time = time.time()
 
         # The move at which the player resigned, if any. None if the game is still ongoing.
@@ -146,7 +144,7 @@ class SelfPlayCpp:
         self._set_mcts(iteration)
 
     def _set_mcts(self, iteration: int) -> None:
-        from AlphaZeroCpp import INVALID_NODE, InferenceClientParams, MCTS, MCTSParams
+        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams
 
         """Set the MCTS parameters for the current iteration."""
         # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
@@ -166,14 +164,13 @@ class SelfPlayCpp:
 
         mcts_args = MCTSParams(
             num_parallel_searches=self.args.mcts.num_parallel_searches,
+            num_full_searches=self.num_searches_per_turn,
+            num_fast_searches=self.num_searches_per_turn // 4,  # TODO make this a parameter
             dirichlet_alpha=self.args.mcts.dirichlet_alpha,
             dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
             c_param=self.args.mcts.c_param,
             min_visit_count=self.args.mcts.min_visit_count,
-            node_reuse_discount=self.args.mcts.percentage_of_node_visits_to_keep,
             num_threads=self.args.mcts.num_threads,
-            num_full_searches=self.num_searches_per_turn,
-            num_fast_searches=self.num_searches_per_turn // 4,  # TODO make this a parameter
         )
         client_args = InferenceClientParams(
             self.device_id,
@@ -184,27 +181,19 @@ class SelfPlayCpp:
 
         # Reset the already expanded node for all self-play games
         for spg in self.self_play_games:
-            spg.already_expanded_node = INVALID_NODE
+            spg.already_expanded_node = None
 
     @timeit
-    def search(self, boards: list[tuple[str, NodeId, bool]]) -> MCTSResults:
-        from AlphaZeroCpp import INVALID_NODE
-
+    def search(self, boards: list[tuple[MCTSNode, bool]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        try:
-            return self.mcts.search(boards)
-        except Exception as e:
-            error(f'Error during MCTS search: {e}')
-            self.mcts.clear_node_pool()  # Clear the node pool to free memory
-            for spg in self.self_play_games:
-                spg.already_expanded_node = INVALID_NODE
-            return self.search([(fen, INVALID_NODE, num_searches) for fen, old_node_id, num_searches in boards])
+        return self.mcts.search(boards)
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+        from AlphaZeroCpp import new_root
 
-        boards: list[tuple[str, NodeId, bool]] = []
+        boards: list[tuple[MCTSNode, bool]] = []
         for spg in self.self_play_games:
             should_run_full_search = (
                 (
@@ -225,7 +214,11 @@ class SelfPlayCpp:
             #     self.mcts.free_tree(spg.already_expanded_node)  # Free the node to avoid memory leaks
             #     spg.already_expanded_node = INVALID_NODE
 
-            boards.append((spg.board.board.fen(), spg.already_expanded_node, should_run_full_search))
+            if spg.already_expanded_node is None:
+                # If the node is not already expanded, create a new root node for the MCTS search
+                spg.already_expanded_node = new_root(spg.board.board.fen())
+
+            boards.append((spg.already_expanded_node, should_run_full_search))
 
         mcts_results = self.search(boards)
 
@@ -233,11 +226,9 @@ class SelfPlayCpp:
         log_scalar('dataset/average_search_depth', stats.averageDepth)
         log_scalar('dataset/average_search_entropy', mcts_results.mctsStats.averageEntropy)
         log_scalar('dataset/average_search_kl_divergence', stats.averageKLDivergence)
-        log_scalar('mcts/node_pool_capacity', stats.nodePoolCapacity)
-        log_scalar('mcts/live_node_count', stats.liveNodeCount)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
-            was_full_searched = boards[i][2]
+            was_full_searched = boards[i][1]
             if was_full_searched:
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
 
@@ -275,7 +266,7 @@ class SelfPlayCpp:
 
             self.self_play_games[i] = self._sample_self_play_game(
                 spg,
-                mcts_result.children,
+                mcts_result.root,
                 mcts_result.visits,
             )
 
@@ -283,7 +274,7 @@ class SelfPlayCpp:
     def _sample_self_play_game(
         self,
         current: SelfPlayGame,
-        children: list[NodeId],
+        root: MCTSNode,
         visit_counts: list[tuple[int, int]],
     ) -> SelfPlayGame:
         # Sample a move from the action probabilities then create a new game state with that move
@@ -314,7 +305,9 @@ class SelfPlayCpp:
 
         move = CurrentGame.decode_move(children_encoded_moves[child_index], current.board)
         new_spg = current.expand(move)
-        new_spg.already_expanded_node = children[child_index]
+        new_spg.already_expanded_node = root.make_new_root(
+            child_index, self.args.mcts.percentage_of_node_visits_to_keep
+        )
 
         if not new_spg.board.is_game_over():
             return new_spg

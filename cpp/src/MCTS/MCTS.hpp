@@ -2,8 +2,6 @@
 
 #include "common.hpp"
 
-#include "NodePool.h"
-
 #include "MCTSNode.hpp"
 
 #include "../InferenceClient.hpp"
@@ -18,6 +16,10 @@ struct MCTSParams {
     // Higher values enable more parallelism but also increase exploration.
     int num_parallel_searches;
 
+    uint32 num_full_searches; // Number of searches to perform if full searches are requested.
+
+    uint32 num_fast_searches; // Number of searches to perform if fast searches are requested.
+
     // The c parameter used in the UCB1 formula to balance exploration and exploitation.
     float c_param;
 
@@ -27,38 +29,29 @@ struct MCTSParams {
     // Epsilon value for the Dirichlet noise added to the root node to encourage exploration.
     float dirichlet_epsilon;
 
-    float node_reuse_discount; // Discount factor for node reuse in MCTS.
-
     uint8 min_visit_count; // Minimum visit count for a child of a root node.
 
     uint8 num_threads; // Number of threads to use for parallel processing.
 
-    uint32 num_full_searches; // Number of searches to perform if full searches are requested.
-
-    uint32 num_fast_searches; // Number of searches to perform if fast searches are requested.
-
-    MCTSParams(int num_parallel_searches, float c_param, float dirichlet_alpha,
-               float dirichlet_epsilon, float node_reuse_discount, uint8 min_visit_count,
-               uint8 num_threads, uint32 num_full_searches, uint32 num_fast_searches)
-        : num_parallel_searches(num_parallel_searches), c_param(c_param),
-          dirichlet_alpha(dirichlet_alpha), dirichlet_epsilon(dirichlet_epsilon),
-          node_reuse_discount(node_reuse_discount), min_visit_count(min_visit_count),
-          num_threads(num_threads), num_full_searches(num_full_searches),
-          num_fast_searches(num_fast_searches) {}
+    MCTSParams(int num_parallel_searches, uint32 num_full_searches, uint32 num_fast_searches,
+               float c_param, float dirichlet_alpha, float dirichlet_epsilon, uint8 min_visit_count,
+               uint8 num_threads)
+        : num_parallel_searches(num_parallel_searches), num_full_searches(num_full_searches),
+          num_fast_searches(num_fast_searches), c_param(c_param), dirichlet_alpha(dirichlet_alpha),
+          dirichlet_epsilon(dirichlet_epsilon), min_visit_count(min_visit_count),
+          num_threads(num_threads) {}
 };
 
 struct MCTSResult {
     float result;
     VisitCounts visits;
-    std::vector<NodeId> children;
+    std::shared_ptr<MCTSNode> root;
 };
 
 struct MCTSStatistics {
     float averageDepth = 0.0f;        // Average depth of the search trees.
     float averageEntropy = 0.0f;      // Average entropy of the visit counts.
     float averageKLDivergence = 0.0f; // Average KL divergence of the visit counts.
-    int nodePoolCapacity = 0;         // Total number of NodeIds that have ever been touched.
-    int liveNodeCount = 0;            // Number of currently live nodes in the pool.
 };
 
 struct MCTSResults {
@@ -92,8 +85,8 @@ struct MCTSResults {
  *
  */
 
-using BoardTuple = std::tuple<std::string /*FEN*/, NodeId /*prev child or INVALID_NODE*/,
-                              bool /*should run full searches*/>;
+using BoardTuple =
+    std::tuple<std::shared_ptr<MCTSNode> /* root node */, bool /*should run full searches*/>;
 
 class MCTS {
 public:
@@ -102,43 +95,27 @@ public:
 
     [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards);
 
-    [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics() {
-        // print number of threads and number of interop threads of torch
-        std::cout << "Num Threads: " << torch::get_num_threads() << std::endl;
-        std::cout << "Num Interop Threads: " << torch::get_num_interop_threads() << std::endl;
-        return {m_client.getStatistics(), resetTimes()};
-    }
-
-    [[nodiscard]] NodePool *getNodePool() { return &m_pool; }
-
-    // Reset the node pool to a new instance.
-    void clearNodePool() { m_pool.clear(); }
+    [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics();
 
     [[nodiscard]] InferenceClient *getInferenceClient() { return &m_client; }
 
-    // Free the node, its parent and all its children, except the excluded one and its children.
-    void freeTree(NodeId nodeId, NodeId excluded = INVALID_NODE);
-
-    [[nodiscard]] MCTSResult evalSearch(const std::string &fen, NodeId prevNodeId, int numberOfSearches);
+    [[nodiscard]] MCTSResult evalSearch(const std::shared_ptr<MCTSNode> &root,
+                                        int numberOfSearches);
 
 private:
     InferenceClient m_client;
     MCTSParams m_args;
-    NodePool m_pool;
     ThreadPool m_threadPool;
 
     [[nodiscard]] std::vector<std::pair<MCTSResult, MCTSStatistics>>
     searchGames(const std::vector<BoardTuple> &boards);
 
     // This method performs several iterations of tree search in parallel.
-    void parallelIterate(const std::vector<MCTSNode *> &roots);
+    void parallelIterate(const std::vector<std::shared_ptr<MCTSNode>> &roots);
 
     // Add Dirichlet noise to a vector of MoveScore.
-    [[nodiscard]] std::vector<MoveScore> addNoise(const std::vector<MoveScore> &moves) const;
+    void addNoise(const std::shared_ptr<MCTSNode> &root) const;
 
-    [[nodiscard]] MCTSNode *getBestChildOrBackPropagate(MCTSNode *root, float cParam);
-
-    void setupNodeForTreeReuse(MCTSNode *root, bool shouldRunFullSearch);
-
-    void addToNodesToKeep(std::vector<NodeId> &nodesToKeep, NodeId nodeId);
+    [[nodiscard]] std::shared_ptr<MCTSNode>
+    getBestChildOrBackPropagate(std::shared_ptr<MCTSNode> root, float cParam) const;
 };

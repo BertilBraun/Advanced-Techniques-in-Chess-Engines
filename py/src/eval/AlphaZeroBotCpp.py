@@ -1,11 +1,15 @@
 import multiprocessing
-import numpy as np
+from typing import Optional
 
 from src.self_play.SelfPlayCpp import new_game
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM
-from AlphaZeroCpp import INVALID_NODE, MCTS, InferenceClientParams, MCTSParams, MCTSNode
+from AlphaZeroCpp import MCTSNode, new_root, MCTS, InferenceClientParams, MCTSParams
+
+
+NUM_PARALLEL_SEARCHES = 16
+NUM_SEARCHES_PER_TURN = 512
 
 
 class AlphaZeroBot(Bot):
@@ -14,15 +18,12 @@ class AlphaZeroBot(Bot):
     ) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        NUM_PARALLEL_SEARCHES = 16
-
         mcts_args = MCTSParams(
             num_parallel_searches=NUM_PARALLEL_SEARCHES,
             dirichlet_alpha=0.5,  # irrelevant for eval
             dirichlet_epsilon=0.0,  # irrelevant for eval
             c_param=PLAY_C_PARAM,
             min_visit_count=2,
-            node_reuse_discount=1.0,  # irrelevant for eval
             num_threads=multiprocessing.cpu_count(),
             num_full_searches=0,  # irrelevant for eval
             num_fast_searches=0,  # irrelevant for eval
@@ -39,7 +40,9 @@ class AlphaZeroBot(Bot):
 
         # run some inferences to compile and warm up the model
         for _ in range(5):
-            self.mcts.search([(new_game().board.board.fen(), INVALID_NODE, False) for _ in range(4)])
+            self.mcts.search([(new_root(new_game().board.board.fen()), False) for _ in range(4)])
+
+        self.last_root: Optional[MCTSNode] = None
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
@@ -57,47 +60,49 @@ class AlphaZeroBot(Bot):
             return move
 
         board_fen = board.board.fen()
-        num_searches = 512
 
-        res = self.mcts.eval_search(board_fen, INVALID_NODE, num_searches)
-        root = self.mcts.get_node(res.children[0]).parent
-        assert root is not None, 'MCTS search returned no parent node'
+        root = None
+        if self.last_root is not None:
+            # We must look for the children of the children of the last root since 2 plies were already played
+            # If the fen is the same, we can reuse the last root
+            for child in self.last_root.children:
+                for i, grandchild in enumerate(child.children):
+                    if grandchild.fen == board_fen:
+                        log('Reusing last root for the same position')
+                        root = child.make_new_root(i, discount=1.0)
+                        break
+
+        if self.last_root is None:
+            root = new_root(board_fen)
+
+        assert root is not None, 'Root node must be initialized'
+
+        res = self.mcts.eval_search(root, NUM_SEARCHES_PER_TURN)
 
         while not self.time_is_up:
-            res = self.mcts.eval_search(board_fen, root.id, num_searches)
+            res = self.mcts.eval_search(root, NUM_SEARCHES_PER_TURN)
 
-        # visits are a list of (Encoded Move Id, Visit Count)
-        best_move_index = np.argmax([count for encoded_move, count in res.visits])
-        best_move = CurrentGame.decode_move(res.visits[best_move_index][0], board)
+        best_child = root.best_child(PLAY_C_PARAM)
+        best_move = CurrentGame.decode_move(best_child.encoded_move, board)
 
         if best_move not in board.get_valid_moves():
             raise Exception(f'Best move {best_move} is not legal, trying next best move...')
-
-        best_child = self.mcts.get_node(res.children[best_move_index])
-
-        def max_depth(node: MCTSNode) -> int:
-            if not node.children:
-                return 0
-            return 1 + max(max_depth(child) for child in node.children)
 
         children = [child for child in root.children if child.visits > 0]
 
         log('---------------------- Alpha Zero Best Move ----------------------')
         log('Total number of searches:', root.visits)
         log(f'Results of the search: {res.result:.4f}')
-        log('Max depth:', max_depth(root))
+        log('Max depth:', root.max_depth)
         log('Best move:', best_move)
-        log('Best child index:', best_move_index)
         log(f'Best child has {best_child.visits} visits')
-        log(f'Best child has {best_child.result / best_child.visits:.4f} result_score')
+        log(f'Best child has {best_child.result_sum / best_child.visits:.4f} result_score')
         log('Child moves:', [child.move for child in children])
         log('Child visits:', [child.visits for child in children])
-        log('Child result_scores:', [round(child.result / child.visits, 2) for child in children])
+        log('Child result_scores:', [round(child.result_sum / child.visits, 2) for child in children])
         log('Child priors:', [round(child.policy, 2) for child in children])
-        log('Current board FEN:', board_fen)
+        log('Current board FEN:', board.board.fen())
         print(repr(board))
         log('------------------------------------------------------------------')
-
-        self.mcts.free_tree(root.id)
 
         return best_move

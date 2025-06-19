@@ -36,7 +36,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=6, hidden_size=64)
+network = NetworkParams(num_layers=8, hidden_size=64)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
@@ -47,7 +47,7 @@ training = TrainingParams(
 )
 evaluation = EvaluationParams(
     num_searches_per_turn=64,
-    num_games=200,
+    num_games=100,
     every_n_iterations=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
 )

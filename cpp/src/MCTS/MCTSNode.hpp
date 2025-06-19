@@ -2,20 +2,15 @@
 
 #include "common.hpp"
 
-class NodePool;
-
-class MCTSNode {
+class MCTSNode : public std::enable_shared_from_this<MCTSNode> {
 public:
-    MCTSNode() {}
+    static std::shared_ptr<MCTSNode> createRoot(const std::string &fen);
 
-    MCTSNode(const std::string &boardFen, float policy, Move move_to_get_here, NodeId parent,
-             NodePool *pool);
+    [[nodiscard]] bool isTerminal() const { return board.isGameOver(); }
 
-    [[nodiscard]] bool isTerminalNode() const { return board.isGameOver(); }
+    [[nodiscard]] bool isExpanded() const { return !children.empty(); }
 
-    [[nodiscard]] bool isFullyExpanded() const { return !children.empty(); }
-
-    [[nodiscard]] float ucb(float uCommon, float parentScore) const;
+    [[nodiscard]] float ucb(float uCommon, float parentQ) const;
 
     void expand(const std::vector<MoveScore> &moves_with_scores);
 
@@ -25,38 +20,27 @@ public:
 
     void addVirtualLoss();
 
-    [[nodiscard]] NodeId bestChild(float cParam) const;
+    [[nodiscard]] std::shared_ptr<MCTSNode> bestChild(float cParam) const;
 
-    [[nodiscard]] bool operator==(const MCTSNode &other) const {
-        return board.quickHash() == other.board.quickHash() &&
-               move_to_get_here == other.move_to_get_here;
-    }
+    [[nodiscard]] bool operator==(const MCTSNode &other) const;
 
-    std::string repr() const {
-        std::stringstream ss;
-        ss << "MCTSNode(" << board.fen() << ", Move: " << toString(move_to_get_here)
-           << ", Visits: " << number_of_visits << ", Score: " << result_score
-           << ", Policy: " << policy << ", Virtual Loss: " << virtual_loss << ", Parent: " << parent << ", MyId: " << myId << ", Children: [";
-        for (const NodeId child : children) {
-            ss << child << ", ";
-        }
-        if (!children.empty()) {
-            ss.seekp(-2, ss.cur); // Remove the last comma and space
-        }
-        ss << "])";
-        return ss.str();
-    }
+    /* prune old tree, return chosen child as new root */
+    [[nodiscard]] std::shared_ptr<MCTSNode> makeNewRoot(std::size_t childIdx, float discount);
 
-    NodeId parent = INVALID_NODE;
-    NodeId myId = INVALID_NODE;
-    std::vector<NodeId> children;
+    [[nodiscard]] std::string repr() const;
 
-    NodePool *pool = nullptr;
+    [[nodiscard]] int maxDepth() const;
+
+    std::weak_ptr<MCTSNode> parent;
+    std::vector<std::shared_ptr<MCTSNode>> children;
 
     Board board;
     Move move_to_get_here = Move::null();
     int number_of_visits = 0;
     float virtual_loss = 0.0;
-    float result_score = 0.0;
+    float result_sum = 0.0;
     float policy = 0.0;
+
+private:
+    MCTSNode(const std::string &fen, float policy, Move move, std::weak_ptr<MCTSNode> parent);
 };
