@@ -15,21 +15,7 @@ os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
 
 import torch  # noqa
 
-torch.manual_seed(42)  # Set the random seed for PyTorch
-torch.set_num_threads(1)  # Limit the number of threads to 1 for PyTorch
-torch.set_num_interop_threads(1)  # Limit the number of inter-op threads to 1 for PyTorch
-
-torch.autograd.set_detect_anomaly(True)
-
-if __name__ == '__main__':
-    import torch.multiprocessing as mp
-
-    mp.set_start_method('spawn')
-
-    import torch  # noqa
-
-    torch.set_float32_matmul_precision('high')
-    torch.backends.cuda.matmul.allow_tf32 = True
+from AlphaZeroCpp import test_inference_speed_cpp
 
 
 def test_inference_speed_py(num_boards: int, num_iterations: int) -> None:
@@ -80,7 +66,5 @@ if __name__ == '__main__':
     print('Finished Python inference speed test.')
 
     print('C++:', '=' * 20)
-    from AlphaZeroCpp import test_inference_speed_cpp
-
     test_inference_speed_cpp(num_boards, num_iterations)
     print('Finished C++ inference speed test.')
