@@ -141,11 +141,16 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def("best_child", &MCTSNode::bestChild, py::arg("cParam"))
 
         // Pruning and re-rooting
-        .def("make_new_root", &MCTSNode::makeNewRoot, py::arg("child_index"), py::arg("discount"),
+        .def("make_new_root", &MCTSNode::makeNewRoot, py::arg("child_index"),
              R"pbdoc(
             Prune the old tree and return a new root node.
             `child_index` is the index of the child to make the new root.
-            `discount` is the discount factor for the visits and results.
+            )pbdoc")
+
+        .def("discount", &MCTSNode::discount, py::arg("percentage_of_node_visits_to_keep"),
+             R"pbdoc(
+            Discount the node's score and visits by a percentage.
+            This is useful for pruning old nodes in the search tree.
             )pbdoc")
 
         .def("__repr__", &MCTSNode::repr);

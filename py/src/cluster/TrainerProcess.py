@@ -112,7 +112,7 @@ class TrainerProcess:
                 time.sleep(1)
                 new_games = games(iteration) + 0.5 * games(iteration - 1)
                 if new_games > current_games:
-                    pbar.update(int(min(new_games, self.args.num_games_per_iteration) - current_games))
+                    pbar.update(int(min(new_games, target_games) - current_games))
                     current_games = new_games
 
     @timeit

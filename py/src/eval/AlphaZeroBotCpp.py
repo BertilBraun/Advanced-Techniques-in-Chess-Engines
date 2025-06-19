@@ -69,7 +69,7 @@ class AlphaZeroBot(Bot):
                 for i, grandchild in enumerate(child.children):
                     if grandchild.fen == board_fen:
                         log('Reusing last root for the same position')
-                        root = child.make_new_root(i, discount=1.0)
+                        root = child.make_new_root(i)
                         break
 
         if self.last_root is None:

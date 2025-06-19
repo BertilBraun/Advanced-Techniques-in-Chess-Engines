@@ -123,30 +123,29 @@ bool MCTSNode::operator==(const MCTSNode &other) const {
            move_to_get_here == other.move_to_get_here;
 }
 
-void discountNode(const std::shared_ptr<MCTSNode> &node, const float discount) {
+void MCTSNode::discount(const float percentage_of_node_visits_to_keep) {
     // Discount the node's score and visits.
 
     // Discount the node's score and visits. - Problem same divisor is not given because of
     // integer rounding
-    node->number_of_visits =
-        static_cast<int>(static_cast<float>(node->number_of_visits) * discount);
-    node->result_sum = static_cast<float>(
-        static_cast<int>(static_cast<float>(static_cast<int>(node->result_sum)) * discount));
+    number_of_visits =
+        static_cast<int>(static_cast<float>(number_of_visits) * percentage_of_node_visits_to_keep);
+    result_sum = static_cast<float>(static_cast<int>(
+        static_cast<float>(static_cast<int>(result_sum)) * percentage_of_node_visits_to_keep));
 
-    node->result_sum = clamp(node->result_sum, static_cast<float>(-node->number_of_visits),
-                             static_cast<float>(node->number_of_visits));
+    result_sum = clamp(result_sum, static_cast<float>(-number_of_visits),
+                       static_cast<float>(number_of_visits));
 
-    for (const auto &child : node->children)
-        discountNode(child, discount);
+    for (const auto &child : children)
+        child->discount(percentage_of_node_visits_to_keep);
 }
 
-std::shared_ptr<MCTSNode> MCTSNode::makeNewRoot(const std::size_t childIdx, const float discount) {
+std::shared_ptr<MCTSNode> MCTSNode::makeNewRoot(const std::size_t childIdx) {
     assert(childIdx < children.size());
     auto newRoot = children[childIdx];
     newRoot->parent.reset(); // sever upward link
     children.clear(); // drop every other subtree from myself, so that the new root is the only
                       // child remaining
-    discountNode(newRoot, discount);
     return newRoot;
 }
 

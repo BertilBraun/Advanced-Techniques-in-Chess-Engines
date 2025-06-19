@@ -25,7 +25,8 @@ public:
     [[nodiscard]] bool operator==(const MCTSNode &other) const;
 
     /* prune old tree, return chosen child as new root */
-    [[nodiscard]] std::shared_ptr<MCTSNode> makeNewRoot(std::size_t childIdx, float discount);
+    [[nodiscard]] std::shared_ptr<MCTSNode> makeNewRoot(std::size_t childIdx);
+    void discount(float percentage_of_node_visits_to_keep);
 
     [[nodiscard]] std::string repr() const;
 

@@ -40,7 +40,7 @@ network = NetworkParams(num_layers=8, hidden_size=96)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
-    batch_size=2048,
+    batch_size=1024,  # 2048, # 4096, # 512??
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
@@ -56,7 +56,7 @@ NUM_SELF_PLAYERS_PER_GPU = 16
 NUM_SELF_PLAYERS = NUM_SELF_PLAYERS_PER_GPU * (torch.cuda.device_count() - 1) + (NUM_SELF_PLAYERS_PER_GPU // 2)
 NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
 PARALLEL_GAMES = NUM_THREADS * 32
-NUM_SEARCHES_PER_TURN = 500  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
+NUM_SEARCHES_PER_TURN = 600  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
 MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 4
 
@@ -91,7 +91,7 @@ TRAINING_ARGS = TrainingArgs(
             dirichlet_alpha=0.3,  # Based on AZ Paper
             c_param=1.5,  # Range 1.25-1.5
             min_visit_count=MIN_VISIT_COUNT,
-            percentage_of_node_visits_to_keep=0.8,  # To not keep all symmetries
+            percentage_of_node_visits_to_keep=0.6,
             num_threads=NUM_THREADS,
         ),
     ),

@@ -71,11 +71,15 @@ class MCTSNode:
         ...
     def best_child(self, cParam: float) -> MCTSNode:
         ...
-    def make_new_root(self, child_index: int, discount: float) -> MCTSNode:
+    def discount(self, percentage_of_node_visits_to_keep: float) -> None:
+        """
+                    Discount the node's score and visits by a percentage.
+                    This is useful for pruning old nodes in the search tree.
+        """
+    def make_new_root(self, child_index: int) -> MCTSNode:
         """
                     Prune the old tree and return a new root node.
                     `child_index` is the index of the child to make the new root.
-                    `discount` is the discount factor for the visits and results.
         """
     def ucb(self, cParam: float) -> float:
         """

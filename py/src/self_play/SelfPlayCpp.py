@@ -218,6 +218,10 @@ class SelfPlayCpp:
                 # If the node is not already expanded, create a new root node for the MCTS search
                 spg.already_expanded_node = new_root(spg.board.board.fen())
 
+            if should_run_full_search:
+                # If we should run a full search, discount the visits
+                spg.already_expanded_node.discount(self.args.mcts.percentage_of_node_visits_to_keep)
+
             boards.append((spg.already_expanded_node, should_run_full_search))
 
         mcts_results = self.search(boards)
@@ -305,9 +309,7 @@ class SelfPlayCpp:
 
         move = CurrentGame.decode_move(children_encoded_moves[child_index], current.board)
         new_spg = current.expand(move)
-        new_spg.already_expanded_node = root.make_new_root(
-            child_index, self.args.mcts.percentage_of_node_visits_to_keep
-        )
+        new_spg.already_expanded_node = root.make_new_root(child_index)
 
         if not new_spg.board.is_game_over():
             return new_spg
