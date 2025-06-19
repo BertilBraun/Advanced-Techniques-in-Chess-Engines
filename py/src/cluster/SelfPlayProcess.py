@@ -79,7 +79,6 @@ class SelfPlayProcess:
                 self._save_dataset(current_iteration)
                 running = False
 
-            start = time.time()
             for iteration in range(current_iteration, current_iteration, -1):
                 start_recieved = self.communication.is_received(f'START AT ITERATION: {iteration}')
                 load_received = self.communication.is_received(f'LOAD MODEL: {iteration}')
@@ -95,7 +94,6 @@ class SelfPlayProcess:
 
                 if start_recieved or load_received:
                     break
-            print(f'Self play process {self.node_id} took {time.time() - start:.2f} seconds to check for commands.')
 
             self.communication.send_heartbeat(f'SELF PLAY {self.node_id}')
 
