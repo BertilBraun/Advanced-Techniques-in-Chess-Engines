@@ -85,15 +85,25 @@ class ChessBoard(Board[ChessMove]):
         return hash(self.board.fen())
 
     def get_approximate_result_score(self) -> float:
-        """Returns a score between -1 and 1, where 1 means white is winning, -1 means black is winning, and 0 is a draw."""
-        mat_value = 0
+        """
+        Normalised score in [-1, 1].
+        1   → White is completely winning (all the material belongs to White)
+        0   → Material is exactly equal
+        -1  → Black is completely winning
+        """
+        white_total = 0
+        black_total = 0
 
         for piece in chess.PIECE_TYPES:
-            white_value = len(self.board.pieces(piece, chess.WHITE)) * PIECE_VALUE[piece]
-            black_value = len(self.board.pieces(piece, chess.BLACK)) * PIECE_VALUE[piece]
-            mat_value += white_value - black_value
+            value = PIECE_VALUE[piece]
+            white_total += value * len(self.board.pieces(piece, chess.WHITE))
+            black_total += value * len(self.board.pieces(piece, chess.BLACK))
 
-        return mat_value / MAX_MATERIAL_VALUE
+        total_material = white_total + black_total  # what’s actually left
+        if total_material == 0:  # bare kings
+            return 0.0
+
+        return (white_total - black_total) / total_material
 
     def set_fen(self, fen: str) -> None:
         self.board.set_fen(fen)

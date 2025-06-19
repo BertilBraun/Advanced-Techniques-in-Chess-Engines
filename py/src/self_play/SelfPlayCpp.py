@@ -72,12 +72,7 @@ class SelfPlayGame:
     def approximate_result_score(self) -> float:
         """Get an approximate result score for the game from the perspective of the current player."""
         # discount the score to account for uncertainty in the result
-        return sign(self.board.get_approximate_result_score()) * self.board.current_player * 0.5
-
-
-def sign(x: float) -> int:
-    """Return the sign of x as an integer."""
-    return (x > 0) - (x < 0)  # Returns 1 for positive, -1 for negative, 0 for zero
+        return self.board.get_approximate_result_score() * self.board.current_player * 0.5
 
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
