@@ -70,9 +70,6 @@ class TrainerProcess:
 
         for epoch in range(self.args.training.num_epochs):
             # print num threads and interop threads
-            log(
-                f'Epoch {epoch + 1}/{self.args.training.num_epochs} - Num threads: {torch.get_num_threads()}, Interop threads: {torch.get_num_interop_threads()}'
-            )
             try:
                 epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
             except RuntimeError as e:
@@ -115,7 +112,7 @@ class TrainerProcess:
                 time.sleep(1)
                 new_games = games(iteration) + 0.5 * games(iteration - 1)
                 if new_games > current_games:
-                    pbar.update(int(new_games - current_games))
+                    pbar.update(int(min(new_games, self.args.num_games_per_iteration) - current_games))
                     current_games = new_games
 
     @timeit
