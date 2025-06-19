@@ -31,7 +31,10 @@ class TrainerProcess:
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
         torch.set_num_threads(32)  # Set number of threads for CPU operations
-        torch.set_num_interop_threads(8)  # Set number of threads for interop operations
+        torch.set_num_interop_threads(4)  # Set number of threads for interop operations
+        os.environ['OMP_NUM_THREADS'] = '32'
+        os.environ['MKL_NUM_THREADS'] = '32'
+        os.environ['OPENBLAS_NUM_THREADS'] = '32'
 
         if USE_GPU:
             torch.cuda.set_device(device_id)

@@ -14,10 +14,11 @@ static void init() {
     Bitboards::init();
     Position::init();
 
-    // TODO reenable? torch::set_num_threads(1); // Set the number of threads for PyTorch to 1 to
-    // avoid conflicts.
-    // TODO reenable? torch::set_num_interop_threads(1); // inter-op
-    // TODO reenable? setenv("OMP_NUM_THREADS", "1", 1); // for MKL / OpenBLAS just in case
+    torch::set_num_threads(1); // Set the number of threads for PyTorch to 1 to avoid conflicts.
+    torch::set_num_interop_threads(1); // inter-op
+    setenv("OMP_NUM_THREADS", "1", 1); // for MKL / OpenBLAS just in case
+    setenv("MKL_NUM_THREADS", "1", 1);
+    setenv("OPENBLAS_NUM_THREADS", "1", 1);
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
