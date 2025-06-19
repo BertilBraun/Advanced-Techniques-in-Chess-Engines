@@ -20,13 +20,17 @@ struct InferenceStatistics {
 };
 
 struct InferenceClientParams {
-    int device_id;                // GPU device id to use (if available), else CPU.
-    std::string currentModelPath; // Path used to resolve the model file.
-    int maxBatchSize;             // Maximum number of requests to process in one batch.
+    int device_id;                          // GPU device id to use (if available), else CPU.
+    std::string currentModelPath;           // Path used to resolve the model file.
+    int maxBatchSize;                       // Maximum number of requests to process in one batch.
+    int microsecondsTimeoutInferenceThread; // Timeout for the inference worker thread to wait for
+                                            // requests.
 
-    InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize)
+    InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize,
+                          int microsecondsTimeoutInferenceThread)
         : device_id(device_id), currentModelPath(std::move(currentModelPath)),
-          maxBatchSize(maxBatchSize) {}
+          maxBatchSize(maxBatchSize),
+          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread) {}
 };
 
 /**
@@ -47,7 +51,8 @@ public:
      * Synchronous interface: runs inference on a batch of boards and returns results
      * in the same order as the input.
      */
-    [[nodiscard]] std::vector<InferenceResult> inferenceBatch(const std::vector<const Board *> &boards);
+    [[nodiscard]] std::vector<InferenceResult>
+    inferenceBatch(const std::vector<const Board *> &boards);
 
     [[nodiscard]] InferenceStatistics getStatistics();
 
@@ -108,5 +113,5 @@ private:
 
     std::thread m_inferenceThread;
     std::mutex m_modelMutex;
-    size_t m_maxBatchSize;
+    InferenceClientParams m_params; // Store the parameters for easy access
 };

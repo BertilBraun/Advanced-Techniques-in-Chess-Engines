@@ -22,7 +22,7 @@ static void init() {
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
-    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards);
+    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 1000);
 
     InferenceClient client(params);
 
@@ -189,11 +189,18 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (2.2) InferenceClientParams ---
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
-        .def(py::init<int, std::string, int>(), py::arg("device_id"), py::arg("currentModelPath"),
-             py::arg("maxBatchSize"))
+        .def(py::init<int, std::string, int, int>(), py::arg("device_id"),
+             py::arg("currentModelPath"), py::arg("maxBatchSize"),
+             py::arg("microsecondsTimeoutInferenceThread") = 500)
         .def_readwrite("device_id", &InferenceClientParams::device_id)
         .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
-        .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize);
+        .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize)
+        .def_readwrite("microsecondsTimeoutInferenceThread",
+                       &InferenceClientParams::microsecondsTimeoutInferenceThread,
+                       R"pbdoc(
+                Timeout for the inference thread in microseconds.
+                Default is 500 microseconds.
+            )pbdoc");
 
     // --- (2.3) InferenceStatistics ---
     py::class_<InferenceStatistics>(m, "InferenceStatistics")

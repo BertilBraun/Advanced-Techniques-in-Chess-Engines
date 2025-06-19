@@ -6,7 +6,7 @@
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false),
-      m_maxBatchSize(args.maxBatchSize) {
+      m_params(args) {
     // Initialize the model and other members.
     m_totalHits = 0;
     m_totalEvals = 0;
@@ -143,7 +143,8 @@ InferenceStatistics InferenceClient::getStatistics() {
         return stats; // Avoid division by zero.
     }
 
-    stats.cacheHitRate = static_cast<float>(m_totalHits) / static_cast<float>(m_totalEvals) * 100.0f;
+    stats.cacheHitRate =
+        static_cast<float>(m_totalHits) / static_cast<float>(m_totalEvals) * 100.0f;
     stats.uniquePositions = m_cache.size();
 
     stats.nnOutputValueDistribution.reserve(m_cache.size());
@@ -188,19 +189,20 @@ void InferenceClient::loadModel(const std::string &modelPath) {
 void InferenceClient::inferenceWorker() {
     std::vector<torch::Tensor> tensorBatch;
     std::vector<std::promise<ModelInferenceResult>> promises;
-    tensorBatch.reserve(m_maxBatchSize);
-    promises.reserve(m_maxBatchSize);
+    tensorBatch.reserve(m_params.maxBatchSize);
+    promises.reserve(m_params.maxBatchSize);
 
     while (true) {
         {
-            std::unique_lock<std::mutex> lock(m_queueMutex);
-            m_queueCV.wait_for(lock, std::chrono::microseconds(500), // TODO make this configurable
-                               [this] { return !m_requestQueue.empty() || m_shutdown; });
+            std::unique_lock lock(m_queueMutex);
+            m_queueCV.wait_for(
+                lock, std::chrono::microseconds(m_params.microsecondsTimeoutInferenceThread),
+                [this] { return !m_requestQueue.empty() || m_shutdown; });
             if (m_shutdown && m_requestQueue.empty())
                 break;
 
             // Extract up to m_maxBatchSize requests.
-            while (!m_requestQueue.empty() && promises.size() < m_maxBatchSize) {
+            while (!m_requestQueue.empty() && promises.size() < m_params.maxBatchSize) {
                 tensorBatch.push_back(m_requestQueue.front().boardTensor);
                 promises.push_back(std::move(m_requestQueue.front().promise));
                 m_requestQueue.pop();

@@ -43,9 +43,9 @@ class SelfPlayGame:
         self.start_generation_time = time.time()
 
         # The move at which the player resigned, if any. None if the game is still ongoing.
-        self.resigned_at_move: int | None = None
+        self.resigned_at_move: Optional[int] = None
         # The player who resigned, if any. None if the game is still ongoing.
-        self.resignee: Player | None = None
+        self.resignee: Optional[Player] = None
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
@@ -176,6 +176,7 @@ class SelfPlayCpp:
             self.device_id,
             currentModelPath=str(model_save_path(iteration, self.save_path).with_suffix('.jit.pt').absolute()),
             maxBatchSize=256,  # TODO: adjust based on the model size and available memory
+            microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
         )
         self.mcts = MCTS(client_args, mcts_args)
 
@@ -208,18 +209,14 @@ class SelfPlayCpp:
                 and random.random() < 0.25  # TODO make this a parameter
             )
 
-            # NOTE: Disabled for now - think about whether to re-enable this (probably not necessary for amateur games)
-            # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
-            # if should_run_full_search and spg.already_expanded_node != INVALID_NODE:
-            #     self.mcts.free_tree(spg.already_expanded_node)  # Free the node to avoid memory leaks
-            #     spg.already_expanded_node = INVALID_NODE
-
             if spg.already_expanded_node is None:
                 # If the node is not already expanded, create a new root node for the MCTS search
                 spg.already_expanded_node = new_root(spg.board.board.fen())
 
             if should_run_full_search:
-                # If we should run a full search, discount the visits
+                # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
+                # NOTE: Disabled for now - think about whether to re-enable this (probably not necessary for amateur games)
+                # Instead - if we should run a full search, discount the visits
                 spg.already_expanded_node.discount(self.args.mcts.percentage_of_node_visits_to_keep)
 
             boards.append((spg.already_expanded_node, should_run_full_search))

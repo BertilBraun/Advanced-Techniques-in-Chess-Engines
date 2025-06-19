@@ -20,7 +20,16 @@ class InferenceClientParams:
     currentModelPath: str
     device_id: int
     maxBatchSize: int
-    def __init__(self, device_id: int, currentModelPath: str, maxBatchSize: int) -> None:
+    def __init__(self, device_id: int, currentModelPath: str, maxBatchSize: int, microsecondsTimeoutInferenceThread: int = 500) -> None:
+        ...
+    @property
+    def microsecondsTimeoutInferenceThread(self) -> int:
+        """
+                        Timeout for the inference thread in microseconds.
+                        Default is 500 microseconds.
+        """
+    @microsecondsTimeoutInferenceThread.setter
+    def microsecondsTimeoutInferenceThread(self, arg0: int) -> None:
         ...
 class InferenceStatistics:
     def __init__(self) -> None:
