@@ -4,6 +4,8 @@
 #include "MCTS/MCTS.hpp"
 #include "MoveEncoding.hpp"
 
+#include "MCTS/EvalMCTS.hpp"
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -260,10 +262,66 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  Run inference on a given FEN string.
                  Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
                  The encoded moves are pairs of (encoded_move: int, score: float).
-             )pbdoc")
-        .def("eval_search", &MCTS::evalSearch, py::arg("root"), py::arg("numberOfSearches"),
-             R"pbdoc(
-                 Evaluate a search starting from the given root.
-                 Returns a `MCTSResult` object containing the average result score and visit counts.
              )pbdoc");
+
+    // Expose EvalMCTSNode and EvalMCTS
+    py::class_<EvalMCTSResult>(m, "EvalMCTSResult")
+        .def_readonly("result", &EvalMCTSResult::result)
+        .def_readonly("visits", &EvalMCTSResult::visits)
+        // EvalMCTSNode, the root node of the search tree
+        .def_readonly("root", &EvalMCTSResult::root);
+
+    py::class_<EvalMCTSParams>(m, "EvalMCTSParams")
+        .def(py::init<float, uint8>(), py::arg("c_param"), py::arg("num_threads"))
+        .def_readwrite("c_param", &EvalMCTSParams::c_param)
+        .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
+
+    py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
+        .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
+        .def_property_readonly(
+            "children",
+            [](const EvalMCTSNode &n) {
+                const auto children = n.childrenPtr.load(std::memory_order_acquire);
+                return children ? *children : std::vector<std::shared_ptr<EvalMCTSNode>>{};
+            },
+            py::return_value_policy::reference_internal)
+        .def("best_child", &EvalMCTSNode::bestChild, py::arg("c_param"),
+             R"pbdoc(
+            Get the best child node based on UCB score.
+            `c_param` is the exploration constant.
+            )pbdoc")
+        .def_property_readonly("visits",
+                               [](const EvalMCTSNode &n) {
+                                   return n.number_of_visits.load(std::memory_order_acquire);
+                               })
+        .def_property_readonly("move",
+                               [](const EvalMCTSNode &n) { return toString(n.moveToGetHere); })
+        .def_property_readonly(
+            "encoded_move",
+            [](const EvalMCTSNode &n) { return encodeMove(n.moveToGetHere, &n.board); })
+        .def_property_readonly(
+            "result_sum",
+            [](const EvalMCTSNode &n) { return n.result_sum.load(std::memory_order_acquire); })
+        .def_readonly("policy", &EvalMCTSNode::policy)
+        .def_property_readonly("max_depth", &EvalMCTSNode::maxDepth)
+        .def("make_new_root", &EvalMCTSNode::makeNewRoot, py::arg("child_index"),
+             R"pbdoc(
+            Prune the old tree and return a new root node.
+            `child_index` is the index of the child to make the new root.
+            )pbdoc");
+
+    py::class_<EvalMCTS>(m, "EvalMCTS")
+        .def(py::init<const InferenceClientParams &, const EvalMCTSParams &>(),
+             py::arg("client_args"), py::arg("mcts_args"))
+        .def("eval_search", &EvalMCTS::evalSearch, py::arg("root"), py::arg("searches"),
+             R"pbdoc(
+                 Run evaluation MCTS search on a given root node.
+                 Returns an `EvalMCTSResult` object containing the result, visits, and root node.
+             )pbdoc");
+
+    m.def("new_eval_root", &EvalMCTSNode::createRoot, py::arg("fen"),
+          R"pbdoc(
+            Create a new root node for evaluation MCTS with the given FEN string.
+            Returns a shared pointer to the new EvalMCTSNode.
+          )pbdoc");
 }

@@ -5,10 +5,9 @@ from src.self_play.SelfPlayCpp import new_game
 from src.util.log import log
 from src.eval.Bot import Bot
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM
-from AlphaZeroCpp import MCTSNode, new_root, MCTS, InferenceClientParams, MCTSParams
+from AlphaZeroCpp import EvalMCTSNode, new_eval_root, EvalMCTS, InferenceClientParams, EvalMCTSParams, MCTSParams, MCTS
 
 
-NUM_PARALLEL_SEARCHES = 16
 NUM_SEARCHES_PER_TURN = 512
 
 
@@ -18,35 +17,39 @@ class AlphaZeroBot(Bot):
     ) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        mcts_args = MCTSParams(
-            num_parallel_searches=NUM_PARALLEL_SEARCHES,
-            dirichlet_alpha=0.5,  # irrelevant for eval
-            dirichlet_epsilon=0.0,  # irrelevant for eval
-            c_param=PLAY_C_PARAM,
-            min_visit_count=2,
-            num_threads=multiprocessing.cpu_count(),
-            num_full_searches=0,  # irrelevant for eval
-            num_fast_searches=0,  # irrelevant for eval
-        )
-        inference_args = InferenceClientParams(
+        mcts_args = EvalMCTSParams(c_param=PLAY_C_PARAM, num_threads=multiprocessing.cpu_count())
+        self.inference_args = InferenceClientParams(
             device_id=device_id,
             currentModelPath=current_model_path,
-            maxBatchSize=NUM_PARALLEL_SEARCHES,
+            maxBatchSize=256,
         )
 
-        self.mcts = MCTS(inference_args, mcts_args)
+        self.mcts = EvalMCTS(self.inference_args, mcts_args)
 
         self.network_eval_only = network_eval_only
 
         # run some inferences to compile and warm up the model
         for _ in range(5):
-            self.mcts.search([(new_root(new_game().board.board.fen()), False) for _ in range(4)])
+            self.mcts.eval_search(new_eval_root(new_game().board.board.fen()), 64)
 
-        self.last_root: Optional[MCTSNode] = None
+        self.last_root: Optional[EvalMCTSNode] = None
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         if self.network_eval_only:
-            encoded_moves, value = self.mcts.inference(board.board.fen())
+            network_only_mcts = MCTS(
+                self.inference_args,
+                MCTSParams(
+                    num_fast_searches=1,
+                    num_full_searches=1,
+                    num_parallel_searches=1,
+                    c_param=PLAY_C_PARAM,
+                    num_threads=multiprocessing.cpu_count(),
+                    dirichlet_alpha=0.3,
+                    dirichlet_epsilon=0.0,
+                    min_visit_count=1,
+                ),
+            )
+            encoded_moves, value = network_only_mcts.inference(board.board.fen())
             encoded_move, policy = max(encoded_moves, key=lambda move: move[1])
             move = CurrentGame.decode_move(encoded_move, board)
 
@@ -73,7 +76,7 @@ class AlphaZeroBot(Bot):
                         break
 
         if self.last_root is None:
-            root = new_root(board_fen)
+            root = new_eval_root(board_fen)
 
         assert root is not None, 'Root node must be initialized'
 

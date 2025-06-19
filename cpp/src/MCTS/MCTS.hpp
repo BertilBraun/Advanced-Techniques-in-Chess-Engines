@@ -99,9 +99,6 @@ public:
 
     [[nodiscard]] InferenceClient *getInferenceClient() { return &m_client; }
 
-    [[nodiscard]] MCTSResult evalSearch(const std::shared_ptr<MCTSNode> &root,
-                                        int numberOfSearches);
-
 private:
     InferenceClient m_client;
     MCTSParams m_args;

@@ -213,19 +213,6 @@ std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     return {m_client.getStatistics(), resetTimes()};
 }
 
-MCTSResult MCTS::evalSearch(const std::shared_ptr<MCTSNode> &root, const int numberOfSearches) {
-    // TODO make use of num_threads parallel inference threads -> requires mutexes in MCTSNode
-
-    std::vector<std::shared_ptr<MCTSNode>> roots;
-    roots.push_back(root);
-
-    // Run the MCTS iterations until the root node has enough visits.
-    for (int _ : range(numberOfSearches))
-        parallelIterate(roots);
-
-    return gatherResult(root);
-}
-
 // These variables are initialized only once per thread
 // and retain their values between function calls
 thread_local std::vector<std::shared_ptr<MCTSNode>> nodes;

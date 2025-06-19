@@ -2,7 +2,65 @@
 pybind11 bindings for custom MCTS + inference client
 """
 from __future__ import annotations
-__all__ = ['FunctionTimeInfo', 'InferenceClientParams', 'InferenceStatistics', 'MCTS', 'MCTSNode', 'MCTSParams', 'MCTSResult', 'MCTSResults', 'MCTSStatistics', 'TimeInfo', 'new_root', 'test_inference_speed_cpp']
+__all__ = ['EvalMCTS', 'EvalMCTSNode', 'EvalMCTSParams', 'EvalMCTSResult', 'FunctionTimeInfo', 'InferenceClientParams', 'InferenceStatistics', 'MCTS', 'MCTSNode', 'MCTSParams', 'MCTSResult', 'MCTSResults', 'MCTSStatistics', 'TimeInfo', 'new_eval_root', 'new_root', 'test_inference_speed_cpp']
+class EvalMCTS:
+    def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None:
+        ...
+    def eval_search(self, root: EvalMCTSNode, searches: int) -> EvalMCTSResult:
+        """
+                         Run evaluation MCTS search on a given root node.
+                         Returns an `EvalMCTSResult` object containing the result, visits, and root node.
+        """
+class EvalMCTSNode:
+    def best_child(self, c_param: float) -> EvalMCTSNode:
+        """
+                    Get the best child node based on UCB score.
+                    `c_param` is the exploration constant.
+        """
+    def make_new_root(self, child_index: int) -> EvalMCTSNode:
+        """
+                    Prune the old tree and return a new root node.
+                    `child_index` is the index of the child to make the new root.
+        """
+    @property
+    def children(self) -> list[EvalMCTSNode]:
+        ...
+    @property
+    def encoded_move(self) -> int:
+        ...
+    @property
+    def fen(self) -> str:
+        ...
+    @property
+    def max_depth(self) -> int:
+        ...
+    @property
+    def move(self) -> str:
+        ...
+    @property
+    def policy(self) -> float:
+        ...
+    @property
+    def result_sum(self) -> float:
+        ...
+    @property
+    def visits(self) -> int:
+        ...
+class EvalMCTSParams:
+    c_param: float
+    num_threads: int
+    def __init__(self, c_param: float, num_threads: int) -> None:
+        ...
+class EvalMCTSResult:
+    @property
+    def result(self) -> float:
+        ...
+    @property
+    def root(self) -> EvalMCTSNode:
+        ...
+    @property
+    def visits(self) -> list[tuple[int, int]]:
+        ...
 class FunctionTimeInfo:
     @property
     def invocations(self) -> int:
@@ -52,11 +110,6 @@ class InferenceStatistics:
 class MCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None:
         ...
-    def eval_search(self, root: MCTSNode, numberOfSearches: int) -> MCTSResult:
-        """
-                         Evaluate a search starting from the given root.
-                         Returns a `MCTSResult` object containing the average result score and visit counts.
-        """
     def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]:
         ...
     def inference(self, fen: str) -> tuple[list[tuple[int, float]], float]:
@@ -178,6 +231,11 @@ class TimeInfo:
     @property
     def totalTime(self) -> float:
         ...
+def new_eval_root(fen: str) -> EvalMCTSNode:
+    """
+                Create a new root node for evaluation MCTS with the given FEN string.
+                Returns a shared pointer to the new EvalMCTSNode.
+    """
 def new_root(fen: str) -> MCTSNode:
     """
                 Create a new root node for MCTS with the given FEN string.
