@@ -169,7 +169,7 @@ class ModelEvaluation:
         def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_stockfish_policy(board: CurrentBoard) -> np.ndarray:
                 # Use Stockfish to get the best move
-                result = engine.play(board.board, chess.engine.Limit(time=0.01, depth=level))
+                result = engine.play(board.board, chess.engine.Limit(time=0.01, depth=level * 2))
                 move = result.move
 
                 if not move:
