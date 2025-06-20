@@ -26,6 +26,13 @@ class TournamentManager:
     def play_games(self, verify_moves=True) -> Results:
         """Manages the gameplay loop until the game is over, using multiprocessing for parallelization."""
 
+        results = Results(0, 0, 0)
+        for i in range(self.num_games):
+            result, player_index = self._play_single_game(i, verify_moves)
+            results.update(result, player_index)
+
+        return results
+
         mp.set_start_method('spawn', force=True)  # Ensure the spawn method is used for multiprocessing
 
         # Split the games across processes
