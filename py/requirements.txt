@@ -1,23 +1,19 @@
 tqdm
 h5py
-# torch
-# numpy
-# numba
 optuna
-tensorboardX
 chess
 pygame
 GPUtil
 requests
 psutil
 
-
-numba==0.61.2
-numpy==2.2.6
+numba
+numpy
 #torch==2.7.0+cu128
-torch==2.7.0
-torchvision==0.22.0
+torch
+torchvision
 
 tensorboard
+tensorboardX
 
 pybind11-stubgen
