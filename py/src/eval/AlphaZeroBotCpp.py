@@ -89,7 +89,7 @@ class AlphaZeroBot(Bot):
         best_move = CurrentGame.decode_move(best_child.encoded_move, board)
 
         if best_move not in board.get_valid_moves():
-            raise Exception(f'Best move {best_move} is not legal, trying next best move...')
+            raise Exception(f'Best move {best_move} is not legal in FEN {board.board.fen()}\n{repr(board)}')
 
         children = [child for child in root.children if child.visits > 0]
 
