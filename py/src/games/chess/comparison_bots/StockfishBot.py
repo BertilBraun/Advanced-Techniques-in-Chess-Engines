@@ -5,6 +5,7 @@ from src.eval.Bot import Bot
 
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.comparison_bots.util import *
+from src.util.log import log
 
 
 class ChessStockfishBot(Bot):
@@ -33,4 +34,5 @@ class ChessStockfishBot(Bot):
             # Handle promotion moves
             move = Move(move.from_square, move.to_square, promotion=chess.QUEEN)
 
+        log(f'Stockfish selected move: {move}')
         return move
