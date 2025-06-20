@@ -3,26 +3,11 @@ import torch
 from src.eval.TournamentManager import TournamentManager
 from src.games.chess.comparison_bots.StockfishBot import ChessStockfishBot
 from src.util.log import log
-from src.settings import TRAINING_ARGS, CurrentGame, CurrentBoard, CurrentGameVisuals, CURRENT_GAME
+from src.settings import TRAINING_ARGS
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBotCpp import AlphaZeroBot
 from src.util.save_paths import get_latest_model_iteration, model_save_path
-
-if CURRENT_GAME == 'hex':
-    from src.eval.HexGUI import HexGridGameGUI as GUI
-else:
-    from src.eval.GridGUI import BaseGridGameGUI as GUI
-
-
-class CommonHumanPlayer(HumanPlayer):
-    def __init__(self) -> None:
-        """Initializes the human player."""
-        _, rows, cols = CurrentGame.representation_shape
-        if hasattr(CurrentBoard(), 'board_dimensions'):
-            rows, cols = CurrentBoard().board_dimensions  # type: ignore
-        gui = GUI(rows, cols)
-        super().__init__(gui, CurrentGameVisuals)  # type: ignore
 
 
 def alpha_zero_bot_factory(game_index: int) -> AlphaZeroBot:
@@ -42,9 +27,6 @@ iteration = get_latest_model_iteration(TRAINING_ARGS.save_path)
 model_path = str(model_save_path(iteration, TRAINING_ARGS.save_path))
 
 if __name__ == '__main__':
-    torch.set_float32_matmul_precision('high')
-    torch.backends.cuda.matmul.allow_tf32 = True
-
     HUMAN_PLAY = True
 
     if HUMAN_PLAY:
@@ -52,8 +34,8 @@ if __name__ == '__main__':
         NETWORK_ONLY = False
 
         game_manager = GameManager(
-            CommonHumanPlayer(),
             AlphaZeroBot(model_path, device_id=0, max_time_to_think=MAX_TIME_TO_THINK, network_eval_only=NETWORK_ONLY),
+            HumanPlayer(),
         )
 
         result = game_manager.play_game()

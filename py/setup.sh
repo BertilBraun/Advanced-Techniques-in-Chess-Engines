@@ -85,6 +85,7 @@ else
     echo "alias compile='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
     echo "alias compileDebug='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
     echo "alias compileRel='cd ../cpp && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYTHON_EXECUTABLE=\$(which python3.10) && make -j && cd ../../py'" >> ~/.bashrc
+    echo "alias compileOnly='cd ../cpp && mkdir -p build && cd build && make -j && cd ../../py'" >> ~/.bashrc
 
     echo "ulimit -n 4096" >> ~/.bashrc
     

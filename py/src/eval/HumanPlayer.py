@@ -2,23 +2,30 @@ import time
 from typing import Optional, Tuple
 
 from src.eval.Bot import Bot
-from src.eval.GridGUI import BaseGridGameGUI
-from src.games.GameVisuals import GameVisuals
-from src.settings import CurrentGameMove, CurrentBoard
+from src.settings import CurrentGameMove, CurrentBoard, CurrentGame, CurrentGameVisuals, CURRENT_GAME
+
+if CURRENT_GAME == 'hex':
+    from src.eval.HexGUI import HexGridGameGUI as GUI
+else:
+    from src.eval.GridGUI import BaseGridGameGUI as GUI
 
 
 class HumanPlayer(Bot):
-    def __init__(self, gui: BaseGridGameGUI, game_visuals: GameVisuals) -> None:
+    def __init__(self) -> None:
         """Initializes the human player."""
         super().__init__('HumanPlayer', max_time_to_think=0.0)
-        self.gui = gui
-        self.game_visuals = game_visuals
+        _, rows, cols = CurrentGame.representation_shape
+        if hasattr(CurrentBoard(), 'board_dimensions'):
+            rows, cols = CurrentBoard().board_dimensions  # type: ignore
+        self.gui = GUI(rows, cols)
+        self.game_visuals = CurrentGameVisuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
         self.board_history: list[CurrentBoard] = []
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         # Common input loop for all games
+        print('Waiting for human input...')
 
         self.display_board(board)
 
@@ -62,10 +69,10 @@ class HumanPlayer(Bot):
                     current_displayed_board += 1
                     self.display_board(self.board_history[current_displayed_board])
 
-            time.sleep(0.2)
+            time.sleep(0.05)
 
     def display_board(self, board: CurrentBoard):
-        self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))
+        self.gui.clear_highlights_and_redraw(lambda: self.game_visuals.draw_pieces(board, self.gui))  # type: ignore
         self.gui.update_display()
 
     def handle_click(self, board: CurrentBoard, cell: Tuple[int, int]) -> Optional[CurrentGameMove]:

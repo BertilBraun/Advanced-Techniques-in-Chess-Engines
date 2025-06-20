@@ -110,9 +110,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_property_readonly("fen", [](const MCTSNode &n) { return n.board.fen(); })
         .def_property_readonly("move",
                                [](const MCTSNode &n) { return toString(n.move_to_get_here); })
-        .def_property_readonly(
-            "encoded_move",
-            [](const MCTSNode &n) { return encodeMove(n.move_to_get_here, &n.board); })
+        .def_property_readonly("encoded_move",
+                               [](const MCTSNode &n) {
+                                   return encodeMove(n.move_to_get_here, &n.parent.lock()->board);
+                               })
         .def_readonly("visits", &MCTSNode::number_of_visits)
         .def_readonly("virtual_loss", &MCTSNode::virtual_loss)
         .def_readonly("result_sum", &MCTSNode::result_sum)
@@ -291,9 +292,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                                })
         .def_property_readonly("move",
                                [](const EvalMCTSNode &n) { return toString(n.moveToGetHere); })
-        .def_property_readonly(
-            "encoded_move",
-            [](const EvalMCTSNode &n) { return encodeMove(n.moveToGetHere, &n.board); })
+        .def_property_readonly("encoded_move",
+                               [](const EvalMCTSNode &n) {
+                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board);
+                               })
         .def_property_readonly(
             "result_sum",
             [](const EvalMCTSNode &n) { return n.result_sum.load(std::memory_order_acquire); })

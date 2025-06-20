@@ -138,11 +138,11 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves) {
 
     const auto newChildren = std::make_shared<ChildVector>();
     newChildren->reserve(moves.size());
-    for (const auto &[mv, pol] : moves) {
-        Board nxt = board;
-        nxt.makeMove(mv);
-        newChildren->emplace_back(
-            std::shared_ptr<EvalMCTSNode>(new EvalMCTSNode{nxt.fen(), pol, mv, weak_from_this()}));
+    for (const auto &[move, policy] : moves) {
+        Board next = board;
+        next.makeMove(move);
+        newChildren->emplace_back(std::shared_ptr<EvalMCTSNode>(
+            new EvalMCTSNode{next.fen(), policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
     childrenStrong = newChildren;                                    // own the memory
