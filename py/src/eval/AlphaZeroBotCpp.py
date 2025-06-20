@@ -102,8 +102,6 @@ class AlphaZeroBot(Bot):
         log('Child visits:', [child.visits for child in children])
         log('Child result_scores:', [round(child.result_sum / child.visits, 2) for child in children])
         log('Child priors:', [round(child.policy, 2) for child in children])
-        log('Current board FEN:', board.board.fen())
-        print(repr(board))
         log('------------------------------------------------------------------')
 
         return best_move

@@ -33,18 +33,14 @@ else
 
     # 1) add / refresh NVIDIA’s CUDA repo for Ubuntu 20.04
     sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
-    sudo add-apt-repository \
-      "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
-    sudo apt-get update
+    sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 
     # 2) pull in NVTX + cuDNN 9 for CUDA 12.x
     CUDA_REL=12-8              # 12-6, 12-7, … use whatever tool-kit minor you’re building against
-    sudo apt-get install -y \
-        cuda-nvtx-${CUDA_REL} \
-        libcudnn9-cuda-12 \
-        libcudnn9-dev-cuda-12
+    sudo apt-get install -y cuda-nvtx-${CUDA_REL} libcudnn9-cuda-12 libcudnn9-dev-cuda-12
 
-    sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+    sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+    sudo apt-get update
     sudo apt update
     sudo apt install gcc-11 g++-11 -y
 

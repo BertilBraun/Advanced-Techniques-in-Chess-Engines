@@ -15,6 +15,8 @@ class ChessStockfishBot(Bot):
         super().__init__('Stockfish', max_time_to_think=max_time_to_think)
         self.engine.configure({'Skill Level': skill_level})
 
+        log(f'Starting Stockfish with skill level {skill_level} and max time to think {max_time_to_think} seconds.')
+
         self.limit = chess.engine.Limit(time=self.max_time_to_think)
 
     def cleanup(self) -> None:
