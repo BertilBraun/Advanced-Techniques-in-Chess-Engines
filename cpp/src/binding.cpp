@@ -278,13 +278,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
         .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
-        .def_property_readonly(
-            "children",
-            [](const EvalMCTSNode &n) {
-                const auto children = n.childrenPtr.load(std::memory_order_acquire);
-                return children ? *children : std::vector<std::shared_ptr<EvalMCTSNode>>{};
-            },
-            py::return_value_policy::reference_internal)
+        .def_property_readonly("children", &EvalMCTSNode::children,
+                               py::return_value_policy::reference_internal)
         .def("best_child", &EvalMCTSNode::bestChild, py::arg("c_param"),
              R"pbdoc(
             Get the best child node based on UCB score.
