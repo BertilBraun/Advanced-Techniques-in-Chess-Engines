@@ -17,7 +17,7 @@ class AlphaZeroBot(Bot):
     ) -> None:
         super().__init__('AlphaZeroBot', max_time_to_think)
 
-        mcts_args = EvalMCTSParams(c_param=PLAY_C_PARAM, num_threads=multiprocessing.cpu_count())
+        mcts_args = EvalMCTSParams(c_param=PLAY_C_PARAM, num_threads=min(multiprocessing.cpu_count(), 16))
         self.inference_args = InferenceClientParams(
             device_id=device_id,
             currentModelPath=current_model_path,
@@ -43,7 +43,7 @@ class AlphaZeroBot(Bot):
                     num_full_searches=1,
                     num_parallel_searches=1,
                     c_param=PLAY_C_PARAM,
-                    num_threads=multiprocessing.cpu_count(),
+                    num_threads=1,
                     dirichlet_alpha=0.3,
                     dirichlet_epsilon=0.0,
                     min_visit_count=1,
@@ -75,10 +75,8 @@ class AlphaZeroBot(Bot):
                         root = child.make_new_root(i)
                         break
 
-        if self.last_root is None:
+        if root is None:
             root = new_eval_root(board_fen)
-
-        assert root is not None, 'Root node must be initialized'
 
         res = self.mcts.eval_search(root, NUM_SEARCHES_PER_TURN)
 
