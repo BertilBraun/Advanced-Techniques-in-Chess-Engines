@@ -23,29 +23,38 @@ static void init() {
     setenv("OPENBLAS_NUM_THREADS", "1", 1);
 }
 
+Board *newBoard() {
+    Board *board = new Board();
+    for (int i = 0; i < 30; ++i) {
+        auto moves = board->validMoves();
+        if (moves.empty())
+            break; // No more valid moves, stop early
+        board->makeMove(moves[rand() % moves.size()]);
+    }
+    if (board->isGameOver()) {
+        delete board;      // Clean up if the game is over
+        return newBoard(); // Create a new board if the game is over
+    }
+    return board;
+}
+
+std::vector<const Board *> newBoards(const int numBoards) {
+    std::vector<const Board *> boards;
+    boards.reserve(numBoards);
+    for (int _ : range(numBoards))
+        boards.push_back(newBoard());
+
+    return boards;
+}
+
 void testInferenceSpeed(int numBoards, int numIterations) {
-    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 1000);
+    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 100);
 
     InferenceClient client(params);
 
     float totalTime = 0.0f;
     for (int i = 0; i < numIterations; ++i) {
-        std::vector<const Board *> boards;
-        boards.reserve(numBoards);
-        while (boards.size() < numBoards) {
-            Board *board = new Board();
-            for (int k = 0; k < 30; ++k) {
-                auto moves = board->validMoves();
-                if (moves.empty())
-                    break; // No more valid moves, stop early
-                board->makeMove(moves[rand() % moves.size()]);
-            }
-            if (board->isGameOver()) {
-                delete board; // Clean up if the game is over
-                continue;
-            }
-            boards.push_back(board);
-        }
+        std::vector<const Board *> boards = newBoards(numBoards);
 
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<InferenceResult> results = client.inferenceBatch(boards);
@@ -66,6 +75,83 @@ void testInferenceSpeed(int numBoards, int numIterations) {
     std::cout << std::endl;
 
     resetTimes();
+}
+
+void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
+                   int numParallelSearches, int numThreads) {
+    const MCTSParams mctsParams(numParallelSearches, numSearchesPerTurn, numSearchesPerTurn, 1.0,
+                                0.3, 0.0, 0, numThreads);
+
+    const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
+                                                numBoards * numParallelSearches, 100);
+
+    MCTS mcts(inferenceParams, mctsParams);
+
+    float totalTime = 0.0f;
+
+    for (int i = 0; i < numIterations; ++i) {
+        std::vector<BoardTuple> boards;
+        boards.reserve(numBoards);
+        for (auto &&board : newBoards(numBoards)) {
+            // Create a root node for each board
+            boards.emplace_back(MCTSNode::createRoot(board->fen()), true);
+        }
+
+        auto start = std::chrono::high_resolution_clock::now();
+        auto _ = mcts.search(boards);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> duration = end - start;
+
+        std::cout << "Iteration " << i + 1 << ": MCTS search time: " << duration.count()
+                  << " seconds\n";
+
+        totalTime += duration.count();
+    }
+
+    std::cout << "Total MCTS time: " << totalTime << " seconds\n";
+    std::cout << "Average MCTS time per iteration: " << (totalTime / numIterations) << " seconds\n";
+    std::cout << "Average MCTS time per board: " << (totalTime / (numIterations * numBoards))
+              << " seconds\n";
+}
+
+void testEvalMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
+                       int numParallelSearches, int numThreads) {
+    const EvalMCTSParams mctsParams(1.0, numThreads);
+
+    const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
+                                                numBoards * numParallelSearches, 100);
+
+    EvalMCTS mcts(inferenceParams, mctsParams);
+
+    float totalTime = 0.0f;
+
+    for (int i = 0; i < numIterations; ++i) {
+        std::vector<std::shared_ptr<EvalMCTSNode>> roots;
+        roots.reserve(numBoards);
+        for (auto &&board : newBoards(numBoards)) {
+            // Create a root node for each board
+            roots.emplace_back(EvalMCTSNode::createRoot(board->fen()));
+        }
+
+        auto start = std::chrono::high_resolution_clock::now();
+        for (const auto &root : roots) {
+            // Run Eval MCTS search on each root node
+            auto _ = mcts.evalSearch(root, numSearchesPerTurn);
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> duration = end - start;
+
+        std::cout << "Iteration " << i + 1 << ": Eval MCTS search time: " << duration.count()
+                  << " seconds\n";
+
+        totalTime += duration.count();
+    }
+
+    std::cout << "Total Eval MCTS time: " << totalTime << " seconds\n";
+    std::cout << "Average Eval MCTS time per iteration: " << (totalTime / numIterations)
+              << " seconds\n";
+    std::cout << "Average Eval MCTS time per board: " << (totalTime / (numIterations * numBoards))
+              << " seconds\n";
 }
 
 std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
@@ -172,6 +258,26 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
           R"pbdoc(
             Test the inference speed of the InferenceClient.
             Runs inference on a specified number of boards for a given number of iterations.
+            Prints the average time taken per iteration and per board.
+          )pbdoc");
+
+    m.def("test_mcts_speed_cpp", &testMCTSSpeed,
+          "Test the MCTS search speed", py::arg("numBoards") = 100, py::arg("numIterations") = 10,
+          py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
+          py::arg("numThreads") = 1,
+          R"pbdoc(
+            Test the MCTS search speed.
+            Runs MCTS search on a specified number of boards for a given number of iterations.
+            Prints the average time taken per iteration and per board.
+          )pbdoc");
+
+    m.def("test_eval_mcts_speed_cpp", &testEvalMCTSSpeed,
+          "Test the Eval MCTS search speed", py::arg("numBoards") = 100,
+          py::arg("numIterations") = 10, py::arg("numSearchesPerTurn") = 100,
+          py::arg("numParallelSearches") = 1, py::arg("numThreads") = 1,
+          R"pbdoc(
+            Test the Eval MCTS search speed.
+            Runs Eval MCTS search on a specified number of boards for a given number of iterations.
             Prints the average time taken per iteration and per board.
           )pbdoc");
 

@@ -23,15 +23,21 @@ class TournamentManager:
         self.opponent = opponent
         self.num_games = num_games
 
-    def play_games(self, verify_moves=True) -> Results:
+    def play_games(self, verify_moves=True) -> tuple[Results, list[str]]:
         """Manages the gameplay loop until the game is over, using multiprocessing for parallelization."""
 
         results = Results(0, 0, 0)
+        games: list[str] = []
         for i in range(self.num_games):
-            result, player_index = self._play_single_game(i, verify_moves)
-            results.update(result, player_index)
+            try:
+                result, player_index, pgn = self._play_single_game(i, verify_moves)
+                results.update(result, player_index)
+                games.append(pgn)
+            except Exception as e:
+                print(f'Error occurred while playing game {i}: {e}')
+                continue
 
-        return results
+        return results, games
 
         mp.set_start_method('spawn', force=True)  # Ensure the spawn method is used for multiprocessing
 
@@ -48,7 +54,7 @@ class TournamentManager:
 
         return results
 
-    def _play_single_game(self, game_index: int, verify_moves: bool) -> tuple[Player | None, Player]:
+    def _play_single_game(self, game_index: int, verify_moves: bool) -> tuple[Player | None, Player, str]:
         if game_index % 2 == 0:
             white = self.main(game_index)
             black = self.opponent(game_index)
@@ -59,5 +65,5 @@ class TournamentManager:
             player_index = -1
 
         game_manager = GameManager(white, black)
-        result = game_manager.play_game(verify_moves)
-        return result, player_index
+        result, pgn = game_manager.play_game(verify_moves)
+        return result, player_index, pgn

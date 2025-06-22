@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import chess.pgn
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,12 +15,17 @@ class GameManager:
         """Initializes the game manager with two players."""
         self.players = {1: white, -1: black}
 
-    def play_game(self, verify_moves=True) -> Optional[Player]:
+    def play_game(self, verify_moves: bool = True, start_random: bool = False) -> tuple[Optional[Player], str]:
         """Manages the gameplay loop until the game is over or a player quits."""
         self.board = CurrentGame.get_initial_board()
 
-        for _ in range(2):
-            self.board.make_move(random.choice(self.board.get_valid_moves()))
+        move_list: list = []
+
+        if start_random:
+            for _ in range(2):
+                move = random.choice(self.board.get_valid_moves())
+                self.board.make_move(move)
+                move_list.append(move)
 
         while not self.board.is_game_over():
             current_player = self.players[self.board.current_player]
@@ -32,5 +38,13 @@ class GameManager:
 
             self.board.make_move(move)
             print(repr(self.board))
+            move_list.append(move)
 
-        return self.board.check_winner()
+        print(f'Game over! Winner: {self.board.check_winner()} Moves: {move_list}')
+
+        pgn = chess.pgn.Game()
+        node = pgn.add_variation(move_list[0])
+        for move in move_list[1:]:
+            node = node.add_variation(move)
+
+        return self.board.check_winner(), str(pgn)

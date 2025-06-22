@@ -2,7 +2,7 @@
 pybind11 bindings for custom MCTS + inference client
 """
 from __future__ import annotations
-__all__ = ['EvalMCTS', 'EvalMCTSNode', 'EvalMCTSParams', 'EvalMCTSResult', 'FunctionTimeInfo', 'InferenceClientParams', 'InferenceStatistics', 'MCTS', 'MCTSNode', 'MCTSParams', 'MCTSResult', 'MCTSResults', 'MCTSStatistics', 'TimeInfo', 'new_eval_root', 'new_root', 'test_inference_speed_cpp']
+__all__ = ['EvalMCTS', 'EvalMCTSNode', 'EvalMCTSParams', 'EvalMCTSResult', 'FunctionTimeInfo', 'InferenceClientParams', 'InferenceStatistics', 'MCTS', 'MCTSNode', 'MCTSParams', 'MCTSResult', 'MCTSResults', 'MCTSStatistics', 'TimeInfo', 'new_eval_root', 'new_root', 'test_eval_mcts_speed_cpp', 'test_inference_speed_cpp', 'test_mcts_speed_cpp']
 class EvalMCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None:
         ...
@@ -241,9 +241,21 @@ def new_root(fen: str) -> MCTSNode:
                 Create a new root node for MCTS with the given FEN string.
                 Returns a shared pointer to the new MCTSNode.
     """
+def test_eval_mcts_speed_cpp(numBoards: int = 100, numIterations: int = 10, numSearchesPerTurn: int = 100, numParallelSearches: int = 1, numThreads: int = 1) -> None:
+    """
+                Test the Eval MCTS search speed.
+                Runs Eval MCTS search on a specified number of boards for a given number of iterations.
+                Prints the average time taken per iteration and per board.
+    """
 def test_inference_speed_cpp(numBoards: int = 100, numIterations: int = 10) -> None:
     """
                 Test the inference speed of the InferenceClient.
                 Runs inference on a specified number of boards for a given number of iterations.
+                Prints the average time taken per iteration and per board.
+    """
+def test_mcts_speed_cpp(numBoards: int = 100, numIterations: int = 10, numSearchesPerTurn: int = 100, numParallelSearches: int = 1, numThreads: int = 1) -> None:
+    """
+                Test the MCTS search speed.
+                Runs MCTS search on a specified number of boards for a given number of iterations.
                 Prints the average time taken per iteration and per board.
     """
