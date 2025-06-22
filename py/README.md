@@ -1,7 +1,9 @@
 # AlphaZero-Style Chess Bot
 
-This project implements a full AlphaZero-style chess agent entirely in Python.  
+This project implements a full AlphaZero-style agent.  
 It includes self-play data generation, neural network training, evaluation, and Bayesian hyperparameter optimization.
+
+While computationally intensive components (e.g., self-play) are handled in C++ (`cpp/`), the Python side manages the training loops, evaluation, and cluster orchestration.
 
 ## Components
 
@@ -48,13 +50,13 @@ These scripts automate distributed training job submissions.
 
 ## Technologies
 
-- **Programming Language**: Python 3.11+
+- **Programming Language**: Python 3.10
 - **Machine Learning**: PyTorch
 - **Optimization**: Bayesian Optimization (e.g., `scikit-optimize`)
-- **Cluster Job Management**: Slurm
 - **Visualization**: TensorBoard
 
 Optional dependencies for evaluation:
+
 - `stockfish` (for engine evaluation)
 
 ## Workflow Overview
@@ -62,11 +64,11 @@ Optional dependencies for evaluation:
 1. **Install Dependencies**:
 
     ```bash
-    pip install -r requirements.txt
+    source setup.sh
     ```
 
 2. **Configure** your training parameters in `src/settings.py`.
-3. **Start Training**:
+3. **Start Training for X iterations as defined in settings.py**:
 
     ```bash
     python train.py
@@ -102,7 +104,7 @@ Optional dependencies for evaluation:
 
 ## Notes
 
-- **Self-Play**: Games are generated using a Python-based implementation and saved as training datasets.
+- **Self-Play**: Games are generated using a the Cpp Bindings in the Chess case, else using the Python MCTS implementation and saved as training datasets.
 - **Training**: Trains models on collected self-play data using configurable architectures and optimizers.
 - **Evaluation**: Modular system for competitive evaluations and performance tracking.
 - **Optimization**: Supports automatic hyperparameter search to improve training dynamics.

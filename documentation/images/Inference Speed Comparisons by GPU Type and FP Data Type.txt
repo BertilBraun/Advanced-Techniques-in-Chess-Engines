@@ -1,0 +1,239 @@
+A10:
+
+BFloat16
+
+tarting inference speed test...
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.270744 seconds
+Iteration 2: Inference time: 0.018218 seconds
+Iteration 3: Inference time: 0.017734 seconds
+Iteration 4: Inference time: 0.017265 seconds
+Iteration 5: Inference time: 0.017169 seconds
+Iteration 6: Inference time: 0.016781 seconds
+Iteration 7: Inference time: 0.017746 seconds
+Iteration 8: Inference time: 0.017097 seconds
+Iteration 9: Inference time: 0.017039 seconds
+Iteration 10: Inference time: 0.016871 seconds
+Total time: 0.426662 seconds
+Average time per iteration: 0.042666 seconds
+Average time per board: 0.000427 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 0.0830743 seconds
+Iteration 2: Inference time: 0.0255986 seconds
+Iteration 3: Inference time: 0.0750624 seconds
+Iteration 4: Inference time: 0.0158737 seconds
+Iteration 5: Inference time: 0.0157166 seconds
+Iteration 6: Inference time: 0.0161259 seconds
+Iteration 7: Inference time: 0.0160826 seconds
+Iteration 8: Inference time: 0.0155753 seconds
+Iteration 9: Inference time: 0.0161337 seconds
+Iteration 10: Inference time: 0.0159769 seconds
+Total time: 0.29522 seconds
+Average time per iteration: 0.029522 seconds
+Average time per board: 0.00029522 seconds
+
+
+Average time with outliers removed: 0.0171 seconds for both Cpp and Py
+
+
+
+
+
+Float 16
+
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.293712 seconds
+Iteration 2: Inference time: 0.016142 seconds
+Iteration 3: Inference time: 0.015423 seconds
+Iteration 4: Inference time: 0.015201 seconds
+Iteration 5: Inference time: 0.016159 seconds
+Iteration 6: Inference time: 0.016428 seconds
+Iteration 7: Inference time: 0.015393 seconds
+Iteration 8: Inference time: 0.015779 seconds
+Iteration 9: Inference time: 0.016341 seconds
+Iteration 10: Inference time: 0.015534 seconds
+Total time: 0.436113 seconds
+Average time per iteration: 0.043611 seconds
+Average time per board: 0.000436 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 0.0859374 seconds
+Iteration 2: Inference time: 0.0157629 seconds
+Iteration 3: Inference time: 0.0155963 seconds
+Iteration 4: Inference time: 0.0158249 seconds
+Iteration 5: Inference time: 0.0297959 seconds
+Iteration 6: Inference time: 0.0162936 seconds
+Iteration 7: Inference time: 0.0156289 seconds
+Iteration 8: Inference time: 0.0155692 seconds
+Iteration 9: Inference time: 0.0161788 seconds
+Iteration 10: Inference time: 0.0155621 seconds
+Total time: 0.24215 seconds
+Average time per iteration: 0.024215 seconds
+Average time per board: 0.00024215 seconds
+
+
+
+V100: -> 10x slower than the A10 and only 2/3 of the price -> not worth it
+
+BFloat16
+
+
+Starting inference speed test...
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.266090 seconds
+Iteration 2: Inference time: 0.161900 seconds
+Iteration 3: Inference time: 0.161308 seconds
+Iteration 4: Inference time: 0.160863 seconds
+Iteration 5: Inference time: 0.161183 seconds
+Iteration 6: Inference time: 0.160880 seconds
+Iteration 7: Inference time: 0.161095 seconds
+Iteration 8: Inference time: 0.161055 seconds
+Iteration 9: Inference time: 0.162069 seconds
+Iteration 10: Inference time: 0.162322 seconds
+Total time: 1.718764 seconds
+Average time per iteration: 0.171876 seconds
+Average time per board: 0.001719 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 0.264894 seconds
+Iteration 2: Inference time: 0.172837 seconds
+Iteration 3: Inference time: 0.17644 seconds
+Iteration 4: Inference time: 0.171967 seconds
+Iteration 5: Inference time: 0.176319 seconds
+Iteration 6: Inference time: 0.178106 seconds
+Iteration 7: Inference time: 0.175327 seconds
+Iteration 8: Inference time: 0.179185 seconds
+Iteration 9: Inference time: 0.179102 seconds
+Iteration 10: Inference time: 0.175115 seconds
+Total time: 1.84929 seconds
+Average time per iteration: 0.184929 seconds
+Average time per board: 0.00184929 seconds
+
+
+
+
+Float16
+
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.276805 seconds
+Iteration 2: Inference time: 0.172298 seconds
+Iteration 3: Inference time: 0.162127 seconds
+Iteration 4: Inference time: 0.161712 seconds
+Iteration 5: Inference time: 0.162041 seconds
+Iteration 6: Inference time: 0.163065 seconds
+Iteration 7: Inference time: 0.162673 seconds
+Iteration 8: Inference time: 0.161976 seconds
+Iteration 9: Inference time: 0.161481 seconds
+Iteration 10: Inference time: 0.161967 seconds
+Total time: 1.746146 seconds
+Average time per iteration: 0.174615 seconds
+Average time per board: 0.001746 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 0.264396 seconds
+Iteration 2: Inference time: 0.181586 seconds
+Iteration 3: Inference time: 0.176909 seconds
+Iteration 4: Inference time: 0.182337 seconds
+Iteration 5: Inference time: 0.177168 seconds
+Iteration 6: Inference time: 0.18228 seconds
+Iteration 7: Inference time: 0.183274 seconds
+Iteration 8: Inference time: 0.180986 seconds
+Iteration 9: Inference time: 0.181581 seconds
+Iteration 10: Inference time: 0.171343 seconds
+Total time: 1.88186 seconds
+Average time per iteration: 0.188186 seconds
+Average time per board: 0.00188186 seconds
+
+
+
+A100: -> quite a bit slower than the A10 and almost twice as expensive -> not worth it
+
+BFloat16
+
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.515313 seconds
+Iteration 2: Inference time: 0.025528 seconds
+Iteration 3: Inference time: 0.023933 seconds
+Iteration 4: Inference time: 0.022602 seconds
+Iteration 5: Inference time: 0.024965 seconds
+Iteration 6: Inference time: 0.024223 seconds
+Iteration 7: Inference time: 0.023503 seconds
+Iteration 8: Inference time: 0.024454 seconds
+Iteration 9: Inference time: 0.022948 seconds
+Iteration 10: Inference time: 0.023231 seconds
+Total time: 0.730699 seconds
+Average time per iteration: 0.073070 seconds
+Average time per board: 0.000731 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 1.64223 seconds
+Iteration 2: Inference time: 0.0306974 seconds
+Iteration 3: Inference time: 0.0198329 seconds
+Iteration 4: Inference time: 0.0294359 seconds
+Iteration 5: Inference time: 0.0318571 seconds
+Iteration 6: Inference time: 0.0299537 seconds
+Iteration 7: Inference time: 0.0194963 seconds
+Iteration 8: Inference time: 0.0192531 seconds
+Iteration 9: Inference time: 0.0196901 seconds
+Iteration 10: Inference time: 0.0189871 seconds
+Total time: 1.86144 seconds
+Average time per iteration: 0.186144 seconds
+Average time per board: 0.00186144 seconds
+
+[16:24:32] [01] 100 % (total 100 % on 10 invocations) InferenceClient::inferenceBatch
+[16:24:32] [01] 0 % (total 0 % on 32176 invocations) Board::validMoves
+[16:24:32] [01] 0 % (total 0 % on 30167 invocations) Board::makeMove
+[16:24:32] [01] 0 % (total 0 % on 1000 invocations) encodeBoard
+[16:24:32] [01] 0 % (total 0 % on 1010 invocations) Board::isGameOver
+[16:24:32] [01] 0 % (total 0 % on 1000 invocations) toTensor
+[16:24:32] [01] In total: 98.1751 % recorded
+
+
+
+A6000: -> twice as long inference with 2/3 the cost -> not worth it
+BFloat16
+
+
+Starting inference speed test...
+Number of boards: 100
+Number of iterations: 10
+Python: ====================
+Iteration 1: Inference time: 0.405477 seconds
+Iteration 2: Inference time: 0.027040 seconds
+Iteration 3: Inference time: 0.025260 seconds
+Iteration 4: Inference time: 0.025242 seconds
+Iteration 5: Inference time: 0.025160 seconds
+Iteration 6: Inference time: 0.025348 seconds
+Iteration 7: Inference time: 0.025176 seconds
+Iteration 8: Inference time: 0.025545 seconds
+Iteration 9: Inference time: 0.024536 seconds
+Iteration 10: Inference time: 0.026220 seconds
+Total time: 0.635004 seconds
+Average time per iteration: 0.063500 seconds
+Average time per board: 0.000635 seconds
+Finished Python inference speed test.
+C++: ====================
+Iteration 1: Inference time: 0.230877 seconds
+Iteration 2: Inference time: 0.031073 seconds
+Iteration 3: Inference time: 0.0577506 seconds
+Iteration 4: Inference time: 0.0560397 seconds
+Iteration 5: Inference time: 0.0314829 seconds
+Iteration 6: Inference time: 0.0340125 seconds
+Iteration 7: Inference time: 0.0258993 seconds
+Iteration 8: Inference time: 0.0327974 seconds
+Iteration 9: Inference time: 0.0284572 seconds
+Iteration 10: Inference time: 0.02597 seconds
+Total time: 0.55436 seconds
+Average time per iteration: 0.055436 seconds
+Average time per board: 0.00055436 seconds

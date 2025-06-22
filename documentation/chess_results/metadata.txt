@@ -1,0 +1,58 @@
+Commit Hash: 16a3a5b
+Training Time: ~12 hours
+
+Compute Node:
+    - 4x NVIDIA A10 (100 TFLOPS in total)
+    - 96x Xeon Gold 6342 CPUs
+    - 256 GB RAM
+    - Cost $1.108/hr
+
+TrainingArgs(save_path='training_data/chess',
+             num_iterations=300,
+             num_games_per_iteration=5000,
+             network=NetworkParams(num_layers=8, 
+                                   hidden_size=96, 
+                                   se_positions=(1, 3), # Squeeze-and-Excitation positions
+                                   num_policy_channels=4,
+                                   num_value_channels=2,
+                                   value_fc_size=48),
+             self_play=SelfPlayParams(mcts=MCTSParams(num_searches_per_turn=600, # Search until the root node is visited 600 times (with node reuse, this might be a lot less than 600 new searches per turn)
+                                                      num_parallel_searches=4, # With virtual losses
+                                                      dirichlet_epsilon=0.25,
+                                                      dirichlet_alpha=0.3,
+                                                      c_param=1.5,
+                                                      num_threads=3,
+                                                      percentage_of_node_visits_to_keep=0.6, # Keep 60% of the nodes visited, the rest are pruned. This only affects full searches, fast searches are not pruned.
+                                                      fast_searches_proportion_of_full_searches=1/4,
+                                                      playout_cap_randomization=0.25, # (KataGo "RPC") only search 25% of the moves with 100% of the search budget, the rest with only 1/4 of the search budget, but these wont be added as training data
+                                                      min_visit_count=1 # Visit at least once to not miss obvious good moves, wich were ignored by the policy
+                                                      ),
+                                      num_parallel_games=96, # Large number of parallel games to batch over games as well as parallel searches for larger inference batches
+                                      num_moves_after_which_to_play_greedy=50, # After this, the moves will be selected greedily, no noise is added, 1/4 the searches performed and no training data is written from this point on, since these moves are way noisier than the ones selected before this point and the model will be able to play decent end games with a strong foundation of common positions as well
+                                      portion_of_samples_to_keep=0.75, # To not keep all symmetries
+                                      game_outcome_discount_per_move=0.005, # Discount per move, to simulate the fact that the game outcome is less certain from the start of the game, the longer the game goes, the more certain the outcome becomes
+                                      only_store_sampled_moves=True,
+                                      starting_temperature=1.3, # Decays to 0.1 up to num_moves_after_which_to_play_greedy
+                                      final_temperature=0.1,
+                                      result_score_weight=0.1, # Slowly adding in the mcts result scores into the value training target from 0% at the start up to a max of 10% weight on the mcts scores and 90% on the game score. That is, because initially, the value outputs of the network are just noise, and training with 30-50% or so of these noise targets would completely destroy the value targets
+                                      num_games_after_which_to_write=2,
+                                      resignation_threshold=-5.0 # Disabled for now, since the model seemed to resign often and quickly early on and downwards spiral from there
+                                      ),
+             training=TrainingParams(num_epochs=1,
+                                     batch_size=2048,
+                                     optimizer='adamw',
+                                     sampling_window=<Increasing sampling window, from 5k games up to 150k games storing up to 4mil positions>,
+                                     learning_rate=<0.005 for the first 60 iterations, 0.002 for the rest of the training>,
+                                     max_buffer_samples=4'000'000,
+                                     max_grad_norm=0.5,
+                                     value_target_clip=(-0.95, 0.95), # Don't loose gradient information with tanh at -1 and 1
+                                     value_loss_weight=0.5,
+                                     policy_loss_weight=1,
+                                     num_workers=16),
+             cluster=ClusterParams(num_self_play_nodes_on_cluster=56),
+             evaluation=EvaluationParams(num_searches_per_turn=64,
+                                         num_games=100,
+                                         every_n_iterations=1, # Evaluate every iteration against previous models and against stockfish and a pro dataset to track performance
+                                         dataset_path='reference/memory_0_chess_database.hdf5'),
+             gating=None # Disabled for now, since gating didn't seem to improve the performance but slowed down the training by ~20%
+             )

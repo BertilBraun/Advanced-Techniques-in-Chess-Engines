@@ -1,0 +1,139 @@
+MCTS Speed test results:
+
+Starting mcts speed test...
+Number of iterations: 2
+Number of boards: 64
+Number of threads: 96
+Python: ====================
+[12.07.22] [WARNING] Warning: No tensorboard writer active
+Iteration 1: Inference time: 37.953844 seconds
+Iteration 2: Inference time: 35.378524 seconds
+Total time: 73.332368 seconds
+Average time per iteration: 36.666184 seconds
+Average time per board: 0.572909 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 3.08862 seconds
+Iteration 2: MCTS search time: 1.79283 seconds
+Total MCTS time: 4.88145 seconds
+Average MCTS time per iteration: 2.44072 seconds
+Average MCTS time per board: 0.0381363 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 3.23737 seconds
+Iteration 2: Eval MCTS search time: 2.58041 seconds
+Total Eval MCTS time: 5.81778 seconds
+Average Eval MCTS time per iteration: 2.90889 seconds
+Average Eval MCTS time per board: 0.0454514 seconds
+Finished C++ eval mcts speed test.
+Number of threads: 16
+Python: ====================
+Iteration 1: Inference time: 36.299907 seconds
+Iteration 2: Inference time: 36.078162 seconds
+Total time: 72.378069 seconds
+Average time per iteration: 36.189035 seconds
+Average time per board: 0.565454 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 3.01833 seconds
+Iteration 2: MCTS search time: 1.51707 seconds
+Total MCTS time: 4.53541 seconds
+Average MCTS time per iteration: 2.2677 seconds
+Average MCTS time per board: 0.0354329 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 8.13508 seconds
+Iteration 2: Eval MCTS search time: 7.76423 seconds
+Total Eval MCTS time: 15.8993 seconds
+Average Eval MCTS time per iteration: 7.94966 seconds
+Average Eval MCTS time per board: 0.124213 seconds
+Finished C++ eval mcts speed test.
+Number of threads: 1
+Python: ====================
+Iteration 1: Inference time: 35.807699 seconds
+Iteration 2: Inference time: 35.391353 seconds
+Total time: 71.199052 seconds
+Average time per iteration: 35.599526 seconds
+Average time per board: 0.556243 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 12.4214 seconds
+Iteration 2: MCTS search time: 10.7578 seconds
+Total MCTS time: 23.1792 seconds
+Average MCTS time per iteration: 11.5896 seconds
+Average MCTS time per board: 0.181088 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 91.7297 seconds
+Iteration 2: Eval MCTS search time: 89.0286 seconds
+Total Eval MCTS time: 180.758 seconds
+Average Eval MCTS time per iteration: 90.3792 seconds
+Average Eval MCTS time per board: 1.41217 seconds
+Finished C++ eval mcts speed test.
+Number of boards: 1
+Number of threads: 96
+Python: ====================
+Iteration 1: Inference time: 0.948627 seconds
+Iteration 2: Inference time: 0.895115 seconds
+Total time: 1.843742 seconds
+Average time per iteration: 0.921871 seconds
+Average time per board: 0.921871 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 0.935269 seconds
+Iteration 2: MCTS search time: 0.864494 seconds
+Total MCTS time: 1.79976 seconds
+Average MCTS time per iteration: 0.899882 seconds
+Average MCTS time per board: 0.899882 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 0.316034 seconds
+Iteration 2: Eval MCTS search time: 0.126275 seconds
+Total Eval MCTS time: 0.442309 seconds
+Average Eval MCTS time per iteration: 0.221154 seconds
+Average Eval MCTS time per board: 0.221154 seconds
+Finished C++ eval mcts speed test.
+Number of threads: 16
+Python: ====================
+Iteration 1: Inference time: 0.783237 seconds
+Iteration 2: Inference time: 0.925634 seconds
+Total time: 1.708871 seconds
+Average time per iteration: 0.854435 seconds
+Average time per board: 0.854435 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 1.0849 seconds
+Iteration 2: MCTS search time: 1.08856 seconds
+Total MCTS time: 2.17346 seconds
+Average MCTS time per iteration: 1.08673 seconds
+Average MCTS time per board: 1.08673 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 0.326517 seconds
+Iteration 2: Eval MCTS search time: 0.167733 seconds
+Total Eval MCTS time: 0.494251 seconds
+Average Eval MCTS time per iteration: 0.247125 seconds
+Average Eval MCTS time per board: 0.247125 seconds
+Finished C++ eval mcts speed test.
+Number of threads: 1
+Python: ====================
+Iteration 1: Inference time: 0.774499 seconds
+Iteration 2: Inference time: 0.962411 seconds
+Total time: 1.736910 seconds
+Average time per iteration: 0.868455 seconds
+Average time per board: 0.868455 seconds
+Finished Python mcts speed test.
+C++: ====================
+Iteration 1: MCTS search time: 1.04975 seconds
+Iteration 2: MCTS search time: 0.716204 seconds
+Total MCTS time: 1.76596 seconds
+Average MCTS time per iteration: 0.882978 seconds
+Average MCTS time per board: 0.882978 seconds
+Finished C++ mcts speed test.
+C++ eval: ====================
+Iteration 1: Eval MCTS search time: 1.26183 seconds
+Iteration 2: Eval MCTS search time: 1.24097 seconds
+Total Eval MCTS time: 2.5028 seconds
+Average Eval MCTS time per iteration: 1.2514 seconds
+Average Eval MCTS time per board: 1.2514 seconds
+Finished C++ eval mcts speed test.

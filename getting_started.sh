@@ -11,7 +11,8 @@ source setup.sh
 
 compile
 
-python3 inference_speed_test.py
+python3 -m test.inference_speed_test
+python3 -m test.mcts_speed_test
 
 # download the chess database
 python3 -m src.games.chess.ChessDatabase 5 2000

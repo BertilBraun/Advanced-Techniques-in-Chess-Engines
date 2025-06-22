@@ -1,57 +1,67 @@
 # C++ Self-Play Engine for AlphaZero-Like Chess Bot
 
-This project is a high-performance C++ backend for an AlphaZero-style chess engine, focused specifically on the computationally intensive self-play and training data generation components.  
-It supplements the Python-based system by providing a faster, parallelized self-play engine that can be directly called from Python via PyBind bindings.
+This project is a high-performance C++ backend for an AlphaZero-style chess engine, focused specifically on the computationally intensive MCTS components.  
+It supplements the Python-based system by providing a faster, parallelized multithreaded MCTS engine that can be directly called from Python via PyBind bindings.
 
 While originally intended to replace the Python version entirely, some higher-level logic remains simpler and more flexible in Python. Therefore, the C++ component now permanently acts as a powerful backend for the Python project.
+
+![AlphaZero Chess Engine Architecture](../documentation/images/C++%20Overview.png)
 
 ## Documentation
 
 Detailed documentation for each project component can be found in:
 
-- **[Chess Encoding for Neural Networks](../documentation/implementation/encodings.md)**: How chess board states are encoded as inputs to the neural network.
-- **[Chess Framework](../documentation/implementation/chess/README.md)**: Details about the ported chess logic and performance gains. **WARNING**: The chess logic has a **bug** somewhere in the move generation code. The perft tests are not passing!!!
-- **[Pre-Training System](../documentation/optimizations/pretraining.md)**: Using grandmaster games and Stockfish to bootstrap the initial training.
-- **[Parallelization](../documentation/implementation/parallelization/README.md)**: Strategies used for efficient parallel self-play and data generation.
+- **[Chess Encoding for Neural Networks](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/5.1-chess-implementation#move-encoding-system)**: How chess board states are encoded as inputs to the neural network.
+- **[Chess Framework](https://github.com/BertilBraun/Stockfish)**: Details about the the chess framework and logic adapted from the Stockfish chess engine.
+- **[MCTS Parallelization](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.1-c++-mcts-engine)**: Strategies used for efficient parallel MCTS.
+- **[Inference Client](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.2-c++-inference-client)**: Architecture of the C++ inference client.
 
 ## Technologies
 
 - **Programming Language**: C++20
 - **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
-- **Chess Library**: Port of `python-chess` to C++
+- **Chess Library**: Stockfish adapted chess engine for board logic [see here](https://github.com/BertilBraun/Stockfish)
 - **Python Integration**: PyBind11 for binding C++ modules into Python
 - **Model Sharing**: Neural network models are defined in Python, JIT-compiled with PyTorch, and loaded into C++ at runtime
 
 ## Architecture Overview
 
-- **Self-Play Engine**: Written in C++, highly parallelized.
-- **Bindings**: C++ exports functionality (e.g., starting self-play workers) to Python via PyBind11.
-- **Data Interface**: Self-play workers write training data to files. File formats are consistent between C++ and Python.
+- **MCTS Engine**: Written in C++, highly parallelized.
+- **Bindings**: C++ exports functionality (e.g., starting MCTS searches, inspecting search tree nodes, etc.) to Python via PyBind11.
+- **Data Interface**: Data exchange between Python and C++ happens through pybind bindings of the C++ STL data structures, allowing efficient transfer of game states and MCTS results.
 - **Model Loading**: Python-side model definitions are JIT-exported to `.jit.pt` files, which the C++ engine loads directly with LibTorch.
 
-All orchestration (job submission, training loop, etc.) happens in Python — the C++ part provides the raw self-play data.
+All orchestration (job submission, training loop, etc.) happens in Python — the C++ part provides the raw MCTS data.
 
 ## Getting Started
 
 ### Step 1: Build the Project
 
 Ensure you have PyTorch installed via pip as well as a compatible C++ compiler (e.g., GCC, Clang, MSVC) and CMake.
-You can use the provided setup scripts to automate downloading dependencies and generating build files.
+You can use the provided `py/setup.sh` scripts to automate downloading dependencies and generating build files.
 
 ```bash
-cd build
-cmake --build . --config Release
-```
+compile
 or
+compileDebug
+```
+
+which expands to:
+
 ```bash
-cd build
-make
+cd ../cpp && mkdir -p build && cd build && \
+cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=$(which python3.10) && \
+make -j && cd ../../py
 ```
 
 The build process generates a shared object file:
 
-- `cpp_py/AlphaZeroCpp.so` (Linux/Mac)
-- `cpp_py/AlphaZeroCpp.pyd` (Windows)
+- `py/AlphaZeroCpp.so` (Linux/Mac)
+- `py/AlphaZeroCpp.pyd` (Windows)
+
+As well as type stubs for Python:
+
+- `py/AlphaZeroCpp.pyi`
 
 This shared object can be imported as a Python module.
 
@@ -62,11 +72,11 @@ Once built, the module can be imported in your Python code:
 ```python
 import AlphaZeroCpp
 
-# Example: start self-play workers
-AlphaZeroCpp.start_self_play(num_workers=8, model_path="path/to/model.jit.pt")
+mcts = AlphaZeroCpp.MCTS(...) # initialize with parameters
+# search with fens
+res = mcts.search(["rkbq...BKR w KQkq - 0 1", "rkbq...BKR b KQkq - 0 1"]) # search multiple positions in parallel
+print(res)  # prints the results of the MCTS search
 ```
-
-The self-play workers will generate training data files, which can then be loaded by the Python-side training logic.
 
 **Note**: The neural network model must be exported from Python using PyTorch’s JIT export (`torch.jit.save`) to ensure compatibility.
 
@@ -83,13 +93,6 @@ traced_model = torch.jit.trace(model, example_inputs)
 torch.jit.save(traced_model, "path/to/model.jit.pt")
 ```
 
-## Cluster Usage
-
-The C++ code is no longer directly submitted to the cluster for execution.  
-All cluster job management, distributed training orchestration, and evaluation pipelines are handled via the Python system (`cpp_py/`).
-
-Refer to the main Python project’s README for instructions on how to launch cluster jobs.
-
 ## Performance Considerations
 
 Preliminary testing notes, that the C++ implementation of the pure MCTS search is 90-100x faster than the Python implemenation
@@ -98,7 +101,7 @@ Preliminary testing notes, that the C++ implementation of the pure MCTS search i
 
 ## Summary
 
-- The C++ engine handles **self-play** and **data generation**.
+- The C++ engine handles **parallel MCTS**.
 - **Python** handles **training**, **evaluation**, and **cluster orchestration**.
-- Communication happens via **file-based data exchange** and **PyBind bindings**.
+- Communication happens via **PyBind bindings**.
 - Models are shared via **PyTorch JIT** export/import.

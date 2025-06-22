@@ -48,7 +48,7 @@ def main():
 
         if events.right:
             # Go forward in history
-            if current_displayed_board < len(move_list) - 1:
+            if current_displayed_board < len(moves) - 1:
                 current_displayed_board += 1
                 display_board(current_displayed_board, gui)
 

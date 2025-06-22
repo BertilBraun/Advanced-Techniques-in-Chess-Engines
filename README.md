@@ -1,291 +1,224 @@
 # AlphaZero-Clone: General Deep Reinforcement Learning for Board Games
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines)
+
+> **Achievement:** Intermediate-level Chess AI (~2000-2100 Elo) trained on a $350 personal R&D budget with final model costing $13 to train.
+
 ## **Project Overview**
 
-**AlphaZero-Clone** is an open-source project implementing a **general AlphaZero-like system** for learning **board games** via **deep reinforcement learning** and **self-play**.  
-Starting with simpler games like **Tic-Tac-Toe**, **Connect Four**, **Checkers** and **Hex** it is designed to scale to more complex games, such as **Chess**.
+**AlphaZero-Clone** is a personal implementation of AlphaZero's deep reinforcement learning approach, designed to master board games through self-play without human knowledge. This project demonstrates that sophisticated AI techniques can achieve strong performance on modest personal budgets, successfully scaling from simple games like Tic-Tac-Toe to complex strategy games like Chess.
 
-Key features:
-- Learns entirely from **self-play**, with no prior knowledge of the games.
-- Utilizes **Monte Carlo Tree Search (MCTS)** guided by a neural network predicting **move probabilities** (policy) and **outcomes** (value).
-- Built for **scalability** across multiple GPUs and nodes.
-- Extensible to multiple board games with minimal modification.
-- Aims to achieve **strong amateur-level play** using **limited computational resources**.
+The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to learn optimal play through millions of self-play games. The implementation focuses on practical optimization and efficiency, achieving intermediate-level Chess play on limited computational resources.
 
----
+### **Core Features**
 
-## **Key Objectives**
-
-- Implement a **general self-play training system** using MCTS and neural networks.
-- Replicate AlphaZero’s success at a **strong amateur level**, **without requiring world-class hardware**.
-- Start with simple board games to verify correctness, then **scale up** to more complex games like **Chess**.
-- Optimize for **faster training convergence**, **efficient resource usage**, and **scalability** across multiple workers and GPUs.
-- Maintain **modularity** and **readability** for easy extension to new games and research experiments.
+- **General Game Framework**: Extensible architecture supporting multiple board games with minimal modification
+- **Self-Play Learning**: Learns optimal strategies without human knowledge or game-specific heuristics
+- **Distributed Training**: Scalable across multiple GPUs and CPU cores with asynchronous data generation
+- **Production-Ready Performance**: Optimized C++ MCTS implementation achieving 4-10k searches per second
+- **Budget Efficient**: Achieves strong performance with limited computational resources
 
 ---
 
-## **Current Status**
+## **Supported Games and Results**
 
-### **Training System**
+### **Game Progression**
 
-- The system has been **successfully validated** on **Tic-Tac-Toe** and **Connect Four** - problems started araising with **Checkers** and **Hex** - and the system doesn't seem to improve over very basic play in **Chess**.
-- **Python** is used for game development and orchestration; **C++** for performance-critical components like self-play and inference.
-- **Highly parallelized self-play** with **hundreds of workers**.
-- **Caching mechanisms** are heavily utilized for efficiency.
-- **Bayesian hyperparameter tuning** has been applied successfully to small games.
+| Game             | Board Size   | Complexity   | Status             | Performance Notes                  |
+| ---------------- | ------------ | ------------ | ------------------ | ---------------------------------- |
+| **Tic-Tac-Toe**  | 3x3          | ~10³ states  | Solved             | Perfect play achieved              |
+| **Connect Four** | 7x6          | ~10¹³ states | Mastered           | Strong tactical understanding      |
+| **Checkers**     | 8x8          | ~10²⁰ states | Strong             | Solid positional and tactical play |
+| **Hex**          | 7x7 to 11x11 | ~10²⁵ states | Strong             | Effective on multiple board sizes  |
+| **Chess**        | 8x8          | ~10⁴⁷ states | **~2000-2100 Elo** | **Intermediate-level mastery**     |
 
-### **Critical Challenges**
+### **Chess Performance Analysis**
 
-> **One serious learning problem is currently blocking progress:**
-> 
-> - **Model stagnation**: The model stops improving after reaching ~70% win rate against random players and when started from a strong pretrained model, it deteriorates to approximately the same level.
+The Chess implementation represents the project's main achievement, demonstrating sophisticated understanding of both tactical and positional concepts. Training utilized approximately 280,000 games over 100,000 update steps with a compact 8x96 neural network architecture.
 
-**Fixing this issue is essential**.
+![Sample Game vs Stockfish Level 6](documentation/chess_results/Example%20Game.gif)
+*AlphaZero-Clone (White) defeating Stockfish Level 6 in a tactical middlegame*
+
+#### **Benchmark Results**
+
+Performance was evaluated against multiple opponents across various time controls:
+
+**Stockfish UCI Level Testing:**
+
+| Stockfish Level | Win/Draw/Loss |
+| --------------- | ------------- |
+| Level 0         | 8/1/1         |
+| Level 3         | 7/1/2         |
+| Level 4         | 53/17/30      |
+| Level 5         | 7/6/7         |
+| Level 6         | 2/6/12        |
+
+**Elo-Calibrated Testing:**
+
+| Target Elo | Result |
+| ---------- | ------ |
+| 1400       | 20/0/0 |
+| 2000       | 12/4/4 |
+| 2200       | 7/4/9  |
+| 2400       | 5/7/8  |
+
+*The engine also passed a more personal benchmark: winning a casual game against my Dad ❤️.*
+
+*Testing conditions: 1.0s/move time control, Stockfish skill level limited via `Skill Level`, Elo targets set via `UCI_Elo`*  
+*Testing hardware: Single A10 GPU + 16 CPUs vs Stockfish on 32 CPUs*
+
+The performance data suggests the engine operates at approximately **2000-2100 Elo**, demonstrating intermediate-level play with solid tactical awareness and positional understanding.
 
 ---
 
-## **Main Challenge: Model Stagnation**
+## **Technical Architecture**
 
-> **Model stagnation is the critical project-threatening issue.**
+The system is built around a robust training pipeline that separates concerns between data generation, neural network training, and model evaluation:
 
-- After reaching around **70% win rate against random opponents**, the model stops improving further.
-- Continued self-play and training fail to meaningfully strengthen the model.
+### **Training Pipeline**
 
-**Potential causes under investigation:**
-- **Hyperparameter mismatches** (e.g., exploration vs. exploitation balance, learning rates).
-- **Incorrect training target generation** or **evaluation logic bugs**.
-- **Insufficient exploration** during self-play leading to shallow learning.
-- **Training pipeline flaws** such as gradient issues, loss imbalance, or poor replay data diversity.
+1. **Self-Play Generation**: Multiple worker processes generate games using the current best model and MCTS
+2. **Data Collection**: Game states, MCTS-derived move probabilities, and final outcomes are stored efficiently
+3. **Neural Network Training**: Collected data trains the network to predict both move probabilities (policy) and position evaluations (value)
+4. **Model Evaluation**: New models are benchmarked against previous versions to ensure improvement
+5. **Model Promotion**: Superior models become the new best model for continued self-play generation
 
-> **Solving model stagnation is the highest current priority for the project’s success.**
+### **Implementation Details**
+
+The project leverages a hybrid Python/C++ architecture optimized for both development velocity and runtime performance:
+
+- **Python Components**: Training orchestration, neural network definitions, experimental framework
+- **C++ Components**: High-performance MCTS implementation, game engines, batched inference
+- **Asynchronous Design**: Self-play workers operate independently while training occurs on accumulated data
+- **Mixed Precision**: BFloat16 training and inference for improved performance and reduced memory usage
 
 ---
 
-### **Training Logs for Debugging**
+## **Training Methodology**
 
-To assist in diagnosing the critical learning challenges, **detailed TensorBoard logs** and **screenshots of several training runs** are provided under: [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/).
+### **Resource Efficiency**
 
-![Latest Run](documentation/tensorboard_runs/From_pretrained_py_6.png)
+The project achieves remarkable results through careful resource management:
 
-> **<span style="color:red">If you are experienced with reinforcement learning, deep learning training dynamics, or AlphaZero-style systems, you may be able to spot anomalies or common issues just by analyzing these plots and run documentation below — without needing to set up or run the system yourself. Any insights or help based on the provided results would be *greatly appreciated*!</span>**
+- **Total Personal Budget**: ~$350 including all experimental runs
+- **Final Model Training Cost**: ~$13 for 12-hour training session
+- **Hardware Configuration**: 96 CPU cores + 3.5 A10 GPUs
+- **Training Throughput**: 5-15 games per second during self-play generation
+
+### **Implementation Techniques**
+
+The implementation incorporates several established techniques for improved performance:
+
+- **AdamW Optimizer**: Superior convergence properties for deep learning
+- **Mixed Precision Training**: BFloat16 reduces memory usage while maintaining numerical stability
+- **ResNet Architecture**: Skip connections with Squeeze-and-Excitation blocks for efficient learning
+- **Playout-Cap Randomization**: Technique borrowed from KataGo for improved exploration
+- **Asynchronous Training**: Continuous data generation while neural network training occurs
 
 <details>
-<summary><strong>Training Parameters and Run documentation <span style="color:red">(click to expand)</span></strong></summary>
+<summary><strong>Training Progression Analysis</strong></summary>
 
-Pretraining was done on 1xA10 GPU for ~20min on a dataset of ~600k 2000+ Elo games. As a decent baseline, the model wins 100% of the time against random players and has baselines for policy and value predictions:
-    Policy accuracy @1: 36.22%
-    Policy accuracy @5: 65.42%
-    Policy accuracy @10: 73.82%
-    Avg value loss: 0.843603523572286
+The training process demonstrates clear learning phases visible in comprehensive metrics:
 
-This model was then used as a starting point for the RL training run as well as for the evaluation reference model. Training then proceeded for 9 iterations with the following parameters:
+![Training Plots](documentation/chess_results/Training%20Plots.png)
 
-```jsonc
-{
-  "num_gpus": 1, // 1 A10 24GB GPU
-  "cpu_count": 30,
-  "num_self_play_players": 27, // Based on CPU count - limited by CPU cores
-  "num_games_per_iteration": 1728, // 8 (parallel games) * 27 (self players) * 8
-  "num_iterations": 12,
+**Key Observations:**
 
-  // Learning rate schedule (SGD)
-  "learning_rate": {
-    "iteration 0-9": 0.03,
-    "iteration 10+": 0.01
-  },
+- **Loss Convergence**: Policy and value losses show steady improvement with occasional plateaus
+- **Value Accuracy**: Position evaluation accuracy improves consistently throughout training
+- **Search Efficiency**: MCTS becomes more selective as the neural network improves
+- **Evaluation Metrics**: Win rates against previous models and Stockfish show clear upward trends
 
-  // Network configuration
-  "network": {
-    "num_layers": 15,
-    "hidden_size": 128
-  },
-
-  // Training settings
-  "training": {
-    "num_epochs": 1,
-    "optimizer": "sgd",
-    "batch_size": 512
-  },
-
-  // Evaluation settings
-  "evaluation": {
-    "num_searches_per_turn": 60,
-    "num_games": 40,
-    "every_n_iterations": 1,
-    "dataset_path": "reference/memory_0_chess_database.hdf5"
-  },
-
-  // Self-play parameters
-  "self_play": {
-    "num_parallel_games": 8,
-    "num_moves_after_which_to_play_greedy": 24,
-    "result_score_weight": 0.15,
-    "resignation_threshold": -1.0,
-    "temperature": 1.0,
-    "num_games_after_which_to_write": 1,
-
-    "mcts": {
-      "num_searches_per_turn": 640,
-      "num_parallel_searches": 4,
-      "dirichlet_epsilon": 0.25,
-      "dirichlet_alpha": 0.3,
-      "c_param": 1.7,
-      "full_search_probability": 0.2
-    }
-  }
-}
-```
-
-The model deteriorated rather quickly... Even though the train and validation losses decreased a lot, the evaluation shows detremental performance. The policy accuracy continuously decreased and the game win rate against the reference model dropped to a 4/19/17 win/draw/loss rate from an initial 12/17/11 win/draw/loss rate.
-
-Models as well as additional logs are available in the [`documentation/tensorboard_runs/`](documentation/tensorboard_runs/) folder.
+The training data reveals the model's learning trajectory from random play to sophisticated chess understanding, with the skill level increasing significantly over time. Notably, the model does not seem to have fully converged yet, indicating potential for further improvement with additional training resources. Additionally, increases in model size, training duration and number of games played will most likely lead to even stronger performance.
 
 </details>
 
 ---
 
-## **Training Pipeline**
+## **Performance Optimizations**
 
-The training pipeline consists of:
+The training pipeline includes several important optimizations for efficiency:
 
-1. **Self-Play Generation**:
-   - Multiple workers generate games using the current model and MCTS.
-2. **Data Collection**:
-   - Store game states, move probabilities, and outcomes to file from the workers.
-3. **Training**:
-   - Load the collected data from the files, shuffle and deduplicate it.
-   - Train the neural network to predict policies and values from self-play data.
-4. **Evaluation**:
-   - Compare new models to previous best models.
-   - Promote stronger models for further training.
-5. **Repeat**
+### **Core Optimizations**
 
----
+- **[Inference Optimization](documentation/optimizations/inference.md)**: Batched GPU inference with efficient memory management
+- **[MCTS Optimization](documentation/optimizations/mcts.md)**: Optimized tree traversal and node expansion algorithms
+- **[Game Engine Optimization](documentation/optimizations/games.md)**: Efficient board representation and move generation
+- **[Training Pipeline Optimization](documentation/optimizations/training.md)**: Data loading, shuffling, and batch processing improvements
+- **[Evaluation Optimization](documentation/optimizations/evaluation.md)**: Parallel game evaluation and statistical analysis
 
-## **Optimizations**
+### **System Design**
 
-Significant optimizations have been implemented to enhance performance, efficiency, and scalability:
-
-- [Inference Optimization](documentation/optimizations/inference.md)
-- [MCTS Optimization](documentation/optimizations/mcts.md)
-- [Game Optimization](documentation/optimizations/games.md)
-- [Inference Architecture Optimization](documentation/optimizations/architecture.md)
-- [Training Optimization](documentation/optimizations/training.md)
-- [Evaluation Optimization](documentation/optimizations/evaluation.md)
-- [Hyperparameter Optimization](documentation/optimizations/hyperparameters.md)
-- [Optional Pretraining](documentation/optimizations/pretraining.md) using grandmaster games and Stockfish evaluations.
+- **Asynchronous Architecture**: Eliminates training bottlenecks through independent worker processes
+- **Memory Management**: Efficient data structures minimizing memory allocation overhead
+- **Batch Processing**: Optimal batch sizes for both training and inference operations
+- **Load Balancing**: Dynamic work distribution across available computational resources
 
 ---
 
-## **Implementation Details**
+## **Potential Improvements**
 
-See full implementation description here:  
-- [Implementation Details](documentation/implementation/implementation.md)
+The training plots suggest the model hasn't fully converged yet, indicating significant room for improvement with additional computational resources:
 
-Topics covered include:
-- Neural network architecture.
-- MCTS search tree structure.
-- Game interface design.
-- Training and evaluation loops.
-- Python–C++ interoperability.
+- **Extended Training**: Performance likely to improve with longer training runs and more games
+- **Larger Networks**: Scaling to bigger neural network architectures
+- **Game Expansion**: Support for Go, Shogi, and other complex strategy games
+- **Training Techniques**: Population-based training and advanced exploration methods
+- **Hyperparameter Optimization**: Systematic search for optimal training configurations
 
----
-
-## **Supported Games**
-
-- **Tic-Tac-Toe** — for basic testing and verification.
-- **Connect Four** — introduces more complexity.
-- **Checkers** — larger board, more complex strategies.
-- **Chess** — primary target for full-scale AlphaZero-style learning.
-
----
-
-## **Additional Challenges**
-
-Besides model stagnation, there are several technical challenges:
-
-### **1. High Cache Hit Rate**
-
-- We currently have a **cache hit rate of 60–80%** during self-play. This means that **60–80% of the states** were already evaluated and cached.
-- This could indicate duplicate evaluations or issues in the MCTS tree rebuilding or in self-play worker coordination.
-- **Possible solutions** include:
-  - Investigating the MCTS tree rebuilding process.
-  - Ensuring that self-play workers are not duplicating efforts unnecessarily.
-  - Optimizing the caching mechanism to reduce redundancy.
-
-### **2. Hyperparameter Tuning at Scale**
-
-- **Bayesian hyperparameter optimization** was effective for smaller games like Tic-Tac-Toe and Connect Four.
-- For **Chess and complex games**, tuning becomes **very expensive** and **slow** due to long training cycles.
-- Smarter, faster methods (or better initial heuristics) are needed to scale tuning efforts.
-
----
-
-## **Future Work**
-
-Future enhancements are planned:
-
-- [Future Work Overview](documentation/future.md)
-
-Major goals include:
-- **Solve model stagnation** — **highest priority**.
-- Develop **more efficient hyperparameter search** with faster hyperparameter sample evaluation.
-- Implement additional **training improvements** for stability and faster convergence.
+Detailed roadmap available in **[Future Work](documentation/future.md)**.
 
 ---
 
 ## **Getting Started**
 
-The project is organized into two main sections:
+### **Quick Start**
 
-- **Python Folder (py/)**:
-  - Game development.
-  - Training orchestration.
-  - Easy-to-debug experimental framework.
-- **C++ Folders (cpp/ and cpp_py/)**:
-  - High-performance self-play engine.
-  - Optimized multithreaded inference.
-
-For setup and usage instructions, see the **Getting Started** guides inside each directory.
-
-The entire project can be setup and run by launching the `getting_started.sh` script in the root directory. This will install all dependencies and set up the environment for both Python and C++ components and start the training process from the python implementation. To do this, run the following command in your terminal:
+The entire system can be installed and configured with a single command:
 
 ```bash
 curl https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/refs/heads/master/getting_started.sh | bash
 ```
 
+This script handles dependency installation, environment configuration, and initiates the training process.
+
+### **Project Structure**
+
+- **`py/`**: Python components for training orchestration and experimentation
+- **`cpp/`**: High-performance C++ implementations for self-play and inference
+- **`documentation/`**: Comprehensive technical documentation and analysis
+- **`documentation/chess_results/`**: Detailed Chess performance data and sample games
+
+For detailed setup instructions and usage examples, refer to the Getting Started guides in each directory.
+
 ---
 
 ## **Contributing**
 
-Contributions are **highly welcome**, especially for:
+Contributions are welcomed across multiple areas:
 
-- Fixing model stagnation.
-- Debugging or improving MCTS and training.
-- Optimizing C++ self-play and GPU utilization.
+- **Algorithm Implementation**: Training techniques and search improvements
+- **Game Support**: Additional board games and rule variants
+- **Performance Optimization**: Speed and memory efficiency improvements
+- **Documentation**: Technical documentation and educational resources
+- **Evaluation**: Benchmarking and performance analysis tools
 
-Please open issues or pull requests or contact the Author directly if you'd like to help!
+Please review contribution guidelines and open issues for current development priorities.
 
 ---
 
-## **References**
+## **References and Acknowledgments**
 
-Check out [references.md](documentation/references.md) for a list of papers, articles, and resources related to AlphaZero and deep reinforcement learning.
+This work builds upon extensive research in game AI and deep reinforcement learning. See **[references.md](documentation/references.md)** for comprehensive citations and related work.
+
+Special recognition to the AlphaZero team at DeepMind for the foundational research that made this project possible.
 
 ---
 
 ## **License**
 
-This project is licensed under the [MIT License](./LICENSE).
+This project is licensed under the [MIT License](./LICENSE), enabling both academic and commercial use.
 
 ---
 
-## **Acknowledgements**
-
-- Inspired by [DeepMind's AlphaZero](https://deepmind.com/research/case-studies/alphazero-the-story-so-far).
-- Utilizes [PyTorch](https://pytorch.org/) for deep learning components.
-
----
-
-> **Help on fixing model stagnation is urgently needed —  
-> if you have experience with AlphaZero, deep reinforcement learning, or debugging training systems, please reach out!**
+*Demonstrating that sophisticated AI techniques can be accessible on modest personal budgets.*

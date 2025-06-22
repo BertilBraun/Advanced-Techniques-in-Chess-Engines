@@ -59,7 +59,7 @@ def test_mcts_speed_py(num_boards: int, num_iterations: int) -> None:
         duration = end - start
         total_time += duration
 
-        print(f'Iteration {i + 1}: Inference time: {duration:.6f} seconds')
+        print(f'Iteration {i + 1}: MCTS time: {duration:.6f} seconds')
 
     print(f'Total time: {total_time:.6f} seconds')
     print(f'Average time per iteration: {total_time / num_iterations:.6f} seconds')
@@ -68,7 +68,7 @@ def test_mcts_speed_py(num_boards: int, num_iterations: int) -> None:
 
 if __name__ == '__main__':
     print('Starting mcts speed test...')
-    num_iterations = 10  # Number of iterations to run the test
+    num_iterations = 5  # Number of iterations to run the test
     print(f'Number of iterations: {num_iterations}')
 
     network = create_model(TRAINING_ARGS.network, torch.device('cpu'))

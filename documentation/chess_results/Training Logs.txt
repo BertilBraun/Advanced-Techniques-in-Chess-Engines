@@ -1,0 +1,1069 @@
+[19.40.53] [INFO] Gating evaluation skipped at iteration 50. Using model 51.
+[19.40.53] [INFO] Started evaluation process for iteration 50.
+[19.40.53] [INFO] Starting iteration 51.
+Waiting for games (iter 51):  50%|██████████████████████████████████████████████████████████████████████████████████▍                                                                                   | 2483/5000 [00:38<05:05,  8.23it/s][19.41.33] [INFO] Results after playing the current policy only vs random at iteration 51: W/D/L: 96/4/0
+Waiting for games (iter 51):  51%|████████████████████████████████████████████████████████████████████████████████████▊                                                                                 | 2556/5000 [00:49<05:30,  7.39it/s][19.41.46] [INFO] Evaluation results at iteration 51:
+[19.41.46] [INFO]     Policy accuracy @1: 36.60%
+[19.41.46] [INFO]     Policy accuracy @5: 75.79%
+[19.41.46] [INFO]     Policy accuracy @10: 89.01%
+[19.41.46] [INFO]     Avg value loss: 0.8119932850201924
+Waiting for games (iter 51):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                                     | 3388/5000 [02:33<03:06,  8.66it/s][19.43.29] [INFO] Results after playing vs random at iteration 51: W/D/L: 100/0/0
+Waiting for games (iter 51):  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                 | 3988/5000 [03:47<02:05,  8.09it/s][19.44.43] [INFO] Results after playing vs stockfish level 0 at iteration 51: W/D/L: 81/14/5
+Waiting for games (iter 51):  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                         | 4235/5000 [04:18<01:31,  8.40it/s][19.45.15] [INFO] Results after playing vs stockfish level 2 at iteration 51: W/D/L: 68/20/12
+[19.45.15] [INFO] Results after playing vs stockfish level 1 at iteration 51: W/D/L: 73/18/9
+Waiting for games (iter 51):  91%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊               | 4542/5000 [04:56<01:00,  7.63it/s][19.45.53] [INFO] Results after playing vs model 10 at iteration 51: W/D/L: 92/8/0
+Waiting for games (iter 51):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊             | 4601/5000 [05:03<00:49,  8.03it/s][19.46.00] [INFO] Results after playing vs stockfish level 3 at iteration 51: W/D/L: 27/28/45
+Waiting for games (iter 51):  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍ | 4952/5000 [05:44<00:04, 10.54it/s][19.46.41] [INFO] Results after playing vs model 20 at iteration 51: W/D/L: 77/16/7
+Waiting for games (iter 51): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:53<00:00,  7.77it/s]
+[19.46.48] [INFO] Loading memories for iteration 51 with window size 14 (37-51)
+[19.47.22] [INFO] Results after playing 51 vs 46: W/D/L: 30/35/35
+[19.47.23] [INFO] Results after playing vs model 50 at iteration 51: W/D/L: 30/40/30
+[19.47.23] [INFO] Results after playing vs model 40 at iteration 51: W/D/L: 43/31/26
+[19.47.24] [INFO] Results after playing 51 vs 41: W/D/L: 35/38/27
+[19.47.27] [INFO] Results after playing vs model 30 at iteration 51: W/D/L: 44/33/23
+[19.47.36] [INFO] Loaded 1294671 samples from 41046 games
+[19.47.37] [INFO] Model and optimizer loaded from iteration 51
+[19.47.37] [INFO] Setting learning rate to 0.005 for iteration 51
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1265/1265 [02:45<00:00,  7.63it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.30s/it]
+[19.50.25] [INFO] Train stats:  Policy Loss: 1.8474, Value Loss: 0.1947, Total Loss: 1.9448, Value Mean: 0.0239, Value Std: 0.4570, Gradient Norm: 0.2197, Num Batches: 1265
+[19.50.25] [INFO] Valid stats:  Policy Loss: 2.0222, Value Loss: 0.2139, Total Loss: 2.1291, Value Mean: 0.0286, Value Std: 0.4844, Gradient Norm: 0.0000, Num Batches: 2
+[19.50.27] [INFO] Training finished for iteration 51
+[19.50.27] [INFO] Gating evaluation skipped at iteration 51. Using model 52.
+[19.50.27] [INFO] Started evaluation process for iteration 51.
+[19.50.27] [INFO] Starting iteration 52.
+Waiting for games (iter 52):  49%|████████████████████████████████████████████████████████████████████████████████▉                                                                                     | 2438/5000 [00:23<05:31,  7.72it/s][19.50.54] [INFO] Evaluation results at iteration 52:
+[19.50.54] [INFO]     Policy accuracy @1: 36.65%
+[19.50.54] [INFO]     Policy accuracy @5: 76.27%
+[19.50.54] [INFO]     Policy accuracy @10: 89.38%
+[19.50.54] [INFO]     Avg value loss: 0.8107526275846694
+Waiting for games (iter 52):  51%|████████████████████████████████████████████████████████████████████████████████████▍                                                                                 | 2545/5000 [00:37<04:52,  8.40it/s][19.51.09] [INFO] Results after playing the current policy only vs random at iteration 52: W/D/L: 98/2/0
+Waiting for games (iter 52):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                                                     | 3389/5000 [02:21<02:58,  9.00it/s][19.52.52] [INFO] Results after playing vs random at iteration 52: W/D/L: 99/1/0
+Waiting for games (iter 52):  86%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                       | 4300/5000 [04:14<01:38,  7.11it/s][19.54.46] [INFO] Results after playing vs stockfish level 0 at iteration 52: W/D/L: 80/14/6
+Waiting for games (iter 52):  87%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                      | 4333/5000 [04:17<01:23,  7.99it/s][19.54.47] [INFO] Results after playing vs stockfish level 1 at iteration 52: W/D/L: 80/8/12
+Waiting for games (iter 52):  90%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                | 4504/5000 [04:39<01:05,  7.57it/s][19.55.10] [INFO] Results after playing vs stockfish level 2 at iteration 52: W/D/L: 69/15/16
+Waiting for games (iter 52):  93%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍           | 4651/5000 [05:02<00:56,  6.20it/s][19.55.34] [INFO] Results after playing vs stockfish level 3 at iteration 52: W/D/L: 42/24/34
+Waiting for games (iter 52):  93%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊           | 4663/5000 [05:05<01:01,  5.50it/s][19.55.37] [INFO] Results after playing vs model 10 at iteration 52: W/D/L: 92/8/0
+Waiting for games (iter 52):  95%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎        | 4737/5000 [05:15<00:36,  7.15it/s][19.55.46] [INFO] Results after playing vs model 20 at iteration 52: W/D/L: 86/10/4
+Waiting for games (iter 52): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:50<00:00,  7.69it/s]
+[19.56.19] [INFO] Loading memories for iteration 52 with window size 14 (38-52)
+[19.56.52] [INFO] Results after playing vs model 50 at iteration 52: W/D/L: 25/43/32
+[19.56.56] [INFO] Results after playing vs model 30 at iteration 52: W/D/L: 63/32/5
+[19.57.04] [INFO] Results after playing vs model 40 at iteration 52: W/D/L: 45/32/23
+[19.57.08] [INFO] Results after playing 52 vs 42: W/D/L: 39/40/21
+[19.57.09] [INFO] Loaded 1291625 samples from 40906 games
+[19.57.09] [INFO] Model and optimizer loaded from iteration 52
+[19.57.09] [INFO] Setting learning rate to 0.005 for iteration 52
+Train batches:   4%|███████▊                                                                                                                                                                              | 54/1262 [00:13<02:45,  7.29it/s][19.57.22] [INFO] Results after playing 52 vs 47: W/D/L: 41/38/21
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1262/1262 [02:46<00:00,  7.59it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.40s/it]
+[19.59.58] [INFO] Train stats:  Policy Loss: 1.8417, Value Loss: 0.1946, Total Loss: 1.9390, Value Mean: 0.0237, Value Std: 0.4570, Gradient Norm: 0.2210, Num Batches: 1262
+[19.59.58] [INFO] Valid stats:  Policy Loss: 1.9679, Value Loss: 0.1692, Total Loss: 2.0525, Value Mean: -0.0176, Value Std: 0.4336, Gradient Norm: 0.0000, Num Batches: 2
+[20.00.01] [INFO] Training finished for iteration 52
+[20.00.01] [INFO] Gating evaluation skipped at iteration 52. Using model 53.
+[20.00.01] [INFO] Started evaluation process for iteration 52.
+[20.00.01] [INFO] Starting iteration 53.
+Waiting for games (iter 53):  50%|███████████████████████████████████████████████████████████████████████████████████▎                                                                                  | 2510/5000 [00:40<04:32,  9.14it/s][20.00.43] [INFO] Results after playing the current policy only vs random at iteration 53: W/D/L: 96/4/0
+Waiting for games (iter 53):  53%|███████████████████████████████████████████████████████████████████████████████████████▏                                                                              | 2628/5000 [00:54<05:11,  7.62it/s][20.00.58] [INFO] Evaluation results at iteration 53:
+[20.00.58] [INFO]     Policy accuracy @1: 35.47%
+[20.00.58] [INFO]     Policy accuracy @5: 74.65%
+[20.00.58] [INFO]     Policy accuracy @10: 88.85%
+[20.00.58] [INFO]     Avg value loss: 0.8097255018022326
+Waiting for games (iter 53):  68%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                                                    | 3423/5000 [02:32<03:47,  6.93it/s][20.02.35] [INFO] Results after playing vs random at iteration 53: W/D/L: 100/0/0
+Waiting for games (iter 53):  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                         | 4234/5000 [04:11<01:33,  8.23it/s][20.04.16] [INFO] Results after playing vs stockfish level 0 at iteration 53: W/D/L: 85/10/5
+Waiting for games (iter 53):  88%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                    | 4380/5000 [04:30<01:19,  7.84it/s][20.04.36] [INFO] Results after playing vs stockfish level 1 at iteration 53: W/D/L: 78/14/8
+Waiting for games (iter 53):  91%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊               | 4543/5000 [04:53<00:57,  7.89it/s][20.04.56] [INFO] Results after playing vs stockfish level 2 at iteration 53: W/D/L: 67/17/16
+Waiting for games (iter 53):  98%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉   | 4906/5000 [05:38<00:12,  7.38it/s][20.05.44] [INFO] Results after playing vs stockfish level 3 at iteration 53: W/D/L: 44/28/28
+Waiting for games (iter 53): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:52<00:00,  7.85it/s]
+[20.05.55] [INFO] Loading memories for iteration 53 with window size 14 (39-53)
+[20.05.58] [INFO] Results after playing vs model 10 at iteration 53: W/D/L: 89/11/0
+[20.06.49] [INFO] Loaded 1291859 samples from 40847 games
+[20.06.50] [INFO] Model and optimizer loaded from iteration 53
+[20.06.50] [INFO] Setting learning rate to 0.005 for iteration 53
+Train batches:   0%|                                                                                                                                                                                               | 0/1262 [00:00<?, ?it/s][20.06.52] [INFO] Results after playing vs model 20 at iteration 53: W/D/L: 78/20/2
+Train batches:   1%|█▌                                                                                                                                                                                    | 11/1262 [00:07<06:29,  3.21it/s][20.06.58] [INFO] Results after playing vs model 30 at iteration 53: W/D/L: 61/27/12
+Train batches:   6%|██████████                                                                                                                                                                            | 70/1262 [00:23<04:22,  4.54it/s][20.07.13] [INFO] Results after playing 53 vs 48: W/D/L: 42/25/33
+Train batches:   7%|████████████▎                                                                                                                                                                         | 85/1262 [00:26<05:01,  3.91it/s][20.07.17] [INFO] Results after playing vs model 40 at iteration 53: W/D/L: 45/35/20
+Train batches:   8%|██████████████▊                                                                                                                                                                      | 103/1262 [00:29<03:15,  5.93it/s][20.07.20] [INFO] Results after playing 53 vs 43: W/D/L: 38/36/26
+Train batches:  12%|█████████████████████▎                                                                                                                                                               | 149/1262 [00:37<03:02,  6.08it/s][20.07.27] [INFO] Results after playing vs model 50 at iteration 53: W/D/L: 27/36/37
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1262/1262 [02:48<00:00,  7.48it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.40s/it]
+[20.09.42] [INFO] Train stats:  Policy Loss: 1.8340, Value Loss: 0.1947, Total Loss: 1.9313, Value Mean: 0.0237, Value Std: 0.4551, Gradient Norm: 0.2205, Num Batches: 1262
+[20.09.42] [INFO] Valid stats:  Policy Loss: 1.9510, Value Loss: 0.2125, Total Loss: 2.0572, Value Mean: 0.0469, Value Std: 0.4531, Gradient Norm: 0.0000, Num Batches: 2
+[20.09.44] [INFO] Training finished for iteration 53
+[20.09.44] [INFO] Gating evaluation skipped at iteration 53. Using model 54.
+[20.09.44] [INFO] Started evaluation process for iteration 53.
+[20.09.44] [INFO] Starting iteration 54.
+Waiting for games (iter 54):  51%|█████████████████████████████████████████████████████████████████████████████████████▏                                                                                | 2565/5000 [00:39<04:34,  8.89it/s][20.10.28] [INFO] Results after playing the current policy only vs random at iteration 54: W/D/L: 100/0/0
+Waiting for games (iter 54):  52%|██████████████████████████████████████████████████████████████████████████████████████                                                                                | 2594/5000 [00:45<05:39,  7.09it/s][20.10.31] [INFO] Evaluation results at iteration 54:
+[20.10.31] [INFO]     Policy accuracy @1: 36.55%
+[20.10.31] [INFO]     Policy accuracy @5: 75.61%
+[20.10.31] [INFO]     Policy accuracy @10: 89.42%
+[20.10.31] [INFO]     Avg value loss: 0.8096234586503771
+Waiting for games (iter 54):  72%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                                              | 3613/5000 [02:45<02:46,  8.31it/s][20.12.33] [INFO] Results after playing vs random at iteration 54: W/D/L: 98/2/0
+Waiting for games (iter 54):  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                 | 4476/5000 [04:30<00:56,  9.34it/s][20.14.18] [INFO] Results after playing vs stockfish level 0 at iteration 54: W/D/L: 77/13/10
+Waiting for games (iter 54):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏             | 4584/5000 [04:43<00:49,  8.39it/s][20.14.30] [INFO] Results after playing vs stockfish level 1 at iteration 54: W/D/L: 78/15/7
+Waiting for games (iter 54):  94%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍          | 4683/5000 [05:00<00:51,  6.12it/s][20.14.47] [INFO] Results after playing vs stockfish level 2 at iteration 54: W/D/L: 69/17/14
+Waiting for games (iter 54):  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎ | 4950/5000 [05:30<00:06,  8.25it/s][20.15.17] [INFO] Results after playing vs model 10 at iteration 54: W/D/L: 87/10/3
+Waiting for games (iter 54): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:37<00:00,  7.99it/s]
+[20.15.23] [INFO] Loading memories for iteration 54 with window size 14 (40-54)
+[20.15.39] [INFO] Results after playing vs stockfish level 3 at iteration 54: W/D/L: 36/27/37
+[20.16.18] [INFO] Loaded 1289768 samples from 40702 games
+[20.16.19] [INFO] Model and optimizer loaded from iteration 54
+[20.16.19] [INFO] Setting learning rate to 0.005 for iteration 54
+Train batches:   2%|███▌                                                                                                                                                                                  | 25/1260 [00:14<07:54,  2.61it/s][20.16.34] [INFO] Results after playing vs model 20 at iteration 54: W/D/L: 77/17/6
+Train batches:   6%|██████████▍                                                                                                                                                                           | 72/1260 [00:29<06:53,  2.88it/s][20.16.49] [INFO] Results after playing vs model 30 at iteration 54: W/D/L: 46/35/19
+Train batches:   7%|█████████████▌                                                                                                                                                                        | 94/1260 [00:35<06:00,  3.23it/s][20.16.55] [INFO] Results after playing vs model 50 at iteration 54: W/D/L: 32/37/31
+Train batches:  10%|██████████████████▊                                                                                                                                                                  | 131/1260 [00:45<04:41,  4.01it/s][20.17.04] [INFO] Results after playing vs model 40 at iteration 54: W/D/L: 44/34/22
+Train batches:  14%|█████████████████████████▎                                                                                                                                                           | 176/1260 [00:53<03:34,  5.06it/s][20.17.12] [INFO] Results after playing 54 vs 49: W/D/L: 32/39/29
+Train batches:  18%|█████████████████████████████████▎                                                                                                                                                   | 232/1260 [01:01<01:58,  8.66it/s][20.17.20] [INFO] Results after playing 54 vs 44: W/D/L: 40/32/28
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1260/1260 [03:02<00:00,  6.91it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+[20.19.24] [INFO] Train stats:  Policy Loss: 1.8286, Value Loss: 0.1946, Total Loss: 1.9259, Value Mean: 0.0234, Value Std: 0.4551, Gradient Norm: 0.2233, Num Batches: 1260
+[20.19.24] [INFO] Valid stats:  Policy Loss: 1.8884, Value Loss: 0.2007, Total Loss: 1.9888, Value Mean: 0.0393, Value Std: 0.4355, Gradient Norm: 0.0000, Num Batches: 2
+[20.19.27] [INFO] Training finished for iteration 54
+[20.19.27] [INFO] Gating evaluation skipped at iteration 54. Using model 55.
+[20.19.27] [INFO] Started evaluation process for iteration 54.
+[20.19.27] [INFO] Starting iteration 55.
+Waiting for games (iter 55):  50%|███████████████████████████████████████████████████████████████████████████████████▋                                                                                  | 2520/5000 [00:42<05:36,  7.37it/s][20.20.11] [INFO] Results after playing the current policy only vs random at iteration 55: W/D/L: 98/2/0
+Waiting for games (iter 55):  61%|██████████████████████████████████████████████████████████████████████████████████████████████████████                                                                | 3073/5000 [01:50<03:28,  9.26it/s][20.21.19] [INFO] Evaluation results at iteration 55:
+[20.21.19] [INFO]     Policy accuracy @1: 36.44%
+[20.21.19] [INFO]     Policy accuracy @5: 75.84%
+[20.21.19] [INFO]     Policy accuracy @10: 88.71%
+[20.21.19] [INFO]     Avg value loss: 0.8041758590274387
+Waiting for games (iter 55):  69%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                                   | 3464/5000 [02:36<03:21,  7.64it/s][20.22.05] [INFO] Results after playing vs random at iteration 55: W/D/L: 100/0/0
+Waiting for games (iter 55):  89%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                  | 4432/5000 [04:29<01:11,  7.91it/s][20.24.00] [INFO] Results after playing vs stockfish level 0 at iteration 55: W/D/L: 81/15/4
+Waiting for games (iter 55):  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊         | 4725/5000 [05:05<00:29,  9.35it/s][20.24.35] [INFO] Results after playing vs stockfish level 1 at iteration 55: W/D/L: 79/12/9
+[20.24.35] [INFO] Results after playing vs model 10 at iteration 55: W/D/L: 90/9/1
+Waiting for games (iter 55):  95%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍        | 4743/5000 [05:08<00:31,  8.14it/s][20.24.38] [INFO] Results after playing vs stockfish level 2 at iteration 55: W/D/L: 62/22/16
+Waiting for games (iter 55):  99%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏| 4974/5000 [05:38<00:04,  6.01it/s][20.25.09] [INFO] Results after playing vs stockfish level 3 at iteration 55: W/D/L: 36/35/29
+Waiting for games (iter 55): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:45<00:00,  8.00it/s]
+[20.25.13] [INFO] Loading memories for iteration 55 with window size 15 (40-55)
+[20.26.09] [INFO] Loaded 1376877 samples from 43406 games
+[20.26.10] [INFO] Model and optimizer loaded from iteration 55
+[20.26.10] [INFO] Setting learning rate to 0.005 for iteration 55
+Train batches:   0%|                                                                                                                                                                                               | 0/1345 [00:00<?, ?it/s][20.26.14] [INFO] Results after playing vs model 20 at iteration 55: W/D/L: 75/23/2
+Train batches:   4%|██████▍                                                                                                                                                                               | 48/1345 [00:18<07:30,  2.88it/s][20.26.29] [INFO] Results after playing vs model 30 at iteration 55: W/D/L: 51/37/12
+Train batches:   7%|█████████████▍                                                                                                                                                                       | 100/1345 [00:33<05:42,  3.63it/s][20.26.44] [INFO] Results after playing 55 vs 45: W/D/L: 39/32/29
+Train batches:   9%|████████████████▊                                                                                                                                                                    | 125/1345 [00:39<03:36,  5.64it/s][20.26.50] [INFO] Results after playing 55 vs 50: W/D/L: 34/38/28
+Train batches:  10%|██████████████████▋                                                                                                                                                                  | 139/1345 [00:42<03:24,  5.90it/s][20.26.52] [INFO] Results after playing vs model 40 at iteration 55: W/D/L: 47/30/23
+Train batches:  15%|██████████████████████████▍                                                                                                                                                          | 196/1345 [00:51<02:40,  7.18it/s][20.27.01] [INFO] Results after playing vs model 50 at iteration 55: W/D/L: 43/31/26
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1345/1345 [03:05<00:00,  7.23it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+[20.29.19] [INFO] Train stats:  Policy Loss: 1.8252, Value Loss: 0.1946, Total Loss: 1.9225, Value Mean: 0.0236, Value Std: 0.4551, Gradient Norm: 0.2212, Num Batches: 1345
+[20.29.19] [INFO] Valid stats:  Policy Loss: 1.9196, Value Loss: 0.1398, Total Loss: 1.9895, Value Mean: 0.0258, Value Std: 0.4590, Gradient Norm: 0.0000, Num Batches: 2
+[20.29.21] [INFO] Training finished for iteration 55
+[20.29.21] [INFO] Gating evaluation skipped at iteration 55. Using model 56.
+[20.29.21] [INFO] Started evaluation process for iteration 55.
+[20.29.21] [INFO] Starting iteration 56.
+Waiting for games (iter 56):  52%|███████████████████████████████████████████████████████████████████████████████████████                                                                               | 2621/5000 [00:40<04:46,  8.31it/s][20.30.05] [INFO] Results after playing the current policy only vs random at iteration 56: W/D/L: 96/4/0
+Waiting for games (iter 56):  59%|██████████████████████████████████████████████████████████████████████████████████████████████████                                                                    | 2955/5000 [01:20<04:21,  7.83it/s][20.30.45] [INFO] Evaluation results at iteration 56:
+[20.30.45] [INFO]     Policy accuracy @1: 37.17%
+[20.30.45] [INFO]     Policy accuracy @5: 76.80%
+[20.30.45] [INFO]     Policy accuracy @10: 89.50%
+[20.30.45] [INFO]     Avg value loss: 0.8064497099982367
+Waiting for games (iter 56):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                                                     | 3397/5000 [02:14<02:42,  9.85it/s][20.31.38] [INFO] Results after playing vs random at iteration 56: W/D/L: 100/0/0
+Waiting for games (iter 56):  90%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                | 4519/5000 [04:26<01:00,  7.96it/s][20.33.51] [INFO] Results after playing vs stockfish level 1 at iteration 56: W/D/L: 72/11/17
+Waiting for games (iter 56):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍             | 4592/5000 [04:36<00:55,  7.40it/s][20.34.00] [INFO] Results after playing vs stockfish level 2 at iteration 56: W/D/L: 65/19/16
+[20.34.01] [INFO] Results after playing vs stockfish level 0 at iteration 56: W/D/L: 78/15/7
+Waiting for games (iter 56): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:28<00:00,  8.09it/s]
+[20.34.51] [INFO] Loading memories for iteration 56 with window size 15 (41-56)
+[20.34.54] [INFO] Results after playing vs model 10 at iteration 56: W/D/L: 86/12/2
+[20.35.14] [INFO] Results after playing vs stockfish level 3 at iteration 56: W/D/L: 38/28/34
+[20.35.46] [INFO] Loaded 1375982 samples from 43236 games
+[20.35.47] [INFO] Model and optimizer loaded from iteration 56
+[20.35.47] [INFO] Setting learning rate to 0.005 for iteration 56
+Train batches:   0%|                                                                                                                                                                                               | 0/1344 [00:00<?, ?it/s][20.35.48] [INFO] Results after playing vs model 20 at iteration 56: W/D/L: 79/19/2
+Train batches:   8%|███████████████                                                                                                                                                                      | 112/1344 [00:41<06:12,  3.31it/s][20.36.28] [INFO] Results after playing 56 vs 46: W/D/L: 29/43/28
+Train batches:   9%|████████████████▌                                                                                                                                                                    | 123/1344 [00:44<06:05,  3.34it/s][20.36.32] [INFO] Results after playing vs model 30 at iteration 56: W/D/L: 56/25/19
+Train batches:  10%|█████████████████▌                                                                                                                                                                   | 130/1344 [00:46<05:24,  3.74it/s][20.36.33] [INFO] Results after playing vs model 40 at iteration 56: W/D/L: 43/34/23
+Train batches:  10%|██████████████████▊                                                                                                                                                                  | 140/1344 [00:48<03:28,  5.79it/s][20.36.35] [INFO] Results after playing vs model 50 at iteration 56: W/D/L: 32/49/19
+Train batches:  14%|█████████████████████████▏                                                                                                                                                           | 187/1344 [00:55<02:38,  7.29it/s][20.36.42] [INFO] Results after playing 56 vs 51: W/D/L: 32/43/25
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1344/1344 [03:16<00:00,  6.85it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.49s/it]
+[20.39.06] [INFO] Train stats:  Policy Loss: 1.8233, Value Loss: 0.1945, Total Loss: 1.9206, Value Mean: 0.0236, Value Std: 0.4551, Gradient Norm: 0.2247, Num Batches: 1344
+[20.39.06] [INFO] Valid stats:  Policy Loss: 1.9453, Value Loss: 0.1843, Total Loss: 2.0375, Value Mean: 0.0449, Value Std: 0.4336, Gradient Norm: 0.0000, Num Batches: 2
+[20.39.08] [INFO] Training finished for iteration 56
+[20.39.08] [INFO] Gating evaluation skipped at iteration 56. Using model 57.
+[20.39.08] [INFO] Started evaluation process for iteration 56.
+[20.39.08] [INFO] Starting iteration 57.
+Waiting for games (iter 57):  52%|██████████████████████████████████████████████████████████████████████████████████████▎                                                                               | 2600/5000 [00:36<04:33,  8.78it/s][20.39.47] [INFO] Results after playing the current policy only vs random at iteration 57: W/D/L: 100/0/0
+Waiting for games (iter 57):  55%|███████████████████████████████████████████████████████████████████████████████████████████▌                                                                          | 2759/5000 [00:59<05:51,  6.37it/s][20.40.10] [INFO] Evaluation results at iteration 57:
+[20.40.10] [INFO]     Policy accuracy @1: 37.08%
+[20.40.10] [INFO]     Policy accuracy @5: 76.34%
+[20.40.10] [INFO]     Policy accuracy @10: 89.89%
+[20.40.10] [INFO]     Avg value loss: 0.8126885520087348
+Waiting for games (iter 57):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                                                     | 3382/5000 [02:19<03:31,  7.65it/s][20.41.30] [INFO] Results after playing vs random at iteration 57: W/D/L: 100/0/0
+Waiting for games (iter 57):  86%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                       | 4309/5000 [04:13<01:28,  7.77it/s][20.43.25] [INFO] Results after playing vs stockfish level 0 at iteration 57: W/D/L: 84/7/9
+Waiting for games (iter 57):  87%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                    | 4373/5000 [04:22<01:27,  7.18it/s][20.43.34] [INFO] Results after playing vs stockfish level 1 at iteration 57: W/D/L: 77/14/9
+Waiting for games (iter 57):  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                 | 4469/5000 [04:35<01:14,  7.15it/s][20.43.48] [INFO] Results after playing vs stockfish level 2 at iteration 57: W/D/L: 74/17/9
+Waiting for games (iter 57):  96%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋       | 4778/5000 [05:13<00:27,  8.19it/s][20.44.25] [INFO] Results after playing vs model 10 at iteration 57: W/D/L: 88/12/0
+Waiting for games (iter 57):  96%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎      | 4798/5000 [05:16<00:26,  7.57it/s][20.44.26] [INFO] Results after playing vs stockfish level 3 at iteration 57: W/D/L: 45/24/31
+Waiting for games (iter 57): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4998/5000 [05:39<00:00,  7.75it/s]
+[20.44.49] [INFO] Loading memories for iteration 57 with window size 15 (42-57)
+[20.45.38] [INFO] Results after playing vs model 20 at iteration 57: W/D/L: 75/17/8
+[20.45.44] [INFO] Results after playing 57 vs 52: W/D/L: 39/32/29
+[20.45.45] [INFO] Loaded 1374520 samples from 43122 games
+[20.45.45] [INFO] Model and optimizer loaded from iteration 57
+[20.45.45] [INFO] Setting learning rate to 0.005 for iteration 57
+Train batches:   0%|                                                                                                                                                                                               | 0/1343 [00:00<?, ?it/s][20.45.45] [INFO] Results after playing vs model 50 at iteration 57: W/D/L: 32/39/29
+[20.45.46] [INFO] Results after playing vs model 30 at iteration 57: W/D/L: 55/28/17
+Train batches:   2%|███▌                                                                                                                                                                                  | 26/1343 [00:09<04:47,  4.58it/s][20.45.55] [INFO] Results after playing vs model 40 at iteration 57: W/D/L: 47/32/21
+Train batches:  10%|██████████████████▊                                                                                                                                                                  | 140/1343 [00:31<03:44,  5.36it/s][20.46.17] [INFO] Results after playing 57 vs 47: W/D/L: 34/37/29
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1343/1343 [03:10<00:00,  7.07it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.39s/it]
+[20.48.58] [INFO] Train stats:  Policy Loss: 1.8197, Value Loss: 0.1945, Total Loss: 1.9169, Value Mean: 0.0232, Value Std: 0.4551, Gradient Norm: 0.2252, Num Batches: 1343
+[20.48.58] [INFO] Valid stats:  Policy Loss: 1.9006, Value Loss: 0.2006, Total Loss: 2.0009, Value Mean: -0.0381, Value Std: 0.4492, Gradient Norm: 0.0000, Num Batches: 2
+[20.49.01] [INFO] Training finished for iteration 57
+[20.49.01] [INFO] Gating evaluation skipped at iteration 57. Using model 58.
+[20.49.01] [INFO] Started evaluation process for iteration 57.
+[20.49.01] [INFO] Starting iteration 58.
+Waiting for games (iter 58):  50%|███████████████████████████████████████████████████████████████████████████████████▍                                                                                  | 2515/5000 [00:34<05:12,  7.96it/s][20.49.38] [INFO] Evaluation results at iteration 58:
+[20.49.38] [INFO]     Policy accuracy @1: 36.76%
+[20.49.38] [INFO]     Policy accuracy @5: 76.30%
+[20.49.38] [INFO]     Policy accuracy @10: 89.10%
+[20.49.38] [INFO]     Avg value loss: 0.8144873486624824
+Waiting for games (iter 58):  51%|████████████████████████████████████████████████████████████████████████████████████▎                                                                                 | 2538/5000 [00:37<04:57,  8.26it/s][20.49.41] [INFO] Results after playing the current policy only vs random at iteration 58: W/D/L: 97/3/0
+Waiting for games (iter 58):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                                     | 3385/5000 [02:26<03:02,  8.87it/s][20.51.30] [INFO] Results after playing vs random at iteration 58: W/D/L: 98/2/0
+Waiting for games (iter 58):  81%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                                | 4036/5000 [03:44<02:02,  7.86it/s][20.52.49] [INFO] Results after playing vs stockfish level 0 at iteration 58: W/D/L: 88/7/5
+Waiting for games (iter 58):  84%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                          | 4191/5000 [04:03<01:54,  7.04it/s][20.53.07] [INFO] Results after playing vs stockfish level 1 at iteration 58: W/D/L: 77/8/15
+Waiting for games (iter 58):  86%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                       | 4297/5000 [04:16<01:36,  7.26it/s][20.53.20] [INFO] Results after playing vs stockfish level 2 at iteration 58: W/D/L: 72/15/13
+Waiting for games (iter 58):  93%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋           | 4659/5000 [05:02<00:45,  7.44it/s][20.54.06] [INFO] Results after playing vs model 10 at iteration 58: W/D/L: 90/10/0
+Waiting for games (iter 58):  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎     | 4828/5000 [05:22<00:21,  7.99it/s][20.54.27] [INFO] Results after playing vs stockfish level 3 at iteration 58: W/D/L: 42/26/32
+Waiting for games (iter 58): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌| 4988/5000 [05:45<00:01,  6.42it/s][20.54.48] [INFO] Results after playing vs model 20 at iteration 58: W/D/L: 81/14/5
+Waiting for games (iter 58): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:48<00:00,  7.74it/s]
+[20.54.50] [INFO] Loading memories for iteration 58 with window size 15 (43-58)
+[20.55.09] [INFO] Results after playing vs model 40 at iteration 58: W/D/L: 45/33/22
+[20.55.14] [INFO] Results after playing vs model 30 at iteration 58: W/D/L: 68/28/4
+[20.55.26] [INFO] Results after playing vs model 50 at iteration 58: W/D/L: 39/37/24
+[20.55.28] [INFO] Results after playing 58 vs 48: W/D/L: 42/36/22
+[20.55.42] [INFO] Loaded 1374120 samples from 42999 games
+[20.55.42] [INFO] Model and optimizer loaded from iteration 58
+[20.55.42] [INFO] Setting learning rate to 0.005 for iteration 58
+Train batches:   2%|███▎                                                                                                                                                                                  | 24/1342 [00:08<02:36,  8.44it/s][20.55.51] [INFO] Results after playing 58 vs 53: W/D/L: 33/42/25
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1342/1342 [03:04<00:00,  7.26it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.50s/it]
+[20.58.50] [INFO] Train stats:  Policy Loss: 1.8157, Value Loss: 0.1949, Total Loss: 1.9132, Value Mean: 0.0232, Value Std: 0.4551, Gradient Norm: 0.2254, Num Batches: 1342
+[20.58.50] [INFO] Valid stats:  Policy Loss: 1.9930, Value Loss: 0.2291, Total Loss: 2.1075, Value Mean: -0.0248, Value Std: 0.4395, Gradient Norm: 0.0000, Num Batches: 2
+[20.58.53] [INFO] Training finished for iteration 58
+[20.58.53] [INFO] Gating evaluation skipped at iteration 58. Using model 59.
+[20.58.53] [INFO] Started evaluation process for iteration 58.
+[20.58.53] [INFO] Starting iteration 59.
+Waiting for games (iter 59):  51%|████████████████████████████████████████████████████████████████████████████████████                                                                                  | 2532/5000 [00:35<04:38,  8.87it/s][20.59.32] [INFO] Results after playing the current policy only vs random at iteration 59: W/D/L: 97/3/0
+Waiting for games (iter 59):  55%|███████████████████████████████████████████████████████████████████████████████████████████▍                                                                          | 2756/5000 [01:03<05:09,  7.25it/s][20.59.58] [INFO] Evaluation results at iteration 59:
+[20.59.58] [INFO]     Policy accuracy @1: 36.44%
+[20.59.58] [INFO]     Policy accuracy @5: 76.32%
+[20.59.58] [INFO]     Policy accuracy @10: 89.56%
+[20.59.58] [INFO]     Avg value loss: 0.8139177441596985
+Waiting for games (iter 59):  71%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                                                | 3551/5000 [02:42<02:58,  8.12it/s][21.01.38] [INFO] Results after playing vs random at iteration 59: W/D/L: 97/3/0
+Waiting for games (iter 59):  84%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                           | 4177/5000 [04:04<02:01,  6.75it/s][21.02.59] [INFO] Results after playing vs stockfish level 0 at iteration 59: W/D/L: 85/10/5
+Waiting for games (iter 59):  88%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                   | 4421/5000 [04:34<01:09,  8.33it/s][21.03.29] [INFO] Results after playing vs stockfish level 1 at iteration 59: W/D/L: 70/22/8
+Waiting for games (iter 59):  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                 | 4480/5000 [04:40<00:57,  9.02it/s][21.03.36] [INFO] Results after playing vs stockfish level 2 at iteration 59: W/D/L: 68/24/8
+Waiting for games (iter 59):  98%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████   | 4913/5000 [05:39<00:10,  8.34it/s][21.04.36] [INFO] Results after playing vs model 10 at iteration 59: W/D/L: 92/6/2
+Waiting for games (iter 59): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:52<00:00,  7.66it/s]
+[21.04.46] [INFO] Loading memories for iteration 59 with window size 15 (44-59)
+[21.04.49] [INFO] Results after playing vs stockfish level 3 at iteration 59: W/D/L: 42/23/35
+[21.05.01] [INFO] Results after playing vs model 20 at iteration 59: W/D/L: 82/15/3
+[21.05.42] [INFO] Loaded 1372898 samples from 42880 games
+[21.05.43] [INFO] Model and optimizer loaded from iteration 59
+[21.05.43] [INFO] Setting learning rate to 0.005 for iteration 59
+Train batches:   0%|                                                                                                                                                                                               | 0/1341 [00:00<?, ?it/s][21.05.45] [INFO] Results after playing vs model 30 at iteration 59: W/D/L: 64/27/9
+Train batches:   5%|█████████▊                                                                                                                                                                            | 72/1341 [00:24<05:41,  3.71it/s][21.06.08] [INFO] Results after playing 59 vs 49: W/D/L: 47/35/18
+Train batches:   6%|██████████▉                                                                                                                                                                           | 81/1341 [00:27<05:46,  3.64it/s][21.06.11] [INFO] Results after playing 59 vs 54: W/D/L: 38/39/23
+Train batches:   8%|██████████████                                                                                                                                                                       | 104/1341 [00:31<03:44,  5.50it/s][21.06.15] [INFO] Results after playing vs model 40 at iteration 59: W/D/L: 49/32/19
+Train batches:  12%|█████████████████████▌                                                                                                                                                               | 160/1341 [00:42<03:48,  5.16it/s][21.06.26] [INFO] Results after playing vs model 50 at iteration 59: W/D/L: 44/39/17
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1341/1341 [03:13<00:00,  6.92it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.39s/it]
+[21.09.00] [INFO] Train stats:  Policy Loss: 1.8119, Value Loss: 0.1938, Total Loss: 1.9088, Value Mean: 0.0232, Value Std: 0.4551, Gradient Norm: 0.2249, Num Batches: 1341
+[21.09.00] [INFO] Valid stats:  Policy Loss: 1.8670, Value Loss: 0.2307, Total Loss: 1.9824, Value Mean: 0.0537, Value Std: 0.4609, Gradient Norm: 0.0000, Num Batches: 2
+[21.09.02] [INFO] Training finished for iteration 59
+[21.09.02] [INFO] Gating evaluation skipped at iteration 59. Using model 60.
+[21.09.02] [INFO] Started evaluation process for iteration 59.
+[21.09.02] [INFO] Starting iteration 60.
+Waiting for games (iter 60):  51%|█████████████████████████████████████████████████████████████████████████████████████▎                                                                                | 2569/5000 [00:36<05:49,  6.95it/s][21.09.43] [INFO] Results after playing the current policy only vs random at iteration 60: W/D/L: 100/0/0
+Waiting for games (iter 60):  56%|█████████████████████████████████████████████████████████████████████████████████████████████▌                                                                        | 2817/5000 [01:05<03:53,  9.34it/s][21.10.11] [INFO] Evaluation results at iteration 60:
+[21.10.11] [INFO]     Policy accuracy @1: 37.19%
+[21.10.11] [INFO]     Policy accuracy @5: 76.67%
+[21.10.11] [INFO]     Policy accuracy @10: 89.77%
+[21.10.11] [INFO]     Avg value loss: 0.8161601410971747
+Waiting for games (iter 60):  71%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                                | 3538/5000 [02:36<03:11,  7.64it/s][21.11.43] [INFO] Results after playing vs random at iteration 60: W/D/L: 99/1/0
+Waiting for games (iter 60):  86%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                       | 4281/5000 [04:05<01:36,  7.45it/s][21.13.11] [INFO] Results after playing vs stockfish level 0 at iteration 60: W/D/L: 82/8/10
+Waiting for games (iter 60):  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                 | 4482/5000 [04:29<01:01,  8.43it/s][21.13.34] [INFO] Results after playing vs stockfish level 1 at iteration 60: W/D/L: 76/12/12
+Waiting for games (iter 60):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋             | 4599/5000 [04:46<00:54,  7.42it/s][21.13.52] [INFO] Results after playing vs stockfish level 2 at iteration 60: W/D/L: 74/19/7
+Waiting for games (iter 60): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:37<00:00,  7.81it/s]
+[21.14.41] [INFO] Loading memories for iteration 60 with window size 16 (44-60)
+[21.14.43] [INFO] Results after playing vs model 10 at iteration 60: W/D/L: 89/10/1
+[21.14.57] [INFO] Results after playing vs stockfish level 3 at iteration 60: W/D/L: 31/35/34
+[21.15.32] [INFO] Results after playing vs model 20 at iteration 60: W/D/L: 85/15/0
+[21.15.41] [INFO] Loaded 1457199 samples from 45441 games
+[21.15.42] [INFO] Model and optimizer loaded from iteration 60
+[21.15.42] [INFO] Setting learning rate to 0.002 for iteration 60
+Train batches:   6%|███████████▏                                                                                                                                                                          | 88/1424 [00:32<04:15,  5.23it/s][21.16.15] [INFO] Results after playing vs model 30 at iteration 60: W/D/L: 61/30/9
+Train batches:   7%|████████████                                                                                                                                                                          | 94/1424 [00:33<04:24,  5.02it/s][21.16.16] [INFO] Results after playing vs model 50 at iteration 60: W/D/L: 40/36/24
+Train batches:   8%|█████████████▋                                                                                                                                                                       | 108/1424 [00:36<04:56,  4.44it/s][21.16.19] [INFO] Results after playing 60 vs 55: W/D/L: 39/34/27
+Train batches:  12%|████████████████████▊                                                                                                                                                                | 164/1424 [00:47<06:19,  3.32it/s][21.16.30] [INFO] Results after playing vs model 40 at iteration 60: W/D/L: 43/37/20
+Train batches:  16%|████████████████████████████▊                                                                                                                                                        | 227/1424 [00:57<02:50,  7.01it/s][21.16.40] [INFO] Results after playing 60 vs 50: W/D/L: 44/33/23
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1424/1424 [03:26<00:00,  6.89it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.40s/it]
+[21.19.12] [INFO] Train stats:  Policy Loss: 1.7745, Value Loss: 0.1904, Total Loss: 1.8697, Value Mean: 0.0229, Value Std: 0.4590, Gradient Norm: 0.1885, Num Batches: 1424
+[21.19.12] [INFO] Valid stats:  Policy Loss: 1.9367, Value Loss: 0.2110, Total Loss: 2.0422, Value Mean: 0.0330, Value Std: 0.4609, Gradient Norm: 0.0000, Num Batches: 2
+[21.19.15] [INFO] Training finished for iteration 60
+[21.19.15] [INFO] Gating evaluation skipped at iteration 60. Using model 61.
+[21.19.15] [INFO] Started evaluation process for iteration 60.
+[21.19.15] [INFO] Starting iteration 61.
+Waiting for games (iter 61):  52%|██████████████████████████████████████████████████████████████████████████████████████                                                                                | 2594/5000 [00:37<04:42,  8.51it/s][21.19.55] [INFO] Results after playing the current policy only vs random at iteration 61: W/D/L: 99/1/0
+Waiting for games (iter 61):  58%|███████████████████████████████████████████████████████████████████████████████████████████████▌                                                                      | 2879/5000 [01:14<04:27,  7.94it/s][21.20.31] [INFO] Evaluation results at iteration 61:
+[21.20.31] [INFO]     Policy accuracy @1: 37.33%
+[21.20.31] [INFO]     Policy accuracy @5: 77.35%
+[21.20.31] [INFO]     Policy accuracy @10: 90.09%
+[21.20.31] [INFO]     Avg value loss: 0.8092885626686944
+Waiting for games (iter 61):  70%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                                                 | 3510/5000 [02:34<03:26,  7.23it/s][21.21.53] [INFO] Results after playing vs random at iteration 61: W/D/L: 99/1/0
+Waiting for games (iter 61):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌             | 4595/5000 [04:46<00:47,  8.47it/s][21.24.03] [INFO] Results after playing vs stockfish level 0 at iteration 61: W/D/L: 75/16/9
+Waiting for games (iter 61):  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊             | 4604/5000 [04:50<00:58,  6.76it/s][21.24.08] [INFO] Results after playing vs stockfish level 1 at iteration 61: W/D/L: 79/13/8
+Waiting for games (iter 61):  96%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌       | 4775/5000 [05:07<00:23,  9.60it/s][21.24.26] [INFO] Results after playing vs stockfish level 2 at iteration 61: W/D/L: 71/20/9
+Waiting for games (iter 61): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4998/5000 [05:35<00:00,  7.87it/s]
+[21.24.52] [INFO] Loading memories for iteration 61 with window size 16 (45-61)
+[21.25.01] [INFO] Results after playing vs stockfish level 3 at iteration 61: W/D/L: 40/24/36
+[21.25.08] [INFO] Results after playing vs model 10 at iteration 61: W/D/L: 90/9/1
+[21.25.53] [INFO] Loaded 1451094 samples from 45232 games
+[21.25.54] [INFO] Model and optimizer loaded from iteration 61
+[21.25.54] [INFO] Setting learning rate to 0.002 for iteration 61
+Train batches:   4%|███████▌                                                                                                                                                                              | 59/1418 [00:29<10:31,  2.15it/s][21.26.24] [INFO] Results after playing vs model 20 at iteration 61: W/D/L: 77/22/1
+Train batches:   8%|██████████████▍                                                                                                                                                                      | 113/1418 [00:49<08:53,  2.44it/s][21.26.44] [INFO] Results after playing 61 vs 51: W/D/L: 40/34/26
+Train batches:   9%|███████████████▌                                                                                                                                                                     | 122/1418 [00:52<06:03,  3.56it/s][21.26.46] [INFO] Results after playing vs model 50 at iteration 61: W/D/L: 40/37/23
+Train batches:   9%|████████████████▊                                                                                                                                                                    | 132/1418 [00:54<04:44,  4.52it/s][21.26.49] [INFO] Results after playing vs model 60 at iteration 61: W/D/L: 32/47/21
+Train batches:  11%|███████████████████▎                                                                                                                                                                 | 151/1418 [00:58<03:47,  5.57it/s][21.26.53] [INFO] Results after playing vs model 40 at iteration 61: W/D/L: 40/42/18
+Train batches:  11%|███████████████████▉                                                                                                                                                                 | 156/1418 [00:59<04:23,  4.79it/s][21.26.54] [INFO] Results after playing 61 vs 56: W/D/L: 36/37/27
+Train batches:  12%|█████████████████████▉                                                                                                                                                               | 172/1418 [01:02<02:42,  7.65it/s][21.26.56] [INFO] Results after playing vs model 30 at iteration 61: W/D/L: 57/29/14
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1418/1418 [03:37<00:00,  6.52it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.45s/it]
+[21.29.34] [INFO] Train stats:  Policy Loss: 1.7721, Value Loss: 0.1904, Total Loss: 1.8673, Value Mean: 0.0231, Value Std: 0.4590, Gradient Norm: 0.1908, Num Batches: 1418
+[21.29.34] [INFO] Valid stats:  Policy Loss: 1.9245, Value Loss: 0.2417, Total Loss: 2.0453, Value Mean: 0.0332, Value Std: 0.4531, Gradient Norm: 0.0000, Num Batches: 2
+[21.29.37] [INFO] Training finished for iteration 61
+[21.29.37] [INFO] Gating evaluation skipped at iteration 61. Using model 62.
+[21.29.37] [INFO] Started evaluation process for iteration 61.
+[21.29.37] [INFO] Starting iteration 62.
+Waiting for games (iter 62):  52%|██████████████████████████████████████████████████████████████████████████████████████▊                                                                               | 2615/5000 [00:30<04:50,  8.21it/s][21.30.10] [INFO] Results after playing the current policy only vs random at iteration 62: W/D/L: 99/1/0
+Waiting for games (iter 62):  63%|████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                                             | 3144/5000 [01:34<03:03, 10.13it/s][21.31.13] [INFO] Evaluation results at iteration 62:
+[21.31.13] [INFO]     Policy accuracy @1: 37.06%
+[21.31.13] [INFO]     Policy accuracy @5: 77.77%
+[21.31.13] [INFO]     Policy accuracy @10: 90.16%
+[21.31.13] [INFO]     Avg value loss: 0.8124446908632914
+Waiting for games (iter 62):  73%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                                             | 3645/5000 [02:37<03:09,  7.16it/s][21.32.18] [INFO] Results after playing vs random at iteration 62: W/D/L: 95/5/0
+Waiting for games (iter 62):  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                 | 4477/5000 [04:24<01:04,  8.05it/s][21.34.05] [INFO] Results after playing vs stockfish level 0 at iteration 62: W/D/L: 86/12/2
+Waiting for games (iter 62):  91%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏              | 4555/5000 [04:34<00:55,  8.08it/s][21.34.15] [INFO] Results after playing vs stockfish level 1 at iteration 62: W/D/L: 83/8/9
+Waiting for games (iter 62):  93%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋           | 4659/5000 [04:48<00:46,  7.35it/s][21.34.28] [INFO] Results after playing vs stockfish level 2 at iteration 62: W/D/L: 74/14/12
+Waiting for games (iter 62):  95%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎        | 4739/5000 [04:57<00:34,  7.49it/s][21.34.39] [INFO] Results after playing vs model 10 at iteration 62: W/D/L: 87/12/1
+Waiting for games (iter 62): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:28<00:00,  7.87it/s]
+[21.35.07] [INFO] Loading memories for iteration 62 with window size 16 (46-62)
+[21.35.10] [INFO] Results after playing vs stockfish level 3 at iteration 62: W/D/L: 41/28/31
+[21.35.44] [INFO] Results after playing vs model 20 at iteration 62: W/D/L: 85/12/3
+[21.36.08] [INFO] Loaded 1443795 samples from 44999 games
+[21.36.09] [INFO] Model and optimizer loaded from iteration 62
+[21.36.09] [INFO] Setting learning rate to 0.002 for iteration 62
+Train batches:   1%|█▊                                                                                                                                                                                    | 14/1410 [00:09<09:45,  2.38it/s][21.36.19] [INFO] Results after playing vs model 50 at iteration 62: W/D/L: 45/39/16
+Train batches:   3%|█████▏                                                                                                                                                                                | 40/1410 [00:18<07:38,  2.99it/s][21.36.27] [INFO] Results after playing vs model 40 at iteration 62: W/D/L: 55/26/19
+Train batches:   4%|███████▍                                                                                                                                                                              | 58/1410 [00:23<06:22,  3.54it/s][21.36.32] [INFO] Results after playing vs model 60 at iteration 62: W/D/L: 42/29/29
+Train batches:   5%|████████▍                                                                                                                                                                             | 65/1410 [00:25<05:07,  4.38it/s][21.36.34] [INFO] Results after playing vs model 30 at iteration 62: W/D/L: 58/29/13
+Train batches:   8%|███████████████▏                                                                                                                                                                     | 118/1410 [00:35<04:21,  4.95it/s][21.36.44] [INFO] Results after playing 62 vs 52: W/D/L: 40/36/24
+Train batches:  11%|████████████████████▎                                                                                                                                                                | 158/1410 [00:42<04:05,  5.11it/s][21.36.51] [INFO] Results after playing 62 vs 57: W/D/L: 40/37/23
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1410/1410 [03:19<00:00,  7.07it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.37s/it]
+[21.39.31] [INFO] Train stats:  Policy Loss: 1.7730, Value Loss: 0.1897, Total Loss: 1.8679, Value Mean: 0.0228, Value Std: 0.4570, Gradient Norm: 0.1901, Num Batches: 1410
+[21.39.31] [INFO] Valid stats:  Policy Loss: 1.8827, Value Loss: 0.2021, Total Loss: 1.9838, Value Mean: 0.0262, Value Std: 0.4746, Gradient Norm: 0.0000, Num Batches: 2
+[21.39.33] [INFO] Training finished for iteration 62
+[21.39.33] [INFO] Gating evaluation skipped at iteration 62. Using model 63.
+[21.39.34] [INFO] Started evaluation process for iteration 62.
+[21.39.34] [INFO] Starting iteration 63.
+Waiting for games (iter 63):  52%|█████████████████████████████████████████████████████████████████████████████████████▋                                                                                | 2580/5000 [00:37<04:17,  9.40it/s][21.40.13] [INFO] Results after playing the current policy only vs random at iteration 63: W/D/L: 96/4/0
+Waiting for games (iter 63):  61%|████████████████████████████████████████████████████████████████████████████████████████████████████▌                                                                 | 3028/5000 [01:30<04:00,  8.20it/s][21.41.06] [INFO] Evaluation results at iteration 63:
+[21.41.06] [INFO]     Policy accuracy @1: 37.10%
+[21.41.06] [INFO]     Policy accuracy @5: 77.56%
+[21.41.06] [INFO]     Policy accuracy @10: 90.27%
+[21.41.06] [INFO]     Avg value loss: 0.805975447760688
+Waiting for games (iter 63):  68%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                                                    | 3424/5000 [02:15<03:06,  8.46it/s][21.41.51] [INFO] Results after playing vs random at iteration 63: W/D/L: 97/3/0
+Waiting for games (iter 63):  91%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌              | 4564/5000 [04:33<00:50,  8.67it/s][21.44.09] [INFO] Results after playing vs stockfish level 0 at iteration 63: W/D/L: 76/19/5
+Waiting for games (iter 63):  95%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊        | 4755/5000 [04:57<00:28,  8.61it/s][21.44.35] [INFO] Results after playing vs stockfish level 2 at iteration 63: W/D/L: 65/15/20
+Waiting for games (iter 63):  96%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎      | 4797/5000 [05:04<00:28,  7.24it/s][21.44.39] [INFO] Results after playing vs stockfish level 1 at iteration 63: W/D/L: 82/14/4
+Waiting for games (iter 63): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:28<00:00,  8.15it/s]
+[21.45.04] [INFO] Loading memories for iteration 63 with window size 16 (47-63)
+[21.45.10] [INFO] Results after playing vs model 10 at iteration 63: W/D/L: 94/6/0
+[21.45.25] [INFO] Results after playing vs stockfish level 3 at iteration 63: W/D/L: 52/25/23
+[21.46.03] [INFO] Loaded 1443937 samples from 44955 games
+[21.46.04] [INFO] Model and optimizer loaded from iteration 63
+[21.46.04] [INFO] Setting learning rate to 0.002 for iteration 63
+Train batches:   3%|█████                                                                                                                                                                                 | 39/1411 [00:20<09:27,  2.42it/s][21.46.25] [INFO] Results after playing vs model 20 at iteration 63: W/D/L: 79/14/7
+Train batches:   7%|█████████████▎                                                                                                                                                                       | 104/1411 [00:45<07:52,  2.77it/s][21.46.50] [INFO] Results after playing vs model 60 at iteration 63: W/D/L: 36/35/29
+Train batches:   8%|██████████████▏                                                                                                                                                                      | 111/1411 [00:48<06:20,  3.42it/s][21.46.52] [INFO] Results after playing 63 vs 53: W/D/L: 46/36/18
+Train batches:   9%|███████████████▊                                                                                                                                                                     | 123/1411 [00:50<05:27,  3.94it/s][21.46.55] [INFO] Results after playing vs model 30 at iteration 63: W/D/L: 69/23/8
+Train batches:   9%|█████████████████▏                                                                                                                                                                   | 134/1411 [00:53<05:17,  4.02it/s][21.46.58] [INFO] Results after playing vs model 50 at iteration 63: W/D/L: 44/34/22
+Train batches:  12%|█████████████████████▏                                                                                                                                                               | 165/1411 [00:58<03:25,  6.06it/s][21.47.03] [INFO] Results after playing vs model 40 at iteration 63: W/D/L: 47/33/20
+Train batches:  13%|██████████████████████▋                                                                                                                                                              | 177/1411 [01:00<03:52,  5.30it/s][21.47.05] [INFO] Results after playing 63 vs 58: W/D/L: 36/38/26
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1411/1411 [03:33<00:00,  6.60it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.37s/it]
+[21.49.41] [INFO] Train stats:  Policy Loss: 1.7737, Value Loss: 0.1888, Total Loss: 1.8681, Value Mean: 0.0225, Value Std: 0.4590, Gradient Norm: 0.1963, Num Batches: 1411
+[21.49.41] [INFO] Valid stats:  Policy Loss: 1.8113, Value Loss: 0.1970, Total Loss: 1.9098, Value Mean: 0.0098, Value Std: 0.4629, Gradient Norm: 0.0000, Num Batches: 2
+[21.49.44] [INFO] Training finished for iteration 63
+[21.49.44] [INFO] Gating evaluation skipped at iteration 63. Using model 64.
+[21.49.44] [INFO] Started evaluation process for iteration 63.
+[21.49.44] [INFO] Starting iteration 64.
+Waiting for games (iter 64):  53%|███████████████████████████████████████████████████████████████████████████████████████▊                                                                              | 2645/5000 [00:36<04:52,  8.05it/s][21.50.24] [INFO] Results after playing the current policy only vs random at iteration 64: W/D/L: 94/6/0
+Waiting for games (iter 64):  63%|█████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                                            | 3174/5000 [01:46<04:08,  7.35it/s][21.51.35] [INFO] Evaluation results at iteration 64:
+[21.51.35] [INFO]     Policy accuracy @1: 37.84%
+[21.51.35] [INFO]     Policy accuracy @5: 77.88%
+[21.51.35] [INFO]     Policy accuracy @10: 90.27%
+[21.51.35] [INFO]     Avg value loss: 0.8037507706218295
+Waiting for games (iter 64):  68%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                                                     | 3399/5000 [02:19<03:58,  6.72it/s][21.52.07] [INFO] Results after playing vs random at iteration 64: W/D/L: 99/1/0
+Waiting for games (iter 64):  88%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                    | 4390/5000 [04:16<01:24,  7.18it/s][21.54.05] [INFO] Results after playing vs stockfish level 0 at iteration 64: W/D/L: 79/12/9
+Waiting for games (iter 64):  89%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋                  | 4447/5000 [04:25<01:27,  6.30it/s][21.54.14] [INFO] Results after playing vs stockfish level 1 at iteration 64: W/D/L: 78/14/8
+Waiting for games (iter 64):  94%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊          | 4695/5000 [04:55<00:41,  7.37it/s][21.54.41] [INFO] Results after playing vs stockfish level 2 at iteration 64: W/D/L: 66/20/14
+Waiting for games (iter 64):  99%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉  | 4936/5000 [05:22<00:07,  8.32it/s][21.55.10] [INFO] Results after playing vs model 10 at iteration 64: W/D/L: 92/8/0
+Waiting for games (iter 64): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4998/5000 [05:32<00:00,  7.74it/s]
+[21.55.18] [INFO] Loading memories for iteration 64 with window size 16 (48-64)
+[21.55.28] [INFO] Results after playing vs stockfish level 3 at iteration 64: W/D/L: 45/29/26
+[21.56.17] [INFO] Loaded 1438977 samples from 44741 games
+[21.56.18] [INFO] Model and optimizer loaded from iteration 64
+[21.56.18] [INFO] Setting learning rate to 0.002 for iteration 64
+Train batches:   2%|███▍                                                                                                                                                                                  | 27/1406 [00:15<07:51,  2.92it/s][21.56.34] [INFO] Results after playing vs model 20 at iteration 64: W/D/L: 82/16/2
+Train batches:   5%|█████████▋                                                                                                                                                                            | 75/1406 [00:33<08:42,  2.55it/s][21.56.53] [INFO] Results after playing vs model 30 at iteration 64: W/D/L: 54/32/14
+Train batches:   6%|███████████                                                                                                                                                                           | 85/1406 [00:37<07:52,  2.79it/s][21.56.56] [INFO] Results after playing vs model 50 at iteration 64: W/D/L: 40/36/24
+Train batches:   6%|███████████▋                                                                                                                                                                          | 90/1406 [00:38<05:38,  3.89it/s][21.56.57] [INFO] Results after playing 64 vs 59: W/D/L: 26/40/34
+Train batches:   7%|█████████████▌                                                                                                                                                                       | 105/1406 [00:42<04:25,  4.89it/s][21.57.01] [INFO] Results after playing vs model 40 at iteration 64: W/D/L: 48/38/14
+Train batches:   9%|███████████████▋                                                                                                                                                                     | 122/1406 [00:45<03:37,  5.90it/s][21.57.04] [INFO] Results after playing vs model 60 at iteration 64: W/D/L: 33/45/22
+Train batches:  11%|███████████████████▊                                                                                                                                                                 | 154/1406 [00:50<03:22,  6.19it/s][21.57.09] [INFO] Results after playing 64 vs 54: W/D/L: 39/36/25
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1406/1406 [03:23<00:00,  6.91it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.36s/it]
+[21.59.45] [INFO] Train stats:  Policy Loss: 1.7719, Value Loss: 0.1885, Total Loss: 1.8661, Value Mean: 0.0222, Value Std: 0.4570, Gradient Norm: 0.1965, Num Batches: 1406
+[21.59.45] [INFO] Valid stats:  Policy Loss: 1.8773, Value Loss: 0.2248, Total Loss: 1.9897, Value Mean: -0.0732, Value Std: 0.4570, Gradient Norm: 0.0000, Num Batches: 2
+[21.59.47] [INFO] Training finished for iteration 64
+[21.59.47] [INFO] Gating evaluation skipped at iteration 64. Using model 65.
+[21.59.47] [INFO] Started evaluation process for iteration 64.
+[21.59.47] [INFO] Starting iteration 65.
+Waiting for games (iter 65):  51%|███████████████████████████████████████████████████████████████████████████████████▉                                                                                  | 2527/5000 [00:36<05:15,  7.84it/s][22.00.26] [INFO] Results after playing the current policy only vs random at iteration 65: W/D/L: 98/2/0
+Waiting for games (iter 65):  55%|██████████████████████████████████████████████████████████████████████████████████████████▌                                                                           | 2727/5000 [01:02<05:19,  7.11it/s][22.00.53] [INFO] Evaluation results at iteration 65:
+[22.00.53] [INFO]     Policy accuracy @1: 37.95%
+[22.00.53] [INFO]     Policy accuracy @5: 78.02%
+[22.00.53] [INFO]     Policy accuracy @10: 90.28%
+[22.00.53] [INFO]     Avg value loss: 0.8146727389759487
+Waiting for games (iter 65):  66%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                                                        | 3290/5000 [02:13<04:19,  6.58it/s][22.02.03] [INFO] Results after playing vs random at iteration 65: W/D/L: 99/1/0
+Waiting for games (iter 65):  82%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                              | 4083/5000 [03:53<02:06,  7.22it/s][22.03.45] [INFO] Results after playing vs stockfish level 0 at iteration 65: W/D/L: 75/20/5
+Waiting for games (iter 65):  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                          | 4219/5000 [04:10<01:36,  8.05it/s][22.04.01] [INFO] Results after playing vs stockfish level 1 at iteration 65: W/D/L: 75/13/12
+Waiting for games (iter 65):  85%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████                         | 4248/5000 [04:13<01:28,  8.47it/s][22.04.03] [INFO] Results after playing vs stockfish level 2 at iteration 65: W/D/L: 77/8/15
+Waiting for games (iter 65):  90%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                | 4499/5000 [04:46<00:58,  8.50it/s][22.04.36] [INFO] Results after playing vs model 10 at iteration 65: W/D/L: 88/12/0
+Waiting for games (iter 65):  94%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍          | 4683/5000 [05:12<00:46,  6.86it/s][22.05.04] [INFO] Results after playing vs stockfish level 3 at iteration 65: W/D/L: 48/20/32
+Waiting for games (iter 65):  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉ | 4968/5000 [05:48<00:03,  8.55it/s][22.05.38] [INFO] Results after playing vs model 20 at iteration 65: W/D/L: 81/15/4
+Waiting for games (iter 65): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4998/5000 [05:55<00:00,  7.59it/s]
+[22.05.44] [INFO] Loading memories for iteration 65 with window size 17 (48-65)
+[22.06.12] [INFO] Results after playing vs model 60 at iteration 65: W/D/L: 41/34/25
+[22.06.21] [INFO] Results after playing vs model 30 at iteration 65: W/D/L: 61/29/10
+[22.06.27] [INFO] Results after playing vs model 40 at iteration 65: W/D/L: 47/33/20
+[22.06.29] [INFO] Results after playing 65 vs 60: W/D/L: 38/42/20
+[22.06.30] [INFO] Results after playing vs model 50 at iteration 65: W/D/L: 28/44/28
+[22.06.31] [INFO] Results after playing 65 vs 55: W/D/L: 34/40/26
+[22.06.41] [INFO] Loaded 1526038 samples from 47402 games
+[22.06.41] [INFO] Model and optimizer loaded from iteration 65
+[22.06.41] [INFO] Setting learning rate to 0.002 for iteration 65
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1491/1491 [03:24<00:00,  7.30it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.17s/it]
+[22.10.08] [INFO] Train stats:  Policy Loss: 1.7699, Value Loss: 0.1881, Total Loss: 1.8639, Value Mean: 0.0225, Value Std: 0.4570, Gradient Norm: 0.1974, Num Batches: 1491
+[22.10.08] [INFO] Valid stats:  Policy Loss: 1.8409, Value Loss: 0.1889, Total Loss: 1.9354, Value Mean: 0.0060, Value Std: 0.4609, Gradient Norm: 0.0000, Num Batches: 2
+[22.10.10] [INFO] Training finished for iteration 65
+[22.10.10] [INFO] Gating evaluation skipped at iteration 65. Using model 66.
+[22.10.10] [INFO] Started evaluation process for iteration 65.
+[22.10.10] [INFO] Starting iteration 66.
+Waiting for games (iter 66):  52%|█████████████████████████████████████████████████████████████████████████████████████▉                                                                                | 2590/5000 [00:35<05:16,  7.61it/s][22.10.49] [INFO] Results after playing the current policy only vs random at iteration 66: W/D/L: 97/3/0
+Waiting for games (iter 66):  69%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                                                    | 3433/5000 [02:18<03:02,  8.60it/s][22.12.33] [INFO] Evaluation results at iteration 66:
+[22.12.33] [INFO]     Policy accuracy @1: 37.70%
+[22.12.33] [INFO]     Policy accuracy @5: 78.11%
+[22.12.33] [INFO]     Policy accuracy @10: 90.32%
+[22.12.33] [INFO]     Avg value loss: 0.8092854301134745
+Waiting for games (iter 66):  72%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                                              | 3599/5000 [02:40<03:21,  6.97it/s][22.12.54] [INFO] Results after playing vs random at iteration 66: W/D/L: 99/1/0
+Waiting for games (iter 66):  89%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                  | 4455/5000 [04:30<01:14,  7.36it/s][22.14.43] [INFO] Results after playing vs stockfish level 0 at iteration 66: W/D/L: 77/14/9
+Waiting for games (iter 66):  93%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌            | 4627/5000 [04:51<00:50,  7.44it/s][22.15.03] [INFO] Results after playing vs stockfish level 1 at iteration 66: W/D/L: 68/20/12
+Waiting for games (iter 66):  96%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉       | 4787/5000 [05:07<00:23,  9.11it/s][22.15.21] [INFO] Results after playing vs stockfish level 2 at iteration 66: W/D/L: 74/16/10
+Waiting for games (iter 66): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4998/5000 [05:39<00:00,  7.70it/s]
+[22.15.52] [INFO] Loading memories for iteration 66 with window size 17 (49-66)
+[22.15.59] [INFO] Results after playing vs stockfish level 3 at iteration 66: W/D/L: 45/32/23
+[22.16.18] [INFO] Results after playing vs model 10 at iteration 66: W/D/L: 87/13/0
+[22.16.56] [INFO] Loaded 1522650 samples from 47244 games
+[22.16.57] [INFO] Model and optimizer loaded from iteration 66
+[22.16.57] [INFO] Setting learning rate to 0.002 for iteration 66
+Train batches:   4%|███████▋                                                                                                                                                                              | 63/1487 [00:30<08:14,  2.88it/s][22.17.28] [INFO] Results after playing vs model 20 at iteration 66: W/D/L: 84/15/1
+Train batches:   5%|█████████                                                                                                                                                                             | 74/1487 [00:33<07:25,  3.17it/s][22.17.31] [INFO] Results after playing vs model 40 at iteration 66: W/D/L: 56/30/14
+[22.17.31] [INFO] Results after playing vs model 30 at iteration 66: W/D/L: 70/23/7
+Train batches:   9%|███████████████▋                                                                                                                                                                     | 129/1487 [00:49<04:17,  5.27it/s][22.17.46] [INFO] Results after playing vs model 60 at iteration 66: W/D/L: 28/41/31
+Train batches:  12%|█████████████████████▍                                                                                                                                                               | 176/1487 [00:59<04:21,  5.02it/s][22.17.57] [INFO] Results after playing 66 vs 56: W/D/L: 38/37/25
+Train batches:  13%|████████████████████████▎                                                                                                                                                            | 200/1487 [01:03<03:12,  6.68it/s][22.18.01] [INFO] Results after playing vs model 50 at iteration 66: W/D/L: 34/36/30
+Train batches:  24%|███████████████████████████████████████████▍                                                                                                                                         | 357/1487 [01:26<02:40,  7.02it/s][22.18.24] [INFO] Results after playing 66 vs 61: W/D/L: 32/44/24
+Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1487/1487 [03:43<00:00,  6.65it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.46s/it]
+[22.20.44] [INFO] Train stats:  Policy Loss: 1.7681, Value Loss: 0.1877, Total Loss: 1.8620, Value Mean: 0.0226, Value Std: 0.4570, Gradient Norm: 0.1995, Num Batches: 1487
+[22.20.44] [INFO] Valid stats:  Policy Loss: 1.9505, Value Loss: 0.1628, Total Loss: 2.0319, Value Mean: 0.0125, Value Std: 0.4902, Gradient Norm: 0.0000, Num Batches: 2
+[22.20.46] [INFO] Training finished for iteration 66
+[22.20.46] [INFO] Gating evaluation skipped at iteration 66. Using model 67.
+[22.20.46] [INFO] Started evaluation process for iteration 66.
+[22.20.46] [INFO] Starting iteration 67.
+Waiting for games (iter 67):  53%|███████████████████████████████████████████████████████████████████████████████████████▊                                                                              | 2646/5000 [00:32<05:34,  7.03it/s][22.21.22] [INFO] Evaluation results at iteration 67:
+[22.21.22] [INFO]     Policy accuracy @1: 38.19%
+[22.21.22] [INFO]     Policy accuracy @5: 78.65%
+[22.21.22] [INFO]     Policy accuracy @10: 90.55%
+[22.21.22] [INFO]     Avg value loss: 0.8032634496688843
+Waiting for games (iter 67):  53%|████████████████████████████████████████████████████████████████████████████████████████▎                                                                             | 2661/5000 [00:35<05:57,  6.54it/s][22.21.26] [INFO] Results after playing the current policy only vs random at iteration 67: W/D/L: 96/4/0
+Waiting for games (iter 67):  69%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                                                   | 3438/5000 [02:13<02:57,  8.81it/s][22.23.03] [INFO] Results after playing vs random at iteration 67: W/D/L: 97/3/0
+Waiting for games (iter 67):  87%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉                      | 4336/5000 [03:58<01:00, 10.98it/s][22.24.48] [INFO] Results after playing vs stockfish level 0 at iteration 67: W/D/L: 88/7/5
+Waiting for games (iter 67):  88%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍                    | 4381/5000 [04:04<01:09,  8.89it/s][22.24.55] [INFO] Results after playing vs stockfish level 1 at iteration 67: W/D/L: 83/7/10
+Waiting for games (iter 67):  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▋         | 4720/5000 [04:49<00:39,  7.12it/s][22.25.38] [INFO] Results after playing vs stockfish level 2 at iteration 67: W/D/L: 73/16/11
+Waiting for games (iter 67):  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████  | 4942/5000 [05:15<00:06,  8.59it/s][22.26.04] [INFO] Results after playing vs stockfish level 3 at iteration 67: W/D/L: 40/24/36
+Waiting for games (iter 67): 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉| 4999/5000 [05:28<00:00,  7.77it/s]
+[22.26.17] [INFO] Loading memories for iteration 67 with window size 17 (50-67)
+[22.26.48] [INFO] Results after playing vs model 10 at iteration 67: W/D/L: 92/8/0
+[22.26.53] [INFO] Results after playing vs model 20 at iteration 67: W/D/L: 81/14/5
+[22.27.14] [INFO] Loaded 1515306 samples from 46972 games
+[22.27.15] [INFO] Model and optimizer loaded from iteration 67
+[22.27.15] [INFO] Setting learning rate to 0.002 for iteration 67
+Train batches:   0%|                                                                                                                                                                                               | 0/1480 [00:00<?, ?it/s][22.27.17] [INFO] Results after playing vs model 30 at iteration 67: W/D/L: 63/30/7
+Train batches:   2%|████▎                                                                                                                                                                                 | 35/1480 [00:15<08:35,  2.80it/s][22.27.31] [INFO] Results after playing vs model 40 at iteration 67: W/D/L: 54/30/16
+Train batches:   3%|██████▏                                                                                                                                                                               | 50/1480 [00:19<06:25,  3.71it/s][22.27.35] [INFO] Results after playing vs model 60 at iteration 67: W/D/L: 34/39/27
+[22.27.35] [INFO] Results after playing vs model 50 at iteration 67: W/D/L: 48/34/18
+Train batches:  13%|███████████████████████▉                                                                                                                                                             | 196/1480 [00:48<02:54,  7.38it/s][22.28.04] [INFO] Results after playing 67 vs 57: W/D/L: 37/39/24
+Train batches:  14%|█████████████████████████▏                                                                                                                                                           | 206/1480 [00:49<02:41,  7.88it/s][22.28.05] [INFO] Results after playing 67 vs 62: W/D/L: 31/36/33
+Train batches:  75%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  75%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  75%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  75%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  75%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  76%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  77%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  78%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  79%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  81%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  82%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  83%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  84%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  85%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  86%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  87%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  88%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  89%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  90%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  91%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  92%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  94%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  95%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  96%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  97%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches:  99%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████Train batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1480/1480 [03:33<00:00,  6.93it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+[22.30.52] [INFO] Train stats:  Policy Loss: 1.7652, Value Loss: 0.1876, Total Loss: 1.8590, Value Mean: 0.0225, Value Std: 0.4551, Gradient Norm: 0.2032, Num Batches: 1480
+[22.30.52] [INFO] Valid stats:  Policy Loss: 1.8470, Value Loss: 0.2042, Total Loss: 1.9491, Value Mean: 0.0234, Value Std: 0.4395, Gradient Norm: 0.0000, Num Batches: 2
+[22.30.55] [INFO] Training finished for iteration 67
+[22.30.55] [INFO] Gating evaluation skipped at iteration 67. Using model 68.
+[22.30.55] [INFO] Started evaluation process for iteration 67.
+[22.30.55] [INFO] Starting iteration 68.
+Waiting for games (iter 68):  49%|██████████████████████████▍                           | 2452/5000 [00:21<06:49,  6.22it/s][22.31.18] [INFO] Evaluation results at iteration 68:
+[22.31.18] [INFO]     Policy accuracy @1: 37.89%
+[22.31.18] [INFO]     Policy accuracy @5: 78.00%
+[22.31.18] [INFO]     Policy accuracy @10: 90.58%
+[22.31.18] [INFO]     Avg value loss: 0.8092812842792935
+Waiting for games (iter 68):  52%|███████████████████████████▉                          | 2586/5000 [00:37<04:39,  8.65it/s][22.31.35] [INFO] Results after playing the current policy only vs random at iteration 68: W/D/L: 100/0/0
+Waiting for games (iter 68):  67%|████████████████████████████████████▏                 | 3349/5000 [02:10<03:22,  8.17it/s][22.33.09] [INFO] Results after playing vs random at iteration 68: W/D/L: 98/2/0
+Waiting for games (iter 68):  82%|████████████████████████████████████████████▎         | 4106/5000 [03:50<01:45,  8.45it/s][22.34.50] [INFO] Results after playing vs stockfish level 0 at iteration 68: W/D/L: 84/10/6
+Waiting for games (iter 68):  87%|██████████████████████████████████████████████▊       | 4338/5000 [04:19<01:19,  8.34it/s][22.35.17] [INFO] Results after playing vs stockfish level 1 at iteration 68: W/D/L: 82/12/6
+Waiting for games (iter 68):  88%|███████████████████████████████████████████████▎      | 4375/5000 [04:25<01:27,  7.12it/s][22.35.24] [INFO] Results after playing vs stockfish level 2 at iteration 68: W/D/L: 65/19/16
+Waiting for games (iter 68):  89%|████████████████████████████████████████████████▏     | 4462/5000 [04:38<01:20,  6.70it/s][22.35.36] [INFO] Results after playing vs model 10 at iteration 68: W/D/L: 90/9/1
+Waiting for games (iter 68):  90%|████████████████████████████████████████████████▌     | 4494/5000 [04:41<01:06,  7.60it/s][22.35.39] [INFO] Results after playing vs stockfish level 3 at iteration 68: W/D/L: 46/27/27
+Waiting for games (iter 68): 100%|█████████████████████████████████████████████████████▋| 4975/5000 [05:40<00:03,  7.91it/s][22.36.38] [INFO] Results after playing vs model 20 at iteration 68: W/D/L: 82/14/4
+Waiting for games (iter 68): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:46<00:00,  7.65it/s]
+[22.36.43] [INFO] Loading memories for iteration 68 with window size 17 (51-68)
+[22.37.07] [INFO] Results after playing vs model 30 at iteration 68: W/D/L: 66/23/11
+[22.37.07] [INFO] Results after playing vs model 40 at iteration 68: W/D/L: 49/30/21
+[22.37.13] [INFO] Results after playing vs model 50 at iteration 68: W/D/L: 39/47/14
+[22.37.22] [INFO] Results after playing vs model 60 at iteration 68: W/D/L: 37/39/24
+[22.37.23] [INFO] Results after playing 68 vs 58: W/D/L: 39/40/21
+[22.37.24] [INFO] Results after playing 68 vs 63: W/D/L: 28/50/22
+[22.37.40] [INFO] Loaded 1515105 samples from 46924 games
+[22.37.40] [INFO] Model and optimizer loaded from iteration 68
+[22.37.40] [INFO] Setting learning rate to 0.002 for iteration 68
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1480/1480 [03:20<00:00,  7.39it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.42s/it]
+[22.41.03] [INFO] Train stats:  Policy Loss: 1.7640, Value Loss: 0.1871, Total Loss: 1.8576, Value Mean: 0.0222, Value Std: 0.4531, Gradient Norm: 0.2060, Num Batches: 1480
+[22.41.03] [INFO] Valid stats:  Policy Loss: 1.8713, Value Loss: 0.2221, Total Loss: 1.9824, Value Mean: 0.0376, Value Std: 0.4766, Gradient Norm: 0.0000, Num Batches: 2
+[22.41.06] [INFO] Training finished for iteration 68
+[22.41.06] [INFO] Gating evaluation skipped at iteration 68. Using model 69.
+[22.41.06] [INFO] Started evaluation process for iteration 68.
+[22.41.06] [INFO] Starting iteration 69.
+Waiting for games (iter 69):  52%|████████████████████████████▏                         | 2610/5000 [00:36<05:05,  7.81it/s][22.41.46] [INFO] Results after playing the current policy only vs random at iteration 69: W/D/L: 100/0/0
+Waiting for games (iter 69):  57%|███████████████████████████████                       | 2875/5000 [01:07<04:01,  8.81it/s][22.42.15] [INFO] Evaluation results at iteration 69:
+[22.42.15] [INFO]     Policy accuracy @1: 37.96%
+[22.42.15] [INFO]     Policy accuracy @5: 78.19%
+[22.42.15] [INFO]     Policy accuracy @10: 90.39%
+[22.42.15] [INFO]     Avg value loss: 0.8063462456067403
+Waiting for games (iter 69):  70%|██████████████████████████████████████                | 3524/5000 [02:32<03:34,  6.87it/s][22.43.42] [INFO] Results after playing vs random at iteration 69: W/D/L: 100/0/0
+Waiting for games (iter 69):  88%|███████████████████████████████████████████████▌      | 4406/5000 [04:22<01:06,  8.97it/s][22.45.30] [INFO] Results after playing vs stockfish level 0 at iteration 69: W/D/L: 81/14/5
+Waiting for games (iter 69):  92%|█████████████████████████████████████████████████▋    | 4599/5000 [04:48<00:46,  8.68it/s][22.45.57] [INFO] Results after playing vs stockfish level 1 at iteration 69: W/D/L: 79/10/11
+Waiting for games (iter 69):  94%|██████████████████████████████████████████████████▊   | 4708/5000 [05:02<00:38,  7.51it/s][22.46.13] [INFO] Results after playing vs stockfish level 2 at iteration 69: W/D/L: 73/18/9
+Waiting for games (iter 69): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:43<00:00,  7.63it/s]
+[22.46.51] [INFO] Loading memories for iteration 69 with window size 17 (52-69)
+[22.46.56] [INFO] Results after playing vs stockfish level 3 at iteration 69: W/D/L: 42/23/35
+[22.47.00] [INFO] Results after playing vs model 10 at iteration 69: W/D/L: 87/12/1
+[22.47.51] [INFO] Results after playing vs model 20 at iteration 69: W/D/L: 80/18/2
+[22.47.53] [INFO] Loaded 1512244 samples from 46786 games
+[22.47.54] [INFO] Model and optimizer loaded from iteration 69
+[22.47.54] [INFO] Setting learning rate to 0.002 for iteration 69
+Train batches:   2%|█▏                                                                    | 26/1477 [00:15<12:03,  2.01it/s][22.48.10] [INFO] Results after playing 69 vs 64: W/D/L: 30/36/34
+Train batches:   4%|██▊                                                                   | 59/1477 [00:25<06:22,  3.71it/s][22.48.20] [INFO] Results after playing vs model 50 at iteration 69: W/D/L: 40/33/27
+Train batches:   4%|██▉                                                                   | 61/1477 [00:26<05:34,  4.23it/s][22.48.20] [INFO] Results after playing vs model 30 at iteration 69: W/D/L: 62/29/9
+Train batches:   6%|███▉                                                                  | 83/1477 [00:31<05:35,  4.15it/s][22.48.26] [INFO] Results after playing 69 vs 59: W/D/L: 26/47/27
+Train batches:  11%|███████▎                                                             | 156/1477 [00:46<04:37,  4.76it/s][22.48.41] [INFO] Results after playing vs model 60 at iteration 69: W/D/L: 29/44/27
+Train batches:  13%|████████▉                                                            | 191/1477 [00:52<03:41,  5.82it/s][22.48.46] [INFO] Results after playing vs model 40 at iteration 69: W/D/L: 50/29/21
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1477/1477 [03:34<00:00,  6.90it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.36s/it]
+[22.51.31] [INFO] Train stats:  Policy Loss: 1.7630, Value Loss: 0.1875, Total Loss: 1.8567, Value Mean: 0.0216, Value Std: 0.4531, Gradient Norm: 0.2040, Num Batches: 1477
+[22.51.31] [INFO] Valid stats:  Policy Loss: 1.8653, Value Loss: 0.2206, Total Loss: 1.9756, Value Mean: 0.0111, Value Std: 0.4688, Gradient Norm: 0.0000, Num Batches: 2
+[22.51.33] [INFO] Training finished for iteration 69
+[22.51.33] [INFO] Gating evaluation skipped at iteration 69. Using model 70.
+[22.51.33] [INFO] Started evaluation process for iteration 69.
+[22.51.33] [INFO] Starting iteration 70.
+Waiting for games (iter 70):  53%|████████████████████████████▋                         | 2658/5000 [00:39<04:46,  8.18it/s][22.52.14] [INFO] Results after playing the current policy only vs random at iteration 70: W/D/L: 100/0/0
+Waiting for games (iter 70):  70%|█████████████████████████████████████▋                | 3486/5000 [02:16<03:01,  8.36it/s][22.53.51] [INFO] Evaluation results at iteration 70:
+[22.53.51] [INFO]     Policy accuracy @1: 38.21%
+[22.53.51] [INFO]     Policy accuracy @5: 78.69%
+[22.53.51] [INFO]     Policy accuracy @10: 90.32%
+[22.53.51] [INFO]     Avg value loss: 0.8030319531758626
+Waiting for games (iter 70):  71%|██████████████████████████████████████▎               | 3544/5000 [02:22<02:54,  8.36it/s][22.53.59] [INFO] Results after playing vs random at iteration 70: W/D/L: 98/2/0
+Waiting for games (iter 70):  90%|████████████████████████████████████████████████▋     | 4511/5000 [04:23<00:58,  8.29it/s][22.56.00] [INFO] Results after playing vs stockfish level 0 at iteration 70: W/D/L: 88/8/4
+Waiting for games (iter 70):  92%|█████████████████████████████████████████████████▍    | 4579/5000 [04:29<00:44,  9.56it/s][22.56.07] [INFO] Results after playing vs stockfish level 1 at iteration 70: W/D/L: 80/9/11
+Waiting for games (iter 70):  96%|███████████████████████████████████████████████████▊  | 4794/5000 [04:57<00:27,  7.38it/s][22.56.35] [INFO] Results after playing vs stockfish level 2 at iteration 70: W/D/L: 74/14/12
+Waiting for games (iter 70): 100%|█████████████████████████████████████████████████████▉| 4998/5000 [05:21<00:00,  9.16it/s][22.56.58] [INFO] Results after playing vs model 10 at iteration 70: W/D/L: 87/12/1
+Waiting for games (iter 70): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:25<00:00,  8.04it/s]
+[22.57.00] [INFO] Loading memories for iteration 70 with window size 18 (52-70)
+[22.57.11] [INFO] Results after playing vs stockfish level 3 at iteration 70: W/D/L: 44/27/29
+[22.58.04] [INFO] Loaded 1595102 samples from 49347 games
+[22.58.05] [INFO] Model and optimizer loaded from iteration 70
+[22.58.05] [INFO] Setting learning rate to 0.002 for iteration 70
+Train batches:   0%|▏                                                                      | 4/1558 [00:06<25:38,  1.01it/s][22.58.11] [INFO] Results after playing vs model 20 at iteration 70: W/D/L: 85/13/2
+Train batches:   3%|██▏                                                                   | 50/1558 [00:23<09:51,  2.55it/s][22.58.28] [INFO] Results after playing vs model 30 at iteration 70: W/D/L: 54/36/10
+Train batches:   4%|██▋                                                                   | 59/1558 [00:26<09:10,  2.72it/s][22.58.32] [INFO] Results after playing 70 vs 60: W/D/L: 39/29/32
+Train batches:   5%|███▎                                                                  | 74/1558 [00:31<07:03,  3.50it/s][22.58.36] [INFO] Results after playing vs model 60 at iteration 70: W/D/L: 39/37/24
+Train batches:   6%|███▊                                                                  | 86/1558 [00:34<06:18,  3.89it/s][22.58.40] [INFO] Results after playing 70 vs 65: W/D/L: 32/46/22
+Train batches:   6%|████▏                                                                 | 93/1558 [00:36<05:19,  4.58it/s][22.58.41] [INFO] Results after playing vs model 40 at iteration 70: W/D/L: 52/30/18
+Train batches:   8%|█████▌                                                               | 126/1558 [00:40<03:49,  6.25it/s][22.58.46] [INFO] Results after playing vs model 50 at iteration 70: W/D/L: 41/39/20
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1558/1558 [03:46<00:00,  6.89it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.33s/it]
+[23.01.54] [INFO] Train stats:  Policy Loss: 1.7603, Value Loss: 0.1870, Total Loss: 1.8538, Value Mean: 0.0219, Value Std: 0.4531, Gradient Norm: 0.2034, Num Batches: 1558
+[23.01.54] [INFO] Valid stats:  Policy Loss: 1.9169, Value Loss: 0.2447, Total Loss: 2.0392, Value Mean: 0.0320, Value Std: 0.4414, Gradient Norm: 0.0000, Num Batches: 2
+[23.01.56] [INFO] Training finished for iteration 70
+[23.01.56] [INFO] Gating evaluation skipped at iteration 70. Using model 71.
+[23.01.56] [INFO] Started evaluation process for iteration 70.
+[23.01.56] [INFO] Starting iteration 71.
+Waiting for games (iter 71):  54%|█████████████████████████████▏                        | 2701/5000 [00:35<04:08,  9.25it/s][23.02.36] [INFO] Results after playing the current policy only vs random at iteration 71: W/D/L: 98/2/0
+Waiting for games (iter 71):  58%|███████████████████████████████▏                      | 2893/5000 [00:59<04:25,  7.94it/s][23.02.58] [INFO] Evaluation results at iteration 71:
+[23.02.58] [INFO]     Policy accuracy @1: 38.18%
+[23.02.58] [INFO]     Policy accuracy @5: 78.55%
+[23.02.58] [INFO]     Policy accuracy @10: 90.50%
+[23.02.58] [INFO]     Avg value loss: 0.8098996917406718
+Waiting for games (iter 71):  78%|█████████████████████████████████████████▊            | 3876/5000 [03:03<02:41,  6.95it/s][23.05.02] [INFO] Results after playing vs random at iteration 71: W/D/L: 99/1/0
+Waiting for games (iter 71):  91%|█████████████████████████████████████████████████▎    | 4569/5000 [04:35<00:57,  7.52it/s][23.06.36] [INFO] Results after playing vs stockfish level 1 at iteration 71: W/D/L: 81/10/9
+Waiting for games (iter 71):  93%|██████████████████████████████████████████████████▎   | 4661/5000 [04:45<00:37,  9.07it/s][23.06.45] [INFO] Results after playing vs stockfish level 0 at iteration 71: W/D/L: 78/17/5
+Waiting for games (iter 71):  95%|███████████████████████████████████████████████████▍  | 4760/5000 [04:58<00:30,  7.87it/s][23.06.59] [INFO] Results after playing vs stockfish level 2 at iteration 71: W/D/L: 76/17/7
+Waiting for games (iter 71): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:30<00:00,  7.71it/s]
+[23.07.28] [INFO] Loading memories for iteration 71 with window size 18 (53-71)
+[23.08.09] [INFO] Results after playing vs stockfish level 3 at iteration 71: W/D/L: 38/30/32
+[23.08.13] [INFO] Results after playing vs model 10 at iteration 71: W/D/L: 85/15/0
+[23.08.36] [INFO] Loaded 1592228 samples from 49212 games
+[23.08.37] [INFO] Model and optimizer loaded from iteration 71
+[23.08.37] [INFO] Setting learning rate to 0.002 for iteration 71
+Train batches:   1%|▍                                                                      | 9/1555 [00:08<11:25,  2.26it/s][23.08.47] [INFO] Results after playing vs model 20 at iteration 71: W/D/L: 94/4/2
+Train batches:   6%|███▉                                                                  | 87/1555 [00:43<09:44,  2.51it/s][23.09.21] [INFO] Results after playing vs model 40 at iteration 71: W/D/L: 56/28/16
+Train batches:   6%|████                                                                  | 91/1555 [00:44<08:06,  3.01it/s][23.09.22] [INFO] Results after playing vs model 70 at iteration 71: W/D/L: 25/40/35
+Train batches:   6%|████▍                                                                | 101/1555 [00:48<07:54,  3.06it/s][23.09.26] [INFO] Results after playing 71 vs 61: W/D/L: 32/40/28
+Train batches:   7%|█████                                                                | 114/1555 [00:51<06:09,  3.90it/s][23.09.29] [INFO] Results after playing vs model 30 at iteration 71: W/D/L: 61/29/10
+Train batches:   7%|█████▏                                                               | 116/1555 [00:51<05:14,  4.57it/s][23.09.29] [INFO] Results after playing vs model 50 at iteration 71: W/D/L: 45/33/22
+Train batches:  13%|████████▋                                                            | 196/1555 [01:07<04:11,  5.41it/s][23.09.45] [INFO] Results after playing vs model 60 at iteration 71: W/D/L: 28/43/29
+Train batches:  16%|██████████▋                                                          | 242/1555 [01:14<02:50,  7.68it/s][23.09.52] [INFO] Results after playing 71 vs 66: W/D/L: 34/37/29
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1555/1555 [04:00<00:00,  6.46it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+[23.12.41] [INFO] Train stats:  Policy Loss: 1.7584, Value Loss: 0.1873, Total Loss: 1.8520, Value Mean: 0.0219, Value Std: 0.4531, Gradient Norm: 0.2082, Num Batches: 1555
+[23.12.41] [INFO] Valid stats:  Policy Loss: 1.8707, Value Loss: 0.1582, Total Loss: 1.9498, Value Mean: 0.0500, Value Std: 0.4590, Gradient Norm: 0.0000, Num Batches: 2
+[23.12.44] [INFO] Training finished for iteration 71
+[23.12.44] [INFO] Gating evaluation skipped at iteration 71. Using model 72.
+[23.12.44] [INFO] Started evaluation process for iteration 71.
+[23.12.44] [INFO] Starting iteration 72.
+Waiting for games (iter 72):  54%|█████████████████████████████▏                        | 2708/5000 [00:39<04:42,  8.10it/s][23.13.25] [INFO] Results after playing the current policy only vs random at iteration 72: W/D/L: 99/1/0
+Waiting for games (iter 72):  69%|█████████████████████████████████████▎                | 3459/5000 [02:12<03:54,  6.58it/s][23.14.59] [INFO] Evaluation results at iteration 72:
+[23.14.59] [INFO]     Policy accuracy @1: 38.02%
+[23.14.59] [INFO]     Policy accuracy @5: 78.35%
+[23.14.59] [INFO]     Policy accuracy @10: 90.44%
+[23.14.59] [INFO]     Avg value loss: 0.8067287656995985
+Waiting for games (iter 72):  75%|████████████████████████████████████████▌             | 3756/5000 [02:45<01:58, 10.51it/s][23.15.33] [INFO] Results after playing vs random at iteration 72: W/D/L: 98/2/0
+Waiting for games (iter 72):  96%|███████████████████████████████████████████████████▉  | 4814/5000 [04:52<00:19,  9.41it/s][23.17.41] [INFO] Results after playing vs stockfish level 1 at iteration 72: W/D/L: 83/8/9
+Waiting for games (iter 72):  98%|████████████████████████████████████████████████████▉ | 4903/5000 [05:03<00:10,  9.31it/s][23.17.49] [INFO] Results after playing vs stockfish level 0 at iteration 72: W/D/L: 81/9/10
+Waiting for games (iter 72): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:18<00:00,  8.11it/s]
+[23.18.03] [INFO] Loading memories for iteration 72 with window size 18 (54-72)
+[23.18.06] [INFO] Results after playing vs stockfish level 2 at iteration 72: W/D/L: 75/11/14
+[23.19.00] [INFO] Results after playing vs stockfish level 3 at iteration 72: W/D/L: 47/31/22
+[23.19.07] [INFO] Loaded 1587825 samples from 48993 games
+[23.19.09] [INFO] Model and optimizer loaded from iteration 72
+[23.19.09] [INFO] Setting learning rate to 0.002 for iteration 72
+Train batches:   0%|                                                                               | 0/1551 [00:00<?, ?it/s][23.19.13] [INFO] Results after playing vs model 10 at iteration 72: W/D/L: 82/17/1
+Train batches:   6%|████▎                                                                 | 95/1551 [00:48<09:19,  2.60it/s][23.19.58] [INFO] Results after playing vs model 20 at iteration 72: W/D/L: 92/7/1
+Train batches:   9%|██████▌                                                              | 147/1551 [01:12<09:11,  2.55it/s][23.20.22] [INFO] Results after playing vs model 30 at iteration 72: W/D/L: 69/18/13
+Train batches:  11%|███████▌                                                             | 169/1551 [01:20<08:06,  2.84it/s][23.20.30] [INFO] Results after playing vs model 60 at iteration 72: W/D/L: 32/38/30
+Train batches:  13%|█████████                                                            | 205/1551 [01:32<06:51,  3.27it/s][23.20.42] [INFO] Results after playing 72 vs 67: W/D/L: 32/39/29
+Train batches:  14%|█████████▌                                                           | 214/1551 [01:35<05:45,  3.87it/s][23.20.44] [INFO] Results after playing vs model 50 at iteration 72: W/D/L: 36/45/19
+Train batches:  14%|█████████▉                                                           | 223/1551 [01:37<04:30,  4.91it/s][23.20.46] [INFO] Results after playing vs model 40 at iteration 72: W/D/L: 43/42/15
+Train batches:  16%|███████████▎                                                         | 254/1551 [01:42<04:36,  4.69it/s][23.20.51] [INFO] Results after playing 72 vs 62: W/D/L: 38/37/25
+Train batches:  17%|███████████▉                                                         | 267/1551 [01:44<02:34,  8.31it/s][23.20.53] [INFO] Results after playing vs model 70 at iteration 72: W/D/L: 24/50/26
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1551/1551 [04:27<00:00,  5.79it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.29s/it]
+[23.23.39] [INFO] Train stats:  Policy Loss: 1.7579, Value Loss: 0.1869, Total Loss: 1.8514, Value Mean: 0.0217, Value Std: 0.4531, Gradient Norm: 0.2102, Num Batches: 1551
+[23.23.39] [INFO] Valid stats:  Policy Loss: 1.7936, Value Loss: 0.1767, Total Loss: 1.8819, Value Mean: -0.0097, Value Std: 0.4590, Gradient Norm: 0.0000, Num Batches: 2
+[23.23.42] [INFO] Training finished for iteration 72
+[23.23.42] [INFO] Gating evaluation skipped at iteration 72. Using model 73.
+[23.23.42] [INFO] Started evaluation process for iteration 72.
+[23.23.42] [INFO] Starting iteration 73.
+Waiting for games (iter 73):  56%|██████████████████████████████▎                       | 2811/5000 [00:36<05:13,  6.97it/s][23.24.22] [INFO] Results after playing the current policy only vs random at iteration 73: W/D/L: 98/2/0
+Waiting for games (iter 73):  66%|███████████████████████████████████▍                  | 3282/5000 [01:35<03:51,  7.42it/s][23.25.19] [INFO] Evaluation results at iteration 73:
+[23.25.19] [INFO]     Policy accuracy @1: 38.71%
+[23.25.19] [INFO]     Policy accuracy @5: 78.88%
+[23.25.19] [INFO]     Policy accuracy @10: 90.67%
+[23.25.19] [INFO]     Avg value loss: 0.8089500480228
+Waiting for games (iter 73):  77%|█████████████████████████████████████████▌            | 3854/5000 [02:42<01:59,  9.56it/s][23.26.29] [INFO] Results after playing vs random at iteration 73: W/D/L: 98/2/0
+Waiting for games (iter 73):  96%|███████████████████████████████████████████████████▋  | 4788/5000 [04:44<00:29,  7.15it/s][23.28.31] [INFO] Results after playing vs stockfish level 0 at iteration 73: W/D/L: 87/12/1
+Waiting for games (iter 73):  99%|█████████████████████████████████████████████████████▋| 4966/5000 [05:08<00:04,  7.31it/s][23.28.54] [INFO] Results after playing vs stockfish level 2 at iteration 73: W/D/L: 75/13/12
+Waiting for games (iter 73): 100%|█████████████████████████████████████████████████████▉| 4998/5000 [05:12<00:00,  7.80it/s][23.28.57] [INFO] Results after playing vs stockfish level 1 at iteration 73: W/D/L: 80/14/6
+Waiting for games (iter 73): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:15<00:00,  7.62it/s]
+[23.28.59] [INFO] Loading memories for iteration 73 with window size 18 (55-73)
+[23.29.55] [INFO] Results after playing vs stockfish level 3 at iteration 73: W/D/L: 46/29/25
+[23.30.02] [INFO] Results after playing vs model 10 at iteration 73: W/D/L: 85/14/1
+[23.30.04] [INFO] Loaded 1578060 samples from 48712 games
+[23.30.05] [INFO] Model and optimizer loaded from iteration 73
+[23.30.05] [INFO] Setting learning rate to 0.002 for iteration 73
+Train batches:   5%|███▎                                                                  | 73/1542 [00:39<11:26,  2.14it/s][23.30.44] [INFO] Results after playing vs model 20 at iteration 73: W/D/L: 84/13/3
+Train batches:  10%|██████▋                                                              | 150/1542 [01:13<09:17,  2.50it/s][23.31.19] [INFO] Results after playing vs model 30 at iteration 73: W/D/L: 56/34/10
+Train batches:  11%|███████▏                                                             | 162/1542 [01:18<09:48,  2.35it/s][23.31.24] [INFO] Results after playing vs model 70 at iteration 73: W/D/L: 28/32/40
+Train batches:  12%|████████▌                                                            | 190/1542 [01:27<06:02,  3.73it/s][23.31.33] [INFO] Results after playing vs model 50 at iteration 73: W/D/L: 44/37/19
+Train batches:  13%|████████▋                                                            | 194/1542 [01:27<04:19,  5.20it/s][23.31.33] [INFO] Results after playing vs model 40 at iteration 73: W/D/L: 56/30/14
+Train batches:  14%|█████████▊                                                           | 218/1542 [01:33<03:25,  6.46it/s][23.31.38] [INFO] Results after playing 73 vs 63: W/D/L: 35/40/25
+Train batches:  15%|██████████▏                                                          | 227/1542 [01:34<03:09,  6.94it/s][23.31.40] [INFO] Results after playing 73 vs 68: W/D/L: 32/43/25
+Train batches:  16%|██████████▋                                                          | 240/1542 [01:36<02:34,  8.41it/s][23.31.42] [INFO] Results after playing vs model 60 at iteration 73: W/D/L: 30/45/25
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1542/1542 [04:20<00:00,  5.91it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.37s/it]
+[23.34.29] [INFO] Train stats:  Policy Loss: 1.7562, Value Loss: 0.1864, Total Loss: 1.8495, Value Mean: 0.0219, Value Std: 0.4531, Gradient Norm: 0.2111, Num Batches: 1542
+[23.34.29] [INFO] Valid stats:  Policy Loss: 1.8262, Value Loss: 0.2461, Total Loss: 1.9492, Value Mean: -0.0208, Value Std: 0.4043, Gradient Norm: 0.0000, Num Batches: 2
+[23.34.31] [INFO] Training finished for iteration 73
+[23.34.31] [INFO] Gating evaluation skipped at iteration 73. Using model 74.
+[23.34.32] [INFO] Started evaluation process for iteration 73.
+[23.34.32] [INFO] Starting iteration 74.
+Waiting for games (iter 74):  54%|█████████████████████████████                         | 2693/5000 [00:36<04:36,  8.34it/s][23.35.11] [INFO] Results after playing the current policy only vs random at iteration 74: W/D/L: 99/1/0
+Waiting for games (iter 74):  57%|██████████████████████████████▊                       | 2853/5000 [00:58<05:25,  6.60it/s][23.35.33] [INFO] Evaluation results at iteration 74:
+[23.35.33] [INFO]     Policy accuracy @1: 38.42%
+[23.35.33] [INFO]     Policy accuracy @5: 78.83%
+[23.35.33] [INFO]     Policy accuracy @10: 90.27%
+[23.35.33] [INFO]     Avg value loss: 0.805888052781423
+Waiting for games (iter 74):  72%|██████████████████████████████████████▉               | 3608/5000 [02:31<02:30,  9.27it/s][23.37.05] [INFO] Results after playing vs random at iteration 74: W/D/L: 100/0/0
+Waiting for games (iter 74):  88%|███████████████████████████████████████████████▊      | 4424/5000 [04:14<01:10,  8.15it/s][23.38.50] [INFO] Results after playing vs stockfish level 0 at iteration 74: W/D/L: 85/10/5
+Waiting for games (iter 74):  95%|███████████████████████████████████████████████████▌  | 4772/5000 [04:53<00:25,  8.96it/s][23.39.27] [INFO] Results after playing vs stockfish level 1 at iteration 74: W/D/L: 84/10/6
+Waiting for games (iter 74):  96%|███████████████████████████████████████████████████▉  | 4807/5000 [04:56<00:20,  9.32it/s][23.39.31] [INFO] Results after playing vs stockfish level 2 at iteration 74: W/D/L: 74/14/12
+Waiting for games (iter 74): 100%|██████████████████████████████████████████████████████| 5000/5000 [05:23<00:00,  7.86it/s]
+[23.39.57] [INFO] Loading memories for iteration 74 with window size 18 (56-74)
+[23.40.14] [INFO] Results after playing vs model 10 at iteration 74: W/D/L: 91/9/0
+[23.40.53] [INFO] Results after playing vs stockfish level 3 at iteration 74: W/D/L: 34/36/30
+[23.40.59] [INFO] Loaded 1572016 samples from 48481 games
+[23.41.00] [INFO] Model and optimizer loaded from iteration 74
+[23.41.00] [INFO] Setting learning rate to 0.002 for iteration 74
+Train batches:   2%|█▌                                                                    | 33/1536 [00:20<09:53,  2.53it/s][23.41.21] [INFO] Results after playing vs model 40 at iteration 74: W/D/L: 57/27/16
+Train batches:   2%|█▋                                                                    | 38/1536 [00:22<08:45,  2.85it/s][23.41.23] [INFO] Results after playing vs model 20 at iteration 74: W/D/L: 83/13/4
+Train batches:   4%|███▏                                                                  | 69/1536 [00:33<07:44,  3.16it/s][23.41.34] [INFO] Results after playing 74 vs 69: W/D/L: 35/39/26
+Train batches:   9%|█████▉                                                               | 132/1536 [00:53<08:37,  2.72it/s][23.41.54] [INFO] Results after playing vs model 50 at iteration 74: W/D/L: 35/45/20
+Train batches:  10%|██████▌                                                              | 146/1536 [00:57<05:06,  4.54it/s][23.41.58] [INFO] Results after playing 74 vs 64: W/D/L: 34/43/23
+Train batches:  11%|███████▎                                                             | 164/1536 [01:01<04:52,  4.68it/s][23.42.02] [INFO] Results after playing vs model 70 at iteration 74: W/D/L: 27/37/36
+Train batches:  12%|███████▉                                                             | 177/1536 [01:03<03:31,  6.43it/s][23.42.04] [INFO] Results after playing vs model 60 at iteration 74: W/D/L: 41/34/25
+Train batches:  12%|████████▎                                                            | 184/1536 [01:04<04:13,  5.33it/s][23.42.05] [INFO] Results after playing vs model 30 at iteration 74: W/D/L: 61/36/3
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1536/1536 [03:54<00:00,  6.54it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.41s/it]
+[23.44.58] [INFO] Train stats:  Policy Loss: 1.7535, Value Loss: 0.1851, Total Loss: 1.8461, Value Mean: 0.0214, Value Std: 0.4512, Gradient Norm: 0.2121, Num Batches: 1536
+[23.44.58] [INFO] Valid stats:  Policy Loss: 1.8202, Value Loss: 0.2002, Total Loss: 1.9203, Value Mean: 0.0297, Value Std: 0.4434, Gradient Norm: 0.0000, Num Batches: 2
+[23.45.01] [INFO] Training finished for iteration 74
+[23.45.01] [INFO] Gating evaluation skipped at iteration 74. Using model 75.
+[23.45.01] [INFO] Started evaluation process for iteration 74.
+[23.45.01] [INFO] Starting iteration 75.
+Waiting for games (iter 75):  54%|████████████████████████████▉                         | 2680/5000 [00:39<04:43,  8.19it/s][23.45.42] [INFO] Results after playing the current policy only vs random at iteration 75: W/D/L: 98/2/0
+Waiting for games (iter 75):  59%|████████████████████████████████                      | 2969/5000 [01:14<04:13,  8.00it/s][23.46.18] [INFO] Evaluation results at iteration 75:
+[23.46.18] [INFO]     Policy accuracy @1: 38.51%
+[23.46.18] [INFO]     Policy accuracy @5: 78.78%
+[23.46.18] [INFO]     Policy accuracy @10: 90.62%
+[23.46.18] [INFO]     Avg value loss: 0.8096264362335205
+Waiting for games (iter 75):  73%|███████████████████████████████████████▌              | 3661/5000 [02:39<02:40,  8.37it/s][23.47.41] [INFO] Results after playing vs random at iteration 75: W/D/L: 99/1/0
+Waiting for games (iter 75):  90%|████████████████████████████████████████████████▋     | 4504/5000 [04:21<00:57,  8.60it/s][23.49.24] [INFO] Results after playing vs stockfish level 0 at iteration 75: W/D/L: 81/12/7
+Waiting for games (iter 75):  96%|███████████████████████████████████████████████████▊  | 4792/5000 [04:55<00:24,  8.47it/s][23.50.00] [INFO] Results after playing vs stockfish level 1 at iteration 75: W/D/L: 78/15/7
+Waiting for games (iter 75):  97%|████████████████████████████████████████████████████▌ | 4868/5000 [05:05<00:17,  7.61it/s][23.50.11] [INFO] Results after playing vs stockfish level 2 at iteration 75: W/D/L: 73/14/13
+Waiting for games (iter 75): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:23<00:00,  7.98it/s]
+[23.50.26] [INFO] Loading memories for iteration 75 with window size 19 (56-75)
+[23.50.41] [INFO] Results after playing vs stockfish level 3 at iteration 75: W/D/L: 47/23/30
+[23.50.58] [INFO] Results after playing vs model 10 at iteration 75: W/D/L: 94/6/0
+[23.51.36] [INFO] Loaded 1652383 samples from 51008 games
+[23.51.37] [INFO] Model and optimizer loaded from iteration 75
+[23.51.37] [INFO] Setting learning rate to 0.002 for iteration 75
+Train batches:   0%|                                                                               | 0/1614 [00:00<?, ?it/s][23.51.38] [INFO] Results after playing vs model 20 at iteration 75: W/D/L: 82/11/7
+Train batches:   7%|█████                                                                | 117/1614 [00:53<11:15,  2.22it/s][23.52.30] [INFO] Results after playing vs model 30 at iteration 75: W/D/L: 63/25/12
+Train batches:   7%|█████                                                                | 119/1614 [00:53<10:00,  2.49it/s][23.52.31] [INFO] Results after playing vs model 70 at iteration 75: W/D/L: 32/40/28
+Train batches:   7%|█████▏                                                               | 120/1614 [00:54<09:00,  2.77it/s][23.52.32] [INFO] Results after playing 75 vs 65: W/D/L: 39/28/33
+Train batches:   8%|█████▊                                                               | 136/1614 [00:58<06:35,  3.74it/s][23.52.36] [INFO] Results after playing 75 vs 70: W/D/L: 41/34/25
+Train batches:   9%|██████▍                                                              | 152/1614 [01:01<05:17,  4.60it/s][23.52.39] [INFO] Results after playing vs model 40 at iteration 75: W/D/L: 52/27/21
+Train batches:  11%|███████▊                                                             | 182/1614 [01:06<03:41,  6.46it/s][23.52.44] [INFO] Results after playing vs model 50 at iteration 75: W/D/L: 45/38/17
+Train batches:  11%|███████▉                                                             | 185/1614 [01:07<03:36,  6.59it/s][23.52.45] [INFO] Results after playing vs model 60 at iteration 75: W/D/L: 42/35/23
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1614/1614 [04:10<00:00,  6.44it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.40s/it]
+[23.55.51] [INFO] Train stats:  Policy Loss: 1.7498, Value Loss: 0.1847, Total Loss: 1.8422, Value Mean: 0.0216, Value Std: 0.4512, Gradient Norm: 0.2120, Num Batches: 1614
+[23.55.51] [INFO] Valid stats:  Policy Loss: 1.8156, Value Loss: 0.1882, Total Loss: 1.9096, Value Mean: -0.0072, Value Std: 0.4492, Gradient Norm: 0.0000, Num Batches: 2
+[23.55.54] [INFO] Training finished for iteration 75
+[23.55.54] [INFO] Gating evaluation skipped at iteration 75. Using model 76.
+[23.55.54] [INFO] Started evaluation process for iteration 75.
+[23.55.54] [INFO] Starting iteration 76.
+Waiting for games (iter 76):  54%|█████████████████████████████▍                        | 2722/5000 [00:32<05:40,  6.69it/s][23.56.28] [INFO] Evaluation results at iteration 76:
+[23.56.29] [INFO]     Policy accuracy @1: 39.01%
+[23.56.29] [INFO]     Policy accuracy @5: 78.78%
+[23.56.29] [INFO]     Policy accuracy @10: 90.83%
+[23.56.29] [INFO]     Avg value loss: 0.811742635567983
+Waiting for games (iter 76):  55%|█████████████████████████████▋                        | 2750/5000 [00:35<04:47,  7.84it/s][23.56.32] [INFO] Results after playing the current policy only vs random at iteration 76: W/D/L: 99/1/0
+Waiting for games (iter 76):  75%|████████████████████████████████████████▋             | 3765/5000 [02:47<02:38,  7.78it/s][23.58.42] [INFO] Results after playing vs random at iteration 76: W/D/L: 98/2/0
+Waiting for games (iter 76):  91%|█████████████████████████████████████████████████▎    | 4570/5000 [04:19<00:57,  7.49it/s][00.00.16] [INFO] Results after playing vs stockfish level 0 at iteration 76: W/D/L: 86/10/4
+Waiting for games (iter 76):  95%|███████████████████████████████████████████████████   | 4731/5000 [04:39<00:32,  8.39it/s][00.00.35] [INFO] Results after playing vs stockfish level 1 at iteration 76: W/D/L: 86/7/7
+Waiting for games (iter 76):  97%|████████████████████████████████████████████████████▋ | 4873/5000 [04:59<00:17,  7.28it/s][00.00.56] [INFO] Results after playing vs stockfish level 2 at iteration 76: W/D/L: 75/12/13
+Waiting for games (iter 76): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:15<00:00,  7.80it/s]
+[00.01.11] [INFO] Loading memories for iteration 76 with window size 19 (57-76)
+[00.01.21] [INFO] Results after playing vs model 10 at iteration 76: W/D/L: 87/12/1
+[00.01.39] [INFO] Results after playing vs stockfish level 3 at iteration 76: W/D/L: 44/34/22
+[00.02.13] [INFO] Loaded 1646721 samples from 50832 games
+[00.02.15] [INFO] Model and optimizer loaded from iteration 76
+[00.02.15] [INFO] Setting learning rate to 0.002 for iteration 76
+Train batches:   1%|▋                                                                     | 17/1609 [00:12<10:15,  2.59it/s][00.02.28] [INFO] Results after playing vs model 20 at iteration 76: W/D/L: 85/11/4
+Train batches:   4%|██▌                                                                   | 59/1609 [00:29<11:31,  2.24it/s][00.02.45] [INFO] Results after playing vs model 40 at iteration 76: W/D/L: 47/34/19
+Train batches:   8%|█████▌                                                               | 130/1609 [00:54<06:58,  3.53it/s][00.03.09] [INFO] Results after playing 76 vs 71: W/D/L: 31/47/22
+Train batches:  10%|███████                                                              | 166/1609 [01:06<07:36,  3.16it/s][00.03.21] [INFO] Results after playing vs model 70 at iteration 76: W/D/L: 32/36/32
+Train batches:  11%|███████▊                                                             | 182/1609 [01:10<05:50,  4.07it/s][00.03.25] [INFO] Results after playing vs model 50 at iteration 76: W/D/L: 56/24/20
+Train batches:  12%|████████▍                                                            | 197/1609 [01:13<05:23,  4.37it/s][00.03.29] [INFO] Results after playing vs model 30 at iteration 76: W/D/L: 61/31/8
+Train batches:  14%|█████████▍                                                           | 220/1609 [01:17<03:02,  7.62it/s][00.03.32] [INFO] Results after playing 76 vs 66: W/D/L: 29/43/28
+Train batches:  20%|█████████████▊                                                       | 323/1609 [01:33<03:42,  5.79it/s][00.03.48] [INFO] Results after playing vs model 60 at iteration 76: W/D/L: 27/47/26
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1609/1609 [04:18<00:00,  6.23it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.40s/it]
+[00.06.36] [INFO] Train stats:  Policy Loss: 1.7476, Value Loss: 0.1851, Total Loss: 1.8401, Value Mean: 0.0215, Value Std: 0.4512, Gradient Norm: 0.2124, Num Batches: 1609
+[00.06.36] [INFO] Valid stats:  Policy Loss: 1.8233, Value Loss: 0.2348, Total Loss: 1.9407, Value Mean: 0.0427, Value Std: 0.4512, Gradient Norm: 0.0000, Num Batches: 2
+[00.06.39] [INFO] Training finished for iteration 76
+[00.06.39] [INFO] Gating evaluation skipped at iteration 76. Using model 77.
+[00.06.39] [INFO] Started evaluation process for iteration 76.
+[00.06.39] [INFO] Starting iteration 77.
+Waiting for games (iter 77):  54%|█████████████████████████████▏                        | 2699/5000 [00:38<04:33,  8.40it/s][00.07.20] [INFO] Results after playing the current policy only vs random at iteration 77: W/D/L: 99/1/0
+Waiting for games (iter 77):  61%|████████████████████████████████▊                     | 3041/5000 [01:19<04:03,  8.03it/s][00.08.02] [INFO] Evaluation results at iteration 77:
+[00.08.02] [INFO]     Policy accuracy @1: 38.67%
+[00.08.02] [INFO]     Policy accuracy @5: 78.80%
+[00.08.02] [INFO]     Policy accuracy @10: 90.80%
+[00.08.02] [INFO]     Avg value loss: 0.8053039206398858
+Waiting for games (iter 77):  73%|███████████████████████████████████████▏              | 3630/5000 [02:36<03:55,  5.82it/s][00.09.19] [INFO] Results after playing vs random at iteration 77: W/D/L: 98/2/0
+Waiting for games (iter 77):  96%|███████████████████████████████████████████████████▋  | 4788/5000 [04:57<00:25,  8.20it/s][00.11.40] [INFO] Results after playing vs stockfish level 0 at iteration 77: W/D/L: 85/4/11
+Waiting for games (iter 77):  98%|████████████████████████████████████████████████████▋ | 4881/5000 [05:07<00:14,  8.50it/s][00.11.50] [INFO] Results after playing vs stockfish level 2 at iteration 77: W/D/L: 81/10/9
+Waiting for games (iter 77):  99%|█████████████████████████████████████████████████████▌| 4962/5000 [05:18<00:04,  8.31it/s][00.11.59] [INFO] Results after playing vs stockfish level 1 at iteration 77: W/D/L: 76/14/10
+Waiting for games (iter 77): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:28<00:00,  7.77it/s]
+[00.12.09] [INFO] Loading memories for iteration 77 with window size 19 (58-77)
+[00.12.41] [INFO] Results after playing vs stockfish level 3 at iteration 77: W/D/L: 38/30/32
+[00.12.51] [INFO] Results after playing vs model 10 at iteration 77: W/D/L: 91/9/0
+[00.13.16] [INFO] Loaded 1644900 samples from 50747 games
+[00.13.18] [INFO] Model and optimizer loaded from iteration 77
+[00.13.18] [INFO] Setting learning rate to 0.002 for iteration 77
+Train batches:   5%|███▏                                                                  | 74/1607 [00:40<09:52,  2.59it/s][00.13.58] [INFO] Results after playing vs model 20 at iteration 77: W/D/L: 89/9/2
+Train batches:   7%|████▌                                                                | 106/1607 [00:55<11:02,  2.26it/s][00.14.13] [INFO] Results after playing vs model 60 at iteration 77: W/D/L: 35/43/22
+Train batches:   7%|████▉                                                                | 115/1607 [00:58<10:34,  2.35it/s][00.14.17] [INFO] Results after playing 77 vs 72: W/D/L: 35/38/27
+Train batches:   9%|██████                                                               | 140/1607 [01:07<07:53,  3.10it/s][00.14.25] [INFO] Results after playing vs model 50 at iteration 77: W/D/L: 43/38/19
+Train batches:   9%|██████▏                                                              | 145/1607 [01:08<05:30,  4.42it/s][00.14.26] [INFO] Results after playing vs model 30 at iteration 77: W/D/L: 70/23/7
+Train batches:  10%|███████▏                                                             | 167/1607 [01:12<06:00,  4.00it/s][00.14.31] [INFO] Results after playing vs model 70 at iteration 77: W/D/L: 20/43/37
+Train batches:  11%|███████▋                                                             | 178/1607 [01:14<03:48,  6.27it/s][00.14.33] [INFO] Results after playing 77 vs 67: W/D/L: 31/41/28
+Train batches:  16%|██████████▋                                                          | 250/1607 [01:26<04:08,  5.46it/s][00.14.44] [INFO] Results after playing vs model 40 at iteration 77: W/D/L: 53/27/20
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1607/1607 [04:19<00:00,  6.19it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+[00.17.40] [INFO] Train stats:  Policy Loss: 1.7473, Value Loss: 0.1851, Total Loss: 1.8398, Value Mean: 0.0216, Value Std: 0.4512, Gradient Norm: 0.2141, Num Batches: 1607
+[00.17.40] [INFO] Valid stats:  Policy Loss: 1.8705, Value Loss: 0.1782, Total Loss: 1.9595, Value Mean: 0.0306, Value Std: 0.3984, Gradient Norm: 0.0000, Num Batches: 2
+[00.17.43] [INFO] Training finished for iteration 77
+[00.17.43] [INFO] Gating evaluation skipped at iteration 77. Using model 78.
+[00.17.43] [INFO] Started evaluation process for iteration 77.
+[00.17.43] [INFO] Starting iteration 78.
+Waiting for games (iter 78):  55%|█████████████████████████████▊                        | 2759/5000 [00:34<04:38,  8.03it/s][00.18.22] [INFO] Results after playing the current policy only vs random at iteration 78: W/D/L: 97/3/0
+Waiting for games (iter 78):  63%|█████████████████████████████████▉                    | 3139/5000 [01:25<03:51,  8.05it/s][00.19.11] [INFO] Evaluation results at iteration 78:
+[00.19.11] [INFO]     Policy accuracy @1: 39.17%
+[00.19.11] [INFO]     Policy accuracy @5: 78.58%
+[00.19.11] [INFO]     Policy accuracy @10: 90.96%
+[00.19.11] [INFO]     Avg value loss: 0.8025067475106981
+Waiting for games (iter 78):  78%|██████████████████████████████████████████            | 3890/5000 [02:56<02:08,  8.63it/s][00.20.43] [INFO] Results after playing vs random at iteration 78: W/D/L: 99/1/0
+Waiting for games (iter 78):  94%|██████████████████████████████████████████████████▊   | 4706/5000 [04:41<00:36,  8.13it/s][00.22.29] [INFO] Results after playing vs stockfish level 0 at iteration 78: W/D/L: 78/14/8
+Waiting for games (iter 78):  95%|███████████████████████████████████████████████████▍  | 4765/5000 [04:47<00:28,  8.38it/s][00.22.34] [INFO] Results after playing vs stockfish level 1 at iteration 78: W/D/L: 76/10/14
+Waiting for games (iter 78):  96%|███████████████████████████████████████████████████▉  | 4806/5000 [04:54<00:27,  7.13it/s][00.22.42] [INFO] Results after playing vs stockfish level 2 at iteration 78: W/D/L: 69/16/15
+Waiting for games (iter 78): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:22<00:00,  7.61it/s]
+[00.23.07] [INFO] Loading memories for iteration 78 with window size 19 (59-78)
+[00.23.29] [INFO] Results after playing vs model 10 at iteration 78: W/D/L: 86/14/0
+[00.23.48] [INFO] Results after playing vs stockfish level 3 at iteration 78: W/D/L: 44/28/28
+[00.24.19] [INFO] Results after playing vs model 20 at iteration 78: W/D/L: 83/13/4
+[00.24.21] [INFO] Loaded 1635373 samples from 50495 games
+[00.24.22] [INFO] Model and optimizer loaded from iteration 78
+[00.24.22] [INFO] Setting learning rate to 0.002 for iteration 78
+Train batches:   8%|█████▎                                                               | 124/1598 [00:53<11:05,  2.22it/s][00.25.16] [INFO] Results after playing 78 vs 68: W/D/L: 39/36/25
+Train batches:  10%|██████▌                                                              | 152/1598 [01:03<08:12,  2.94it/s][00.25.26] [INFO] Results after playing 78 vs 73: W/D/L: 26/45/29
+Train batches:  10%|██████▊                                                              | 159/1598 [01:05<07:00,  3.42it/s][00.25.28] [INFO] Results after playing vs model 40 at iteration 78: W/D/L: 59/23/18
+Train batches:  12%|████████▏                                                            | 189/1598 [01:14<05:58,  3.93it/s][00.25.36] [INFO] Results after playing vs model 50 at iteration 78: W/D/L: 33/42/25
+Train batches:  13%|█████████▏                                                           | 214/1598 [01:19<04:27,  5.18it/s][00.25.42] [INFO] Results after playing vs model 70 at iteration 78: W/D/L: 34/42/24
+Train batches:  16%|██████████▋                                                          | 248/1598 [01:25<04:14,  5.31it/s][00.25.47] [INFO] Results after playing vs model 30 at iteration 78: W/D/L: 57/31/12
+Train batches:  17%|███████████▍                                                         | 266/1598 [01:28<03:26,  6.45it/s][00.25.50] [INFO] Results after playing vs model 60 at iteration 78: W/D/L: 29/36/35
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1598/1598 [04:17<00:00,  6.20it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.45s/it]
+[00.28.43] [INFO] Train stats:  Policy Loss: 1.7460, Value Loss: 0.1850, Total Loss: 1.8385, Value Mean: 0.0217, Value Std: 0.4531, Gradient Norm: 0.2162, Num Batches: 1598
+[00.28.43] [INFO] Valid stats:  Policy Loss: 1.8241, Value Loss: 0.1543, Total Loss: 1.9013, Value Mean: 0.0432, Value Std: 0.4570, Gradient Norm: 0.0000, Num Batches: 2
+[00.28.46] [INFO] Training finished for iteration 78
+[00.28.46] [INFO] Gating evaluation skipped at iteration 78. Using model 79.
+[00.28.46] [INFO] Started evaluation process for iteration 78.
+[00.28.46] [INFO] Starting iteration 79.
+Waiting for games (iter 79):  55%|█████████████████████████████▉                        | 2769/5000 [00:37<04:59,  7.45it/s][00.29.26] [INFO] Results after playing the current policy only vs random at iteration 79: W/D/L: 99/1/0
+Waiting for games (iter 79):  69%|█████████████████████████████████████▍                | 3463/5000 [01:58<03:05,  8.30it/s][00.30.47] [INFO] Evaluation results at iteration 79:
+[00.30.47] [INFO]     Policy accuracy @1: 38.80%
+[00.30.47] [INFO]     Policy accuracy @5: 78.90%
+[00.30.47] [INFO]     Policy accuracy @10: 90.69%
+[00.30.47] [INFO]     Avg value loss: 0.8058905667728848
+Waiting for games (iter 79):  77%|█████████████████████████████████████████▌            | 3847/5000 [02:45<02:02,  9.38it/s][00.31.34] [INFO] Results after playing vs random at iteration 79: W/D/L: 98/2/0
+Waiting for games (iter 79):  94%|██████████████████████████████████████████████████▉   | 4712/5000 [04:33<00:37,  7.60it/s][00.33.23] [INFO] Results after playing vs stockfish level 0 at iteration 79: W/D/L: 85/12/3
+Waiting for games (iter 79):  98%|█████████████████████████████████████████████████████ | 4914/5000 [04:59<00:10,  8.10it/s][00.33.50] [INFO] Results after playing vs stockfish level 1 at iteration 79: W/D/L: 82/11/7
+Waiting for games (iter 79): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:10<00:00,  7.90it/s]
+[00.33.58] [INFO] Loading memories for iteration 79 with window size 19 (60-79)
+[00.34.17] [INFO] Results after playing vs stockfish level 2 at iteration 79: W/D/L: 74/14/12
+[00.34.38] [INFO] Results after playing vs model 10 at iteration 79: W/D/L: 91/8/1
+[00.34.57] [INFO] Results after playing vs stockfish level 3 at iteration 79: W/D/L: 40/35/25
+[00.35.05] [INFO] Loaded 1628250 samples from 50270 games
+[00.35.07] [INFO] Model and optimizer loaded from iteration 79
+[00.35.07] [INFO] Setting learning rate to 0.002 for iteration 79
+Train batches:   7%|████▊                                                                | 110/1591 [00:56<13:53,  1.78it/s][00.36.04] [INFO] Results after playing vs model 40 at iteration 79: W/D/L: 49/34/17
+Train batches:   7%|████▉                                                                | 115/1591 [00:59<12:29,  1.97it/s][00.36.06] [INFO] Results after playing vs model 20 at iteration 79: W/D/L: 82/15/3
+Train batches:   9%|██████▏                                                              | 143/1591 [01:10<09:32,  2.53it/s][00.36.17] [INFO] Results after playing 79 vs 74: W/D/L: 39/35/26
+Train batches:  10%|██████▋                                                              | 155/1591 [01:14<06:05,  3.93it/s][00.36.21] [INFO] Results after playing vs model 70 at iteration 79: W/D/L: 36/44/20
+Train batches:  10%|███████                                                              | 163/1591 [01:16<05:48,  4.10it/s][00.36.23] [INFO] Results after playing 79 vs 69: W/D/L: 37/37/26
+Train batches:  13%|████████▋                                                            | 201/1591 [01:25<04:46,  4.85it/s][00.36.32] [INFO] Results after playing vs model 30 at iteration 79: W/D/L: 57/33/10
+Train batches:  13%|█████████                                                            | 209/1591 [01:26<02:54,  7.94it/s][00.36.33] [INFO] Results after playing vs model 60 at iteration 79: W/D/L: 33/46/21
+Train batches:  17%|███████████▍                                                         | 263/1591 [01:34<04:12,  5.26it/s][00.36.41] [INFO] Results after playing vs model 50 at iteration 79: W/D/L: 41/40/19
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1591/1591 [04:21<00:00,  6.07it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:03<00:00,  1.50s/it]
+[00.39.32] [INFO] Train stats:  Policy Loss: 1.7438, Value Loss: 0.1851, Total Loss: 1.8363, Value Mean: 0.0221, Value Std: 0.4512, Gradient Norm: 0.2164, Num Batches: 1591
+[00.39.32] [INFO] Valid stats:  Policy Loss: 1.8463, Value Loss: 0.1724, Total Loss: 1.9324, Value Mean: -0.0034, Value Std: 0.4395, Gradient Norm: 0.0000, Num Batches: 2
+[00.39.35] [INFO] Training finished for iteration 79
+[00.39.35] [INFO] Gating evaluation skipped at iteration 79. Using model 80.
+[00.39.35] [INFO] Started evaluation process for iteration 79.
+[00.39.35] [INFO] Starting iteration 80.
+Waiting for games (iter 80):  55%|█████████████████████████████▌                        | 2740/5000 [00:36<05:21,  7.03it/s][00.40.14] [INFO] Results after playing the current policy only vs random at iteration 80: W/D/L: 98/2/0
+Waiting for games (iter 80):  67%|███████████████████████████████████▉                  | 3329/5000 [01:52<03:39,  7.61it/s][00.41.32] [INFO] Evaluation results at iteration 80:
+[00.41.32] [INFO]     Policy accuracy @1: 39.27%
+[00.41.32] [INFO]     Policy accuracy @5: 78.60%
+[00.41.32] [INFO]     Policy accuracy @10: 90.78%
+[00.41.32] [INFO]     Avg value loss: 0.8106273942523532
+Waiting for games (iter 80):  72%|██████████████████████████████████████▉               | 3610/5000 [02:27<02:30,  9.26it/s][00.42.06] [INFO] Results after playing vs random at iteration 80: W/D/L: 99/1/0
+Waiting for games (iter 80):  90%|████████████████████████████████████████████████▌     | 4493/5000 [04:21<01:17,  6.58it/s][00.43.59] [INFO] Results after playing vs stockfish level 1 at iteration 80: W/D/L: 74/15/11
+Waiting for games (iter 80):  90%|████████████████████████████████████████████████▊     | 4519/5000 [04:24<01:07,  7.11it/s][00.44.01] [INFO] Results after playing vs stockfish level 2 at iteration 80: W/D/L: 76/14/10
+Waiting for games (iter 80):  91%|█████████████████████████████████████████████████▎    | 4566/5000 [04:30<01:01,  7.07it/s][00.44.08] [INFO] Results after playing vs stockfish level 0 at iteration 80: W/D/L: 85/11/4
+Waiting for games (iter 80):  98%|█████████████████████████████████████████████████████ | 4914/5000 [05:16<00:10,  8.16it/s][00.44.55] [INFO] Results after playing vs model 10 at iteration 80: W/D/L: 88/11/1
+Waiting for games (iter 80): 100%|█████████████████████████████████████████████████████▊| 4988/5000 [05:26<00:01,  7.54it/s][00.45.04] [INFO] Results after playing vs stockfish level 3 at iteration 80: W/D/L: 47/26/27
+Waiting for games (iter 80): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:30<00:00,  7.53it/s]
+[00.45.07] [INFO] Loading memories for iteration 80 with window size 20 (60-80)
+[00.45.54] [INFO] Results after playing vs model 20 at iteration 80: W/D/L: 92/7/1
+[00.46.12] [INFO] Loaded 1706681 samples from 52694 games
+[00.46.14] [INFO] Model and optimizer loaded from iteration 80
+[00.46.14] [INFO] Setting learning rate to 0.002 for iteration 80
+Train batches:   0%|                                                                               | 0/1667 [00:00<?, ?it/s][00.46.18] [INFO] Results after playing vs model 30 at iteration 80: W/D/L: 69/26/5
+Train batches:   0%|▎                                                                      | 7/1667 [00:07<15:13,  1.82it/s][00.46.22] [INFO] Results after playing vs model 40 at iteration 80: W/D/L: 55/34/11
+Train batches:   1%|█                                                                     | 24/1667 [00:13<09:54,  2.76it/s][00.46.27] [INFO] Results after playing 80 vs 75: W/D/L: 34/41/25
+Train batches:   2%|█▍                                                                    | 34/1667 [00:15<04:32,  5.99it/s][00.46.29] [INFO] Results after playing 80 vs 70: W/D/L: 30/39/31
+Train batches:   3%|██▍                                                                   | 57/1667 [00:20<06:50,  3.93it/s][00.46.34] [INFO] Results after playing vs model 50 at iteration 80: W/D/L: 40/32/28
+Train batches:   4%|███                                                                   | 72/1667 [00:23<04:44,  5.60it/s][00.46.37] [INFO] Results after playing vs model 60 at iteration 80: W/D/L: 38/42/20
+Train batches:   9%|██████                                                               | 146/1667 [00:34<03:18,  7.65it/s][00.46.48] [INFO] Results after playing vs model 70 at iteration 80: W/D/L: 38/40/22
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1667/1667 [03:56<00:00,  7.04it/s]
+Valid batches: 100%|██████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.28s/it]
+[00.50.13] [INFO] Train stats:  Policy Loss: 1.7409, Value Loss: 0.1844, Total Loss: 1.8331, Value Mean: 0.0216, Value Std: 0.4531, Gradient Norm: 0.2138, Num Batches: 1667
+[00.50.13] [INFO] Valid stats:  Policy Loss: 1.8088, Value Loss: 0.2464, Total Loss: 1.9320, Value Mean: 0.0205, Value Std: 0.4961, Gradient Norm: 0.0000, Num Batches: 2
+[00.50.16] [INFO] Training finished for iteration 80
+[00.50.16] [INFO] Gating evaluation skipped at iteration 80. Using model 81.
+[00.50.16] [INFO] Started evaluation process for iteration 80.
+[00.50.16] [INFO] Starting iteration 81.
+Waiting for games (iter 81):  54%|█████████████████████████████                         | 2692/5000 [00:42<04:32,  8.46it/s][00.51.01] [INFO] Results after playing the current policy only vs random at iteration 81: W/D/L: 99/1/0
+Waiting for games (iter 81):  58%|███████████████████████████████▌                      | 2920/5000 [01:13<04:33,  7.61it/s][00.51.32] [INFO] Evaluation results at iteration 81:
+[00.51.32] [INFO]     Policy accuracy @1: 39.10%
+[00.51.32] [INFO]     Policy accuracy @5: 78.81%
+[00.51.32] [INFO]     Policy accuracy @10: 90.96%
+[00.51.32] [INFO]     Avg value loss: 0.798306922117869
+Waiting for games (iter 81):  74%|████████████████████████████████████████▏             | 3720/5000 [02:58<02:36,  8.18it/s][00.53.18] [INFO] Results after playing vs random at iteration 81: W/D/L: 100/0/0
+Waiting for games (iter 81):  94%|██████████████████████████████████████████████████▌   | 4687/5000 [05:02<00:36,  8.69it/s][00.55.21] [INFO] Results after playing vs stockfish level 1 at iteration 81: W/D/L: 74/14/12
+Waiting for games (iter 81):  94%|██████████████████████████████████████████████████▊   | 4709/5000 [05:05<00:36,  8.08it/s][00.55.24] [INFO] Results after playing vs stockfish level 0 at iteration 81: W/D/L: 78/18/4
+Waiting for games (iter 81):  99%|█████████████████████████████████████████████████████▍| 4946/5000 [05:33<00:05,  9.60it/s][00.55.52] [INFO] Results after playing vs stockfish level 2 at iteration 81: W/D/L: 76/15/9
+Waiting for games (iter 81): 100%|█████████████████████████████████████████████████████▉| 4999/5000 [05:40<00:00,  7.61it/s]
+[00.55.57] [INFO] Loading memories for iteration 81 with window size 20 (61-81)
+[00.56.27] [INFO] Results after playing vs model 10 at iteration 81: W/D/L: 90/10/0
+[00.56.58] [INFO] Results after playing vs stockfish level 3 at iteration 81: W/D/L: 50/32/18
+[00.57.13] [INFO] Loaded 1703683 samples from 52641 games
+[00.57.15] [INFO] Model and optimizer loaded from iteration 81
+[00.57.15] [INFO] Setting learning rate to 0.002 for iteration 81
+Train batches:   5%|███▍                                                                  | 82/1664 [00:50<14:20,  1.84it/s][00.58.06] [INFO] Results after playing vs model 20 at iteration 81: W/D/L: 79/19/2
+Train batches:   6%|████▎                                                                | 104/1664 [01:03<15:40,  1.66it/s][00.58.19] [INFO] Results after playing 81 vs 76: W/D/L: 33/43/24
+Train batches:   6%|████▍                                                                | 106/1664 [01:04<14:16,  1.82it/s][00.58.19] [INFO] Results after playing vs model 70 at iteration 81: W/D/L: 42/32/26
+Train batches:   6%|████▍                                                                | 108/1664 [01:04<12:14,  2.12it/s][00.58.20] [INFO] Results after playing vs model 40 at iteration 81: W/D/L: 53/28/19
+Train batches:   7%|█████▏                                                               | 124/1664 [01:10<07:50,  3.27it/s][00.58.25] [INFO] Results after playing vs model 50 at iteration 81: W/D/L: 53/33/14
+Train batches:   8%|█████▎                                                               | 127/1664 [01:10<06:53,  3.72it/s][00.58.26] [INFO] Results after playing vs model 30 at iteration 81: W/D/L: 69/23/8
+Train batches:   9%|██████▍                                                              | 156/1664 [01:16<04:33,  5.52it/s][00.58.32] [INFO] Results after playing vs model 60 at iteration 81: W/D/L: 42/32/26
+Train batches:  12%|████████▎                                                            | 199/1664 [01:24<03:24,  7.16it/s][00.58.39] [INFO] Results after playing 81 vs 71: W/D/L: 32/42/26
+Train batches:  15%|██████████▌                                                          | 254/1664 [01:32<02:54,  8.10it/s][00.58.48] [INFO] Results after playing vs model 80 at iteration 81: W/D/L: 30/44/26
+Train batches: 100%|████████████████████████████████████████████████████████████████████| 1664/1664 [04:33<00:00,  6.09it/s]
+Valid batches:   0%|                                                                                  | 0/2 [00:00<?, ?it/s]
+[01.01.49] [WARNING] Exception in Commander process: [Errno 24] Too many open files
+Traceback (most recent call last):
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/util/exceptions.py", line 10, in log_exceptions
+    yield
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/cluster/CommanderProcess.py", line 110, in run
+    trainer.train(iteration)
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/util/timing.py", line 25, in wrapper
+    return func(*args, **kwargs)
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/cluster/TrainerProcess.py", line 77, in train
+    epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/util/timing.py", line 25, in wrapper
+    return func(*args, **kwargs)
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/train/Trainer.py", line 143, in train
+    validation_stats: TrainingStats = self._validate_epoch(validation_dataloader)
+  File "/root/Advanced-Techniques-in-Chess-Engines/py/src/train/Trainer.py", line 114, in _validate_epoch
+    for batch in tqdm(validation_dataloader, desc='Valid batches'):
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 488, in __iter__
+    self._iterator = self._get_iterator()
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 424, in _get_iterator
+    return _MultiProcessingDataLoaderIter(self)
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1171, in __init__
+    w.start()
+  File "/root/miniconda3/envs/Chess/lib/python3.10/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+  File "/root/miniconda3/envs/Chess/lib/python3.10/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+  File "/root/miniconda3/envs/Chess/lib/python3.10/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+  File "/root/miniconda3/envs/Chess/lib/python3.10/multiprocessing/popen_fork.py", line 65, in _launch
+    child_r, parent_w = os.pipe()
+OSError: [Errno 24] Too many open files
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7b7e67c80040>
+Traceback (most recent call last):
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1663, in __del__
+    self._shutdown_workers()
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1622, in _shutdown_workers
+    self._mark_worker_as_unavailable(worker_id, shutdown=True)
+  File "/root/miniconda3/envs/Chess/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 1577, in _mark_worker_as_unavailable
+    self._workers_status[worker_id] = False
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute '_workers_status'
+[01.01.49] [INFO] Training complete. Sending STOP to all processes.
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ /root/miniconda3/envs/Chess/lib/python3.10/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 174 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ ls
+AlphaZeroCpp.pyi  README.md         __init__.py    communication     eval.py                  logs    opt.sh     reference         setup.sh  start_tmux.sh  test.py   train.sh
+AlphaZeroCpp.so   README_cpp_py.md  combined_logs  dataset_train.sh  inference_speed_test.py  opt.py  perf.data  requirements.txt  src       test           train.py  training_data
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ zip -r zip9.zip training_data/chess/model_
+Display all 164 possibilities? (y or n)
+model_0.jit.pt   model_14.pt      model_20.jit.pt  model_26.pt      model_32.jit.pt  model_38.pt      model_44.jit.pt  model_5.pt       model_56.jit.pt  model_61.pt      model_68.jit.pt  model_73.pt      model_8.jit.pt
+model_0.pt       model_15.jit.pt  model_20.pt      model_27.jit.pt  model_32.pt      model_39.jit.pt  model_44.pt      model_50.jit.pt  model_56.pt      model_62.jit.pt  model_68.pt      model_74.jit.pt  model_8.pt
+model_1.jit.pt   model_15.pt      model_21.jit.pt  model_27.pt      model_33.jit.pt  model_39.pt      model_45.jit.pt  model_50.pt      model_57.jit.pt  model_62.pt      model_69.jit.pt  model_74.pt      model_80.jit.pt
+model_1.pt       model_16.jit.pt  model_21.pt      model_28.jit.pt  model_33.pt      model_4.jit.pt   model_45.pt      model_51.jit.pt  model_57.pt      model_63.jit.pt  model_69.pt      model_75.jit.pt  model_80.pt
+model_10.jit.pt  model_16.pt      model_22.jit.pt  model_28.pt      model_34.jit.pt  model_4.pt       model_46.jit.pt  model_51.pt      model_58.jit.pt  model_63.pt      model_7.jit.pt   model_75.pt      model_81.jit.pt
+model_10.pt      model_17.jit.pt  model_22.pt      model_29.jit.pt  model_34.pt      model_40.jit.pt  model_46.pt      model_52.jit.pt  model_58.pt      model_64.jit.pt  model_7.pt       model_76.jit.pt  model_81.pt
+model_11.jit.pt  model_17.pt      model_23.jit.pt  model_29.pt      model_35.jit.pt  model_40.pt      model_47.jit.pt  model_52.pt      model_59.jit.pt  model_64.pt      model_70.jit.pt  model_76.pt      model_9.jit.pt
+model_11.pt      model_18.jit.pt  model_23.pt      model_3.jit.pt   model_35.pt      model_41.jit.pt  model_47.pt      model_53.jit.pt  model_59.pt      model_65.jit.pt  model_70.pt      model_77.jit.pt  model_9.pt
+model_12.jit.pt  model_18.pt      model_24.jit.pt  model_3.pt       model_36.jit.pt  model_41.pt      model_48.jit.pt  model_53.pt      model_6.jit.pt   model_65.pt      model_71.jit.pt  model_77.pt      
+model_12.pt      model_19.jit.pt  model_24.pt      model_30.jit.pt  model_36.pt      model_42.jit.pt  model_48.pt      model_54.jit.pt  model_6.pt       model_66.jit.pt  model_71.pt      model_78.jit.pt  
+model_13.jit.pt  model_19.pt      model_25.jit.pt  model_30.pt      model_37.jit.pt  model_42.pt      model_49.jit.pt  model_54.pt      model_60.jit.pt  model_66.pt      model_72.jit.pt  model_78.pt      
+model_13.pt      model_2.jit.pt   model_25.pt      model_31.jit.pt  model_37.pt      model_43.jit.pt  model_49.pt      model_55.jit.pt  model_60.pt      model_67.jit.pt  model_72.pt      model_79.jit.pt  
+model_14.jit.pt  model_2.pt       model_26.jit.pt  model_31.pt      model_38.jit.pt  model_43.pt      model_5.jit.pt   model_55.pt      model_61.jit.pt  model_67.pt      model_73.jit.pt  model_79.pt      
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ zip -r zip9.zip training_data/chess/model_8* training_data/chess/optimizer_8* logs communication/
+  adding: training_data/chess/model_8.jit.pt (deflated 7%)
+  adding: training_data/chess/model_8.pt (deflated 7%)
+  adding: training_data/chess/model_80.jit.pt (deflated 7%)
+  adding: training_data/chess/model_80.pt (deflated 8%)
+  adding: training_data/chess/model_81.jit.pt (deflated 7%)
+  adding: training_data/chess/model_81.pt (deflated 8%)
+  adding: training_data/chess/optimizer_8.pt (deflated 8%)
+  adding: training_data/chess/optimizer_80.pt^C
+
+
+zip error: Interrupted (aborting)
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ zip -r zip9.zip training_data/chess/model_8* training_data/chess/optimizer_8* logs communication/ train_^C
+(Chess) (main) root@C.21279300:~/Advanced-Techniques-in-Chess-Engines/py$ tmux capture-pane -J -S - -p > tmux_history.txt
+

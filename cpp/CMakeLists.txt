@@ -123,13 +123,6 @@ FetchContent_Declare(
         GIT_TAG v2.13.6
 )
 
-# --- Fetch tensorboard_logger ---
-# FetchContent_Declare(
-#     tensorboard_logger
-#     GIT_REPOSITORY https://github.com/RustingSword/tensorboard_logger.git
-#     GIT_TAG master
-# )
-
 # --- Fetch Stockfish ---
 FetchContent_Declare(
         Stockfish
@@ -170,11 +163,6 @@ pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
-
-# target_link_libraries(AlphaZeroCpp PRIVATE ${Protobuf_LIBRARIES} tensorboard_logger "${TORCH_LIBRARIES}")
-
-# target_include_directories(AlphaZeroCpp PRIVATE ${Protobuf_INCLUDE_DIRS})
-# target_include_directories(AlphaZeroCpp PRIVATE ${tensorboard_logger_SOURCE_DIR}/include)
 
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20

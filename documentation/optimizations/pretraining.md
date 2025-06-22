@@ -12,8 +12,6 @@ My idea to overcome this problem is to use grandmaster games and stockfish evalu
 
 ## Training Data Generation
 
-(We are using Stockfish 8 on the cluster, because it is the only version that compiles there)
-
 With parallelization, we can generate the training data for the model in a reasonable amount of time. We can use the cluster to generate the training data for the model. We generated about 28mil samples from mainly the lichess evaluations over 2h on 32 threads of the cluster.
 
 ## Approach Implemented
