@@ -15,8 +15,8 @@ The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to 
 - **General Game Framework**: Extensible architecture supporting multiple board games with minimal modification
 - **Self-Play Learning**: Learns optimal strategies without human knowledge or game-specific heuristics
 - **Distributed Training**: Scalable across multiple GPUs and CPU cores with asynchronous data generation
-- **Production-Ready Performance**: Optimized C++ MCTS implementation achieving 4-10k searches per second
-- **Budget Efficient**: Achieves strong performance with limited computational resources
+- **Production-Ready Performance**: Optimized C++ MCTS implementation achieving ~77k searches per second during self play and 6-12k searches per second during evaluation per GPU
+- **Budget Efficient**: Achieves strong performance with quite limited computational resources
 
 ---
 
@@ -34,14 +34,15 @@ The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to 
 
 ### **Chess Performance Analysis**
 
-The Chess implementation represents the project's main achievement, demonstrating sophisticated understanding of both tactical and positional concepts. Training utilized approximately 280,000 games over 100,000 update steps with a compact 8x96 neural network architecture.
+The Chess implementation represents the project's main achievement, demonstrating sophisticated understanding of both tactical and positional concepts. Training for ~12 hours utilized approximately 280,000 games over 100,000 update steps with a compact 8x96 neural network architecture.
 
 ![Sample Game vs Stockfish Level 6](documentation/chess_results/Example%20Game.gif)
+
 *AlphaZero-Clone (White) defeating Stockfish Level 6 in a tactical middlegame*
 
 #### **Benchmark Results**
 
-Performance was evaluated against multiple opponents across various time controls:
+Performance was evaluated against multiple opponents across various levels, including Stockfish at different skill levels and Elo-calibrated targets. The results indicate strong tactical play and positional understanding, with the engine consistently outperforming lower-level Stockfish configurations:
 
 **Stockfish UCI Level Testing:**
 
@@ -62,12 +63,12 @@ Performance was evaluated against multiple opponents across various time control
 | 2200       | 7/4/9  |
 | 2400       | 5/7/8  |
 
-*The engine also passed a more personal benchmark: winning a casual game against my Dad ❤️.*
-
 *Testing conditions: 1.0s/move time control, Stockfish skill level limited via `Skill Level`, Elo targets set via `UCI_Elo`*  
 *Testing hardware: Single A10 GPU + 16 CPUs vs Stockfish on 32 CPUs*
 
 The performance data suggests the engine operates at approximately **2000-2100 Elo**, demonstrating intermediate-level play with solid tactical awareness and positional understanding.
+
+**The engine also passed a more personal benchmark: winning a casual game against my Dad ❤️.**
 
 ---
 
