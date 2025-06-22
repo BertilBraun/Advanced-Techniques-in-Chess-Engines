@@ -1,7 +1,5 @@
 # AlphaZero-Clone: General Deep Reinforcement Learning for Board Games
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines)
-
 > **Achievement:** Intermediate-level Chess AI (~2000-2100 Elo) trained on a $350 personal R&D budget with final model costing $13 to train.
 
 ## **Project Overview**
@@ -91,7 +89,9 @@ The project leverages a hybrid Python/C++ architecture optimized for both develo
 - **Python Components**: Training orchestration, neural network definitions, experimental framework
 - **C++ Components**: High-performance MCTS implementation, game engines, batched inference
 - **Asynchronous Design**: Self-play workers operate independently while training occurs on accumulated data
-- **Mixed Precision**: BFloat16 training and inference for improved performance and reduced memory usage
+- **Mixed Precision**: `torch.amp.autocast(bfloat16)` training and inference in `bfloat16` for improved performance and reduced memory usage
+
+For a detailed overview of the entire project and all implementation details, refer to the [Technical Documentation: ![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines)
 
 ---
 
