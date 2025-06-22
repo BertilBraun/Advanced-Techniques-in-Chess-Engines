@@ -116,8 +116,7 @@ The implementation incorporates several established techniques for improved perf
 - **Playout-Cap Randomization**: Technique borrowed from KataGo for improved exploration
 - **Asynchronous Training**: Continuous data generation while neural network training occurs
 
-<details>
-<summary><strong>Training Progression Analysis</strong></summary>
+### Training Progression Analysis
 
 The training process demonstrates clear learning phases visible in comprehensive metrics:
 
@@ -131,8 +130,6 @@ The training process demonstrates clear learning phases visible in comprehensive
 - **Evaluation Metrics**: Win rates against previous models and Stockfish show clear upward trends
 
 The training data reveals the model's learning trajectory from random play to sophisticated chess understanding, with the skill level increasing significantly over time. Notably, the model does not seem to have fully converged yet, indicating potential for further improvement with additional training resources. Additionally, increases in model size, training duration and number of games played will most likely lead to even stronger performance.
-
-</details>
 
 ---
 
