@@ -191,7 +191,6 @@ class MCTS:
         #         )
 
         DISPLAY = False
-        DISPLAY = True
         if DISPLAY:
             if CURRENT_GAME == 'hex':
                 from src.games.hex.HexVisuals import display_node

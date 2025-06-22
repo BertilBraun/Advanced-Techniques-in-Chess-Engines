@@ -24,7 +24,7 @@ def alpha_zero_bot_factory(game_index: int) -> AlphaZeroBot:
         current_model_path=MODEL_PATH,
         device_id=game_index % max(1, torch.cuda.device_count()),
         max_time_to_think=MAX_TIME_TO_THINK,
-        network_eval_only=False,
+        network_eval_only=NETWORK_ONLY,
     )
 
 
