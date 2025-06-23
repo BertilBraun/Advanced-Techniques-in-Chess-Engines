@@ -72,6 +72,8 @@ The performance data suggests the engine operates at approximately **2000-2100 E
 
 ## **Technical Architecture**
 
+**For those interested in implementing their own AlphaZero-style system, detailed insights and recommendations based on my implementation experience can be found in [Insights and Recommendations](documentation/insights_and_recommendations.md).**
+
 The system is built around a robust training pipeline that separates concerns between data generation, neural network training, and model evaluation:
 
 ### **Training Pipeline**
