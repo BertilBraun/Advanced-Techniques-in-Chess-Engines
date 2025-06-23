@@ -18,6 +18,10 @@ Path Consistency ([paper](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf
 
 Population Based Training ([paper](https://arxiv.org/abs/2003.06212)) - seems to be a better hyperparameter optimization technique than bayesian optimization based on their paper. Apparently they only require a single training run instead of the multiple runs for bayesian optimization.
 
+## [Monte-Carlo Graph Search](https://ojs.aaai.org/index.php/ICAPS/article/view/15952)
+
+Monte-Carlo Graph Search merges nodes in the MCTS tree that have the same state, which can significantly reduce the size of the MCTS tree and remove duplicated nodes which would otherwise require two separate search paths, potentially reducing the number of simulations required for a move. This could be especially useful for games with large branching factors, such as Go or Chess where the positions can be very similar but have different move sequences leading to them.
+
 ## Faster Initial learning
 
 Initially, the first iterations of training are almost akin to noise, as the model is not yet trained. In addition, initially the model does not need to learn a lot, just the basics to improve its performance. Therefore the first iterations of training can be sped up by using a smaller model, which allows for faster self-play games and faster training and a model that is only able to learn the basics. Once the model has learned the basics, the model can be scaled up to a larger model, which can learn more complex patterns. To transfer the knowledge from the smaller model to the larger model, the latest samples from the smaller model can be used to train the larger model until the loss of the larger model is lower than the loss of the smaller model. After that, the larger model can be used for the next iterations of training.
