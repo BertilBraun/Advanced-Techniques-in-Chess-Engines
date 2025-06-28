@@ -11,7 +11,7 @@ While originally intended to replace the Python version entirely, some higher-le
 
 Detailed documentation for each project component can be found in:
 
-- **[Chess Encoding for Neural Networks](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/5.1-chess-implementation#move-encoding-system)**: How chess board states are encoded as inputs to the neural network.
+- **[Chess Encoding for Neural Networks](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/5.1-chess-implementation)**: How chess board states are encoded as inputs to the neural network.
 - **[Chess Framework](https://github.com/BertilBraun/Stockfish)**: Details about the the chess framework and logic adapted from the Stockfish chess engine.
 - **[MCTS Parallelization](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.1-c++-mcts-engine)**: Strategies used for efficient parallel MCTS.
 - **[Inference Client](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.2-c++-inference-client)**: Architecture of the C++ inference client.
