@@ -1,0 +1,83 @@
+{
+  "run_name": "chess-continuation-4x4070s-vast-45170106-shutdown-smoke",
+  "stage": "systems_pilot",
+  "requires_explicit_approval": true,
+  "output_path": "py/training_data/chess-continuation-4x4070s-vast-45170106-shutdown-smoke",
+  "resume": {
+    "mode": "weights_only",
+    "model_path": "documentation/chess_results/best_model.pt",
+    "optimizer": "adamw"
+  },
+  "budget": {
+    "currency": "USD",
+    "hourly_price": 0.3957777777777778,
+    "maximum_cost": null,
+    "maximum_wall_time_minutes": 10
+  },
+  "hardware": {
+    "provider_name": "vast.ai",
+    "offer_id": "45170106",
+    "gpu_model": "NVIDIA GeForce RTX 4070 SUPER",
+    "gpu_count": 4,
+    "logical_cpu_count": 64,
+    "minimum_ram_gib": 120,
+    "minimum_disk_gib": 80
+  },
+  "topology": {
+    "trainer_device_id": 3,
+    "evaluation_device_id": 3,
+    "self_play_processes_per_device": [6, 6, 6, 2],
+    "mcts_threads_per_process": 2,
+    "parallel_games_per_process": 64,
+    "trainer_cpu_threads": 8,
+    "trainer_interop_threads": 2,
+    "dataloader_workers": 0,
+    "reserved_logical_cpus": 12,
+    "max_concurrent_evaluations": 1,
+    "max_concurrent_evaluation_tasks": 1
+  },
+  "workload": {
+    "iterations": 1,
+    "games_per_iteration": 20,
+    "learning_rate": 0.0002,
+    "random_seed": 20260717,
+    "evaluation_games": 16,
+    "evaluation_searches_per_turn": 64,
+    "evaluation_every_iterations": 100
+  },
+  "safety": {
+    "maximum_open_file_count": 32768,
+    "maximum_host_ram_percent": 90,
+    "minimum_free_disk_gib": 20,
+    "telemetry_interval_seconds": 10
+  },
+  "retention": {
+    "checkpoint_count": 5,
+    "replay_window_iterations": 30
+  },
+  "evaluation_protocol": {
+    "opening_suite_path": "py/reference/pilot-openings.tsv",
+    "reference_model_path": "py/training_data/chess-continuation-4x4070s-vast-45170106-shutdown-smoke/model_0.pt",
+    "raw_results_subdirectory": "evaluations",
+    "maximum_game_plies": 200,
+    "bootstrap_seed": 20260717,
+    "bootstrap_samples": 10000,
+    "mcts_threads": 4,
+    "evaluate_dataset": false,
+    "evaluate_initial_checkpoint": false,
+    "stockfish_binary_path": "/workspace/chess/stockfish-18",
+    "stockfish_nodes_per_move": 1000,
+    "stockfish_threads": 1,
+    "stockfish_hash_mib": 128
+  },
+  "environment": {
+    "runtime_image": "vastai/pytorch:cuda-13.2.1-auto",
+    "python_version": "3.10",
+    "torch_version": "2.7.1+cu128",
+    "cuda_version": "12.8",
+    "dependency_lock_path": "py/requirements-training.lock",
+    "dependency_lock_sha256": "2eb67d2a3c43b458bf66d7651c17fcafe8f180206287cc347ea09c9e0c64e250",
+    "stockfish_revision": "cb3d4ee9b47d0c5aae855b12379378ea1439675c",
+    "minimum_open_file_soft_limit": 65536
+  }
+}

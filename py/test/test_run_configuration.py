@@ -37,6 +37,7 @@ from src.train.TrainingArgs import (
 
 CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-pilot.json')
 SCALING_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-scaling-pilot.json')
+SHUTDOWN_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-shutdown-smoke.json')
 
 
 def sampling_window(_: int) -> int:
@@ -140,7 +141,10 @@ def resolved_pilot_hardware() -> ResolvedHardware:
     )
 
 
-@pytest.mark.parametrize('configuration_path', (CONFIGURATION_PATH, SCALING_CONFIGURATION_PATH))
+@pytest.mark.parametrize(
+    'configuration_path',
+    (CONFIGURATION_PATH, SCALING_CONFIGURATION_PATH, SHUTDOWN_CONFIGURATION_PATH),
+)
 def test_pilot_configuration_is_valid_for_quoted_hardware(configuration_path: Path) -> None:
     configuration = load_run_configuration(configuration_path)
 
