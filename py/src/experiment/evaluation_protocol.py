@@ -85,6 +85,7 @@ class MatchConditions(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     source_revision: str
+    evaluation_source_revision: str
     opening_suite_path: str
     opening_suite_sha256: str
     candidate: EngineCondition

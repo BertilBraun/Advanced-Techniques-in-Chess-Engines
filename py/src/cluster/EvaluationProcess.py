@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 from torch import multiprocessing as mp
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
@@ -21,6 +22,20 @@ from src.experiment.evaluation_protocol import (
     write_match_report,
 )
 from src.experiment.run_configuration import RunManifest
+
+
+SOURCE_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _evaluation_source_revision() -> str:
+    completed = subprocess.run(
+        ['git', 'rev-parse', 'HEAD'],
+        cwd=SOURCE_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
 
 
 def run_evaluation_process(run: int, args: TrainingArgs, iteration: int) -> None:
@@ -160,6 +175,7 @@ def _eval_vs_reference(
     report = MatchReport(
         conditions=MatchConditions(
             source_revision=run_manifest.source_revision,
+            evaluation_source_revision=_evaluation_source_revision(),
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
             candidate=condition,
@@ -229,6 +245,7 @@ def _eval_vs_stockfish_fixed(
     report = MatchReport(
         conditions=MatchConditions(
             source_revision=run_manifest.source_revision,
+            evaluation_source_revision=_evaluation_source_revision(),
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
             candidate=EngineCondition(
