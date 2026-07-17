@@ -206,6 +206,14 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation.stockfish_hash_mib == 128
 
 
+def test_training_rejects_legacy_configuration_without_retention() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    legacy_configuration = configuration.model_copy(update={'retention': None})
+
+    with pytest.raises(ValueError, match='retention must be configured'):
+        apply_run_configuration(training_args(), legacy_configuration)
+
+
 def test_approval_must_match_exact_configuration_and_source() -> None:
     configuration = load_run_configuration(CONFIGURATION_PATH)
     source_revision = '1' * 40

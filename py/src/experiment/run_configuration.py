@@ -175,7 +175,7 @@ class RunConfiguration(BaseModel):
     topology: TopologyConfiguration
     workload: WorkloadConfiguration
     safety: SafetyConfiguration
-    retention: RetentionConfiguration
+    retention: RetentionConfiguration | None = None
     evaluation_protocol: EvaluationProtocolConfiguration
     environment: EnvironmentConfiguration
 
@@ -395,12 +395,15 @@ def apply_run_configuration(
 ) -> None:
     topology = configuration.topology
     workload = configuration.workload
+    retention = configuration.retention
+    if retention is None:
+        raise ValueError('Artifact retention must be configured for training.')
     maximum_sampling_window = max(
         training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1)
     )
-    if configuration.retention.replay_window_iterations < maximum_sampling_window:
+    if retention.replay_window_iterations < maximum_sampling_window:
         raise ValueError(
-            f'Replay retention of {configuration.retention.replay_window_iterations} iterations is below '
+            f'Replay retention of {retention.replay_window_iterations} iterations is below '
             f'the maximum training sampling window of {maximum_sampling_window}.'
         )
 
@@ -430,8 +433,8 @@ def apply_run_configuration(
         minimum_free_disk_gib=configuration.safety.minimum_free_disk_gib,
     )
     training_args.artifact_retention = ArtifactRetention(
-        checkpoint_count=configuration.retention.checkpoint_count,
-        replay_window_iterations=configuration.retention.replay_window_iterations,
+        checkpoint_count=retention.checkpoint_count,
+        replay_window_iterations=retention.replay_window_iterations,
     )
 
     if training_args.evaluation is not None:
