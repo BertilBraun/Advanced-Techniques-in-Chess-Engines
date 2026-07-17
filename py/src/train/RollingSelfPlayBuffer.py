@@ -27,6 +27,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         self._prefix: list[int] = [0]  # len prefix sums
         self._num_samples = 0
         self._max_buffer_samples = max_buffer_samples
+        self._logging_threads: list[Thread] = []
 
     # ---------- public API used by TrainerProcess ------------------------- #
     def update(self, iteration: int, window_iter: int, files: list[Path]) -> None:
@@ -64,7 +65,22 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         return self._buf[ds_idx][1][inner]  # (state, π-target, v-target)
 
     def log_all_dataset_stats(self, run: int) -> None:
-        Thread(target=self._log_all_dataset_stats, args=(run,), daemon=True).start()
+        self._logging_threads = [thread for thread in self._logging_threads if thread.is_alive()]
+        thread = Thread(
+            target=self._log_all_dataset_stats,
+            args=(run,),
+            daemon=True,
+            name=f'dataset-stats-{run}',
+        )
+        thread.start()
+        self._logging_threads.append(thread)
+
+    def close(self) -> None:
+        for thread in self._logging_threads:
+            thread.join(timeout=30)
+            if thread.is_alive():
+                raise RuntimeError(f'Dataset logging thread {thread.name!r} did not stop.')
+        self._logging_threads = []
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats

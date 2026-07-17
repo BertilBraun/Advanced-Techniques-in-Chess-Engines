@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from threading import Thread
+from threading import Event, Thread
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,6 +11,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict
 
 from src.experiment.cost_accounting import CostCurrency, estimated_cost
+from src.util.background_worker import BackgroundWorker
 
 
 class GpuTelemetry(BaseModel):
@@ -131,12 +132,13 @@ def record_resource_telemetry(
     cost_currency: CostCurrency,
     hourly_price: float,
     interval_seconds: float,
+    stop_event: Event,
 ) -> None:
     parent_process = psutil.Process(parent_process_id)
     telemetry_path = output_path / 'resource-telemetry.jsonl'
     telemetry_path.parent.mkdir(parents=True, exist_ok=True)
 
-    while parent_process.is_running():
+    while parent_process.is_running() and not stop_event.is_set():
         sample = collect_resource_telemetry(
             parent_process=parent_process,
             output_path=output_path,
@@ -147,7 +149,7 @@ def record_resource_telemetry(
         with telemetry_path.open('a', encoding='utf-8') as telemetry_file:
             telemetry_file.write(sample.model_dump_json() + '\n')
             telemetry_file.flush()
-        time.sleep(interval_seconds)
+        stop_event.wait(interval_seconds)
 
 
 def start_resource_telemetry(
@@ -156,7 +158,8 @@ def start_resource_telemetry(
     cost_currency: CostCurrency,
     hourly_price: float,
     interval_seconds: float,
-) -> Thread:
+) -> BackgroundWorker:
+    stop_event = Event()
     thread = Thread(
         target=record_resource_telemetry,
         args=(
@@ -166,8 +169,10 @@ def start_resource_telemetry(
             cost_currency,
             hourly_price,
             interval_seconds,
+            stop_event,
         ),
         daemon=True,
+        name='resource-telemetry',
     )
     thread.start()
-    return thread
+    return BackgroundWorker(thread=thread, stop_event=stop_event)

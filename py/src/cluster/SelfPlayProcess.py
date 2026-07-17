@@ -11,6 +11,7 @@ from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
 from src.util.profiler import start_cpu_usage_logger
+from src.util.background_worker import BackgroundWorker
 from src.util.timing import reset_times
 
 if USE_CPP:
@@ -51,50 +52,57 @@ class SelfPlayProcess:
     def run(self) -> None:
         current_iteration = -1
         running = False
+        usage_logger: BackgroundWorker | None = None
 
-        while True:
-            if running:
-                with log_exceptions('Self playing failed'):
-                    self.self_play.self_play()
+        try:
+            while True:
+                if running:
+                    with log_exceptions('Self playing failed'):
+                        self.self_play.self_play()
 
-                if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
-                    self._save_dataset(current_iteration)
+                    if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
+                        self._save_dataset(current_iteration)
 
-                if (
-                    number_of_games_in_iteration(current_iteration, self.args.save_path)
-                    >= TRAINING_ARGS.num_games_per_iteration * 5
-                ):
-                    log(f'Iteration {current_iteration} has enough games.')
+                    if (
+                        number_of_games_in_iteration(current_iteration, self.args.save_path)
+                        >= TRAINING_ARGS.num_games_per_iteration * 5
+                    ):
+                        log(f'Iteration {current_iteration} has enough games.')
+                        self._save_dataset(current_iteration)
+                        running = False
+                else:
+                    time.sleep(0.1)  # Sleep to avoid busy waiting
+
+                if self.communication.is_received('STOP'):
+                    break
+                if self.communication.try_receive_from_id('START USAGE LOGGER', self.node_id):
+                    if usage_logger is not None:
+                        usage_logger.stop()
+                    usage_logger = start_cpu_usage_logger(self.run_id, 'self_play')
+                if self.communication.try_receive_from_id('STOP SELF PLAY', self.node_id):
                     self._save_dataset(current_iteration)
                     running = False
-            else:
-                time.sleep(0.1)  # Sleep to avoid busy waiting
 
-            if self.communication.is_received('STOP'):
-                break
-            if self.communication.try_receive_from_id('START USAGE LOGGER', self.node_id):
-                start_cpu_usage_logger(self.run_id, 'self_play')
-            if self.communication.try_receive_from_id('STOP SELF PLAY', self.node_id):
-                self._save_dataset(current_iteration)
-                running = False
+                for iteration in range(self.args.num_iterations, current_iteration, -1):
+                    start_recieved = self.communication.is_received(f'START AT ITERATION: {iteration}')
+                    load_received = self.communication.is_received(f'LOAD MODEL: {iteration}')
+                    if start_recieved:
+                        self._save_dataset(current_iteration)
+                        current_iteration = iteration
+                        running = True
+                        reset_times()
+                    if load_received:
+                        self._save_dataset(current_iteration)
+                        self.self_play.update_iteration(iteration)
+                        current_iteration = iteration
 
-            for iteration in range(self.args.num_iterations, current_iteration, -1):
-                start_recieved = self.communication.is_received(f'START AT ITERATION: {iteration}')
-                load_received = self.communication.is_received(f'LOAD MODEL: {iteration}')
-                if start_recieved:
-                    self._save_dataset(current_iteration)
-                    current_iteration = iteration
-                    running = True
-                    reset_times()
-                if load_received:
-                    self._save_dataset(current_iteration)
-                    self.self_play.update_iteration(iteration)
-                    current_iteration = iteration
+                    if start_recieved or load_received:
+                        break
 
-                if start_recieved or load_received:
-                    break
-
-            self.communication.send_heartbeat(f'SELF PLAY {self.node_id}')
+                self.communication.send_heartbeat(f'SELF PLAY {self.node_id}')
+        finally:
+            if usage_logger is not None:
+                usage_logger.stop()
 
         log('Self play process stopped.')
 

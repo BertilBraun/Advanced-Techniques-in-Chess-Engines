@@ -90,6 +90,7 @@ class CommanderProcess:
                     current_best_iteration,
                 )
         finally:
+            trainer.close()
             self._shutdown()
 
     def _initialize_workers(

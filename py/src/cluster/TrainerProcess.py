@@ -46,10 +46,14 @@ class TrainerProcess:
         if USE_GPU:
             torch.cuda.set_device(device_id)
 
-        start_cpu_usage_logger(self.run_id, 'trainer')
+        self.usage_logger = start_cpu_usage_logger(self.run_id, 'trainer')
 
         self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=args.training.max_buffer_samples)
         self.validation_dataset = SelfPlayDataset()
+
+    def close(self) -> None:
+        self.rolling_buffer.close()
+        self.usage_logger.stop()
 
     @timeit
     def train(self, iteration: int) -> tuple[TrainingStats, TrainingStats]:

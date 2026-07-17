@@ -81,7 +81,7 @@ if __name__ == '__main__':
     log('Resolved run manifest:')
     log(manifest.model_dump(), use_pprint=True)
 
-    start_resource_telemetry(
+    resource_telemetry = start_resource_telemetry(
         output_path=Path(TRAINING_ARGS.save_path),
         started_at=run_started_at,
         cost_currency=run_configuration.budget.currency,
@@ -89,7 +89,7 @@ if __name__ == '__main__':
         interval_seconds=run_configuration.safety.telemetry_interval_seconds,
     )
 
-    start_gpu_usage_logger(run)
+    gpu_usage_logger = start_gpu_usage_logger(run)
 
     # if a function on_startup is defined, call it
     if TRAINING_ARGS.on_startup is not None:
@@ -117,6 +117,9 @@ if __name__ == '__main__':
             commander.latest_completed_iteration,
         )
         raise
+    finally:
+        gpu_usage_logger.stop()
+        resource_telemetry.stop()
 
     outcome_status = RunOutcomeStatus.STOPPED if commander.final_stop_reason is not None else RunOutcomeStatus.COMPLETED
     write_run_outcome(
