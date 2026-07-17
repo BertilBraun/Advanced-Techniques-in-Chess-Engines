@@ -174,7 +174,6 @@ set_target_properties(AlphaZeroCpp PROPERTIES
 
 # Post-build step to copy the module and generate the stubs
 set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../py")
-set(STUB_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/stubs/AlphaZeroCpp.pyi")
 
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
         COMMENT "Copying AlphaZeroCpp.so and generating stubs..."
@@ -189,11 +188,6 @@ add_custom_command(TARGET AlphaZeroCpp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E env
         PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
         pybind11-stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
-
-        # Copy the generated AlphaZeroCpp.pyi into the same dir as the .so
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${STUB_OUTPUT_FILE}
-        ${PYTHON_MODULE_OUTPUT_DIR}/AlphaZeroCpp.pyi
 )
 
 
