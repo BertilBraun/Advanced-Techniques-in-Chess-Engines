@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -173,6 +174,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.self_play.num_parallel_games == 64
     assert arguments.training.num_workers == 0
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0002)
+    assert pickle.dumps(arguments.training.learning_rate)
     assert arguments.num_iterations == 2
     assert arguments.num_games_per_iteration == 200
     assert arguments.random_seed == 20260717

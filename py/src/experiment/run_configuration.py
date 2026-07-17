@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -218,6 +219,14 @@ class RunManifest(BaseModel):
     cuda_version: str | None
 
 
+@dataclass(frozen=True)
+class ConstantLearningRate:
+    value: float
+
+    def __call__(self, _: int, __: OptimizerType) -> float:
+        return self.value
+
+
 def load_run_configuration(path: Path) -> RunConfiguration:
     return RunConfiguration.model_validate_json(path.read_text(encoding='utf-8'))
 
@@ -369,10 +378,7 @@ def _self_play_device_ids(processes_per_device: tuple[int, ...]) -> tuple[int, .
 def _constant_learning_rate(
     learning_rate: float,
 ) -> Callable[[int, OptimizerType], float]:
-    def constant_learning_rate(_: int, __: OptimizerType) -> float:
-        return learning_rate
-
-    return constant_learning_rate
+    return ConstantLearningRate(learning_rate)
 
 
 def apply_run_configuration(
