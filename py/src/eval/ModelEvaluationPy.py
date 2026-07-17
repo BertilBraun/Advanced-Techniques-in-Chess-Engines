@@ -22,6 +22,12 @@ from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
 from src.util.save_paths import load_model, model_save_path
 from src.util.tensorboard import log_text
+from src.experiment.evaluation_protocol import (
+    GameOutcome,
+    GameRecord,
+    PlayerColor,
+    ScheduledGame,
+)
 
 
 @dataclass
@@ -240,8 +246,126 @@ def _new_game() -> tuple[CurrentBoard, list[str]]:
     return game, move_history
 
 
+@dataclass
+class _ActivePairedGame:
+    schedule_index: int
+    opening_id: str
+    starting_fen: str
+    candidate_color: PlayerColor
+    board: CurrentBoard
+    moves_uci: list[str]
+
+    @property
+    def candidate_player(self) -> Player:
+        if self.candidate_color == PlayerColor.WHITE:
+            return 1
+        return -1
+
+
+def _game_outcome(winner: Player | None, candidate_player: Player) -> GameOutcome:
+    if winner is None:
+        return GameOutcome.DRAW
+    if winner == candidate_player:
+        return GameOutcome.WIN
+    return GameOutcome.LOSS
+
+
+def _play_paired_models_search(
+    iteration: int,
+    candidate_model: EvaluationModel,
+    opponent_model: EvaluationModel,
+    schedule: tuple[ScheduledGame, ...],
+    maximum_game_plies: int,
+    name: str,
+) -> tuple[Results, tuple[GameRecord, ...]]:
+    if not schedule:
+        raise ValueError('A paired opening schedule is required.')
+    if maximum_game_plies < 1:
+        raise ValueError('maximum_game_plies must be positive.')
+
+    active_games = [
+        _ActivePairedGame(
+            schedule_index=scheduled_game.schedule_index,
+            opening_id=scheduled_game.opening_id,
+            starting_fen=scheduled_game.fen,
+            candidate_color=scheduled_game.candidate_color,
+            board=CurrentBoard.from_fen(scheduled_game.fen),
+            moves_uci=[],
+        )
+        for scheduled_game in schedule
+    ]
+    completed_records: list[GameRecord | None] = [None] * len(schedule)
+
+    while active_games:
+        candidate_game_indices = [
+            game_index
+            for game_index, active_game in enumerate(active_games)
+            if active_game.board.current_player == active_game.candidate_player
+        ]
+        opponent_game_indices = [
+            game_index
+            for game_index, active_game in enumerate(active_games)
+            if active_game.board.current_player != active_game.candidate_player
+        ]
+
+        policies_by_game_index: dict[int, np.ndarray] = {}
+        if candidate_game_indices:
+            candidate_policies = candidate_model(
+                [active_games[game_index].board for game_index in candidate_game_indices]
+            )
+            assert len(candidate_policies) == len(candidate_game_indices)
+            policies_by_game_index.update(zip(candidate_game_indices, candidate_policies))
+        if opponent_game_indices:
+            opponent_policies = opponent_model([active_games[game_index].board for game_index in opponent_game_indices])
+            assert len(opponent_policies) == len(opponent_game_indices)
+            policies_by_game_index.update(zip(opponent_game_indices, opponent_policies))
+
+        remaining_games: list[_ActivePairedGame] = []
+        for game_index, active_game in enumerate(active_games):
+            policy = policies_by_game_index[game_index]
+            encoded_move = int(np.argmax(policy).item())
+            move = CurrentGame.decode_move(encoded_move, active_game.board)
+            active_game.board.make_move(move)
+            active_game.moves_uci.append(str(move))
+
+            game_finished = active_game.board.is_game_over() or len(active_game.moves_uci) >= maximum_game_plies
+            if not game_finished:
+                remaining_games.append(active_game)
+                continue
+
+            winner = active_game.board.check_winner() if active_game.board.is_game_over() else None
+            outcome = _game_outcome(winner, active_game.candidate_player)
+            completed_records[active_game.schedule_index] = GameRecord(
+                schedule_index=active_game.schedule_index,
+                opening_id=active_game.opening_id,
+                starting_fen=active_game.starting_fen,
+                candidate_color=active_game.candidate_color,
+                outcome=outcome,
+                moves_uci=tuple(active_game.moves_uci),
+            )
+            log_text(
+                f'evaluation_moves/{iteration}/{name}',
+                f'{outcome.value}:{",".join(active_game.moves_uci)}',
+            )
+
+        active_games = remaining_games
+
+    assert all(record is not None for record in completed_records)
+    records = tuple(record for record in completed_records if record is not None)
+    results = Results(
+        wins=sum(record.outcome == GameOutcome.WIN for record in records),
+        losses=sum(record.outcome == GameOutcome.LOSS for record in records),
+        draws=sum(record.outcome == GameOutcome.DRAW for record in records),
+    )
+    return results, records
+
+
 def _play_two_models_search(
-    iteration, model1: EvaluationModel, model2: EvaluationModel, num_games: int, name: str
+    iteration: int,
+    model1: EvaluationModel,
+    model2: EvaluationModel,
+    num_games: int,
+    name: str,
 ) -> Results:
     results = Results(0, 0, 0)
 

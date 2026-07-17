@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal
 
 
 @dataclass
@@ -93,8 +93,33 @@ class SelfPlayParams:
 
 @dataclass
 class ClusterParams:
-    num_self_play_nodes_on_cluster: int
-    """This is the number of separate nodes on the cluster to use to parallelize the self-play. This should most likely be 16x or more the number of nodes used for training to minimize the wait time for the training nodes to get new data to train with."""
+    trainer_device_id: int
+    """The CUDA device used for neural-network training."""
+
+    evaluation_device_id: int
+    """The CUDA device used for neural-network evaluation."""
+
+    self_play_device_ids: tuple[int, ...]
+    """One CUDA device ID per self-play process."""
+
+    trainer_cpu_threads: int
+    """CPU threads reserved for PyTorch training operations."""
+
+    trainer_interop_threads: int
+    """CPU threads reserved for PyTorch inter-operation parallelism."""
+
+    max_concurrent_evaluations: int
+    """Maximum number of top-level evaluation processes."""
+
+
+@dataclass(frozen=True)
+class RuntimeLimits:
+    hourly_price_eur: float
+    maximum_cost_eur: float
+    maximum_wall_time_seconds: float
+    maximum_open_file_count: int
+    maximum_host_ram_percent: float
+    minimum_free_disk_gib: float
 
 
 OptimizerType = Literal['adamw', 'sgd']
@@ -168,8 +193,30 @@ class EvaluationParams:
     every_n_iterations: int
     """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
 
-    dataset_path: str | None = None
+    evaluate_initial_checkpoint: bool
+    """Whether to evaluate model 0 before self-play starts."""
+
+    max_concurrent_tasks: int
+    """Maximum number of evaluation tasks running inside one evaluation process."""
+
+    dataset_path: str | None
     """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""
+
+    reference_model_path: str | None
+    opening_suite_path: str | None
+    raw_results_path: str | None
+    maximum_game_plies: int
+    bootstrap_seed: int
+    bootstrap_samples: int
+    mcts_threads: int
+    previous_model_offsets: tuple[int, ...]
+    historical_model_iterations: tuple[int, ...]
+    stockfish_skill_levels: tuple[int, ...]
+    stockfish_binary_path: str | None
+    stockfish_nodes_per_move: int
+    stockfish_threads: int
+    stockfish_hash_mib: int
+    evaluate_random: bool
 
 
 @dataclass
@@ -202,8 +249,10 @@ class TrainingArgs:
     self_play: SelfPlayParams
     training: TrainingParams
     cluster: ClusterParams
-    evaluation: Optional[EvaluationParams] = None
-    gating: Optional[GatingParams] = None
+    run_limits: RuntimeLimits
+    random_seed: int
+    evaluation: EvaluationParams | None = None
+    gating: GatingParams | None = None
 
-    on_startup: Optional[Callable[[], None]] = None
+    on_startup: Callable[[], None] | None = None
     """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

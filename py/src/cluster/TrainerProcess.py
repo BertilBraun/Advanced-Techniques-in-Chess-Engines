@@ -1,5 +1,6 @@
 import os
 import time
+from collections.abc import Callable
 import torch
 from tqdm import tqdm
 
@@ -31,11 +32,13 @@ class TrainerProcess:
         self.run_id = run_id
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
 
-        torch.set_num_threads(32)  # Set number of threads for CPU operations
-        torch.set_num_interop_threads(4)  # Set number of threads for interop operations
-        os.environ['OMP_NUM_THREADS'] = '32'
-        os.environ['MKL_NUM_THREADS'] = '32'
-        os.environ['OPENBLAS_NUM_THREADS'] = '32'
+        trainer_cpu_threads = args.cluster.trainer_cpu_threads
+        trainer_interop_threads = args.cluster.trainer_interop_threads
+        torch.set_num_threads(trainer_cpu_threads)
+        torch.set_num_interop_threads(trainer_interop_threads)
+        os.environ['OMP_NUM_THREADS'] = str(trainer_cpu_threads)
+        os.environ['MKL_NUM_THREADS'] = str(trainer_cpu_threads)
+        os.environ['OPENBLAS_NUM_THREADS'] = str(trainer_cpu_threads)
 
         if USE_GPU:
             torch.cuda.set_device(device_id)
@@ -107,7 +110,11 @@ class TrainerProcess:
         return training_stats, validation_stats
 
     @timeit
-    def wait_for_enough_training_samples(self, iteration):
+    def wait_for_enough_training_samples(
+        self,
+        iteration: int,
+        stop_reason: Callable[[], str | None],
+    ) -> bool:
         def games(iteration: int) -> int:
             """Returns the number of games in the given iteration."""
             return number_of_games_in_iteration(iteration, self.args.save_path)
@@ -116,11 +123,14 @@ class TrainerProcess:
         current_games = games(iteration) + 0.5 * games(iteration - 1)
         with tqdm(total=target_games, desc=f'Waiting for games (iter {iteration})', initial=int(current_games)) as pbar:
             while current_games < target_games:
+                if stop_reason() is not None:
+                    return False
                 time.sleep(1)
                 new_games = games(iteration) + 0.5 * games(iteration - 1)
                 if new_games > current_games:
                     pbar.update(int(min(new_games, target_games) - current_games))
                     current_games = new_games
+        return True
 
     @timeit
     def load_all_memories_to_train_on_for_iteration(self, iteration: int) -> None:
@@ -181,7 +191,7 @@ def as_dataloader(
         num_workers=num_workers,
         shuffle=True,
         drop_last=drop_last,
-        persistent_workers=num_workers > 0,
+        persistent_workers=False,
         pin_memory=USE_GPU,
         prefetch_factor=16 if num_workers > 0 else None,
         # fork is not available on Windows

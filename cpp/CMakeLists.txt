@@ -120,21 +120,21 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE BOOL "No dev warnings")
 FetchContent_Declare(
         pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG v2.13.6
+        GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4
 )
 
 # --- Fetch Stockfish ---
 FetchContent_Declare(
         Stockfish
         GIT_REPOSITORY https://github.com/BertilBraun/Stockfish.git
-        GIT_TAG master
+        GIT_TAG 22956373a5618da5634966e22a250a0482680d9c
 )
 
 # --- Fetch Nlohmann JSON ---
 FetchContent_Declare(
         nlohmann_json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG master
+        GIT_TAG 55f93686c01528224f448c19128836e7df245f72
 )
 
 FetchContent_MakeAvailable(pybind11 Stockfish nlohmann_json) # tensorboard_logger)

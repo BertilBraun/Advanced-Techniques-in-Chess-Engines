@@ -27,3 +27,4 @@ cpp/libtorch**/**
 /cpp_py/reference
 
 !documentation/**
+/py/training_data/

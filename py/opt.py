@@ -1,6 +1,7 @@
 import torch
 import optuna
 from multiprocessing import Process
+from time import monotonic
 
 from src.util.log import log
 from src.train.TrainingArgs import (
@@ -13,7 +14,7 @@ from src.train.TrainingArgs import (
     TrainingParams,
 )
 from src.cluster.CommanderProcess import CommanderProcess
-from src.settings import SAVE_PATH, learning_rate_scheduler
+from src.settings import DEFAULT_RUNTIME_LIMITS, SAVE_PATH, learning_rate_scheduler
 
 
 torch.set_float32_matmul_precision('high')
@@ -100,13 +101,22 @@ def objective(trial: optuna.Trial) -> float:
         network=network_params,
         self_play=self_play_params,
         training=training_params,
-        cluster=ClusterParams(num_self_play_nodes_on_cluster=2),
+        cluster=ClusterParams(
+            trainer_device_id=max(0, torch.cuda.device_count() - 1),
+            evaluation_device_id=max(0, torch.cuda.device_count() - 1),
+            self_play_device_ids=(max(0, torch.cuda.device_count() - 1),) * 2,
+            trainer_cpu_threads=1,
+            trainer_interop_threads=1,
+            max_concurrent_evaluations=1,
+        ),
+        run_limits=DEFAULT_RUNTIME_LIMITS,
+        random_seed=trial.number,
     )
 
     log(f'Running trial {trial.number} with the following hyperparameters:')
     log(trial.params, use_pprint=True)
 
-    commander = CommanderProcess(trial.number, training_args)
+    commander = CommanderProcess(trial.number, training_args, monotonic())
     for iteration, (training_stats, validation_stats) in commander.run():
         trial.report(training_stats.total_loss, step=iteration)
 

@@ -17,7 +17,7 @@ from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessVisuals import ChessVisuals
 
 
-def on_startup():
+def on_startup() -> None:
     if evaluation is None:
         return
     ensure_eval_dataset_exists(evaluation.dataset_path)
@@ -51,7 +51,24 @@ evaluation = EvaluationParams(
     num_searches_per_turn=64,
     num_games=100,
     every_n_iterations=1,
+    evaluate_initial_checkpoint=False,
+    max_concurrent_tasks=1,
     dataset_path='reference/memory_0_chess_database.hdf5',
+    reference_model_path=None,
+    opening_suite_path=None,
+    raw_results_path=None,
+    maximum_game_plies=200,
+    bootstrap_seed=0,
+    bootstrap_samples=10_000,
+    mcts_threads=1,
+    previous_model_offsets=(5, 10),
+    historical_model_iterations=tuple(range(10, 301, 10)),
+    stockfish_skill_levels=(0, 1, 2, 3),
+    stockfish_binary_path=None,
+    stockfish_nodes_per_move=1_000,
+    stockfish_threads=1,
+    stockfish_hash_mib=128,
+    evaluate_random=True,
 )
 
 if USE_GATING := False:
@@ -64,10 +81,9 @@ if USE_GATING := False:
 else:
     gating = None
 
-NUM_SELF_PLAYERS_PER_GPU = 16
-NUM_SELF_PLAYERS = NUM_SELF_PLAYERS_PER_GPU * (torch.cuda.device_count() - 1) + (NUM_SELF_PLAYERS_PER_GPU // 2)
-NUM_THREADS = multiprocessing.cpu_count() // NUM_SELF_PLAYERS * 3
-PARALLEL_GAMES = NUM_THREADS * 32
+NUM_SELF_PLAYERS = 1
+NUM_THREADS = 1
+PARALLEL_GAMES = 2
 NUM_SEARCHES_PER_TURN = 600  # More searches? 500-800? # NOTE: if KL divergence between policy and mcts policy is < 0.2 then add more searches
 MIN_VISIT_COUNT = 1
 PARALLEL_SEARCHES = 4
@@ -110,9 +126,18 @@ TRAINING_ARGS = TrainingArgs(
             playout_cap_randomization=0.25,
         ),
     ),
-    cluster=ClusterParams(num_self_play_nodes_on_cluster=NUM_SELF_PLAYERS),
+    cluster=ClusterParams(
+        trainer_device_id=max(0, torch.cuda.device_count() - 1),
+        evaluation_device_id=max(0, torch.cuda.device_count() - 1),
+        self_play_device_ids=(max(0, torch.cuda.device_count() - 1),),
+        trainer_cpu_threads=1,
+        trainer_interop_threads=1,
+        max_concurrent_evaluations=1,
+    ),
     training=training,
+    run_limits=DEFAULT_RUNTIME_LIMITS,
     evaluation=evaluation,
     gating=gating,
+    random_seed=0,
     on_startup=on_startup,
 )

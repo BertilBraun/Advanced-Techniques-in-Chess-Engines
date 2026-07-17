@@ -1,6 +1,5 @@
 from __future__ import annotations
 from os import PathLike
-import os
 from pathlib import Path
 import random
 
@@ -16,13 +15,24 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.eval.ModelEvaluationPy import _play_two_models_search, policy_evaluator, Results, EvaluationModel
+from src.eval.ModelEvaluationPy import (
+    _play_paired_models_search,
+    _play_two_models_search,
+    policy_evaluator,
+    Results,
+    EvaluationModel,
+)
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import action_probabilities
 from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
-from src.util.save_paths import load_model, model_save_path
+from src.util.save_paths import inference_model_path, load_model, model_save_path
+from src.experiment.evaluation_protocol import (
+    GameRecord,
+    build_paired_schedule,
+    load_opening_suite,
+)
 
 
 class ModelEvaluation:
@@ -36,6 +46,15 @@ class ModelEvaluation:
         self.args = args
         self.num_searches_per_turn = num_searches_per_turn
         self.device_id = device_id
+        if args.evaluation is None or args.evaluation.opening_suite_path is None:
+            self.paired_schedule = None
+        else:
+            openings = load_opening_suite(Path(args.evaluation.opening_suite_path))
+            self.paired_schedule = build_paired_schedule(openings)
+            if len(self.paired_schedule) != num_games:
+                raise ValueError(
+                    f'Opening suite schedules {len(self.paired_schedule)} games, but evaluation requested {num_games}.'
+                )
 
     @property
     def mcts_args(self) -> MCTSParams:
@@ -47,7 +66,7 @@ class ModelEvaluation:
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
-            num_threads=self.num_games // 2,
+            num_threads=self.args.evaluation.mcts_threads,
             num_full_searches=self.num_searches_per_turn,
             num_fast_searches=self.num_searches_per_turn,
         )
@@ -114,13 +133,25 @@ class ModelEvaluation:
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
     def play_two_models_search(self, model_path: str | PathLike) -> Results:
+        results, _ = self.play_two_models_paired(model_path)
+        return results
+
+    def play_two_models_paired(
+        self,
+        model_path: str | PathLike,
+    ) -> tuple[Results, tuple[GameRecord, ...]]:
         from AlphaZeroCpp import InferenceClientParams, MCTS, new_root
 
-        if not Path(model_path).exists():
-            print(f'Model path {model_path} does not exist. Skipping evaluation.')
-            return Results(self.num_games, 0, 0)
+        opponent_inference_path = inference_model_path(model_path)
+        if not opponent_inference_path.is_file():
+            raise ValueError(f'Opponent inference model does not exist: {opponent_inference_path}')
+        if self.paired_schedule is None or self.args.evaluation is None:
+            raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
-        opponent = MCTS(InferenceClientParams(self.device_id, str(model_path), 16), self.mcts_args)
+        opponent = MCTS(
+            InferenceClientParams(self.device_id, str(opponent_inference_path), 16),
+            self.mcts_args,
+        )
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
@@ -129,7 +160,10 @@ class ModelEvaluation:
             )
             return [action_probabilities(result.visits) for result in results.results]
 
-        res = self.play_vs_evaluation_model(opponent_evaluator, os.path.basename(model_path))
+        res = self.play_vs_evaluation_model_paired(
+            opponent_evaluator,
+            opponent_inference_path.name,
+        )
 
         del opponent  # Free the memory used by the MCTS client
 
@@ -189,11 +223,76 @@ class ModelEvaluation:
 
         return results
 
+    def play_vs_stockfish_fixed_nodes(
+        self,
+        binary_path: Path,
+        nodes_per_move: int,
+        threads: int,
+        hash_mib: int,
+    ) -> tuple[Results, tuple[GameRecord, ...], str]:
+        import chess.engine
+
+        if nodes_per_move < 1:
+            raise ValueError('Stockfish nodes_per_move must be positive.')
+        if threads < 1:
+            raise ValueError('Stockfish threads must be positive.')
+        if hash_mib < 1:
+            raise ValueError('Stockfish hash_mib must be positive.')
+        if not binary_path.is_file():
+            raise ValueError(f'Stockfish binary does not exist: {binary_path}')
+
+        engine = chess.engine.SimpleEngine.popen_uci(str(binary_path))
+        try:
+            if 'name' not in engine.id:
+                raise ValueError('Stockfish did not report an engine name.')
+            engine_name = engine.id['name']
+            engine.configure(
+                {
+                    'Threads': threads,
+                    'Hash': hash_mib,
+                    'Ponder': False,
+                }
+            )
+
+            def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+                policies: list[np.ndarray] = []
+                for board in boards:
+                    result = engine.play(
+                        board.board,
+                        chess.engine.Limit(nodes=nodes_per_move),
+                    )
+                    if result.move is None:
+                        raise ValueError('Stockfish did not return a move.')
+                    policies.append(CurrentGame.encode_moves([result.move], board))
+                return policies
+
+            results, records = self.play_vs_evaluation_model_paired(
+                stockfish_evaluator,
+                'stockfish_fixed_nodes',
+            )
+            return results, records, engine_name
+        finally:
+            engine.quit()
+
     def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
+        results, _ = self.play_vs_evaluation_model_paired(eval_model, name)
+        return results
+
+    def play_vs_evaluation_model_paired(
+        self,
+        eval_model: EvaluationModel,
+        name: str,
+    ) -> tuple[Results, tuple[GameRecord, ...]]:
         from AlphaZeroCpp import new_root, InferenceClientParams, MCTS
 
+        if self.paired_schedule is None or self.args.evaluation is None:
+            raise ValueError('A fixed paired opening suite is required for model evaluation.')
+
+        current_inference_path = inference_model_path(model_save_path(self.iteration, self.args.save_path))
+        if not current_inference_path.is_file():
+            raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
         current = MCTS(
-            InferenceClientParams(self.device_id, str(model_save_path(self.iteration, self.args.save_path)), 16),
+            InferenceClientParams(self.device_id, str(current_inference_path), 16),
             self.mcts_args,
         )
 
@@ -204,18 +303,18 @@ class ModelEvaluation:
             )
             return [action_probabilities(result.visits) for result in results.results]
 
-        results = Results(0, 0, 0)
-
-        results += _play_two_models_search(
-            self.iteration, current_model, eval_model, self.num_games // 2, name + '_vs_current'
-        )
-        results -= _play_two_models_search(
-            self.iteration, eval_model, current_model, self.num_games // 2, 'current_vs_' + name
+        results, records = _play_paired_models_search(
+            iteration=self.iteration,
+            candidate_model=current_model,
+            opponent_model=eval_model,
+            schedule=self.paired_schedule,
+            maximum_game_plies=self.args.evaluation.maximum_game_plies,
+            name=name,
         )
 
         del current  # Free the memory used by the MCTS client
 
-        return results
+        return results, records
 
 
 if __name__ == '__main__':

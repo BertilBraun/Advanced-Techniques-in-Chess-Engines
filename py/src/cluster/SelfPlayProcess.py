@@ -2,7 +2,6 @@ import random
 import time
 import numpy as np
 import torch
-import torch.multiprocessing as mp
 
 from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -27,10 +26,10 @@ def run_self_play_process(
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)
 
-    # Seed for random number generation
-    random.seed(mp.current_process().pid)
-    torch.manual_seed(mp.current_process().pid)
-    np.random.seed(mp.current_process().pid)
+    worker_seed = args.random_seed + node_id
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+    np.random.seed(worker_seed)
 
     self_play_process = SelfPlayProcess(args, communication_folder, device_id=device_id, node_id=node_id, run_id=run)
     with log_exceptions(f'Self play process {node_id} crashed.'), TensorboardWriter(run, 'self_play'):
@@ -49,7 +48,7 @@ class SelfPlayProcess:
         self.node_id = node_id
         self.run_id = run_id
 
-    def run(self):
+    def run(self) -> None:
         current_iteration = -1
         running = False
 
@@ -99,7 +98,7 @@ class SelfPlayProcess:
 
         log('Self play process stopped.')
 
-    def _save_dataset(self, iteration: int):
+    def _save_dataset(self, iteration: int) -> None:
         if not len(self.self_play.dataset):
             return
 

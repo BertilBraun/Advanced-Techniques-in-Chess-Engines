@@ -1,6 +1,5 @@
-import os
+from pathlib import Path
 from torch import multiprocessing as mp
-import torch
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 
@@ -10,17 +9,32 @@ from src.settings_common import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import TrainingArgs
-from src.util.save_paths import model_save_path
+from src.util.save_paths import inference_model_path, model_save_path
 from src.util.tensorboard import log_scalars
+from src.experiment.evaluation_protocol import (
+    EngineCondition,
+    EngineSetting,
+    MatchConditions,
+    MatchReport,
+    file_sha256,
+    summarize_match,
+    write_match_report,
+)
+from src.experiment.run_configuration import RunManifest
 
 
-def run_evaluation_process(run: int, args: TrainingArgs, iteration: int):
+def run_evaluation_process(run: int, args: TrainingArgs, iteration: int) -> None:
     evaluation_process = EvaluationProcess(args)
     with log_exceptions('Evaluation process'):
         evaluation_process.run(run, iteration)
 
 
-def _eval_vs_dataset(run: int, model_evaluation: ModelEvaluation, iteration: int, dataset_path: str):
+def _eval_vs_dataset(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    dataset_path: str,
+) -> None:
     with TensorboardWriter(run, 'evaluation_dataset', postfix_pid=False):
         dataset = SelfPlayDataset.load(dataset_path)
         (
@@ -54,7 +68,7 @@ def _eval_vs_previous(
     iteration: int,
     save_path: str,
     how_many_previous: int,
-):
+) -> None:
     previous_model_path = model_save_path(iteration - how_many_previous, save_path)
     if not previous_model_path.exists():
         return
@@ -76,7 +90,7 @@ def _eval_vs_previous(
 
 def _eval_vs_iteration(
     run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
-):
+) -> None:
     model_path = model_save_path(iteration, save_path)
     if not model_path.exists():
         return
@@ -96,13 +110,27 @@ def _eval_vs_iteration(
         )
 
 
-def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
-    reference_model_path = save_path + '/reference_model.pt'
-    if not os.path.exists(reference_model_path):
+def _eval_vs_reference(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    args: TrainingArgs,
+) -> None:
+    evaluation = args.evaluation
+    if evaluation is None or evaluation.reference_model_path is None:
         return
+    if evaluation.opening_suite_path is None or evaluation.raw_results_path is None:
+        raise ValueError('Reference evaluation requires opening and raw-results paths.')
+
+    reference_model_path = Path(evaluation.reference_model_path)
+    candidate_model_path = model_save_path(iteration, args.save_path)
+    reference_inference_path = inference_model_path(reference_model_path)
+    candidate_inference_path = inference_model_path(candidate_model_path)
+    run_manifest_path = Path(args.save_path) / 'run_manifest.json'
+    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
 
     with TensorboardWriter(run, 'evaluation_vs_reference', postfix_pid=False):
-        results = model_evaluation.play_two_models_search(reference_model_path)
+        results, records = model_evaluation.play_two_models_paired(reference_model_path)
         log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
 
         log_scalars(
@@ -115,8 +143,125 @@ def _eval_vs_reference(run: int, model_evaluation: ModelEvaluation, iteration: i
             iteration,
         )
 
+    summary = summarize_match(
+        records,
+        bootstrap_seed=evaluation.bootstrap_seed,
+        bootstrap_samples=evaluation.bootstrap_samples,
+    )
+    opening_suite_path = Path(evaluation.opening_suite_path)
+    condition = EngineCondition(
+        artifact_sha256=file_sha256(candidate_inference_path),
+        identifier=f'candidate-model-{iteration}',
+        search_limit_name='mcts_root_visits',
+        search_limit_value=evaluation.num_searches_per_turn,
+        threads=evaluation.mcts_threads,
+        settings=(),
+    )
+    report = MatchReport(
+        conditions=MatchConditions(
+            source_revision=run_manifest.source_revision,
+            opening_suite_path=str(opening_suite_path),
+            opening_suite_sha256=file_sha256(opening_suite_path),
+            candidate=condition,
+            opponent=EngineCondition(
+                artifact_sha256=file_sha256(reference_inference_path),
+                identifier='archived-best-model-reexported-as-model-0',
+                search_limit_name=condition.search_limit_name,
+                search_limit_value=condition.search_limit_value,
+                threads=condition.threads,
+                settings=(),
+            ),
+            maximum_game_plies=evaluation.maximum_game_plies,
+            bootstrap_seed=evaluation.bootstrap_seed,
+            bootstrap_samples=evaluation.bootstrap_samples,
+        ),
+        summary=summary,
+        games=records,
+    )
+    report_path = Path(evaluation.raw_results_path) / f'match-vs-archive-iteration-{iteration}.json'
+    write_match_report(report_path, report)
 
-def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str):
+
+def _eval_vs_stockfish_fixed(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    args: TrainingArgs,
+) -> None:
+    evaluation = args.evaluation
+    if evaluation is None or evaluation.stockfish_binary_path is None:
+        return
+    if evaluation.opening_suite_path is None or evaluation.raw_results_path is None:
+        raise ValueError('Stockfish evaluation requires opening and raw-results paths.')
+
+    stockfish_binary_path = Path(evaluation.stockfish_binary_path)
+    candidate_model_path = model_save_path(iteration, args.save_path)
+    candidate_inference_path = inference_model_path(candidate_model_path)
+    run_manifest_path = Path(args.save_path) / 'run_manifest.json'
+    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    if run_manifest.stockfish_binary_sha256 is None:
+        raise ValueError('Run manifest does not identify the Stockfish binary.')
+
+    with TensorboardWriter(run, 'evaluation_vs_stockfish_fixed_nodes', postfix_pid=False):
+        results, records, engine_name = model_evaluation.play_vs_stockfish_fixed_nodes(
+            binary_path=stockfish_binary_path,
+            nodes_per_move=evaluation.stockfish_nodes_per_move,
+            threads=evaluation.stockfish_threads,
+            hash_mib=evaluation.stockfish_hash_mib,
+        )
+        log(f'Results after playing the current model vs {engine_name}:', results)
+        log_scalars(
+            'evaluation/vs_stockfish_fixed_nodes',
+            {
+                'wins': results.wins,
+                'losses': results.losses,
+                'draws': results.draws,
+            },
+            iteration,
+        )
+
+    summary = summarize_match(
+        records,
+        bootstrap_seed=evaluation.bootstrap_seed,
+        bootstrap_samples=evaluation.bootstrap_samples,
+    )
+    opening_suite_path = Path(evaluation.opening_suite_path)
+    report = MatchReport(
+        conditions=MatchConditions(
+            source_revision=run_manifest.source_revision,
+            opening_suite_path=str(opening_suite_path),
+            opening_suite_sha256=file_sha256(opening_suite_path),
+            candidate=EngineCondition(
+                artifact_sha256=file_sha256(candidate_inference_path),
+                identifier=f'candidate-model-{iteration}',
+                search_limit_name='mcts_root_visits',
+                search_limit_value=evaluation.num_searches_per_turn,
+                threads=evaluation.mcts_threads,
+                settings=(),
+            ),
+            opponent=EngineCondition(
+                artifact_sha256=run_manifest.stockfish_binary_sha256,
+                identifier=engine_name,
+                search_limit_name='nodes_per_move',
+                search_limit_value=evaluation.stockfish_nodes_per_move,
+                threads=evaluation.stockfish_threads,
+                settings=(
+                    EngineSetting(name='Hash', value=str(evaluation.stockfish_hash_mib)),
+                    EngineSetting(name='Ponder', value='false'),
+                ),
+            ),
+            maximum_game_plies=evaluation.maximum_game_plies,
+            bootstrap_seed=evaluation.bootstrap_seed,
+            bootstrap_samples=evaluation.bootstrap_samples,
+        ),
+        summary=summary,
+        games=records,
+    )
+    report_path = Path(evaluation.raw_results_path) / f'match-vs-stockfish-fixed-nodes-iteration-{iteration}.json'
+    write_match_report(report_path, report)
+
+
+def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str) -> None:
     with TensorboardWriter(run, 'evaluation_vs_random', postfix_pid=False):
         results = model_evaluation.play_vs_random()
         log(f'Results after playing vs random at iteration {iteration}:', results)
@@ -132,7 +277,12 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
         )
 
 
-def _eval_policy_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str):
+def _eval_policy_vs_random(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    save_path: str,
+) -> None:
     with TensorboardWriter(run, 'evaluation_policy_vs_random', postfix_pid=False):
         results = model_evaluation.play_policy_vs_random()
         log(f'Results after playing the current policy only vs random at iteration {iteration}:', results)
@@ -148,7 +298,12 @@ def _eval_policy_vs_random(run: int, model_evaluation: ModelEvaluation, iteratio
         )
 
 
-def _eval_vs_stockfish(run: int, model_evaluation: ModelEvaluation, level: int, iteration: int):
+def _eval_vs_stockfish(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    level: int,
+    iteration: int,
+) -> None:
     with TensorboardWriter(run, f'evaluation_vs_stockfish_level_{level}', postfix_pid=False):
         results = model_evaluation.play_vs_stockfish(level)
         log(f'Results after playing vs stockfish level {level} at iteration {iteration}:', results)
@@ -171,7 +326,7 @@ class EvaluationProcess:
         self.args = args
         self.eval_args = args.evaluation
 
-    def run(self, run: int, iteration: int):
+    def run(self, run: int, iteration: int) -> None:
         """Play two most recent models against each other."""
         if not self.eval_args:
             return
@@ -179,12 +334,33 @@ class EvaluationProcess:
         model_evaluation = ModelEvaluation(
             iteration,
             self.args,
-            device_id=torch.cuda.device_count() - 1 if USE_GPU else 0,
+            device_id=self.args.cluster.evaluation_device_id if USE_GPU else 0,
             num_games=self.eval_args.num_games,
             num_searches_per_turn=self.eval_args.num_searches_per_turn,
         )
 
         processes: list[mp.Process] = []
+        max_concurrent_tasks = self.eval_args.max_concurrent_tasks
+
+        def join_process(process: mp.Process) -> None:
+            process.join()
+            if process.exitcode != 0:
+                raise RuntimeError(f'Evaluation task {process.pid} exited with code {process.exitcode}.')
+
+        def start_process(process: mp.Process) -> None:
+            active_processes: list[mp.Process] = []
+            for running_process in processes:
+                if running_process.is_alive():
+                    active_processes.append(running_process)
+                else:
+                    join_process(running_process)
+            processes[:] = active_processes
+
+            while len(processes) >= max_concurrent_tasks:
+                join_process(processes.pop(0))
+
+            process.start()
+            processes.append(process)
 
         # Spawn subprocesses for each evaluation
         if self.eval_args.dataset_path:
@@ -192,42 +368,52 @@ class EvaluationProcess:
                 target=_eval_vs_dataset,
                 args=(run, model_evaluation, iteration, self.eval_args.dataset_path),
             )
-            p.start()
-            processes.append(p)
+            start_process(p)
 
-        for how_many_previous in [5, 10]:
+        for how_many_previous in self.eval_args.previous_model_offsets:
             p = mp.Process(
                 target=_eval_vs_previous,
                 args=(run, model_evaluation, iteration, self.args.save_path, how_many_previous),
             )
-            p.start()
-            processes.append(p)
+            start_process(p)
 
-        for fn in [_eval_vs_reference, _eval_vs_random, _eval_policy_vs_random]:
-            p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
-            p.start()
-            processes.append(p)
+        if self.eval_args.reference_model_path is not None:
+            p = mp.Process(
+                target=_eval_vs_reference,
+                args=(run, model_evaluation, iteration, self.args),
+            )
+            start_process(p)
 
-        for iter in range(10, self.args.num_iterations + 1, 10):
+        if self.eval_args.stockfish_binary_path is not None:
+            p = mp.Process(
+                target=_eval_vs_stockfish_fixed,
+                args=(run, model_evaluation, iteration, self.args),
+            )
+            start_process(p)
+
+        if self.eval_args.evaluate_random:
+            for fn in [_eval_vs_random, _eval_policy_vs_random]:
+                p = mp.Process(target=fn, args=(run, model_evaluation, iteration, self.args.save_path))
+                start_process(p)
+
+        for iter in self.eval_args.historical_model_iterations:
             if iter >= iteration:
                 continue
             p = mp.Process(
                 target=_eval_vs_iteration, args=(run, model_evaluation, iter, self.args.save_path, iteration)
             )
-            p.start()
-            processes.append(p)
+            start_process(p)
 
-        for level in (0, 1, 2, 3):
+        for level in self.eval_args.stockfish_skill_levels:
             p = mp.Process(target=_eval_vs_stockfish, args=(run, model_evaluation, level, iteration))
-            p.start()
-            processes.append(p)
+            start_process(p)
 
         # Wait for all to finish
         for p in processes:
-            p.join()
+            join_process(p)
 
 
-def evaluate_iteration(iteration: int, run_id: int):
+def evaluate_iteration(iteration: int, run_id: int) -> None:
     from src.settings import TRAINING_ARGS
     from src.util.save_paths import model_save_path
 
@@ -237,13 +423,11 @@ def evaluate_iteration(iteration: int, run_id: int):
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
 
-    TRAINING_ARGS.evaluation.num_games = 4
-
     log(f'Running evaluation process for iteration {iteration}')
     run_evaluation_process(run_id, TRAINING_ARGS, iteration)
 
 
-def __main():
+def __main() -> None:
     import torch.multiprocessing as mp
 
     mp.set_start_method('spawn')

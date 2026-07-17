@@ -1,6 +1,6 @@
 import os
 import torch
-from src.train.TrainingArgs import OptimizerType
+from src.train.TrainingArgs import OptimizerType, RuntimeLimits
 from src.util import lerp
 from src.util.tensorboard import *
 
@@ -9,7 +9,7 @@ USE_GPU = torch.cuda.is_available()
 USE_CPP = False  # NOTE: set to True if you want to use the C++ self play implementation (only available for chess at the moment)
 
 
-def get_run_id():
+def get_run_id() -> int:
     for run in range(10000):
         log_folder = f'logs/run_{run}'
         if not os.path.exists(log_folder):
@@ -28,6 +28,15 @@ NUM_SELF_PLAYERS = (NUM_GPUS - 1) * SELF_PLAYERS_PER_NODE + (SELF_PLAYERS_PER_NO
 NUM_SELF_PLAYERS = max(1, NUM_SELF_PLAYERS)
 
 PLAY_C_PARAM = 1.0
+
+DEFAULT_RUNTIME_LIMITS = RuntimeLimits(
+    hourly_price_eur=1.0,
+    maximum_cost_eur=1_000_000.0,
+    maximum_wall_time_seconds=365 * 24 * 60 * 60,
+    maximum_open_file_count=1_000_000,
+    maximum_host_ram_percent=99.0,
+    minimum_free_disk_gib=0.1,
+)
 
 
 def sampling_window(current_iteration: int) -> int:
