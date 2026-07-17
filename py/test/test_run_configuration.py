@@ -40,6 +40,8 @@ from src.train.TrainingArgs import (
 CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-pilot.json')
 SCALING_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-scaling-pilot.json')
 SHUTDOWN_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-shutdown-smoke.json')
+TUNING_CONFIGURATION_PATHS = tuple(Path(f'configs/chess-clean-tuning-{variant}.json') for variant in ('a', 'b', 'c'))
+MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
 
 
 def sampling_window(_: int) -> int:
@@ -105,8 +107,12 @@ def training_args() -> TrainingArgs:
         artifact_retention=ArtifactRetention(
             checkpoint_count=5,
             replay_window_iterations=30,
+            recent_inference_checkpoint_count=11,
+            milestone_inference_interval=10,
         ),
         random_seed=0,
+        self_play_search_warmup_iterations=1,
+        self_play_value_warmup_iterations=1,
         evaluation=EvaluationParams(
             num_searches_per_turn=8,
             num_games=2,
@@ -145,7 +151,13 @@ def resolved_pilot_hardware() -> ResolvedHardware:
 
 @pytest.mark.parametrize(
     'configuration_path',
-    (CONFIGURATION_PATH, SCALING_CONFIGURATION_PATH, SHUTDOWN_CONFIGURATION_PATH),
+    (
+        CONFIGURATION_PATH,
+        SCALING_CONFIGURATION_PATH,
+        SHUTDOWN_CONFIGURATION_PATH,
+        *TUNING_CONFIGURATION_PATHS,
+        MAIN_CONFIGURATION_PATH,
+    ),
 )
 def test_pilot_configuration_is_valid_for_quoted_hardware(configuration_path: Path) -> None:
     configuration = load_run_configuration(configuration_path)
@@ -227,6 +239,8 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert pickle.dumps(arguments.training.learning_rate)
     assert arguments.num_iterations == 2
     assert arguments.num_games_per_iteration == 200
+    assert arguments.self_play_search_warmup_iterations == 1
+    assert arguments.self_play_value_warmup_iterations == 1
     assert arguments.random_seed == 20260717
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 16
@@ -236,6 +250,28 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation.stockfish_nodes_per_move == 1_000
     assert arguments.evaluation.stockfish_threads == 1
     assert arguments.evaluation.stockfish_hash_mib == 128
+
+
+def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> None:
+    configuration = load_run_configuration(MAIN_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    assert configuration.stage.value == 'clean_retrain'
+    assert configuration.resume.mode.value == 'random_initialization'
+    assert arguments.num_iterations == 200
+    assert arguments.num_games_per_iteration == 5000
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
+    assert arguments.self_play_search_warmup_iterations == 15
+    assert arguments.self_play_value_warmup_iterations == 30
+    assert arguments.evaluation is not None
+    assert arguments.evaluation.num_games == 100
+    assert arguments.evaluation.every_n_iterations == 1
+    assert arguments.evaluation.previous_model_offsets == (5, 10)
+    assert arguments.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
+    assert arguments.evaluation.evaluate_random
 
 
 def test_training_rejects_legacy_configuration_without_retention() -> None:

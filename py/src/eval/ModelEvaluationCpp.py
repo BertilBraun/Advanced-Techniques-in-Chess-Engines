@@ -199,7 +199,10 @@ class ModelEvaluation:
     def play_vs_stockfish(self, level: int) -> Results:
         import chess.engine
 
-        engine = chess.engine.SimpleEngine.popen_uci('stockfish')
+        evaluation = self.args.evaluation
+        if evaluation is None or evaluation.stockfish_binary_path is None:
+            raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
+        engine = chess.engine.SimpleEngine.popen_uci(evaluation.stockfish_binary_path)
         engine.configure({'Skill Level': level})
         engine.configure({'Threads': 1})  # Limit to one thread for consistency
         engine.configure({'Hash': 1024})  # Set hash size to 1GB

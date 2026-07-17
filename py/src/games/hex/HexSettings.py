@@ -92,4 +92,6 @@ TRAINING_ARGS = TrainingArgs(
     artifact_retention=DEFAULT_ARTIFACT_RETENTION,
     evaluation=evaluation,
     random_seed=0,
+    self_play_search_warmup_iterations=18,
+    self_play_value_warmup_iterations=35,
 )

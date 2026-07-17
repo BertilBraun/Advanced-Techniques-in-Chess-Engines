@@ -33,6 +33,7 @@
     "trainer_interop_threads": 2,
     "dataloader_workers": 0,
     "reserved_logical_cpus": 12,
+    "maximum_cpu_oversubscription_ratio": 1.0,
     "max_concurrent_evaluations": 1,
     "max_concurrent_evaluation_tasks": 1
   },
@@ -45,6 +46,8 @@
         "learning_rate": 0.0002
       }
     ],
+    "self_play_search_warmup_iterations": 1,
+    "self_play_value_warmup_iterations": 1,
     "random_seed": 20260717,
     "evaluation_games": 16,
     "evaluation_searches_per_turn": 64,
@@ -58,7 +61,9 @@
   },
   "retention": {
     "checkpoint_count": 5,
-    "replay_window_iterations": 30
+    "replay_window_iterations": 30,
+    "recent_inference_checkpoint_count": 11,
+    "milestone_inference_interval": 10
   },
   "evaluation_protocol": {
     "opening_suite_path": "py/reference/pilot-openings.tsv",
@@ -70,6 +75,10 @@
     "mcts_threads": 4,
     "evaluate_dataset": false,
     "evaluate_initial_checkpoint": false,
+    "previous_model_offsets": [],
+    "historical_model_iterations": [],
+    "stockfish_skill_levels": [],
+    "evaluate_random": false,
     "stockfish_binary_path": "/workspace/chess/stockfish-18",
     "stockfish_nodes_per_move": 1000,
     "stockfish_threads": 1,

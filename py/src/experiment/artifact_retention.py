@@ -10,7 +10,8 @@ from src.util.save_paths import CheckpointManifest, load_checkpoint_manifest
 
 
 CHECKPOINT_PATTERN = re.compile(r'^checkpoint_(\d+)\.json$')
-MODEL_PATTERN = re.compile(r'^model_(\d+)(?:\.jit)?\.pt$')
+RAW_MODEL_PATTERN = re.compile(r'^model_(\d+)\.pt$')
+INFERENCE_MODEL_PATTERN = re.compile(r'^model_(\d+)\.jit\.pt$')
 OPTIMIZER_PATTERN = re.compile(r'^optimizer_(\d+)\.pt$')
 REPLAY_DIRECTORY_PATTERN = re.compile(r'^memory_(\d+)$')
 
@@ -35,11 +36,23 @@ def _replay_iteration(reference_path: str) -> int | None:
 
 
 def _checkpoint_artifact_iteration(path: Path) -> int | None:
-    for pattern in (CHECKPOINT_PATTERN, MODEL_PATTERN, OPTIMIZER_PATTERN):
+    for pattern in (CHECKPOINT_PATTERN, RAW_MODEL_PATTERN, OPTIMIZER_PATTERN):
         iteration = _iteration_from_name(path, pattern)
         if iteration is not None:
             return iteration
     return None
+
+
+def _retain_inference_model(
+    iteration: int,
+    latest_checkpoint_iteration: int,
+    retention: ArtifactRetention,
+) -> bool:
+    earliest_recent_iteration = max(
+        0,
+        latest_checkpoint_iteration - retention.recent_inference_checkpoint_count + 1,
+    )
+    return iteration >= earliest_recent_iteration or iteration % retention.milestone_inference_interval == 0
 
 
 def _write_filtered_manifest(
@@ -73,6 +86,10 @@ def apply_artifact_retention(
         raise ValueError('Checkpoint retention count must be positive.')
     if retention.replay_window_iterations <= 0:
         raise ValueError('Replay window retention must be positive.')
+    if retention.recent_inference_checkpoint_count <= 0:
+        raise ValueError('Recent inference-checkpoint retention count must be positive.')
+    if retention.milestone_inference_interval <= 0:
+        raise ValueError('Milestone inference-checkpoint interval must be positive.')
 
     earliest_checkpoint_iteration = max(0, latest_checkpoint_iteration - retention.checkpoint_count + 1)
     retained_checkpoint_iterations = tuple(
@@ -94,6 +111,15 @@ def apply_artifact_retention(
     for path in save_folder.iterdir():
         iteration = _checkpoint_artifact_iteration(path)
         if iteration is not None and iteration < earliest_checkpoint_iteration:
+            path.unlink()
+            deleted_checkpoint_files += 1
+            continue
+        inference_iteration = _iteration_from_name(path, INFERENCE_MODEL_PATTERN)
+        if inference_iteration is not None and not _retain_inference_model(
+            inference_iteration,
+            latest_checkpoint_iteration,
+            retention,
+        ):
             path.unlink()
             deleted_checkpoint_files += 1
 

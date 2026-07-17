@@ -54,17 +54,23 @@ def test_retention_keeps_five_resumable_checkpoints_and_bounded_replay(tmp_path:
         retention=ArtifactRetention(
             checkpoint_count=5,
             replay_window_iterations=3,
+            recent_inference_checkpoint_count=5,
+            milestone_inference_interval=10,
         ),
     )
 
     assert result.earliest_checkpoint_iteration == 6
     assert result.earliest_replay_iteration == 3
-    assert result.deleted_checkpoint_files == 24
+    assert result.deleted_checkpoint_files == 23
     assert result.deleted_replay_directories == 3
     assert {path.name for path in tmp_path.glob('checkpoint_*.json')} == {
         f'checkpoint_{iteration}.json' for iteration in range(6, 11)
     }
     assert {path.name for path in tmp_path.glob('memory_*')} == {f'memory_{iteration}' for iteration in range(3, 11)}
+    assert {path.name for path in tmp_path.glob('model_*.jit.pt')} == {
+        'model_0.jit.pt',
+        *(f'model_{iteration}.jit.pt' for iteration in range(6, 11)),
+    }
     for iteration in range(6, 11):
         manifest = load_checkpoint_manifest(iteration, tmp_path)
         assert len(manifest.replay_files) == 4

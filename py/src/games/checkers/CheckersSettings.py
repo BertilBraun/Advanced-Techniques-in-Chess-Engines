@@ -82,4 +82,6 @@ TRAINING_ARGS = TrainingArgs(
         evaluate_random=True,
     ),
     random_seed=0,
+    self_play_search_warmup_iterations=5,
+    self_play_value_warmup_iterations=10,
 )

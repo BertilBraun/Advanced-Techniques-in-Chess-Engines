@@ -3,6 +3,7 @@ import subprocess
 from torch import multiprocessing as mp
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.eval.ModelEvaluationPy import Results
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import log_scalar, TensorboardWriter
@@ -25,6 +26,18 @@ from src.experiment.run_configuration import RunManifest
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _result_metrics(results: Results) -> dict[str, float | int]:
+    total_games = results.wins + results.draws + results.losses
+    if total_games <= 0:
+        raise ValueError('Evaluation results must contain at least one game.')
+    return {
+        'wins': results.wins,
+        'losses': results.losses,
+        'draws': results.draws,
+        'score': (results.wins + 0.5 * results.draws) / total_games,
+    }
 
 
 def _evaluation_source_revision() -> str:
@@ -94,11 +107,7 @@ def _eval_vs_previous(
 
         log_scalars(
             f'evaluation/vs_{how_many_previous}_previous_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+            _result_metrics(results),
             iteration,
         )
 
@@ -107,7 +116,7 @@ def _eval_vs_iteration(
     run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
 ) -> None:
     model_path = model_save_path(iteration, save_path)
-    if not model_path.exists():
+    if not inference_model_path(model_path).exists():
         return
 
     with TensorboardWriter(run, f'evaluation_vs_{iteration}_model', postfix_pid=False):
@@ -116,11 +125,7 @@ def _eval_vs_iteration(
 
         log_scalars(
             f'evaluation/vs_{iteration}_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+            _result_metrics(results),
             current_iteration,
         )
 
@@ -144,25 +149,25 @@ def _eval_vs_reference(
     run_manifest_path = Path(args.save_path) / 'run_manifest.json'
     run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
 
-    with TensorboardWriter(run, 'evaluation_vs_reference', postfix_pid=False):
-        results, records = model_evaluation.play_two_models_paired(reference_model_path)
-        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
-
-        log_scalars(
-            'evaluation/vs_reference_model',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
+    results, records = model_evaluation.play_two_models_paired(reference_model_path)
     summary = summarize_match(
         records,
         bootstrap_seed=evaluation.bootstrap_seed,
         bootstrap_samples=evaluation.bootstrap_samples,
     )
+    with TensorboardWriter(run, 'evaluation_vs_reference', postfix_pid=False):
+        log(f'Results after playing the current vs the reference at iteration {iteration}:', results)
+
+        log_scalars(
+            'evaluation/vs_reference_model',
+            {
+                **_result_metrics(results),
+                'score_confidence_low': summary.score_confidence_low,
+                'score_confidence_high': summary.score_confidence_high,
+            },
+            iteration,
+        )
+
     opening_suite_path = Path(evaluation.opening_suite_path)
     condition = EngineCondition(
         artifact_sha256=file_sha256(candidate_inference_path),
@@ -218,29 +223,29 @@ def _eval_vs_stockfish_fixed(
     if run_manifest.stockfish_binary_sha256 is None:
         raise ValueError('Run manifest does not identify the Stockfish binary.')
 
-    with TensorboardWriter(run, 'evaluation_vs_stockfish_fixed_nodes', postfix_pid=False):
-        results, records, engine_name = model_evaluation.play_vs_stockfish_fixed_nodes(
-            binary_path=stockfish_binary_path,
-            nodes_per_move=evaluation.stockfish_nodes_per_move,
-            threads=evaluation.stockfish_threads,
-            hash_mib=evaluation.stockfish_hash_mib,
-        )
-        log(f'Results after playing the current model vs {engine_name}:', results)
-        log_scalars(
-            'evaluation/vs_stockfish_fixed_nodes',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
-            iteration,
-        )
-
+    results, records, engine_name = model_evaluation.play_vs_stockfish_fixed_nodes(
+        binary_path=stockfish_binary_path,
+        nodes_per_move=evaluation.stockfish_nodes_per_move,
+        threads=evaluation.stockfish_threads,
+        hash_mib=evaluation.stockfish_hash_mib,
+    )
     summary = summarize_match(
         records,
         bootstrap_seed=evaluation.bootstrap_seed,
         bootstrap_samples=evaluation.bootstrap_samples,
     )
+    with TensorboardWriter(run, 'evaluation_vs_stockfish_fixed_nodes', postfix_pid=False):
+        log(f'Results after playing the current model vs {engine_name}:', results)
+        log_scalars(
+            'evaluation/vs_stockfish_fixed_nodes',
+            {
+                **_result_metrics(results),
+                'score_confidence_low': summary.score_confidence_low,
+                'score_confidence_high': summary.score_confidence_high,
+            },
+            iteration,
+        )
+
     opening_suite_path = Path(evaluation.opening_suite_path)
     report = MatchReport(
         conditions=MatchConditions(
@@ -285,11 +290,7 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
 
         log_scalars(
             'evaluation/vs_random',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+            _result_metrics(results),
             iteration,
         )
 
@@ -306,11 +307,7 @@ def _eval_policy_vs_random(
 
         log_scalars(
             'evaluation/policy_vs_random',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+            _result_metrics(results),
             iteration,
         )
 
@@ -327,11 +324,7 @@ def _eval_vs_stockfish(
 
         log_scalars(
             f'evaluation/vs_stockfish_level_{level}',
-            {
-                'wins': results.wins,
-                'losses': results.losses,
-                'draws': results.draws,
-            },
+            _result_metrics(results),
             iteration,
         )
 

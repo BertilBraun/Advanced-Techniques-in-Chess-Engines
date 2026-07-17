@@ -96,6 +96,8 @@ TRAINING_ARGS = TrainingArgs(
         evaluate_random=True,
     ),
     random_seed=0,
+    self_play_search_warmup_iterations=1,
+    self_play_value_warmup_iterations=2,
 )
 
 if TRAINING_ARGS.evaluation and TRAINING_ARGS.evaluation.dataset_path:

@@ -129,6 +129,8 @@ class RuntimeLimits:
 class ArtifactRetention:
     checkpoint_count: int
     replay_window_iterations: int
+    recent_inference_checkpoint_count: int
+    milestone_inference_interval: int
 
 
 OptimizerType = Literal['adamw', 'sgd']
@@ -261,6 +263,8 @@ class TrainingArgs:
     run_limits: RuntimeLimits
     artifact_retention: ArtifactRetention
     random_seed: int
+    self_play_search_warmup_iterations: int
+    self_play_value_warmup_iterations: int
     evaluation: EvaluationParams | None = None
     gating: GatingParams | None = None
 

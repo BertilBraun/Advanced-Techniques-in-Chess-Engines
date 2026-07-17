@@ -140,5 +140,7 @@ TRAINING_ARGS = TrainingArgs(
     evaluation=evaluation,
     gating=gating,
     random_seed=0,
+    self_play_search_warmup_iterations=15,
+    self_play_value_warmup_iterations=30,
     on_startup=on_startup,
 )

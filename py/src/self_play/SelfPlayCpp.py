@@ -15,8 +15,9 @@ from dataclasses import dataclass
 
 from src.games.Board import Player
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.util import clamp, lerp
+from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.curriculum import curriculum_progress
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
@@ -147,8 +148,10 @@ class SelfPlayCpp:
             lerp(
                 self.args.mcts.num_searches_per_turn / 2,
                 self.args.mcts.num_searches_per_turn,
-                # TODO make this a parameter
-                clamp(iteration * 20 / TRAINING_ARGS.num_iterations, 0.0, 1.0),
+                curriculum_progress(
+                    iteration,
+                    TRAINING_ARGS.self_play_search_warmup_iterations,
+                ),
             )
         )
         assert self.num_searches_per_turn > self.args.mcts.num_parallel_searches, (
@@ -345,10 +348,12 @@ class SelfPlayCpp:
                     lerp(
                         turn_game_outcome,
                         mem.result_score,
-                        # TODO parameter?
                         # Scale up the proportion of the mcts result score based on the iteration number
                         # This is to ensure that the mcts result score is less significant in the early iterations where the value network is not yet well trained
-                        clamp(self.iteration * 10 / TRAINING_ARGS.num_iterations, 0.0, 1.0)
+                        curriculum_progress(
+                            self.iteration,
+                            TRAINING_ARGS.self_play_value_warmup_iterations,
+                        )
                         * self.args.result_score_weight,
                     ),
                 )

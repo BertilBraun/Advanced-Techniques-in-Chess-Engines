@@ -34,6 +34,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[3]
 class TrainingStage(str, Enum):
     SYSTEMS_PILOT = 'systems_pilot'
     CONTINUATION = 'continuation'
+    CLEAN_RETRAIN = 'clean_retrain'
 
 
 class ResumeMode(str, Enum):
@@ -105,6 +106,7 @@ class TopologyConfiguration(BaseModel):
     trainer_interop_threads: int = Field(gt=0)
     dataloader_workers: int = Field(ge=0)
     reserved_logical_cpus: int = Field(ge=1)
+    maximum_cpu_oversubscription_ratio: float = Field(ge=1.0, le=2.0)
     max_concurrent_evaluations: int = Field(ge=1)
     max_concurrent_evaluation_tasks: int = Field(ge=1)
 
@@ -132,6 +134,8 @@ class WorkloadConfiguration(BaseModel):
     iterations: int = Field(gt=0)
     games_per_iteration: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...]
+    self_play_search_warmup_iterations: int = Field(ge=0)
+    self_play_value_warmup_iterations: int = Field(ge=0)
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
@@ -165,6 +169,8 @@ class RetentionConfiguration(BaseModel):
 
     checkpoint_count: int = Field(gt=0)
     replay_window_iterations: int = Field(gt=0)
+    recent_inference_checkpoint_count: int = Field(gt=0)
+    milestone_inference_interval: int = Field(gt=0)
 
 
 class EvaluationProtocolConfiguration(BaseModel):
@@ -179,10 +185,26 @@ class EvaluationProtocolConfiguration(BaseModel):
     mcts_threads: int = Field(gt=0)
     evaluate_dataset: bool
     evaluate_initial_checkpoint: bool
+    previous_model_offsets: tuple[int, ...]
+    historical_model_iterations: tuple[int, ...]
+    stockfish_skill_levels: tuple[int, ...]
+    evaluate_random: bool
     stockfish_binary_path: str | None
     stockfish_nodes_per_move: int = Field(gt=0)
     stockfish_threads: int = Field(gt=0)
     stockfish_hash_mib: int = Field(gt=0)
+
+    @model_validator(mode='after')
+    def validate_monitoring_evaluations(self) -> EvaluationProtocolConfiguration:
+        if any(offset <= 0 for offset in self.previous_model_offsets):
+            raise ValueError('Previous-model offsets must be positive.')
+        if any(iteration <= 0 for iteration in self.historical_model_iterations):
+            raise ValueError('Historical model iterations must be positive.')
+        if tuple(sorted(set(self.historical_model_iterations))) != self.historical_model_iterations:
+            raise ValueError('Historical model iterations must be unique and increasing.')
+        if any(not 0 <= level <= 20 for level in self.stockfish_skill_levels):
+            raise ValueError('Stockfish skill levels must be between 0 and 20.')
+        return self
 
 
 class EnvironmentConfiguration(BaseModel):
@@ -214,6 +236,20 @@ class RunConfiguration(BaseModel):
     retention: RetentionConfiguration | None = None
     evaluation_protocol: EvaluationProtocolConfiguration
     environment: EnvironmentConfiguration
+
+    @model_validator(mode='after')
+    def validate_evaluation_retention(self) -> RunConfiguration:
+        if self.retention is None:
+            return self
+        offsets = self.evaluation_protocol.previous_model_offsets
+        if offsets and max(offsets) >= self.retention.recent_inference_checkpoint_count:
+            raise ValueError('Recent inference-checkpoint retention must exceed every previous-model offset.')
+        milestone_interval = self.retention.milestone_inference_interval
+        if any(
+            iteration % milestone_interval != 0 for iteration in self.evaluation_protocol.historical_model_iterations
+        ):
+            raise ValueError('Historical model iterations must align with the retained inference-checkpoint interval.')
+        return self
 
 
 class ResolvedHardware(BaseModel):
@@ -411,10 +447,12 @@ def validate_run_configuration(
         + topology.dataloader_workers
         + topology.reserved_logical_cpus
     )
-    if required_cpu_slots > resolved_hardware.logical_cpu_count:
+    maximum_cpu_slots = resolved_hardware.logical_cpu_count * topology.maximum_cpu_oversubscription_ratio
+    if required_cpu_slots > maximum_cpu_slots:
         raise ValueError(
             f'Topology reserves {required_cpu_slots} logical CPU slots but only '
-            f'{resolved_hardware.logical_cpu_count} are visible.'
+            f'{resolved_hardware.logical_cpu_count} are visible with a configured '
+            f'{topology.maximum_cpu_oversubscription_ratio:.2f}x oversubscription limit.'
         )
 
 
@@ -452,6 +490,8 @@ def apply_run_configuration(
     training_args.num_iterations = workload.iterations
     training_args.num_games_per_iteration = workload.games_per_iteration
     training_args.random_seed = workload.random_seed
+    training_args.self_play_search_warmup_iterations = workload.self_play_search_warmup_iterations
+    training_args.self_play_value_warmup_iterations = workload.self_play_value_warmup_iterations
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
     training_args.training.num_workers = topology.dataloader_workers
@@ -476,6 +516,8 @@ def apply_run_configuration(
     training_args.artifact_retention = ArtifactRetention(
         checkpoint_count=retention.checkpoint_count,
         replay_window_iterations=retention.replay_window_iterations,
+        recent_inference_checkpoint_count=retention.recent_inference_checkpoint_count,
+        milestone_inference_interval=retention.milestone_inference_interval,
     )
 
     if training_args.evaluation is not None:
@@ -499,16 +541,16 @@ def apply_run_configuration(
         training_args.evaluation.bootstrap_seed = evaluation_protocol.bootstrap_seed
         training_args.evaluation.bootstrap_samples = evaluation_protocol.bootstrap_samples
         training_args.evaluation.mcts_threads = evaluation_protocol.mcts_threads
-        training_args.evaluation.previous_model_offsets = ()
-        training_args.evaluation.historical_model_iterations = ()
-        training_args.evaluation.stockfish_skill_levels = ()
+        training_args.evaluation.previous_model_offsets = evaluation_protocol.previous_model_offsets
+        training_args.evaluation.historical_model_iterations = evaluation_protocol.historical_model_iterations
+        training_args.evaluation.stockfish_skill_levels = evaluation_protocol.stockfish_skill_levels
         training_args.evaluation.stockfish_binary_path = (
             evaluation_protocol.stockfish_binary_path if evaluation_protocol.stockfish_binary_path is not None else None
         )
         training_args.evaluation.stockfish_nodes_per_move = evaluation_protocol.stockfish_nodes_per_move
         training_args.evaluation.stockfish_threads = evaluation_protocol.stockfish_threads
         training_args.evaluation.stockfish_hash_mib = evaluation_protocol.stockfish_hash_mib
-        training_args.evaluation.evaluate_random = False
+        training_args.evaluation.evaluate_random = evaluation_protocol.evaluate_random
 
 
 def write_run_manifest(path: Path, manifest: RunManifest) -> RunManifest:
