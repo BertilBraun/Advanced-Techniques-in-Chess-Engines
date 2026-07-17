@@ -39,7 +39,12 @@
   "workload": {
     "iterations": 2,
     "games_per_iteration": 200,
-    "learning_rate": 0.0002,
+    "learning_rate_schedule": [
+      {
+        "start_iteration": 0,
+        "learning_rate": 0.0002
+      }
+    ],
     "random_seed": 20260717,
     "evaluation_games": 16,
     "evaluation_searches_per_turn": 64,

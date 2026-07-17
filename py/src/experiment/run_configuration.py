@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Annotated, Literal
 
 import psutil
 import torch
@@ -20,6 +21,7 @@ from src.train.TrainingArgs import ArtifactRetention, ClusterParams, OptimizerTy
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.util.save_paths import (
     create_optimizer,
+    create_model,
     load_model,
     model_save_path,
     save_model_and_optimizer,
@@ -36,14 +38,28 @@ class TrainingStage(str, Enum):
 
 class ResumeMode(str, Enum):
     WEIGHTS_ONLY = 'weights_only'
+    RANDOM_INITIALIZATION = 'random_initialization'
 
 
-class ResumeConfiguration(BaseModel):
+class WeightsOnlyResumeConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    mode: ResumeMode
+    mode: Literal[ResumeMode.WEIGHTS_ONLY]
     model_path: str
     optimizer: OptimizerType
+
+
+class RandomInitializationResumeConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    mode: Literal[ResumeMode.RANDOM_INITIALIZATION]
+    optimizer: OptimizerType
+
+
+ResumeConfiguration = Annotated[
+    WeightsOnlyResumeConfiguration | RandomInitializationResumeConfiguration,
+    Field(discriminator='mode'),
+]
 
 
 class BudgetConfiguration(BaseModel):
@@ -103,16 +119,36 @@ class TopologyConfiguration(BaseModel):
         return self
 
 
+class LearningRateStage(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    start_iteration: int = Field(ge=0)
+    learning_rate: float = Field(gt=0)
+
+
 class WorkloadConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     iterations: int = Field(gt=0)
     games_per_iteration: int = Field(gt=0)
-    learning_rate: float = Field(gt=0)
+    learning_rate_schedule: tuple[LearningRateStage, ...]
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
     evaluation_every_iterations: int = Field(gt=0)
+
+    @model_validator(mode='after')
+    def validate_learning_rate_schedule(self) -> WorkloadConfiguration:
+        if not self.learning_rate_schedule:
+            raise ValueError('At least one learning-rate stage must be configured.')
+        start_iterations = tuple(stage.start_iteration for stage in self.learning_rate_schedule)
+        if start_iterations[0] != 0:
+            raise ValueError('The learning-rate schedule must start at iteration 0.')
+        if start_iterations != tuple(sorted(set(start_iterations))):
+            raise ValueError('Learning-rate stage iterations must be unique and strictly increasing.')
+        if start_iterations[-1] >= self.iterations:
+            raise ValueError('Learning-rate stages must start before the configured final iteration.')
+        return self
 
 
 class SafetyConfiguration(BaseModel):
@@ -228,11 +264,16 @@ class RunManifest(BaseModel):
 
 
 @dataclass(frozen=True)
-class ConstantLearningRate:
-    value: float
+class PiecewiseLearningRate:
+    stages: tuple[LearningRateStage, ...]
 
-    def __call__(self, _: int, __: OptimizerType) -> float:
-        return self.value
+    def __call__(self, iteration: int, _: OptimizerType) -> float:
+        selected_stage = self.stages[0]
+        for stage in self.stages[1:]:
+            if stage.start_iteration > iteration:
+                break
+            selected_stage = stage
+        return selected_stage.learning_rate
 
 
 def load_run_configuration(path: Path) -> RunConfiguration:
@@ -383,10 +424,10 @@ def _self_play_device_ids(processes_per_device: tuple[int, ...]) -> tuple[int, .
     )
 
 
-def _constant_learning_rate(
-    learning_rate: float,
+def _piecewise_learning_rate(
+    stages: tuple[LearningRateStage, ...],
 ) -> Callable[[int, OptimizerType], float]:
-    return ConstantLearningRate(learning_rate)
+    return PiecewiseLearningRate(stages)
 
 
 def apply_run_configuration(
@@ -414,7 +455,7 @@ def apply_run_configuration(
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
     training_args.training.num_workers = topology.dataloader_workers
-    training_args.training.learning_rate = _constant_learning_rate(workload.learning_rate)
+    training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
     training_args.cluster = ClusterParams(
         trainer_device_id=topology.trainer_device_id,
         evaluation_device_id=topology.evaluation_device_id,
@@ -527,10 +568,6 @@ def prepare_training_run(
     if configuration.safety.maximum_open_file_count >= open_file_soft_limit:
         raise ValueError('The open-file safety stop must be lower than the process soft limit.')
 
-    initial_model_path = _resolve_source_path(configuration.resume.model_path)
-    if not initial_model_path.is_file():
-        raise ValueError(f'Initial model does not exist: {initial_model_path}')
-
     opening_suite_path = _resolve_source_path(configuration.evaluation_protocol.opening_suite_path)
     openings = load_opening_suite(opening_suite_path)
     expected_evaluation_games = len(openings) * 2
@@ -551,27 +588,41 @@ def prepare_training_run(
     source_worktree_clean = not bool(_git_output(['status', '--short']))
     if not source_worktree_clean:
         raise ValueError('Refusing to start training from a dirty source working tree.')
+    output_path = Path(training_args.save_path)
+    run_manifest_path = output_path / 'run_manifest.json'
+    initial_checkpoint_path = model_save_path(0, output_path)
+    match configuration.resume:
+        case WeightsOnlyResumeConfiguration(model_path=model_path, optimizer=optimizer):
+            initial_model_path = _resolve_source_path(model_path)
+            if not initial_model_path.is_file():
+                raise ValueError(f'Initial model does not exist: {initial_model_path}')
+            initial_model_sha256 = _sha256(initial_model_path)
+            if not initial_checkpoint_path.exists():
+                device = torch.device('cuda', configuration.topology.trainer_device_id)
+                model = load_model(initial_model_path, training_args.network, device)
+                save_model_and_optimizer(model, create_optimizer(model, optimizer), 0, output_path)
+        case RandomInitializationResumeConfiguration(optimizer=optimizer):
+            if initial_checkpoint_path.exists() and not run_manifest_path.exists():
+                raise ValueError(
+                    f'Randomly initialized checkpoint exists without a run manifest: {initial_checkpoint_path}'
+                )
+            if not initial_checkpoint_path.exists():
+                device = torch.device('cuda', configuration.topology.trainer_device_id)
+                model = create_model(training_args.network, device)
+                save_model_and_optimizer(model, create_optimizer(model, optimizer), 0, output_path)
+            initial_model_sha256 = _sha256(initial_checkpoint_path)
+
     manifest = RunManifest(
         configuration=configuration,
         approval=approval,
         resolved_hardware=resolved_hardware,
         source_revision=source_revision,
         source_worktree_clean=source_worktree_clean,
-        initial_model_sha256=_sha256(initial_model_path),
+        initial_model_sha256=initial_model_sha256,
         stockfish_binary_sha256=(_sha256(stockfish_binary_path) if stockfish_binary_path is not None else None),
         open_file_soft_limit=open_file_soft_limit,
         torch_version=torch.__version__,
         cuda_version=torch.version.cuda,
     )
 
-    output_path = Path(training_args.save_path)
-    manifest = write_run_manifest(output_path / 'run_manifest.json', manifest)
-
-    initial_checkpoint_path = model_save_path(0, output_path)
-    if not initial_checkpoint_path.exists():
-        device = torch.device('cuda', configuration.topology.trainer_device_id)
-        model = load_model(initial_model_path, training_args.network, device)
-        optimizer = create_optimizer(model, configuration.resume.optimizer)
-        save_model_and_optimizer(model, optimizer, 0, output_path)
-
-    return manifest
+    return write_run_manifest(run_manifest_path, manifest)

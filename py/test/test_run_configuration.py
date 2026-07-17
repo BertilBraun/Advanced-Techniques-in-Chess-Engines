@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from src.experiment.cost_accounting import CostCurrency
 from src.experiment.run_configuration import (
     BudgetConfiguration,
+    LearningRateStage,
+    PiecewiseLearningRate,
     ApprovalRecord,
     ResolvedHardware,
     RunConfiguration,
@@ -180,6 +182,32 @@ def test_budget_allows_elapsed_time_only_accounting() -> None:
     )
 
     assert budget.maximum_cost is None
+
+
+def test_clean_retrain_uses_random_initialization_without_a_model_path() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['resume'] = {
+        'mode': 'random_initialization',
+        'optimizer': 'adamw',
+    }
+
+    clean_retrain = RunConfiguration.model_validate(data)
+
+    assert clean_retrain.resume.mode.value == 'random_initialization'
+
+
+def test_piecewise_learning_rate_uses_latest_started_stage() -> None:
+    schedule = PiecewiseLearningRate(
+        (
+            LearningRateStage(start_iteration=0, learning_rate=0.005),
+            LearningRateStage(start_iteration=60, learning_rate=0.002),
+        )
+    )
+
+    assert schedule(59, 'adamw') == pytest.approx(0.005)
+    assert schedule(60, 'adamw') == pytest.approx(0.002)
+    assert pickle.dumps(schedule)
 
 
 def test_run_configuration_applies_explicit_topology_and_workload() -> None:
