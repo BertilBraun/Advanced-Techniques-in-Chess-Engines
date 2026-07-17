@@ -12,11 +12,13 @@ from src.experiment.run_configuration import (
     ApprovalRecord,
     ResolvedHardware,
     RunConfiguration,
+    RunManifest,
     apply_run_configuration,
     configuration_sha256,
     load_run_configuration,
     validate_run_configuration,
     validate_approval,
+    write_run_manifest,
 )
 from src.train.TrainingArgs import (
     ClusterParams,
@@ -206,3 +208,43 @@ def test_approval_must_match_exact_configuration_and_source() -> None:
     mismatched_approval = approval.model_copy(update={'maximum_cost': 1.0})
     with pytest.raises(ValueError, match='cost ceiling'):
         validate_approval(configuration, mismatched_approval, source_revision)
+
+
+def test_existing_manifest_preserves_initial_dynamic_hardware_measurements(tmp_path: Path) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    source_revision = '1' * 40
+    approval = ApprovalRecord(
+        approved_by='Bertil',
+        approved_at_utc=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        run_name=configuration.run_name,
+        source_revision=source_revision,
+        configuration_sha256=configuration_sha256(configuration),
+        provider_name=configuration.hardware.provider_name,
+        offer_id=configuration.hardware.offer_id,
+        cost_currency=configuration.budget.currency,
+        hourly_price=configuration.budget.hourly_price,
+        maximum_cost=configuration.budget.maximum_cost,
+        maximum_wall_time_minutes=configuration.budget.maximum_wall_time_minutes,
+    )
+    initial_hardware = resolved_pilot_hardware()
+    initial_manifest = RunManifest(
+        configuration=configuration,
+        approval=approval,
+        resolved_hardware=initial_hardware,
+        source_revision=source_revision,
+        source_worktree_clean=True,
+        initial_model_sha256='2' * 64,
+        stockfish_binary_sha256='3' * 64,
+        open_file_soft_limit=4096,
+        torch_version='2.7.1+cu128',
+        cuda_version='12.8',
+    )
+    manifest_path = tmp_path / 'run_manifest.json'
+    write_run_manifest(manifest_path, initial_manifest)
+    current_manifest = initial_manifest.model_copy(
+        update={'resolved_hardware': initial_hardware.model_copy(update={'free_disk_gib': 91.2})}
+    )
+
+    preserved_manifest = write_run_manifest(manifest_path, current_manifest)
+
+    assert preserved_manifest == initial_manifest

@@ -441,18 +441,20 @@ def apply_run_configuration(
         training_args.evaluation.evaluate_random = False
 
 
-def _write_manifest(path: Path, manifest: RunManifest) -> None:
+def write_run_manifest(path: Path, manifest: RunManifest) -> RunManifest:
     serialized = manifest.model_dump_json(indent=2)
     if path.exists():
         existing = RunManifest.model_validate_json(path.read_text(encoding='utf-8'))
-        if existing != manifest:
+        existing_with_current_hardware = existing.model_copy(update={'resolved_hardware': manifest.resolved_hardware})
+        if existing_with_current_hardware != manifest:
             raise ValueError(f'Existing run manifest does not match the requested run: {path}')
-        return
+        return existing
 
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_suffix('.json.tmp')
     temporary_path.write_text(serialized + '\n', encoding='utf-8')
     temporary_path.replace(path)
+    return manifest
 
 
 def prepare_training_run(
@@ -534,7 +536,7 @@ def prepare_training_run(
     )
 
     output_path = Path(training_args.save_path)
-    _write_manifest(output_path / 'run_manifest.json', manifest)
+    manifest = write_run_manifest(output_path / 'run_manifest.json', manifest)
 
     initial_checkpoint_path = model_save_path(0, output_path)
     if not initial_checkpoint_path.exists():
