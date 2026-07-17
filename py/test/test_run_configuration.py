@@ -330,6 +330,7 @@ def test_existing_manifest_preserves_initial_dynamic_hardware_measurements(tmp_p
         source_revision=source_revision,
         source_worktree_clean=True,
         initial_model_sha256='2' * 64,
+        evaluation_dataset_sha256=None,
         stockfish_binary_sha256='3' * 64,
         open_file_soft_limit=4096,
         torch_version='2.7.1+cu128',

@@ -184,6 +184,7 @@ class EvaluationProtocolConfiguration(BaseModel):
     bootstrap_samples: int = Field(gt=0)
     mcts_threads: int = Field(gt=0)
     evaluate_dataset: bool
+    evaluation_dataset_path: str | None
     evaluate_initial_checkpoint: bool
     previous_model_offsets: tuple[int, ...]
     historical_model_iterations: tuple[int, ...]
@@ -196,6 +197,8 @@ class EvaluationProtocolConfiguration(BaseModel):
 
     @model_validator(mode='after')
     def validate_monitoring_evaluations(self) -> EvaluationProtocolConfiguration:
+        if self.evaluate_dataset != (self.evaluation_dataset_path is not None):
+            raise ValueError('Evaluation dataset path must be configured exactly when dataset evaluation is enabled.')
         if any(offset <= 0 for offset in self.previous_model_offsets):
             raise ValueError('Previous-model offsets must be positive.')
         if any(iteration <= 0 for iteration in self.historical_model_iterations):
@@ -293,6 +296,7 @@ class RunManifest(BaseModel):
     source_revision: str
     source_worktree_clean: bool
     initial_model_sha256: str
+    evaluation_dataset_sha256: str | None
     stockfish_binary_sha256: str | None
     open_file_soft_limit: int
     torch_version: str
@@ -528,7 +532,9 @@ def apply_run_configuration(
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
         training_args.evaluation.evaluate_initial_checkpoint = evaluation_protocol.evaluate_initial_checkpoint
         training_args.evaluation.dataset_path = (
-            training_args.evaluation.dataset_path if evaluation_protocol.evaluate_dataset else None
+            str(_resolve_source_path(evaluation_protocol.evaluation_dataset_path))
+            if evaluation_protocol.evaluation_dataset_path is not None
+            else None
         )
         training_args.evaluation.reference_model_path = str(
             _resolve_source_path(evaluation_protocol.reference_model_path)
@@ -620,6 +626,15 @@ def prepare_training_run(
             f'{configuration.workload.evaluation_games} games were requested.'
         )
 
+    configured_evaluation_dataset_path = configuration.evaluation_protocol.evaluation_dataset_path
+    evaluation_dataset_path = (
+        _resolve_source_path(configured_evaluation_dataset_path)
+        if configured_evaluation_dataset_path is not None
+        else None
+    )
+    if evaluation_dataset_path is not None and not evaluation_dataset_path.is_file():
+        raise ValueError(f'Evaluation dataset does not exist: {evaluation_dataset_path}')
+
     configured_stockfish_binary_path = configuration.evaluation_protocol.stockfish_binary_path
     stockfish_binary_path = (
         Path(configured_stockfish_binary_path) if configured_stockfish_binary_path is not None else None
@@ -661,6 +676,7 @@ def prepare_training_run(
         source_revision=source_revision,
         source_worktree_clean=source_worktree_clean,
         initial_model_sha256=initial_model_sha256,
+        evaluation_dataset_sha256=(_sha256(evaluation_dataset_path) if evaluation_dataset_path is not None else None),
         stockfish_binary_sha256=(_sha256(stockfish_binary_path) if stockfish_binary_path is not None else None),
         open_file_soft_limit=open_file_soft_limit,
         torch_version=torch.__version__,

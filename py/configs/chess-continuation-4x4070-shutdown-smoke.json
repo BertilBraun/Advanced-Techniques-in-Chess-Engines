@@ -74,6 +74,7 @@
     "bootstrap_samples": 10000,
     "mcts_threads": 4,
     "evaluate_dataset": false,
+    "evaluation_dataset_path": null,
     "evaluate_initial_checkpoint": false,
     "previous_model_offsets": [],
     "historical_model_iterations": [],
