@@ -3,6 +3,7 @@ import os
 import torch
 import numpy as np
 import multiprocessing
+from contextvars import ContextVar, Token
 from types import TracebackType
 from tensorboardX import SummaryWriter
 from typing import SupportsFloat
@@ -10,12 +11,12 @@ from typing import SupportsFloat
 
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
-_TB_SUMMARY: SummaryWriter | None = None
+_TB_SUMMARY = ContextVar[SummaryWriter | None]('tensorboard_summary', default=None)
 _HAS_PROMPTED = False
 
 
 def _tb_check_active() -> bool:
-    if _TB_SUMMARY is None:
+    if _TB_SUMMARY.get() is None:
         global _HAS_PROMPTED
         if not _HAS_PROMPTED:
             from src.util.log import LogLevel, log
@@ -29,29 +30,32 @@ def _tb_check_active() -> bool:
 def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
-    _TB_SUMMARY.add_scalar(name, value, iteration)
+    summary.add_scalar(name, value, iteration)
 
 
 def log_scalars(name: str, values: dict[str, SupportsFloat], iteration: int | None = None) -> None:
     if not _tb_check_active() or not values:
         return
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
     values_float = {k: float(v) for k, v in values.items()}  # Ensure all values are floats
-    _TB_SUMMARY.add_scalars(name, values_float, iteration)
+    summary.add_scalars(name, values_float, iteration)
 
 
 def log_text(name: str, text: str, iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
-    _TB_SUMMARY.add_text(name, text, iteration)
+    summary.add_text(name, text, iteration)
 
 
 def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int | None = None) -> None:
@@ -62,10 +66,11 @@ def log_histogram(name: str, values: torch.Tensor | np.ndarray, iteration: int |
         values = values.cpu().numpy()
     if not values.size:
         return
-    assert _TB_SUMMARY is not None, 'No tensorboard writer active'
+    summary = _TB_SUMMARY.get()
+    assert summary is not None, 'No tensorboard writer active'
     if iteration is None:
         iteration = int(time.time() * 1000)
-    _TB_SUMMARY.add_histogram(name, values, iteration)
+    summary.add_histogram(name, values, iteration)
 
 
 class TensorboardWriter:
@@ -76,11 +81,11 @@ class TensorboardWriter:
         self.log_folder = f'{log_root}/run_{run}/{suffix}'
         if postfix_pid:
             self.log_folder += f'/{multiprocessing.current_process().pid}'
+        self._token: Token[SummaryWriter | None] | None = None
 
     def __enter__(self) -> None:
-        global _TB_SUMMARY
-        assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
-        _TB_SUMMARY = SummaryWriter(self.log_folder)
+        assert _TB_SUMMARY.get() is None, 'Only one tensorboard writer can be active at a time'
+        self._token = _TB_SUMMARY.set(SummaryWriter(self.log_folder))
 
     def __exit__(
         self,
@@ -88,7 +93,9 @@ class TensorboardWriter:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        global _TB_SUMMARY
-        assert _TB_SUMMARY is not None, 'No tensorboard writer active'
-        _TB_SUMMARY.close()
-        _TB_SUMMARY = None
+        summary = _TB_SUMMARY.get()
+        assert summary is not None, 'No tensorboard writer active'
+        assert self._token is not None, 'Tensorboard writer context was not entered'
+        summary.close()
+        _TB_SUMMARY.reset(self._token)
+        self._token = None

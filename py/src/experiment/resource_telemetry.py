@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import multiprocessing
 import os
 import subprocess
 import time
+from threading import Thread
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -156,8 +156,8 @@ def start_resource_telemetry(
     cost_currency: CostCurrency,
     hourly_price: float,
     interval_seconds: float,
-) -> multiprocessing.Process:
-    process = multiprocessing.Process(
+) -> Thread:
+    thread = Thread(
         target=record_resource_telemetry,
         args=(
             psutil.Process().pid,
@@ -169,5 +169,5 @@ def start_resource_telemetry(
         ),
         daemon=True,
     )
-    process.start()
-    return process
+    thread.start()
+    return thread

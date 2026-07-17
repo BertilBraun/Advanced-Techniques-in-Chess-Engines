@@ -5,8 +5,8 @@ import numpy as np
 from pathlib import Path
 from collections import deque
 from itertools import accumulate
+from threading import Thread
 from torch.utils.data import Dataset
-from torch.multiprocessing import Process
 
 from src.mcts.MCTS import action_probabilities
 from src.settings import log_histogram, log_scalar
@@ -58,13 +58,13 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
     def __len__(self) -> int:
         return self._num_samples
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         ds_idx = np.searchsorted(self._prefix, idx + 1) - 1
         inner = idx - self._prefix[ds_idx]
         return self._buf[ds_idx][1][inner]  # (state, π-target, v-target)
 
     def log_all_dataset_stats(self, run: int) -> None:
-        Process(target=self._log_all_dataset_stats, args=(run,), daemon=True).start()
+        Thread(target=self._log_all_dataset_stats, args=(run,), daemon=True).start()
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats

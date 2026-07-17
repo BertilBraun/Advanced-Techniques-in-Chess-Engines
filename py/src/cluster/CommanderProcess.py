@@ -184,8 +184,12 @@ class CommanderProcess:
         self.communication.boardcast('STOP')
 
         for process in self.self_play_processes:
-            process.terminate()
             process.join(timeout=10)
+        for process in self.self_play_processes:
+            if process.is_alive():
+                warn(f'Force-terminating self-play process {process.pid} after graceful shutdown timeout.')
+                process.terminate()
+                process.join(timeout=10)
 
         self._wait_for_all_evaluations()
 

@@ -1,14 +1,14 @@
 import time
 import psutil
 import GPUtil
-from multiprocessing import Process
+from threading import Thread
 
 from src.settings import log_scalar
 
 from src.util.tensorboard import TensorboardWriter
 
 
-def _tensorboard_gpu_usage(run: int, interval: float):
+def _tensorboard_gpu_usage(run: int, interval: float) -> None:
     """Logs GPU usage every 'interval' seconds to tensorboard."""
 
     with TensorboardWriter(run, 'gpu_usage', postfix_pid=False):
@@ -19,7 +19,7 @@ def _tensorboard_gpu_usage(run: int, interval: float):
             time.sleep(interval)
 
 
-def _tensorboard_cpu_usage(run: int, interval: float, title: str, pid: int):
+def _tensorboard_cpu_usage(run: int, interval: float, title: str, pid: int) -> None:
     """Logs CPU usage every 'interval' seconds to tensorboard."""
 
     with TensorboardWriter(run, f'cpu_usage_{title}', postfix_pid=True):
@@ -35,21 +35,25 @@ def _tensorboard_cpu_usage(run: int, interval: float, title: str, pid: int):
             time.sleep(interval)
 
 
-def start_gpu_usage_logger(run: int):
+def start_gpu_usage_logger(run: int) -> Thread:
     """Starts the GPU usage logger in a separate daemon thread."""
 
-    Process(
+    thread = Thread(
         target=_tensorboard_gpu_usage,
         args=(run, 10.0),
         daemon=True,
-    ).start()
+    )
+    thread.start()
+    return thread
 
 
-def start_cpu_usage_logger(run: int, title: str):
+def start_cpu_usage_logger(run: int, title: str) -> Thread:
     """Starts the CPU usage logger in a separate daemon thread."""
 
-    Process(
+    thread = Thread(
         target=_tensorboard_cpu_usage,
         args=(run, 10.0, title, psutil.Process().pid),
         daemon=True,
-    ).start()
+    )
+    thread.start()
+    return thread
