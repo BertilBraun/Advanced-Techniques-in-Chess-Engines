@@ -1,8 +1,8 @@
 {
-  "run_name": "chess-clean-tuning-a-vast-45170106",
+  "run_name": "chess-clean-microbenchmark-a-vast-45170106",
   "stage": "systems_pilot",
   "requires_explicit_approval": true,
-  "output_path": "py/training_data/chess-clean-tuning-a-vast-45170106",
+  "output_path": "py/training_data/chess-clean-microbenchmark-a-vast-45170106",
   "resume": {
     "mode": "random_initialization",
     "optimizer": "adamw"
@@ -11,7 +11,7 @@
     "currency": "USD",
     "hourly_price": 0.3957777777777778,
     "maximum_cost": null,
-    "maximum_wall_time_minutes": 30
+    "maximum_wall_time_minutes": 3
   },
   "hardware": {
     "provider_name": "vast.ai",
@@ -38,7 +38,7 @@
   },
   "workload": {
     "iterations": 1,
-    "games_per_iteration": 400,
+    "games_per_iteration": 60,
     "learning_rate_schedule": [
       {
         "start_iteration": 0,
@@ -56,7 +56,7 @@
     "maximum_open_file_count": 32768,
     "maximum_host_ram_percent": 90,
     "minimum_free_disk_gib": 20,
-    "telemetry_interval_seconds": 5
+    "telemetry_interval_seconds": 2
   },
   "retention": {
     "checkpoint_count": 5,
