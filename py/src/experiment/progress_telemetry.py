@@ -5,6 +5,8 @@ from time import monotonic
 
 from pydantic import BaseModel, ConfigDict
 
+from src.experiment.cost_accounting import CostCurrency, estimated_cost
+
 
 class IterationTelemetry(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
@@ -19,7 +21,8 @@ class IterationTelemetry(BaseModel):
     replay_games_loaded: int
     training_seconds: float
     elapsed_seconds: float
-    estimated_cost_eur: float
+    cost_currency: CostCurrency
+    estimated_cost: float
     maximum_process_open_file_count: int
     total_open_file_count: int
 
@@ -37,7 +40,8 @@ class RunOutcome(BaseModel):
     reason: str | None
     completed_at_utc: datetime
     elapsed_seconds: float
-    estimated_cost_eur: float
+    cost_currency: CostCurrency
+    estimated_cost: float
     latest_checkpoint_iteration: int
 
 
@@ -53,7 +57,8 @@ def write_run_outcome(
     status: RunOutcomeStatus,
     reason: str | None,
     started_at: float,
-    hourly_price_eur: float,
+    cost_currency: CostCurrency,
+    hourly_price: float,
     latest_checkpoint_iteration: int,
 ) -> None:
     elapsed_seconds = monotonic() - started_at
@@ -62,7 +67,8 @@ def write_run_outcome(
         reason=reason,
         completed_at_utc=datetime.now(timezone.utc),
         elapsed_seconds=elapsed_seconds,
-        estimated_cost_eur=hourly_price_eur * elapsed_seconds / 3600,
+        cost_currency=cost_currency,
+        estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
         latest_checkpoint_iteration=latest_checkpoint_iteration,
     )
     temporary_path = path.with_name(f'.{path.name}.tmp')

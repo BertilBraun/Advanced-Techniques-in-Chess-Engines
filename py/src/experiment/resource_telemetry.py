@@ -10,6 +10,8 @@ from pathlib import Path
 import psutil
 from pydantic import BaseModel, ConfigDict
 
+from src.experiment.cost_accounting import CostCurrency, estimated_cost
+
 
 class GpuTelemetry(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
@@ -28,7 +30,8 @@ class ResourceTelemetry(BaseModel):
 
     timestamp_utc: datetime
     elapsed_seconds: float
-    estimated_cost_eur: float
+    cost_currency: CostCurrency
+    estimated_cost: float
     process_rss_mib: float
     process_cpu_percent: float
     child_process_count: int
@@ -98,7 +101,8 @@ def collect_resource_telemetry(
     parent_process: psutil.Process,
     output_path: Path,
     started_at: float,
-    hourly_price_eur: float,
+    cost_currency: CostCurrency,
+    hourly_price: float,
 ) -> ResourceTelemetry:
     elapsed_seconds = time.monotonic() - started_at
     virtual_memory = psutil.virtual_memory()
@@ -106,7 +110,8 @@ def collect_resource_telemetry(
     return ResourceTelemetry(
         timestamp_utc=datetime.now(timezone.utc),
         elapsed_seconds=elapsed_seconds,
-        estimated_cost_eur=hourly_price_eur * elapsed_seconds / 3600,
+        cost_currency=cost_currency,
+        estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
         process_rss_mib=parent_process.memory_info().rss / 2**20,
         process_cpu_percent=parent_process.cpu_percent(interval=None),
         child_process_count=len(parent_process.children(recursive=True)),
@@ -123,7 +128,8 @@ def record_resource_telemetry(
     parent_process_id: int,
     output_path: Path,
     started_at: float,
-    hourly_price_eur: float,
+    cost_currency: CostCurrency,
+    hourly_price: float,
     interval_seconds: float,
 ) -> None:
     parent_process = psutil.Process(parent_process_id)
@@ -135,7 +141,8 @@ def record_resource_telemetry(
             parent_process=parent_process,
             output_path=output_path,
             started_at=started_at,
-            hourly_price_eur=hourly_price_eur,
+            cost_currency=cost_currency,
+            hourly_price=hourly_price,
         )
         with telemetry_path.open('a', encoding='utf-8') as telemetry_file:
             telemetry_file.write(sample.model_dump_json() + '\n')
@@ -146,7 +153,8 @@ def record_resource_telemetry(
 def start_resource_telemetry(
     output_path: Path,
     started_at: float,
-    hourly_price_eur: float,
+    cost_currency: CostCurrency,
+    hourly_price: float,
     interval_seconds: float,
 ) -> multiprocessing.Process:
     process = multiprocessing.Process(
@@ -155,7 +163,8 @@ def start_resource_telemetry(
             psutil.Process().pid,
             output_path,
             started_at,
-            hourly_price_eur,
+            cost_currency,
+            hourly_price,
             interval_seconds,
         ),
         daemon=True,

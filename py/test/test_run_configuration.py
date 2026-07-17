@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
+from src.experiment.cost_accounting import CostCurrency
 from src.experiment.run_configuration import (
     BudgetConfiguration,
     ApprovalRecord,
@@ -85,8 +86,9 @@ def training_args() -> TrainingArgs:
             max_concurrent_evaluations=1,
         ),
         run_limits=RuntimeLimits(
-            hourly_price_eur=1.0,
-            maximum_cost_eur=1.0,
+            cost_currency=CostCurrency.EUR,
+            hourly_price=1.0,
+            maximum_cost=1.0,
             maximum_wall_time_seconds=3600,
             maximum_open_file_count=1024,
             maximum_host_ram_percent=90,
@@ -121,11 +123,11 @@ def training_args() -> TrainingArgs:
 
 def resolved_pilot_hardware() -> ResolvedHardware:
     return ResolvedHardware(
-        visible_gpu_names=('NVIDIA GeForce RTX 4070',) * 4,
+        visible_gpu_names=('NVIDIA GeForce RTX 4070 SUPER',) * 4,
         visible_gpu_count=4,
-        logical_cpu_count=72,
-        total_ram_gib=128,
-        free_disk_gib=100,
+        logical_cpu_count=64,
+        total_ram_gib=125.7,
+        free_disk_gib=99.9,
     )
 
 
@@ -148,8 +150,9 @@ def test_configuration_rejects_cpu_oversubscription() -> None:
 def test_budget_rejects_cost_above_ceiling() -> None:
     with pytest.raises(ValidationError, match='Projected cost'):
         BudgetConfiguration(
-            hourly_price_eur=1.5,
-            maximum_cost_eur=1.0,
+            currency=CostCurrency.EUR,
+            hourly_price=1.5,
+            maximum_cost=1.0,
             maximum_wall_time_minutes=120,
         )
 
@@ -162,7 +165,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
 
     assert arguments.cluster.trainer_device_id == 3
     assert arguments.cluster.evaluation_device_id == 3
-    assert arguments.cluster.self_play_device_ids == (0,) * 7 + (1,) * 7 + (2,) * 7 + (3,) * 3
+    assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 2
     assert arguments.cluster.trainer_cpu_threads == 8
     assert arguments.self_play.mcts.num_threads == 2
     assert arguments.self_play.num_parallel_games == 64
@@ -175,7 +178,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation.num_games == 16
     assert arguments.evaluation.max_concurrent_tasks == 1
     assert arguments.evaluation.evaluate_initial_checkpoint
-    assert arguments.evaluation.stockfish_binary_path == '/usr/local/bin/stockfish-18'
+    assert arguments.evaluation.stockfish_binary_path == '/workspace/chess/stockfish-18'
     assert arguments.evaluation.stockfish_nodes_per_move == 1_000
     assert arguments.evaluation.stockfish_threads == 1
     assert arguments.evaluation.stockfish_hash_mib == 128
@@ -192,13 +195,14 @@ def test_approval_must_match_exact_configuration_and_source() -> None:
         configuration_sha256=configuration_sha256(configuration),
         provider_name=configuration.hardware.provider_name,
         offer_id=configuration.hardware.offer_id,
-        hourly_price_eur=configuration.budget.hourly_price_eur,
-        maximum_cost_eur=configuration.budget.maximum_cost_eur,
+        cost_currency=configuration.budget.currency,
+        hourly_price=configuration.budget.hourly_price,
+        maximum_cost=configuration.budget.maximum_cost,
         maximum_wall_time_minutes=configuration.budget.maximum_wall_time_minutes,
     )
 
     validate_approval(configuration, approval, source_revision)
 
-    mismatched_approval = approval.model_copy(update={'maximum_cost_eur': 1.0})
+    mismatched_approval = approval.model_copy(update={'maximum_cost': 1.0})
     with pytest.raises(ValueError, match='cost ceiling'):
         validate_approval(configuration, mismatched_approval, source_revision)

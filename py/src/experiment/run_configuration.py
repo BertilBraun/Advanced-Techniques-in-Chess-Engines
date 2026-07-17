@@ -14,6 +14,7 @@ import psutil
 import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.experiment.cost_accounting import CostCurrency
 from src.train.TrainingArgs import ClusterParams, OptimizerType, RuntimeLimits, TrainingArgs
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.util.save_paths import (
@@ -47,17 +48,18 @@ class ResumeConfiguration(BaseModel):
 class BudgetConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    hourly_price_eur: float = Field(gt=0)
-    maximum_cost_eur: float = Field(gt=0)
+    currency: CostCurrency
+    hourly_price: float = Field(gt=0)
+    maximum_cost: float = Field(gt=0)
     maximum_wall_time_minutes: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_projected_cost(self) -> BudgetConfiguration:
-        projected_cost = self.hourly_price_eur * self.maximum_wall_time_minutes / 60
-        if projected_cost > self.maximum_cost_eur:
+        projected_cost = self.hourly_price * self.maximum_wall_time_minutes / 60
+        if projected_cost > self.maximum_cost:
             raise ValueError(
-                f'Projected cost EUR {projected_cost:.2f} exceeds the configured '
-                f'EUR {self.maximum_cost_eur:.2f} maximum.'
+                f'Projected cost {self.currency.value} {projected_cost:.2f} exceeds the configured '
+                f'{self.currency.value} {self.maximum_cost:.2f} maximum.'
             )
         return self
 
@@ -142,7 +144,7 @@ class EvaluationProtocolConfiguration(BaseModel):
 class EnvironmentConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    container_base: str
+    runtime_image: str
     python_version: str
     torch_version: str
     cuda_version: str
@@ -189,8 +191,9 @@ class ApprovalRecord(BaseModel):
     configuration_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
     provider_name: str
     offer_id: str
-    hourly_price_eur: float
-    maximum_cost_eur: float
+    cost_currency: CostCurrency
+    hourly_price: float
+    maximum_cost: float
     maximum_wall_time_minutes: int
 
     @model_validator(mode='after')
@@ -245,9 +248,11 @@ def validate_approval(
         raise ValueError('Approval provider does not match the requested hardware provider.')
     if approval.offer_id != configuration.hardware.offer_id:
         raise ValueError('Approval offer ID does not match the requested hardware offer.')
-    if approval.hourly_price_eur != configuration.budget.hourly_price_eur:
+    if approval.cost_currency != configuration.budget.currency:
+        raise ValueError('Approval cost currency does not match the requested budget.')
+    if approval.hourly_price != configuration.budget.hourly_price:
         raise ValueError('Approval hourly price does not match the requested budget.')
-    if approval.maximum_cost_eur != configuration.budget.maximum_cost_eur:
+    if approval.maximum_cost != configuration.budget.maximum_cost:
         raise ValueError('Approval cost ceiling does not match the requested budget.')
     if approval.maximum_wall_time_minutes != configuration.budget.maximum_wall_time_minutes:
         raise ValueError('Approval duration does not match the requested budget.')
@@ -394,8 +399,9 @@ def apply_run_configuration(
         max_concurrent_evaluations=topology.max_concurrent_evaluations,
     )
     training_args.run_limits = RuntimeLimits(
-        hourly_price_eur=configuration.budget.hourly_price_eur,
-        maximum_cost_eur=configuration.budget.maximum_cost_eur,
+        cost_currency=configuration.budget.currency,
+        hourly_price=configuration.budget.hourly_price,
+        maximum_cost=configuration.budget.maximum_cost,
         maximum_wall_time_seconds=configuration.budget.maximum_wall_time_minutes * 60,
         maximum_open_file_count=configuration.safety.maximum_open_file_count,
         maximum_host_ram_percent=configuration.safety.maximum_host_ram_percent,
@@ -479,8 +485,8 @@ def prepare_training_run(
         raise ValueError(f'Expected PyTorch {environment.torch_version}, found {torch.__version__}.')
     if torch.version.cuda != environment.cuda_version:
         raise ValueError(f'Expected PyTorch CUDA {environment.cuda_version}, found {torch.version.cuda}.')
-    if os.environ.get('TRAINING_CONTAINER_BASE') != environment.container_base:
-        raise ValueError('Training container base does not match the approved configuration.')
+    if os.environ.get('TRAINING_RUNTIME_IMAGE') != environment.runtime_image:
+        raise ValueError('Training runtime image does not match the approved configuration.')
     open_file_soft_limit = _open_file_soft_limit()
     if open_file_soft_limit < environment.minimum_open_file_soft_limit:
         raise ValueError(

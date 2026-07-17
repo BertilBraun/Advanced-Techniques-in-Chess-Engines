@@ -84,7 +84,8 @@ if __name__ == '__main__':
     start_resource_telemetry(
         output_path=Path(TRAINING_ARGS.save_path),
         started_at=run_started_at,
-        hourly_price_eur=run_configuration.budget.hourly_price_eur,
+        cost_currency=run_configuration.budget.currency,
+        hourly_price=run_configuration.budget.hourly_price,
         interval_seconds=run_configuration.safety.telemetry_interval_seconds,
     )
 
@@ -111,7 +112,8 @@ if __name__ == '__main__':
             RunOutcomeStatus.FAILED,
             str(error),
             run_started_at,
-            run_configuration.budget.hourly_price_eur,
+            run_configuration.budget.currency,
+            run_configuration.budget.hourly_price,
             commander.latest_completed_iteration,
         )
         raise
@@ -122,7 +124,8 @@ if __name__ == '__main__':
         outcome_status,
         commander.final_stop_reason,
         run_started_at,
-        run_configuration.budget.hourly_price_eur,
+        run_configuration.budget.currency,
+        run_configuration.budget.hourly_price,
         commander.latest_completed_iteration,
     )
 

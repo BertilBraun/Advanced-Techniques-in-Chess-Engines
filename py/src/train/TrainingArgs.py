@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable, Literal
 
+from src.experiment.cost_accounting import CostCurrency
+
 
 @dataclass
 class MCTSParams:
@@ -114,8 +116,9 @@ class ClusterParams:
 
 @dataclass(frozen=True)
 class RuntimeLimits:
-    hourly_price_eur: float
-    maximum_cost_eur: float
+    cost_currency: CostCurrency
+    hourly_price: float
+    maximum_cost: float
     maximum_wall_time_seconds: float
     maximum_open_file_count: int
     maximum_host_ram_percent: float

@@ -25,6 +25,7 @@ from src.util.tensorboard import TensorboardWriter
 from src.util.timing import reset_times
 from src.experiment.resource_telemetry import process_tree_open_file_counts
 from src.experiment.progress_telemetry import IterationTelemetry, append_iteration_telemetry
+from src.experiment.cost_accounting import estimated_cost
 
 
 class CommanderProcess:
@@ -197,9 +198,12 @@ class CommanderProcess:
                 f'{limits.maximum_wall_time_seconds / 3600:.2f} h limit'
             )
 
-        estimated_cost = limits.hourly_price_eur * elapsed_seconds / 3600
-        if estimated_cost >= limits.maximum_cost_eur:
-            return f'estimated cost EUR {estimated_cost:.2f} reached EUR {limits.maximum_cost_eur:.2f} limit'
+        current_estimated_cost = estimated_cost(limits.hourly_price, elapsed_seconds)
+        if current_estimated_cost >= limits.maximum_cost:
+            return (
+                f'estimated cost {limits.cost_currency.value} {current_estimated_cost:.2f} reached '
+                f'{limits.cost_currency.value} {limits.maximum_cost:.2f} limit'
+            )
 
         maximum_process_open_file_count, _ = process_tree_open_file_counts(psutil.Process())
         if maximum_process_open_file_count >= limits.maximum_open_file_count:
@@ -241,7 +245,8 @@ class CommanderProcess:
             replay_games_loaded=replay_games_loaded,
             training_seconds=training_seconds,
             elapsed_seconds=elapsed_seconds,
-            estimated_cost_eur=self.args.run_limits.hourly_price_eur * elapsed_seconds / 3600,
+            cost_currency=self.args.run_limits.cost_currency,
+            estimated_cost=estimated_cost(self.args.run_limits.hourly_price, elapsed_seconds),
             maximum_process_open_file_count=maximum_process_open_file_count,
             total_open_file_count=total_open_file_count,
         )
