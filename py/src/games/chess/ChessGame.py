@@ -31,6 +31,19 @@ class DictMove(NamedTuple):
     promotion: chess.PieceType | None
 
 
+def normalize_move_for_action_space(move: ChessMove, board: ChessBoard) -> ChessMove:
+    if move.promotion in (None, chess.QUEEN):
+        return move
+    queen_promotion = chess.Move(
+        move.from_square,
+        move.to_square,
+        promotion=chess.QUEEN,
+    )
+    if queen_promotion not in board.get_valid_moves():
+        raise ValueError(f'Cannot normalize illegal promotion move {move.uci()} on {board.board.fen()}.')
+    return queen_promotion
+
+
 def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
     """We need to define a efficient dense representation for the chess Moves.
     In principal I have the following move options:

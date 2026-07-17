@@ -5,6 +5,9 @@ import random
 
 from typing import TYPE_CHECKING
 
+import chess
+import chess.engine
+
 if TYPE_CHECKING:
     from AlphaZeroCpp import MCTSParams
 
@@ -25,6 +28,7 @@ from src.eval.ModelEvaluationPy import (
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
+from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.mcts.MCTS import action_probabilities
 from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
 from src.util.save_paths import inference_model_path, load_model, model_save_path
@@ -230,8 +234,6 @@ class ModelEvaluation:
         threads: int,
         hash_mib: int,
     ) -> tuple[Results, tuple[GameRecord, ...], str]:
-        import chess.engine
-
         if nodes_per_move < 1:
             raise ValueError('Stockfish nodes_per_move must be positive.')
         if threads < 1:
@@ -263,7 +265,8 @@ class ModelEvaluation:
                     )
                     if result.move is None:
                         raise ValueError('Stockfish did not return a move.')
-                    policies.append(CurrentGame.encode_moves([result.move], board))
+                    move = normalize_move_for_action_space(result.move, board)
+                    policies.append(CurrentGame.encode_moves([move], board))
                 return policies
 
             results, records = self.play_vs_evaluation_model_paired(
