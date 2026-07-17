@@ -250,7 +250,6 @@ class ModelEvaluation:
                 {
                     'Threads': threads,
                     'Hash': hash_mib,
-                    'Ponder': False,
                 }
             )
 
@@ -260,6 +259,7 @@ class ModelEvaluation:
                     result = engine.play(
                         board.board,
                         chess.engine.Limit(nodes=nodes_per_move),
+                        ponder=False,
                     )
                     if result.move is None:
                         raise ValueError('Stockfish did not return a move.')
