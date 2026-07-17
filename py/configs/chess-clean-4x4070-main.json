@@ -32,7 +32,7 @@
     "trainer_interop_threads": 2,
     "dataloader_workers": 0,
     "reserved_logical_cpus": 4,
-    "maximum_cpu_oversubscription_ratio": 1.5,
+    "maximum_cpu_oversubscription_ratio": 1.0,
     "max_concurrent_evaluations": 1,
     "max_concurrent_evaluation_tasks": 4
   },
