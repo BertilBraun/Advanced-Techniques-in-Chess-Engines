@@ -136,6 +136,7 @@ TRAINING_ARGS = TrainingArgs(
     ),
     training=training,
     run_limits=DEFAULT_RUNTIME_LIMITS,
+    artifact_retention=DEFAULT_ARTIFACT_RETENTION,
     evaluation=evaluation,
     gating=gating,
     random_seed=0,

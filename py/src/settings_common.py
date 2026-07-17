@@ -1,7 +1,7 @@
 import os
 import torch
 from src.experiment.cost_accounting import CostCurrency
-from src.train.TrainingArgs import OptimizerType, RuntimeLimits
+from src.train.TrainingArgs import ArtifactRetention, OptimizerType, RuntimeLimits
 from src.util import lerp
 from src.util.tensorboard import *
 
@@ -38,6 +38,11 @@ DEFAULT_RUNTIME_LIMITS = RuntimeLimits(
     maximum_open_file_count=1_000_000,
     maximum_host_ram_percent=99.0,
     minimum_free_disk_gib=0.1,
+)
+
+DEFAULT_ARTIFACT_RETENTION = ArtifactRetention(
+    checkpoint_count=5,
+    replay_window_iterations=30,
 )
 
 

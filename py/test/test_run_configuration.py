@@ -22,6 +22,7 @@ from src.experiment.run_configuration import (
     write_run_manifest,
 )
 from src.train.TrainingArgs import (
+    ArtifactRetention,
     ClusterParams,
     EvaluationParams,
     MCTSParams,
@@ -98,6 +99,10 @@ def training_args() -> TrainingArgs:
             maximum_host_ram_percent=90,
             minimum_free_disk_gib=1,
         ),
+        artifact_retention=ArtifactRetention(
+            checkpoint_count=5,
+            replay_window_iterations=30,
+        ),
         random_seed=0,
         evaluation=EvaluationParams(
             num_searches_per_turn=8,
@@ -160,6 +165,17 @@ def test_budget_rejects_cost_above_ceiling() -> None:
             maximum_cost=1.0,
             maximum_wall_time_minutes=120,
         )
+
+
+def test_budget_allows_elapsed_time_only_accounting() -> None:
+    budget = BudgetConfiguration(
+        currency=CostCurrency.USD,
+        hourly_price=0.40,
+        maximum_cost=None,
+        maximum_wall_time_minutes=12 * 60,
+    )
+
+    assert budget.maximum_cost is None
 
 
 def test_run_configuration_applies_explicit_topology_and_workload() -> None:

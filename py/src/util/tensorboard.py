@@ -1,7 +1,9 @@
 import time
+import os
 import torch
 import numpy as np
 import multiprocessing
+from types import TracebackType
 from tensorboardX import SummaryWriter
 from typing import SupportsFloat
 
@@ -70,16 +72,22 @@ class TensorboardWriter:
     def __init__(self, run: int, suffix: str = '', postfix_pid: bool = True) -> None:
         from src.settings import LOG_FOLDER
 
-        self.log_folder = f'{LOG_FOLDER}/run_{run}/{suffix}'
+        log_root = os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', LOG_FOLDER)
+        self.log_folder = f'{log_root}/run_{run}/{suffix}'
         if postfix_pid:
             self.log_folder += f'/{multiprocessing.current_process().pid}'
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         global _TB_SUMMARY
         assert _TB_SUMMARY is None, 'Only one tensorboard writer can be active at a time'
         _TB_SUMMARY = SummaryWriter(self.log_folder)
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         global _TB_SUMMARY
         assert _TB_SUMMARY is not None, 'No tensorboard writer active'
         _TB_SUMMARY.close()

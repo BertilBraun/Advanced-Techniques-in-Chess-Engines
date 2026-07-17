@@ -1,10 +1,13 @@
 import os
 import time
 from collections.abc import Callable
+from pathlib import Path
+
 import torch
 from tqdm import tqdm
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.experiment.artifact_retention import apply_artifact_retention
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
@@ -98,6 +101,12 @@ class TrainerProcess:
                 exit()
 
             save_model_and_optimizer(model, optimizer, iteration + 1, self.args.save_path)
+            retention_result = apply_artifact_retention(
+                Path(self.args.save_path),
+                iteration + 1,
+                self.args.artifact_retention,
+            )
+            log('Artifact retention:', retention_result)
             if number_of_games_in_iteration(iteration, self.args.save_path) >= self.args.num_games_per_iteration * 2:
                 log('Enough games played, stopping training for this iteration.')
                 break

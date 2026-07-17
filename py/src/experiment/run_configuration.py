@@ -16,7 +16,7 @@ import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
-from src.train.TrainingArgs import ClusterParams, OptimizerType, RuntimeLimits, TrainingArgs
+from src.train.TrainingArgs import ArtifactRetention, ClusterParams, OptimizerType, RuntimeLimits, TrainingArgs
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.util.save_paths import (
     create_optimizer,
@@ -51,13 +51,13 @@ class BudgetConfiguration(BaseModel):
 
     currency: CostCurrency
     hourly_price: float = Field(gt=0)
-    maximum_cost: float = Field(gt=0)
+    maximum_cost: float | None
     maximum_wall_time_minutes: int = Field(gt=0)
 
     @model_validator(mode='after')
     def validate_projected_cost(self) -> BudgetConfiguration:
         projected_cost = self.hourly_price * self.maximum_wall_time_minutes / 60
-        if projected_cost > self.maximum_cost:
+        if self.maximum_cost is not None and projected_cost > self.maximum_cost:
             raise ValueError(
                 f'Projected cost {self.currency.value} {projected_cost:.2f} exceeds the configured '
                 f'{self.currency.value} {self.maximum_cost:.2f} maximum.'
@@ -124,6 +124,13 @@ class SafetyConfiguration(BaseModel):
     telemetry_interval_seconds: float = Field(gt=0)
 
 
+class RetentionConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    checkpoint_count: int = Field(gt=0)
+    replay_window_iterations: int = Field(gt=0)
+
+
 class EvaluationProtocolConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
@@ -168,6 +175,7 @@ class RunConfiguration(BaseModel):
     topology: TopologyConfiguration
     workload: WorkloadConfiguration
     safety: SafetyConfiguration
+    retention: RetentionConfiguration
     evaluation_protocol: EvaluationProtocolConfiguration
     environment: EnvironmentConfiguration
 
@@ -194,7 +202,7 @@ class ApprovalRecord(BaseModel):
     offer_id: str
     cost_currency: CostCurrency
     hourly_price: float
-    maximum_cost: float
+    maximum_cost: float | None
     maximum_wall_time_minutes: int
 
     @model_validator(mode='after')
@@ -387,6 +395,14 @@ def apply_run_configuration(
 ) -> None:
     topology = configuration.topology
     workload = configuration.workload
+    maximum_sampling_window = max(
+        training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1)
+    )
+    if configuration.retention.replay_window_iterations < maximum_sampling_window:
+        raise ValueError(
+            f'Replay retention of {configuration.retention.replay_window_iterations} iterations is below '
+            f'the maximum training sampling window of {maximum_sampling_window}.'
+        )
 
     training_args.save_path = str(_resolve_source_path(configuration.output_path))
     training_args.num_iterations = workload.iterations
@@ -412,6 +428,10 @@ def apply_run_configuration(
         maximum_open_file_count=configuration.safety.maximum_open_file_count,
         maximum_host_ram_percent=configuration.safety.maximum_host_ram_percent,
         minimum_free_disk_gib=configuration.safety.minimum_free_disk_gib,
+    )
+    training_args.artifact_retention = ArtifactRetention(
+        checkpoint_count=configuration.retention.checkpoint_count,
+        replay_window_iterations=configuration.retention.replay_window_iterations,
     )
 
     if training_args.evaluation is not None:

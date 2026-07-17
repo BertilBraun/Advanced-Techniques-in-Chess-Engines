@@ -71,6 +71,7 @@ TRAINING_ARGS = TrainingArgs(
         learning_rate_scheduler=learning_rate_scheduler,
     ),
     run_limits=DEFAULT_RUNTIME_LIMITS,
+    artifact_retention=DEFAULT_ARTIFACT_RETENTION,
     evaluation=EvaluationParams(
         num_searches_per_turn=60,
         num_games=30,

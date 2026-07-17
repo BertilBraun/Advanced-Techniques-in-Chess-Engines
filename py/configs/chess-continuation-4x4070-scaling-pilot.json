@@ -51,6 +51,10 @@
     "minimum_free_disk_gib": 20,
     "telemetry_interval_seconds": 10
   },
+  "retention": {
+    "checkpoint_count": 5,
+    "replay_window_iterations": 30
+  },
   "evaluation_protocol": {
     "opening_suite_path": "py/reference/pilot-openings.tsv",
     "reference_model_path": "py/training_data/chess-continuation-4x4070s-vast-45170106-scaling-pilot/model_0.pt",

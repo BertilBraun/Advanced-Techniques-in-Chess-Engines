@@ -199,7 +199,7 @@ class CommanderProcess:
             )
 
         current_estimated_cost = estimated_cost(limits.hourly_price, elapsed_seconds)
-        if current_estimated_cost >= limits.maximum_cost:
+        if limits.maximum_cost is not None and current_estimated_cost >= limits.maximum_cost:
             return (
                 f'estimated cost {limits.cost_currency.value} {current_estimated_cost:.2f} reached '
                 f'{limits.cost_currency.value} {limits.maximum_cost:.2f} limit'

@@ -118,11 +118,17 @@ class ClusterParams:
 class RuntimeLimits:
     cost_currency: CostCurrency
     hourly_price: float
-    maximum_cost: float
+    maximum_cost: float | None
     maximum_wall_time_seconds: float
     maximum_open_file_count: int
     maximum_host_ram_percent: float
     minimum_free_disk_gib: float
+
+
+@dataclass(frozen=True)
+class ArtifactRetention:
+    checkpoint_count: int
+    replay_window_iterations: int
 
 
 OptimizerType = Literal['adamw', 'sgd']
@@ -253,6 +259,7 @@ class TrainingArgs:
     training: TrainingParams
     cluster: ClusterParams
     run_limits: RuntimeLimits
+    artifact_retention: ArtifactRetention
     random_seed: int
     evaluation: EvaluationParams | None = None
     gating: GatingParams | None = None
