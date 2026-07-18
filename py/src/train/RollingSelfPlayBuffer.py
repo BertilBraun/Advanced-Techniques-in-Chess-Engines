@@ -2,17 +2,25 @@ from __future__ import annotations
 
 import torch
 import numpy as np
+import numpy.typing as npt
 from pathlib import Path
 from collections import deque
 from itertools import accumulate
 from threading import Thread
 from torch.utils.data import Dataset
 
-from src.mcts.MCTS import action_probabilities
 from src.settings import log_histogram, log_scalar
 from src.util.tensorboard import TensorboardWriter, log_scalars
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+
+
+def maximum_action_probability(visit_counts: npt.NDArray[np.uint16]) -> float:
+    counts = visit_counts[:, 1]
+    total_visits = int(np.sum(counts))
+    if total_visits <= 0:
+        raise ValueError('Visit counts must contain a positive total')
+    return float(np.max(counts) / total_visits)
 
 
 class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
@@ -86,17 +94,23 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         accumulated_stats = self.stats
 
         with TensorboardWriter(run, 'dataset', postfix_pid=False):
-            policies = [action_probabilities(visits) for _, dataset in self._buf for visits in dataset.visit_counts]
+            policy_maxima = np.fromiter(
+                (maximum_action_probability(visits) for _, dataset in self._buf for visits in dataset.visit_counts),
+                dtype=np.float32,
+                count=len(self),
+            )
+            value_targets = np.fromiter(
+                (value for _, dataset in self._buf for value in dataset.value_targets),
+                dtype=np.float32,
+                count=len(self),
+            )
 
-            spikiness = sum(policy.max() for policy in policies) / len(self)
+            spikiness = float(np.mean(policy_maxima))
 
             log_scalar('dataset/policy_spikiness', spikiness)
 
-            log_histogram('dataset/policy_targets', np.array([policy.max() for policy in policies]))
-            log_histogram(
-                'dataset/value_targets',
-                np.array([value for _, dataset in self._buf for value in dataset.value_targets]),
-            )
+            log_histogram('dataset/policy_targets', policy_maxima)
+            log_histogram('dataset/value_targets', value_targets)
 
             # dataset.deduplicate()
             # log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))

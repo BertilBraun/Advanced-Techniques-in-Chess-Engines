@@ -16,9 +16,6 @@ import numpy as np
 import torch  # noqa
 
 
-torch.autograd.set_detect_anomaly(True)
-
-
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--run-config', required=True, type=Path)
