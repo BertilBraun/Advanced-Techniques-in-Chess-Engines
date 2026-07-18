@@ -241,6 +241,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert pickle.dumps(arguments.training.learning_rate)
     assert arguments.num_iterations == 2
     assert arguments.num_games_per_iteration == 200
+    assert arguments.self_play.num_games_after_which_to_write == 2
     assert arguments.self_play_search_warmup_iterations == 1
     assert arguments.self_play_value_warmup_iterations == 1
     assert arguments.random_seed == 20260717
@@ -264,6 +265,7 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 200
     assert arguments.num_games_per_iteration == 5000
+    assert arguments.self_play.num_games_after_which_to_write == 10
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15

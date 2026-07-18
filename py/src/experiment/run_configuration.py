@@ -134,6 +134,7 @@ class WorkloadConfiguration(BaseModel):
 
     iterations: int = Field(gt=0)
     games_per_iteration: int = Field(gt=0)
+    games_per_replay_file: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...]
     self_play_search_warmup_iterations: int = Field(ge=0)
     self_play_value_warmup_iterations: int = Field(ge=0)
@@ -494,6 +495,7 @@ def apply_run_configuration(
     training_args.save_path = str(_resolve_source_path(configuration.output_path))
     training_args.num_iterations = workload.iterations
     training_args.num_games_per_iteration = workload.games_per_iteration
+    training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
     training_args.random_seed = workload.random_seed
     training_args.self_play_search_warmup_iterations = workload.self_play_search_warmup_iterations
     training_args.self_play_value_warmup_iterations = workload.self_play_value_warmup_iterations
