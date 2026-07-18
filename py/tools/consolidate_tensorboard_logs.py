@@ -12,7 +12,8 @@ from types import FrameType
 
 from pydantic import BaseModel, ConfigDict, Field
 from tensorboard.backend.event_processing.event_file_loader import LegacyEventFileLoader
-from tensorboard.compat.proto import event_pb2, summary_pb2
+from tensorboard.compat.proto import event_pb2, summary_pb2, tensor_pb2, tensor_shape_pb2, types_pb2
+from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
 
@@ -47,6 +48,26 @@ class EventFileSelection:
     source_event_file_count: int
     skipped_self_play_event_file_count: int
     representative_self_play_processes: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True)
+class MultilineChart:
+    title: str
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class MarginChart:
+    title: str
+    value_tag: str
+    lower_tag: str
+    upper_tag: str
+
+
+@dataclass(frozen=True)
+class CustomScalarCategory:
+    title: str
+    charts: tuple[MultilineChart | MarginChart, ...]
 
 
 class RepresentativeSelfPlayProcess(BaseModel):
@@ -87,9 +108,10 @@ class ConsolidationManifest(BaseModel):
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--source-root', required=True, type=Path)
+    parser.add_argument('--source-root', type=Path)
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--watch-interval-seconds', type=float)
+    parser.add_argument('--custom-layout-only', action='store_true')
     return parser.parse_args()
 
 
@@ -203,6 +225,176 @@ def _plugin_name(value: summary_pb2.Summary.Value) -> str:
     return ''
 
 
+def _evaluation_wdl_chart(title: str, tag_prefix: str) -> MultilineChart:
+    return MultilineChart(
+        title=title,
+        tags=(
+            f'{tag_prefix}/wins',
+            f'{tag_prefix}/draws',
+            f'{tag_prefix}/losses',
+        ),
+    )
+
+
+def custom_scalar_categories() -> tuple[CustomScalarCategory, ...]:
+    return (
+        CustomScalarCategory(
+            title='Evaluation W/D/L',
+            charts=(
+                _evaluation_wdl_chart('Reference model', 'evaluation/vs_reference_model'),
+                _evaluation_wdl_chart('Random', 'evaluation/vs_random'),
+                _evaluation_wdl_chart('Policy vs random', 'evaluation/policy_vs_random'),
+                _evaluation_wdl_chart('Stockfish fixed nodes', 'evaluation/vs_stockfish_fixed_nodes'),
+                _evaluation_wdl_chart('Stockfish level 0', 'evaluation/vs_stockfish_level_0'),
+                _evaluation_wdl_chart('Stockfish level 1', 'evaluation/vs_stockfish_level_1'),
+                _evaluation_wdl_chart('Stockfish level 2', 'evaluation/vs_stockfish_level_2'),
+                _evaluation_wdl_chart('Stockfish level 3', 'evaluation/vs_stockfish_level_3'),
+                _evaluation_wdl_chart('Model from 10 iterations earlier', 'evaluation/vs_10_model'),
+                _evaluation_wdl_chart('Model from 20 iterations earlier', 'evaluation/vs_20_model'),
+            ),
+        ),
+        CustomScalarCategory(
+            title='Evaluation scores',
+            charts=(
+                MultilineChart(
+                    title='Stockfish skill levels',
+                    tags=tuple(f'evaluation/vs_stockfish_level_{level}/score' for level in range(4)),
+                ),
+                MultilineChart(
+                    title='Reference and random baselines',
+                    tags=(
+                        'evaluation/vs_reference_model/score',
+                        'evaluation/vs_random/score',
+                        'evaluation/policy_vs_random/score',
+                    ),
+                ),
+                MultilineChart(
+                    title='Previous models',
+                    tags=(
+                        'evaluation/vs_10_model/score',
+                        'evaluation/vs_20_model/score',
+                    ),
+                ),
+                MarginChart(
+                    title='Reference model confidence interval',
+                    value_tag='evaluation/vs_reference_model/score',
+                    lower_tag='evaluation/vs_reference_model/score_confidence_low',
+                    upper_tag='evaluation/vs_reference_model/score_confidence_high',
+                ),
+                MarginChart(
+                    title='Stockfish fixed-nodes confidence interval',
+                    value_tag='evaluation/vs_stockfish_fixed_nodes/score',
+                    lower_tag='evaluation/vs_stockfish_fixed_nodes/score_confidence_low',
+                    upper_tag='evaluation/vs_stockfish_fixed_nodes/score_confidence_high',
+                ),
+            ),
+        ),
+        CustomScalarCategory(
+            title='Policy',
+            charts=(
+                MultilineChart(
+                    title='Policy accuracy',
+                    tags=(
+                        'evaluation/policy_accuracy/1',
+                        'evaluation/policy_accuracy/5',
+                        'evaluation/policy_accuracy/10',
+                    ),
+                ),
+            ),
+        ),
+        CustomScalarCategory(
+            title='Optimization',
+            charts=(
+                MultilineChart(
+                    title='Training losses',
+                    tags=(
+                        'train/policy_loss',
+                        'train/value_loss',
+                        'train/total_loss',
+                    ),
+                ),
+                MultilineChart(
+                    title='Validation losses',
+                    tags=(
+                        'validation/policy_loss',
+                        'validation/value_loss',
+                        'validation/total_loss',
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _custom_scalar_layout() -> layout_pb2.Layout:
+    categories: list[layout_pb2.Category] = []
+    for category_definition in custom_scalar_categories():
+        charts: list[layout_pb2.Chart] = []
+        for chart_definition in category_definition.charts:
+            match chart_definition:
+                case MultilineChart():
+                    charts.append(
+                        layout_pb2.Chart(
+                            title=chart_definition.title,
+                            multiline=layout_pb2.MultilineChartContent(tag=chart_definition.tags),
+                        )
+                    )
+                case MarginChart():
+                    charts.append(
+                        layout_pb2.Chart(
+                            title=chart_definition.title,
+                            margin=layout_pb2.MarginChartContent(
+                                series=(
+                                    layout_pb2.MarginChartContent.Series(
+                                        value=chart_definition.value_tag,
+                                        lower=chart_definition.lower_tag,
+                                        upper=chart_definition.upper_tag,
+                                    ),
+                                )
+                            ),
+                        )
+                    )
+        categories.append(layout_pb2.Category(title=category_definition.title, chart=charts))
+    return layout_pb2.Layout(category=categories)
+
+
+def _write_custom_scalar_layout(writer: EventFileWriter) -> None:
+    layout = _custom_scalar_layout()
+    metadata = summary_pb2.SummaryMetadata(
+        plugin_data=summary_pb2.SummaryMetadata.PluginData(plugin_name='custom_scalars')
+    )
+    tensor = tensor_pb2.TensorProto(
+        dtype=types_pb2.DT_STRING,
+        string_val=(layout.SerializeToString(),),
+        tensor_shape=tensor_shape_pb2.TensorShapeProto(),
+    )
+    writer.add_event(
+        event_pb2.Event(
+            wall_time=time.time(),
+            summary=summary_pb2.Summary(
+                value=(
+                    summary_pb2.Summary.Value(
+                        tag='custom_scalars__config__',
+                        tensor=tensor,
+                        metadata=metadata,
+                    ),
+                )
+            ),
+        )
+    )
+
+
+def append_custom_scalar_layout(output_root: Path) -> None:
+    resolved_output_root = output_root.resolve()
+    if not resolved_output_root.is_dir():
+        raise ValueError(f'TensorBoard output root does not exist: {resolved_output_root}')
+    writer = EventFileWriter(str(resolved_output_root))
+    try:
+        _write_custom_scalar_layout(writer)
+    finally:
+        writer.close()
+
+
 def _summary_identity(
     canonical_summary_tag: str,
     step: int,
@@ -222,6 +414,7 @@ class TensorboardLogConsolidator:
     def __init__(self, source_root: Path, output_root: Path) -> None:
         self.source_root, self.output_root = _validate_paths(source_root, output_root)
         self.writer = EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
+        _write_custom_scalar_layout(self.writer)
         self.summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.emitted_summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.event_file_fingerprints: dict[Path, EventFileFingerprint] = {}
@@ -381,6 +574,11 @@ def watch(source_root: Path, output_root: Path, interval_seconds: float) -> None
 
 def main() -> None:
     arguments = parse_arguments()
+    if arguments.custom_layout_only:
+        append_custom_scalar_layout(arguments.output_root)
+        return
+    if arguments.source_root is None:
+        raise ValueError('--source-root is required unless --custom-layout-only is selected.')
     if arguments.watch_interval_seconds is None:
         manifest = consolidate_once(arguments.source_root, arguments.output_root)
         print(manifest.model_dump_json(indent=2))

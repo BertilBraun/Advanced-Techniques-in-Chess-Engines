@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from tensorboard.compat.proto import event_pb2, summary_pb2
+from tensorboard.plugins.custom_scalar import layout_pb2
 from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
 from tools.consolidate_tensorboard_logs import consolidate_once
@@ -122,3 +123,23 @@ def test_consolidation_preserves_add_scalars_child_series(tmp_path: Path) -> Non
 
     assert scalar_values(output_root, 'evaluation/policy_accuracy/1') == pytest.approx((0.2,))
     assert scalar_values(output_root, 'evaluation/policy_accuracy/5') == pytest.approx((0.6,))
+
+
+def test_custom_scalar_layout_groups_wins_draws_and_losses(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    write_scalar(source_root / 'run_0' / 'trainer', 'train/total_loss', 1, 1.0, wall_time=10.0)
+
+    consolidate_once(source_root, output_root)
+
+    accumulator = EventAccumulator(str(output_root))
+    accumulator.Reload()
+    layout_event = accumulator.Tensors('custom_scalars__config__')[0]
+    layout = layout_pb2.Layout.FromString(layout_event.tensor_proto.string_val[0])
+    wdl_category = next(category for category in layout.category if category.title == 'Evaluation W/D/L')
+    reference_chart = next(chart for chart in wdl_category.chart if chart.title == 'Reference model')
+    assert tuple(reference_chart.multiline.tag) == (
+        'evaluation/vs_reference_model/wins',
+        'evaluation/vs_reference_model/draws',
+        'evaluation/vs_reference_model/losses',
+    )
