@@ -143,3 +143,27 @@ def test_custom_scalar_layout_groups_wins_draws_and_losses(tmp_path: Path) -> No
         'evaluation/vs_reference_model/draws',
         'evaluation/vs_reference_model/losses',
     )
+
+
+def test_time_series_view_overlays_evaluation_series_as_colored_runs(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    for series_name, value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0), ('score', 55.0)):
+        write_scalar(
+            source_root
+            / 'run_0'
+            / 'evaluation_vs_stockfish_level_0'
+            / 'evaluation'
+            / 'vs_stockfish_level_0'
+            / series_name,
+            'evaluation/vs_stockfish_level_0',
+            4,
+            value,
+            wall_time=10.0,
+        )
+
+    consolidate_once(source_root, output_root, time_series_view=True)
+
+    for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0), ('score', 55.0)):
+        run_directory = output_root / 'evaluation' / 'vs_stockfish_level_0' / series_name
+        assert scalar_values(run_directory, 'evaluation/vs_stockfish_level_0') == (expected_value,)

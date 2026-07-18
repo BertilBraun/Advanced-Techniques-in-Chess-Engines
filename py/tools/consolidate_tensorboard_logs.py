@@ -51,6 +51,12 @@ class EventFileSelection:
 
 
 @dataclass(frozen=True)
+class TimeSeriesRoute:
+    run_name: str
+    tag: str
+
+
+@dataclass(frozen=True)
 class MultilineChart:
     title: str
     tags: tuple[str, ...]
@@ -112,6 +118,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--watch-interval-seconds', type=float)
     parser.add_argument('--custom-layout-only', action='store_true')
+    parser.add_argument('--time-series-view', action='store_true')
     return parser.parse_args()
 
 
@@ -217,6 +224,23 @@ def canonical_tag(source_root: Path, event_file: Path, original_tag: str) -> str
             return expanded_summary_tag
         case _:
             return f'{category}/{expanded_summary_tag}'
+
+
+def time_series_route(canonical_summary_tag: str) -> TimeSeriesRoute:
+    tag_parts = tuple(canonical_summary_tag.split('/'))
+    if len(tag_parts) >= 3:
+        parent_tag = '/'.join(tag_parts[:-1])
+        series_name = tag_parts[-1]
+        if tag_parts[0] == 'evaluation' and (
+            series_name in {'wins', 'draws', 'losses', 'score'}
+            or (parent_tag == 'evaluation/policy_accuracy' and series_name in {'1', '5', '10'})
+        ):
+            return TimeSeriesRoute(run_name=canonical_summary_tag, tag=parent_tag)
+        if parent_tag in {'dataset/game_length', 'self_play/mcts'}:
+            return TimeSeriesRoute(run_name=canonical_summary_tag, tag=parent_tag)
+    if len(tag_parts) == 2 and tag_parts[0] in {'train', 'validation'}:
+        return TimeSeriesRoute(run_name=canonical_summary_tag, tag=tag_parts[0])
+    return TimeSeriesRoute(run_name='other_metrics', tag=canonical_summary_tag)
 
 
 def _plugin_name(value: summary_pb2.Summary.Value) -> str:
@@ -411,10 +435,15 @@ def _summary_identity(
 
 
 class TensorboardLogConsolidator:
-    def __init__(self, source_root: Path, output_root: Path) -> None:
+    def __init__(self, source_root: Path, output_root: Path, time_series_view: bool = False) -> None:
         self.source_root, self.output_root = _validate_paths(source_root, output_root)
-        self.writer = EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
-        _write_custom_scalar_layout(self.writer)
+        self.time_series_view = time_series_view
+        self.writer = (
+            None if time_series_view else EventFileWriter(str(self.output_root), max_queue_size=1_000, flush_secs=10)
+        )
+        self.time_series_writers: dict[str, EventFileWriter] = {}
+        if self.writer is not None:
+            _write_custom_scalar_layout(self.writer)
         self.summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.emitted_summary_states: dict[SummaryIdentity, SummaryState] = {}
         self.event_file_fingerprints: dict[Path, EventFileFingerprint] = {}
@@ -423,7 +452,10 @@ class TensorboardLogConsolidator:
         self.excluded_text_summary_count = 0
 
     def close(self) -> None:
-        self.writer.close()
+        if self.writer is not None:
+            self.writer.close()
+        for writer in self.time_series_writers.values():
+            writer.close()
 
     def scan(self) -> ConsolidationManifest:
         selection = select_event_files(self.source_root)
@@ -437,7 +469,10 @@ class TensorboardLogConsolidator:
             self._load_event_file(event_file)
             self.event_file_fingerprints[event_file] = fingerprint
         self._emit_changed_summaries()
-        self.writer.flush()
+        if self.writer is not None:
+            self.writer.flush()
+        for writer in self.time_series_writers.values():
+            writer.flush()
         manifest = self._manifest(selection)
         (self.output_root / 'consolidation-manifest.json').write_text(
             manifest.model_dump_json(indent=2),
@@ -495,7 +530,9 @@ class TensorboardLogConsolidator:
             key=lambda item: (item[1].wall_time, item[0].step, item[0].tag),
         ):
             consolidated_value = summary_pb2.Summary.Value.FromString(state.serialized_value)
-            self.writer.add_event(
+            writer, output_tag = self._writer_and_tag(identity.tag)
+            consolidated_value.tag = output_tag
+            writer.add_event(
                 event_pb2.Event(
                     wall_time=state.wall_time,
                     step=identity.step,
@@ -504,6 +541,21 @@ class TensorboardLogConsolidator:
             )
             self.emitted_summary_states[identity] = state
             self.emitted_summary_count += 1
+
+    def _writer_and_tag(self, canonical_summary_tag: str) -> tuple[EventFileWriter, str]:
+        if not self.time_series_view:
+            assert self.writer is not None
+            return self.writer, canonical_summary_tag
+        route = time_series_route(canonical_summary_tag)
+        writer = self.time_series_writers.get(route.run_name)
+        if writer is None:
+            writer = EventFileWriter(
+                str(self.output_root / Path(route.run_name)),
+                max_queue_size=1_000,
+                flush_secs=10,
+            )
+            self.time_series_writers[route.run_name] = writer
+        return writer, route.tag
 
     def _manifest(self, selection: EventFileSelection) -> ConsolidationManifest:
         tag_identities: dict[tuple[str, str, str], list[SummaryIdentity]] = {}
@@ -549,21 +601,30 @@ class StopSignal:
         self.requested = True
 
 
-def consolidate_once(source_root: Path, output_root: Path) -> ConsolidationManifest:
-    consolidator = TensorboardLogConsolidator(source_root, output_root)
+def consolidate_once(
+    source_root: Path,
+    output_root: Path,
+    time_series_view: bool = False,
+) -> ConsolidationManifest:
+    consolidator = TensorboardLogConsolidator(source_root, output_root, time_series_view)
     try:
         return consolidator.scan()
     finally:
         consolidator.close()
 
 
-def watch(source_root: Path, output_root: Path, interval_seconds: float) -> None:
+def watch(
+    source_root: Path,
+    output_root: Path,
+    interval_seconds: float,
+    time_series_view: bool = False,
+) -> None:
     if interval_seconds <= 0:
         raise ValueError('Watch interval must be positive.')
     stop_signal = StopSignal()
     signal.signal(signal.SIGTERM, stop_signal.request)
     signal.signal(signal.SIGINT, stop_signal.request)
-    consolidator = TensorboardLogConsolidator(source_root, output_root)
+    consolidator = TensorboardLogConsolidator(source_root, output_root, time_series_view)
     try:
         while not stop_signal.requested:
             consolidator.scan()
@@ -580,10 +641,19 @@ def main() -> None:
     if arguments.source_root is None:
         raise ValueError('--source-root is required unless --custom-layout-only is selected.')
     if arguments.watch_interval_seconds is None:
-        manifest = consolidate_once(arguments.source_root, arguments.output_root)
+        manifest = consolidate_once(
+            arguments.source_root,
+            arguments.output_root,
+            arguments.time_series_view,
+        )
         print(manifest.model_dump_json(indent=2))
         return
-    watch(arguments.source_root, arguments.output_root, arguments.watch_interval_seconds)
+    watch(
+        arguments.source_root,
+        arguments.output_root,
+        arguments.watch_interval_seconds,
+        arguments.time_series_view,
+    )
 
 
 if __name__ == '__main__':
