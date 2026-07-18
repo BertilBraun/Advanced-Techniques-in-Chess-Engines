@@ -107,6 +107,9 @@ class ClusterParams:
     self_play_device_ids: tuple[int, ...]
     """One CUDA device ID per self-play process."""
 
+    self_play_tensorboard_processes: int
+    """Number of self-play processes that emit representative TensorBoard metrics."""
+
     trainer_cpu_threads: int
     """CPU threads reserved for PyTorch training operations."""
 

@@ -27,6 +27,7 @@
     "trainer_device_id": 3,
     "evaluation_device_id": 3,
     "self_play_processes_per_device": [6, 6, 6, 4],
+    "self_play_tensorboard_processes": 1,
     "mcts_threads_per_process": 2,
     "parallel_games_per_process": 64,
     "inference_cache_capacity_per_process": 250000,

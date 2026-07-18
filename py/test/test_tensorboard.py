@@ -37,3 +37,16 @@ def test_tensorboard_context_is_isolated_between_threads(
         tmp_path / 'run_1' / 'usage',
         tmp_path / 'run_2' / 'usage',
     )
+
+
+def test_disabled_tensorboard_writer_creates_no_event_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv('TRAINING_TENSORBOARD_LOG_PATH', str(tmp_path))
+
+    writer = TensorboardWriter(run=3, suffix='self_play', postfix_pid=False, enabled=False)
+    with writer:
+        log_scalar('mcts/average_search_depth', 4.0, iteration=0)
+
+    assert not Path(writer.log_folder).exists()

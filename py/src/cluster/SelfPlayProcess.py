@@ -33,7 +33,15 @@ def run_self_play_process(
     np.random.seed(worker_seed)
 
     self_play_process = SelfPlayProcess(args, communication_folder, device_id=device_id, node_id=node_id, run_id=run)
-    with log_exceptions(f'Self play process {node_id} crashed.'), TensorboardWriter(run, 'self_play'):
+    with (
+        log_exceptions(f'Self play process {node_id} crashed.'),
+        TensorboardWriter(
+            run,
+            'self_play',
+            postfix_pid=False,
+            enabled=node_id < args.cluster.self_play_tensorboard_processes,
+        ),
+    ):
         self_play_process.run()
 
 

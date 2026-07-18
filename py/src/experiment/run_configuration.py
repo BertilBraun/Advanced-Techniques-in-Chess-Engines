@@ -100,6 +100,7 @@ class TopologyConfiguration(BaseModel):
     trainer_device_id: int = Field(ge=0)
     evaluation_device_id: int = Field(ge=0)
     self_play_processes_per_device: tuple[int, ...]
+    self_play_tensorboard_processes: int = Field(ge=1)
     mcts_threads_per_process: int = Field(gt=0)
     parallel_games_per_process: int = Field(gt=0)
     inference_cache_capacity_per_process: int = Field(gt=0)
@@ -120,6 +121,8 @@ class TopologyConfiguration(BaseModel):
             raise ValueError('Self-play process counts cannot be negative.')
         if sum(self.self_play_processes_per_device) == 0:
             raise ValueError('At least one self-play process must be configured.')
+        if self.self_play_tensorboard_processes > sum(self.self_play_processes_per_device):
+            raise ValueError('TensorBoard self-play process count cannot exceed the self-play process count.')
         return self
 
 
@@ -509,6 +512,7 @@ def apply_run_configuration(
         trainer_device_id=topology.trainer_device_id,
         evaluation_device_id=topology.evaluation_device_id,
         self_play_device_ids=_self_play_device_ids(topology.self_play_processes_per_device),
+        self_play_tensorboard_processes=topology.self_play_tensorboard_processes,
         trainer_cpu_threads=topology.trainer_cpu_threads,
         trainer_interop_threads=topology.trainer_interop_threads,
         pause_self_play_during_training=topology.pause_self_play_during_training,

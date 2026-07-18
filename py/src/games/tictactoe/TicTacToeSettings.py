@@ -59,6 +59,7 @@ TRAINING_ARGS = TrainingArgs(
         trainer_device_id=max(0, NUM_GPUS - 1),
         evaluation_device_id=max(0, NUM_GPUS - 1),
         self_play_device_ids=(max(0, NUM_GPUS - 1),),
+        self_play_tensorboard_processes=1,
         trainer_cpu_threads=1,
         trainer_interop_threads=1,
         pause_self_play_during_training=False,

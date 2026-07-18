@@ -106,6 +106,7 @@ def objective(trial: optuna.Trial) -> float:
             trainer_device_id=max(0, torch.cuda.device_count() - 1),
             evaluation_device_id=max(0, torch.cuda.device_count() - 1),
             self_play_device_ids=(max(0, torch.cuda.device_count() - 1),) * 2,
+            self_play_tensorboard_processes=1,
             trainer_cpu_threads=1,
             trainer_interop_threads=1,
             max_concurrent_evaluations=1,
