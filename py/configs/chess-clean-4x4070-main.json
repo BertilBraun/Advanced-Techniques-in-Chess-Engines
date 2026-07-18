@@ -1,5 +1,6 @@
 {
   "run_name": "chess-clean-4x4070s-vast-45170106-main",
+  "tensorboard_run_directory": "chess-clean-4x4070s-vast-45170106-main",
   "stage": "clean_retrain",
   "requires_explicit_approval": true,
   "output_path": "py/training_data/chess-clean-4x4070s-vast-45170106-main",

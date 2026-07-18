@@ -266,6 +266,7 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     apply_run_configuration(arguments, configuration)
 
     assert configuration.stage.value == 'clean_retrain'
+    assert configuration.tensorboard_run_directory == 'chess-clean-4x4070s-vast-45170106-main'
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 200
     assert arguments.num_games_per_iteration == 5000
@@ -283,6 +284,16 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert arguments.evaluation.previous_model_offsets == (5, 10)
     assert arguments.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
     assert arguments.evaluation.evaluate_random
+
+
+@pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))
+def test_run_configuration_rejects_unsafe_tensorboard_run_directory(run_directory: str) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['tensorboard_run_directory'] = run_directory
+
+    with pytest.raises(ValidationError, match='tensorboard_run_directory'):
+        RunConfiguration.model_validate(data)
 
 
 def test_training_rejects_legacy_configuration_without_retention() -> None:

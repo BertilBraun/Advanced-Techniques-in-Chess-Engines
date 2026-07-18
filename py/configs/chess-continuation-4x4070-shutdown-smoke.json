@@ -1,5 +1,6 @@
 {
   "run_name": "chess-continuation-4x4070s-vast-45170106-shutdown-smoke",
+  "tensorboard_run_directory": "chess-continuation-4x4070s-vast-45170106-shutdown-smoke",
   "stage": "systems_pilot",
   "requires_explicit_approval": true,
   "output_path": "py/training_data/chess-continuation-4x4070s-vast-45170106-shutdown-smoke",

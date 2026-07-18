@@ -4,16 +4,58 @@ import torch
 import numpy as np
 import multiprocessing
 from contextvars import ContextVar, Token
+from pathlib import Path
 from types import TracebackType
 from tensorboardX import SummaryWriter
+from tensorboardX.summary import scalar
+from tensorboardX.writer import FileWriter
 from typing import SupportsFloat
 
 
 LOG_HISTOGRAMS = True  # Log any histograms to tensorboard - not sure, might be really slow, not sure though
 
-_TB_SUMMARY = ContextVar[SummaryWriter | None]('tensorboard_summary', default=None)
+
+class RestartSafeSummaryWriter(SummaryWriter):
+    def add_scalars(
+        self,
+        main_tag: str,
+        tag_scalar_dict: dict[str, float],
+        global_step: int | None = None,
+        walltime: float | None = None,
+    ) -> None:
+        resolved_walltime = time.time() if walltime is None else walltime
+        root_log_directory = self._get_file_writer().get_logdir()
+        assert self.all_writers is not None
+        for tag, scalar_value in tag_scalar_dict.items():
+            child_log_directory = str(Path(root_log_directory) / main_tag / tag)
+            child_writer = self.all_writers.get(child_log_directory)
+            if child_writer is None:
+                child_writer = FileWriter(
+                    logdir=child_log_directory,
+                    max_queue=self._max_queue,
+                    flush_secs=self._flush_secs,
+                    filename_suffix=self._filename_suffix,
+                )
+                self.all_writers[child_log_directory] = child_writer
+            child_writer.add_summary(scalar(main_tag, scalar_value), global_step, resolved_walltime)
+
+
+_TB_SUMMARY = ContextVar[RestartSafeSummaryWriter | None]('tensorboard_summary', default=None)
 _TB_LOGGING_ENABLED = ContextVar[bool]('tensorboard_logging_enabled', default=True)
 _HAS_PROMPTED = False
+_TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE = 'TRAINING_TENSORBOARD_RUN_DIRECTORY'
+
+
+def configure_tensorboard_run_directory(run_directory: str) -> None:
+    allowed_characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
+    valid_initial_characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    if (
+        not run_directory
+        or run_directory[0] not in valid_initial_characters
+        or any(character not in allowed_characters for character in run_directory)
+    ):
+        raise ValueError('TensorBoard run directory must contain only letters, numbers, underscores, and hyphens.')
+    os.environ[_TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE] = run_directory
 
 
 def _tb_check_active() -> bool:
@@ -87,18 +129,22 @@ class TensorboardWriter:
         from src.settings import LOG_FOLDER
 
         log_root = os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', LOG_FOLDER)
-        self.log_folder = f'{log_root}/run_{run}/{suffix}'
+        run_directory = os.environ.get(_TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE, f'run_{run}')
+        self.log_folder = str(Path(log_root) / run_directory / suffix)
         if postfix_pid:
             self.log_folder += f'/{multiprocessing.current_process().pid}'
         self.enabled = enabled
-        self._summary_token: Token[SummaryWriter | None] | None = None
+        self._summary_token: Token[RestartSafeSummaryWriter | None] | None = None
         self._enabled_token: Token[bool] | None = None
 
     def __enter__(self) -> None:
         assert _TB_SUMMARY.get() is None, 'Only one tensorboard writer can be active at a time'
         self._enabled_token = _TB_LOGGING_ENABLED.set(self.enabled)
         if self.enabled:
-            self._summary_token = _TB_SUMMARY.set(SummaryWriter(self.log_folder))
+            filename_suffix = f'.{time.time_ns()}_{multiprocessing.current_process().pid}'
+            self._summary_token = _TB_SUMMARY.set(
+                RestartSafeSummaryWriter(self.log_folder, filename_suffix=filename_suffix)
+            )
 
     def __exit__(
         self,

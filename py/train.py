@@ -41,6 +41,7 @@ if __name__ == '__main__':
     from src.util.profiler import start_gpu_usage_logger
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
+    from src.util.tensorboard import configure_tensorboard_run_directory
     from src.experiment.run_configuration import (
         apply_run_configuration,
         load_run_configuration,
@@ -54,6 +55,7 @@ if __name__ == '__main__':
 
     run_configuration = load_run_configuration(command_line_arguments.run_config)
     apply_run_configuration(TRAINING_ARGS, run_configuration)
+    configure_tensorboard_run_directory(run_configuration.tensorboard_run_directory)
 
     random.seed(TRAINING_ARGS.random_seed)
     np.random.seed(TRAINING_ARGS.random_seed)

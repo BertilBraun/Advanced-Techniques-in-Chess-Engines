@@ -1,5 +1,6 @@
 {
   "run_name": "chess-continuation-4x4070s-vast-45170106-scaling-pilot",
+  "tensorboard_run_directory": "chess-continuation-4x4070s-vast-45170106-scaling-pilot",
   "stage": "systems_pilot",
   "requires_explicit_approval": true,
   "output_path": "py/training_data/chess-continuation-4x4070s-vast-45170106-scaling-pilot",

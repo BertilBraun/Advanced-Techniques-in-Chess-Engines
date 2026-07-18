@@ -1,5 +1,6 @@
 {
   "run_name": "chess-clean-microbenchmark-a-vast-45170106",
+  "tensorboard_run_directory": "chess-clean-microbenchmark-a-vast-45170106",
   "stage": "systems_pilot",
   "requires_explicit_approval": true,
   "output_path": "py/training_data/chess-clean-microbenchmark-a-vast-45170106",

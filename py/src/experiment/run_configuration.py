@@ -233,6 +233,7 @@ class RunConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     run_name: str = Field(min_length=1)
+    tensorboard_run_directory: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
     stage: TrainingStage
     requires_explicit_approval: bool
     output_path: str
