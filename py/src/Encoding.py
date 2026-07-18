@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 import numpy as np
 import numpy.typing as npt
 
@@ -80,6 +82,29 @@ def decode_board_state(buf: bytes) -> npt.NDArray[np.int8]:
         out[ch, :, :] = scalars[i]  # broadcast the scalars
 
     return out
+
+
+def decode_board_states(encoded_states: Sequence[bytes]) -> npt.NDArray[np.int8]:
+    """Decode a batch of compressed board states with vectorized NumPy operations."""
+    if not encoded_states:
+        return np.empty((0, C, H, W), dtype=np.int8)
+
+    normalized_states = (state[:ENCODED_BYTES].ljust(ENCODED_BYTES, b'\x00') for state in encoded_states)
+    encoded = np.frombuffer(b''.join(normalized_states), dtype=np.uint8).reshape(len(encoded_states), ENCODED_BYTES)
+
+    binary_bytes = encoded[:, : N_BB * 8].reshape(len(encoded_states), N_BB, 8)
+    binary_planes = np.unpackbits(binary_bytes, axis=2, bitorder='little').reshape(
+        len(encoded_states),
+        N_BB,
+        H,
+        W,
+    )
+    scalar_values = encoded[:, N_BB * 8 :].view(np.int8)
+
+    decoded = np.zeros((len(encoded_states), C, H, W), dtype=np.int8)
+    decoded[:, BINARY_CHANNELS] = binary_planes
+    decoded[:, SCALAR_CHANNELS] = scalar_values[:, :, np.newaxis, np.newaxis]
+    return decoded
 
 
 def get_board_result_score(board: Board) -> float | None:

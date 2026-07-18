@@ -1,9 +1,10 @@
-from typing import NamedTuple
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from typing import NamedTuple, Protocol
 import torch
 import torch.nn.functional as F
 
 from tqdm import tqdm
-from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
 
 from src.Network import Network
@@ -21,6 +22,28 @@ class _LossResult(NamedTuple):
     value_output: torch.Tensor
 
 
+TrainingBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+
+class TrainingBatchLoader(Protocol):
+    def __iter__(self) -> Iterator[TrainingBatch]: ...
+
+    def __len__(self) -> int: ...
+
+
+def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[TrainingBatch]:
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix='training-batch') as executor:
+        iterator = iter(batches)
+        pending_batch = executor.submit(next, iterator)
+        while True:
+            try:
+                batch = pending_batch.result()
+            except StopIteration:
+                return
+            pending_batch = executor.submit(next, iterator)
+            yield batch
+
+
 class Trainer:
     def __init__(
         self,
@@ -32,7 +55,7 @@ class Trainer:
         self.optimizer: torch.optim.Optimizer = optimizer
         self.args: TrainingParams = args
 
-    def _calculate_loss_for_batch(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor]) -> _LossResult:
+    def _calculate_loss_for_batch(self, batch: TrainingBatch) -> _LossResult:
         """Calculate losses for a single batch"""
         state, policy_targets, value_targets = batch
 
@@ -76,13 +99,13 @@ class Trainer:
             value_output=value_output,
         )
 
-    def _train_epoch(self, dataloader: DataLoader) -> TrainingStats:
+    def _train_epoch(self, dataloader: TrainingBatchLoader) -> TrainingStats:
         """Train for one epoch and return statistics"""
         self.model.train()
         stats = TrainingStats(self.model.device)
         scaler = GradScaler()
 
-        for batch in tqdm(dataloader, desc='Train batches'):
+        for batch in tqdm(prefetch_training_batches(dataloader), total=len(dataloader), desc='Train batches'):
             self.optimizer.zero_grad()
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
@@ -103,13 +126,17 @@ class Trainer:
 
         return stats
 
-    def _validate_epoch(self, validation_dataloader: DataLoader) -> TrainingStats:
+    def _validate_epoch(self, validation_dataloader: TrainingBatchLoader) -> TrainingStats:
         """Validate for one epoch and return statistics"""
         self.model.eval()
         stats = TrainingStats(self.model.device)
 
         with torch.no_grad(), torch.autocast(dtype=torch.bfloat16, device_type=self.model.device.type):
-            for batch in tqdm(validation_dataloader, desc='Valid batches'):
+            for batch in tqdm(
+                prefetch_training_batches(validation_dataloader),
+                total=len(validation_dataloader),
+                desc='Valid batches',
+            ):
                 policy_loss, value_loss, total_loss, value_output = self._calculate_loss_for_batch(batch)
 
                 # Collect statistics (no gradient norm for validation)
@@ -119,7 +146,10 @@ class Trainer:
 
     @timeit
     def train(
-        self, dataloader: DataLoader, validation_dataloader: DataLoader, iteration: int
+        self,
+        dataloader: TrainingBatchLoader,
+        validation_dataloader: TrainingBatchLoader,
+        iteration: int,
     ) -> tuple[TrainingStats, TrainingStats]:
         """
         Train the model with the given memory.

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 from src.settings import log_histogram, log_scalar
 from src.util.tensorboard import TensorboardWriter, log_scalars
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset, training_batch_from_raw_samples
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
@@ -72,6 +72,14 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         inner = idx - self._prefix[ds_idx]
         return self._buf[ds_idx][1][inner]  # (state, π-target, v-target)
 
+    def __getitems__(self, indices: list[int]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raw_samples = [self._raw_sample(index) for index in indices]
+        return training_batch_from_raw_samples(
+            [sample[0] for sample in raw_samples],
+            [sample[1] for sample in raw_samples],
+            [sample[2] for sample in raw_samples],
+        )
+
     def log_all_dataset_stats(self, run: int) -> None:
         self._logging_threads = [thread for thread in self._logging_threads if thread.is_alive()]
         thread = Thread(
@@ -89,6 +97,11 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
             if thread.is_alive():
                 raise RuntimeError(f'Dataset logging thread {thread.name!r} did not stop.')
         self._logging_threads = []
+
+    def _raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], float]:
+        dataset_index = np.searchsorted(self._prefix, idx + 1) - 1
+        inner_index = idx - self._prefix[dataset_index]
+        return self._buf[dataset_index][1].raw_sample(inner_index)
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats

@@ -195,8 +195,18 @@ class TrainerProcess:
         log(f'Loaded {self.rolling_buffer.stats.num_samples} samples from {self.rolling_buffer.stats.num_games} games')
 
 
+TrainingBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+
+def preserve_prebatched_samples(batch: TrainingBatch) -> TrainingBatch:
+    return batch
+
+
 def as_dataloader(
-    dataset: torch.utils.data.Dataset, batch_size: int, num_workers: int, drop_last: bool = False
+    dataset: SelfPlayDataset | RollingSelfPlayBuffer,
+    batch_size: int,
+    num_workers: int,
+    drop_last: bool = False,
 ) -> torch.utils.data.DataLoader:
     return torch.utils.data.DataLoader(
         dataset,
@@ -204,6 +214,7 @@ def as_dataloader(
         num_workers=num_workers,
         shuffle=True,
         drop_last=drop_last,
+        collate_fn=preserve_prebatched_samples,
         persistent_workers=False,
         pin_memory=USE_GPU,
         prefetch_factor=16 if num_workers > 0 else None,

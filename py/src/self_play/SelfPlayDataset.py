@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import Sequence
 from math import ceil
 
 import h5py
@@ -10,13 +11,43 @@ from pathlib import Path
 from typing import Any
 from torch.utils.data import Dataset
 
-from src.Encoding import decode_board_state, encode_board_state
+from src.Encoding import decode_board_state, decode_board_states, encode_board_state
 from src.mcts.MCTS import action_probabilities
 from src.settings import CurrentGame, USE_GPU
 from src.util import random_id
 from src.util.log import warn
 from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+
+
+def training_batch_from_raw_samples(
+    encoded_states: Sequence[bytes],
+    visit_counts: Sequence[npt.NDArray[np.uint16]],
+    value_targets: Sequence[float],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    batch_size = len(encoded_states)
+    if len(visit_counts) != batch_size or len(value_targets) != batch_size:
+        raise ValueError('Training batch inputs must contain the same number of samples.')
+
+    states = torch.from_numpy(decode_board_states(encoded_states)).to(dtype=torch.float32)
+    policies = np.zeros((batch_size, CurrentGame.action_size), dtype=np.float32)
+    visit_lengths = np.fromiter((len(counts) for counts in visit_counts), dtype=np.int64, count=batch_size)
+    if np.any(visit_lengths == 0):
+        raise ValueError('Visit counts must not be empty.')
+
+    concatenated_visits = np.concatenate(visit_counts)
+    sample_indices = np.repeat(np.arange(batch_size), visit_lengths)
+    policies[sample_indices, concatenated_visits[:, 0]] = concatenated_visits[:, 1]
+    policy_totals = np.sum(policies, axis=1, keepdims=True)
+    if np.any(policy_totals <= 0):
+        raise ValueError('Visit counts must contain a positive total.')
+    policies /= policy_totals
+
+    return (
+        states,
+        torch.from_numpy(policies),
+        torch.from_numpy(np.asarray(value_targets, dtype=np.float32)),
+    )
 
 
 class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
@@ -76,6 +107,16 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             torch.from_numpy(probabilities).to(dtype=torch.float32, non_blocking=USE_GPU),
             torch.tensor(self.value_targets[idx], dtype=torch.float32),
         )
+
+    def __getitems__(self, indices: list[int]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return training_batch_from_raw_samples(
+            [self.encoded_states[index] for index in indices],
+            [self.visit_counts[index] for index in indices],
+            [self.value_targets[index] for index in indices],
+        )
+
+    def raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], float]:
+        return self.encoded_states[idx], self.visit_counts[idx], self.value_targets[idx]
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
         new_dataset = SelfPlayDataset()
@@ -232,7 +273,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
 
         try:
             with h5py.File(file_path, 'r') as file:
-                dataset.encoded_states = [state for state in file['states']]  # type: ignore
+                dataset.encoded_states = [bytes(state) for state in file['states']]  # type: ignore
                 # parse out the visit counts but only the non-zero ones
                 dataset.visit_counts = [
                     visit_count[visit_count[:, 1] > 0]

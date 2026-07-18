@@ -49,8 +49,6 @@ class CommanderProcess:
         self.self_play_processes: list[Process] = []
         self.evaluation_processes: list[Process] = []
 
-        self.self_play_nodes_on_trainer_device: list[int] = []
-
         self.trainer_device_id = self.args.cluster.trainer_device_id if USE_GPU else 0
         self.started_at = started_at
         self.final_stop_reason: str | None = None
@@ -156,10 +154,10 @@ class CommanderProcess:
                     break
                 pause_self_play_workers(
                     self.communication,
-                    tuple(self.self_play_nodes_on_trainer_device),
+                    tuple(range(len(self.self_play_processes))),
                     timeout_seconds=120,
                 )
-                log(f'Paused all self-play workers on trainer device {self.trainer_device_id}.')
+                log('Paused all self-play workers before training.')
 
                 training_started_at = monotonic()
                 training_result = trainer.train(iteration)
@@ -316,9 +314,6 @@ class CommanderProcess:
     def _setup_connections(self) -> None:
         for node_id, device_id in enumerate(self.args.cluster.self_play_device_ids):
             self.self_play_processes.append(self._start_self_play_process(node_id, device_id))
-
-            if device_id == self.trainer_device_id:
-                self.self_play_nodes_on_trainer_device.append(node_id)
 
         log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
 
