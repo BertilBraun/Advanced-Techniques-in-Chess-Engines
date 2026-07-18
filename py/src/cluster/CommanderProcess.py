@@ -9,7 +9,7 @@ from src.cluster.GatingProcess import GatingProcess
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
 from src.train.TrainingStats import TrainingStats
-from src.util.communication import Communication
+from src.util.communication import Communication, pause_self_play_workers
 from src.util.exceptions import log_exceptions
 from src.util.log import log, warn
 from src.util.save_paths import (
@@ -152,8 +152,14 @@ class CommanderProcess:
                 )
                 trainer.load_all_memories_to_train_on_for_iteration(iteration)
 
-                for node_id in self.self_play_nodes_on_trainer_device[::2]:
-                    self.communication.send_to_id('STOP SELF PLAY', node_id)
+                if not self._wait_for_all_evaluations():
+                    break
+                pause_self_play_workers(
+                    self.communication,
+                    tuple(self.self_play_nodes_on_trainer_device),
+                    timeout_seconds=120,
+                )
+                log(f'Paused all self-play workers on trainer device {self.trainer_device_id}.')
 
                 training_started_at = monotonic()
                 training_result = trainer.train(iteration)

@@ -6,6 +6,10 @@ from pathlib import Path
 import time
 
 
+STOP_SELF_PLAY = 'STOP SELF PLAY'
+SELF_PLAY_PAUSED = 'SELF PLAY PAUSED'
+
+
 class Communication:
     def __init__(self, folder: str) -> None:
         self.folder = Path(folder)
@@ -77,3 +81,25 @@ class Communication:
     def _file_path(self, identifier: str) -> Path:
         """Returns the file path for a given identifier."""
         return self.folder / f'{identifier}.txt'
+
+
+def pause_self_play_workers(
+    communication: Communication,
+    node_ids: tuple[int, ...],
+    timeout_seconds: float,
+) -> None:
+    for node_id in node_ids:
+        communication.try_receive_from_id(SELF_PLAY_PAUSED, node_id)
+        communication.send_to_id(STOP_SELF_PLAY, node_id)
+
+    pending_node_ids = set(node_ids)
+    deadline = time.monotonic() + timeout_seconds
+    while pending_node_ids:
+        pending_node_ids = {
+            node_id for node_id in pending_node_ids if not communication.try_receive_from_id(SELF_PLAY_PAUSED, node_id)
+        }
+        if not pending_node_ids:
+            break
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f'Self-play workers did not pause before training: {sorted(pending_node_ids)}')
+        time.sleep(0.05)

@@ -6,7 +6,7 @@ import torch
 from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS
-from src.util.communication import Communication
+from src.util.communication import Communication, SELF_PLAY_PAUSED, STOP_SELF_PLAY
 from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
@@ -79,9 +79,10 @@ class SelfPlayProcess:
                     if usage_logger is not None:
                         usage_logger.stop()
                     usage_logger = start_cpu_usage_logger(self.run_id, 'self_play')
-                if self.communication.try_receive_from_id('STOP SELF PLAY', self.node_id):
+                if self.communication.try_receive_from_id(STOP_SELF_PLAY, self.node_id):
                     self._save_dataset(current_iteration)
                     running = False
+                    self.communication.send_to_id(SELF_PLAY_PAUSED, self.node_id)
 
                 for iteration in range(self.args.num_iterations, current_iteration, -1):
                     start_recieved = self.communication.is_received(f'START AT ITERATION: {iteration}')
