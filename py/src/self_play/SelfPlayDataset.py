@@ -276,10 +276,10 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
-        dataset.stats = SelfPlayDataset.load_stats(file_path)
 
         try:
             with h5py.File(file_path, 'r') as file:
+                dataset.stats = SelfPlayDataset._load_stats_from_open_file(file)
                 dataset.encoded_states = [bytes(state) for state in file['states']]  # type: ignore
                 # parse out the visit counts but only the non-zero ones
                 dataset.visit_counts = [
@@ -299,17 +299,21 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:
         try:
             with h5py.File(file_path, 'r') as file:
-                metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
-                message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
-                assert metadata == SelfPlayDataset._get_current_metadata(), message
-
-                stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
-                return SelfPlayDatasetStats(**stats)
+                return SelfPlayDataset._load_stats_from_open_file(file)
         except Exception as e:
             from src.util.log import log, LogLevel
 
             log(f'Error loading dataset stats from {file_path}: {e}', level=LogLevel.DEBUG)
             return SelfPlayDatasetStats()
+
+    @staticmethod
+    def _load_stats_from_open_file(file: h5py.File) -> SelfPlayDatasetStats:
+        metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
+        message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
+        assert metadata == SelfPlayDataset._get_current_metadata(), message
+
+        stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
+        return SelfPlayDatasetStats(**stats)
 
     @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int) -> SelfPlayDataset:
