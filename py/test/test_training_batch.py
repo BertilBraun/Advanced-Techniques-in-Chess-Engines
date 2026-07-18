@@ -1,10 +1,12 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 import numpy as np
 import torch
 
 from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.Trainer import TrainingBatch, prefetch_training_batches
 
 
@@ -78,3 +80,30 @@ def test_background_prefetch_preserves_batch_order_and_values() -> None:
     for actual_batch, expected_batch in zip(prefetched, (first_batch, second_batch)):
         for actual_component, expected_component in zip(actual_batch, expected_batch):
             torch.testing.assert_close(actual_component, expected_component)
+
+
+def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path) -> None:
+    samples = dataset()
+    first_dataset = SelfPlayDataset()
+    second_dataset = SelfPlayDataset()
+    for target, indices in ((first_dataset, (0, 1)), (second_dataset, (2, 3))):
+        target.encoded_states = [samples.encoded_states[index] for index in indices]
+        target.visit_counts = [samples.visit_counts[index] for index in indices]
+        target.value_targets = [samples.value_targets[index] for index in indices]
+
+    first_path = tmp_path / 'memory_0' / 'first.hdf5'
+    second_path = tmp_path / 'memory_0' / 'second.hdf5'
+    assert first_dataset.save_to_path(first_path)
+    assert second_dataset.save_to_path(second_path)
+
+    rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=10)
+    rolling_buffer.update(iteration=0, window_iter=1, files=[first_path, second_path])
+    shuffled_indices = [3, 0, 2, 1]
+    expected = tuple(
+        torch.stack([rolling_buffer[index][component] for index in shuffled_indices]) for component in range(3)
+    )
+
+    batch = rolling_buffer.__getitems__(shuffled_indices)
+
+    for actual_component, expected_component in zip(batch, expected):
+        torch.testing.assert_close(actual_component, expected_component)

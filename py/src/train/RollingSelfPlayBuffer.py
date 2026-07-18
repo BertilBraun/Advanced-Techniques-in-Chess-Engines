@@ -5,7 +5,6 @@ import numpy as np
 import numpy.typing as npt
 from pathlib import Path
 from collections import deque
-from itertools import accumulate
 from threading import Thread
 from torch.utils.data import Dataset
 
@@ -32,7 +31,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
 
     def __init__(self, max_buffer_samples: int) -> None:
         self._buf: deque[tuple[int, SelfPlayDataset]] = deque()  # (iteration, dataset)
-        self._prefix: list[int] = [0]  # len prefix sums
+        self._prefix: npt.NDArray[np.int64] = np.asarray([0], dtype=np.int64)
         self._num_samples = 0
         self._max_buffer_samples = max_buffer_samples
         self._logging_threads: list[Thread] = []
@@ -68,12 +67,17 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         return self._num_samples
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        ds_idx = np.searchsorted(self._prefix, idx + 1) - 1
-        inner = idx - self._prefix[ds_idx]
-        return self._buf[ds_idx][1][inner]  # (state, π-target, v-target)
+        dataset_index = int(np.searchsorted(self._prefix, idx + 1) - 1)
+        inner_index = idx - int(self._prefix[dataset_index])
+        return self._buf[dataset_index][1][inner_index]  # (state, π-target, v-target)
 
     def __getitems__(self, indices: list[int]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        raw_samples = [self._raw_sample(index) for index in indices]
+        sample_indices = np.asarray(indices, dtype=np.int64)
+        dataset_indices = np.searchsorted(self._prefix, sample_indices + 1) - 1
+        raw_samples = [
+            self._buf[int(dataset_index)][1].raw_sample(int(sample_index - self._prefix[dataset_index]))
+            for sample_index, dataset_index in zip(sample_indices, dataset_indices)
+        ]
         return training_batch_from_raw_samples(
             [sample[0] for sample in raw_samples],
             [sample[1] for sample in raw_samples],
@@ -97,11 +101,6 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
             if thread.is_alive():
                 raise RuntimeError(f'Dataset logging thread {thread.name!r} did not stop.')
         self._logging_threads = []
-
-    def _raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], float]:
-        dataset_index = np.searchsorted(self._prefix, idx + 1) - 1
-        inner_index = idx - self._prefix[dataset_index]
-        return self._buf[dataset_index][1].raw_sample(inner_index)
 
     def _log_all_dataset_stats(self, run: int) -> None:
         accumulated_stats = self.stats
@@ -187,5 +186,5 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         self._num_samples -= len(old)
 
     def _rebuild_prefix(self) -> None:
-        lengths = [len(ds) for _, ds in self._buf]
-        self._prefix = [0] + list(accumulate(lengths))
+        lengths = np.fromiter((len(dataset) for _, dataset in self._buf), dtype=np.int64, count=len(self._buf))
+        self._prefix = np.concatenate((np.asarray([0], dtype=np.int64), np.cumsum(lengths)))
