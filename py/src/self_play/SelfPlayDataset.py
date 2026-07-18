@@ -50,6 +50,13 @@ def training_batch_from_raw_samples(
     )
 
 
+TrainingBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+
+def preserve_prebatched_samples(batch: TrainingBatch) -> TrainingBatch:
+    return batch
+
+
 class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     """Each sample is represented by:
     state: torch.Tensor

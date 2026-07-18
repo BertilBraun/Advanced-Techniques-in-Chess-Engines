@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.experiment.artifact_retention import apply_artifact_retention
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
@@ -193,13 +193,6 @@ class TrainerProcess:
         self.rolling_buffer.log_all_dataset_stats(self.run_id)
 
         log(f'Loaded {self.rolling_buffer.stats.num_samples} samples from {self.rolling_buffer.stats.num_games} games')
-
-
-TrainingBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-
-
-def preserve_prebatched_samples(batch: TrainingBatch) -> TrainingBatch:
-    return batch
 
 
 def as_dataloader(

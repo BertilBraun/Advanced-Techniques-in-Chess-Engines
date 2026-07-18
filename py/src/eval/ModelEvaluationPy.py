@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import MCTSParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
@@ -111,7 +111,12 @@ class ModelEvaluation:
         device = torch.device(f'cuda:{EVAL_DEVICE}' if USE_GPU else 'cpu')
         model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
 
-        dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=128,
+            shuffle=True,
+            collate_fn=preserve_prebatched_samples,
+        )
         return self._evaluate_model_vs_dataset(model, dataloader)
 
     @staticmethod

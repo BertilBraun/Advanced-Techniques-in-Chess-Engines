@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.Trainer import TrainingBatch, prefetch_training_batches
 
@@ -66,6 +66,22 @@ def test_prebatched_dataset_matches_individual_samples() -> None:
 
     for actual_component, expected_component in zip(batch, expected):
         torch.testing.assert_close(actual_component, expected_component)
+
+
+def test_prebatched_dataset_dataloader_preserves_components() -> None:
+    samples = dataset()
+    loader = torch.utils.data.DataLoader(
+        samples,
+        batch_size=len(samples),
+        shuffle=False,
+        collate_fn=preserve_prebatched_samples,
+    )
+
+    batch = next(iter(loader))
+
+    assert batch[0].shape == (len(samples), C, H, W)
+    assert batch[1].shape == (len(samples), 1814)
+    assert batch[2].shape == (len(samples),)
 
 
 def test_background_prefetch_preserves_batch_order_and_values() -> None:
