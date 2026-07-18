@@ -34,6 +34,7 @@ class SummaryState:
     wall_time: float
     value_sha256: str
     serialized_value: bytes
+    time_series_tag: str
 
 
 @dataclass(frozen=True)
@@ -203,44 +204,38 @@ def _expanded_summary_tag(source_root: Path, event_file: Path, original_tag: str
     return original_tag
 
 
-def canonical_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
-    relative_parts = event_file.relative_to(source_root).parts
-    category = relative_parts[1]
-    expanded_summary_tag = _expanded_summary_tag(source_root, event_file, original_tag)
+def _namespaced_tag(category: str, summary_tag: str) -> str:
     match category:
         case 'self_play':
-            return f'self_play/{expanded_summary_tag}'
+            return f'self_play/{summary_tag}'
         case 'cpu_usage_self_play':
-            return f'system/cpu_self_play/{expanded_summary_tag}'
+            return f'system/cpu_self_play/{summary_tag}'
         case 'cpu_usage_trainer':
-            return f'system/cpu_trainer/{expanded_summary_tag}'
+            return f'system/cpu_trainer/{summary_tag}'
         case 'gpu_usage':
-            return f'system/gpu/{expanded_summary_tag}'
+            return f'system/gpu/{summary_tag}'
         case 'training_args':
-            return f'configuration/{expanded_summary_tag}'
+            return f'configuration/{summary_tag}'
         case _ if category.startswith('evaluation_'):
-            return expanded_summary_tag
+            return summary_tag
         case 'trainer' | 'dataset':
-            return expanded_summary_tag
+            return summary_tag
         case _:
-            return f'{category}/{expanded_summary_tag}'
+            return f'{category}/{summary_tag}'
 
 
-def time_series_route(canonical_summary_tag: str) -> TimeSeriesRoute:
-    tag_parts = tuple(canonical_summary_tag.split('/'))
-    if len(tag_parts) >= 3:
-        parent_tag = '/'.join(tag_parts[:-1])
-        series_name = tag_parts[-1]
-        if tag_parts[0] == 'evaluation' and (
-            series_name in {'wins', 'draws', 'losses', 'score'}
-            or (parent_tag == 'evaluation/policy_accuracy' and series_name in {'1', '5', '10'})
-        ):
-            return TimeSeriesRoute(run_name=canonical_summary_tag, tag=parent_tag)
-        if parent_tag in {'dataset/game_length', 'self_play/mcts'}:
-            return TimeSeriesRoute(run_name=canonical_summary_tag, tag=parent_tag)
-    if len(tag_parts) == 2 and tag_parts[0] in {'train', 'validation'}:
-        return TimeSeriesRoute(run_name=canonical_summary_tag, tag=tag_parts[0])
-    return TimeSeriesRoute(run_name='other_metrics', tag=canonical_summary_tag)
+def canonical_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
+    category = event_file.relative_to(source_root).parts[1]
+    return _namespaced_tag(category, _expanded_summary_tag(source_root, event_file, original_tag))
+
+
+def time_series_tag(source_root: Path, event_file: Path, original_tag: str) -> str:
+    category = event_file.relative_to(source_root).parts[1]
+    return _namespaced_tag(category, original_tag)
+
+
+def time_series_route(canonical_summary_tag: str, grouped_summary_tag: str) -> TimeSeriesRoute:
+    return TimeSeriesRoute(run_name=canonical_summary_tag, tag=grouped_summary_tag)
 
 
 def _plugin_name(value: summary_pb2.Summary.Value) -> str:
@@ -502,6 +497,7 @@ class TensorboardLogConsolidator:
         consolidated_value = summary_pb2.Summary.Value()
         consolidated_value.CopyFrom(original_value)
         consolidated_value.tag = canonical_tag(self.source_root, event_file, original_value.tag)
+        grouped_summary_tag = time_series_tag(self.source_root, event_file, original_value.tag)
         identity = _summary_identity(consolidated_value.tag, event.step, consolidated_value)
         serialized_value = consolidated_value.SerializeToString()
         value_sha256 = hashlib.sha256(serialized_value).hexdigest()
@@ -517,6 +513,7 @@ class TensorboardLogConsolidator:
             wall_time=event.wall_time,
             value_sha256=value_sha256,
             serialized_value=serialized_value,
+            time_series_tag=grouped_summary_tag,
         )
 
     def _emit_changed_summaries(self) -> None:
@@ -530,7 +527,7 @@ class TensorboardLogConsolidator:
             key=lambda item: (item[1].wall_time, item[0].step, item[0].tag),
         ):
             consolidated_value = summary_pb2.Summary.Value.FromString(state.serialized_value)
-            writer, output_tag = self._writer_and_tag(identity.tag)
+            writer, output_tag = self._writer_and_tag(identity.tag, state.time_series_tag)
             consolidated_value.tag = output_tag
             writer.add_event(
                 event_pb2.Event(
@@ -542,11 +539,15 @@ class TensorboardLogConsolidator:
             self.emitted_summary_states[identity] = state
             self.emitted_summary_count += 1
 
-    def _writer_and_tag(self, canonical_summary_tag: str) -> tuple[EventFileWriter, str]:
+    def _writer_and_tag(
+        self,
+        canonical_summary_tag: str,
+        grouped_summary_tag: str,
+    ) -> tuple[EventFileWriter, str]:
         if not self.time_series_view:
             assert self.writer is not None
             return self.writer, canonical_summary_tag
-        route = time_series_route(canonical_summary_tag)
+        route = time_series_route(canonical_summary_tag, grouped_summary_tag)
         writer = self.time_series_writers.get(route.run_name)
         if writer is None:
             writer = EventFileWriter(

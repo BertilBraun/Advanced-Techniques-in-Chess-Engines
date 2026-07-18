@@ -167,3 +167,21 @@ def test_time_series_view_overlays_evaluation_series_as_colored_runs(tmp_path: P
     for series_name, expected_value in (('wins', 20.0), ('draws', 70.0), ('losses', 10.0), ('score', 55.0)):
         run_directory = output_root / 'evaluation' / 'vs_stockfish_level_0' / series_name
         assert scalar_values(run_directory, 'evaluation/vs_stockfish_level_0') == (expected_value,)
+
+
+def test_time_series_view_gives_standalone_metrics_semantic_colored_runs(tmp_path: Path) -> None:
+    source_root = tmp_path / 'source'
+    output_root = tmp_path / 'output'
+    write_scalar(
+        source_root / 'run_0' / 'gpu_usage',
+        'gpu/0/load',
+        1,
+        75.0,
+        wall_time=10.0,
+    )
+
+    consolidate_once(source_root, output_root, time_series_view=True)
+
+    run_directory = output_root / 'system' / 'gpu' / 'gpu' / '0' / 'load'
+    assert scalar_values(run_directory, 'system/gpu/gpu/0/load') == (75.0,)
+    assert not (output_root / 'other_metrics').exists()
