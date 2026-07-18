@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -151,4 +152,3 @@ inline std::string toString(const Move move) {
     }
     return ss.str();
 }
-

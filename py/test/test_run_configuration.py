@@ -75,6 +75,7 @@ def training_args() -> TrainingArgs:
                 percentage_of_node_visits_to_keep=0.5,
             ),
             num_parallel_games=1,
+            inference_cache_capacity=1,
             num_moves_after_which_to_play_greedy=10,
             portion_of_samples_to_keep=0.5,
         ),
@@ -234,6 +235,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.cluster.trainer_cpu_threads == 8
     assert arguments.self_play.mcts.num_threads == 2
     assert arguments.self_play.num_parallel_games == 64
+    assert arguments.self_play.inference_cache_capacity == 250_000
     assert arguments.training.num_workers == 0
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0002)
     assert pickle.dumps(arguments.training.learning_rate)
@@ -266,6 +268,7 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
+    assert arguments.self_play.inference_cache_capacity == 1_500_000
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 1

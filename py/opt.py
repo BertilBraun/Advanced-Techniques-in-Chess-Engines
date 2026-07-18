@@ -79,6 +79,7 @@ def objective(trial: optuna.Trial) -> float:
 
     self_play_params = SelfPlayParams(
         num_parallel_games=128,
+        inference_cache_capacity=250_000,
         result_score_weight=self_play_weighting,
         mcts=mcts_params,
         num_moves_after_which_to_play_greedy=10,

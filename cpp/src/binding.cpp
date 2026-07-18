@@ -48,7 +48,7 @@ std::vector<const Board *> newBoards(const int numBoards) {
 }
 
 void testInferenceSpeed(int numBoards, int numIterations) {
-    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 100);
+    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 100, 100000);
 
     InferenceClient client(params);
 
@@ -83,7 +83,7 @@ void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
                                 0.3, 0.0, 0, numThreads);
 
     const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100);
+                                                numBoards * numParallelSearches, 100, 100000);
 
     MCTS mcts(inferenceParams, mctsParams);
 
@@ -119,7 +119,7 @@ void testEvalMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
     const EvalMCTSParams mctsParams(1.0, numThreads);
 
     const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100);
+                                                numBoards * numParallelSearches, 100, 100000);
 
     EvalMCTS mcts(inferenceParams, mctsParams);
 
@@ -261,8 +261,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             Prints the average time taken per iteration and per board.
           )pbdoc");
 
-    m.def("test_mcts_speed_cpp", &testMCTSSpeed,
-          "Test the MCTS search speed", py::arg("numBoards") = 100, py::arg("numIterations") = 10,
+    m.def("test_mcts_speed_cpp", &testMCTSSpeed, "Test the MCTS search speed",
+          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
           py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
           py::arg("numThreads") = 1,
           R"pbdoc(
@@ -271,10 +271,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             Prints the average time taken per iteration and per board.
           )pbdoc");
 
-    m.def("test_eval_mcts_speed_cpp", &testEvalMCTSSpeed,
-          "Test the Eval MCTS search speed", py::arg("numBoards") = 100,
-          py::arg("numIterations") = 10, py::arg("numSearchesPerTurn") = 100,
-          py::arg("numParallelSearches") = 1, py::arg("numThreads") = 1,
+    m.def("test_eval_mcts_speed_cpp", &testEvalMCTSSpeed, "Test the Eval MCTS search speed",
+          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
+          py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
+          py::arg("numThreads") = 1,
           R"pbdoc(
             Test the Eval MCTS search speed.
             Runs Eval MCTS search on a specified number of boards for a given number of iterations.
@@ -298,9 +298,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (2.2) InferenceClientParams ---
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
-        .def(py::init<int, std::string, int, int>(), py::arg("device_id"),
+        .def(py::init<int, std::string, int, int, size_t>(), py::arg("device_id"),
              py::arg("currentModelPath"), py::arg("maxBatchSize"),
-             py::arg("microsecondsTimeoutInferenceThread") = 500)
+             py::arg("microsecondsTimeoutInferenceThread"), py::arg("cacheCapacity"))
         .def_readwrite("device_id", &InferenceClientParams::device_id)
         .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
         .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize)
@@ -309,7 +309,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                        R"pbdoc(
                 Timeout for the inference thread in microseconds.
                 Default is 500 microseconds.
-            )pbdoc");
+            )pbdoc")
+        .def_readwrite("cacheCapacity", &InferenceClientParams::cacheCapacity);
 
     // --- (2.3) InferenceStatistics ---
     py::class_<InferenceStatistics>(m, "InferenceStatistics")
@@ -317,6 +318,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("cacheHitRate", &InferenceStatistics::cacheHitRate)
         .def_readonly("uniquePositions", &InferenceStatistics::uniquePositions)
         .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
+        .def_readonly("cacheCapacity", &InferenceStatistics::cacheCapacity)
+        .def_readonly("cacheEvictions", &InferenceStatistics::cacheEvictions)
         .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution)
         .def_readonly("averageNumberOfPositionsInInferenceCall",
                       &InferenceStatistics::averageNumberOfPositionsInInferenceCall);

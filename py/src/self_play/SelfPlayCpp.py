@@ -114,6 +114,8 @@ class SelfPlayCpp:
             log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, iteration - 1)
             log_scalar('inference/unique_positions', inference_stats.uniquePositions, iteration - 1)
             log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, iteration - 1)
+            log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, iteration - 1)
+            log_scalar('inference/cache_evictions', inference_stats.cacheEvictions, iteration - 1)
             log_histogram(
                 'inference/nn_output_value_distribution',
                 np.array(inference_stats.nnOutputValueDistribution),
@@ -177,6 +179,7 @@ class SelfPlayCpp:
             currentModelPath=str(model_save_path(iteration, self.save_path).with_suffix('.jit.pt').absolute()),
             maxBatchSize=256,  # TODO: adjust based on the model size and available memory
             microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
+            cacheCapacity=self.args.inference_cache_capacity,
         )
         self.mcts = MCTS(client_args, mcts_args)
 

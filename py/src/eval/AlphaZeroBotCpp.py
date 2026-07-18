@@ -22,6 +22,8 @@ class AlphaZeroBot(Bot):
             device_id=device_id,
             currentModelPath=current_model_path,
             maxBatchSize=256,
+            microsecondsTimeoutInferenceThread=500,
+            cacheCapacity=250_000,
         )
 
         self.mcts = EvalMCTS(self.inference_args, mcts_args)

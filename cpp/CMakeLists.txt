@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
+include(CTest)
+
 # --- Export compile commands for Clang-Tidy ---
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -163,6 +165,10 @@ pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
+
+add_executable(ShardedCacheTest test/TestShardedCache.cpp)
+target_include_directories(ShardedCacheTest PRIVATE src)
+add_test(NAME ShardedCacheTest COMMAND ShardedCacheTest)
 
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20

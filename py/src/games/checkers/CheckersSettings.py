@@ -38,6 +38,7 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
+        inference_cache_capacity=250_000,
         num_moves_after_which_to_play_greedy=10,
         mcts=MCTSParams(
             num_searches_per_turn=320,  # 200, based on https://arxiv.org/pdf/1902.10565

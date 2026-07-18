@@ -14,6 +14,8 @@ struct InferenceStatistics {
     float cacheHitRate = 0.0f;                    // Percentage of cache hits.
     size_t uniquePositions = 0;                   // Number of unique positions in the cache.
     size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
+    size_t cacheCapacity = 0;                     // Maximum completed cache entries.
+    size_t cacheEvictions = 0;                    // Number of completed entries evicted.
     std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
     float averageNumberOfPositionsInInferenceCall =
         0.0f; // Average number of positions in an inference call.
@@ -25,12 +27,14 @@ struct InferenceClientParams {
     int maxBatchSize;                       // Maximum number of requests to process in one batch.
     int microsecondsTimeoutInferenceThread; // Timeout for the inference worker thread to wait for
                                             // requests.
+    size_t cacheCapacity;                   // Maximum cached positions per inference client.
 
     InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize,
-                          int microsecondsTimeoutInferenceThread)
+                          int microsecondsTimeoutInferenceThread, size_t cacheCapacity)
         : device_id(device_id), currentModelPath(std::move(currentModelPath)),
           maxBatchSize(maxBatchSize),
-          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread) {}
+          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread),
+          cacheCapacity(cacheCapacity) {}
 };
 
 /**
@@ -101,9 +105,9 @@ private:
 
     // Cache: board -> InferenceResult.
     ShardedCache<CompressedEncodedBoard, CachedInferenceResult, 32, BoardHash> m_cache;
-    int m_totalHits;
-    int m_totalEvals;
-    int m_totalModelInferenceCalls = 0;
+    std::atomic_size_t m_totalHits = 0;
+    std::atomic_size_t m_totalEvals = 0;
+    std::atomic_size_t m_totalModelInferenceCalls = 0;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

@@ -65,6 +65,9 @@ class SelfPlayParams:
     num_parallel_games: int
     """This is the number of games to run in parallel for self-play."""
 
+    inference_cache_capacity: int
+    """Maximum cached neural-network evaluations in each self-play process."""
+
     num_moves_after_which_to_play_greedy: int
     """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
 

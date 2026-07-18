@@ -147,6 +147,8 @@ client_args = InferenceClientParams(
     device_id=0,
     currentModelPath=str(model_path),
     maxBatchSize=256,  # maybe 512
+    microsecondsTimeoutInferenceThread=500,
+    cacheCapacity=100_000,
 )
 
 mcts_args = MCTSParams(

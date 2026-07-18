@@ -43,6 +43,7 @@ TRAINING_ARGS = TrainingArgs(
     self_play=SelfPlayParams(
         starting_temperature=1.25,
         num_parallel_games=1,  # TODO 5,
+        inference_cache_capacity=250_000,
         num_moves_after_which_to_play_greedy=5,
         result_score_weight=0.15,
         mcts=MCTSParams(

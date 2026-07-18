@@ -5,12 +5,8 @@
 #include "MoveEncoding.hpp"
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)
-    : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_shutdown(false),
-      m_params(args) {
-    // Initialize the model and other members.
-    m_totalHits = 0;
-    m_totalEvals = 0;
-
+    : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_cache(args.cacheCapacity),
+      m_shutdown(false), m_params(args) {
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
         assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
@@ -47,7 +43,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         encodedBoards.push_back(encodeBoard(board));
     }
 
-    m_totalEvals += boards.size();
+    m_totalEvals.fetch_add(boards.size(), std::memory_order_relaxed);
 
     // Prepare a futures vector for the inference results.
     // This will be used to wait for the results of the inference requests.
@@ -55,15 +51,11 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     futures.reserve(boards.size());
 
     for (size_t i : range(boards.size())) {
-        // Check if the result is already cached.
-        // If so, set the promise and continue.
-        if (m_cache.contains(encodedBoards[i])) {
-            m_totalHits++;
+        const bool mustEvaluate = m_cache.acquireOrInsert(encodedBoards[i], kSentinelResult);
+        if (!mustEvaluate) {
+            m_totalHits.fetch_add(1, std::memory_order_relaxed);
             continue;
         }
-
-        // Insert a sentinel result to mark it as enqueued.
-        m_cache.insertIfNotPresent(encodedBoards[i], kSentinelResult);
 
         // Create and enqueue a new request.
         InferenceRequest req;
@@ -89,7 +81,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
                "InferenceClient::inference_batch: policy does not sum to 1.0");
 
-        m_cache.insert(encodedBoards[i],
+        m_cache.update(encodedBoards[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
 
@@ -104,11 +96,12 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
                 throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
             // Wait until the real result is available.
             if (result != kSentinelResult) {
-                break; // We have a valid result.
+                break;
             }
             // Sleep to avoid busy-waiting.
             std::this_thread::sleep_for(std::chrono::microseconds(10));
         }
+        m_cache.release(encodedBoard);
 
         const auto &[moves, value] = result;
 
@@ -138,26 +131,32 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
 InferenceStatistics InferenceClient::getStatistics() {
     InferenceStatistics stats;
+    stats.cacheCapacity = m_cache.maximumSize();
+    stats.cacheEvictions = m_cache.evictionCount();
 
-    if (m_totalEvals == 0 || m_cache.empty()) {
+    const size_t totalEvals = m_totalEvals.load(std::memory_order_relaxed);
+    const size_t totalModelInferenceCalls =
+        m_totalModelInferenceCalls.load(std::memory_order_relaxed);
+    if (totalEvals == 0 || totalModelInferenceCalls == 0 || m_cache.empty()) {
         return stats; // Avoid division by zero.
     }
 
-    stats.cacheHitRate =
-        static_cast<float>(m_totalHits) / static_cast<float>(m_totalEvals) * 100.0f;
+    stats.cacheHitRate = static_cast<float>(m_totalHits.load(std::memory_order_relaxed)) /
+                         static_cast<float>(totalEvals) * 100.0f;
     stats.uniquePositions = m_cache.size();
 
     stats.nnOutputValueDistribution.reserve(m_cache.size());
-    for (const auto &entry : m_cache) {
-        stats.nnOutputValueDistribution.push_back(entry.second.second);
-    }
+    size_t dynamicValueBytes = 0;
+    m_cache.forEachValue([&stats, &dynamicValueBytes](const CachedInferenceResult &result) {
+        stats.nnOutputValueDistribution.push_back(result.second);
+        dynamicValueBytes += result.first.capacity() * sizeof(EncodedMoveScore);
+    });
 
-    const size_t sizeInBytes =
-        m_cache.size() * (sizeof(CachedInferenceResult) + sizeof(CompressedEncodedBoard));
+    const size_t sizeInBytes = m_cache.estimatedStaticSizeBytes() + dynamicValueBytes;
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
 
     stats.averageNumberOfPositionsInInferenceCall =
-        static_cast<float>(m_totalEvals) / static_cast<float>(m_totalModelInferenceCalls);
+        static_cast<float>(totalEvals) / static_cast<float>(totalModelInferenceCalls);
 
     return stats;
 }
@@ -227,7 +226,7 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     torch::NoGradGuard noGrad;
     std::unique_lock<std::mutex> lock(m_modelMutex);
 
-    m_totalModelInferenceCalls++;
+    m_totalModelInferenceCalls.fetch_add(1, std::memory_order_relaxed);
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).

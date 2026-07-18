@@ -64,6 +64,7 @@ TRAINING_ARGS = TrainingArgs(
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
+        inference_cache_capacity=250_000,
         num_moves_after_which_to_play_greedy=SIZE * 6,  # even number - no bias towards white
         result_score_weight=0.4,
         resignation_threshold=-1.0,  # TODO -0.9,

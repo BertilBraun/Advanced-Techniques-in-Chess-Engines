@@ -153,7 +153,7 @@ class ModelEvaluation:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
         opponent = MCTS(
-            InferenceClientParams(self.device_id, str(opponent_inference_path), 16),
+            InferenceClientParams(self.device_id, str(opponent_inference_path), 16, 500, 250_000),
             self.mcts_args,
         )
 
@@ -298,7 +298,7 @@ class ModelEvaluation:
         if not current_inference_path.is_file():
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
         current = MCTS(
-            InferenceClientParams(self.device_id, str(current_inference_path), 16),
+            InferenceClientParams(self.device_id, str(current_inference_path), 16, 500, 250_000),
             self.mcts_args,
         )
 
