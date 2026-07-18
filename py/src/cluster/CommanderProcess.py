@@ -152,12 +152,13 @@ class CommanderProcess:
 
                 if not self._wait_for_all_evaluations():
                     break
-                pause_self_play_workers(
-                    self.communication,
-                    tuple(range(len(self.self_play_processes))),
-                    timeout_seconds=120,
-                )
-                log('Paused all self-play workers before training.')
+                if self.args.cluster.pause_self_play_during_training:
+                    pause_self_play_workers(
+                        self.communication,
+                        tuple(range(len(self.self_play_processes))),
+                        timeout_seconds=120,
+                    )
+                    log('Paused all self-play workers before training.')
 
                 training_started_at = monotonic()
                 training_result = trainer.train(iteration)

@@ -105,6 +105,7 @@ class TopologyConfiguration(BaseModel):
     inference_cache_capacity_per_process: int = Field(gt=0)
     trainer_cpu_threads: int = Field(gt=0)
     trainer_interop_threads: int = Field(gt=0)
+    pause_self_play_during_training: bool
     dataloader_workers: int = Field(ge=0)
     reserved_logical_cpus: int = Field(ge=1)
     maximum_cpu_oversubscription_ratio: float = Field(ge=1.0, le=2.0)
@@ -510,6 +511,7 @@ def apply_run_configuration(
         self_play_device_ids=_self_play_device_ids(topology.self_play_processes_per_device),
         trainer_cpu_threads=topology.trainer_cpu_threads,
         trainer_interop_threads=topology.trainer_interop_threads,
+        pause_self_play_during_training=topology.pause_self_play_during_training,
         max_concurrent_evaluations=topology.max_concurrent_evaluations,
     )
     training_args.run_limits = RuntimeLimits(

@@ -113,6 +113,9 @@ class ClusterParams:
     trainer_interop_threads: int
     """CPU threads reserved for PyTorch inter-operation parallelism."""
 
+    pause_self_play_during_training: bool
+    """Whether all self-play processes pause during optimizer training."""
+
     max_concurrent_evaluations: int
     """Maximum number of top-level evaluation processes."""
 

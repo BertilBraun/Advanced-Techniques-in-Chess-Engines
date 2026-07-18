@@ -86,6 +86,7 @@ TRAINING_ARGS = TrainingArgs(
         self_play_device_ids=(max(0, NUM_GPUS - 1),) * NUM_SELF_PLAYERS,
         trainer_cpu_threads=1,
         trainer_interop_threads=1,
+        pause_self_play_during_training=False,
         max_concurrent_evaluations=1,
     ),
     training=training,
