@@ -2,21 +2,26 @@
 
 #include "position.h"
 
+#include <cstdint>
+#include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <sstream>
-#include <cstdint>
-
 
 using namespace Stockfish;
 
 class Board {
 public:
+    static constexpr std::uint16_t MAX_REVERSIBLE_HISTORY_PLIES = 100;
+
     explicit Board(
         const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Board(const Board &) = default;
+    Board(Board &&) noexcept = default;
+    Board &operator=(const Board &) = default;
+    Board &operator=(Board &&) noexcept = default;
 
     /// Returns +1 if White to move, -1 if Black to move.
     [[nodiscard]] int currentPlayer() const { return (m_pos.side_to_move() == WHITE) ? +1 : -1; }
@@ -77,8 +82,15 @@ public:
 
 private:
     struct PositionHistory {
-        std::uint64_t key;
-        std::shared_ptr<const PositionHistory> previous;
+        PositionHistory(const std::uint64_t positionKey,
+                        std::shared_ptr<const PositionHistory> previousPosition)
+            : key(positionKey), previous(std::move(previousPosition)),
+              retainedPreviousPositions(
+                  previous == nullptr ? 0 : previous->retainedPreviousPositions + 1) {}
+
+        const std::uint64_t key;
+        const std::shared_ptr<const PositionHistory> previous;
+        const std::uint16_t retainedPreviousPositions;
     };
 
     Position m_pos;
@@ -87,6 +99,8 @@ private:
     [[nodiscard]] static constexpr const char *pieceSymbol(PieceType pt, Color c);
 
     [[nodiscard]] bool drawByInsufficientMaterial() const;
+    [[nodiscard]] std::uint8_t castlingRightsMask() const;
+    void validateHistory() const;
 };
 
 // Overload operator<< so you can do: std::cout << board << "\n";

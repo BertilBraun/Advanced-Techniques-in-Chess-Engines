@@ -228,6 +228,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             py::arg("cParam"),
             R"pbdoc(Calculate UCB score given exploration constant cParam.)pbdoc")
         .def_property_readonly("is_terminal", &MCTSNode::isTerminal)
+        .def_property_readonly("repetition_count",
+                               [](const MCTSNode &node) { return node.board.repetitionCount(); })
         .def_property_readonly("is_expanded", &MCTSNode::isExpanded)
         .def_property_readonly("max_depth", &MCTSNode::maxDepth)
 
@@ -344,6 +346,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
         .def_readonly("cacheCapacity", &InferenceStatistics::cacheCapacity)
         .def_readonly("cacheEvictions", &InferenceStatistics::cacheEvictions)
+        .def_readonly("cacheFingerprintCollisions",
+                      &InferenceStatistics::cacheFingerprintCollisions)
         .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution)
         .def_readonly("averageNumberOfPositionsInInferenceCall",
                       &InferenceStatistics::averageNumberOfPositionsInInferenceCall);
@@ -412,6 +416,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
         .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
+        .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
+        .def_property_readonly(
+            "repetition_count",
+            [](const EvalMCTSNode &node) { return node.board.repetitionCount(); })
         .def_property_readonly("children", &EvalMCTSNode::children,
                                py::return_value_policy::reference_internal)
         .def("best_child", &EvalMCTSNode::bestChild, py::arg("c_param"),

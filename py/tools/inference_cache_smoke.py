@@ -42,6 +42,8 @@ def main() -> None:
         raise RuntimeError('Expected exactly one MCTS result')
     if statistics.cacheCapacity != arguments.cache_capacity:
         raise RuntimeError('Inference cache did not retain its configured capacity')
+    if statistics.cacheFingerprintCollisions != 0:
+        raise RuntimeError('Inference cache reported an unexpected board-fingerprint collision')
 
     print(
         json.dumps(
@@ -49,6 +51,7 @@ def main() -> None:
                 'capacity': statistics.cacheCapacity,
                 'entries': statistics.uniquePositions,
                 'evictions': statistics.cacheEvictions,
+                'fingerprint_collisions': statistics.cacheFingerprintCollisions,
             },
             sort_keys=True,
         )

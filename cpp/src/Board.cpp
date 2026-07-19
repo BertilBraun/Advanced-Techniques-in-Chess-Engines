@@ -31,28 +31,57 @@ void Board::makeMove(Move m) {
     TIMEIT("Board::makeMove");
 
     assert(contains(validMoves(), m) && "Attempting to push an illegal move");
-    const bool resetsRepetitionHistory =
-        type_of(m_pos.moved_piece(m)) == PAWN || m_pos.capture(m);
+    const bool pawnMove = type_of(m_pos.moved_piece(m)) == PAWN;
+    const bool capture = m_pos.capture(m);
+    const std::uint8_t castlingRightsBeforeMove = castlingRightsMask();
     m_pos.do_move(m);
-    m_history = std::make_shared<PositionHistory>(
-        PositionHistory{m_pos.repetition_key(), resetsRepetitionHistory ? nullptr : m_history});
+    const bool castlingRightsChanged = castlingRightsMask() != castlingRightsBeforeMove;
+    const bool resetsRepetitionHistory = pawnMove || capture || castlingRightsChanged;
+    const bool historyIsAtCapacity =
+        m_history->retainedPreviousPositions >= MAX_REVERSIBLE_HISTORY_PLIES;
+    std::shared_ptr<const PositionHistory> previous =
+        resetsRepetitionHistory || historyIsAtCapacity ? nullptr : m_history;
+    m_history =
+        std::make_shared<const PositionHistory>(m_pos.repetition_key(), std::move(previous));
+    validateHistory();
 }
 
 void Board::setFen(const std::string &fen) {
     m_pos.set(fen, false);
-    m_history =
-        std::make_shared<PositionHistory>(PositionHistory{m_pos.repetition_key(), nullptr});
+    m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
+    validateHistory();
 }
 
 int Board::repetitionCount() const {
-    assert(m_history && "Board history must be initialized");
+    validateHistory();
     int occurrences = 0;
-    for (auto entry = m_history->previous; entry; entry = entry->previous) {
+    std::uint16_t inspectedPositions = 0;
+    for (auto entry = m_history->previous;
+         entry != nullptr && inspectedPositions < MAX_REVERSIBLE_HISTORY_PLIES;
+         entry = entry->previous, ++inspectedPositions) {
         if (entry->key == m_history->key) {
             ++occurrences;
         }
     }
     return occurrences;
+}
+
+std::uint8_t Board::castlingRightsMask() const {
+    return static_cast<std::uint8_t>(
+        static_cast<std::uint8_t>(m_pos.can_castle(CastlingRights::WHITE_OO)) |
+        (static_cast<std::uint8_t>(m_pos.can_castle(CastlingRights::WHITE_OOO)) << 1) |
+        (static_cast<std::uint8_t>(m_pos.can_castle(CastlingRights::BLACK_OO)) << 2) |
+        (static_cast<std::uint8_t>(m_pos.can_castle(CastlingRights::BLACK_OOO)) << 3));
+}
+
+void Board::validateHistory() const {
+    assert(m_history != nullptr && "Board history must be initialized");
+    assert(m_history->key == m_pos.repetition_key() &&
+           "Board history head must describe the current position");
+    assert(m_history->retainedPreviousPositions <= MAX_REVERSIBLE_HISTORY_PLIES &&
+           "Board history exceeded its bounded reversible window");
+    assert((m_history->previous == nullptr) == (m_history->retainedPreviousPositions == 0) &&
+           "Board history depth is inconsistent");
 }
 
 bool Board::isGameOver() const {
@@ -147,9 +176,8 @@ bool Board::drawByInsufficientMaterial() const {
     const int knightCount = m_pos.count<KNIGHT>();
     const int bishopCount = m_pos.count<BISHOP>();
     if (bishopCount == 0) {
-        return knightCount == 0 ||
-               (knightCount <= 2 &&
-                (m_pos.count<KNIGHT>(WHITE) == 0 || m_pos.count<KNIGHT>(BLACK) == 0));
+        return knightCount == 0 || (knightCount <= 2 && (m_pos.count<KNIGHT>(WHITE) == 0 ||
+                                                         m_pos.count<KNIGHT>(BLACK) == 0));
     }
     if (knightCount > 0) {
         return false;

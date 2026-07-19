@@ -1,3 +1,4 @@
+#include "util/CollisionCheckedCache.hpp"
 #include "util/ShardedCache.hpp"
 
 #include <stdexcept>
@@ -85,6 +86,32 @@ void testStatisticsAndClear() {
     require(cache.empty(), "clear did not remove cache entries");
 }
 
+void testFingerprintCollisionRequiresExactIdentity() {
+    CollisionCheckedCache<int, std::vector<int>, int, 1> cache(2);
+    const std::vector<int> firstIdentity{1, 2, 3};
+    const std::vector<int> collidingIdentity{4, 5, 6};
+
+    require(cache.acquireOrInsert(7, firstIdentity, -1) == CacheAcquisition::Inserted,
+            "first fingerprint did not insert");
+    cache.update(7, firstIdentity, 42);
+    cache.release(7);
+
+    require(cache.acquireOrInsert(7, firstIdentity, -1) == CacheAcquisition::Hit,
+            "exact identity was not a hit");
+    int cachedValue = 0;
+    require(cache.lookup(7, firstIdentity, cachedValue) && cachedValue == 42,
+            "exact identity returned the wrong value");
+    cache.release(7);
+
+    require(cache.acquireOrInsert(7, collidingIdentity, -1) ==
+                CacheAcquisition::FingerprintCollision,
+            "colliding fingerprint was accepted as an exact hit");
+
+    require(cache.acquireOrInsert(7, firstIdentity, -1) == CacheAcquisition::Hit,
+            "collision handling damaged the original entry");
+    cache.release(7);
+}
+
 } // namespace
 
 int main() {
@@ -92,5 +119,6 @@ int main() {
     testLeasedEntriesAreNotEvicted();
     testMultipleConsumersHoldIndependentLeases();
     testStatisticsAndClear();
+    testFingerprintCollisionRequiresExactIdentity();
     return 0;
 }

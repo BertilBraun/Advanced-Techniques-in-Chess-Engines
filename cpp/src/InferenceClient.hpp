@@ -4,7 +4,7 @@
 
 #include "BoardEncoding.hpp"
 
-#include "util/ShardedCache.hpp"
+#include "util/CollisionCheckedCache.hpp"
 #include <ATen/core/TensorBody.h>
 
 // InferenceResult is defined as a pair: (vector of MoveScore, float value)
@@ -16,6 +16,7 @@ struct InferenceStatistics {
     size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
     size_t cacheCapacity = 0;                     // Maximum completed cache entries.
     size_t cacheEvictions = 0;                    // Number of completed entries evicted.
+    size_t cacheFingerprintCollisions = 0;        // Exact-board mismatches for equal fingerprints.
     std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
     float averageNumberOfPositionsInInferenceCall =
         0.0f; // Average number of positions in an inference call.
@@ -103,11 +104,14 @@ private:
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
-    // Cache compact board fingerprints rather than full encoded tensors.
-    ShardedCache<BoardFingerprint, CachedInferenceResult, 32, BoardFingerprintHash> m_cache;
+    // Fingerprints select buckets; every hit is verified against the exact compressed board.
+    CollisionCheckedCache<BoardFingerprint, CompressedEncodedBoard, CachedInferenceResult, 32,
+                          BoardFingerprintHash>
+        m_cache;
     std::atomic_size_t m_totalHits = 0;
     std::atomic_size_t m_totalEvals = 0;
     std::atomic_size_t m_totalModelInferenceCalls = 0;
+    std::atomic_size_t m_totalFingerprintCollisions = 0;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

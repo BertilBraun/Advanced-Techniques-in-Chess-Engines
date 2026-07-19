@@ -1,6 +1,4 @@
 #include "InferenceClient.hpp"
-#include "util/ShardedCache.hpp"
-
 #include "BoardEncoding.hpp"
 #include "MoveEncoding.hpp"
 
@@ -52,20 +50,31 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
     // Prepare a futures vector for the inference results.
     // This will be used to wait for the results of the inference requests.
-    std::vector<std::pair<size_t, std::future<ModelInferenceResult>>> futures;
+    struct PendingInference {
+        size_t boardIndex;
+        bool cacheResult;
+        std::future<ModelInferenceResult> future;
+    };
+    std::vector<PendingInference> futures;
     futures.reserve(boards.size());
+    std::vector<std::optional<CachedInferenceResult>> uncachedResults(boards.size());
 
     for (size_t i : range(boards.size())) {
-        const bool mustEvaluate = m_cache.acquireOrInsert(fingerprints[i], kSentinelResult);
-        if (!mustEvaluate) {
+        const CacheAcquisition acquisition =
+            m_cache.acquireOrInsert(fingerprints[i], encodedBoards[i], kSentinelResult);
+        if (acquisition == CacheAcquisition::Hit) {
             m_totalHits.fetch_add(1, std::memory_order_relaxed);
             continue;
+        }
+        const bool cacheResult = acquisition == CacheAcquisition::Inserted;
+        if (!cacheResult) {
+            m_totalFingerprintCollisions.fetch_add(1, std::memory_order_relaxed);
         }
 
         // Create and enqueue a new request.
         InferenceRequest req;
         req.boardTensor = toTensor(encodedBoards[i]);
-        futures.emplace_back(i, std::move(req.promise.get_future()));
+        futures.push_back(PendingInference{i, cacheResult, std::move(req.promise.get_future())});
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_requestQueue.push(std::move(req));
@@ -74,7 +83,9 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     }
 
     // Wait for all inference futures to complete.
-    for (auto &&[i, future] : futures) {
+    for (PendingInference &pending : futures) {
+        const size_t i = pending.boardIndex;
+        std::future<ModelInferenceResult> &future = pending.future;
         const auto [policy, value] = future.get();
 
         assert(std::abs(value) <= 1.0f + 1e-2f &&
@@ -86,27 +97,40 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
                "InferenceClient::inference_batch: policy does not sum to 1.0");
 
-        m_cache.update(fingerprints[i],
-                       {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
+        CachedInferenceResult result{filterPolicyThenGetMovesAndProbabilities(policy, boards[i]),
+                                     value};
+        if (pending.cacheResult) {
+            m_cache.update(fingerprints[i], encodedBoards[i], result);
+        } else {
+            uncachedResults[i] = std::move(result);
+        }
     }
 
     // Wait for all futures in order.
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
 
-    for (const auto &&[fingerprint, board] : zip(fingerprints, boards)) {
+    for (size_t i : range(boards.size())) {
+        const BoardFingerprint &fingerprint = fingerprints[i];
+        const Board *board = boards[i];
         CachedInferenceResult result;
-        while (true) {
-            if (!m_cache.lookup(fingerprint, result))
-                throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
-            // Wait until the real result is available.
-            if (result != kSentinelResult) {
-                break;
+        if (uncachedResults[i].has_value()) {
+            result = std::move(uncachedResults[i].value());
+        } else {
+            while (true) {
+                if (!m_cache.lookup(fingerprint, encodedBoards[i], result)) {
+                    throw std::runtime_error(
+                        "InferenceClient::inference_batch: cache lookup failed");
+                }
+                // Wait until the real result is available.
+                if (result != kSentinelResult) {
+                    break;
+                }
+                // Sleep to avoid busy-waiting.
+                std::this_thread::sleep_for(std::chrono::microseconds(10));
             }
-            // Sleep to avoid busy-waiting.
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            m_cache.release(fingerprint);
         }
-        m_cache.release(fingerprint);
 
         const auto &[moves, value] = result;
 
@@ -138,6 +162,7 @@ InferenceStatistics InferenceClient::getStatistics() {
     InferenceStatistics stats;
     stats.cacheCapacity = m_cache.maximumSize();
     stats.cacheEvictions = m_cache.evictionCount();
+    stats.cacheFingerprintCollisions = m_totalFingerprintCollisions.load(std::memory_order_relaxed);
 
     const size_t totalEvals = m_totalEvals.load(std::memory_order_relaxed);
     const size_t totalModelInferenceCalls =
@@ -152,7 +177,8 @@ InferenceStatistics InferenceClient::getStatistics() {
 
     stats.nnOutputValueDistribution.reserve(m_cache.size());
     size_t dynamicValueBytes = 0;
-    m_cache.forEachValue([&stats, &dynamicValueBytes](const CachedInferenceResult &result) {
+    m_cache.forEachValue([&stats, &dynamicValueBytes](const CompressedEncodedBoard &,
+                                                      const CachedInferenceResult &result) {
         stats.nnOutputValueDistribution.push_back(result.second);
         dynamicValueBytes += result.first.capacity() * sizeof(EncodedMoveScore);
     });

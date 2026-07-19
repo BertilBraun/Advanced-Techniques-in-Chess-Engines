@@ -30,6 +30,8 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+option(ENABLE_TIMING_INSTRUMENTATION "Enable TIMEIT instrumentation" OFF)
+message(STATUS "Timing instrumentation: ${ENABLE_TIMING_INSTRUMENTATION}")
 
 # Add debug flags
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -39,8 +41,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -O3")
     endif ()
 elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
-    message(STATUS "Adding release flags (-O3)")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -flto")
+    message(STATUS "Adding release flags (-O3 -DNDEBUG)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -march=native -flto")
     if (CMAKE_CUDA_COMPILER)
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3")
     endif ()
@@ -165,6 +167,9 @@ file(GLOB_RECURSE ALL_SOURCES
 pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
 
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
+if (ENABLE_TIMING_INSTRUMENTATION)
+    target_compile_definitions(AlphaZeroCpp PRIVATE ENABLE_TIMING)
+endif ()
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 

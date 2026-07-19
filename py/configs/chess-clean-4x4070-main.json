@@ -50,7 +50,11 @@
         "learning_rate": 0.005
       },
       {
-        "start_iteration": 60,
+        "start_iteration": 50,
+        "learning_rate": 0.0035
+      },
+      {
+        "start_iteration": 100,
         "learning_rate": 0.002
       }
     ],

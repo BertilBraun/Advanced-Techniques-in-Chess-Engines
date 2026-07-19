@@ -35,6 +35,7 @@ class BenchmarkResult:
     terminal_roots: int
     inference_unique_positions: int
     inference_cache_size_mib: int
+    inference_cache_fingerprint_collisions: int
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         terminal_roots=terminal_roots,
         inference_unique_positions=inference_statistics.uniquePositions,
         inference_cache_size_mib=inference_statistics.cacheSizeMB,
+        inference_cache_fingerprint_collisions=inference_statistics.cacheFingerprintCollisions,
     )
 
 

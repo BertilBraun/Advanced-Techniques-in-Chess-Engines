@@ -292,7 +292,8 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.num_games_per_iteration == 3500
     assert arguments.self_play.num_games_after_which_to_write == 100
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
-    assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
+    assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(100, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
     assert arguments.self_play.inference_cache_capacity == 3_000_000

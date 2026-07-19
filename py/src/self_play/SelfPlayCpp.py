@@ -111,6 +111,11 @@ class SelfPlayCpp:
             log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, iteration - 1)
             log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, iteration - 1)
             log_scalar('inference/cache_evictions', inference_stats.cacheEvictions, iteration - 1)
+            log_scalar(
+                'inference/cache_fingerprint_collisions',
+                inference_stats.cacheFingerprintCollisions,
+                iteration - 1,
+            )
             log_histogram(
                 'inference/nn_output_value_distribution',
                 np.array(inference_stats.nnOutputValueDistribution),

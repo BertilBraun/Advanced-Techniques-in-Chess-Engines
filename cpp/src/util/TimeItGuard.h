@@ -36,7 +36,6 @@ struct TimeInfo {
 
 TimeInfo resetTimes();
 
-// #define ENABLE_TIMING
 #ifdef ENABLE_TIMING
 #define TIMEIT(name) TimeItGuard timer(name);
 #else
