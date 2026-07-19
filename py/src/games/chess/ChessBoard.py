@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import chess
-from typing import Optional, List
+from typing import List, Optional
 
 from src.games.Board import Board, Player
+from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES
 
 ChessMove = chess.Move
 
@@ -39,7 +40,12 @@ class ChessBoard(Board[ChessMove]):
         self.board.push(move)
 
     def is_game_over(self) -> bool:
-        return self.board.is_game_over(claim_draw=True) or self._is_draw_by_insufficient_material()
+        return (
+            self.board.is_game_over(claim_draw=False)
+            or self.board.is_repetition(3)
+            or self.board.is_fifty_moves()
+            or self._is_draw_by_insufficient_material()
+        )
 
     def _is_draw_by_insufficient_material(self) -> bool:
         """Check if the game is a draw by insufficient material. Copy to the one in Board.cpp"""
@@ -63,7 +69,9 @@ class ChessBoard(Board[ChessMove]):
 
     def check_winner(self) -> Optional[Player]:
         """Check if the game is over and return the winner."""
-        result = self.board.result(claim_draw=True)
+        if self.board.is_repetition(3):
+            return None
+        result = self.board.result(claim_draw=False)
         if result == '1-0':
             return 1
         elif result == '0-1':
@@ -78,7 +86,7 @@ class ChessBoard(Board[ChessMove]):
 
     def copy(self) -> ChessBoard:
         game = ChessBoard()
-        game.board = self.board.copy(stack=False)
+        game.board = self.board.copy(stack=REPETITION_HISTORY_PLIES)
         return game
 
     def quick_hash(self) -> int:

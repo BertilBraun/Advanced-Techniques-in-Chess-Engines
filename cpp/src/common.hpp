@@ -145,10 +145,16 @@ inline std::string toString(const Move move) {
         return "null";
     }
 
+    const Square from = move.from_sq();
+    const Square to =
+        move.type_of() == CASTLING
+            ? static_cast<Square>(static_cast<int>(from) + (move.to_sq() > from ? 2 : -2))
+            : move.to_sq();
+
     std::stringstream ss;
-    ss << toString(move.from_sq()) << toString(move.to_sq());
+    ss << toString(from) << toString(to);
     if (move.type_of() == PROMOTION) {
-        ss << " pkbrqK"[move.promotion_type()];
+        ss << "  nbrqk"[move.promotion_type()];
     }
     return ss.str();
 }

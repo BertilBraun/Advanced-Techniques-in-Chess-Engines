@@ -243,11 +243,23 @@ def new_eval_root(fen: str) -> EvalMCTSNode:
     Returns a shared pointer to the new EvalMCTSNode.
     """
 
+def new_eval_root_with_history(
+    starting_fen: str,
+    moves_uci: tuple[str, ...],
+) -> EvalMCTSNode:
+    """Create an evaluation MCTS root by replaying a bounded UCI move history."""
+
 def new_root(fen: str) -> MCTSNode:
     """
     Create a new root node for MCTS with the given FEN string.
     Returns a shared pointer to the new MCTSNode.
     """
+
+def new_root_with_history(
+    starting_fen: str,
+    moves_uci: tuple[str, ...],
+) -> MCTSNode:
+    """Create an MCTS root by replaying a bounded UCI move history."""
 
 def test_eval_mcts_speed_cpp(
     numBoards: int = 100,

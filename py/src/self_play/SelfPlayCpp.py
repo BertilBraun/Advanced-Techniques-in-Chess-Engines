@@ -14,6 +14,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from src.games.Board import Player
+from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -195,7 +196,7 @@ class SelfPlayCpp:
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        from AlphaZeroCpp import new_root
+        from AlphaZeroCpp import new_root_with_history
 
         boards: list[tuple[MCTSNode, bool]] = []
         for spg in self.self_play_games:
@@ -214,7 +215,8 @@ class SelfPlayCpp:
 
             if spg.already_expanded_node is None:
                 # If the node is not already expanded, create a new root node for the MCTS search
-                spg.already_expanded_node = new_root(spg.board.board.fen())
+                history = bounded_repetition_history(spg.board.board, REPETITION_HISTORY_PLIES)
+                spg.already_expanded_node = new_root_with_history(history.starting_fen, history.moves_uci)
 
             if should_run_full_search:
                 # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
@@ -308,12 +310,15 @@ class SelfPlayCpp:
         new_spg = current.expand(move)
         new_spg.already_expanded_node = root.make_new_root(child_index)
 
-        if not new_spg.board.is_game_over():
+        native_game_over = new_spg.already_expanded_node.is_terminal
+        if not native_game_over and not new_spg.board.is_game_over():
             return new_spg
 
         # Game is over, add the game to the dataset and return a new game state
         result = get_board_result_score(new_spg.board)
-        assert result is not None, 'Game should not be over if result is None'
+        if result is None:
+            assert native_game_over, 'Python reported a terminal game without a result.'
+            result = 0.0
         return self._handle_end_of_game(new_spg, result)
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:

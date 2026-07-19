@@ -11,13 +11,16 @@ constexpr float TURN_DISCOUNT = 0.99f; // Discount factor for the result score w
 constexpr float FPU_REDUCTION = 0.10f; // ≈-10 centipawns
 
 std::shared_ptr<MCTSNode> MCTSNode::createRoot(const std::string &fen) {
-    return std::shared_ptr<MCTSNode>(
-        new MCTSNode(fen, 1.0f, Move::null(), std::weak_ptr<MCTSNode>()));
+    return createRoot(Board(fen));
 }
 
-MCTSNode::MCTSNode(const std::string &fen, const float policy, const Move move,
-                   std::weak_ptr<MCTSNode> parent)
-    : parent(std::move(parent)), board(fen), move_to_get_here(move), policy(policy) {}
+std::shared_ptr<MCTSNode> MCTSNode::createRoot(Board board) {
+    return std::shared_ptr<MCTSNode>(
+        new MCTSNode(std::move(board), 1.0f, Move::null(), std::weak_ptr<MCTSNode>()));
+}
+
+MCTSNode::MCTSNode(Board board, const float policy, const Move move, std::weak_ptr<MCTSNode> parent)
+    : parent(std::move(parent)), board(std::move(board)), move_to_get_here(move), policy(policy) {}
 
 float MCTSNode::ucb(const float uCommon, const float parentQ) const {
     TIMEIT("MCTSNode::ucb");
@@ -47,8 +50,8 @@ void MCTSNode::expand(const std::vector<MoveScore> &moves_with_scores) {
         Board next = board; // Create a copy of the board to make the move
         next.makeMove(move);
 
-        children.emplace_back(
-            std::shared_ptr<MCTSNode>(new MCTSNode(next.fen(), score, move, weak_from_this())));
+        children.emplace_back(std::shared_ptr<MCTSNode>(
+            new MCTSNode(std::move(next), score, move, weak_from_this())));
     }
 }
 

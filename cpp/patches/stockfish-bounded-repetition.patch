@@ -1,0 +1,70 @@
+diff --git a/src/position.cpp b/src/position.cpp
+index b8913172..11bbff0b 100644
+--- a/src/position.cpp
++++ b/src/position.cpp
+@@ -267,6 +267,10 @@ Position& Position::set(const string& fenStr, bool isChess960) {
+ 
+     chess960 = isChess960;
+     set_state();
++    repetition = 0;
++    std::fill(std::begin(recentKeys), std::end(recentKeys), Key{});
++    recentKeys[0] = _key;
++    recentCount   = 1;
+ 
+     assert(pos_is_ok());
+ 
+@@ -844,17 +848,16 @@ DirtyPiece Position::do_move(Move m, bool givesCheck) {
+     // Update king attacks used for fast check detection
+     set_check_info();
+ 
+-    // Calculate the repetition info. It is the count of how many times
+-    // the position has occurred in the last 7 moves
++    // Count earlier occurrences with the same side to move in the bounded recent-key window.
+     repetition = 0;
+     for (int i = 1; i < recentCount; i += 2)
+         if (recentKeys[i] == _key)
+             repetition += 1;
+ 
+-    for (int i = std::min(recentCount, 5); i > 0; --i)
++    for (int i = std::min(recentCount, RECENT_KEY_CAPACITY - 1); i > 0; --i)
+         recentKeys[i] = recentKeys[i - 1];  // copy backwards
+     recentKeys[0] = _key;
+-    recentCount   = std::min(recentCount + 1, 6);
++    recentCount   = std::min(recentCount + 1, RECENT_KEY_CAPACITY);
+ 
+     assert(pos_is_ok());
+ 
+@@ -1007,9 +1010,8 @@ bool Position::is_draw() const {
+     return is_repetition();
+ }
+ 
+-// Return a draw score if a position repeats once earlier but strictly
+-// after the root, or repeats twice before or at the root.
+-bool Position::is_repetition() const { return repetition >= 3; }
++// A threefold repetition consists of the current position plus two earlier occurrences.
++bool Position::is_repetition() const { return repetition >= 2; }
+ 
+ 
+ // Flips position with the white and black sides reversed. This
+diff --git a/src/position.h b/src/position.h
+index ff671931..31c19f41 100644
+--- a/src/position.h
++++ b/src/position.h
+@@ -120,6 +120,8 @@ class Position {
+     void remove_piece(Square s);
+ 
+    private:
++    static constexpr int RECENT_KEY_CAPACITY = 8;
++
+     // Initialization helpers (used while setting up a position)
+     void set_castling_right(Color c, Square rfrom);
+     void set_state();
+@@ -168,7 +170,7 @@ class Position {
+     Bitboard checkSquares[PIECE_TYPE_NB]{};
+     Piece    capturedPiece;
+     int      repetition{};
+-    Key      recentKeys[6]{};  // Sliding window: [0] = most recent
++    Key      recentKeys[RECENT_KEY_CAPACITY]{};  // Sliding window: [0] = most recent
+     int      recentCount = 0;
+ };
+ 

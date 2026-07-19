@@ -5,6 +5,7 @@
 class MCTSNode : public std::enable_shared_from_this<MCTSNode> {
 public:
     static std::shared_ptr<MCTSNode> createRoot(const std::string &fen);
+    static std::shared_ptr<MCTSNode> createRoot(Board board);
 
     [[nodiscard]] bool isTerminal() const { return board.isGameOver(); }
 
@@ -43,5 +44,5 @@ public:
     float policy = 0.0;
 
 private:
-    MCTSNode(const std::string &fen, float policy, Move move, std::weak_ptr<MCTSNode> parent);
+    MCTSNode(Board board, float policy, Move move, std::weak_ptr<MCTSNode> parent);
 };

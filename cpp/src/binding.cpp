@@ -175,6 +175,21 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
 
 // ——————————————————————————————————————————————
 // Bind everything with pybind11:
+Board replayMoves(const std::string &startingFen, const std::vector<std::string> &movesUci) {
+    Board board(startingFen);
+    for (const std::string &moveUci : movesUci) {
+        const std::vector<Move> legalMoves = board.validMoves();
+        const auto matchingMove =
+            std::find_if(legalMoves.begin(), legalMoves.end(),
+                         [&moveUci](const Move move) { return toString(move) == moveUci; });
+        if (matchingMove == legalMoves.end()) {
+            throw std::invalid_argument("Illegal move " + moveUci + " while replaying history");
+        }
+        board.makeMove(*matchingMove);
+    }
+    return board;
+}
+
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "pybind11 bindings for custom MCTS + inference client";
 
@@ -246,11 +261,20 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def("__repr__", &MCTSNode::repr);
 
     // Root creation helper
-    m.def("new_root", &MCTSNode::createRoot, py::arg("fen"),
-          R"pbdoc(
+    m.def(
+        "new_root", [](const std::string &fen) { return MCTSNode::createRoot(fen); },
+        py::arg("fen"),
+        R"pbdoc(
             Create a new root node for MCTS with the given FEN string.
             Returns a shared pointer to the new MCTSNode.
           )pbdoc");
+    m.def(
+        "new_root_with_history",
+        [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
+            return MCTSNode::createRoot(replayMoves(startingFen, movesUci));
+        },
+        py::arg("starting_fen"), py::arg("moves_uci"),
+        R"pbdoc(Create an MCTS root by replaying a bounded UCI move history.)pbdoc");
 
     m.def("test_inference_speed_cpp", &testInferenceSpeed,
           "Test the inference speed of the InferenceClient", py::arg("numBoards") = 100,
@@ -425,9 +449,18 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  Returns an `EvalMCTSResult` object containing the result, visits, and root node.
              )pbdoc");
 
-    m.def("new_eval_root", &EvalMCTSNode::createRoot, py::arg("fen"),
-          R"pbdoc(
+    m.def(
+        "new_eval_root", [](const std::string &fen) { return EvalMCTSNode::createRoot(fen); },
+        py::arg("fen"),
+        R"pbdoc(
             Create a new root node for evaluation MCTS with the given FEN string.
             Returns a shared pointer to the new EvalMCTSNode.
           )pbdoc");
+    m.def(
+        "new_eval_root_with_history",
+        [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
+            return EvalMCTSNode::createRoot(replayMoves(startingFen, movesUci));
+        },
+        py::arg("starting_fen"), py::arg("moves_uci"),
+        R"pbdoc(Create an evaluation MCTS root by replaying a bounded UCI move history.)pbdoc");
 }

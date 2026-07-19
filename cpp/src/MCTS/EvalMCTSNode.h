@@ -26,8 +26,12 @@ public:
 
     /* ──────────────────────────  factory ───────────────────────────── */
     static std::shared_ptr<EvalMCTSNode> createRoot(const std::string &fen) {
+        return createRoot(Board(fen));
+    }
+
+    static std::shared_ptr<EvalMCTSNode> createRoot(Board board) {
         return std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{fen, 1.0f, Move::null(), std::weak_ptr<EvalMCTSNode>()});
+            new EvalMCTSNode{std::move(board), 1.0f, Move::null(), std::weak_ptr<EvalMCTSNode>()});
     }
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
@@ -97,9 +101,9 @@ private:
     };
 
     /* ────────────────────  construction only via factory  ──────────── */
-    EvalMCTSNode(const std::string &fen, const float policy, const Move move,
+    EvalMCTSNode(Board board, const float policy, const Move move,
                  std::weak_ptr<EvalMCTSNode> parent)
-        : board{fen}, moveToGetHere{move}, policy{policy}, parent{std::move(parent)} {}
+        : board{std::move(board)}, moveToGetHere{move}, policy{policy}, parent{std::move(parent)} {}
 };
 
 /* =====================================================================
@@ -142,7 +146,7 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves) {
         Board next = board;
         next.makeMove(move);
         newChildren->emplace_back(std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{next.fen(), policy, move, weak_from_this()}));
+            new EvalMCTSNode{std::move(next), policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
     childrenStrong = newChildren;                                    // own the memory

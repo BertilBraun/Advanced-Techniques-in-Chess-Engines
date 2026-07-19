@@ -9,7 +9,7 @@ import chess
 import chess.engine
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTSParams
+    from AlphaZeroCpp import MCTSNode, MCTSParams
 
 import numpy as np
 
@@ -29,6 +29,7 @@ from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_s
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
+from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.mcts.MCTS import action_probabilities
 from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
 from src.util.save_paths import inference_model_path, load_model, model_save_path
@@ -37,6 +38,13 @@ from src.experiment.evaluation_protocol import (
     build_paired_schedule,
     load_opening_suite,
 )
+
+
+def history_aware_root(board: CurrentBoard) -> MCTSNode:
+    from AlphaZeroCpp import new_root_with_history
+
+    history = bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES)
+    return new_root_with_history(history.starting_fen, history.moves_uci)
 
 
 class ModelEvaluation:
@@ -149,7 +157,7 @@ class ModelEvaluation:
         self,
         model_path: str | PathLike,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import InferenceClientParams, MCTS, new_root
+        from AlphaZeroCpp import InferenceClientParams, MCTS
 
         opponent_inference_path = inference_model_path(model_path)
         if not opponent_inference_path.is_file():
@@ -165,7 +173,7 @@ class ModelEvaluation:
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search(  # noqa: F821
-                [(new_root(board.board.fen()), False) for board in boards]
+                [(history_aware_root(board), False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 
@@ -294,7 +302,7 @@ class ModelEvaluation:
         eval_model: EvaluationModel,
         name: str,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import new_root, InferenceClientParams, MCTS
+        from AlphaZeroCpp import InferenceClientParams, MCTS
 
         if self.paired_schedule is None or self.args.evaluation is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
@@ -310,7 +318,7 @@ class ModelEvaluation:
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search(  # noqa: F821
-                [(new_root(board.board.fen()), False) for board in boards]
+                [(history_aware_root(board), False) for board in boards]
             )
             return [action_probabilities(result.visits) for result in results.results]
 
