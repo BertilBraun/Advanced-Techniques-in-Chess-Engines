@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.experiment.artifact_retention import apply_artifact_retention
+from src.experiment.training_data_schedule import select_validation_iteration
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
@@ -156,27 +157,29 @@ class TrainerProcess:
 
         dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
 
-        dataset_stats = SelfPlayDataset.load_iteration_stats(self.args.save_path, iteration)
-
-        required_validation_samples = dataset_stats.num_samples * self.args.training.validation_percentage
-
         self.validation_dataset = SelfPlayDataset()
-        if dataset_files:
-            while len(self.validation_dataset) < required_validation_samples and len(dataset_files) > 0:
-                # The newest file is the validation dataset
-                validation_dataset_file = dataset_files.pop(-1)
-                self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
+        validation_iteration = select_validation_iteration(iteration, bool(dataset_files))
+        if validation_iteration == iteration:
+            validation_dataset_files = dataset_files
         else:
-            previous_iteration_files = SelfPlayDataset.get_files_to_load_for_iteration(
-                self.args.save_path, iteration - 1
+            validation_dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(
+                self.args.save_path, validation_iteration
             )
-            assert previous_iteration_files, (
-                f'No dataset files found at all for iteration {iteration} or {iteration - 1}'
+            assert validation_dataset_files, (
+                f'No dataset files found at all for iteration {iteration} or {validation_iteration}'
             )
-            while len(self.validation_dataset) < required_validation_samples and len(previous_iteration_files) > 0:
-                # The newest file is the validation dataset
-                validation_dataset_file = previous_iteration_files.pop(-1)
-                self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
+        validation_dataset_stats = SelfPlayDataset.load_iteration_stats(
+            self.args.save_path,
+            validation_iteration,
+        )
+
+        required_validation_samples = max(
+            validation_dataset_stats.num_samples * self.args.training.validation_percentage,
+            1,
+        )
+        while len(self.validation_dataset) < required_validation_samples and validation_dataset_files:
+            validation_dataset_file = validation_dataset_files.pop()
+            self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
 
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer

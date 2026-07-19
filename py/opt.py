@@ -104,7 +104,7 @@ def objective(trial: optuna.Trial) -> float:
         training=training_params,
         cluster=ClusterParams(
             trainer_device_id=max(0, torch.cuda.device_count() - 1),
-            evaluation_device_id=max(0, torch.cuda.device_count() - 1),
+            evaluation_device_cycle=(max(0, torch.cuda.device_count() - 1),),
             self_play_device_ids=(max(0, torch.cuda.device_count() - 1),) * 2,
             self_play_tensorboard_processes=1,
             trainer_cpu_threads=1,

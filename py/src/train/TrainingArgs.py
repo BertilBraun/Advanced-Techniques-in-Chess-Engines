@@ -101,8 +101,8 @@ class ClusterParams:
     trainer_device_id: int
     """The CUDA device used for neural-network training."""
 
-    evaluation_device_id: int
-    """The CUDA device used for neural-network evaluation."""
+    evaluation_device_cycle: tuple[int, ...]
+    """CUDA devices assigned cyclically to evaluation tasks."""
 
     self_play_device_ids: tuple[int, ...]
     """One CUDA device ID per self-play process."""
@@ -231,6 +231,7 @@ class EvaluationParams:
     mcts_threads: int
     previous_model_offsets: tuple[int, ...]
     historical_model_iterations: tuple[int, ...]
+    historical_model_rotation_period: int
     stockfish_skill_levels: tuple[int, ...]
     stockfish_binary_path: str | None
     stockfish_nodes_per_move: int

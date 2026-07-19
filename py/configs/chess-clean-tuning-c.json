@@ -25,7 +25,7 @@
   },
   "topology": {
     "trainer_device_id": 3,
-    "evaluation_device_id": 3,
+    "evaluation_device_cycle": [3],
     "self_play_processes_per_device": [8, 8, 8, 4],
     "self_play_tensorboard_processes": 1,
     "mcts_threads_per_process": 3,
@@ -82,6 +82,7 @@
     "evaluate_initial_checkpoint": false,
     "previous_model_offsets": [],
     "historical_model_iterations": [],
+    "historical_model_rotation_period": 1,
     "stockfish_skill_levels": [],
     "evaluate_random": false,
     "stockfish_binary_path": null,

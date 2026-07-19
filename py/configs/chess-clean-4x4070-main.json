@@ -25,7 +25,7 @@
   },
   "topology": {
     "trainer_device_id": 3,
-    "evaluation_device_id": 3,
+    "evaluation_device_cycle": [0, 1, 2, 3],
     "self_play_processes_per_device": [8, 8, 8, 4],
     "self_play_tensorboard_processes": 1,
     "mcts_threads_per_process": 3,
@@ -38,7 +38,7 @@
     "reserved_logical_cpus": 4,
     "maximum_cpu_oversubscription_ratio": 1.5,
     "max_concurrent_evaluations": 1,
-    "max_concurrent_evaluation_tasks": 8
+    "max_concurrent_evaluation_tasks": 16
   },
   "workload": {
     "iterations": 500,
@@ -111,6 +111,7 @@
       460,
       480
     ],
+    "historical_model_rotation_period": 5,
     "stockfish_skill_levels": [0, 1, 2, 3],
     "evaluate_random": true,
     "stockfish_binary_path": "/workspace/chess/stockfish-18",

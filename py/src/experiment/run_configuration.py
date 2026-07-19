@@ -98,7 +98,7 @@ class TopologyConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     trainer_device_id: int = Field(ge=0)
-    evaluation_device_id: int = Field(ge=0)
+    evaluation_device_cycle: tuple[int, ...]
     self_play_processes_per_device: tuple[int, ...]
     self_play_tensorboard_processes: int = Field(ge=1)
     mcts_threads_per_process: int = Field(gt=0)
@@ -121,6 +121,10 @@ class TopologyConfiguration(BaseModel):
             raise ValueError('Self-play process counts cannot be negative.')
         if sum(self.self_play_processes_per_device) == 0:
             raise ValueError('At least one self-play process must be configured.')
+        if not self.evaluation_device_cycle:
+            raise ValueError('At least one evaluation device must be configured.')
+        if any(device_id < 0 for device_id in self.evaluation_device_cycle):
+            raise ValueError('Evaluation device IDs cannot be negative.')
         if self.self_play_tensorboard_processes > sum(self.self_play_processes_per_device):
             raise ValueError('TensorBoard self-play process count cannot exceed the self-play process count.')
         return self
@@ -194,6 +198,7 @@ class EvaluationProtocolConfiguration(BaseModel):
     evaluate_initial_checkpoint: bool
     previous_model_offsets: tuple[int, ...]
     historical_model_iterations: tuple[int, ...]
+    historical_model_rotation_period: int = Field(gt=0)
     stockfish_skill_levels: tuple[int, ...]
     evaluate_random: bool
     stockfish_binary_path: str | None
@@ -435,8 +440,11 @@ def validate_run_configuration(
         raise ValueError('self_play_processes_per_device must contain exactly one entry per visible GPU.')
     if topology.trainer_device_id >= hardware.gpu_count:
         raise ValueError(f'Trainer device {topology.trainer_device_id} is outside the configured GPU range.')
-    if topology.evaluation_device_id >= hardware.gpu_count:
-        raise ValueError(f'Evaluation device {topology.evaluation_device_id} is outside the configured GPU range.')
+    invalid_evaluation_devices = tuple(
+        device_id for device_id in topology.evaluation_device_cycle if device_id >= hardware.gpu_count
+    )
+    if invalid_evaluation_devices:
+        raise ValueError(f'Evaluation devices {invalid_evaluation_devices} are outside the configured GPU range.')
     if resolved_hardware.logical_cpu_count < hardware.logical_cpu_count:
         raise ValueError(
             f'Expected at least {hardware.logical_cpu_count} logical CPUs, found {resolved_hardware.logical_cpu_count}.'
@@ -511,7 +519,7 @@ def apply_run_configuration(
     training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
     training_args.cluster = ClusterParams(
         trainer_device_id=topology.trainer_device_id,
-        evaluation_device_id=topology.evaluation_device_id,
+        evaluation_device_cycle=topology.evaluation_device_cycle,
         self_play_device_ids=_self_play_device_ids(topology.self_play_processes_per_device),
         self_play_tensorboard_processes=topology.self_play_tensorboard_processes,
         trainer_cpu_threads=topology.trainer_cpu_threads,
@@ -560,6 +568,7 @@ def apply_run_configuration(
         training_args.evaluation.mcts_threads = evaluation_protocol.mcts_threads
         training_args.evaluation.previous_model_offsets = evaluation_protocol.previous_model_offsets
         training_args.evaluation.historical_model_iterations = evaluation_protocol.historical_model_iterations
+        training_args.evaluation.historical_model_rotation_period = evaluation_protocol.historical_model_rotation_period
         training_args.evaluation.stockfish_skill_levels = evaluation_protocol.stockfish_skill_levels
         training_args.evaluation.stockfish_binary_path = (
             evaluation_protocol.stockfish_binary_path if evaluation_protocol.stockfish_binary_path is not None else None

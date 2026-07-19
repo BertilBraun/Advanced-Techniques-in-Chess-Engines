@@ -63,6 +63,7 @@ evaluation = EvaluationParams(
     mcts_threads=1,
     previous_model_offsets=(5, 10),
     historical_model_iterations=tuple(range(10, 301, 10)),
+    historical_model_rotation_period=1,
     stockfish_skill_levels=(0, 1, 2, 3),
     stockfish_binary_path=None,
     stockfish_nodes_per_move=1_000,
@@ -129,7 +130,7 @@ TRAINING_ARGS = TrainingArgs(
     ),
     cluster=ClusterParams(
         trainer_device_id=max(0, torch.cuda.device_count() - 1),
-        evaluation_device_id=max(0, torch.cuda.device_count() - 1),
+        evaluation_device_cycle=(max(0, torch.cuda.device_count() - 1),),
         self_play_device_ids=(max(0, torch.cuda.device_count() - 1),),
         self_play_tensorboard_processes=1,
         trainer_cpu_threads=1,
