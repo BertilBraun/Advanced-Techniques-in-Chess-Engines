@@ -42,8 +42,8 @@
   },
   "workload": {
     "iterations": 1,
-    "games_per_iteration": 2500,
-    "games_per_replay_file": 100,
+    "games_per_iteration": 1200,
+    "games_per_replay_file": 10,
     "learning_rate_schedule": [
       {
         "start_iteration": 0,
