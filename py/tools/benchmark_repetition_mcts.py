@@ -138,6 +138,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.threads,
         ),
     )
+    mcts.search([(new_root(openings[0]), False)])
     wait_for_synchronized_start(args)
 
     gpu_samples: list[GpuSample] = []
