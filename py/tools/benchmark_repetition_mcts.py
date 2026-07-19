@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import resource
@@ -59,9 +60,9 @@ def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
         for line in path.read_text(encoding='utf-8').splitlines()
         if line and not line.startswith('#')
     )
-    if len(openings) < number_of_games:
-        raise ValueError(f'Requested {number_of_games} games but {path} has {len(openings)} openings.')
-    return openings[:number_of_games]
+    if not openings:
+        raise ValueError(f'Opening suite is empty: {path}')
+    return tuple(itertools.islice(itertools.cycle(openings), number_of_games))
 
 
 def query_gpu(device_id: int) -> GpuSample:
