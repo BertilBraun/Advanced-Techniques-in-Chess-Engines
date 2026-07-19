@@ -55,7 +55,7 @@ TRAINING_ARGS = TrainingArgs(
         self_play_tensorboard_processes=1,
         trainer_cpu_threads=1,
         trainer_interop_threads=1,
-        pause_self_play_during_training=False,
+        self_play_node_ids_to_pause_during_training=(),
         max_concurrent_evaluations=1,
     ),
     training=training,

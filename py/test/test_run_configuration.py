@@ -95,7 +95,7 @@ def training_args() -> TrainingArgs:
             self_play_tensorboard_processes=1,
             trainer_cpu_threads=1,
             trainer_interop_threads=1,
-            pause_self_play_during_training=False,
+            self_play_node_ids_to_pause_during_training=(),
             max_concurrent_evaluations=1,
         ),
         run_limits=RuntimeLimits(
@@ -179,6 +179,25 @@ def test_configuration_rejects_cpu_oversubscription() -> None:
         validate_run_configuration(oversubscribed, resolved_pilot_hardware())
 
 
+@pytest.mark.parametrize(
+    'training_process_counts',
+    (
+        (6, 6, 6),
+        (6, 6, 6, 3, 0),
+        (7, 6, 6, 2),
+    ),
+)
+def test_configuration_rejects_invalid_training_self_play_counts(
+    training_process_counts: tuple[int, ...],
+) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['self_play_processes_per_device_during_training'] = training_process_counts
+
+    with pytest.raises(ValidationError, match='Training self-play process counts'):
+        RunConfiguration.model_validate(data)
+
+
 def test_budget_rejects_cost_above_ceiling() -> None:
     with pytest.raises(ValidationError, match='Projected cost'):
         BudgetConfiguration(
@@ -237,7 +256,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 2
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.trainer_cpu_threads == 8
-    assert arguments.cluster.pause_self_play_during_training
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == tuple(range(20))
     assert arguments.self_play.mcts.num_threads == 2
     assert arguments.self_play.num_parallel_games == 64
     assert arguments.self_play.inference_cache_capacity == 250_000
@@ -271,7 +290,7 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 500
     assert arguments.num_games_per_iteration == 5000
-    assert arguments.self_play.num_games_after_which_to_write == 10
+    assert arguments.self_play.num_games_after_which_to_write == 100
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15
@@ -279,7 +298,8 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert arguments.self_play.inference_cache_capacity == 1_500_000
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
-    assert not arguments.cluster.pause_self_play_during_training
+    assert arguments.cluster.self_play_device_ids == (0,) * 8 + (1,) * 8 + (2,) * 8 + (3,) * 8
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (28, 29, 30, 31)
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 1

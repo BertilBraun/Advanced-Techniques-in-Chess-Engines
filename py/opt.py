@@ -109,6 +109,7 @@ def objective(trial: optuna.Trial) -> float:
             self_play_tensorboard_processes=1,
             trainer_cpu_threads=1,
             trainer_interop_threads=1,
+            self_play_node_ids_to_pause_during_training=(),
             max_concurrent_evaluations=1,
         ),
         run_limits=DEFAULT_RUNTIME_LIMITS,

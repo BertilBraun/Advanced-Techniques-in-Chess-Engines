@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
+import h5py
 import numpy as np
 import torch
 
@@ -82,6 +83,28 @@ def test_prebatched_dataset_dataloader_preserves_components() -> None:
     assert batch[0].shape == (len(samples), C, H, W)
     assert batch[1].shape == (len(samples), 1814)
     assert batch[2].shape == (len(samples),)
+
+
+def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
+    samples = dataset()
+    memory_path = tmp_path / 'memory_0' / 'samples.hdf5'
+    assert samples.save_to_path(memory_path)
+
+    with h5py.File(memory_path, 'r') as file:
+        expected_states = [bytes(state) for state in file['states']]
+        expected_visit_counts = [visit_count[visit_count[:, 1] > 0] for visit_count in file['visit_counts']]
+        expected_value_targets = [value_target for value_target in file['value_targets']]
+
+    loaded_samples = SelfPlayDataset.load(memory_path)
+
+    assert loaded_samples.encoded_states == expected_states
+    assert loaded_samples.value_targets == expected_value_targets
+    assert len(loaded_samples.visit_counts) == len(expected_visit_counts)
+    for loaded_visit_counts, expected_visit_counts in zip(
+        loaded_samples.visit_counts,
+        expected_visit_counts,
+    ):
+        np.testing.assert_array_equal(loaded_visit_counts, expected_visit_counts)
 
 
 def test_background_prefetch_preserves_batch_order_and_values() -> None:

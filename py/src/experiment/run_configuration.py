@@ -106,7 +106,7 @@ class TopologyConfiguration(BaseModel):
     inference_cache_capacity_per_process: int = Field(gt=0)
     trainer_cpu_threads: int = Field(gt=0)
     trainer_interop_threads: int = Field(gt=0)
-    pause_self_play_during_training: bool
+    self_play_processes_per_device_during_training: tuple[int, ...]
     dataloader_workers: int = Field(ge=0)
     reserved_logical_cpus: int = Field(ge=1)
     maximum_cpu_oversubscription_ratio: float = Field(ge=1.0, le=2.0)
@@ -127,6 +127,16 @@ class TopologyConfiguration(BaseModel):
             raise ValueError('Evaluation device IDs cannot be negative.')
         if self.self_play_tensorboard_processes > sum(self.self_play_processes_per_device):
             raise ValueError('TensorBoard self-play process count cannot exceed the self-play process count.')
+        if len(self.self_play_processes_per_device_during_training) != len(self.self_play_processes_per_device):
+            raise ValueError('Training self-play process counts must contain one entry per self-play device.')
+        if any(
+            not 0 <= training_count <= configured_count
+            for training_count, configured_count in zip(
+                self.self_play_processes_per_device_during_training,
+                self.self_play_processes_per_device,
+            )
+        ):
+            raise ValueError('Training self-play process counts cannot exceed configured process counts.')
         return self
 
 
@@ -481,6 +491,21 @@ def _self_play_device_ids(processes_per_device: tuple[int, ...]) -> tuple[int, .
     )
 
 
+def _self_play_node_ids_to_pause(
+    processes_per_device: tuple[int, ...],
+    processes_per_device_during_training: tuple[int, ...],
+) -> tuple[int, ...]:
+    node_ids_to_pause: list[int] = []
+    first_node_id = 0
+    for configured_count, training_count in zip(
+        processes_per_device,
+        processes_per_device_during_training,
+    ):
+        node_ids_to_pause.extend(range(first_node_id + training_count, first_node_id + configured_count))
+        first_node_id += configured_count
+    return tuple(node_ids_to_pause)
+
+
 def _piecewise_learning_rate(
     stages: tuple[LearningRateStage, ...],
 ) -> Callable[[int, OptimizerType], float]:
@@ -524,7 +549,10 @@ def apply_run_configuration(
         self_play_tensorboard_processes=topology.self_play_tensorboard_processes,
         trainer_cpu_threads=topology.trainer_cpu_threads,
         trainer_interop_threads=topology.trainer_interop_threads,
-        pause_self_play_during_training=topology.pause_self_play_during_training,
+        self_play_node_ids_to_pause_during_training=_self_play_node_ids_to_pause(
+            topology.self_play_processes_per_device,
+            topology.self_play_processes_per_device_during_training,
+        ),
         max_concurrent_evaluations=topology.max_concurrent_evaluations,
     )
     training_args.run_limits = RuntimeLimits(

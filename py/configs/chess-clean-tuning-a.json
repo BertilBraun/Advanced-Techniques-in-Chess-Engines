@@ -33,7 +33,7 @@
     "inference_cache_capacity_per_process": 250000,
     "trainer_cpu_threads": 8,
     "trainer_interop_threads": 2,
-    "pause_self_play_during_training": true,
+    "self_play_processes_per_device_during_training": [0, 0, 0, 0],
     "dataloader_workers": 0,
     "reserved_logical_cpus": 4,
     "maximum_cpu_oversubscription_ratio": 1.0,
