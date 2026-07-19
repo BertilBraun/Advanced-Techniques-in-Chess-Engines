@@ -299,7 +299,7 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
     assert arguments.cluster.self_play_device_ids == (0,) * 7 + (1,) * 7 + (2,) * 7 + (3,) * 7
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (25, 26, 27)
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 1
