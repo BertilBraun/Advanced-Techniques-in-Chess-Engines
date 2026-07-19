@@ -286,7 +286,8 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     apply_run_configuration(arguments, configuration)
 
     assert configuration.stage.value == 'clean_retrain'
-    assert configuration.tensorboard_run_directory == 'chess-rule-complete-10x96-vast-45170106-main'
+    assert configuration.run_name == 'complete-training-run-v2'
+    assert configuration.tensorboard_run_directory == 'complete-training-run-v2'
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 500
     assert arguments.num_games_per_iteration == 3500

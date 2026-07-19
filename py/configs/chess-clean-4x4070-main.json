@@ -1,9 +1,9 @@
 {
-  "run_name": "chess-rule-complete-10x96-vast-45170106-main",
-  "tensorboard_run_directory": "chess-rule-complete-10x96-vast-45170106-main",
+  "run_name": "complete-training-run-v2",
+  "tensorboard_run_directory": "complete-training-run-v2",
   "stage": "clean_retrain",
   "requires_explicit_approval": true,
-  "output_path": "py/training_data/chess-rule-complete-10x96-vast-45170106-main",
+  "output_path": "py/training_data/complete-training-run-v2",
   "resume": {
     "mode": "random_initialization",
     "optimizer": "adamw"
@@ -79,7 +79,7 @@
   },
   "evaluation_protocol": {
     "opening_suite_path": "py/reference/main-monitoring-openings-50.tsv",
-    "reference_model_path": "py/training_data/chess-rule-complete-10x96-vast-45170106-main/model_0.pt",
+    "reference_model_path": "py/training_data/complete-training-run-v2/model_0.pt",
     "raw_results_subdirectory": "evaluations",
     "maximum_game_plies": 200,
     "bootstrap_seed": 20260717,
