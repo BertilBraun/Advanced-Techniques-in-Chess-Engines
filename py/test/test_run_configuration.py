@@ -391,3 +391,84 @@ def test_existing_manifest_preserves_initial_dynamic_hardware_measurements(tmp_p
     preserved_manifest = write_run_manifest(manifest_path, current_manifest)
 
     assert preserved_manifest == initial_manifest
+
+
+def test_changed_manifest_archives_previous_phase(tmp_path: Path) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    initial_manifest = RunManifest(
+        configuration=configuration,
+        approval=ApprovalRecord(
+            approved_by='Bertil',
+            approved_at_utc=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            run_name=configuration.run_name,
+            source_revision='1' * 40,
+            configuration_sha256=configuration_sha256(configuration),
+            provider_name=configuration.hardware.provider_name,
+            offer_id=configuration.hardware.offer_id,
+            cost_currency=configuration.budget.currency,
+            hourly_price=configuration.budget.hourly_price,
+            maximum_cost=configuration.budget.maximum_cost,
+            maximum_wall_time_minutes=configuration.budget.maximum_wall_time_minutes,
+        ),
+        resolved_hardware=resolved_pilot_hardware(),
+        source_revision='1' * 40,
+        source_worktree_clean=True,
+        initial_model_sha256='2' * 64,
+        evaluation_dataset_sha256=None,
+        stockfish_binary_sha256='3' * 64,
+        open_file_soft_limit=4096,
+        torch_version='2.7.1+cu128',
+        cuda_version='12.8',
+    )
+    manifest_path = tmp_path / 'run_manifest.json'
+    write_run_manifest(manifest_path, initial_manifest)
+    current_manifest = initial_manifest.model_copy(
+        update={
+            'source_revision': '4' * 40,
+            'approval': initial_manifest.approval.model_copy(update={'source_revision': '4' * 40}),
+        }
+    )
+
+    written_manifest = write_run_manifest(manifest_path, current_manifest)
+
+    history_paths = tuple((tmp_path / 'run_manifests').glob('run_manifest-*.json'))
+    assert written_manifest == current_manifest
+    assert RunManifest.model_validate_json(manifest_path.read_text(encoding='utf-8')) == current_manifest
+    assert len(history_paths) == 1
+    assert RunManifest.model_validate_json(history_paths[0].read_text(encoding='utf-8')) == initial_manifest
+
+
+def test_changed_manifest_rejects_different_run_identity(tmp_path: Path) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    initial_manifest = RunManifest(
+        configuration=configuration,
+        approval=ApprovalRecord(
+            approved_by='Bertil',
+            approved_at_utc=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            run_name=configuration.run_name,
+            source_revision='1' * 40,
+            configuration_sha256=configuration_sha256(configuration),
+            provider_name=configuration.hardware.provider_name,
+            offer_id=configuration.hardware.offer_id,
+            cost_currency=configuration.budget.currency,
+            hourly_price=configuration.budget.hourly_price,
+            maximum_cost=configuration.budget.maximum_cost,
+            maximum_wall_time_minutes=configuration.budget.maximum_wall_time_minutes,
+        ),
+        resolved_hardware=resolved_pilot_hardware(),
+        source_revision='1' * 40,
+        source_worktree_clean=True,
+        initial_model_sha256='2' * 64,
+        evaluation_dataset_sha256=None,
+        stockfish_binary_sha256='3' * 64,
+        open_file_soft_limit=4096,
+        torch_version='2.7.1+cu128',
+        cuda_version='12.8',
+    )
+    manifest_path = tmp_path / 'run_manifest.json'
+    write_run_manifest(manifest_path, initial_manifest)
+    other_configuration = configuration.model_copy(update={'run_name': 'other-run'})
+    other_manifest = initial_manifest.model_copy(update={'configuration': other_configuration})
+
+    with pytest.raises(ValueError, match='different run'):
+        write_run_manifest(manifest_path, other_manifest)

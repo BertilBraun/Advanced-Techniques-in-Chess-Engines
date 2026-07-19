@@ -612,15 +612,33 @@ def write_run_manifest(path: Path, manifest: RunManifest) -> RunManifest:
     if path.exists():
         existing = RunManifest.model_validate_json(path.read_text(encoding='utf-8'))
         existing_with_current_hardware = existing.model_copy(update={'resolved_hardware': manifest.resolved_hardware})
-        if existing_with_current_hardware != manifest:
-            raise ValueError(f'Existing run manifest does not match the requested run: {path}')
-        return existing
+        if existing_with_current_hardware == manifest:
+            return existing
+        if (
+            existing.configuration.run_name != manifest.configuration.run_name
+            or existing.configuration.output_path != manifest.configuration.output_path
+        ):
+            raise ValueError(f'Existing run manifest belongs to a different run: {path}')
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix('.json.tmp')
-    temporary_path.write_text(serialized + '\n', encoding='utf-8')
-    temporary_path.replace(path)
+        existing_serialized = existing.model_dump_json(indent=2)
+        manifest_fingerprint = hashlib.sha256(existing_serialized.encode('utf-8')).hexdigest()
+        history_path = path.parent / 'run_manifests' / f'run_manifest-{manifest_fingerprint}.json'
+        if history_path.exists():
+            archived = RunManifest.model_validate_json(history_path.read_text(encoding='utf-8'))
+            if archived != existing:
+                raise ValueError(f'Run manifest history collision: {history_path}')
+        else:
+            _write_text_atomically(history_path, existing_serialized + '\n')
+
+    _write_text_atomically(path, serialized + '\n')
     return manifest
+
+
+def _write_text_atomically(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(path.suffix + '.tmp')
+    temporary_path.write_text(content, encoding='utf-8')
+    temporary_path.replace(path)
 
 
 def prepare_training_run(
