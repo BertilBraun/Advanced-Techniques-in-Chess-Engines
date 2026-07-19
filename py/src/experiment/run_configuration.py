@@ -109,7 +109,7 @@ class TopologyConfiguration(BaseModel):
     self_play_processes_per_device_during_training: tuple[int, ...]
     dataloader_workers: int = Field(ge=0)
     reserved_logical_cpus: int = Field(ge=1)
-    maximum_cpu_oversubscription_ratio: float = Field(ge=1.0, le=4.0)
+    maximum_cpu_oversubscription_ratio: float = Field(ge=1.0, le=5.0)
     max_concurrent_evaluations: int = Field(ge=1)
     max_concurrent_evaluation_tasks: int = Field(ge=1)
 
