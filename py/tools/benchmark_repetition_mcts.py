@@ -52,6 +52,8 @@ class Arguments:
     maximum_batch_size: int
     inference_timeout_microseconds: int
     cache_capacity: int
+    ready_file: Path | None
+    start_barrier: Path | None
 
 
 def load_openings(path: Path, number_of_games: int) -> tuple[str, ...]:
@@ -100,6 +102,17 @@ def choose_root(result_root: MCTSNode, visits: list[tuple[int, int]]) -> MCTSNod
     return result_root.make_new_root(child_index)
 
 
+def wait_for_synchronized_start(args: Arguments) -> None:
+    if args.ready_file is None and args.start_barrier is None:
+        return
+    if args.ready_file is None or args.start_barrier is None:
+        raise ValueError('--ready-file and --start-barrier must be provided together.')
+
+    args.ready_file.touch()
+    while not args.start_barrier.exists():
+        time.sleep(0.05)
+
+
 def run_benchmark(args: Arguments) -> BenchmarkResult:
     if args.games < 1 or args.steps < 1 or args.searches < 1:
         raise ValueError('games, steps, and searches must be positive.')
@@ -125,6 +138,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.threads,
         ),
     )
+    wait_for_synchronized_start(args)
 
     gpu_samples: list[GpuSample] = []
     stop_event = threading.Event()
@@ -190,6 +204,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--cache-capacity', type=int, default=100_000)
+    parser.add_argument('--ready-file', type=Path)
+    parser.add_argument('--start-barrier', type=Path)
     namespace = parser.parse_args()
     return Arguments(
         model=namespace.model,
@@ -203,6 +219,8 @@ def parse_arguments() -> Arguments:
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         cache_capacity=namespace.cache_capacity,
+        ready_file=namespace.ready_file,
+        start_barrier=namespace.start_barrier,
     )
 
 
