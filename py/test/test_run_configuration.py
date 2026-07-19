@@ -298,8 +298,8 @@ def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> 
     assert arguments.self_play.inference_cache_capacity == 1_500_000
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
-    assert arguments.cluster.self_play_device_ids == (0,) * 8 + (1,) * 8 + (2,) * 8 + (3,) * 8
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (28, 29, 30, 31)
+    assert arguments.cluster.self_play_device_ids == (0,) * 7 + (1,) * 7 + (2,) * 7 + (3,) * 7
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 1
