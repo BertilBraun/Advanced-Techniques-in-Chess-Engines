@@ -103,8 +103,8 @@ private:
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
-    // Cache: board -> InferenceResult.
-    ShardedCache<CompressedEncodedBoard, CachedInferenceResult, 32, BoardHash> m_cache;
+    // Cache compact board fingerprints rather than full encoded tensors.
+    ShardedCache<BoardFingerprint, CachedInferenceResult, 32, BoardFingerprintHash> m_cache;
     std::atomic_size_t m_totalHits = 0;
     std::atomic_size_t m_totalEvals = 0;
     std::atomic_size_t m_totalModelInferenceCalls = 0;

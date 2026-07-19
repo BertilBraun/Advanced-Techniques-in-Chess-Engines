@@ -120,7 +120,7 @@ def objective(trial: optuna.Trial) -> float:
     log(trial.params, use_pprint=True)
 
     commander = CommanderProcess(trial.number, training_args, monotonic())
-    for iteration, (training_stats, validation_stats) in commander.run():
+    for iteration, training_stats in commander.run():
         trial.report(training_stats.total_loss, step=iteration)
 
         if trial.should_prune():

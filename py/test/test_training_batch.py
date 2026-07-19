@@ -81,7 +81,7 @@ def test_prebatched_dataset_dataloader_preserves_components() -> None:
     batch = next(iter(loader))
 
     assert batch[0].shape == (len(samples), C, H, W)
-    assert batch[1].shape == (len(samples), 1814)
+    assert batch[1].shape == (len(samples), 1880)
     assert batch[2].shape == (len(samples),)
 
 

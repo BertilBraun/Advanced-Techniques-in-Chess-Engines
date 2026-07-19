@@ -1,9 +1,9 @@
 {
-  "run_name": "chess-clean-4x4070s-vast-45170106-main",
-  "tensorboard_run_directory": "chess-clean-4x4070s-vast-45170106-main",
+  "run_name": "chess-rule-complete-10x96-vast-45170106-main",
+  "tensorboard_run_directory": "chess-rule-complete-10x96-vast-45170106-main",
   "stage": "clean_retrain",
   "requires_explicit_approval": true,
-  "output_path": "py/training_data/chess-clean-4x4070s-vast-45170106-main",
+  "output_path": "py/training_data/chess-rule-complete-10x96-vast-45170106-main",
   "resume": {
     "mode": "random_initialization",
     "optimizer": "adamw"
@@ -26,14 +26,14 @@
   "topology": {
     "trainer_device_id": 3,
     "evaluation_device_cycle": [0, 1, 2, 3],
-    "self_play_processes_per_device": [7, 7, 7, 7],
+    "self_play_processes_per_device": [4, 4, 4, 4],
     "self_play_tensorboard_processes": 1,
-    "mcts_threads_per_process": 3,
+    "mcts_threads_per_process": 4,
     "parallel_games_per_process": 96,
-    "inference_cache_capacity_per_process": 1500000,
+    "inference_cache_capacity_per_process": 3000000,
     "trainer_cpu_threads": 8,
     "trainer_interop_threads": 2,
-    "self_play_processes_per_device_during_training": [7, 7, 7, 4],
+    "self_play_processes_per_device_during_training": [4, 4, 4, 2],
     "dataloader_workers": 0,
     "reserved_logical_cpus": 4,
     "maximum_cpu_oversubscription_ratio": 1.75,
@@ -42,7 +42,7 @@
   },
   "workload": {
     "iterations": 500,
-    "games_per_iteration": 5000,
+    "games_per_iteration": 3500,
     "games_per_replay_file": 100,
     "learning_rate_schedule": [
       {
@@ -59,7 +59,7 @@
     "random_seed": 20260717,
     "evaluation_games": 100,
     "evaluation_searches_per_turn": 64,
-    "evaluation_every_iterations": 1
+    "evaluation_every_iterations": 2
   },
   "safety": {
     "maximum_open_file_count": 32768,

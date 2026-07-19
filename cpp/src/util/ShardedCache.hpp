@@ -26,7 +26,7 @@ public:
         for (std::size_t index = 0; index < NumBuckets; ++index) {
             Bucket &bucket = m_buckets[index];
             bucket.capacity = minimumBucketCapacity + (index < bucketsWithExtraEntry ? 1 : 0);
-            bucket.map.reserve(std::min<std::size_t>(bucket.capacity, 1024));
+            bucket.map.reserve(bucket.capacity);
         }
     }
 
@@ -106,7 +106,7 @@ public:
             std::lock_guard lock(bucket.mutex);
             bucket.recency.clear();
             Map emptyMap;
-            emptyMap.reserve(std::min<std::size_t>(bucket.capacity, 1024));
+            emptyMap.reserve(bucket.capacity);
             bucket.map.swap(emptyMap);
         }
     }

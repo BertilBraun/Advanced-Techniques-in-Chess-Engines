@@ -184,9 +184,6 @@ class TrainingParams:
         return lerp(min_lr, base_lr, batch_percentage)
     """
 
-    validation_percentage: float = 0.01
-    """This is the percentage of the training data to use for validation. This is used to validate the model during training to see how well it is doing. The higher the percentage the more data is used for validation but the less data is used for training. Typically 0.01-0.1 for training"""
-
     max_buffer_samples: int = 4_000_000
     """This is the maximum size of the training buffer to use for the training. This is used to limit the size of the training buffer to prevent memory issues. The higher the value the more stable the training but the slower the training. Typically 1_000_000-10_000_000 for training"""
 
@@ -194,7 +191,7 @@ class TrainingParams:
     """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
 
     value_loss_weight: float = 0.5
-    """This is the weight to use for the value loss in the training. The value loss is the mean squared error between the predicted value and the actual value. The higher the weight the more important the value loss is in the training. Typically 0.5-1.0 for training"""
+    """This is the weight applied to the WDL cross-entropy value loss."""
     policy_loss_weight: float = 1.0
     """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
 

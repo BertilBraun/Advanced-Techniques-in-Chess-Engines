@@ -37,7 +37,7 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=8, hidden_size=96, se_positions=(1, 3))
+network = NetworkParams(num_layers=10, hidden_size=96, se_positions=(1, 3))
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',

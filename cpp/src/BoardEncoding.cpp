@@ -9,13 +9,24 @@ constexpr uint64 splitmix64(uint64 x) noexcept {
     return x ^ (x >> 31);
 }
 
-std::size_t BoardHash::operator()(CompressedEncodedBoard const &b) const noexcept {
-    uint64 h = 0xcbf29ce484222325ull;
-    for (const uint64 v : b.bits)
-        h = splitmix64(h ^ splitmix64(v));
-    for (const int8 v : b.scal)
-        h = splitmix64(h ^ static_cast<uint64>(v));
-    return static_cast<size_t>(h);
+std::size_t BoardFingerprintHash::operator()(const BoardFingerprint &fingerprint) const noexcept {
+    return static_cast<std::size_t>(
+        fingerprint.first ^ std::rotl(fingerprint.second, 29));
+}
+
+BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed) {
+    uint64 first = 0x243F6A8885A308D3ULL;
+    uint64 second = 0x13198A2E03707344ULL;
+    for (const uint64 value : compressed.bits) {
+        first = splitmix64(first ^ value);
+        second = splitmix64(second ^ std::rotl(value, 31));
+    }
+    for (const int8 value : compressed.scal) {
+        const uint64 unsignedValue = static_cast<uint8>(value);
+        first = splitmix64(first ^ unsignedValue);
+        second = splitmix64(second ^ (unsignedValue + 0x9E3779B97F4A7C15ULL));
+    }
+    return {first, second};
 }
 
 CompressedEncodedBoard encodeBoard(const Board *board) {
@@ -48,7 +59,12 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     // ---- 5) “checkers” mask (attackers of side-to-move’s king) ------------
     out.bits[ch++] = tmp.checkers();
 
-    static_assert(BINARY_C == 19);
+    const Square epSquare = tmp.ep_square();
+    out.bits[ch++] = epSquare == SQ_NONE ? 0ULL : square_bb(epSquare);
+    out.bits[ch++] = ALL_SET * (board->repetitionCount() >= 1);
+    out.bits[ch++] = ALL_SET * (board->repetitionCount() >= 2);
+
+    assert(ch == BINARY_C);
 
     // ---- 6) material-difference scalars -----------------------------------
     for (int i = 0; i < 6; ++i) {
@@ -56,6 +72,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
         const Bitboard black = tmp.pieces(BLACK, PIECE_TYPES[i]);
         out.scal[i] = static_cast<int8>(pieceCount(white) - pieceCount(black));
     }
+    out.scal[6] = static_cast<int8>(std::min(tmp.rule50_count(), 100));
 
     return out;
 }
@@ -100,8 +117,7 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
 float getBoardResultScore(const Board &board) {
     // Returns the result score for the given board.
     //
-    // The result score is -1.0 if the current player has lost, otherwise it must have been a
-    // draw, in which case the score is based on the remaining material.
+    // The result score is -1.0 if the current player has lost and 0.0 for a draw.
     //
     // param board: The board to get the result score for.
     // :return: The result score for the given board.
@@ -113,9 +129,5 @@ float getBoardResultScore(const Board &board) {
         return -1.0f; // Our last move put us in checkmate
     }
 
-    // Draw -> Return a score between based on the remaining material
-    // The materialScore is positive if the white player has the advantage, and negative if the
-    // black player has the advantage. Therefore, we need to negate the material score if the
-    // black player is the current player.
-    return 0.5 * board.currentPlayer() * board.approximateResultScore();
+    return 0.0f;
 }

@@ -5,9 +5,12 @@ const std::vector<std::pair<int, int>> DIRECTIONS = {{1, 0},  {1, 1},   {0, 1}, 
                                                      {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
 const std::vector<std::pair<int, int>> KNIGHT_MOVES = {{2, 1},   {1, 2},   {-1, 2}, {-2, 1},
                                                        {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
-constexpr std::array PROMOTION_PIECES = {PieceType::QUEEN};
-// Note: not relevant for strong amateur play: PieceType::ROOK, PieceType::BISHOP,
-// PieceType::KNIGHT};
+constexpr std::array PROMOTION_PIECES = {
+    PieceType::QUEEN,
+    PieceType::ROOK,
+    PieceType::BISHOP,
+    PieceType::KNIGHT,
+};
 
 constexpr int NUM_PROMOTION_PIECES = (int) PieceType::PIECE_TYPE_NB;
 } // namespace defines

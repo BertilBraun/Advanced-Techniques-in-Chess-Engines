@@ -39,7 +39,7 @@ def test_bounded_repetition_history_reconstructs_current_position() -> None:
     reconstructed = chess.Board(history.starting_fen)
     play_moves(reconstructed, history.moves_uci)
 
-    assert len(history.moves_uci) == 8
+    assert len(history.moves_uci) == len(moves)
     assert reconstructed.fen() == board.fen()
     assert reconstructed.is_repetition(3)
 
@@ -60,9 +60,9 @@ def test_threefold_ends_after_third_occurrence_not_before_claimable_move() -> No
     assert board.check_winner() is None
 
 
-def test_chess_board_copy_preserves_only_bounded_history() -> None:
+def test_chess_board_copy_preserves_bounded_history() -> None:
     board = ChessBoard()
-    play_moves(board.board, KNIGHT_CYCLE * 3)
+    play_moves(board.board, KNIGHT_CYCLE * 30)
 
     copied = board.copy()
 
@@ -80,7 +80,7 @@ def test_current_fifty_move_position_is_a_draw_without_prospective_claims() -> N
     assert board.check_winner() is None
 
 
-def test_bounded_history_declares_longer_cycle_limitation() -> None:
+def test_bounded_history_preserves_longer_repetition_cycle() -> None:
     board = chess.Board()
     play_moves(board, EIGHT_PLY_CYCLE * 2)
     assert board.is_repetition(3)
@@ -90,4 +90,4 @@ def test_bounded_history_declares_longer_cycle_limitation() -> None:
     play_moves(reconstructed, history.moves_uci)
 
     assert reconstructed.fen() == board.fen()
-    assert not reconstructed.is_repetition(3)
+    assert reconstructed.is_repetition(3)

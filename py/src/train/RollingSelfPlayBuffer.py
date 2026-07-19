@@ -45,7 +45,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         self._add_iteration(iteration, files)
 
         # 1) enforce iteration-based window
-        while self._buf and self._buf[0][0] < iteration - window_iter:
+        while self._buf and self._buf[0][0] < iteration - window_iter + 1:
             self._drop_left()
 
         # 2) enforce sample-count ceiling

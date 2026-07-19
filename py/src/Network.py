@@ -53,7 +53,7 @@ class Network(nn.Module):
             nn.Flatten(),
             nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
             nn.ReLU(inplace=True),
-            nn.Linear(args.value_fc_size, 1),
+            nn.Linear(args.value_fc_size, 3),
         )
 
         # init weights
@@ -74,7 +74,7 @@ class Network(nn.Module):
         value_logits = self.valueHead(x)
 
         policy = torch.softmax(policy_logits, dim=1)
-        value = torch.tanh(value_logits)
+        value = torch.softmax(value_logits, dim=1)
         return policy, value
 
     def logit_forward(self, x: Tensor) -> tuple[Tensor, Tensor]:

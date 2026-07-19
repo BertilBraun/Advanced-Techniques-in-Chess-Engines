@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 import numpy as np
 
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.Network import Network
@@ -38,6 +37,7 @@ from src.experiment.evaluation_protocol import (
     build_paired_schedule,
     load_opening_suite,
 )
+from src.value import scalar_to_wdl, wdl_cross_entropy
 
 
 def history_aware_root(board: CurrentBoard) -> MCTSNode:
@@ -110,7 +110,7 @@ class ModelEvaluation:
                 board, moves, outcome = batch
                 board = board.to(model.device)
                 moves = moves.to(model.device)
-                outcome = outcome.to(model.device).unsqueeze(1)
+                outcome = outcome.to(model.device)
 
                 policy_pred, value_output = model(board)
 
@@ -129,7 +129,7 @@ class ModelEvaluation:
 
                     total_policy_total += 1
 
-                total_value_loss += F.mse_loss(value_output, outcome).item()
+                total_value_loss += wdl_cross_entropy(value_output, scalar_to_wdl(outcome)).item()
 
         top1_accuracy = total_top1_correct / total_policy_total
         top5_accuracy = total_top5_correct / total_policy_total

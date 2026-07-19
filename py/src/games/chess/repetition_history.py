@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import chess
 
-REPETITION_HISTORY_PLIES = 8
+REPETITION_HISTORY_PLIES = 100
 
 
 @dataclass(frozen=True)

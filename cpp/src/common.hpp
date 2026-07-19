@@ -84,7 +84,7 @@ template <typename T> inline void shuffle(std::vector<T> &vec) {
 
 // Calculated as output of __precalculateMoveMappings() but defined here to be able to use it as a
 // constexpr variable
-static inline constexpr int ACTION_SIZE = 1814;
+static inline constexpr int ACTION_SIZE = 1880;
 
 static inline constexpr int BOARD_LENGTH = 8;
 static inline constexpr int BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH;

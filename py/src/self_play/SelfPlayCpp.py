@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from AlphaZeroCpp import MCTSNode, MCTSResults, MCTS
 
 
-import chess
 import numpy as np
 from dataclasses import dataclass
 
@@ -19,7 +18,7 @@ from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.curriculum import curriculum_progress
-from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
@@ -70,11 +69,6 @@ class SelfPlayGame:
 
     def __hash__(self) -> int:
         return self.board.quick_hash()
-
-    def approximate_result_score(self) -> float:
-        """Get an approximate result score for the game from the perspective of the current player."""
-        # discount the score to account for uncertainty in the result
-        return self.board.get_approximate_result_score() * self.board.current_player
 
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
@@ -201,16 +195,7 @@ class SelfPlayCpp:
         boards: list[tuple[MCTSNode, bool]] = []
         for spg in self.self_play_games:
             should_run_full_search = (
-                (
-                    not self.args.only_store_sampled_moves  # If all moves are stored, run full search
-                    # or if the game is still in the early phase
-                    or len(spg.played_moves) < self.args.num_moves_after_which_to_play_greedy
-                    or len(spg.board.board.piece_map()) > 8  # or if there are many pieces on the board
-                )
-                # and the game has not been resigned
-                and spg.resigned_at_move is None
-                # Playout-Cap Randomization (KataGo "RPC")
-                and random.random() < self.args.mcts.playout_cap_randomization
+                spg.resigned_at_move is None and random.random() < self.args.mcts.playout_cap_randomization
             )
 
             if spg.already_expanded_node is None:
@@ -248,26 +233,6 @@ class SelfPlayCpp:
                     spg.resignee = spg.board.current_player
                 else:
                     self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result)
-                    continue
-
-            if CURRENT_GAME == 'chess':
-                if len(spg.played_moves) >= 200:
-                    # If the game is too long, end it and add it to the dataset
-                    self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                    game_result = spg.approximate_result_score() * 0.5  # Handle as approximately a draw
-                    self.self_play_games[i] = self._handle_end_of_game(spg, game_result)
-                    continue
-
-                pieces = list(spg.board.board.piece_map().values())
-                white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
-                black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if (
-                    (white_pieces < 4 or black_pieces < 4)
-                    and len(spg.played_moves) >= self.args.num_moves_after_which_to_play_greedy
-                    and random.random() < 0.2
-                ):
-                    # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
-                    self.self_play_games[i] = self._handle_end_of_game(spg, spg.approximate_result_score())
                     continue
 
             self.self_play_games[i] = self._sample_self_play_game(

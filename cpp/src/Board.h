@@ -2,6 +2,7 @@
 
 #include "position.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -33,10 +34,7 @@ public:
      */
     [[nodiscard]] std::optional<int> checkWinner() const;
 
-    /**
-     * Generates all legal moves, but filters out underpromotions (i.e., only allows
-     * promotions to Queen, or non‐promotion moves).
-     */
+    /// Generates every legal move, including all promotion choices.
     [[nodiscard]] std::vector<Move> validMoves() const;
 
     /// Returns a 64‐bit Zobrist hash of the current position.
@@ -54,10 +52,13 @@ public:
     [[nodiscard]] std::string fen() const { return m_pos.fen(); }
 
     /// Sets the internal Position from a FEN string.
-    void setFen(const std::string &fen) { m_pos.set(fen, false); }
+    void setFen(const std::string &fen);
 
     /// Returns a reference to the internal Position object.
     [[nodiscard]] const Position &position() const { return m_pos; }
+
+    /// Returns the number of earlier occurrences of the current position.
+    [[nodiscard]] int repetitionCount() const;
 
     /**
      * Produces an ASCII representation of the board similar to the Python version:
@@ -75,7 +76,13 @@ public:
     [[nodiscard]] std::string repr() const;
 
 private:
+    struct PositionHistory {
+        std::uint64_t key;
+        std::shared_ptr<const PositionHistory> previous;
+    };
+
     Position m_pos;
+    std::shared_ptr<const PositionHistory> m_history;
 
     [[nodiscard]] static constexpr const char *pieceSymbol(PieceType pt, Color c);
 

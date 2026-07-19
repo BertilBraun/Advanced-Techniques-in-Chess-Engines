@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import chess
-from typing import List, Optional
-
 from src.games.Board import Board, Player
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES
 
@@ -40,49 +38,19 @@ class ChessBoard(Board[ChessMove]):
         self.board.push(move)
 
     def is_game_over(self) -> bool:
-        return (
-            self.board.is_game_over(claim_draw=False)
-            or self.board.is_repetition(3)
-            or self.board.is_fifty_moves()
-            or self._is_draw_by_insufficient_material()
-        )
+        if self.board.is_game_over(claim_draw=False):
+            return True
+        return self.board.halfmove_clock >= 100 or self.board.is_repetition(3)
 
-    def _is_draw_by_insufficient_material(self) -> bool:
-        """Check if the game is a draw by insufficient material. Copy to the one in Board.cpp"""
-        if len(self.board.piece_map()) > 4:
-            return False
-
-        # Check for the following cases:
-        # 1) King vs King
-        if len(self.board.piece_map()) == 2:
-            return True
-        # 2) King and Bishop vs King
-        if len(self.board.piece_map()) == 3 and len(self.board.piece_map(mask=self.board.bishops)) == 1:
-            return True
-        # 3) King and Knight vs King
-        if len(self.board.piece_map()) == 3 and len(self.board.piece_map(mask=self.board.knights)) == 1:
-            return True
-        # 4) King and two Knights vs King
-        if len(self.board.piece_map()) == 4 and len(self.board.piece_map(mask=self.board.knights)) == 2:
-            return True
-        return False
-
-    def check_winner(self) -> Optional[Player]:
+    def check_winner(self) -> Player | None:
         """Check if the game is over and return the winner."""
-        if self.board.is_repetition(3):
+        outcome = self.board.outcome()
+        if outcome is None or outcome.winner is None:
             return None
-        result = self.board.result(claim_draw=False)
-        if result == '1-0':
-            return 1
-        elif result == '0-1':
-            return -1
-        else:
-            return None
+        return 1 if outcome.winner == chess.WHITE else -1
 
-    def get_valid_moves(self) -> List[ChessMove]:
-        legal_moves = list(self.board.legal_moves)
-        # Filter out non-queen promotions
-        return [move for move in legal_moves if not move.promotion or move.promotion == chess.QUEEN]
+    def get_valid_moves(self) -> list[ChessMove]:
+        return list(self.board.legal_moves)
 
     def copy(self) -> ChessBoard:
         game = ChessBoard()

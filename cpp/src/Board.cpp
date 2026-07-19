@@ -20,6 +20,7 @@ static constexpr int PIECE_VALUE[PIECE_TYPE_NB] = {
 static constexpr int MAX_MATERIAL_VALUE = PIECE_VALUE[PAWN] * 8 + PIECE_VALUE[KNIGHT] * 2 +
                                           PIECE_VALUE[BISHOP] * 2 + PIECE_VALUE[ROOK] * 2 +
                                           PIECE_VALUE[QUEEN] * 1;
+static constexpr Bitboard DARK_SQUARES = 0xAA55AA55AA55AA55ULL;
 
 Board::Board(const std::string &fen) {
     // Initialize Position and StateInfo with the standard start position.
@@ -29,21 +30,42 @@ Board::Board(const std::string &fen) {
 void Board::makeMove(Move m) {
     TIMEIT("Board::makeMove");
 
-    // Optionally, one could assert that 'm' is legal:
     assert(contains(validMoves(), m) && "Attempting to push an illegal move");
+    const bool resetsRepetitionHistory =
+        type_of(m_pos.moved_piece(m)) == PAWN || m_pos.capture(m);
     m_pos.do_move(m);
+    m_history = std::make_shared<PositionHistory>(
+        PositionHistory{m_pos.repetition_key(), resetsRepetitionHistory ? nullptr : m_history});
+}
+
+void Board::setFen(const std::string &fen) {
+    m_pos.set(fen, false);
+    m_history =
+        std::make_shared<PositionHistory>(PositionHistory{m_pos.repetition_key(), nullptr});
+}
+
+int Board::repetitionCount() const {
+    assert(m_history && "Board history must be initialized");
+    int occurrences = 0;
+    for (auto entry = m_history->previous; entry; entry = entry->previous) {
+        if (entry->key == m_history->key) {
+            ++occurrences;
+        }
+    }
+    return occurrences;
 }
 
 bool Board::isGameOver() const {
     TIMEIT("Board::isGameOver");
 
-    // 3-fold-repetition and 50 move rul draw is handled outside move generation
-    if (m_pos.is_draw() || drawByInsufficientMaterial()) {
+    const MoveList<LEGAL> legalMoves(m_pos);
+    const bool fiftyMoveDraw =
+        m_pos.rule50_count() >= 100 && (m_pos.checkers() == 0ULL || legalMoves.size() > 0);
+    if (fiftyMoveDraw || repetitionCount() >= 2 || drawByInsufficientMaterial()) {
         return true;
     }
 
-    // Generate all legal moves from the current position.
-    return MoveList<LEGAL>(m_pos).size() == 0;
+    return legalMoves.size() == 0;
 }
 
 std::optional<int> Board::checkWinner() const {
@@ -70,16 +92,12 @@ std::vector<Move> Board::validMoves() const {
     TIMEIT("Board::validMoves");
 
     const MoveList<LEGAL> ml(m_pos);
-    std::vector<Move> filtered;
-    filtered.reserve(ml.size());
+    std::vector<Move> legalMoves;
+    legalMoves.reserve(ml.size());
     for (auto m : ml) {
-        const Move move(m.raw()); // Create a Move out of the ExtMove object just to be safe.
-        if (move.type_of() != PROMOTION || move.promotion_type() == QUEEN) {
-            // If it's a promotion, only keep Queen promotions.
-            filtered.push_back(move);
-        }
+        legalMoves.emplace_back(m.raw());
     }
-    return filtered;
+    return legalMoves;
 }
 
 double Board::approximateResultScore() const {
@@ -122,17 +140,23 @@ std::string Board::repr() const {
     return oss.str();
 }
 bool Board::drawByInsufficientMaterial() const {
-    // default early stopping
-    if (m_pos.count<ALL_PIECES>() > 4) {
+    if (m_pos.count<PAWN>() > 0 || m_pos.count<ROOK>() > 0 || m_pos.count<QUEEN>() > 0) {
         return false;
     }
 
-    // check for chess and atomic
-    return (m_pos.count<ALL_PIECES>() == 2) ||                               // 1) KK
-           (m_pos.count<ALL_PIECES>() == 3 && m_pos.count<BISHOP>() == 1) || // 2) KB vs K
-           (m_pos.count<ALL_PIECES>() == 3 && m_pos.count<KNIGHT>() == 1) || // 3) KN vs K
-           (m_pos.count<ALL_PIECES>() == 4 &&
-            (m_pos.count<KNIGHT>(WHITE) == 2 || m_pos.count<KNIGHT>(BLACK) == 2)); // 4) KNN vs K
+    const int knightCount = m_pos.count<KNIGHT>();
+    const int bishopCount = m_pos.count<BISHOP>();
+    if (bishopCount == 0) {
+        return knightCount == 0 ||
+               (knightCount <= 2 &&
+                (m_pos.count<KNIGHT>(WHITE) == 0 || m_pos.count<KNIGHT>(BLACK) == 0));
+    }
+    if (knightCount > 0) {
+        return false;
+    }
+
+    const Bitboard bishops = m_pos.pieces(BISHOP);
+    return (bishops & DARK_SQUARES) == 0 || (bishops & ~DARK_SQUARES) == 0;
 }
 
 constexpr const char *Board::pieceSymbol(const PieceType pt, const Color c) {

@@ -10,10 +10,11 @@ from src.games.chess.ChessBoard import ChessBoard, ChessMove
 
 BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
-# 12 piece types, 4 castling rights, 2 player pieces, 1 checkers, 6 material difference channels
-ENCODING_CHANNELS = 12 + 4 + 2 + 1 + 6
-BINARY_CHANNELS = tuple(range(12 + 4 + 2 + 1))  # All channels are binary except the material difference channels
-SCALAR_CHANNELS = tuple(range(max(BINARY_CHANNELS) + 1, ENCODING_CHANNELS))  # Material difference channels
+# 12 pieces, 4 castling rights, 2 occupancies, checkers, en passant, 2 repetitions,
+# 6 material differences, and the halfmove clock.
+BINARY_CHANNELS = tuple(range(12 + 4 + 2 + 1 + 1 + 2))
+SCALAR_CHANNELS = tuple(range(len(BINARY_CHANNELS), len(BINARY_CHANNELS) + 6 + 1))
+ENCODING_CHANNELS = len(BINARY_CHANNELS) + len(SCALAR_CHANNELS)
 
 
 def square_to_index(square: int) -> tuple[int, int]:
@@ -32,16 +33,9 @@ class DictMove(NamedTuple):
 
 
 def normalize_move_for_action_space(move: ChessMove, board: ChessBoard) -> ChessMove:
-    if move.promotion in (None, chess.QUEEN):
-        return move
-    queen_promotion = chess.Move(
-        move.from_square,
-        move.to_square,
-        promotion=chess.QUEEN,
-    )
-    if queen_promotion not in board.get_valid_moves():
-        raise ValueError(f'Cannot normalize illegal promotion move {move.uci()} on {board.board.fen()}.')
-    return queen_promotion
+    if move not in board.get_valid_moves():
+        raise ValueError(f'Cannot normalize illegal move {move.uci()} on {board.board.fen()}.')
+    return move
 
 
 def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
@@ -53,15 +47,11 @@ def _build_action_dicts() -> tuple[dict[DictMove, int], dict[int, DictMove]]:
 
     For the second and second last row, we also have (8x3-2)*4 many promotion moves. Pawns can move forward or capture to the right/left but not at the boarders (8x3-2) and we have four different promotion pieces.
     Note: given the current board encoding, we always present the current player's perspective as white, so we only need to encode the white promotion moves. The black moves are always mirrored to the equivalent white moves before.
-    Note: given the goal of this project to achieve a high amateur level of play, we can ignore the possibility of promoting to a knight, rook or bishop, as these moves are extremely rare in practice. We can just promote to a queen.
-    Note: these reduce the number of moves to encode by 154 moves in total, which is a significant reduction.
-
     I want to precalculate a dict mapping which I can utilize to encode all moves into a dense representation, i.e. each value from 0..ACTION_SIZE represents one of these moves, and we need to be able to decode them again."""
 
     DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
     KNIGHT_MOVES = [(2, 1), (1, 2), (-1, 2), (-2, 1), (-2, -1), (-1, -2), (1, -2), (2, -1)]
-    PROMOTION_PIECES = [chess.QUEEN]
-    # Unless for really professional play, these promotion pieces never come to play: [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
+    PROMOTION_PIECES = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]
 
     moves: list[DictMove] = []
     for from_square in range(BOARD_SIZE):
@@ -160,8 +150,9 @@ class ChessGame(Game[ChessMove]):
             for right in (tmp.has_kingside_castling_rights(co), tmp.has_queenside_castling_rights(co))
         ]
 
-        # ep_bit = (1 << tmp.ep_square) if tmp.ep_square else 0 # EP bit is so rarely used that we can just ignore it for now
-        # based on: https://arxiv.org/html/2304.14918v2
+        en_passant = (1 << tmp.ep_square) if tmp.ep_square is not None else 0
+        repeated_once = int(board.board.is_repetition(2)) * 0xFFFF_FFFF_FFFF_FFFF
+        repeated_twice = int(board.board.is_repetition(3)) * 0xFFFF_FFFF_FFFF_FFFF
         p1_pieces = tmp.occupied_co[chess.WHITE]
         p2_pieces = tmp.occupied_co[chess.BLACK]
         material_difference = [
@@ -170,12 +161,17 @@ class ChessGame(Game[ChessMove]):
         ]
         checkers = tmp.checkers().mask
 
-        state = np.array(encoded_pieces + castling_bits + [p1_pieces, p2_pieces, checkers], dtype=np.uint64)
+        state = np.array(
+            encoded_pieces
+            + castling_bits
+            + [p1_pieces, p2_pieces, checkers, en_passant, repeated_once, repeated_twice],
+            dtype=np.uint64,
+        )
         binary_state = _bitfield_to_board_state(state)
-        # scalar state should be a array of BOARD_LENGTH x BOARD_LENGTH with the material difference for each square
         scalar_state = np.zeros((len(SCALAR_CHANNELS), BOARD_LENGTH, BOARD_LENGTH), dtype=np.int8)
         for i, diff in enumerate(material_difference):
             scalar_state[i, :, :] = diff
+        scalar_state[-1, :, :] = min(tmp.halfmove_clock, 100)
         state = np.concatenate((binary_state, scalar_state), axis=0)
         return state  # shape: (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
@@ -184,9 +180,8 @@ class ChessGame(Game[ChessMove]):
         Notably:
         - Black moves are mirrored to the equivalent white moves before encoding. This is because we always represent the current player's perspective as white.
         - Castling moves are handled separately, because the Cpp-Stockfish engine encodes castling moves differently than python-chess does. This function converts the castling move to the format used by stockfish before encoding.
-        - Only queen promotions are supported in this encoding, as the level of play we are targeting does not require knight, rook, or bishop promotions.
         """
-        assert move.promotion in (None, chess.QUEEN), 'Only queen promotions are supported in this encoding.'
+        assert move.promotion in (None, chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT)
 
         if board.board.turn == chess.BLACK:
             move = mirror_move_for_black(move)

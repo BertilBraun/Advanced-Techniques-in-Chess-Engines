@@ -7,11 +7,14 @@
 // 4  castling-rights planes
 // 2  occupancy planes       (all white pieces, all black pieces)
 // 1  "checkers" plane
+// 1  en-passant target plane
+// 2  repetition planes      (second and third occurrence)
 // 6  material-difference scalar planes
+// 1  halfmove-clock scalar plane
 static constexpr int BOARD_LEN = 8;
-static constexpr int BOARD_C = 25;  // total channels
-static constexpr int BINARY_C = 19; // stored as one u64 each
-static constexpr int SCALAR_C = 6;  // stored as one  int8 each
+static constexpr int BOARD_C = 29;
+static constexpr int BINARY_C = 22;
+static constexpr int SCALAR_C = 7;
 static_assert(BOARD_C == BINARY_C + SCALAR_C);
 
 // ---------------------------------------------------------------------------
@@ -26,11 +29,22 @@ struct CompressedEncodedBoard {
     }
 };
 
-struct BoardHash {
-    [[nodiscard]] std::size_t operator()(CompressedEncodedBoard const &b) const noexcept;
+struct BoardFingerprint {
+    uint64 first;
+    uint64 second;
+
+    [[nodiscard]] bool operator==(const BoardFingerprint &other) const noexcept {
+        return first == other.first && second == other.second;
+    }
+};
+
+struct BoardFingerprintHash {
+    [[nodiscard]] std::size_t operator()(const BoardFingerprint &fingerprint) const noexcept;
 };
 
 [[nodiscard]] CompressedEncodedBoard encodeBoard(const Board *board);
+
+[[nodiscard]] BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed);
 
 [[nodiscard]] torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
 

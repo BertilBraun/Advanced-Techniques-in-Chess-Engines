@@ -54,7 +54,7 @@ class CommanderProcess:
         self.final_stop_reason: str | None = None
         self.latest_completed_iteration = 0
 
-    def run(self) -> Generator[tuple[int, tuple[TrainingStats, TrainingStats]], None, None]:
+    def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
         """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
 
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
@@ -117,7 +117,7 @@ class CommanderProcess:
         gating: GatingProcess,
         starting_iteration: int,
         current_best_iteration: int,
-    ) -> Generator[tuple[int, tuple[TrainingStats, TrainingStats]], None, None]:
+    ) -> Generator[tuple[int, TrainingStats], None, None]:
         for iteration in range(starting_iteration, self.args.num_iterations):
             stop_reason = self._stop_reason()
             if stop_reason is not None:

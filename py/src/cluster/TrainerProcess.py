@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.experiment.artifact_retention import apply_artifact_retention
-from src.experiment.training_data_schedule import select_validation_iteration
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
 from src.train.TrainingArgs import TrainingArgs
 from src.settings import USE_GPU
@@ -50,14 +49,13 @@ class TrainerProcess:
         self.usage_logger = start_cpu_usage_logger(self.run_id, 'trainer')
 
         self.rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=args.training.max_buffer_samples)
-        self.validation_dataset = SelfPlayDataset()
 
     def close(self) -> None:
         self.rolling_buffer.close()
         self.usage_logger.stop()
 
     @timeit
-    def train(self, iteration: int) -> tuple[TrainingStats, TrainingStats]:
+    def train(self, iteration: int) -> TrainingStats:
         model, optimizer = load_model_and_optimizer(
             iteration,
             self.args.network,
@@ -73,19 +71,12 @@ class TrainerProcess:
             self.args.training.batch_size,
             self.args.training.num_workers,
         )
-        validation_dataloader = as_dataloader(
-            self.validation_dataset,
-            self.args.training.batch_size,
-            self.args.training.num_workers,
-            drop_last=True,
-        )
         train_stats: list[TrainingStats] = []
-        valid_stats: list[TrainingStats] = []
 
         for epoch in range(self.args.training.num_epochs):
             # print num threads and interop threads
             try:
-                epoch_train_stats, epoch_valid_stats = trainer.train(dataloader, validation_dataloader, iteration)
+                epoch_train_stats = trainer.train(dataloader, iteration)
             except RuntimeError as e:
                 if 'returned nan values' in str(e):
                     error('Training failed due to NaN values in the model output. Retrying with a fresh optimizer.')
@@ -96,10 +87,7 @@ class TrainerProcess:
                     raise e
 
             train_stats.append(epoch_train_stats)
-            valid_stats.append(epoch_valid_stats)
-
             log('Train stats: ', epoch_train_stats)
-            log('Valid stats: ', epoch_valid_stats)
 
             if epoch_train_stats.value_std < 0.01:
                 log('Training stopped early due to low value std deviation.')
@@ -117,11 +105,8 @@ class TrainerProcess:
                 break
 
         training_stats = TrainingStats.combine(train_stats)
-        validation_stats = TrainingStats.combine(valid_stats)
         training_stats.log_to_tensorboard(iteration, 'train')
-        validation_stats.log_to_tensorboard(iteration, 'validation')
-
-        return training_stats, validation_stats
+        return training_stats
 
     @timeit
     def wait_for_enough_training_samples(
@@ -157,33 +142,9 @@ class TrainerProcess:
 
         dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, iteration)
 
-        self.validation_dataset = SelfPlayDataset()
-        validation_iteration = select_validation_iteration(iteration, bool(dataset_files))
-        if validation_iteration == iteration:
-            validation_dataset_files = dataset_files
-        else:
-            validation_dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(
-                self.args.save_path, validation_iteration
-            )
-            assert validation_dataset_files, (
-                f'No dataset files found at all for iteration {iteration} or {validation_iteration}'
-            )
-        validation_dataset_stats = SelfPlayDataset.load_iteration_stats(
-            self.args.save_path,
-            validation_iteration,
-        )
-
-        required_validation_samples = max(
-            validation_dataset_stats.num_samples * self.args.training.validation_percentage,
-            1,
-        )
-        while len(self.validation_dataset) < required_validation_samples and validation_dataset_files:
-            validation_dataset_file = validation_dataset_files.pop()
-            self.validation_dataset += SelfPlayDataset.load(validation_dataset_file)
-
         if len(self.rolling_buffer) == 0:
             # Load all the iterations in the window into the rolling buffer
-            for i in range(max(iteration - window_size, 0), iteration):
+            for i in range(max(iteration - window_size + 1, 0), iteration):
                 iter_dataset_files = SelfPlayDataset.get_files_to_load_for_iteration(self.args.save_path, i)
                 if not iter_dataset_files:
                     log(f'No dataset files found for iteration {i}, skipping')

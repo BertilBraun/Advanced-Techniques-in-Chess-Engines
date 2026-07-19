@@ -47,9 +47,16 @@ index b8913172..11bbff0b 100644
  
  // Flips position with the white and black sides reversed. This
 diff --git a/src/position.h b/src/position.h
-index ff671931..31c19f41 100644
+index ff671931..e0fb1671 100644
 --- a/src/position.h
 +++ b/src/position.h
+@@ -100,5 +100,6 @@ class Position {
+     // Accessing hash keys
+     Key key() const;
++    Key repetition_key() const;
+     Key material_key() const;
+     Key pawn_key() const;
+     Key minor_piece_key() const;
 @@ -120,6 +120,8 @@ class Position {
      void remove_piece(Square s);
  
@@ -68,3 +75,11 @@ index ff671931..31c19f41 100644
      int      recentCount = 0;
  };
  
+@@ -262,5 +264,6 @@ inline Bitboard Position::check_squares(PieceType pt) const { return checkSquares
+ inline Key Position::key() const { return adjust_key50<false>(_key); }
+-
++inline Key Position::repetition_key() const { return _key; }
++
+ template<bool AfterMove>
+ inline Key Position::adjust_key50(Key k) const {
+     return rule50 < 14 - AfterMove ? k : k ^ make_key((rule50 - (14 - AfterMove)) / 8);

@@ -42,6 +42,11 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     for (const Board *board : boards) {
         encodedBoards.push_back(encodeBoard(board));
     }
+    std::vector<BoardFingerprint> fingerprints;
+    fingerprints.reserve(encodedBoards.size());
+    for (const CompressedEncodedBoard &encodedBoard : encodedBoards) {
+        fingerprints.push_back(fingerprintBoard(encodedBoard));
+    }
 
     m_totalEvals.fetch_add(boards.size(), std::memory_order_relaxed);
 
@@ -51,7 +56,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     futures.reserve(boards.size());
 
     for (size_t i : range(boards.size())) {
-        const bool mustEvaluate = m_cache.acquireOrInsert(encodedBoards[i], kSentinelResult);
+        const bool mustEvaluate = m_cache.acquireOrInsert(fingerprints[i], kSentinelResult);
         if (!mustEvaluate) {
             m_totalHits.fetch_add(1, std::memory_order_relaxed);
             continue;
@@ -81,7 +86,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
                "InferenceClient::inference_batch: policy does not sum to 1.0");
 
-        m_cache.update(encodedBoards[i],
+        m_cache.update(fingerprints[i],
                        {filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value});
     }
 
@@ -89,10 +94,10 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
 
-    for (const auto &&[encodedBoard, board] : zip(encodedBoards, boards)) {
+    for (const auto &&[fingerprint, board] : zip(fingerprints, boards)) {
         CachedInferenceResult result;
         while (true) {
-            if (!m_cache.lookup(encodedBoard, result))
+            if (!m_cache.lookup(fingerprint, result))
                 throw std::runtime_error("InferenceClient::inference_batch: cache lookup failed");
             // Wait until the real result is available.
             if (result != kSentinelResult) {
@@ -101,7 +106,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             // Sleep to avoid busy-waiting.
             std::this_thread::sleep_for(std::chrono::microseconds(10));
         }
-        m_cache.release(encodedBoard);
+        m_cache.release(fingerprint);
 
         const auto &[moves, value] = result;
 
@@ -238,7 +243,7 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     // Run the model and get the output.
     // The output is a tuple of (policies, values).
     // policies: (batch_size, ACTION_SIZE)
-    // values: (batch_size, 1)
+    // values: (batch_size, 3), ordered win/draw/loss
     const torch::jit::IValue output = m_model.forward(inputs);
     const auto outputTuple = output.toTuple();
 
@@ -252,7 +257,7 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     results.reserve(boards.size());
     for (int i = 0; i < policies.size(0); ++i) {
         const torch::Tensor policy = policies[i];
-        const float value = values[i].item<float>();
+        const float value = values[i][0].item<float>() - values[i][2].item<float>();
         results.emplace_back(policy, value);
     }
     return results;

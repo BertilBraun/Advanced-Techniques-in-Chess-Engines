@@ -15,9 +15,9 @@ NUM_BITS = C * H * W
 BINARY_CHANNELS = CurrentGame.binary_channels
 SCALAR_CHANNELS = CurrentGame.scalar_channels
 
-N_BB = len(BINARY_CHANNELS)  # 19
-N_SCALAR = len(SCALAR_CHANNELS)  # 6
-ENCODED_BYTES = N_BB * 8 + N_SCALAR  # 158
+N_BB = len(BINARY_CHANNELS)
+N_SCALAR = len(SCALAR_CHANNELS)
+ENCODED_BYTES = N_BB * 8 + N_SCALAR
 
 assert set(BINARY_CHANNELS).isdisjoint(SCALAR_CHANNELS)
 assert N_BB * 8 + N_SCALAR == ENCODED_BYTES, 'Encoded bytes must match the sum of bit-board and scalar channels'
@@ -112,7 +112,8 @@ def get_board_result_score(board: Board) -> float | None:
     Returns the result score for the given board.
 
     :param board: The board to get the result score for.
-    :return: The result score for the given board. -1 if the current player has lost, -0.5 to 0.5 for a draw. None if the game is not over.
+    :return: The result score for the given board. -1 if the current player lost,
+        0 for a draw, and None if the game is not over.
     """
     if not board.is_game_over():
         return None
@@ -121,7 +122,7 @@ def get_board_result_score(board: Board) -> float | None:
         assert winner != board.current_player, 'The winner must be the opponent, sine he just played a checkmate move'
         return -1.0
 
-    return 0.5 * board.current_player * board.get_approximate_result_score()
+    return 0.0
 
 
 MoveScore = tuple[int, float]

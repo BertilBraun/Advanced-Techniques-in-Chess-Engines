@@ -120,7 +120,6 @@ class SelfPlayProcess:
             return
 
         subsampled_size = int(self.args.self_play.portion_of_samples_to_keep * len(self.self_play.dataset))
-        # subsampled_dataset = self.self_play.dataset.choose_only_samples_with_high_policy_spikyness(subsampled_size)
-        subsampled_dataset = self.self_play.dataset.sample_by_policy_spikyness(subsampled_size)
+        subsampled_dataset = self.self_play.dataset.sample(subsampled_size)
         subsampled_dataset.save(self.args.save_path, iteration)
         self.self_play.dataset = SelfPlayDataset()

@@ -16,6 +16,7 @@ from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 from src.util.log import LogLevel, error, log, warn
 from src.util.timing import timeit
 from src.util.save_paths import load_model, model_save_path
+from src.value import wdl_to_scalar
 
 
 T = TypeVar('T')
@@ -148,12 +149,12 @@ class InferenceClient:
 
         input_tensor = torch.from_numpy(np.array(boards)).to(dtype=self.dtype, device=self.device, non_blocking=True)
 
-        policies, values = self.model(input_tensor)
+        policies, value_probabilities = self.model(input_tensor)
 
         policies = torch.detach(policies)
-        values = torch.detach(values)
+        values = torch.detach(wdl_to_scalar(value_probabilities))
 
         policies = policies.to(dtype=torch.float32, device='cpu').numpy()
         values = values.to(dtype=torch.float32, device='cpu').numpy()
 
-        return [(policy, value) for policy, value in zip(policies, values)]
+        return [(policy, float(value)) for policy, value in zip(policies, values)]

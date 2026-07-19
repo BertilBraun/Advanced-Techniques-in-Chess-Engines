@@ -279,30 +279,30 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation.stockfish_hash_mib == 128
 
 
-def test_clean_main_reproduces_historical_training_and_monitoring_schedule() -> None:
+def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     configuration = load_run_configuration(MAIN_CONFIGURATION_PATH)
     arguments = training_args()
 
     apply_run_configuration(arguments, configuration)
 
     assert configuration.stage.value == 'clean_retrain'
-    assert configuration.tensorboard_run_directory == 'chess-clean-4x4070s-vast-45170106-main'
+    assert configuration.tensorboard_run_directory == 'chess-rule-complete-10x96-vast-45170106-main'
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 500
-    assert arguments.num_games_per_iteration == 5000
+    assert arguments.num_games_per_iteration == 3500
     assert arguments.self_play.num_games_after_which_to_write == 100
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(60, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
-    assert arguments.self_play.inference_cache_capacity == 1_500_000
+    assert arguments.self_play.inference_cache_capacity == 3_000_000
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
-    assert arguments.cluster.self_play_device_ids == (0,) * 7 + (1,) * 7 + (2,) * 7 + (3,) * 7
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (25, 26, 27)
+    assert arguments.cluster.self_play_device_ids == (0,) * 4 + (1,) * 4 + (2,) * 4 + (3,) * 4
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (14, 15)
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
-    assert arguments.evaluation.every_n_iterations == 1
+    assert arguments.evaluation.every_n_iterations == 2
     assert arguments.evaluation.max_concurrent_tasks == 16
     assert arguments.evaluation.previous_model_offsets == (5, 10)
     assert arguments.evaluation.historical_model_rotation_period == 5
