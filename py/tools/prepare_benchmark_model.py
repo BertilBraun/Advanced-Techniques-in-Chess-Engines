@@ -15,6 +15,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--layers', required=True, type=int)
     parser.add_argument('--hidden-size', required=True, type=int)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--zero-parameters', action='store_true')
     return parser.parse_args()
 
 
@@ -29,6 +30,10 @@ def main() -> None:
         ),
         torch.device('cpu'),
     )
+    if arguments.zero_parameters:
+        with torch.no_grad():
+            for parameter in network.parameters():
+                parameter.zero_()
     network.eval()
     network.fuse_model()
     torch.jit.script(network).save(str(arguments.output))
