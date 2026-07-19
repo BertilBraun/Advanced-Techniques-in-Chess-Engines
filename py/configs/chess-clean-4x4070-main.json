@@ -67,7 +67,7 @@
   },
   "safety": {
     "maximum_open_file_count": 32768,
-    "maximum_host_ram_percent": 90,
+    "maximum_host_ram_percent": 78,
     "minimum_free_disk_gib": 20,
     "telemetry_interval_seconds": 10
   },
