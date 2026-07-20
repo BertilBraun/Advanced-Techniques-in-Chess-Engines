@@ -2,6 +2,13 @@
 
 constexpr int pieceCount(const Bitboard bb) noexcept { return std::popcount(bb); }
 
+constexpr Bitboard flipRanks(const Bitboard bits) noexcept {
+    return ((bits & 0x0000'0000'0000'00FFULL) << 56) | ((bits & 0x0000'0000'0000'FF00ULL) << 40) |
+           ((bits & 0x0000'0000'00FF'0000ULL) << 24) | ((bits & 0x0000'0000'FF00'0000ULL) << 8) |
+           ((bits & 0x0000'00FF'0000'0000ULL) >> 8) | ((bits & 0x0000'FF00'0000'0000ULL) >> 24) |
+           ((bits & 0x00FF'0000'0000'0000ULL) >> 40) | ((bits & 0xFF00'0000'0000'0000ULL) >> 56);
+}
+
 constexpr uint64 splitmix64(uint64 x) noexcept {
     x += 0x9E3779B97F4A7C15ull;
     x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -10,8 +17,7 @@ constexpr uint64 splitmix64(uint64 x) noexcept {
 }
 
 std::size_t BoardFingerprintHash::operator()(const BoardFingerprint &fingerprint) const noexcept {
-    return static_cast<std::size_t>(
-        fingerprint.first ^ std::rotl(fingerprint.second, 29));
+    return static_cast<std::size_t>(fingerprint.first ^ std::rotl(fingerprint.second, 29));
 }
 
 BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed) {
@@ -34,33 +40,40 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     CompressedEncodedBoard out{};
 
     // ---- 1) normalise position so it's *always white to move* -------------
-    const Board tmpBoard((board->currentPlayer() == -1) ? board->position().flip() : board->fen());
-    const Position &tmp = tmpBoard.position();
+    const Position &position = board->position();
+    const bool flipForBlack = position.side_to_move() == BLACK;
+    const auto canonicalBits = [flipForBlack](const Bitboard bits) {
+        return flipForBlack ? flipRanks(bits) : bits;
+    };
 
     // ---- 2) piece-type channels -------------------------------------------
     int ch = 0;
     for (const Color color : {WHITE, BLACK}) {
+        const Color positionColor = flipForBlack ? ~color : color;
         for (const PieceType piece : PIECE_TYPES) {
-            out.bits[ch++] = tmp.pieces(color, piece);
+            out.bits[ch++] = canonicalBits(position.pieces(positionColor, piece));
         }
     }
 
     // ---- 3) castling rights ------------------------------------------------
     constexpr uint64 ALL_SET = 0xFFFF'FFFF'FFFF'FFFFull;
-    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::WHITE_OO);
-    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::WHITE_OOO);
-    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::BLACK_OO);
-    out.bits[ch++] = ALL_SET * tmp.can_castle(CastlingRights::BLACK_OOO);
+    for (const Color color : {WHITE, BLACK}) {
+        const Color positionColor = flipForBlack ? ~color : color;
+        out.bits[ch++] = ALL_SET * position.can_castle(positionColor & KING_SIDE);
+        out.bits[ch++] = ALL_SET * position.can_castle(positionColor & QUEEN_SIDE);
+    }
 
     // ---- 4) occupancy planes ----------------------------------------------
-    out.bits[ch++] = tmp.pieces(Color::WHITE);
-    out.bits[ch++] = tmp.pieces(Color::BLACK);
+    for (const Color color : {WHITE, BLACK}) {
+        const Color positionColor = flipForBlack ? ~color : color;
+        out.bits[ch++] = canonicalBits(position.pieces(positionColor));
+    }
 
     // ---- 5) “checkers” mask (attackers of side-to-move’s king) ------------
-    out.bits[ch++] = tmp.checkers();
+    out.bits[ch++] = canonicalBits(position.checkers());
 
-    const Square epSquare = tmp.ep_square();
-    out.bits[ch++] = epSquare == SQ_NONE ? 0ULL : square_bb(epSquare);
+    const Square epSquare = position.ep_square();
+    out.bits[ch++] = epSquare == SQ_NONE ? 0ULL : canonicalBits(square_bb(epSquare));
     out.bits[ch++] = ALL_SET * (board->repetitionCount() >= 1);
     out.bits[ch++] = ALL_SET * (board->repetitionCount() >= 2);
 
@@ -68,11 +81,13 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
 
     // ---- 6) material-difference scalars -----------------------------------
     for (int i = 0; i < 6; ++i) {
-        const Bitboard white = tmp.pieces(WHITE, PIECE_TYPES[i]);
-        const Bitboard black = tmp.pieces(BLACK, PIECE_TYPES[i]);
+        const Color whiteSource = flipForBlack ? BLACK : WHITE;
+        const Color blackSource = flipForBlack ? WHITE : BLACK;
+        const Bitboard white = position.pieces(whiteSource, PIECE_TYPES[i]);
+        const Bitboard black = position.pieces(blackSource, PIECE_TYPES[i]);
         out.scal[i] = static_cast<int8>(pieceCount(white) - pieceCount(black));
     }
-    out.scal[6] = static_cast<int8>(std::min(tmp.rule50_count(), 100));
+    out.scal[6] = static_cast<int8>(std::min(position.rule50_count(), 100));
 
     return out;
 }

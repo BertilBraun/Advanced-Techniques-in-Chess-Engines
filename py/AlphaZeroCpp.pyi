@@ -19,12 +19,16 @@ __all__ = [
     'MCTSResults',
     'MCTSStatistics',
     'TimeInfo',
+    'encode_board_compressed',
     'new_eval_root',
     'new_root',
     'test_eval_mcts_speed_cpp',
     'test_inference_speed_cpp',
     'test_mcts_speed_cpp',
 ]
+
+def encode_board_compressed(fen: str) -> tuple[list[int], list[int]]:
+    """Encode a FEN into the canonical compressed binary and scalar planes."""
 
 class EvalMCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None: ...

@@ -1,5 +1,6 @@
 #include "common.hpp"
 
+#include "BoardEncoding.hpp"
 #include "InferenceClient.hpp"
 #include "MCTS/MCTS.hpp"
 #include "MoveEncoding.hpp"
@@ -277,6 +278,17 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         },
         py::arg("starting_fen"), py::arg("moves_uci"),
         R"pbdoc(Create an MCTS root by replaying a bounded UCI move history.)pbdoc");
+
+    m.def(
+        "encode_board_compressed",
+        [](const std::string &fen)
+            -> std::pair<std::array<uint64, BINARY_C>, std::array<int8, SCALAR_C>> {
+            const Board board(fen);
+            const CompressedEncodedBoard encoded = encodeBoard(&board);
+            return {encoded.bits, encoded.scal};
+        },
+        py::arg("fen"),
+        R"pbdoc(Encode a FEN into the canonical compressed binary and scalar planes.)pbdoc");
 
     m.def("test_inference_speed_cpp", &testInferenceSpeed,
           "Test the inference speed of the InferenceClient", py::arg("numBoards") = 100,
