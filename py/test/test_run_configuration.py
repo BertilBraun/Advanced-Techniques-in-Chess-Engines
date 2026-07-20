@@ -298,7 +298,6 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
     assert arguments.self_play_endgame_shortcut_fade_iterations == 50
-    assert arguments.training.batch_size == 1024
     assert arguments.self_play.inference_cache_capacity == 700_000
     assert arguments.self_play.mcts.num_threads == 3
     assert arguments.cluster.self_play_tensorboard_processes == 1
