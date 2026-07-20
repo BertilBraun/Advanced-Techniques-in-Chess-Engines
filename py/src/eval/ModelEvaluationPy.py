@@ -16,6 +16,7 @@ from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import MCTSParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
+from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.settings import USE_GPU, CurrentBoard, CurrentGame
 from src.games.Game import Player
@@ -71,7 +72,7 @@ EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 EVAL_DEVICE = 0
 
 
-def policy_evaluator(current_model: InferenceClient) -> EvaluationModel:
+def policy_evaluator(current_model: InferenceClient | NonCachingInferenceClient) -> EvaluationModel:
     def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
         results = current_model.inference_batch(boards)
         policies = []
@@ -280,12 +281,12 @@ def _play_paired_models_search(
     candidate_model: EvaluationModel,
     opponent_model: EvaluationModel,
     schedule: tuple[ScheduledGame, ...],
-    maximum_game_plies: int,
+    maximum_game_plies: int | None,
     name: str,
 ) -> tuple[Results, tuple[GameRecord, ...]]:
     if not schedule:
         raise ValueError('A paired opening schedule is required.')
-    if maximum_game_plies < 1:
+    if maximum_game_plies is not None and maximum_game_plies < 1:
         raise ValueError('maximum_game_plies must be positive.')
 
     active_games = [
@@ -333,7 +334,9 @@ def _play_paired_models_search(
             active_game.board.make_move(move)
             active_game.moves_uci.append(str(move))
 
-            game_finished = active_game.board.is_game_over() or len(active_game.moves_uci) >= maximum_game_plies
+            game_finished = active_game.board.is_game_over() or (
+                maximum_game_plies is not None and len(active_game.moves_uci) >= maximum_game_plies
+            )
             if not game_finished:
                 remaining_games.append(active_game)
                 continue

@@ -37,6 +37,7 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=2,
         ),
+        (model.device.index,) if model.device.type == 'cuda' else (),
     )
 
     log('Training with lr:', trainer.args.learning_rate(iteration, trainer.args.optimizer))

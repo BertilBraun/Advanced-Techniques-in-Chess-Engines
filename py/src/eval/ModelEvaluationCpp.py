@@ -27,6 +27,7 @@ from src.eval.ModelEvaluationPy import (
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
+from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.mcts.MCTS import action_probabilities
@@ -172,6 +173,7 @@ class ModelEvaluation:
                 self.args.evaluation.inference_cache_capacity,
             ),
             self.mcts_args,
+            use_inference_cache=self.args.evaluation.use_inference_cache,
         )
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
@@ -187,7 +189,11 @@ class ModelEvaluation:
         return res
 
     def play_policy_vs_random(self) -> Results:
-        current_model = InferenceClient(self.device_id, self.args.network, self.args.save_path)
+        evaluation = self.args.evaluation
+        if evaluation is None:
+            raise ValueError('Evaluation settings are required for policy-versus-random evaluation.')
+        inference_client_type = InferenceClient if evaluation.use_inference_cache else NonCachingInferenceClient
+        current_model = inference_client_type(self.device_id, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         policy_model = policy_evaluator(current_model)
@@ -319,6 +325,7 @@ class ModelEvaluation:
                 self.args.evaluation.inference_cache_capacity,
             ),
             self.mcts_args,
+            use_inference_cache=self.args.evaluation.use_inference_cache,
         )
 
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:

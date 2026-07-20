@@ -17,8 +17,9 @@ from src.train.TrainingArgs import TrainingArgs
 @dataclass(frozen=True)
 class _EvaluationSettings:
     inference_cache_capacity: int
+    use_inference_cache: bool = True
     mcts_threads: int = 1
-    maximum_game_plies: int = 200
+    maximum_game_plies: int | None = 200
     stockfish_binary_path: str | None = None
     stockfish_hash_mib: int = 128
 
@@ -27,6 +28,7 @@ class _EvaluationSettings:
 class _EvaluationTrainingArguments:
     save_path: str
     evaluation: _EvaluationSettings
+    network: str = 'unused'
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,7 @@ class _FakeMctsBoard:
     should_run_full_search: bool
 
 
-def test_model_comparison_uses_configured_cache_for_both_models(
+def test_model_comparison_uses_configured_inference_client_for_both_models(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -54,16 +56,17 @@ def test_model_comparison_uses_configured_cache_for_both_models(
     current_model_path.touch()
     opponent_model_path.touch()
 
-    cache_capacities: list[int] = []
+    inference_clients: list[tuple[int, bool]] = []
 
     class FakeMcts:
         def __init__(
             self,
             inference_parameters: _FakeInferenceClientParameters,
             mcts_parameters: str,
+            use_inference_cache: bool,
         ) -> None:
             assert mcts_parameters == 'mcts-parameters'
-            cache_capacities.append(inference_parameters.cache_capacity)
+            inference_clients.append((inference_parameters.cache_capacity, use_inference_cache))
 
     def fake_paired_match(
         *,
@@ -100,14 +103,75 @@ def test_model_comparison_uses_configured_cache_for_both_models(
         TrainingArgs,
         _EvaluationTrainingArguments(
             save_path=str(tmp_path),
-            evaluation=_EvaluationSettings(inference_cache_capacity=50_000),
+            evaluation=_EvaluationSettings(
+                inference_cache_capacity=0,
+                use_inference_cache=False,
+            ),
         ),
     )
     model_evaluation.paired_schedule = ()
 
     model_evaluation.play_two_models_paired(tmp_path / 'model_0.pt')
 
-    assert cache_capacities == [50_000, 50_000]
+    assert inference_clients == [(0, False), (0, False)]
+
+
+def test_policy_evaluation_uses_non_cached_inference_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_clients: list[tuple[int, str, str]] = []
+    updated_iterations: list[int] = []
+
+    class FakeNonCachingInferenceClient:
+        def __init__(self, device_id: int, network_args: str, save_path: str) -> None:
+            created_clients.append((device_id, network_args, save_path))
+
+        def update_iteration(self, iteration: int) -> None:
+            updated_iterations.append(iteration)
+
+        def inference_batch(self, boards: list[object]) -> list[tuple[list[tuple[int, float]], float]]:
+            raise AssertionError(f'No games should be evaluated in this unit test: {boards}')
+
+    def finish_without_games(
+        iteration: int,
+        candidate_model: EvaluationModel,
+        opponent_model: EvaluationModel,
+        num_games: int,
+        name: str,
+    ) -> Results:
+        assert iteration == 7
+        assert callable(candidate_model)
+        assert callable(opponent_model)
+        assert num_games == 0
+        assert name in {'policy_vs_random', 'random_vs_policy'}
+        return Results(0, 0, 0)
+
+    monkeypatch.setattr(
+        evaluation_module,
+        'NonCachingInferenceClient',
+        FakeNonCachingInferenceClient,
+    )
+    monkeypatch.setattr(evaluation_module, '_play_two_models_search', finish_without_games)
+
+    model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
+    model_evaluation.iteration = 7
+    model_evaluation.num_games = 0
+    model_evaluation.device_id = 2
+    model_evaluation.args = cast(
+        TrainingArgs,
+        _EvaluationTrainingArguments(
+            save_path='training-output',
+            evaluation=_EvaluationSettings(
+                inference_cache_capacity=0,
+                use_inference_cache=False,
+            ),
+            network='network-settings',
+        ),
+    )
+
+    assert model_evaluation.play_policy_vs_random() == Results(0, 0, 0)
+    assert created_clients == [(2, 'network-settings', 'training-output')]
+    assert updated_iterations == [7]
 
 
 class _FakeStockfish:

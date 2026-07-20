@@ -98,7 +98,7 @@ def benchmark_training(
         TRAINING_ARGS.save_path,
         TRAINING_ARGS.training.optimizer,
     )
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.training)
+    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, (device.index,))
     scaler = GradScaler()
     dataloader = as_dataloader(
         dataset,

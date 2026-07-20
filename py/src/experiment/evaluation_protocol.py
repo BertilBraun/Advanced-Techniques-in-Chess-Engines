@@ -90,7 +90,7 @@ class MatchConditions(BaseModel):
     opening_suite_sha256: str
     candidate: EngineCondition
     opponent: EngineCondition
-    maximum_game_plies: int
+    maximum_game_plies: int | None
     bootstrap_seed: int
     bootstrap_samples: int
 

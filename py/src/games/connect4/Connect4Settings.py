@@ -43,6 +43,7 @@ TRAINING_ARGS = TrainingArgs(
     ),
     cluster=ClusterParams(
         trainer_device_id=max(0, NUM_GPUS - 1),
+        trainer_data_parallel_device_ids=(max(0, NUM_GPUS - 1),),
         evaluation_device_cycle=(max(0, NUM_GPUS - 1),),
         self_play_device_ids=(max(0, NUM_GPUS - 1),) * NUM_SELF_PLAYERS,
         self_play_tensorboard_processes=1,
@@ -68,6 +69,7 @@ TRAINING_ARGS = TrainingArgs(
         evaluate_initial_checkpoint=False,
         max_concurrent_tasks=1,
         inference_cache_capacity=250_000,
+        use_inference_cache=True,
         dataset_path='reference/memory_0_connect4_database.hdf5',
         reference_model_path=None,
         opening_suite_path=None,

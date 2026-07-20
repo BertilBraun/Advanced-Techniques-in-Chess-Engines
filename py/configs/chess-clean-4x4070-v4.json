@@ -1,9 +1,9 @@
 {
-  "run_name": "complete-training-run-v3",
-  "tensorboard_run_directory": "complete-training-run-v3",
+  "run_name": "complete-training-run-v4",
+  "tensorboard_run_directory": "complete-training-run-v4",
   "stage": "clean_retrain",
   "requires_explicit_approval": true,
-  "output_path": "py/training_data/complete-training-run-v3",
+  "output_path": "py/training_data/complete-training-run-v4",
   "resume": {
     "mode": "random_initialization",
     "optimizer": "adamw"
@@ -25,19 +25,19 @@
   },
   "topology": {
     "trainer_device_id": 3,
-    "trainer_data_parallel_device_ids": [3],
+    "trainer_data_parallel_device_ids": [3, 2, 1, 0],
     "evaluation_device_cycle": [0, 1, 2, 3],
-    "self_play_processes_per_device": [6, 6, 6, 6],
+    "self_play_processes_per_device": [10, 10, 10, 10],
     "self_play_tensorboard_processes": 1,
-    "mcts_threads_per_process": 6,
+    "mcts_threads_per_process": 3,
     "parallel_games_per_process": 96,
-    "use_inference_cache": true,
-    "inference_cache_capacity_per_process": 100000,
-    "use_evaluation_inference_cache": true,
-    "evaluation_inference_cache_capacity_per_process": 50000,
+    "use_inference_cache": false,
+    "inference_cache_capacity_per_process": 0,
+    "use_evaluation_inference_cache": false,
+    "evaluation_inference_cache_capacity_per_process": 0,
     "trainer_cpu_threads": 8,
     "trainer_interop_threads": 2,
-    "self_play_processes_per_device_during_training": [6, 6, 6, 3],
+    "self_play_processes_per_device_during_training": [5, 5, 5, 5],
     "dataloader_workers": 0,
     "reserved_logical_cpus": 4,
     "maximum_cpu_oversubscription_ratio": 2.5,
@@ -48,9 +48,9 @@
     "iterations": 500,
     "games_per_iteration": 3500,
     "games_per_replay_file": 100,
-    "training_batch_size": 1024,
+    "training_batch_size": 2048,
     "self_play_searches_per_turn": 600,
-    "self_play_fast_searches_per_turn": 150,
+    "self_play_fast_searches_per_turn": 100,
     "learning_rate_schedule": [
       {
         "start_iteration": 0,
@@ -89,9 +89,9 @@
   },
   "evaluation_protocol": {
     "opening_suite_path": "py/reference/main-monitoring-openings-50.tsv",
-    "reference_model_path": "py/training_data/complete-training-run-v3/model_0.pt",
+    "reference_model_path": "py/training_data/complete-training-run-v4/model_0.pt",
     "raw_results_subdirectory": "evaluations",
-    "maximum_game_plies": 200,
+    "maximum_game_plies": null,
     "bootstrap_seed": 20260717,
     "bootstrap_samples": 10000,
     "mcts_threads": 4,
@@ -131,7 +131,7 @@
     "stockfish_binary_path": "/workspace/chess/stockfish-18",
     "stockfish_nodes_per_move": 1000,
     "stockfish_threads": 1,
-    "stockfish_hash_mib": 128
+    "stockfish_hash_mib": 1024
   },
   "environment": {
     "runtime_image": "vastai/pytorch:cuda-13.2.1-auto",

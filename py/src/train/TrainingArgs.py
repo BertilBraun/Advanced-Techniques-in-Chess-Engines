@@ -124,6 +124,9 @@ class ClusterParams:
     trainer_device_id: int
     """The CUDA device used for neural-network training."""
 
+    trainer_data_parallel_device_ids: tuple[int, ...]
+    """CUDA devices participating in data-parallel neural-network training."""
+
     evaluation_device_cycle: tuple[int, ...]
     """CUDA devices assigned cyclically to evaluation tasks."""
 
@@ -242,13 +245,16 @@ class EvaluationParams:
     inference_cache_capacity: int
     """Maximum cached positions in each evaluation inference client."""
 
+    use_inference_cache: bool
+    """Whether evaluation search constructs the cached or non-cached C++ inference client."""
+
     dataset_path: str | None
     """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""
 
     reference_model_path: str | None
     opening_suite_path: str | None
     raw_results_path: str | None
-    maximum_game_plies: int
+    maximum_game_plies: int | None
     bootstrap_seed: int
     bootstrap_samples: int
     mcts_threads: int

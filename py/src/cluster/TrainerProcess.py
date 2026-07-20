@@ -64,7 +64,12 @@ class TrainerProcess:
             self.args.training.optimizer,
         )
 
-        trainer = Trainer(model, optimizer, self.args.training)
+        trainer = Trainer(
+            model,
+            optimizer,
+            self.args.training,
+            self.args.cluster.trainer_data_parallel_device_ids,
+        )
 
         dataloader = as_dataloader(
             self.rolling_buffer,

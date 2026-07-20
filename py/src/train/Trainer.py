@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple, Protocol
 import torch
 import torch.nn.functional as F
+from torch import nn
 
 from tqdm import tqdm
 from torch.amp import GradScaler, autocast
@@ -32,6 +33,15 @@ class TrainingBatchLoader(Protocol):
     def __len__(self) -> int: ...
 
 
+class _LogitForward(nn.Module):
+    def __init__(self, model: Network) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, state: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.model.logit_forward(state)
+
+
 def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[TrainingBatch]:
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix='training-batch') as executor:
         iterator = iter(batches)
@@ -51,10 +61,15 @@ class Trainer:
         model: Network,
         optimizer: torch.optim.Optimizer,
         args: TrainingParams,
+        device_ids: tuple[int, ...],
     ) -> None:
         self.model: Network = model
         self.optimizer: torch.optim.Optimizer = optimizer
         self.args: TrainingParams = args
+        logit_forward = _LogitForward(model)
+        self.training_model: nn.Module = (
+            nn.DataParallel(logit_forward, device_ids=list(device_ids)) if len(device_ids) > 1 else logit_forward
+        )
 
     def _calculate_loss_for_batch(self, batch: TrainingBatch) -> _LossResult:
         """Calculate losses for a single batch"""
@@ -66,7 +81,7 @@ class Trainer:
         value_targets = value_targets.to(device=self.model.device)
 
         # Forward pass
-        policy_logits, value_logits = self.model.logit_forward(state)
+        policy_logits, value_logits = self.training_model(state)
         value_probabilities = torch.softmax(value_logits, dim=1)
         value_output = wdl_to_scalar(value_probabilities).unsqueeze(1)
 
@@ -93,6 +108,7 @@ class Trainer:
     def _train_epoch(self, dataloader: TrainingBatchLoader) -> TrainingStats:
         """Train for one epoch and return statistics"""
         self.model.train()
+        self.training_model.train()
         stats = TrainingStats(self.model.device)
         scaler = GradScaler()
 

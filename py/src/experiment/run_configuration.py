@@ -98,6 +98,7 @@ class TopologyConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     trainer_device_id: int = Field(ge=0)
+    trainer_data_parallel_device_ids: tuple[int, ...]
     evaluation_device_cycle: tuple[int, ...]
     self_play_processes_per_device: tuple[int, ...]
     self_play_tensorboard_processes: int = Field(ge=1)
@@ -105,6 +106,8 @@ class TopologyConfiguration(BaseModel):
     parallel_games_per_process: int = Field(gt=0)
     use_inference_cache: bool
     inference_cache_capacity_per_process: int = Field(ge=0)
+    use_evaluation_inference_cache: bool
+    evaluation_inference_cache_capacity_per_process: int = Field(ge=0)
     trainer_cpu_threads: int = Field(gt=0)
     trainer_interop_threads: int = Field(gt=0)
     self_play_processes_per_device_during_training: tuple[int, ...]
@@ -116,6 +119,12 @@ class TopologyConfiguration(BaseModel):
 
     @model_validator(mode='after')
     def validate_process_counts(self) -> TopologyConfiguration:
+        if not self.trainer_data_parallel_device_ids:
+            raise ValueError('At least one trainer device must be configured.')
+        if self.trainer_data_parallel_device_ids[0] != self.trainer_device_id:
+            raise ValueError('The primary trainer device must be first in the data-parallel device list.')
+        if len(set(self.trainer_data_parallel_device_ids)) != len(self.trainer_data_parallel_device_ids):
+            raise ValueError('Data-parallel trainer devices must be unique.')
         if not self.self_play_processes_per_device:
             raise ValueError('At least one self-play device must be configured.')
         if any(process_count < 0 for process_count in self.self_play_processes_per_device):
@@ -130,6 +139,10 @@ class TopologyConfiguration(BaseModel):
             raise ValueError('TensorBoard self-play process count cannot exceed the self-play process count.')
         if self.use_inference_cache != (self.inference_cache_capacity_per_process > 0):
             raise ValueError('Inference cache capacity must be positive exactly when inference caching is enabled.')
+        if self.use_evaluation_inference_cache != (self.evaluation_inference_cache_capacity_per_process > 0):
+            raise ValueError(
+                'Evaluation inference cache capacity must be positive exactly when evaluation caching is enabled.'
+            )
         if len(self.self_play_processes_per_device_during_training) != len(self.self_play_processes_per_device):
             raise ValueError('Training self-play process counts must contain one entry per self-play device.')
         if any(
@@ -156,6 +169,9 @@ class WorkloadConfiguration(BaseModel):
     iterations: int = Field(gt=0)
     games_per_iteration: int = Field(gt=0)
     games_per_replay_file: int = Field(gt=0)
+    training_batch_size: int = Field(gt=0)
+    self_play_searches_per_turn: int = Field(gt=0)
+    self_play_fast_searches_per_turn: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...]
     self_play_search_warmup_iterations: int = Field(ge=0)
     self_play_value_warmup_iterations: int = Field(ge=0)
@@ -178,8 +194,15 @@ class WorkloadConfiguration(BaseModel):
             raise ValueError('Learning-rate stage iterations must be unique and strictly increasing.')
         if start_iterations[-1] >= self.iterations:
             raise ValueError('Learning-rate stages must start before the configured final iteration.')
+        if self.self_play_fast_searches_per_turn >= self.self_play_searches_per_turn:
+            raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
         if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_iteration == 0):
             raise ValueError('Self-play maximum game plies and its iteration limit must be configured together.')
+        if (
+            self.self_play_maximum_game_plies is not None
+            and self.self_play_maximum_game_plies_until_iteration != self.self_play_endgame_shortcut_fade_iterations
+        ):
+            raise ValueError('Self-play ply cap must end when the endgame-shortcut fade ends.')
         return self
 
 
@@ -207,7 +230,7 @@ class EvaluationProtocolConfiguration(BaseModel):
     opening_suite_path: str
     reference_model_path: str
     raw_results_subdirectory: str
-    maximum_game_plies: int = Field(gt=0)
+    maximum_game_plies: int | None
     bootstrap_seed: int = Field(ge=0)
     bootstrap_samples: int = Field(gt=0)
     mcts_threads: int = Field(gt=0)
@@ -458,6 +481,13 @@ def validate_run_configuration(
         raise ValueError('self_play_processes_per_device must contain exactly one entry per visible GPU.')
     if topology.trainer_device_id >= hardware.gpu_count:
         raise ValueError(f'Trainer device {topology.trainer_device_id} is outside the configured GPU range.')
+    invalid_trainer_devices = tuple(
+        device_id for device_id in topology.trainer_data_parallel_device_ids if device_id >= hardware.gpu_count
+    )
+    if invalid_trainer_devices:
+        raise ValueError(
+            f'Data-parallel trainer devices {invalid_trainer_devices} are outside the configured GPU range.'
+        )
     invalid_evaluation_devices = tuple(
         device_id for device_id in topology.evaluation_device_cycle if device_id >= hardware.gpu_count
     )
@@ -542,6 +572,11 @@ def apply_run_configuration(
     training_args.num_iterations = workload.iterations
     training_args.num_games_per_iteration = workload.games_per_iteration
     training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
+    training_args.training.batch_size = workload.training_batch_size
+    training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
+    training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
+        workload.self_play_fast_searches_per_turn / workload.self_play_searches_per_turn
+    )
     training_args.random_seed = workload.random_seed
     training_args.self_play_search_warmup_iterations = workload.self_play_search_warmup_iterations
     training_args.self_play_value_warmup_iterations = workload.self_play_value_warmup_iterations
@@ -556,6 +591,7 @@ def apply_run_configuration(
     training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
     training_args.cluster = ClusterParams(
         trainer_device_id=topology.trainer_device_id,
+        trainer_data_parallel_device_ids=topology.trainer_data_parallel_device_ids,
         evaluation_device_cycle=topology.evaluation_device_cycle,
         self_play_device_ids=_self_play_device_ids(topology.self_play_processes_per_device),
         self_play_tensorboard_processes=topology.self_play_tensorboard_processes,
@@ -589,6 +625,8 @@ def apply_run_configuration(
         training_args.evaluation.num_searches_per_turn = workload.evaluation_searches_per_turn
         training_args.evaluation.every_n_iterations = workload.evaluation_every_iterations
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
+        training_args.evaluation.use_inference_cache = topology.use_evaluation_inference_cache
+        training_args.evaluation.inference_cache_capacity = topology.evaluation_inference_cache_capacity_per_process
         training_args.evaluation.evaluate_initial_checkpoint = evaluation_protocol.evaluate_initial_checkpoint
         training_args.evaluation.dataset_path = (
             str(_resolve_source_path(evaluation_protocol.evaluation_dataset_path))

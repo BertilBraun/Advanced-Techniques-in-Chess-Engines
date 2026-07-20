@@ -16,7 +16,8 @@ from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 @dataclass(frozen=True)
 class Arguments:
-    device: int
+    device_ids: tuple[int, ...]
+    batch_size: int
     layers: int
     hidden_size: int
     se_placement: SEPlacement
@@ -27,13 +28,17 @@ class Arguments:
 @dataclass(frozen=True)
 class Result:
     parameters: int
+    device_ids: tuple[int, ...]
+    batch_size: int
     seconds_per_batch: float
-    peak_gpu_memory_mib: float
+    samples_per_second: float
+    peak_gpu_memory_mib: tuple[float, ...]
 
 
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', required=True, type=int)
+    parser.add_argument('--device-ids', required=True, nargs='+', type=int)
+    parser.add_argument('--batch-size', required=True, type=int)
     parser.add_argument('--layers', required=True, type=int)
     parser.add_argument('--hidden-size', required=True, type=int)
     parser.add_argument(
@@ -46,7 +51,8 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--warmup-batches', default=2, type=int)
     namespace = parser.parse_args()
     return Arguments(
-        device=namespace.device,
+        device_ids=tuple(namespace.device_ids),
+        batch_size=namespace.batch_size,
         layers=namespace.layers,
         hidden_size=namespace.hidden_size,
         se_placement=namespace.se_placement,
@@ -72,7 +78,7 @@ def train_batch(
 
 def main() -> None:
     arguments = parse_arguments()
-    device = torch.device('cuda', arguments.device)
+    device = torch.device('cuda', arguments.device_ids[0])
     torch.cuda.set_device(device)
     model = Network(
         NetworkParams(
@@ -83,10 +89,10 @@ def main() -> None:
         device,
     )
     optimizer = torch.optim.AdamW(model.parameters())
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.training)
+    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, arguments.device_ids)
     scaler = GradScaler()
 
-    batch_size = TRAINING_ARGS.training.batch_size
+    batch_size = arguments.batch_size
     state = torch.randn((batch_size, *CurrentGame.representation_shape))
     policy = torch.zeros((batch_size, CurrentGame.action_size))
     policy[:, 0] = 1
@@ -96,7 +102,8 @@ def main() -> None:
     for _ in range(arguments.warmup_batches):
         train_batch(trainer, scaler, batch)
     torch.cuda.synchronize(device)
-    torch.cuda.reset_peak_memory_stats(device)
+    for device_id in arguments.device_ids:
+        torch.cuda.reset_peak_memory_stats(device_id)
 
     started_at = time.perf_counter()
     for _ in range(arguments.batches):
@@ -106,8 +113,13 @@ def main() -> None:
 
     result = Result(
         parameters=sum(parameter.numel() for parameter in model.parameters()),
+        device_ids=arguments.device_ids,
+        batch_size=batch_size,
         seconds_per_batch=elapsed_seconds / arguments.batches,
-        peak_gpu_memory_mib=torch.cuda.max_memory_allocated(device) / 2**20,
+        samples_per_second=batch_size * arguments.batches / elapsed_seconds,
+        peak_gpu_memory_mib=tuple(
+            torch.cuda.max_memory_allocated(device_id) / 2**20 for device_id in arguments.device_ids
+        ),
     )
     print(json.dumps(asdict(result), indent=2))
 

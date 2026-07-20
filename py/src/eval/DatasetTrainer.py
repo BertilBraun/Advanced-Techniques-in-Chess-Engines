@@ -44,6 +44,7 @@ def train_model(
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=2,
         ),
+        (model.device.index,) if model.device.type == 'cuda' else (),
     )
 
     log(

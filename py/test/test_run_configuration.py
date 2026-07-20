@@ -42,6 +42,7 @@ SCALING_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-scaling-pil
 SHUTDOWN_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-shutdown-smoke.json')
 TUNING_CONFIGURATION_PATHS = tuple(Path(f'configs/chess-clean-tuning-{variant}.json') for variant in ('a', 'b', 'c'))
 MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
+V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
 
 
 def sampling_window(_: int) -> int:
@@ -91,6 +92,7 @@ def training_args() -> TrainingArgs:
         ),
         cluster=ClusterParams(
             trainer_device_id=0,
+            trainer_data_parallel_device_ids=(0,),
             evaluation_device_cycle=(0,),
             self_play_device_ids=(0,),
             self_play_tensorboard_processes=1,
@@ -124,6 +126,7 @@ def training_args() -> TrainingArgs:
             evaluate_initial_checkpoint=False,
             max_concurrent_tasks=1,
             inference_cache_capacity=1,
+            use_inference_cache=True,
             dataset_path=None,
             reference_model_path=None,
             opening_suite_path=None,
@@ -163,6 +166,7 @@ def resolved_pilot_hardware() -> ResolvedHardware:
         SHUTDOWN_CONFIGURATION_PATH,
         *TUNING_CONFIGURATION_PATHS,
         MAIN_CONFIGURATION_PATH,
+        V4_CONFIGURATION_PATH,
     ),
 )
 def test_pilot_configuration_is_valid_for_quoted_hardware(configuration_path: Path) -> None:
@@ -254,6 +258,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     apply_run_configuration(arguments, configuration)
 
     assert arguments.cluster.trainer_device_id == 3
+    assert arguments.cluster.trainer_data_parallel_device_ids == (3,)
     assert arguments.cluster.evaluation_device_cycle == (3,)
     assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 2
     assert arguments.cluster.self_play_tensorboard_processes == 1
@@ -263,7 +268,10 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.self_play.num_parallel_games == 64
     assert arguments.self_play.inference_cache_capacity == 250_000
     assert arguments.self_play.use_inference_cache
+    assert arguments.self_play.mcts.num_searches_per_turn == 600
+    assert arguments.self_play.mcts.fast_searches_proportion_of_full_searches == pytest.approx(0.25)
     assert arguments.training.num_workers == 0
+    assert arguments.training.batch_size == 1024
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0002)
     assert pickle.dumps(arguments.training.learning_rate)
     assert arguments.num_iterations == 2
@@ -275,6 +283,8 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 16
     assert arguments.evaluation.max_concurrent_tasks == 1
+    assert arguments.evaluation.inference_cache_capacity == 50_000
+    assert arguments.evaluation.use_inference_cache
     assert arguments.evaluation.evaluate_initial_checkpoint
     assert arguments.evaluation.stockfish_binary_path == '/workspace/chess/stockfish-18'
     assert arguments.evaluation.stockfish_nodes_per_move == 1_000
@@ -318,6 +328,26 @@ def test_run_configuration_rejects_inconsistent_inference_cache_settings(
         RunConfiguration.model_validate(data)
 
 
+@pytest.mark.parametrize(
+    ('use_inference_cache', 'capacity'),
+    (
+        (True, 0),
+        (False, 1),
+    ),
+)
+def test_run_configuration_rejects_inconsistent_evaluation_cache_settings(
+    use_inference_cache: bool,
+    capacity: int,
+) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['use_evaluation_inference_cache'] = use_inference_cache
+    data['topology']['evaluation_inference_cache_capacity_per_process'] = capacity
+
+    with pytest.raises(ValidationError, match='Evaluation inference cache capacity'):
+        RunConfiguration.model_validate(data)
+
+
 def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     configuration = load_run_configuration(MAIN_CONFIGURATION_PATH)
     arguments = training_args()
@@ -346,6 +376,7 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play.mcts.num_threads == 6
     assert arguments.self_play.num_parallel_games == 96
     assert arguments.cluster.self_play_tensorboard_processes == 1
+    assert arguments.cluster.trainer_data_parallel_device_ids == (3,)
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
     assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 6
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (21, 22, 23)
@@ -358,6 +389,58 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.evaluation.historical_model_rotation_period == 5
     assert arguments.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
     assert arguments.evaluation.evaluate_random
+
+
+def test_v4_configuration_matches_approved_launch_parameters() -> None:
+    configuration = load_run_configuration(V4_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    validate_run_configuration(configuration, resolved_pilot_hardware())
+    apply_run_configuration(arguments, configuration)
+
+    assert configuration.run_name == 'complete-training-run-v4'
+    assert configuration.output_path == 'py/training_data/complete-training-run-v4'
+    assert configuration.resume.mode.value == 'random_initialization'
+    assert arguments.self_play.mcts.num_searches_per_turn == 600
+    assert arguments.self_play.mcts.fast_searches_proportion_of_full_searches == pytest.approx(1 / 6)
+    assert not arguments.self_play.use_inference_cache
+    assert arguments.self_play.inference_cache_capacity == 0
+    assert arguments.self_play.maximum_game_plies == 200
+    assert arguments.self_play.maximum_game_plies_until_iteration == 50
+    assert arguments.self_play_endgame_shortcut_fade_iterations == 50
+    assert arguments.self_play.mcts.num_threads == 3
+    assert arguments.self_play.num_parallel_games == 96
+    assert arguments.cluster.self_play_device_ids == (0,) * 10 + (1,) * 10 + (2,) * 10 + (3,) * 10
+    assert arguments.cluster.trainer_data_parallel_device_ids == (3, 2, 1, 0)
+    assert arguments.training.batch_size == 2048
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (
+        5,
+        6,
+        7,
+        8,
+        9,
+        15,
+        16,
+        17,
+        18,
+        19,
+        25,
+        26,
+        27,
+        28,
+        29,
+        35,
+        36,
+        37,
+        38,
+        39,
+    )
+    assert arguments.evaluation is not None
+    assert not arguments.evaluation.use_inference_cache
+    assert arguments.evaluation.inference_cache_capacity == 0
+    assert arguments.evaluation.maximum_game_plies is None
+    assert arguments.evaluation.max_concurrent_tasks == 16
+    assert arguments.evaluation.stockfish_hash_mib == 1024
 
 
 @pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))
