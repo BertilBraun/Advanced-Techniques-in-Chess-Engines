@@ -29,7 +29,7 @@ from src.util.save_paths import create_model, create_optimizer, save_model_and_o
 class Arguments:
     device_ids: tuple[int, ...]
     samples: int
-    replay_source_directory: Path | None
+    replay_source_directories: tuple[Path, ...]
     work_directory: Path
     output_path: Path
     monitor_interval_seconds: float
@@ -142,7 +142,7 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
     parser.add_argument('--device-ids', nargs='+', required=True, type=int)
     parser.add_argument('--samples', default=409_600, type=int)
-    parser.add_argument('--replay-source-directory', type=Path)
+    parser.add_argument('--replay-source-directories', nargs='*', default=(), type=Path)
     parser.add_argument('--work-directory', required=True, type=Path)
     parser.add_argument('--output-path', required=True, type=Path)
     parser.add_argument('--monitor-interval-seconds', default=0.5, type=float)
@@ -154,14 +154,16 @@ def parse_arguments() -> Arguments:
         raise ValueError('The 2,048-sample global batch must divide evenly across trainer devices.')
     if namespace.samples <= 0:
         raise ValueError('Sample count must be positive.')
-    if namespace.replay_source_directory is not None and not namespace.replay_source_directory.is_dir():
-        raise ValueError(f'Replay source directory does not exist: {namespace.replay_source_directory}')
+    replay_source_directories = tuple(namespace.replay_source_directories)
+    missing_directories = tuple(path for path in replay_source_directories if not path.is_dir())
+    if missing_directories:
+        raise ValueError(f'Replay source directories do not exist: {missing_directories}')
     if namespace.monitor_interval_seconds <= 0:
         raise ValueError('Monitor interval must be positive.')
     return Arguments(
         device_ids=device_ids,
         samples=namespace.samples,
-        replay_source_directory=namespace.replay_source_directory,
+        replay_source_directories=replay_source_directories,
         work_directory=namespace.work_directory,
         output_path=namespace.output_path,
         monitor_interval_seconds=namespace.monitor_interval_seconds,
@@ -222,17 +224,26 @@ def write_replay_fixture(path: Path, sample_count: int, seed: int) -> None:
         file.attrs['stats'] = str(stats._asdict())
 
 
-def stage_replay_files(source_directory: Path, destination_directory: Path, minimum_samples: int) -> int:
-    source_files = sorted(source_directory.glob('*.hdf5'))
+def stage_replay_files(
+    source_directories: tuple[Path, ...],
+    destination_directory: Path,
+    minimum_samples: int,
+) -> int:
+    source_files = tuple(
+        (source_index, source_file)
+        for source_index, source_directory in enumerate(source_directories)
+        for source_file in sorted(source_directory.glob('*.hdf5'))
+    )
     if not source_files:
-        raise ValueError(f'Replay source directory contains no HDF5 files: {source_directory}')
+        raise ValueError(f'Replay source directories contain no HDF5 files: {source_directories}')
 
     destination_directory.mkdir(parents=True, exist_ok=False)
     sample_count = 0
-    for source_file in source_files:
+    for source_index, source_file in source_files:
         with h5py.File(source_file, 'r') as file:
             file_samples = int(file['states'].shape[0])
-        shutil.copy2(source_file, destination_directory / source_file.name)
+        destination_file = destination_directory / f'{source_index:03d}-{source_file.name}'
+        shutil.copy2(source_file, destination_file)
         sample_count += file_samples
         if sample_count >= minimum_samples:
             return sample_count
@@ -271,12 +282,12 @@ def prepare_smoke_run(arguments: Arguments, training_args: TrainingArgs) -> int:
     os.environ['TRAINING_TENSORBOARD_LOG_PATH'] = str(arguments.work_directory / 'logs')
     os.environ['TRAINING_TENSORBOARD_RUN_DIRECTORY'] = 'production-ddp-smoke'
     replay_directory = arguments.work_directory / 'memory_0'
-    if arguments.replay_source_directory is None:
+    if not arguments.replay_source_directories:
         write_replay_fixture(replay_directory / 'smoke.hdf5', arguments.samples, training_args.random_seed)
         replay_samples = arguments.samples
     else:
         replay_samples = stage_replay_files(
-            arguments.replay_source_directory,
+            arguments.replay_source_directories,
             replay_directory,
             arguments.samples,
         )
@@ -310,8 +321,8 @@ def run_smoke(arguments: Arguments) -> SmokeResult:
     result = SmokeResult(
         source_revision=source_revision(),
         replay_source=(
-            str(arguments.replay_source_directory.resolve())
-            if arguments.replay_source_directory is not None
+            ', '.join(str(path.resolve()) for path in arguments.replay_source_directories)
+            if arguments.replay_source_directories
             else 'generated synthetic fixture'
         ),
         device_ids=arguments.device_ids,
