@@ -93,6 +93,7 @@ class RankTrainingComplete:
     phase_id: int
     training_stats: TrainingStats | None
     early_stop: bool
+    optimizer_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,7 @@ class TrainerProcess:
         self.starting_iteration = starting_iteration
         self.world_size = len(args.cluster.trainer_ddp_device_ids)
         self.replay_stats = ReplayBufferStatistics(0, 0)
+        self.last_optimizer_seconds = 0.0
         self._phase_id = 0
         self._context = multiprocessing.get_context('spawn')
         self._connections: list[Connection] = []
@@ -232,6 +234,9 @@ class TrainerProcess:
                 raise RuntimeError('DDP ranks disagreed about the early-stop decision.')
             if rank_zero_response.early_stop:
                 raise TrainingEarlyStop('Training stopped early due to low value standard deviation.')
+            if rank_zero_response.optimizer_seconds is None:
+                raise RuntimeError('Rank zero did not return optimizer timing.')
+            self.last_optimizer_seconds = rank_zero_response.optimizer_seconds
             return rank_zero_response.training_stats
 
     @timeit
@@ -550,12 +555,25 @@ def _train_iteration(
 ) -> RankTrainingComplete:
     trainer = Trainer(model, optimizer, args.training, training_model=training_model, rank=rank)
     epoch_stats: list[TrainingStats] = []
+    optimizer_seconds = 0.0
     early_stop = False
     writer = TensorboardWriter(run_id, 'trainer', postfix_pid=False, enabled=is_rank_zero(rank))
     with writer:
         for epoch in range(args.training.num_epochs):
             dataloader = as_distributed_dataloader(rolling_buffer, args, rank, command.iteration, epoch)
+            if model.device.type == 'cuda':
+                torch.cuda.synchronize(model.device)
+            optimizer_started_at = time.perf_counter()
             training_stats = trainer.train(dataloader, command.iteration)
+            if model.device.type == 'cuda':
+                torch.cuda.synchronize(model.device)
+            elapsed_seconds = torch.tensor(
+                time.perf_counter() - optimizer_started_at,
+                device=model.device,
+                dtype=torch.float64,
+            )
+            distributed.all_reduce(elapsed_seconds, op=distributed.ReduceOp.MAX)
+            optimizer_seconds += float(elapsed_seconds.item())
             epoch_stats.append(training_stats)
             early_stop = training_stats.value_std < 0.01
             if early_stop:
@@ -587,6 +605,7 @@ def _train_iteration(
         phase_id=command.phase_id,
         training_stats=combined_stats if rank == 0 else None,
         early_stop=early_stop,
+        optimizer_seconds=optimizer_seconds if rank == 0 else None,
     )
 
 

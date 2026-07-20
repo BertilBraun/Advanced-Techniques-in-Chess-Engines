@@ -53,8 +53,10 @@ class SmokeResult:
     dropped_samples: int
     optimizer_steps: int
     aggregated_training_samples: int
-    training_seconds: float
-    samples_per_second: float
+    training_phase_seconds: float
+    optimizer_seconds: float
+    production_phase_samples_per_second: float
+    optimizer_samples_per_second: float
     peak_host_rss_mib: float
     gpu_utilization: tuple[GpuUtilization, ...]
 
@@ -264,7 +266,7 @@ def run_smoke(arguments: Arguments) -> SmokeResult:
         try:
             started_at = time.perf_counter()
             training_stats = trainer.train(0)
-            training_seconds = time.perf_counter() - started_at
+            training_phase_seconds = time.perf_counter() - started_at
         finally:
             monitor.stop()
         peak_host_rss_mib, gpu_utilization = monitor.result()
@@ -282,8 +284,10 @@ def run_smoke(arguments: Arguments) -> SmokeResult:
         dropped_samples=arguments.samples - retained_samples,
         optimizer_steps=retained_samples // training_args.training.global_batch_size,
         aggregated_training_samples=training_stats.sample_count,
-        training_seconds=training_seconds,
-        samples_per_second=training_stats.sample_count / training_seconds,
+        training_phase_seconds=training_phase_seconds,
+        optimizer_seconds=trainer.last_optimizer_seconds,
+        production_phase_samples_per_second=training_stats.sample_count / training_phase_seconds,
+        optimizer_samples_per_second=training_stats.sample_count / trainer.last_optimizer_seconds,
         peak_host_rss_mib=peak_host_rss_mib,
         gpu_utilization=gpu_utilization,
     )
