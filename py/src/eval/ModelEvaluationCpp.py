@@ -166,7 +166,13 @@ class ModelEvaluation:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
         opponent = MCTS(
-            InferenceClientParams(self.device_id, str(opponent_inference_path), 16, 500, 250_000),
+            InferenceClientParams(
+                self.device_id,
+                str(opponent_inference_path),
+                16,
+                500,
+                self.args.evaluation.inference_cache_capacity,
+            ),
             self.mcts_args,
         )
 
@@ -218,7 +224,7 @@ class ModelEvaluation:
         engine = chess.engine.SimpleEngine.popen_uci(evaluation.stockfish_binary_path)
         engine.configure({'Skill Level': level})
         engine.configure({'Threads': 1})  # Limit to one thread for consistency
-        engine.configure({'Hash': 1024})  # Set hash size to 1GB
+        engine.configure({'Hash': evaluation.stockfish_hash_mib})
 
         def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             def get_stockfish_policy(board: CurrentBoard) -> np.ndarray:
@@ -311,7 +317,13 @@ class ModelEvaluation:
         if not current_inference_path.is_file():
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
         current = MCTS(
-            InferenceClientParams(self.device_id, str(current_inference_path), 16, 500, 250_000),
+            InferenceClientParams(
+                self.device_id,
+                str(current_inference_path),
+                16,
+                500,
+                self.args.evaluation.inference_cache_capacity,
+            ),
             self.mcts_args,
         )
 

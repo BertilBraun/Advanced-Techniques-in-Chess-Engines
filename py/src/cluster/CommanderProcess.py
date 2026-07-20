@@ -150,8 +150,7 @@ class CommanderProcess:
                 )
                 trainer.load_all_memories_to_train_on_for_iteration(iteration)
 
-                if not self._wait_for_all_evaluations():
-                    break
+                self._reap_evaluation_processes()
                 self_play_node_ids_to_pause = self.args.cluster.self_play_node_ids_to_pause_during_training
                 if self_play_node_ids_to_pause:
                     pause_self_play_workers(

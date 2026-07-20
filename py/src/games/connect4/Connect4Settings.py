@@ -66,6 +66,7 @@ TRAINING_ARGS = TrainingArgs(
         every_n_iterations=10,
         evaluate_initial_checkpoint=False,
         max_concurrent_tasks=1,
+        inference_cache_capacity=250_000,
         dataset_path='reference/memory_0_connect4_database.hdf5',
         reference_model_path=None,
         opening_suite_path=None,

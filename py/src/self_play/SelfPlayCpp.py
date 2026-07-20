@@ -328,15 +328,27 @@ class SelfPlayCpp:
         new_spg.already_expanded_node = root.make_new_root(child_index)
 
         native_game_over = new_spg.already_expanded_node.is_terminal
-        if not native_game_over and not new_spg.board.is_game_over():
+        finished_game = self._finish_game_after_move(new_spg, native_game_over)
+        if finished_game is None:
             return new_spg
+        return finished_game
 
-        # Game is over, add the game to the dataset and return a new game state
-        result = get_board_result_score(new_spg.board)
-        if result is None:
-            assert native_game_over, 'Python reported a terminal game without a result.'
-            result = 0.0
-        return self._handle_end_of_game(new_spg, result)
+    def _finish_game_after_move(self, game: SelfPlayGame, native_game_over: bool) -> SelfPlayGame | None:
+        if native_game_over or game.board.is_game_over():
+            result = get_board_result_score(game.board)
+            if result is None:
+                assert native_game_over, 'Python reported a terminal game without a result.'
+                result = 0.0
+            return self._handle_end_of_game(game, result)
+
+        maximum_game_plies = self.args.maximum_game_plies
+        if (
+            maximum_game_plies is not None
+            and self.iteration < self.args.maximum_game_plies_until_iteration
+            and len(game.played_moves) >= maximum_game_plies
+        ):
+            return self._handle_end_of_game(game, 0.0)
+        return None
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'

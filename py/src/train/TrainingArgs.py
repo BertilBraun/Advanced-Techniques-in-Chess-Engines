@@ -88,6 +88,12 @@ class SelfPlayParams:
     portion_of_samples_to_keep: float
     """This is the portion of samples to keep in the self-play dataset. This is used to reduce the size of the dataset and to keep only some of the moves that were played in self-play. This reduces the risk of overfitting to given lines of play and keeps the dataset diverse. This comes at the cost of longer self-play times, as fewer samples are kept. Typically 0.1-0.3 for games like Hex, Connect4, Go, as their board positions are very static and slightly larger 0.4-0.7 for games like Chess, as their board positions are more dynamic and the dataset is larger. A value of 1.0 means that all samples are kept, which is not recommended as it leads to overfitting and a very large dataset."""
 
+    maximum_game_plies: int | None = None
+    """Maximum self-play game length while the iteration limit is active."""
+
+    maximum_game_plies_until_iteration: int = 0
+    """Exclusive iteration at which the self-play game-length limit is disabled."""
+
     only_store_sampled_moves: bool = False
     """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""
 
@@ -229,6 +235,9 @@ class EvaluationParams:
 
     max_concurrent_tasks: int
     """Maximum number of evaluation tasks running inside one evaluation process."""
+
+    inference_cache_capacity: int
+    """Maximum cached positions in each evaluation inference client."""
 
     dataset_path: str | None
     """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""

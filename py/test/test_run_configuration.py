@@ -122,6 +122,7 @@ def training_args() -> TrainingArgs:
             every_n_iterations=1,
             evaluate_initial_checkpoint=False,
             max_concurrent_tasks=1,
+            inference_cache_capacity=1,
             dataset_path=None,
             reference_model_path=None,
             opening_suite_path=None,
@@ -300,16 +301,20 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
     assert arguments.self_play_endgame_shortcut_fade_iterations == 50
-    assert arguments.self_play.inference_cache_capacity == 700_000
-    assert arguments.self_play.mcts.num_threads == 3
+    assert arguments.self_play.maximum_game_plies == 200
+    assert arguments.self_play.maximum_game_plies_until_iteration == 50
+    assert arguments.self_play.inference_cache_capacity == 100_000
+    assert arguments.self_play.mcts.num_threads == 6
+    assert arguments.self_play.num_parallel_games == 96
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
-    assert arguments.cluster.self_play_device_ids == (0,) * 8 + (1,) * 8 + (2,) * 8 + (3,) * 8
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (28, 29, 30, 31)
+    assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 6
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (21, 22, 23)
+    assert configuration.topology.maximum_cpu_oversubscription_ratio == pytest.approx(2.5)
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 2
-    assert arguments.evaluation.max_concurrent_tasks == 4
+    assert arguments.evaluation.max_concurrent_tasks == 16
     assert arguments.evaluation.previous_model_offsets == (5, 10)
     assert arguments.evaluation.historical_model_rotation_period == 5
     assert arguments.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
