@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 ARTIFACT_DIRECTORY = Path(__file__).resolve().parent
 RESULTS_PATH = ARTIFACT_DIRECTORY / 'results.json'
+PRODUCTION_RESULTS_PATH = ARTIFACT_DIRECTORY.parent / 'ddp-production-training-20260720' / 'results.json'
 
 
 class Strategy(str, Enum):
@@ -85,6 +86,130 @@ class BenchmarkResults(BaseModel):
     results: tuple[ThroughputResult, ...]
 
 
+class ProductionHardware(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    gpu_count: int
+    gpu_model: str
+    gpu_memory_mib: int
+    logical_cpu_count: int
+    torch_version: str
+    cuda_version: str
+
+
+class ProductionGpuUtilization(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    rank: int
+    device_id: int
+    samples: int
+    mean_sm_percent: float
+    mean_memory_controller_percent: float
+    peak_memory_mib: int
+
+
+class IsolatedProductionResult(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    source_revision: str
+    method: str
+    rank_device_ids: tuple[int, ...]
+    global_batch_size: int
+    local_batch_size: int
+    replay_samples: int
+    retained_samples: int
+    dropped_incomplete_global_batch_samples: int
+    optimizer_steps_per_rank: int
+    samples_per_rank: int
+    partition_overlap_samples: int
+    duplicated_padding_samples: int
+    aggregated_training_samples: int
+    training_phase_seconds: float
+    optimizer_seconds: float
+    production_phase_samples_per_second: float
+    optimizer_samples_per_second: float
+    peak_aggregate_trainer_process_tree_rss_mib: float
+    gpu_utilization: tuple[ProductionGpuUtilization, ...]
+
+
+class SelfPlayContentionResult(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    processes_per_gpu: int
+    total_processes: int
+    mcts_threads_per_process: int
+    parallel_games_per_process: int
+    full_searches: int
+    fast_searches: int
+    inference_cache_enabled: bool
+    measurement_seconds: float
+    completed_games: int
+    completed_games_per_second: float
+    generated_samples: int
+    generated_samples_per_second: float
+    retained_samples: int
+    retained_samples_per_second: float
+    completed_game_plies_per_second: float
+    inference_evaluations: int
+    model_calls: int
+    average_inference_batch_size: float
+    summed_worker_peak_rss_mib: float
+
+
+class CombinedGpuUtilization(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    device_id: int
+    mean_sm_percent: float
+    peak_memory_mib: int
+
+
+class ContendedProductionResult(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    ddp_source_revision: str
+    ddp_replay: str
+    ddp_rank_device_ids: tuple[int, ...]
+    ddp_global_batch_size: int
+    ddp_local_batch_size: int
+    ddp_optimizer_steps_per_rank: int
+    ddp_samples_per_rank: int
+    ddp_aggregated_training_samples: int
+    ddp_training_phase_seconds: float
+    ddp_optimizer_seconds: float
+    ddp_production_phase_samples_per_second: float
+    ddp_optimizer_samples_per_second: float
+    ddp_peak_process_tree_rss_mib: float
+    self_play: SelfPlayContentionResult
+    combined_gpu_utilization: tuple[CombinedGpuUtilization, ...]
+    peak_host_ram_percent: float
+
+
+class PriorIsolatedReference(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    method: str
+    four_gpu_ddp_samples_per_second: float
+    four_gpu_data_parallel_samples_per_second: float
+
+
+class ProductionBenchmarkResults(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    hardware: ProductionHardware
+    isolated_real_replay: IsolatedProductionResult
+    ddp_with_half_self_play: ContendedProductionResult
+    prior_isolated_reference: PriorIsolatedReference
+
+
+class ThroughputBar(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    label: str
+    samples_per_second: float
+    color: str
+
+
 STRATEGY_COLORS = {
     Strategy.SINGLE_GPU: '#4C78A8',
     Strategy.DATA_PARALLEL: '#F58518',
@@ -124,13 +249,74 @@ def result_label(result: ThroughputResult) -> str:
     return f'{strategy}, {len(result.devices)} GPU{"s" if len(result.devices) > 1 else ""}, batch {result.global_batch_size:,}'
 
 
-def plot_throughput(results: BenchmarkResults) -> None:
-    ordered_results = tuple(reversed(results.results))
-    labels = tuple(result_label(result) for result in ordered_results)
-    throughput = tuple(result.samples_per_second / 1_000 for result in ordered_results)
-    colors = tuple(STRATEGY_COLORS[result.strategy] for result in ordered_results)
+def select_result(
+    results: BenchmarkResults,
+    strategy: Strategy,
+    device_count: int,
+    global_batch_size: int,
+) -> ThroughputResult:
+    return next(
+        result
+        for result in results.results
+        if result.strategy is strategy
+        and len(result.devices) == device_count
+        and result.global_batch_size == global_batch_size
+    )
 
-    figure, axis = plt.subplots(figsize=(9.2, 4.8))
+
+def plot_throughput(
+    results: BenchmarkResults,
+    production: ProductionBenchmarkResults,
+) -> None:
+    single_gpu = select_result(results, Strategy.SINGLE_GPU, 1, 1_024)
+    data_parallel = select_result(results, Strategy.DATA_PARALLEL, 4, 2_048)
+    distributed_data_parallel = select_result(
+        results,
+        Strategy.DISTRIBUTED_DATA_PARALLEL,
+        4,
+        2_048,
+    )
+    bars_to_plot = tuple(
+        reversed(
+            (
+                ThroughputBar(
+                    label='Single GPU, synthetic model path',
+                    samples_per_second=single_gpu.samples_per_second,
+                    color=STRATEGY_COLORS[Strategy.SINGLE_GPU],
+                ),
+                ThroughputBar(
+                    label='DataParallel, synthetic model path',
+                    samples_per_second=data_parallel.samples_per_second,
+                    color=STRATEGY_COLORS[Strategy.DATA_PARALLEL],
+                ),
+                ThroughputBar(
+                    label='DDP, short synthetic model path',
+                    samples_per_second=distributed_data_parallel.samples_per_second,
+                    color='#8BCB82',
+                ),
+                ThroughputBar(
+                    label='DDP, sustained synthetic model path',
+                    samples_per_second=results.steady_state_four_gpu_ddp.samples_per_second,
+                    color='#68B35F',
+                ),
+                ThroughputBar(
+                    label='DDP, production real replay',
+                    samples_per_second=production.isolated_real_replay.production_phase_samples_per_second,
+                    color='#3B8F45',
+                ),
+                ThroughputBar(
+                    label='DDP + half self-play',
+                    samples_per_second=production.ddp_with_half_self_play.ddp_production_phase_samples_per_second,
+                    color='#1F6F78',
+                ),
+            )
+        )
+    )
+    labels = tuple(result.label for result in bars_to_plot)
+    throughput = tuple(result.samples_per_second / 1_000 for result in bars_to_plot)
+    colors = tuple(result.color for result in bars_to_plot)
+
+    figure, axis = plt.subplots(figsize=(9.5, 5.2))
     bars = axis.barh(labels, throughput, color=colors, height=0.66)
     baseline = next(
         result.samples_per_second / 1_000
@@ -147,69 +333,73 @@ def plot_throughput(results: BenchmarkResults) -> None:
     )
     axis.bar_label(bars, labels=[f'{value:.1f}k' for value in throughput], padding=4)
     axis.set_xlim(0, max(throughput) * 1.16)
-    axis.set_xlabel('Training throughput (thousand synthetic samples/s)')
-    axis.set_title('DDP scales; single-process DataParallel does not')
+    axis.set_xlabel('Training throughput (thousand samples/s)')
+    axis.set_title('Production data loading and concurrent self-play reduce DDP throughput')
     axis.grid(axis='x')
     axis.set_axisbelow(True)
     axis.legend(frameon=False, loc='lower right')
     figure.text(
         0.01,
         -0.02,
-        '12×112 network, BF16, resident synthetic batches; DDP ranks intentionally received duplicate samples.',
+        (
+            '12×112 network, BF16. Synthetic ranks used duplicate resident samples; '
+            'production ranks used disjoint replay partitions.'
+        ),
         color='#555555',
         fontsize=8.5,
     )
     save_figure(figure, 'training-throughput')
 
 
-def plot_utilization(results: BenchmarkResults) -> None:
-    steady_state = results.steady_state_four_gpu_ddp
-    utilization = steady_state.gpu_utilization
-    devices = tuple(f'GPU {sample.device}' for sample in utilization)
-    means = tuple(sample.sm_mean_percent for sample in utilization)
-    lower_errors = tuple(sample.sm_mean_percent - sample.sm_min_percent for sample in utilization)
-    upper_errors = tuple(sample.sm_max_percent - sample.sm_mean_percent for sample in utilization)
-    overall_mean = sum(means) / len(means)
+def plot_utilization(production: ProductionBenchmarkResults) -> None:
+    isolated_by_device = tuple(
+        sorted(
+            production.isolated_real_replay.gpu_utilization,
+            key=lambda sample: sample.device_id,
+        )
+    )
+    contended_by_device = tuple(
+        sorted(
+            production.ddp_with_half_self_play.combined_gpu_utilization,
+            key=lambda sample: sample.device_id,
+        )
+    )
+    devices = tuple(f'GPU {sample.device_id}' for sample in isolated_by_device)
+    isolated_means = tuple(sample.mean_sm_percent for sample in isolated_by_device)
+    contended_means = tuple(sample.mean_sm_percent for sample in contended_by_device)
+    positions = tuple(float(index) for index in range(len(devices)))
+    width = 0.36
 
-    figure, axis = plt.subplots(figsize=(9.2, 4.8))
-    bars = axis.bar(
-        devices,
-        means,
+    figure, axis = plt.subplots(figsize=(8.8, 4.8))
+    isolated_bars = axis.bar(
+        tuple(position - width / 2 for position in positions),
+        isolated_means,
         color='#54A24B',
-        width=0.62,
-        yerr=(lower_errors, upper_errors),
-        capsize=5,
-        error_kw={'elinewidth': 1.2, 'ecolor': '#285B2D'},
+        width=width,
+        label='Production DDP',
     )
-    axis.bar_label(bars, labels=[f'{value:.1f}%' for value in means], padding=8)
-    axis.axhline(
-        overall_mean,
-        color='#333333',
-        linewidth=1.2,
-        linestyle='--',
-        label=f'Four-GPU mean: {overall_mean:.1f}%',
+    contended_bars = axis.bar(
+        tuple(position + width / 2 for position in positions),
+        contended_means,
+        color='#1F6F78',
+        width=width,
+        label='DDP + half self-play',
     )
-    memory = steady_state.memory_controller_utilization_percent
-    axis.axhspan(
-        memory.observed_minimum,
-        memory.observed_maximum,
-        color='#B9D7EA',
-        alpha=0.55,
-        label=f'Memory-controller range: {memory.observed_minimum:.0f}–{memory.observed_maximum:.0f}%',
-    )
-    axis.set_ylim(0, 85)
-    axis.set_ylabel('Utilization (%)')
-    axis.set_title('Sustained four-GPU DDP leaves room for concurrent self-play')
+    axis.bar_label(isolated_bars, labels=[f'{value:.1f}%' for value in isolated_means], padding=4)
+    axis.bar_label(contended_bars, labels=[f'{value:.1f}%' for value in contended_means], padding=4)
+    axis.set_xticks(positions, devices)
+    axis.set_ylim(0, 125)
+    axis.set_ylabel('Mean SM utilization (%)')
+    axis.set_title('Half self-play fills the compute headroom during DDP training')
     axis.grid(axis='y')
     axis.set_axisbelow(True)
-    axis.legend(frameon=False, loc='upper left', bbox_to_anchor=(1.01, 1))
+    axis.legend(frameon=False, loc='upper center', ncol=2)
     figure.text(
         0.01,
         -0.02,
         (
-            f'{steady_state.batches} measured batches; '
-            f'{steady_state.active_utilization_samples_per_gpu} one-second samples per GPU; '
-            f'{steady_state.samples_per_second / 1_000:.1f}k synthetic samples/s sustained.'
+            'Isolated DDP used real replay data (127 samples/device); the contention run used '
+            '5 self-play processes/GPU and reached 96.6–97.1% mean SM utilization.'
         ),
         color='#555555',
         fontsize=8.5,
@@ -220,8 +410,9 @@ def plot_utilization(results: BenchmarkResults) -> None:
 def main() -> None:
     configure_plot_style()
     results = BenchmarkResults.model_validate_json(RESULTS_PATH.read_text(encoding='utf-8'))
-    plot_throughput(results)
-    plot_utilization(results)
+    production = ProductionBenchmarkResults.model_validate_json(PRODUCTION_RESULTS_PATH.read_text(encoding='utf-8'))
+    plot_throughput(results, production)
+    plot_utilization(production)
 
 
 if __name__ == '__main__':
