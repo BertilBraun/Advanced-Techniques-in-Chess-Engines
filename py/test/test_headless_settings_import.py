@@ -6,10 +6,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parents[1]
 
 
-def test_chess_settings_does_not_import_pygame() -> None:
+def test_training_entrypoint_does_not_import_pygame() -> None:
     source = """
 import sys
-import src.games.chess.ChessSettings
+import src.train.Trainer
 
 assert 'pygame' not in sys.modules
 assert 'src.eval.GridGUI' not in sys.modules
