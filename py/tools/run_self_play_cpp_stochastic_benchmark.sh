@@ -92,13 +92,13 @@ for ((device = 0; device < gpu_count; device++)); do
 done
 visible_gpu_count=$(nvidia-smi --query-gpu=index --format=csv,noheader,nounits | wc -l)
 logical_cpu_count=$(nproc)
-maximum_mcts_threads=$((logical_cpu_count * 2))
+maximum_mcts_threads=$((logical_cpu_count * 3))
 if [[ "${visible_gpu_count}" -lt "${gpu_count}" ]]; then
     echo "Requested ${gpu_count} GPUs, but only ${visible_gpu_count} are visible"
     exit 1
 fi
 if [[ "${total_mcts_threads}" -gt "${maximum_mcts_threads}" ]]; then
-    echo "MCTS threads ${total_mcts_threads} exceed the 2x CPU limit ${maximum_mcts_threads}"
+    echo "MCTS threads ${total_mcts_threads} exceed the 3x CPU limit ${maximum_mcts_threads}"
     exit 1
 fi
 
