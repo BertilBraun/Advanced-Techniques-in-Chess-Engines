@@ -31,19 +31,19 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
         TrainingParams(
             num_epochs=num_epochs,
             optimizer='adamw',
-            batch_size=BATCH_SIZE,
+            global_batch_size=BATCH_SIZE,
+            local_batch_size=BATCH_SIZE,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=2,
         ),
-        (model.device.index,) if model.device.type == 'cuda' else (),
     )
 
     log('Training with lr:', trainer.args.learning_rate(iteration, trainer.args.optimizer))
 
     for epoch in range(num_epochs):
-        stats = trainer.train(dataloader, dataloader, iteration)
+        stats = trainer.train(dataloader, iteration)
         log(f'Epoch {epoch + 1}/{num_epochs} done: {stats}')
 
 

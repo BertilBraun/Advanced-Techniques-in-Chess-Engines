@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple, Protocol
 import torch
+import torch.distributed as distributed
 import torch.nn.functional as F
 from torch import nn
 
@@ -61,15 +62,14 @@ class Trainer:
         model: Network,
         optimizer: torch.optim.Optimizer,
         args: TrainingParams,
-        device_ids: tuple[int, ...],
+        training_model: nn.Module | None = None,
+        rank: int = 0,
     ) -> None:
         self.model: Network = model
         self.optimizer: torch.optim.Optimizer = optimizer
         self.args: TrainingParams = args
-        logit_forward = _LogitForward(model)
-        self.training_model: nn.Module = (
-            nn.DataParallel(logit_forward, device_ids=list(device_ids)) if len(device_ids) > 1 else logit_forward
-        )
+        self.training_model = _LogitForward(model) if training_model is None else training_model
+        self.rank = rank
 
     def _calculate_loss_for_batch(self, batch: TrainingBatch) -> _LossResult:
         """Calculate losses for a single batch"""
@@ -109,11 +109,17 @@ class Trainer:
         """Train for one epoch and return statistics"""
         self.model.train()
         self.training_model.train()
-        stats = TrainingStats(self.model.device)
-        scaler = GradScaler()
+        reduction_values = torch.zeros(9, device=self.model.device, dtype=torch.float64)
+        scaler = GradScaler(self.model.device.type, enabled=self.model.device.type == 'cuda')
 
-        for batch in tqdm(prefetch_training_batches(dataloader), total=len(dataloader), desc='Train batches'):
+        for batch in tqdm(
+            prefetch_training_batches(dataloader),
+            total=len(dataloader),
+            desc='Train batches',
+            disable=self.rank != 0,
+        ):
             self.optimizer.zero_grad()
+            sample_count = batch[0].shape[0]
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
                 policy_loss, value_loss, total_loss, value_output = self._calculate_loss_for_batch(batch)
@@ -128,10 +134,31 @@ class Trainer:
             scaler.step(self.optimizer)
             scaler.update()
 
-            # Collect statistics
-            stats.add_batch(policy_loss, value_loss, total_loss, value_output, grad_norm.item())
+            reduction_values[0] += policy_loss.detach().double() * sample_count
+            reduction_values[1] += value_loss.detach().double() * sample_count
+            reduction_values[2] += total_loss.detach().double() * sample_count
+            reduction_values[3] += sample_count
+            reduction_values[4] += value_output.detach().double().sum()
+            reduction_values[5] += value_output.detach().double().square().sum()
+            if self.rank == 0:
+                reduction_values[6] += grad_norm.detach().double()
+                reduction_values[7] += 1
+                reduction_values[8] += 1
 
-        return stats
+        if distributed.is_initialized():
+            distributed.all_reduce(reduction_values, op=distributed.ReduceOp.SUM)
+
+        return TrainingStats(
+            policy_loss_sum=float(reduction_values[0].item()),
+            value_loss_sum=float(reduction_values[1].item()),
+            total_loss_sum=float(reduction_values[2].item()),
+            sample_count=int(reduction_values[3].item()),
+            value_sum=float(reduction_values[4].item()),
+            value_square_sum=float(reduction_values[5].item()),
+            gradient_norm_sum=float(reduction_values[6].item()),
+            gradient_norm_count=int(reduction_values[7].item()),
+            num_batches=int(reduction_values[8].item()),
+        )
 
     @timeit
     def train(
@@ -146,8 +173,9 @@ class Trainer:
         """
         # Set learning rate
         base_lr: float = self.args.learning_rate(iteration, self.args.optimizer)
-        log_scalar('training/learning_rate', base_lr, iteration)
-        log(f'Setting learning rate to {base_lr} for iteration {iteration}')
+        if self.rank == 0:
+            log_scalar('training/learning_rate', base_lr, iteration)
+            log(f'Setting learning rate to {base_lr} for iteration {iteration}')
 
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = base_lr

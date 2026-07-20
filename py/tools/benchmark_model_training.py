@@ -6,11 +6,12 @@ import time
 from dataclasses import asdict, dataclass
 
 import torch
+from torch import nn
 from torch.amp import GradScaler, autocast
 
 from src.Network import Network
 from src.settings import CurrentGame, TRAINING_ARGS
-from src.train.Trainer import Trainer
+from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
@@ -89,7 +90,13 @@ def main() -> None:
         device,
     )
     optimizer = torch.optim.AdamW(model.parameters())
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, arguments.device_ids)
+    logit_model = _LogitForward(model)
+    training_model: nn.Module = (
+        nn.DataParallel(logit_model, device_ids=list(arguments.device_ids))
+        if len(arguments.device_ids) > 1
+        else logit_model
+    )
+    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, training_model=training_model)
     scaler = GradScaler()
 
     batch_size = arguments.batch_size

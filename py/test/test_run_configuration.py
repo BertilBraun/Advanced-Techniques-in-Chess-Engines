@@ -83,7 +83,8 @@ def training_args() -> TrainingArgs:
         ),
         training=TrainingParams(
             num_epochs=1,
-            batch_size=8,
+            global_batch_size=8,
+            local_batch_size=8,
             optimizer='adamw',
             sampling_window=sampling_window,
             learning_rate=learning_rate,
@@ -91,8 +92,10 @@ def training_args() -> TrainingArgs:
             num_workers=0,
         ),
         cluster=ClusterParams(
-            trainer_device_id=0,
-            trainer_data_parallel_device_ids=(0,),
+            trainer_device_type='cpu',
+            trainer_process_group_backend='gloo',
+            trainer_rank_zero_device_id=0,
+            trainer_ddp_device_ids=(0,),
             evaluation_device_cycle=(0,),
             self_play_device_ids=(0,),
             self_play_tensorboard_processes=1,
@@ -186,6 +189,83 @@ def test_configuration_rejects_cpu_oversubscription() -> None:
 
 
 @pytest.mark.parametrize(
+    ('device_ids', 'rank_zero_device_id', 'message'),
+    (
+        ((), 0, 'At least one trainer device'),
+        ((3, 3), 3, 'must be unique'),
+        ((2, 3), 3, 'rank-zero trainer device'),
+        ((-1,), 0, 'cannot be negative'),
+    ),
+)
+def test_configuration_rejects_invalid_ddp_device_lists(
+    device_ids: tuple[int, ...],
+    rank_zero_device_id: int,
+    message: str,
+) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['trainer_ddp_device_ids'] = device_ids
+    data['topology']['trainer_rank_zero_device_id'] = rank_zero_device_id
+
+    with pytest.raises(ValidationError, match=message):
+        RunConfiguration.model_validate(data)
+
+
+def test_configuration_rejects_out_of_range_ddp_device() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['trainer_rank_zero_device_id'] = 4
+    data['topology']['trainer_ddp_device_ids'] = (4,)
+    out_of_range = RunConfiguration.model_validate(data)
+
+    with pytest.raises(ValueError, match='outside the configured GPU range'):
+        validate_run_configuration(out_of_range, resolved_pilot_hardware())
+
+
+def test_configuration_accepts_explicit_cpu_gloo_trainer() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['trainer_device_type'] = 'cpu'
+    data['topology']['trainer_process_group_backend'] = 'gloo'
+    data['topology']['trainer_rank_zero_device_id'] = 0
+    data['topology']['trainer_ddp_device_ids'] = (0,)
+
+    cpu_configuration = RunConfiguration.model_validate(data)
+
+    validate_run_configuration(cpu_configuration, resolved_pilot_hardware())
+
+
+def test_configuration_rejects_nccl_for_cpu_trainer() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['trainer_device_type'] = 'cpu'
+    data['topology']['trainer_rank_zero_device_id'] = 0
+    data['topology']['trainer_ddp_device_ids'] = (0,)
+
+    with pytest.raises(ValidationError, match='NCCL can only'):
+        RunConfiguration.model_validate(data)
+
+
+def test_configuration_rejects_global_local_batch_mismatch() -> None:
+    configuration = load_run_configuration(V4_CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['workload']['training_local_batch_size'] = 1024
+
+    with pytest.raises(ValidationError, match='Global training batch size'):
+        RunConfiguration.model_validate(data)
+
+
+def test_configuration_rejects_legacy_data_parallel_fields() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['trainer_device_id'] = data['topology'].pop('trainer_rank_zero_device_id')
+    data['topology']['trainer_data_parallel_device_ids'] = data['topology'].pop('trainer_ddp_device_ids')
+
+    with pytest.raises(ValidationError, match='trainer_device_id|trainer_data_parallel_device_ids'):
+        RunConfiguration.model_validate(data)
+
+
+@pytest.mark.parametrize(
     'training_process_counts',
     (
         (6, 6, 6),
@@ -257,8 +337,10 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
 
     apply_run_configuration(arguments, configuration)
 
-    assert arguments.cluster.trainer_device_id == 3
-    assert arguments.cluster.trainer_data_parallel_device_ids == (3,)
+    assert arguments.cluster.trainer_device_type == 'cuda'
+    assert arguments.cluster.trainer_process_group_backend == 'nccl'
+    assert arguments.cluster.trainer_rank_zero_device_id == 3
+    assert arguments.cluster.trainer_ddp_device_ids == (3,)
     assert arguments.cluster.evaluation_device_cycle == (3,)
     assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 2
     assert arguments.cluster.self_play_tensorboard_processes == 1
@@ -271,7 +353,8 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.self_play.mcts.num_searches_per_turn == 600
     assert arguments.self_play.mcts.fast_searches_proportion_of_full_searches == pytest.approx(0.25)
     assert arguments.training.num_workers == 0
-    assert arguments.training.batch_size == 1024
+    assert arguments.training.global_batch_size == 1024
+    assert arguments.training.local_batch_size == 1024
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0002)
     assert pickle.dumps(arguments.training.learning_rate)
     assert arguments.num_iterations == 2
@@ -376,7 +459,7 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play.mcts.num_threads == 6
     assert arguments.self_play.num_parallel_games == 96
     assert arguments.cluster.self_play_tensorboard_processes == 1
-    assert arguments.cluster.trainer_data_parallel_device_ids == (3,)
+    assert arguments.cluster.trainer_ddp_device_ids == (3,)
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
     assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 6
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (21, 22, 23)
@@ -411,8 +494,10 @@ def test_v4_configuration_matches_approved_launch_parameters() -> None:
     assert arguments.self_play.mcts.num_threads == 3
     assert arguments.self_play.num_parallel_games == 96
     assert arguments.cluster.self_play_device_ids == (0,) * 10 + (1,) * 10 + (2,) * 10 + (3,) * 10
-    assert arguments.cluster.trainer_data_parallel_device_ids == (3, 2, 1, 0)
-    assert arguments.training.batch_size == 2048
+    assert arguments.cluster.trainer_rank_zero_device_id == 3
+    assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
+    assert arguments.training.global_batch_size == 2048
+    assert arguments.training.local_batch_size == 512
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (
         5,
         6,
@@ -483,6 +568,13 @@ def test_approval_must_match_exact_configuration_and_source() -> None:
     mismatched_approval = approval.model_copy(update={'maximum_cost': 1.0})
     with pytest.raises(ValueError, match='cost ceiling'):
         validate_approval(configuration, mismatched_approval, source_revision)
+
+    changed_data = configuration.model_dump()
+    changed_data['workload']['training_global_batch_size'] = 512
+    changed_data['workload']['training_local_batch_size'] = 512
+    changed_configuration = RunConfiguration.model_validate(changed_data)
+    with pytest.raises(ValueError, match='configuration hash'):
+        validate_approval(changed_configuration, approval, source_revision)
 
 
 def test_existing_manifest_preserves_initial_dynamic_hardware_measurements(tmp_path: Path) -> None:

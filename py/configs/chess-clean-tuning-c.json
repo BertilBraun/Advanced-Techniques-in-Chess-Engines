@@ -24,8 +24,10 @@
     "minimum_disk_gib": 80
   },
   "topology": {
-    "trainer_device_id": 3,
-    "trainer_data_parallel_device_ids": [3],
+    "trainer_device_type": "cuda",
+    "trainer_process_group_backend": "nccl",
+    "trainer_rank_zero_device_id": 3,
+    "trainer_ddp_device_ids": [3],
     "evaluation_device_cycle": [3],
     "self_play_processes_per_device": [4, 4, 4, 4],
     "self_play_tensorboard_processes": 1,
@@ -48,7 +50,8 @@
     "iterations": 1,
     "games_per_iteration": 1200,
     "games_per_replay_file": 10,
-    "training_batch_size": 1024,
+    "training_global_batch_size": 1024,
+    "training_local_batch_size": 1024,
     "self_play_searches_per_turn": 600,
     "self_play_fast_searches_per_turn": 150,
     "learning_rate_schedule": [

@@ -97,8 +97,10 @@ class HardwareConfiguration(BaseModel):
 class TopologyConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    trainer_device_id: int = Field(ge=0)
-    trainer_data_parallel_device_ids: tuple[int, ...]
+    trainer_device_type: Literal['cuda', 'cpu']
+    trainer_process_group_backend: Literal['nccl', 'gloo']
+    trainer_rank_zero_device_id: int = Field(ge=0)
+    trainer_ddp_device_ids: tuple[int, ...]
     evaluation_device_cycle: tuple[int, ...]
     self_play_processes_per_device: tuple[int, ...]
     self_play_tensorboard_processes: int = Field(ge=1)
@@ -119,12 +121,21 @@ class TopologyConfiguration(BaseModel):
 
     @model_validator(mode='after')
     def validate_process_counts(self) -> TopologyConfiguration:
-        if not self.trainer_data_parallel_device_ids:
+        if not self.trainer_ddp_device_ids:
             raise ValueError('At least one trainer device must be configured.')
-        if self.trainer_data_parallel_device_ids[0] != self.trainer_device_id:
-            raise ValueError('The primary trainer device must be first in the data-parallel device list.')
-        if len(set(self.trainer_data_parallel_device_ids)) != len(self.trainer_data_parallel_device_ids):
-            raise ValueError('Data-parallel trainer devices must be unique.')
+        if any(device_id < 0 for device_id in self.trainer_ddp_device_ids):
+            raise ValueError('DDP trainer device IDs cannot be negative.')
+        if self.trainer_ddp_device_ids[0] != self.trainer_rank_zero_device_id:
+            raise ValueError('The rank-zero trainer device must be first in the DDP device list.')
+        if len(set(self.trainer_ddp_device_ids)) != len(self.trainer_ddp_device_ids):
+            raise ValueError('DDP trainer devices must be unique.')
+        if self.trainer_process_group_backend == 'nccl' and self.trainer_device_type != 'cuda':
+            raise ValueError('NCCL can only be selected for CUDA trainer devices.')
+        if self.trainer_device_type == 'cpu':
+            if self.trainer_process_group_backend != 'gloo':
+                raise ValueError('CPU distributed training requires the Gloo backend.')
+            if self.trainer_ddp_device_ids != (0,):
+                raise ValueError('CPU distributed training uses the single logical device ID 0.')
         if not self.self_play_processes_per_device:
             raise ValueError('At least one self-play device must be configured.')
         if any(process_count < 0 for process_count in self.self_play_processes_per_device):
@@ -169,7 +180,8 @@ class WorkloadConfiguration(BaseModel):
     iterations: int = Field(gt=0)
     games_per_iteration: int = Field(gt=0)
     games_per_replay_file: int = Field(gt=0)
-    training_batch_size: int = Field(gt=0)
+    training_global_batch_size: int = Field(gt=0)
+    training_local_batch_size: int = Field(gt=0)
     self_play_searches_per_turn: int = Field(gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...]
@@ -295,6 +307,13 @@ class RunConfiguration(BaseModel):
 
     @model_validator(mode='after')
     def validate_evaluation_retention(self) -> RunConfiguration:
+        world_size = len(self.topology.trainer_ddp_device_ids)
+        expected_global_batch_size = self.workload.training_local_batch_size * world_size
+        if self.workload.training_global_batch_size != expected_global_batch_size:
+            raise ValueError(
+                f'Global training batch size {self.workload.training_global_batch_size} must equal '
+                f'local batch size {self.workload.training_local_batch_size} times world size {world_size}.'
+            )
         if self.retention is None:
             return self
         offsets = self.evaluation_protocol.previous_model_offsets
@@ -479,15 +498,12 @@ def validate_run_configuration(
         raise ValueError(f'Expected every GPU to match {hardware.gpu_model!r}; found {unexpected_gpu_names}.')
     if len(topology.self_play_processes_per_device) != hardware.gpu_count:
         raise ValueError('self_play_processes_per_device must contain exactly one entry per visible GPU.')
-    if topology.trainer_device_id >= hardware.gpu_count:
-        raise ValueError(f'Trainer device {topology.trainer_device_id} is outside the configured GPU range.')
-    invalid_trainer_devices = tuple(
-        device_id for device_id in topology.trainer_data_parallel_device_ids if device_id >= hardware.gpu_count
-    )
-    if invalid_trainer_devices:
-        raise ValueError(
-            f'Data-parallel trainer devices {invalid_trainer_devices} are outside the configured GPU range.'
+    if topology.trainer_device_type == 'cuda':
+        invalid_trainer_devices = tuple(
+            device_id for device_id in topology.trainer_ddp_device_ids if device_id >= hardware.gpu_count
         )
+        if invalid_trainer_devices:
+            raise ValueError(f'DDP trainer devices {invalid_trainer_devices} are outside the configured GPU range.')
     invalid_evaluation_devices = tuple(
         device_id for device_id in topology.evaluation_device_cycle if device_id >= hardware.gpu_count
     )
@@ -508,10 +524,11 @@ def validate_run_configuration(
         )
 
     self_play_cpu_slots = sum(topology.self_play_processes_per_device) * topology.mcts_threads_per_process
+    trainer_world_size = len(topology.trainer_ddp_device_ids)
     required_cpu_slots = (
         self_play_cpu_slots
-        + topology.trainer_cpu_threads
-        + topology.dataloader_workers
+        + topology.trainer_cpu_threads * trainer_world_size
+        + topology.dataloader_workers * trainer_world_size
         + topology.reserved_logical_cpus
     )
     maximum_cpu_slots = resolved_hardware.logical_cpu_count * topology.maximum_cpu_oversubscription_ratio
@@ -572,7 +589,8 @@ def apply_run_configuration(
     training_args.num_iterations = workload.iterations
     training_args.num_games_per_iteration = workload.games_per_iteration
     training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
-    training_args.training.batch_size = workload.training_batch_size
+    training_args.training.global_batch_size = workload.training_global_batch_size
+    training_args.training.local_batch_size = workload.training_local_batch_size
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
     training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
         workload.self_play_fast_searches_per_turn / workload.self_play_searches_per_turn
@@ -590,8 +608,10 @@ def apply_run_configuration(
     training_args.training.num_workers = topology.dataloader_workers
     training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
     training_args.cluster = ClusterParams(
-        trainer_device_id=topology.trainer_device_id,
-        trainer_data_parallel_device_ids=topology.trainer_data_parallel_device_ids,
+        trainer_device_type=topology.trainer_device_type,
+        trainer_process_group_backend=topology.trainer_process_group_backend,
+        trainer_rank_zero_device_id=topology.trainer_rank_zero_device_id,
+        trainer_ddp_device_ids=topology.trainer_ddp_device_ids,
         evaluation_device_cycle=topology.evaluation_device_cycle,
         self_play_device_ids=_self_play_device_ids(topology.self_play_processes_per_device),
         self_play_tensorboard_processes=topology.self_play_tensorboard_processes,
@@ -771,7 +791,10 @@ def prepare_training_run(
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
             initial_model_sha256 = _sha256(initial_model_path)
             if not initial_checkpoint_path.exists():
-                device = torch.device('cuda', configuration.topology.trainer_device_id)
+                device = torch.device(
+                    configuration.topology.trainer_device_type,
+                    configuration.topology.trainer_rank_zero_device_id,
+                )
                 model = load_model(initial_model_path, training_args.network, device)
                 save_model_and_optimizer(model, create_optimizer(model, optimizer), 0, output_path)
         case RandomInitializationResumeConfiguration(optimizer=optimizer):
@@ -780,7 +803,10 @@ def prepare_training_run(
                     f'Randomly initialized checkpoint exists without a run manifest: {initial_checkpoint_path}'
                 )
             if not initial_checkpoint_path.exists():
-                device = torch.device('cuda', configuration.topology.trainer_device_id)
+                device = torch.device(
+                    configuration.topology.trainer_device_type,
+                    configuration.topology.trainer_rank_zero_device_id,
+                )
                 model = create_model(training_args.network, device)
                 save_model_and_optimizer(model, create_optimizer(model, optimizer), 0, output_path)
             initial_model_sha256 = _sha256(initial_checkpoint_path)

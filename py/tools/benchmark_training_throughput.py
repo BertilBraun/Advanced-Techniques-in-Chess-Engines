@@ -46,13 +46,13 @@ def parse_arguments() -> argparse.Namespace:
 
 def load_iteration_dataset(save_path: str, iteration: int) -> SelfPlayDataset:
     dataset = SelfPlayDataset.load_iteration(save_path, iteration)
-    if len(dataset) < TRAINING_ARGS.training.batch_size:
+    if len(dataset) < TRAINING_ARGS.training.global_batch_size:
         raise ValueError(f'Iteration {iteration} contains only {len(dataset)} samples.')
     return dataset
 
 
 def benchmark_decode(dataset: SelfPlayDataset, batches: int) -> tuple[float, float]:
-    batch_size = TRAINING_ARGS.training.batch_size
+    batch_size = TRAINING_ARGS.training.global_batch_size
     indices = list(range(batch_size))
 
     started_at = perf_counter()
@@ -89,7 +89,7 @@ def benchmark_training(
     batches: int,
     dataloader_workers: int,
 ) -> tuple[float, float, float]:
-    device = torch.device('cuda', TRAINING_ARGS.cluster.trainer_device_id)
+    device = torch.device('cuda', TRAINING_ARGS.cluster.trainer_rank_zero_device_id)
     torch.cuda.set_device(device)
     model, optimizer = load_model_and_optimizer(
         iteration,
@@ -98,11 +98,11 @@ def benchmark_training(
         TRAINING_ARGS.save_path,
         TRAINING_ARGS.training.optimizer,
     )
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, (device.index,))
+    trainer = Trainer(model, optimizer, TRAINING_ARGS.training)
     scaler = GradScaler()
     dataloader = as_dataloader(
         dataset,
-        TRAINING_ARGS.training.batch_size,
+        TRAINING_ARGS.training.global_batch_size,
         num_workers=dataloader_workers,
         drop_last=True,
     )
@@ -159,7 +159,7 @@ def main() -> None:
         total_seconds_per_batch=total_seconds,
         estimated_gpu_duty_cycle_percent=100 * cuda_seconds / total_seconds,
         host_ram_gib=psutil.Process().memory_info().rss / 2**30,
-        gpu_memory_mib=torch.cuda.memory_allocated(TRAINING_ARGS.cluster.trainer_device_id) / 2**20,
+        gpu_memory_mib=torch.cuda.memory_allocated(TRAINING_ARGS.cluster.trainer_rank_zero_device_id) / 2**20,
     )
     print(json.dumps(asdict(result), indent=2))
 

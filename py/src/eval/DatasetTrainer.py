@@ -38,24 +38,24 @@ def train_model(
         TrainingParams(
             num_epochs=num_epochs,
             optimizer='adamw',
-            batch_size=TRAINING_ARGS.training.batch_size,
+            global_batch_size=TRAINING_ARGS.training.global_batch_size,
+            local_batch_size=TRAINING_ARGS.training.local_batch_size,
             sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
             num_workers=2,
         ),
-        (model.device.index,) if model.device.type == 'cuda' else (),
     )
 
     log(
         'Training with lr:',
         trainer.args.learning_rate(iteration, trainer.args.optimizer),
         'and batch size:',
-        trainer.args.batch_size,
+        trainer.args.global_batch_size,
     )
 
     for epoch in range(num_epochs):
-        trainer.train(dataloader, test_dataloader, iteration)
+        trainer.train(dataloader, iteration)
 
 
 def main(dataset_paths: list[str]):
@@ -74,7 +74,7 @@ def main(dataset_paths: list[str]):
         test_dataset = test_dataset.deduplicate()
         test_dataloader = as_dataloader(
             test_dataset,
-            batch_size=TRAINING_ARGS.training.batch_size,
+            batch_size=TRAINING_ARGS.training.global_batch_size,
             num_workers=1,
         )
 
@@ -84,7 +84,7 @@ def main(dataset_paths: list[str]):
         train_stats = train_dataset.stats
         train_dataloader = as_dataloader(
             train_dataset,
-            batch_size=TRAINING_ARGS.training.batch_size,
+            batch_size=TRAINING_ARGS.training.global_batch_size,
             num_workers=1,
         )
 

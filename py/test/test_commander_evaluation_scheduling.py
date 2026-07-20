@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -28,18 +27,13 @@ class _CommanderArguments:
 
 
 @dataclass(frozen=True)
-class _BufferStatistics:
+class _ReplayStatistics:
     num_samples: int = 0
     num_games: int = 0
 
 
-@dataclass(frozen=True)
-class _RollingBuffer:
-    stats: _BufferStatistics = _BufferStatistics()
-
-
 class _Trainer:
-    rolling_buffer = _RollingBuffer()
+    replay_stats = _ReplayStatistics()
 
     def wait_for_enough_training_samples(
         self,
@@ -103,14 +97,6 @@ def test_training_reaps_evaluations_without_waiting_for_active_ones(
     def no_games(_: int, __: str) -> int:
         return 0
 
-    def tensorboard_writer(
-        _: int,
-        __: str,
-        postfix_pid: bool,
-    ) -> AbstractContextManager[None]:
-        assert not postfix_pid
-        return nullcontext()
-
     def ignore_iteration_telemetry(
         iteration: int,
         games_at_wait_start: int,
@@ -132,8 +118,6 @@ def test_training_reaps_evaluations_without_waiting_for_active_ones(
     monkeypatch.setattr(commander, '_wait_for_all_evaluations', fail_if_waited)
     monkeypatch.setattr(commander, '_write_iteration_telemetry', ignore_iteration_telemetry)
     monkeypatch.setattr(commander_module, 'number_of_games_in_iteration', no_games)
-    monkeypatch.setattr(commander_module, 'TensorboardWriter', tensorboard_writer)
-
     iterations = commander._run_iterations(_Trainer(), _Gating(), 0, 0)
     next(iterations)
 

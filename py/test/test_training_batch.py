@@ -104,6 +104,7 @@ def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
         loaded_samples.visit_counts,
         expected_visit_counts,
     ):
+        assert loaded_visit_counts.dtype == np.uint16
         np.testing.assert_array_equal(loaded_visit_counts, expected_visit_counts)
 
 
@@ -146,3 +147,15 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
 
     for actual_component, expected_component in zip(batch, expected):
         torch.testing.assert_close(actual_component, expected_component)
+
+
+def test_rolling_buffer_replay_updates_are_idempotent(tmp_path: Path) -> None:
+    samples = dataset()
+    memory_path = tmp_path / 'memory_0' / 'samples.hdf5'
+    assert samples.save_to_path(memory_path)
+    rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=10)
+
+    rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
+    rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
+
+    assert len(rolling_buffer) == len(samples)

@@ -7,7 +7,6 @@ from time import monotonic
 
 from src.cluster.GatingProcess import GatingProcess
 from src.train.TrainingArgs import TrainingArgs
-from src.settings import USE_GPU
 from src.train.TrainingStats import TrainingStats
 from src.util.communication import Communication, pause_self_play_workers, resume_self_play_workers
 from src.util.exceptions import log_exceptions
@@ -21,7 +20,6 @@ from src.util.save_paths import (
 from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
 from src.cluster.TrainerProcess import TrainerProcess, number_of_games_in_iteration
-from src.util.tensorboard import TensorboardWriter
 from src.util.timing import reset_times
 from src.experiment.resource_telemetry import process_tree_open_file_counts
 from src.experiment.progress_telemetry import IterationTelemetry, append_iteration_telemetry
@@ -49,7 +47,7 @@ class CommanderProcess:
         self.self_play_processes: list[Process] = []
         self.evaluation_processes: list[Process] = []
 
-        self.trainer_device_id = self.args.cluster.trainer_device_id if USE_GPU else 0
+        self.trainer_device_id = self.args.cluster.trainer_rank_zero_device_id
         self.started_at = started_at
         self.final_stop_reason: str | None = None
         self.latest_completed_iteration = 0
@@ -88,8 +86,10 @@ class CommanderProcess:
                     current_best_iteration,
                 )
         finally:
-            trainer.close()
-            self._shutdown()
+            try:
+                trainer.close()
+            finally:
+                self._shutdown()
 
     def _initialize_workers(
         self,
@@ -99,7 +99,7 @@ class CommanderProcess:
         try:
             log('Setting up connections...')
             self._setup_connections()
-            trainer = TrainerProcess(self.args, self.run_id, self.trainer_device_id)
+            trainer = TrainerProcess(self.args, self.run_id, starting_iteration)
             gating = GatingProcess(self.args, self.run_id, self.trainer_device_id)
             log('Connections set up.')
 
@@ -129,68 +129,43 @@ class CommanderProcess:
             log(f'Starting iteration {iteration}.')
             self.communication.boardcast(f'START AT ITERATION: {iteration}')
 
-            with TensorboardWriter(self.run_id, 'trainer', postfix_pid=False):
-                games_at_wait_start = number_of_games_in_iteration(
-                    iteration,
-                    self.args.save_path,
-                )
-                wait_started_at = monotonic()
-                if not trainer.wait_for_enough_training_samples(
-                    iteration,
-                    self._stop_reason,
-                ):
-                    stop_reason = self._stop_reason()
-                    self.final_stop_reason = stop_reason
-                    warn(f'Stopping while waiting for iteration {iteration}: {stop_reason}')
-                    break
-                wait_finished_at = monotonic()
-                games_at_wait_end = number_of_games_in_iteration(
-                    iteration,
-                    self.args.save_path,
-                )
-                trainer.load_all_memories_to_train_on_for_iteration(iteration)
+            games_at_wait_start = number_of_games_in_iteration(
+                iteration,
+                self.args.save_path,
+            )
+            wait_started_at = monotonic()
+            if not trainer.wait_for_enough_training_samples(
+                iteration,
+                self._stop_reason,
+            ):
+                stop_reason = self._stop_reason()
+                self.final_stop_reason = stop_reason
+                warn(f'Stopping while waiting for iteration {iteration}: {stop_reason}')
+                break
+            wait_finished_at = monotonic()
+            games_at_wait_end = number_of_games_in_iteration(
+                iteration,
+                self.args.save_path,
+            )
+            trainer.load_all_memories_to_train_on_for_iteration(iteration)
 
-                self._reap_evaluation_processes()
-                self_play_node_ids_to_pause = self.args.cluster.self_play_node_ids_to_pause_during_training
-                if self_play_node_ids_to_pause:
-                    pause_self_play_workers(
-                        self.communication,
-                        self_play_node_ids_to_pause,
-                        timeout_seconds=120,
-                    )
-                    log(
-                        'Paused self-play workers before training:',
-                        self_play_node_ids_to_pause,
-                    )
-
-                training_started_at = monotonic()
-                try:
-                    training_result = trainer.train(iteration)
-                finally:
-                    if self_play_node_ids_to_pause:
-                        resume_self_play_workers(
-                            self.communication,
-                            self_play_node_ids_to_pause,
-                            timeout_seconds=120,
-                        )
-                        log(
-                            'Resumed self-play workers after training:',
-                            self_play_node_ids_to_pause,
-                        )
-                training_finished_at = monotonic()
-                self.latest_completed_iteration = iteration + 1
-                self._write_iteration_telemetry(
-                    iteration=iteration,
-                    games_at_wait_start=games_at_wait_start,
-                    games_at_wait_end=games_at_wait_end,
-                    wait_seconds=wait_finished_at - wait_started_at,
-                    replay_samples_loaded=trainer.rolling_buffer.stats.num_samples,
-                    replay_games_loaded=trainer.rolling_buffer.stats.num_games,
-                    training_seconds=training_finished_at - training_started_at,
-                )
-                yield iteration, training_result
-                log(f'Training finished for iteration {iteration}')
-                reset_times()
+            self._reap_evaluation_processes()
+            training_started_at = monotonic()
+            training_result = self._train_with_self_play_cleanup(trainer, iteration)
+            training_finished_at = monotonic()
+            self.latest_completed_iteration = iteration + 1
+            self._write_iteration_telemetry(
+                iteration=iteration,
+                games_at_wait_start=games_at_wait_start,
+                games_at_wait_end=games_at_wait_end,
+                wait_seconds=wait_finished_at - wait_started_at,
+                replay_samples_loaded=trainer.replay_stats.num_samples,
+                replay_games_loaded=trainer.replay_stats.num_games,
+                training_seconds=training_finished_at - training_started_at,
+            )
+            yield iteration, training_result
+            log(f'Training finished for iteration {iteration}')
+            reset_times()
 
             current_best_iteration = gating.run(iteration, current_best_iteration)
 
@@ -199,6 +174,39 @@ class CommanderProcess:
                 if process is None:
                     break
                 log(f'Started evaluation process for iteration {iteration + 1}.')
+
+    def _train_with_self_play_cleanup(
+        self,
+        trainer: TrainerProcess,
+        iteration: int,
+    ) -> TrainingStats:
+        node_ids = self.args.cluster.self_play_node_ids_to_pause_during_training
+        primary_error: BaseException | None = None
+        try:
+            if node_ids:
+                pause_self_play_workers(
+                    self.communication,
+                    node_ids,
+                    timeout_seconds=120,
+                )
+                log('Paused self-play workers before training:', node_ids)
+            return trainer.train(iteration)
+        except BaseException as error:
+            primary_error = error
+            raise
+        finally:
+            if node_ids:
+                try:
+                    resume_self_play_workers(
+                        self.communication,
+                        node_ids,
+                        timeout_seconds=120,
+                    )
+                    log('Resumed self-play workers after training:', node_ids)
+                except BaseException as resume_error:
+                    if primary_error is None:
+                        raise
+                    warn(f'Failed to resume self-play while handling {type(primary_error).__name__}: {resume_error}')
 
     def _shutdown(self) -> None:
         log('Training complete. Sending STOP to all processes.')
@@ -366,7 +374,10 @@ class CommanderProcess:
             load_model_and_optimizer(
                 starting_iteration,
                 self.args.network,
-                torch.device('cuda' if USE_GPU else 'cpu'),
+                torch.device(
+                    self.args.cluster.trainer_device_type,
+                    self.args.cluster.trainer_rank_zero_device_id,
+                ),
                 self.args.save_path,
                 self.args.training.optimizer,
             )
@@ -374,7 +385,10 @@ class CommanderProcess:
         model, optimizer = load_model_and_optimizer(
             starting_iteration,
             self.args.network,
-            torch.device('cuda' if USE_GPU else 'cpu'),
+            torch.device(
+                self.args.cluster.trainer_device_type,
+                self.args.cluster.trainer_rank_zero_device_id,
+            ),
             self.args.save_path,
             self.args.training.optimizer,
         )

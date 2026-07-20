@@ -42,8 +42,10 @@ TRAINING_ARGS = TrainingArgs(
         ),
     ),
     cluster=ClusterParams(
-        trainer_device_id=max(0, NUM_GPUS - 1),
-        trainer_data_parallel_device_ids=(max(0, NUM_GPUS - 1),),
+        trainer_device_type='cuda' if USE_GPU else 'cpu',
+        trainer_process_group_backend='nccl' if USE_GPU else 'gloo',
+        trainer_rank_zero_device_id=max(0, NUM_GPUS - 1),
+        trainer_ddp_device_ids=(max(0, NUM_GPUS - 1),),
         evaluation_device_cycle=(max(0, NUM_GPUS - 1),),
         self_play_device_ids=(max(0, NUM_GPUS - 1),) * NUM_SELF_PLAYERS,
         self_play_tensorboard_processes=1,
@@ -54,7 +56,8 @@ TRAINING_ARGS = TrainingArgs(
     ),
     training=TrainingParams(
         num_epochs=1,
-        batch_size=128,
+        global_batch_size=128,
+        local_batch_size=128,
         optimizer='adamw',  # 'sgd',
         sampling_window=sampling_window,
         learning_rate=learning_rate,
