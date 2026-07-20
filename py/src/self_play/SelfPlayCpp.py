@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTSRoot, MCTSResults, MCTS
+    from AlphaZeroCpp import MCTS, MCTSBoard, MCTSResults, MCTSRoot
 
 
 import chess
@@ -200,14 +200,16 @@ class SelfPlayCpp:
             spg.already_expanded_node = None
 
     @timeit
-    def search(self, boards: list[tuple[MCTSRoot, bool]]) -> MCTSResults:
+    def search(self, boards: list[MCTSBoard]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
         return self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
 
     def self_play(self) -> None:
+        from AlphaZeroCpp import MCTSBoard
+
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        boards: list[tuple[MCTSRoot, bool]] = []
+        boards: list[MCTSBoard] = []
         for spg in self.self_play_games:
             force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
             should_run_full_search = (
@@ -230,7 +232,7 @@ class SelfPlayCpp:
                 # Instead - if we should run a full search, discount the visits
                 spg.already_expanded_node.discount(self.args.mcts.percentage_of_node_visits_to_keep)
 
-            boards.append((spg.already_expanded_node, should_run_full_search))
+            boards.append(MCTSBoard(spg.already_expanded_node, should_run_full_search))
 
         mcts_results = self.search(boards)
 
@@ -240,7 +242,7 @@ class SelfPlayCpp:
         log_scalar('mcts/average_search_kl_divergence', stats.averageKLDivergence)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
-            was_full_searched = boards[i][1]
+            was_full_searched = boards[i].should_run_full_search
             if was_full_searched:
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
 

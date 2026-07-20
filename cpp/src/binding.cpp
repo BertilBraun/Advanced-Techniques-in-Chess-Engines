@@ -91,7 +91,7 @@ void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
     float totalTime = 0.0f;
 
     for (int i = 0; i < numIterations; ++i) {
-        std::vector<BoardTuple> boards;
+        std::vector<MCTSBoard> boards;
         boards.reserve(numBoards);
         for (auto &&board : newBoards(numBoards)) {
             boards.emplace_back(mcts.newRoot(board->fen()), true);
@@ -160,7 +160,7 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
     std::vector<const Board *> boards;
     boards.push_back(&board);
 
-    const auto result = self.getInferenceClient()->inferenceBatch(boards);
+    const auto result = self.inferenceBatch(boards);
     assert(result.size() == 1 && "Inference should return exactly one result for one board");
     const auto &[moves, value] = result[0];
 
@@ -230,6 +230,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             Descendant materializations are explicitly pruned when required by the fixed arena.
             )pbdoc")
         .def("__repr__", &MCTSRoot::repr);
+
+    py::class_<MCTSBoard>(m, "MCTSBoard")
+        .def(py::init<MCTSRoot, bool>(), py::arg("root"), py::arg("should_run_full_search"))
+        .def_readonly("root", &MCTSBoard::root)
+        .def_readonly("should_run_full_search", &MCTSBoard::should_run_full_search);
 
     m.def(
         "new_root",
@@ -369,8 +374,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
-        .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),
-             py::arg("mcts_args"))
+        .def(py::init<const InferenceClientParams &, const MCTSParams &, bool>(),
+             py::arg("client_args"), py::arg("mcts_args"), py::arg("use_inference_cache") = true)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
         .def(
             "new_root", [](const MCTS &self, const std::string &fen) { return self.newRoot(fen); },
@@ -386,7 +391,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
                  Run MCTS search on a list of boards.
-                 `boards` should be a list of tuples: (fen_str: str, prev_node: NodeId, full_search: bool).
+                 `boards` should be a list of MCTSBoard values.
                  Returns an `MCTSResults` object, whose `.results` is a list of `MCTSResult`:
                      - result: float
                      - visits: List of (encoded_move: int, visit_count: int)

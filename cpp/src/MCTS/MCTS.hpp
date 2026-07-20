@@ -5,7 +5,9 @@
 #include "SearchTree.hpp"
 
 #include "../InferenceClient.hpp"
+#include "../NonCachingInferenceClient.hpp"
 #include "util/ThreadPool.h"
+#include <variant>
 
 using VisitCount = std::pair<int, int>;
 using VisitCounts = std::vector<VisitCount>;
@@ -44,30 +46,39 @@ struct MCTSResults {
     MCTSStatistics mctsStats;
 };
 
-using BoardTuple = std::tuple<MCTSRoot, bool>;
+struct MCTSBoard {
+    MCTSRoot root;
+    bool should_run_full_search;
+
+    MCTSBoard(MCTSRoot root, bool shouldRunFullSearch)
+        : root(std::move(root)), should_run_full_search(shouldRunFullSearch) {}
+};
 
 class MCTS {
 public:
-    MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs)
-        : m_client(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
-          m_arenaCapacity(mctsArgs.arenaCapacity()) {}
+    MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
+         bool useInferenceCache = true);
 
-    [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards,
+    [[nodiscard]] MCTSResults search(const std::vector<MCTSBoard> &boards,
                                      bool collectStatistics = false);
     [[nodiscard]] MCTSRoot newRoot(const std::string &fen) const;
     [[nodiscard]] MCTSRoot newRoot(Board board) const;
     [[nodiscard]] uint32 arenaCapacity() const { return m_arenaCapacity; }
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics();
-    [[nodiscard]] InferenceClient *getInferenceClient() { return &m_client; }
+    [[nodiscard]] std::vector<InferenceResult>
+    inferenceBatch(const std::vector<const Board *> &boards);
 
 private:
-    InferenceClient m_client;
+    using InferenceClientVariant =
+        std::variant<std::unique_ptr<InferenceClient>, std::unique_ptr<NonCachingInferenceClient>>;
+
+    InferenceClientVariant m_client;
     MCTSParams m_args;
     ThreadPool m_threadPool;
     uint32 m_arenaCapacity;
 
-    [[nodiscard]] std::vector<MCTSResult> searchGames(const std::vector<BoardTuple> &boards);
+    [[nodiscard]] std::vector<MCTSResult> searchGames(const std::vector<MCTSBoard> &boards);
     void parallelIterate(const std::vector<MCTSRoot> &roots);
     void addNoise(MCTSRoot &root) const;
     [[nodiscard]] std::optional<NodeIndex> getBestChildOrBackPropagate(MCTSRoot &root,

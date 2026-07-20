@@ -38,6 +38,12 @@ class _FakeInferenceClientParameters:
     cache_capacity: int
 
 
+@dataclass(frozen=True)
+class _FakeMctsBoard:
+    root: object
+    should_run_full_search: bool
+
+
 def test_model_comparison_uses_configured_cache_for_both_models(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -82,6 +88,7 @@ def test_model_comparison_uses_configured_cache_for_both_models(
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParameters
     fake_alpha_zero_cpp.MCTS = FakeMcts
+    fake_alpha_zero_cpp.MCTSBoard = _FakeMctsBoard
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
     monkeypatch.setattr(ModelEvaluation, 'mcts_args', property(mcts_parameters))
     monkeypatch.setattr(evaluation_module, '_play_paired_models_search', fake_paired_match)

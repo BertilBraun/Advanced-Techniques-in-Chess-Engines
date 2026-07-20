@@ -10,7 +10,7 @@ build_directory=${BUILD_DIRECTORY:-"${source_root}/cpp/build"}
 if [[ "$#" -lt 1 ]]; then
     echo "Usage: $0 MODEL_PATH [SOURCE_ROOT]"
     echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, MCTS_THREADS_PER_PROCESS, PARALLEL_GAMES_PER_PROCESS"
-    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, CACHE_CAPACITY, SEED_BASE"
+    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, CACHE_CAPACITY, USE_INFERENCE_CACHE, SEED_BASE"
     echo "Affinity override: PIN_WORKERS_TO_CPUS=0|1"
     exit 1
 fi
@@ -28,6 +28,7 @@ parallel_searches=${PARALLEL_SEARCHES:-4}
 maximum_batch_size=${MAXIMUM_BATCH_SIZE:-256}
 inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
 cache_capacity=${CACHE_CAPACITY:-1500000}
+use_inference_cache=${USE_INFERENCE_CACHE:-1}
 seed_base=${SEED_BASE:-1}
 pin_workers_to_cpus=${PIN_WORKERS_TO_CPUS:-0}
 maximum_host_ram_percent=${MAXIMUM_HOST_RAM_PERCENT:-95}
@@ -70,6 +71,10 @@ if [[ "${maximum_host_ram_percent}" -gt 100 ]]; then
 fi
 if [[ "${pin_workers_to_cpus}" != "0" && "${pin_workers_to_cpus}" != "1" ]]; then
     echo "PIN_WORKERS_TO_CPUS must be 0 or 1, found: ${pin_workers_to_cpus}"
+    exit 1
+fi
+if [[ "${use_inference_cache}" != "0" && "${use_inference_cache}" != "1" ]]; then
+    echo "USE_INFERENCE_CACHE must be 0 or 1, found: ${use_inference_cache}"
     exit 1
 fi
 
@@ -245,6 +250,12 @@ fi
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 topology_name="g${gpu_count}-pg${processes_per_gpu}-t${mcts_threads_per_process}-games${parallel_games_per_process}"
 workload_name="s${searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}-cache${cache_capacity}"
+if [[ "${use_inference_cache}" -eq 1 ]]; then
+    inference_client_name=cached
+else
+    inference_client_name=uncached
+fi
+workload_name="${workload_name}-${inference_client_name}"
 output_directory="${output_root}/self-play-cpp-stochastic-${topology_name}-${workload_name}-duration${measurement_duration_seconds}s-timeout${inference_timeout_microseconds}us-affinity${affinity_mode}-${run_timestamp}"
 mkdir -p "${output_directory}"
 exec > >(tee -a "${output_directory}/console.log") 2>&1
@@ -287,6 +298,7 @@ jq -n \
     --argjson maximum_batch_size "${maximum_batch_size}" \
     --argjson inference_timeout_microseconds "${inference_timeout_microseconds}" \
     --argjson cache_capacity "${cache_capacity}" \
+    --argjson use_inference_cache "${use_inference_cache}" \
     --argjson seed_base "${seed_base}" \
     --argjson maximum_host_ram_percent "${maximum_host_ram_percent}" \
     --arg affinity_mode "${affinity_mode}" \
@@ -337,6 +349,7 @@ jq -n \
             maximum_batch_size: $maximum_batch_size,
             inference_timeout_microseconds: $inference_timeout_microseconds,
             cache_capacity_per_process: $cache_capacity,
+            use_inference_cache: ($use_inference_cache == 1),
             seed_base: $seed_base
         },
         safety: {
@@ -367,6 +380,9 @@ for ((device = 0; device < gpu_count; device++)); do
             --ready-file "${output_directory}/ready-${process_index}"
             --start-barrier "${start_barrier}"
         )
+        if [[ "${use_inference_cache}" -eq 0 ]]; then
+            worker_command+=(--no-inference-cache)
+        fi
         if [[ "${pin_workers_to_cpus}" -eq 1 ]]; then
             taskset --cpu-list "${worker_cpu_lists[process_index]}" "${worker_command[@]}" \
                 > "${output_directory}/worker-${process_index}.json" \
@@ -503,6 +519,7 @@ jq -s \
                 self_play_steps_per_second: ($self_play_steps / $makespan),
                 game_updates: $game_updates,
                 game_updates_per_second: ($game_updates / $makespan),
+                milliseconds_per_game_update: (1000 * $makespan / $game_updates),
                 completed_game_plies: $completed_game_plies,
                 completed_game_plies_per_second: ($completed_game_plies / $makespan)
             },

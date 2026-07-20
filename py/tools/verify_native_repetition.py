@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import chess
-from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams, MCTSRoot, new_root, new_root_with_history
+from AlphaZeroCpp import (
+    InferenceClientParams,
+    MCTS,
+    MCTSBoard,
+    MCTSParams,
+    MCTSRoot,
+    new_root,
+    new_root_with_history,
+)
 
 
 KNIGHT_CYCLE = (
@@ -63,7 +71,7 @@ def main() -> None:
     )
     blind_parent = mcts.new_root(board_before_third_occurrence.fen())
     aware_parent = mcts.new_root_with_history(chess.STARTING_FEN, moves_before_third_occurrence)
-    results = mcts.search([(blind_parent, False), (aware_parent, False)])
+    results = mcts.search([MCTSBoard(blind_parent, False), MCTSBoard(aware_parent, False)])
     blind_child = results.results[0].root.make_new_root(repetition_child_index(results.results[0].root))
     aware_child = results.results[1].root.make_new_root(repetition_child_index(results.results[1].root))
 

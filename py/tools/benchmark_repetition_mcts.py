@@ -11,7 +11,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams, MCTSRoot
+from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard, MCTSParams, MCTSRoot
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,7 @@ def run_search_steps(
     searches_completed = 0
     for _ in range(steps):
         visits_before = sum(root.visits for root in roots)
-        search_results = mcts.search([(root, False) for root in roots])
+        search_results = mcts.search([MCTSBoard(root, False) for root in roots])
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
 
         next_roots: list[MCTSRoot] = []

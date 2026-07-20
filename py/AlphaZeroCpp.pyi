@@ -13,6 +13,7 @@ __all__ = [
     'InferenceClientParams',
     'InferenceStatistics',
     'MCTS',
+    'MCTSBoard',
     'MCTSChild',
     'MCTSParams',
     'MCTSResult',
@@ -144,7 +145,12 @@ class InferenceStatistics:
     def uniquePositions(self) -> int: ...
 
 class MCTS:
-    def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None: ...
+    def __init__(
+        self,
+        client_args: InferenceClientParams,
+        mcts_args: MCTSParams,
+        use_inference_cache: bool = True,
+    ) -> None: ...
     @property
     def arena_capacity(self) -> int: ...
     def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
@@ -156,12 +162,12 @@ class MCTS:
         """
     def search(
         self,
-        boards: list[tuple[MCTSRoot, bool]],
+        boards: list[MCTSBoard],
         collect_statistics: bool = False,
     ) -> MCTSResults:
         """
         Run MCTS search on a list of boards.
-        `boards` should be a list of tuples: (fen_str: str, prev_node: NodeId, full_search: bool).
+        `boards` should be a list of MCTSBoard values.
         Returns an `MCTSResults` object, whose `.results` is a list of `MCTSResult`:
             - result: float
             - visits: List of (encoded_move: int, visit_count: int)
@@ -175,6 +181,13 @@ class MCTS:
         starting_fen: str,
         moves_uci: tuple[str, ...],
     ) -> MCTSRoot: ...
+
+class MCTSBoard:
+    def __init__(self, root: MCTSRoot, should_run_full_search: bool) -> None: ...
+    @property
+    def root(self) -> MCTSRoot: ...
+    @property
+    def should_run_full_search(self) -> bool: ...
 
 class MCTSChild:
     @property

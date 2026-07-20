@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams
+from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard, MCTSParams
 
 
 STARTING_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -35,7 +35,7 @@ def main() -> None:
         num_threads=1,
     )
     search = MCTS(client_params, mcts_params)
-    results = search.search([(search.new_root(STARTING_POSITION), False)])
+    results = search.search([MCTSBoard(search.new_root(STARTING_POSITION), False)])
     statistics, _ = search.get_inference_statistics()
 
     if len(results.results) != 1:

@@ -3,46 +3,11 @@
 #include "common.hpp"
 
 #include "BoardEncoding.hpp"
+#include "InferenceClientTypes.hpp"
 
 #include "util/BlockingQueue.hpp"
 #include "util/CollisionCheckedCache.hpp"
 #include <ATen/core/TensorBody.h>
-
-// InferenceResult is defined as a pair: (vector of MoveScore, float value)
-typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
-
-struct InferenceStatistics {
-    float cacheHitRate = 0.0f; // Percentage of cache hits.
-    size_t evaluations = 0;
-    size_t cacheHits = 0;
-    size_t uniquePositions = 0;                   // Number of unique positions in the cache.
-    size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
-    size_t cacheCapacity = 0;                     // Maximum completed cache entries.
-    size_t cacheEvictions = 0;                    // Number of completed entries evicted.
-    size_t cacheFingerprintCollisions = 0;        // Exact-board mismatches for equal fingerprints.
-    std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
-    size_t modelInferenceCalls = 0;
-    size_t modelInferencePositions = 0;
-    std::vector<size_t> modelBatchSizeHistogram;
-    float averageNumberOfPositionsInInferenceCall =
-        0.0f; // Average number of positions in an inference call.
-};
-
-struct InferenceClientParams {
-    int device_id;                          // GPU device id to use (if available), else CPU.
-    std::string currentModelPath;           // Path used to resolve the model file.
-    int maxBatchSize;                       // Maximum number of requests to process in one batch.
-    int microsecondsTimeoutInferenceThread; // Timeout for the inference worker thread to wait for
-                                            // requests.
-    size_t cacheCapacity;                   // Maximum cached positions per inference client.
-
-    InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize,
-                          int microsecondsTimeoutInferenceThread, size_t cacheCapacity)
-        : device_id(device_id), currentModelPath(std::move(currentModelPath)),
-          maxBatchSize(maxBatchSize),
-          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread),
-          cacheCapacity(cacheCapacity) {}
-};
 
 /**
  * @brief InferenceClient batches and caches inference requests.

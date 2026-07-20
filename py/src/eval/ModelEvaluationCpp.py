@@ -155,7 +155,7 @@ class ModelEvaluation:
         self,
         model_path: str | PathLike,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import InferenceClientParams, MCTS
+        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard
 
         opponent_inference_path = inference_model_path(model_path)
         if not opponent_inference_path.is_file():
@@ -176,17 +176,13 @@ class ModelEvaluation:
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
-            results = opponent.search(  # noqa: F821
-                [(history_aware_root(board, opponent), False) for board in boards]  # noqa: F821
-            )
+            results = opponent.search([MCTSBoard(history_aware_root(board, opponent), False) for board in boards])
             return [action_probabilities(result.visits) for result in results.results]
 
         res = self.play_vs_evaluation_model_paired(
             opponent_evaluator,
             opponent_inference_path.name,
         )
-
-        del opponent  # Free the memory used by the MCTS client
 
         return res
 
@@ -306,7 +302,7 @@ class ModelEvaluation:
         eval_model: EvaluationModel,
         name: str,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import InferenceClientParams, MCTS
+        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard
 
         if self.paired_schedule is None or self.args.evaluation is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
@@ -327,9 +323,7 @@ class ModelEvaluation:
 
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
-            results = current.search(  # noqa: F821
-                [(history_aware_root(board, current), False) for board in boards]  # noqa: F821
-            )
+            results = current.search([MCTSBoard(history_aware_root(board, current), False) for board in boards])
             return [action_probabilities(result.visits) for result in results.results]
 
         results, records = _play_paired_models_search(
@@ -340,8 +334,6 @@ class ModelEvaluation:
             maximum_game_plies=self.args.evaluation.maximum_game_plies,
             name=name,
         )
-
-        del current  # Free the memory used by the MCTS client
 
         return results, records
 

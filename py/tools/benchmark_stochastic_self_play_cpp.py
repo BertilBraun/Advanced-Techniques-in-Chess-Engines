@@ -33,6 +33,7 @@ class Arguments:
     maximum_batch_size: int
     inference_timeout_microseconds: int
     cache_capacity: int
+    use_inference_cache: bool
     seed: int
     iteration: int
     ready_file: Path | None
@@ -50,6 +51,7 @@ class BenchmarkResult:
     process_id: int
     device_id: int
     seed: int
+    use_inference_cache: bool
     parallel_games: int
     warmup_steps: int
     requested_duration_seconds: float | None
@@ -102,6 +104,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--cache-capacity', type=int, default=1_500_000)
+    parser.add_argument('--no-inference-cache', action='store_false', dest='use_inference_cache')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument(
         '--iteration',
@@ -128,6 +131,7 @@ def parse_arguments() -> Arguments:
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         cache_capacity=namespace.cache_capacity,
+        use_inference_cache=namespace.use_inference_cache,
         seed=namespace.seed,
         iteration=namespace.iteration,
         ready_file=namespace.ready_file,
@@ -211,6 +215,7 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
             configuration.self_play.mcts.min_visit_count,
             arguments.threads,
         ),
+        use_inference_cache=arguments.use_inference_cache,
     )
     return self_play
 
@@ -280,6 +285,7 @@ def build_result(
         process_id=os.getpid(),
         device_id=arguments.device,
         seed=arguments.seed,
+        use_inference_cache=arguments.use_inference_cache,
         parallel_games=arguments.games,
         warmup_steps=arguments.warmup_steps,
         requested_duration_seconds=arguments.duration_seconds,

@@ -89,6 +89,15 @@ MCTSParams::MCTSParams(const int numParallelSearches, const uint32 numFullSearch
     }
 }
 
+MCTS::MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
+           const bool useInferenceCache)
+    : m_client(
+          useInferenceCache
+              ? InferenceClientVariant{std::make_unique<InferenceClient>(clientArgs)}
+              : InferenceClientVariant{std::make_unique<NonCachingInferenceClient>(clientArgs)}),
+      m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
+      m_arenaCapacity(mctsArgs.arenaCapacity()) {}
+
 uint32 MCTSParams::arenaCapacity() const {
     const uint64 maximumSearches = std::max(num_full_searches, num_fast_searches);
     const uint64 capacity = maximumSearches + static_cast<uint64>(num_parallel_searches) + 1U;
@@ -106,7 +115,7 @@ MCTSRoot MCTS::newRoot(Board board) const {
     return MCTSRoot::create(std::move(board), m_arenaCapacity);
 }
 
-std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards) {
+std::vector<MCTSResult> MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
     TIMEIT("MCTS::searchGames");
 
     const size_t numberOfBoards = boards.size();
@@ -119,8 +128,7 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards)
     newBoards.reserve(numberOfBoards);
 
     for (const auto &[index, board] : enumerate(boards)) {
-        const auto &[root, runFullSearch] = board;
-        static_cast<void>(runFullSearch);
+        const MCTSRoot &root = board.root;
         if (root.arenaCapacity() != m_arenaCapacity) {
             throw std::invalid_argument("MCTSRoot arena capacity does not match MCTS parameters");
         }
@@ -132,13 +140,13 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards)
         }
     }
 
-    const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
+    const std::vector<InferenceResult> inferenceResults = inferenceBatch(newBoards);
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
         roots[rootIndex].tree().expand(roots[rootIndex].rootIndex(), result.first);
     }
 
     for (size_t index = 0; index < roots.size(); ++index) {
-        if (get<1>(boards[index])) {
+        if (boards[index].should_run_full_search) {
             addNoise(roots[index]);
         }
     }
@@ -146,8 +154,8 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards)
     std::vector<RootTask> active;
     active.reserve(numberOfBoards);
     for (size_t index = 0; index < numberOfBoards; ++index) {
-        const uint32 limit =
-            get<1>(boards[index]) ? m_args.num_full_searches : m_args.num_fast_searches;
+        const uint32 limit = boards[index].should_run_full_search ? m_args.num_full_searches
+                                                                  : m_args.num_fast_searches;
         roots[index].tree().prepareForSearch(limit,
                                              static_cast<uint32>(m_args.num_parallel_searches));
         active.push_back({roots[index], limit});
@@ -173,7 +181,7 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards)
     return results;
 }
 
-MCTSResults MCTS::search(const std::vector<BoardTuple> &boards, const bool collectStatistics) {
+MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
     if (boards.empty()) {
         return {.results = {}, .mctsStats = {}};
@@ -189,7 +197,7 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards, const bool colle
         const auto begin = boards.begin() + static_cast<std::ptrdiff_t>(slice * sliceSize);
         const auto end = begin + static_cast<std::ptrdiff_t>(
                                      std::min(sliceSize, numberOfBoards - slice * sliceSize));
-        std::vector<BoardTuple> slicedBoards(begin, end);
+        std::vector<MCTSBoard> slicedBoards(begin, end);
         futures.emplace_back(
             m_threadPool.enqueue(&MCTS::searchGames, this, std::move(slicedBoards)));
     }
@@ -208,7 +216,13 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards, const bool colle
 }
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
-    return {m_client.getStatistics(), resetTimes()};
+    const InferenceStatistics statistics =
+        std::visit([](auto &client) { return client->getStatistics(); }, m_client);
+    return {statistics, resetTimes()};
+}
+
+std::vector<InferenceResult> MCTS::inferenceBatch(const std::vector<const Board *> &boards) {
+    return std::visit([&boards](auto &client) { return client->inferenceBatch(boards); }, m_client);
 }
 
 void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
@@ -237,7 +251,7 @@ void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
         return;
     }
 
-    const std::vector<InferenceResult> results = m_client.inferenceBatch(selectedBoards);
+    const std::vector<InferenceResult> results = inferenceBatch(selectedBoards);
     for (const auto [selected, result] : zip(selectedNodes, results)) {
         const auto &[moves, value] = result;
         selected.tree->expand(selected.index, moves);

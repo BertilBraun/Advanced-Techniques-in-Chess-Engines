@@ -16,7 +16,17 @@ import torch
 
 import chess
 import random
-from AlphaZeroCpp import MCTS, MCTSParams, MCTSRoot, InferenceClientParams, MCTSResults, new_root, test_encode
+from AlphaZeroCpp import (
+    InferenceClientParams,
+    MCTS,
+    MCTSBoard,
+    MCTSParams,
+    MCTSResult,
+    MCTSResults,
+    MCTSRoot,
+    new_root,
+    test_encode,
+)
 from src.settings import TRAINING_ARGS, CurrentGame
 from src.games.chess.ChessBoard import ChessBoard
 from src.Encoding import decode_board_state, encode_board_state
@@ -127,7 +137,7 @@ def run_mcts_py(fens: list[str], model_path: str):
 
 def run_mcts_cpp(fens: list[str], model_path: str):
     del model_path
-    inputs = [(mcts.new_root(fen), True) for fen in fens]
+    inputs = [MCTSBoard(mcts.new_root(fen), True) for fen in fens]
     start = time.time()
     for _ in range(10):
         mcts.search(inputs)  # type: ignore[call-arg]
@@ -175,7 +185,7 @@ input_fens = [STARTING_FEN]
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:
-boards = [(mcts.new_root(STARTING_FEN), True)] * 12
+boards = [MCTSBoard(mcts.new_root(STARTING_FEN), True)] * 12
 # TODO check this for end game positions - does that find the mate moves?
 # TODO check the node reuse, does it work as expected?
 
@@ -224,7 +234,7 @@ def run_mate_puzzle_regression():
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
 
-    inputs: list[tuple[MCTSRoot, bool]] = []
+    inputs: list[MCTSBoard] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
     for puzzle in mate_puzzles:
@@ -244,7 +254,7 @@ def run_mate_puzzle_regression():
         else:
             expected_move = moves[0]
 
-        inputs.append((mcts.new_root(board.board.fen()), True))
+        inputs.append(MCTSBoard(mcts.new_root(board.board.fen()), True))
         metadata.append((puzzle_id, expected_move, puzzle))
 
     # Run batch MCTS search.
@@ -253,7 +263,8 @@ def run_mate_puzzle_regression():
     results = res.results
 
     failures = []
-    for (puzzle_id, expected_move, puzzle), result, (node, _) in zip(metadata, results, inputs):
+    for (puzzle_id, expected_move, puzzle), result, mcts_board in zip(metadata, results, inputs):
+        node = mcts_board.root
         board = CurrentBoard.from_fen(node.fen)
 
         # Apply a softmax to the visit counts.
@@ -511,7 +522,7 @@ def display_node(root: MCTSRoot, inspect_or_search: bool, search_function: Calla
 
 
 def dis(node: MCTSRoot) -> None:
-    inp = [(node, True)]  # Use the FEN string to create the input for MCTS
+    inp = [MCTSBoard(node, True)]
     results: MCTSResults = mcts.search(inp)
     root = results.results[0].root
 
