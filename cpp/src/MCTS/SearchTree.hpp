@@ -77,6 +77,7 @@ public:
 
     [[nodiscard]] NodeIndex reroot(uint32 childIndex);
     void discount(float percentageOfNodeVisitsToKeep);
+    void prepareForSearch(uint32 visitLimit, uint32 parallelSearches);
 
     [[nodiscard]] int maxDepth() const;
     [[nodiscard]] std::vector<MCTSChild> rootChildren() const;

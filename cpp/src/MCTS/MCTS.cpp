@@ -148,6 +148,8 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards)
     for (size_t index = 0; index < numberOfBoards; ++index) {
         const uint32 limit =
             get<1>(boards[index]) ? m_args.num_full_searches : m_args.num_fast_searches;
+        roots[index].tree().prepareForSearch(limit,
+                                             static_cast<uint32>(m_args.num_parallel_searches));
         active.push_back({roots[index], limit});
     }
 

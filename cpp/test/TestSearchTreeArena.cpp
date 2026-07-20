@@ -174,6 +174,39 @@ void testDiscountPrunesToTightCapacityInvariant() {
     }
 }
 
+void testSearchPreparationReservesRemainingBudgetAndRerootSlot() {
+    constexpr uint32 searchBudget = 8;
+    constexpr uint32 parallelSearches = 2;
+    constexpr uint32 capacity = searchBudget + parallelSearches + 1;
+    SearchTree tree(Board{}, capacity);
+
+    NodeIndex selectedIndex = tree.rootIndex();
+    for (uint32 depth = 0; depth < capacity - 1; ++depth) {
+        const std::vector<Move> &moves = tree.node(selectedIndex).board.validMoves();
+        require(!moves.empty(), "adversarial retained tree reached a terminal position");
+        tree.expand(selectedIndex, {{moves.front(), 1.0F}});
+        selectedIndex = tree.materializeChild(selectedIndex, 0);
+    }
+    require(tree.liveNodeCount() == capacity, "adversarial retained tree did not fill the arena");
+
+    tree.prepareForSearch(searchBudget, parallelSearches);
+    require(tree.liveNodeCount() == 1,
+            "search preparation did not reserve the exact remaining allocation bound");
+
+    for (uint32 search = 0; search < searchBudget + parallelSearches - 1; ++search) {
+        selectedIndex = tree.rootIndex();
+        while (tree.node(selectedIndex).isExpanded()) {
+            selectedIndex = tree.materializeChild(selectedIndex, 0);
+        }
+        const std::vector<Move> &moves = tree.node(selectedIndex).board.validMoves();
+        if (!moves.empty()) {
+            tree.expand(selectedIndex, {{moves.front(), 1.0F}});
+        }
+    }
+    require(tree.liveNodeCount() == capacity - 1,
+            "reserved search allocations consumed the guaranteed reroot slot");
+}
+
 void testTerminalAndUnmaterializedReroot() {
     SearchTree terminalTree(Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1"), 2);
     require(terminalTree.node(terminalTree.rootIndex()).isTerminal(),
@@ -208,6 +241,7 @@ int main() {
     testSelectionVirtualLossAndBackupStatistics();
     testRerootReclaimsAndReusesSlotsWithStaleDetection();
     testDiscountPrunesToTightCapacityInvariant();
+    testSearchPreparationReservesRemainingBudgetAndRerootSlot();
     testTerminalAndUnmaterializedReroot();
     std::cout << "SearchTree arena tests passed\n";
     return 0;

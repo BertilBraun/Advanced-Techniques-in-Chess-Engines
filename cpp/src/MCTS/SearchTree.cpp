@@ -31,7 +31,10 @@ uint32 SearchTree::generation(const NodeIndex index) { return static_cast<uint32
 NodeIndex SearchTree::allocateNode(Board board, const NodeIndex parentIndex,
                                    const uint32 parentChildIndex) {
     if (m_freeSlots.empty()) {
-        throw std::overflow_error("SearchTree arena exhausted");
+        throw std::overflow_error(
+            "SearchTree arena exhausted at " + std::to_string(m_liveNodeCount) + "/" +
+            std::to_string(capacity()) + " live nodes with " +
+            std::to_string(m_rootStatistics.number_of_visits) + " root visits");
     }
 
     const uint32 freeSlot = m_freeSlots.back();
@@ -332,6 +335,24 @@ void SearchTree::discount(const float percentageOfNodeVisitsToKeep) {
             ? m_rootStatistics.number_of_visits
             : m_rootStatistics.number_of_visits + 1;
     pruneToLiveNodeLimit(std::max<uint32>(1, liveNodeLimit));
+}
+
+void SearchTree::prepareForSearch(const uint32 visitLimit, const uint32 parallelSearches) {
+    if (parallelSearches == 0) {
+        throw std::invalid_argument("SearchTree parallel search count must be positive");
+    }
+
+    uint64 maximumNewNodes = 0;
+    if (m_rootStatistics.number_of_visits < visitLimit) {
+        maximumNewNodes = static_cast<uint64>(visitLimit - m_rootStatistics.number_of_visits) +
+                          parallelSearches - 1U;
+    }
+    if (maximumNewNodes + 1U >= capacity()) {
+        throw std::logic_error("SearchTree capacity cannot reserve search and reroot slots");
+    }
+
+    const uint32 retainedNodeLimit = capacity() - static_cast<uint32>(maximumNewNodes) - 1U;
+    pruneToLiveNodeLimit(std::max<uint32>(1, retainedNodeLimit));
 }
 
 int SearchTree::maxDepth() const {
