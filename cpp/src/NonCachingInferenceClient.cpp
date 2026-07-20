@@ -67,8 +67,24 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
                "NonCachingInferenceClient::inferenceBatch: policy contains negative values");
         assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
                "NonCachingInferenceClient::inferenceBatch: policy does not sum to 1.0");
-        results.emplace_back(filterPolicyThenGetMovesAndProbabilities(policy, boards[index]),
-                             value);
+        const std::vector<EncodedMoveScore> encodedMoveScores =
+            filterPolicyThenGetMovesAndProbabilities(policy, boards[index]);
+        std::vector<int> encodedMoves;
+        std::vector<float> scores;
+        encodedMoves.reserve(encodedMoveScores.size());
+        scores.reserve(encodedMoveScores.size());
+        for (const auto &[encodedMove, score] : encodedMoveScores) {
+            encodedMoves.push_back(encodedMove);
+            scores.push_back(score);
+        }
+
+        const std::vector<Move> moves = decodeMoves(encodedMoves, boards[index]);
+        std::vector<MoveScore> moveScores;
+        moveScores.reserve(moves.size());
+        for (size_t moveIndex : range(moves.size())) {
+            moveScores.emplace_back(moves[moveIndex], scores[moveIndex]);
+        }
+        results.emplace_back(std::move(moveScores), value);
     }
     return results;
 }
