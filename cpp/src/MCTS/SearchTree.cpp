@@ -342,7 +342,7 @@ void SearchTree::prepareForSearch(const uint32 visitLimit, const uint32 parallel
         throw std::invalid_argument("SearchTree parallel search count must be positive");
     }
 
-    uint64 maximumNewNodes = 0;
+    uint64 maximumNewNodes = parallelSearches;
     if (m_rootStatistics.number_of_visits < visitLimit) {
         maximumNewNodes = static_cast<uint64>(visitLimit - m_rootStatistics.number_of_visits) +
                           parallelSearches - 1U;

@@ -205,6 +205,22 @@ void testSearchPreparationReservesRemainingBudgetAndRerootSlot() {
     }
     require(tree.liveNodeCount() == capacity - 1,
             "reserved search allocations consumed the guaranteed reroot slot");
+
+    SearchTree overBudgetTree(Board{}, capacity);
+    selectedIndex = overBudgetTree.rootIndex();
+    for (uint32 depth = 0; depth < capacity - 1; ++depth) {
+        const std::vector<Move> &moves = overBudgetTree.node(selectedIndex).board.validMoves();
+        require(!moves.empty(), "over-budget retained tree reached a terminal position");
+        overBudgetTree.expand(selectedIndex, {{moves.front(), 1.0F}});
+        selectedIndex = overBudgetTree.materializeChild(selectedIndex, 0);
+    }
+    for (uint32 visit = 0; visit < searchBudget; ++visit) {
+        overBudgetTree.backPropagate(overBudgetTree.rootIndex(), 0.0F);
+    }
+
+    overBudgetTree.prepareForSearch(searchBudget / 2, parallelSearches);
+    require(overBudgetTree.liveNodeCount() == capacity - parallelSearches - 1,
+            "search preparation did not reserve the mandatory over-budget batch");
 }
 
 void testTerminalAndUnmaterializedReroot() {
