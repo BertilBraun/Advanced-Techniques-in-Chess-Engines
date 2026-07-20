@@ -240,7 +240,7 @@ class EvaluationProtocolConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     opening_suite_path: str
-    reference_model_path: str
+    reference_model_path: str | None
     raw_results_subdirectory: str
     maximum_game_plies: int | None
     bootstrap_seed: int = Field(ge=0)
@@ -653,8 +653,10 @@ def apply_run_configuration(
             if evaluation_protocol.evaluation_dataset_path is not None
             else None
         )
-        training_args.evaluation.reference_model_path = str(
-            _resolve_source_path(evaluation_protocol.reference_model_path)
+        training_args.evaluation.reference_model_path = (
+            str(_resolve_source_path(evaluation_protocol.reference_model_path))
+            if evaluation_protocol.reference_model_path is not None
+            else None
         )
         training_args.evaluation.opening_suite_path = str(_resolve_source_path(evaluation_protocol.opening_suite_path))
         training_args.evaluation.raw_results_path = str(

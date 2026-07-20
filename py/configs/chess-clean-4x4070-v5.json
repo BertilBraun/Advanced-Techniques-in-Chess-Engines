@@ -92,7 +92,7 @@
   },
   "evaluation_protocol": {
     "opening_suite_path": "py/reference/main-monitoring-openings-50.tsv",
-    "reference_model_path": "py/training_data/complete-training-run-v5/model_0.pt",
+    "reference_model_path": null,
     "raw_results_subdirectory": "evaluations",
     "maximum_game_plies": null,
     "bootstrap_seed": 20260717,
