@@ -49,7 +49,7 @@ struct InferenceClientParams {
  *
  * The public interface, inference_batch(), returns a vector of InferenceResult in the same
  * order as the input boards. Internally, requests are enqueued and processed asynchronously
- * on a dedicated worker thread.
+ * through dedicated prepare, model, and resolve stages.
  */
 class InferenceClient {
 public:
@@ -84,6 +84,18 @@ private:
         std::chrono::steady_clock::time_point enqueuedAt;
     };
 
+    struct PreparedBatch {
+        torch::Tensor inputTensor;
+        std::vector<std::promise<ModelInferenceResult>> promises;
+    };
+
+    struct CompletedBatch {
+        std::vector<std::promise<ModelInferenceResult>> promises;
+        torch::Tensor policies;
+        torch::Tensor values;
+        std::exception_ptr exception;
+    };
+
     /**
      * Loads the TorchScript model from file and moves it to the proper device.
      * Assumes the model file is valid.
@@ -91,22 +103,27 @@ private:
     void loadModel(const std::string &modelPath);
 
     /**
-     * The dedicated worker thread function.
-     *
-     * This function waits indefinitely for the first request, then collects requests until
-     * the maximum batch size or the oldest request's collection deadline is reached. After
-     * performing batched inference, it sets each request's promise.
+     * Collects requests through the oldest request's deadline and stacks their CPU tensors.
      */
-    void inferenceWorker();
+    void prepareWorker();
 
     /**
-     * Runs model inference on a batch of input tensors.
-     *
-     * Applies softmax to the policies, moves policies and values to CPU (float32),
-     * and returns a vector of (policy tensor, value) pairs.
+     * Runs device transfer and model inference for prepared batches.
      */
-    [[nodiscard]] std::vector<ModelInferenceResult>
-    modelInference(const std::vector<torch::Tensor> &boards);
+    void modelWorker();
+
+    /**
+     * Resolves completed CPU outputs into the individual request promises.
+     */
+    void resolveWorker();
+
+    /**
+     * Runs model inference for one pre-stacked CPU input tensor.
+     *
+     * Moves the input to the device and returns policy and value tensors on CPU in float32.
+     */
+    [[nodiscard]] std::pair<torch::Tensor, torch::Tensor>
+    modelInference(const torch::Tensor &inputTensor);
 
     // Member variables.
     torch::jit::script::Module m_model;
@@ -128,7 +145,23 @@ private:
     std::queue<InferenceRequest> m_requestQueue;
     bool m_shutdown; // Guarded by m_queueMutex.
 
-    std::thread m_inferenceThread;
+    static constexpr size_t HANDOFF_QUEUE_CAPACITY = 2;
+
+    std::mutex m_preparedMutex;
+    std::condition_variable m_preparedNotEmptyCV;
+    std::condition_variable m_preparedNotFullCV;
+    std::queue<PreparedBatch> m_preparedQueue;
+    bool m_prepareFinished = false; // Guarded by m_preparedMutex.
+
+    std::mutex m_completedMutex;
+    std::condition_variable m_completedNotEmptyCV;
+    std::condition_variable m_completedNotFullCV;
+    std::queue<CompletedBatch> m_completedQueue;
+    bool m_modelFinished = false; // Guarded by m_completedMutex.
+
+    std::thread m_prepareThread;
+    std::thread m_modelThread;
+    std::thread m_resolveThread;
     std::mutex m_modelMutex;
     InferenceClientParams m_params; // Store the parameters for easy access
 };

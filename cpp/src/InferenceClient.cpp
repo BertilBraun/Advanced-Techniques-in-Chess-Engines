@@ -15,8 +15,9 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
     }
     loadModel(args.currentModelPath);
 
-    // Start the worker thread that processes inference requests.
-    m_inferenceThread = std::thread(&InferenceClient::inferenceWorker, this);
+    m_prepareThread = std::thread(&InferenceClient::prepareWorker, this);
+    m_modelThread = std::thread(&InferenceClient::modelWorker, this);
+    m_resolveThread = std::thread(&InferenceClient::resolveWorker, this);
 }
 
 InferenceClient::~InferenceClient() {
@@ -25,8 +26,14 @@ InferenceClient::~InferenceClient() {
         m_shutdown = true;
     }
     m_queueCV.notify_all();
-    if (m_inferenceThread.joinable()) {
-        m_inferenceThread.join();
+    if (m_prepareThread.joinable()) {
+        m_prepareThread.join();
+    }
+    if (m_modelThread.joinable()) {
+        m_modelThread.join();
+    }
+    if (m_resolveThread.joinable()) {
+        m_resolveThread.join();
     }
 }
 
@@ -256,7 +263,7 @@ void InferenceClient::loadModel(const std::string &modelPath) {
     m_model.eval();
 }
 
-void InferenceClient::inferenceWorker() {
+void InferenceClient::prepareWorker() {
     std::vector<torch::Tensor> tensorBatch;
     std::vector<std::promise<ModelInferenceResult>> promises;
     tensorBatch.reserve(m_params.maxBatchSize);
@@ -290,35 +297,148 @@ void InferenceClient::inferenceWorker() {
         if (!promises.empty()) {
             assert(promises.size() == tensorBatch.size());
             assert(promises.size() <= static_cast<size_t>(m_params.maxBatchSize));
-            const std::vector<ModelInferenceResult> inferenceResults = modelInference(tensorBatch);
-            assert(inferenceResults.size() == promises.size());
-
-            for (auto &&[promise, res] : zip(promises, inferenceResults)) {
-                promise.set_value(res); // Set the promise for each request.
+            PreparedBatch preparedBatch;
+            try {
+                preparedBatch.inputTensor = torch::stack(tensorBatch);
+                preparedBatch.promises = std::move(promises);
+            } catch (...) {
+                const std::exception_ptr exception = std::current_exception();
+                for (std::promise<ModelInferenceResult> &promise : promises) {
+                    promise.set_exception(exception);
+                }
+                tensorBatch.clear();
+                promises.clear();
+                continue;
             }
 
-            tensorBatch.clear(); // Clear the batch for the next iteration.
-            promises.clear();    // Clear the promises for the next iteration.
+            {
+                std::unique_lock lock(m_preparedMutex);
+                m_preparedNotFullCV.wait(
+                    lock, [this] { return m_preparedQueue.size() < HANDOFF_QUEUE_CAPACITY; });
+                m_preparedQueue.push(std::move(preparedBatch));
+            }
+            m_preparedNotEmptyCV.notify_one();
+
+            tensorBatch.clear();
+            promises.clear();
+        }
+    }
+
+    {
+        std::lock_guard lock(m_preparedMutex);
+        m_prepareFinished = true;
+    }
+    m_preparedNotEmptyCV.notify_all();
+}
+
+void InferenceClient::modelWorker() {
+    while (true) {
+        PreparedBatch preparedBatch;
+        {
+            std::unique_lock lock(m_preparedMutex);
+            m_preparedNotEmptyCV.wait(
+                lock, [this] { return !m_preparedQueue.empty() || m_prepareFinished; });
+            if (m_prepareFinished && m_preparedQueue.empty()) {
+                break;
+            }
+            preparedBatch = std::move(m_preparedQueue.front());
+            m_preparedQueue.pop();
+        }
+        m_preparedNotFullCV.notify_one();
+
+        CompletedBatch completedBatch{std::move(preparedBatch.promises), {}, {}, nullptr};
+        try {
+            std::tie(completedBatch.policies, completedBatch.values) =
+                modelInference(preparedBatch.inputTensor);
+        } catch (...) {
+            completedBatch.exception = std::current_exception();
+        }
+
+        {
+            std::unique_lock lock(m_completedMutex);
+            m_completedNotFullCV.wait(
+                lock, [this] { return m_completedQueue.size() < HANDOFF_QUEUE_CAPACITY; });
+            m_completedQueue.push(std::move(completedBatch));
+        }
+        m_completedNotEmptyCV.notify_one();
+    }
+
+    {
+        std::lock_guard lock(m_completedMutex);
+        m_modelFinished = true;
+    }
+    m_completedNotEmptyCV.notify_all();
+}
+
+void InferenceClient::resolveWorker() {
+    while (true) {
+        CompletedBatch completedBatch;
+        {
+            std::unique_lock lock(m_completedMutex);
+            m_completedNotEmptyCV.wait(
+                lock, [this] { return !m_completedQueue.empty() || m_modelFinished; });
+            if (m_modelFinished && m_completedQueue.empty()) {
+                break;
+            }
+            completedBatch = std::move(m_completedQueue.front());
+            m_completedQueue.pop();
+        }
+        m_completedNotFullCV.notify_one();
+
+        if (completedBatch.exception != nullptr) {
+            for (std::promise<ModelInferenceResult> &promise : completedBatch.promises) {
+                promise.set_exception(completedBatch.exception);
+            }
+            continue;
+        }
+
+        try {
+            assert(completedBatch.policies.size(0) ==
+                   static_cast<int64_t>(completedBatch.promises.size()));
+            assert(completedBatch.values.size(0) ==
+                   static_cast<int64_t>(completedBatch.promises.size()));
+
+            std::vector<ModelInferenceResult> results;
+            results.reserve(completedBatch.promises.size());
+            for (size_t i : range(completedBatch.promises.size())) {
+                const torch::Tensor policy = completedBatch.policies[static_cast<int64_t>(i)];
+                const torch::Tensor values = completedBatch.values[static_cast<int64_t>(i)];
+                const float value = values[0].item<float>() - values[2].item<float>();
+                results.emplace_back(policy, value);
+            }
+
+            for (size_t i : range(completedBatch.promises.size())) {
+                completedBatch.promises[i].set_value(std::move(results[i]));
+            }
+        } catch (...) {
+            const std::exception_ptr exception = std::current_exception();
+            for (std::promise<ModelInferenceResult> &promise : completedBatch.promises) {
+                try {
+                    promise.set_exception(exception);
+                } catch (const std::future_error &) {
+                    // Results set before a promise failure remain valid.
+                }
+            }
         }
     }
 }
 
-std::vector<InferenceClient::ModelInferenceResult>
-InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
+std::pair<torch::Tensor, torch::Tensor>
+InferenceClient::modelInference(const torch::Tensor &inputTensor) {
     torch::NoGradGuard noGrad;
     std::unique_lock<std::mutex> lock(m_modelMutex);
 
+    assert(inputTensor.dim() == 4);
+    const size_t batchSize = static_cast<size_t>(inputTensor.size(0));
     m_totalModelInferenceCalls.fetch_add(1, std::memory_order_relaxed);
-    m_totalModelInferencePositions.fetch_add(boards.size(), std::memory_order_relaxed);
-    assert(boards.size() < m_modelBatchSizeHistogram.size());
-    ++m_modelBatchSizeHistogram[boards.size()];
+    m_totalModelInferencePositions.fetch_add(batchSize, std::memory_order_relaxed);
+    assert(batchSize < m_modelBatchSizeHistogram.size());
+    ++m_modelBatchSizeHistogram[batchSize];
 
-    // Stack the input tensors into a single batch tensor.
-    // The model expects a 4D tensor: (batch_size, channels, height, width).
-    const torch::Tensor inputTensor =
-        torch::stack(boards).to(torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    const torch::Tensor deviceInputTensor =
+        inputTensor.to(torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     std::vector<torch::jit::IValue> inputs;
-    inputs.push_back(inputTensor);
+    inputs.push_back(deviceInputTensor);
 
     // Run the model and get the output.
     // The output is a tuple of (policies, values).
@@ -333,12 +453,5 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     policies = policies.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
     values = values.to(torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32));
 
-    std::vector<std::pair<torch::Tensor, float>> results;
-    results.reserve(boards.size());
-    for (int i = 0; i < policies.size(0); ++i) {
-        const torch::Tensor policy = policies[i];
-        const float value = values[i][0].item<float>() - values[i][2].item<float>();
-        results.emplace_back(policy, value);
-    }
-    return results;
+    return {std::move(policies), std::move(values)};
 }
