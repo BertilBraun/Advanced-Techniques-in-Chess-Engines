@@ -21,7 +21,6 @@ from AlphaZeroCpp import (
     MCTS,
     MCTSBoard,
     MCTSParams,
-    MCTSResult,
     MCTSResults,
     MCTSRoot,
     new_root,
