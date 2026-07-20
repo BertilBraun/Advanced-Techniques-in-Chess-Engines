@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -28,6 +29,7 @@ from src.util.save_paths import create_model, create_optimizer, save_model_and_o
 class Arguments:
     device_ids: tuple[int, ...]
     samples: int
+    replay_source_directory: Path | None
     work_directory: Path
     output_path: Path
     monitor_interval_seconds: float
@@ -45,6 +47,7 @@ class GpuUtilization:
 @dataclass(frozen=True)
 class SmokeResult:
     source_revision: str
+    replay_source: str
     device_ids: tuple[int, ...]
     global_batch_size: int
     local_batch_size: int
@@ -139,6 +142,7 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
     parser.add_argument('--device-ids', nargs='+', required=True, type=int)
     parser.add_argument('--samples', default=409_600, type=int)
+    parser.add_argument('--replay-source-directory', type=Path)
     parser.add_argument('--work-directory', required=True, type=Path)
     parser.add_argument('--output-path', required=True, type=Path)
     parser.add_argument('--monitor-interval-seconds', default=0.5, type=float)
@@ -150,11 +154,14 @@ def parse_arguments() -> Arguments:
         raise ValueError('The 2,048-sample global batch must divide evenly across trainer devices.')
     if namespace.samples <= 0:
         raise ValueError('Sample count must be positive.')
+    if namespace.replay_source_directory is not None and not namespace.replay_source_directory.is_dir():
+        raise ValueError(f'Replay source directory does not exist: {namespace.replay_source_directory}')
     if namespace.monitor_interval_seconds <= 0:
         raise ValueError('Monitor interval must be positive.')
     return Arguments(
         device_ids=device_ids,
         samples=namespace.samples,
+        replay_source_directory=namespace.replay_source_directory,
         work_directory=namespace.work_directory,
         output_path=namespace.output_path,
         monitor_interval_seconds=namespace.monitor_interval_seconds,
@@ -215,6 +222,23 @@ def write_replay_fixture(path: Path, sample_count: int, seed: int) -> None:
         file.attrs['stats'] = str(stats._asdict())
 
 
+def stage_replay_files(source_directory: Path, destination_directory: Path, minimum_samples: int) -> int:
+    source_files = sorted(source_directory.glob('*.hdf5'))
+    if not source_files:
+        raise ValueError(f'Replay source directory contains no HDF5 files: {source_directory}')
+
+    destination_directory.mkdir(parents=True, exist_ok=False)
+    sample_count = 0
+    for source_file in source_files:
+        with h5py.File(source_file, 'r') as file:
+            file_samples = int(file['states'].shape[0])
+        shutil.copy2(source_file, destination_directory / source_file.name)
+        sample_count += file_samples
+        if sample_count >= minimum_samples:
+            return sample_count
+    raise ValueError(f'Replay source contains {sample_count:,} samples, fewer than the requested {minimum_samples:,}.')
+
+
 def smoke_arguments(arguments: Arguments) -> TrainingArgs:
     training_args = copy.deepcopy(TRAINING_ARGS)
     training_args.save_path = str(arguments.work_directory)
@@ -240,24 +264,33 @@ def smoke_arguments(arguments: Arguments) -> TrainingArgs:
     return training_args
 
 
-def prepare_smoke_run(arguments: Arguments, training_args: TrainingArgs) -> None:
+def prepare_smoke_run(arguments: Arguments, training_args: TrainingArgs) -> int:
     if arguments.work_directory.exists():
         raise ValueError(f'Smoke work directory already exists: {arguments.work_directory}')
     arguments.work_directory.mkdir(parents=True)
     os.environ['TRAINING_TENSORBOARD_LOG_PATH'] = str(arguments.work_directory / 'logs')
     os.environ['TRAINING_TENSORBOARD_RUN_DIRECTORY'] = 'production-ddp-smoke'
-    replay_path = arguments.work_directory / 'memory_0' / 'smoke.hdf5'
-    write_replay_fixture(replay_path, arguments.samples, training_args.random_seed)
+    replay_directory = arguments.work_directory / 'memory_0'
+    if arguments.replay_source_directory is None:
+        write_replay_fixture(replay_directory / 'smoke.hdf5', arguments.samples, training_args.random_seed)
+        replay_samples = arguments.samples
+    else:
+        replay_samples = stage_replay_files(
+            arguments.replay_source_directory,
+            replay_directory,
+            arguments.samples,
+        )
     device = torch.device('cuda', arguments.device_ids[0])
     torch.cuda.set_device(device)
     model = create_model(training_args.network, device)
     optimizer = create_optimizer(model, training_args.training.optimizer)
     save_model_and_optimizer(model, optimizer, 0, training_args.save_path)
+    return replay_samples
 
 
 def run_smoke(arguments: Arguments) -> SmokeResult:
     training_args = smoke_arguments(arguments)
-    prepare_smoke_run(arguments, training_args)
+    replay_samples = prepare_smoke_run(arguments, training_args)
     trainer = TrainerProcess(training_args, run_id=9999, starting_iteration=0)
     try:
         trainer.load_all_memories_to_train_on_for_iteration(0)
@@ -273,15 +306,20 @@ def run_smoke(arguments: Arguments) -> SmokeResult:
     finally:
         trainer.close()
 
-    retained_samples = arguments.samples - arguments.samples % training_args.training.global_batch_size
+    retained_samples = replay_samples - replay_samples % training_args.training.global_batch_size
     result = SmokeResult(
         source_revision=source_revision(),
+        replay_source=(
+            str(arguments.replay_source_directory.resolve())
+            if arguments.replay_source_directory is not None
+            else 'generated synthetic fixture'
+        ),
         device_ids=arguments.device_ids,
         global_batch_size=training_args.training.global_batch_size,
         local_batch_size=training_args.training.local_batch_size,
-        replay_samples=arguments.samples,
+        replay_samples=replay_samples,
         retained_samples=retained_samples,
-        dropped_samples=arguments.samples - retained_samples,
+        dropped_samples=replay_samples - retained_samples,
         optimizer_steps=retained_samples // training_args.training.global_batch_size,
         aggregated_training_samples=training_stats.sample_count,
         training_phase_seconds=training_phase_seconds,
