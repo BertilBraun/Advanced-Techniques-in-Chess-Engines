@@ -10,7 +10,7 @@ build_directory=${BUILD_DIRECTORY:-"${source_root}/cpp/build"}
 if [[ "$#" -lt 1 ]]; then
     echo "Usage: $0 MODEL_PATH [SOURCE_ROOT]"
     echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, MCTS_THREADS_PER_PROCESS, PARALLEL_GAMES_PER_PROCESS"
-    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, CACHE_CAPACITY, USE_INFERENCE_CACHE, SEED_BASE"
+    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, FAST_SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, CACHE_CAPACITY, USE_INFERENCE_CACHE, SEED_BASE"
     echo "Affinity override: PIN_WORKERS_TO_CPUS=0|1"
     exit 1
 fi
@@ -24,6 +24,7 @@ parallel_games_per_process=${PARALLEL_GAMES_PER_PROCESS:-96}
 warmup_steps=${WARMUP_STEPS:-1}
 measurement_duration_seconds=${MEASUREMENT_DURATION_SECONDS:-120}
 searches_per_ply=${SEARCHES_PER_PLY:-600}
+fast_searches_per_ply=${FAST_SEARCHES_PER_PLY:-0}
 parallel_searches=${PARALLEL_SEARCHES:-4}
 maximum_batch_size=${MAXIMUM_BATCH_SIZE:-256}
 inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
@@ -59,6 +60,7 @@ require_positive_integer PARALLEL_GAMES_PER_PROCESS "${parallel_games_per_proces
 require_nonnegative_integer WARMUP_STEPS "${warmup_steps}"
 require_positive_integer MEASUREMENT_DURATION_SECONDS "${measurement_duration_seconds}"
 require_positive_integer SEARCHES_PER_PLY "${searches_per_ply}"
+require_nonnegative_integer FAST_SEARCHES_PER_PLY "${fast_searches_per_ply}"
 require_positive_integer PARALLEL_SEARCHES "${parallel_searches}"
 require_positive_integer MAXIMUM_BATCH_SIZE "${maximum_batch_size}"
 require_positive_integer INFERENCE_TIMEOUT_MICROSECONDS "${inference_timeout_microseconds}"
@@ -75,6 +77,13 @@ if [[ "${pin_workers_to_cpus}" != "0" && "${pin_workers_to_cpus}" != "1" ]]; the
 fi
 if [[ "${use_inference_cache}" != "0" && "${use_inference_cache}" != "1" ]]; then
     echo "USE_INFERENCE_CACHE must be 0 or 1, found: ${use_inference_cache}"
+    exit 1
+fi
+if [[ "${fast_searches_per_ply}" -gt 0 ]] && {
+    [[ "${fast_searches_per_ply}" -le "${parallel_searches}" ]] ||
+        [[ "${fast_searches_per_ply}" -ge "${searches_per_ply}" ]]
+}; then
+    echo "FAST_SEARCHES_PER_PLY must exceed PARALLEL_SEARCHES and remain below SEARCHES_PER_PLY"
     exit 1
 fi
 
@@ -249,7 +258,7 @@ fi
 
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 topology_name="g${gpu_count}-pg${processes_per_gpu}-t${mcts_threads_per_process}-games${parallel_games_per_process}"
-workload_name="s${searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}-cache${cache_capacity}"
+workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}-cache${cache_capacity}"
 if [[ "${use_inference_cache}" -eq 1 ]]; then
     inference_client_name=cached
 else
@@ -294,6 +303,7 @@ jq -n \
     --argjson warmup_steps "${warmup_steps}" \
     --argjson measurement_duration_seconds "${measurement_duration_seconds}" \
     --argjson searches_per_ply "${searches_per_ply}" \
+    --argjson fast_searches_per_ply "${fast_searches_per_ply}" \
     --argjson parallel_searches "${parallel_searches}" \
     --argjson maximum_batch_size "${maximum_batch_size}" \
     --argjson inference_timeout_microseconds "${inference_timeout_microseconds}" \
@@ -345,6 +355,7 @@ jq -n \
             warmup_steps: $warmup_steps,
             measurement_duration_seconds: $measurement_duration_seconds,
             target_searches_per_ply: $searches_per_ply,
+            target_fast_searches_per_ply_override: $fast_searches_per_ply,
             parallel_searches: $parallel_searches,
             maximum_batch_size: $maximum_batch_size,
             inference_timeout_microseconds: $inference_timeout_microseconds,
@@ -382,6 +393,9 @@ for ((device = 0; device < gpu_count; device++)); do
         )
         if [[ "${use_inference_cache}" -eq 0 ]]; then
             worker_command+=(--no-inference-cache)
+        fi
+        if [[ "${fast_searches_per_ply}" -gt 0 ]]; then
+            worker_command+=(--fast-searches "${fast_searches_per_ply}")
         fi
         if [[ "${pin_workers_to_cpus}" -eq 1 ]]; then
             taskset --cpu-list "${worker_cpu_lists[process_index]}" "${worker_command[@]}" \
