@@ -33,3 +33,30 @@ For stability during training, since only 1 epoch (at most 2) is used, the 1 cyc
 ## Mixed Precision Training
 
 To further improve the training speed, mixed precision training is used. This means that the model is trained with `torch.amp.autocast` with `torch.bfloat16` numbers instead of `torch.bfloat32` numbers. This greatly reduces the memory footprint and increases the training speed while preserving the accuracy on required operations, therefore minimally affecting the model performance. This way, the model can be trained with a larger batch size and the training speed is increased.
+
+## Multi-GPU Training
+
+Single-process PyTorch `DataParallel` is a poor fit for the 3.24-million-parameter
+chess network. Its primary-device scatter, per-step replication, output gather,
+and gradient reduction overheads outweigh the additional GPU compute.
+Multi-process `DistributedDataParallel` (DDP) instead keeps one persistent model
+replica per GPU and synchronizes bucketed gradients with NCCL.
+
+![Single GPU, DataParallel, and DDP throughput](../benchmarks/ddp-model-throughput-20260720/training-throughput.png)
+
+In a model-only benchmark with resident BF16 batches, four-GPU DDP processes
+53.3 thousand synthetic samples/s, compared with 22.2 thousand samples/s for
+the single-GPU batch-1,024 baseline and 13.3 thousand samples/s for four-GPU
+`DataParallel`. The longer DDP run sustains 38.6 thousand samples/s.
+
+![Four-GPU DDP utilization](../benchmarks/ddp-model-throughput-20260720/ddp-gpu-utilization.png)
+
+Sustained DDP uses 56.9% of aggregate GPU compute on average and only 15%–18%
+of memory-controller capacity. This leaves potential headroom for self-play
+inference during optimizer training. Production training still requires
+non-overlapping rank-local data partitions and a combined DDP/self-play
+contention benchmark; the synthetic DDP measurements deliberately use
+identical resident samples to isolate model and communication throughput.
+
+See the [benchmark artifact](../benchmarks/ddp-model-throughput-20260720/README.md)
+for methodology, limitations, raw results, and figure regeneration.
