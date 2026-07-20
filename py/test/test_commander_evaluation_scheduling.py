@@ -82,6 +82,7 @@ def test_training_reaps_evaluations_without_waiting_for_active_ones(
         ),
     )
     commander.communication = cast(commander_module.Communication, _Communication())
+    commander.run_id = 0
     commander.latest_completed_iteration = 0
     commander.final_stop_reason = None
     reap_calls = 0
