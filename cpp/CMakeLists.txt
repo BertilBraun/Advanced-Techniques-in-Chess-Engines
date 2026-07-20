@@ -177,6 +177,10 @@ add_executable(ShardedCacheTest test/TestShardedCache.cpp)
 target_include_directories(ShardedCacheTest PRIVATE src)
 add_test(NAME ShardedCacheTest COMMAND ShardedCacheTest)
 
+add_executable(BlockingQueueTest test/TestBlockingQueue.cpp)
+target_include_directories(BlockingQueueTest PRIVATE src)
+add_test(NAME BlockingQueueTest COMMAND BlockingQueueTest)
+
 add_executable(
         BoardLegalMovesCacheTest
         test/TestBoardLegalMovesCache.cpp

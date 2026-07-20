@@ -4,6 +4,7 @@
 
 #include "BoardEncoding.hpp"
 
+#include "util/BlockingQueue.hpp"
 #include "util/CollisionCheckedCache.hpp"
 #include <ATen/core/TensorBody.h>
 
@@ -134,34 +135,20 @@ private:
     InferenceCache m_cache;
     std::atomic_size_t m_totalHits = 0;
     std::atomic_size_t m_totalEvals = 0;
-    std::atomic_size_t m_totalModelInferenceCalls = 0;
-    std::atomic_size_t m_totalModelInferencePositions = 0;
+    size_t m_totalModelInferenceCalls = 0;     // Guarded by m_modelStatisticsMutex.
+    size_t m_totalModelInferencePositions = 0; // Guarded by m_modelStatisticsMutex.
     std::atomic_size_t m_totalFingerprintCollisions = 0;
     std::vector<size_t> m_modelBatchSizeHistogram;
 
-    // Request queue for asynchronous batching.
-    std::mutex m_queueMutex;
-    std::condition_variable m_queueCV;
-    std::queue<InferenceRequest> m_requestQueue;
-    bool m_shutdown; // Guarded by m_queueMutex.
-
     static constexpr size_t HANDOFF_QUEUE_CAPACITY = 2;
 
-    std::mutex m_preparedMutex;
-    std::condition_variable m_preparedNotEmptyCV;
-    std::condition_variable m_preparedNotFullCV;
-    std::queue<PreparedBatch> m_preparedQueue;
-    bool m_prepareFinished = false; // Guarded by m_preparedMutex.
-
-    std::mutex m_completedMutex;
-    std::condition_variable m_completedNotEmptyCV;
-    std::condition_variable m_completedNotFullCV;
-    std::queue<CompletedBatch> m_completedQueue;
-    bool m_modelFinished = false; // Guarded by m_completedMutex.
+    BlockingQueue<InferenceRequest> m_requestQueue;
+    BlockingQueue<PreparedBatch> m_preparedQueue{HANDOFF_QUEUE_CAPACITY};
+    BlockingQueue<CompletedBatch> m_completedQueue{HANDOFF_QUEUE_CAPACITY};
 
     std::thread m_prepareThread;
     std::thread m_modelThread;
     std::thread m_resolveThread;
-    std::mutex m_modelMutex;
+    std::mutex m_modelStatisticsMutex;
     InferenceClientParams m_params; // Store the parameters for easy access
 };
