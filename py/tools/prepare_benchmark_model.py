@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 
 from src.Network import Network
-from src.train.TrainingArgs import NetworkParams
+from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -14,6 +14,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--layers', required=True, type=int)
     parser.add_argument('--hidden-size', required=True, type=int)
+    parser.add_argument(
+        '--se-placement',
+        choices=tuple(SEPlacement),
+        default=SEPlacement.EVERY_SECOND_BLOCK,
+        type=SEPlacement,
+    )
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--zero-parameters', action='store_true')
     return parser.parse_args()
@@ -26,7 +32,7 @@ def main() -> None:
         NetworkParams(
             num_layers=arguments.layers,
             hidden_size=arguments.hidden_size,
-            se_positions=(1, 3),
+            se_placement=arguments.se_placement,
         ),
         torch.device('cpu'),
     )

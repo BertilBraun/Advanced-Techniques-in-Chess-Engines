@@ -75,7 +75,7 @@ def objective(trial: optuna.Trial) -> float:
         num_threads=8,  # Adjust based on your hardware
     )
 
-    network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size, se_positions=())
+    network_params = NetworkParams(num_layers=network_num_layers, hidden_size=network_hidden_size)
 
     self_play_params = SelfPlayParams(
         num_parallel_games=128,

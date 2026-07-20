@@ -61,7 +61,7 @@ def training_args() -> TrainingArgs:
         save_path='unused',
         num_iterations=1,
         num_games_per_iteration=1,
-        network=NetworkParams(num_layers=1, hidden_size=8, se_positions=()),
+        network=NetworkParams(num_layers=1, hidden_size=8),
         self_play=SelfPlayParams(
             mcts=MCTSParams(
                 num_searches_per_turn=8,

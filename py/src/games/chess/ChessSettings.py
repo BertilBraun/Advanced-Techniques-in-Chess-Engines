@@ -5,6 +5,7 @@ from src.train.TrainingArgs import (
     GatingParams,
     MCTSParams,
     NetworkParams,
+    SEPlacement,
     SelfPlayParams,
     TrainingArgs,
     TrainingParams,
@@ -37,7 +38,11 @@ CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
-network = NetworkParams(num_layers=12, hidden_size=112, se_positions=(1, 3))
+network = NetworkParams(
+    num_layers=12,
+    hidden_size=112,
+    se_placement=SEPlacement.EVERY_SECOND_BLOCK,
+)
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',

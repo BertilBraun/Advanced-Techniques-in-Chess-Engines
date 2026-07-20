@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable, Literal
 
 from src.experiment.cost_accounting import CostCurrency
@@ -42,6 +43,19 @@ class MCTSParams:
     """The minimum number of visits that each root child should recieve. Typically this value is < 5 or in proportion to the num_searches_per_turn. This is used to ensure that the MCTS algorithm has explored the search tree enough to make a good decision. If the number of visits is too low, the MCTS algorithm might not explore enough to learn the best moves to play."""
 
 
+class SEPlacement(str, Enum):
+    DISABLED = 'disabled'
+    EVERY_BLOCK = 'every_block'
+    EVERY_SECOND_BLOCK = 'every_second_block'
+
+    def applies_to(self, block_index: int) -> bool:
+        if self is SEPlacement.DISABLED:
+            return False
+        if self is SEPlacement.EVERY_BLOCK:
+            return True
+        return block_index % 2 == 1
+
+
 @dataclass
 class NetworkParams:
     num_layers: int
@@ -50,8 +64,8 @@ class NetworkParams:
     hidden_size: int
     """This is the dimension of the hidden layers to use for the neural network. Typically 32-64 for simpler games like TicTacToe, 128-256 for medium complexity games like Connect4 and 512-1024 for complex games like Chess"""
 
-    se_positions: tuple[int, ...]
-    """This is the positions of the residual blocks to upgrade to Squeeze-and-Excitation blocks. This is used to improve the performance of the neural network by adding a Squeeze-and-Excitation block after each residual block in the specified positions. The positions are 0-based indices of the residual blocks, e.g. (0, 2, 4) means that the first, third and fifth residual blocks will be upgraded to Squeeze-and-Excitation blocks."""
+    se_placement: SEPlacement = SEPlacement.DISABLED
+    """Controls whether squeeze-and-excitation is disabled, used in every block, or used in blocks 2, 4, 6, and so on."""
 
     num_policy_channels: int = 4
     num_value_channels: int = 2

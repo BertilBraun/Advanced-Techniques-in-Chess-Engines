@@ -32,11 +32,15 @@ class Network(nn.Module):
             nn.ReLU(inplace=True),
         )
 
-        self.backBone = nn.ModuleList()
-        for i in range(args.num_layers):
-            self.backBone.append(ResBlock(args.hidden_size))
-            if i in args.se_positions:
-                self.backBone.append(SE1x1(args.hidden_size))  # Add SE block after ResBlock
+        self.backBone = nn.ModuleList(
+            [
+                ResBlock(
+                    args.hidden_size,
+                    use_squeeze_excitation=args.se_placement.applies_to(block_index),
+                )
+                for block_index in range(args.num_layers)
+            ]
+        )
 
         self.policyHead = nn.Sequential(
             nn.Conv2d(args.hidden_size, args.num_policy_channels, kernel_size=1, bias=False),
@@ -113,7 +117,12 @@ class Network(nn.Module):
 
 
 class ResBlock(nn.Module):
-    def __init__(self, num_hidden: int) -> None:
+    def __init__(
+        self,
+        num_hidden: int,
+        use_squeeze_excitation: bool = False,
+        squeeze_excitation_reduction: int = 16,
+    ) -> None:
         super().__init__()
         self.conv_block1 = nn.Sequential(
             nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
@@ -124,35 +133,35 @@ class ResBlock(nn.Module):
             nn.Conv2d(num_hidden, num_hidden, kernel_size=3, padding='same', bias=False),
             nn.BatchNorm2d(num_hidden),
         )
+        self.squeeze_excitation: nn.Module = (
+            SqueezeExcitation(num_hidden, squeeze_excitation_reduction) if use_squeeze_excitation else nn.Identity()
+        )
         self.relu2 = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:
         residual = x
         x = self.conv_block1(x)
         x = self.conv_block2(x)
-        x += residual
+        x = self.squeeze_excitation(x)
+        x = x + residual
         x = self.relu2(x)
         return x
 
 
-class SE1x1(nn.Module):
-    """Light‑weight squeeze‑and‑excitation (channel attention) block.
+class SqueezeExcitation(nn.Module):
+    """Channel attention for a residual branch, using a default reduction of 16."""
 
-    Args:
-        channels (int): number of feature channels in the input tensor.
-        reduction (int): bottleneck ratio *r* (Hu et al., 2017).  Default 8.
-    """
-
-    def __init__(self, channels: int, reduction: int = 8) -> None:
+    def __init__(self, channels: int, reduction: int = 16) -> None:
         super().__init__()
+        reduced_channels = max(1, channels // reduction)
         self.squeeze = nn.AdaptiveAvgPool2d(1)  # H×W → 1×1
         self.excite = nn.Sequential(
-            nn.Conv2d(channels, channels // reduction, kernel_size=1, bias=True),
+            nn.Conv2d(channels, reduced_channels, kernel_size=1, bias=True),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels // reduction, channels, kernel_size=1, bias=True),
+            nn.Conv2d(reduced_channels, channels, kernel_size=1, bias=True),
             nn.Sigmoid(),
         )
 
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         w = self.excite(self.squeeze(x))  # shape: (N, C, 1, 1)
         return x * w  # channel‑wise re‑weight

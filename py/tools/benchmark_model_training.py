@@ -11,7 +11,7 @@ from torch.amp import GradScaler, autocast
 from src.Network import Network
 from src.settings import CurrentGame, TRAINING_ARGS
 from src.train.Trainer import Trainer
-from src.train.TrainingArgs import NetworkParams
+from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,7 @@ class Arguments:
     device: int
     layers: int
     hidden_size: int
+    se_placement: SEPlacement
     batches: int
     warmup_batches: int
 
@@ -35,6 +36,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--device', required=True, type=int)
     parser.add_argument('--layers', required=True, type=int)
     parser.add_argument('--hidden-size', required=True, type=int)
+    parser.add_argument(
+        '--se-placement',
+        choices=tuple(SEPlacement),
+        default=SEPlacement.EVERY_SECOND_BLOCK,
+        type=SEPlacement,
+    )
     parser.add_argument('--batches', default=5, type=int)
     parser.add_argument('--warmup-batches', default=2, type=int)
     namespace = parser.parse_args()
@@ -42,6 +49,7 @@ def parse_arguments() -> Arguments:
         device=namespace.device,
         layers=namespace.layers,
         hidden_size=namespace.hidden_size,
+        se_placement=namespace.se_placement,
         batches=namespace.batches,
         warmup_batches=namespace.warmup_batches,
     )
@@ -67,7 +75,11 @@ def main() -> None:
     device = torch.device('cuda', arguments.device)
     torch.cuda.set_device(device)
     model = Network(
-        NetworkParams(arguments.layers, arguments.hidden_size, (1, 3)),
+        NetworkParams(
+            arguments.layers,
+            arguments.hidden_size,
+            arguments.se_placement,
+        ),
         device,
     )
     optimizer = torch.optim.AdamW(model.parameters())
