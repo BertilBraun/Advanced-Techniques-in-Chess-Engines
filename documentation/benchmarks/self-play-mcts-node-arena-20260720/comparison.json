@@ -1,0 +1,48 @@
+{
+  "node_arena_vs_baseline": {
+    "baseline_revision": "439997d1a2e79fd5e59f2745e161655e1b37fce1",
+    "arena_revision": "d2880b78ba470ee770e7b4307cbc44e7f773f6dc",
+    "game_updates_per_second": {
+      "baseline": 643.142358019648,
+      "arena": 695.1104719488281,
+      "change_percent": 8.080343843188832
+    },
+    "summed_worker_peak_rss_mib": {
+      "baseline": 68624.296875,
+      "arena": 45105.9140625,
+      "change_percent": -34.2712186258739
+    },
+    "peak_host_ram_percent": {
+      "baseline": 48.629,
+      "arena": 30.86,
+      "change_percent": -36.53992473626848
+    },
+    "mean_gpu_utilization_percent": {
+      "baseline": 83.77083333333333,
+      "arena": 82.9375,
+      "change_percentage_points": -0.8333333333333286
+    }
+  },
+  "cached_vs_non_cached_inference": {
+    "revision": "f91345aa59ffa3a536fb0db607c6899dc6cb8fc4",
+    "effective_milliseconds_per_ply": {
+      "cached": 1.4322301263231878,
+      "non_cached": 1.4197779148017153,
+      "change_percent": -0.8694281241967546
+    },
+    "game_updates_per_second": {
+      "cached": 698.2118177943887,
+      "non_cached": 704.3355087965705,
+      "change_percent": 0.8770534737619009
+    },
+    "summed_worker_peak_rss_mib": {
+      "cached": 45379.0234375,
+      "non_cached": 42148.37109375,
+      "change_percent": -7.119263701651799
+    },
+    "cache_hit_rate_percent": {
+      "cached": 0.9695068921408271,
+      "non_cached": 0.0
+    }
+  }
+}

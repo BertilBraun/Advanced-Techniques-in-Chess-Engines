@@ -1,0 +1,26 @@
+{
+  "samples_per_gpu": 12,
+  "peak_host_ram_percent": 30.860,
+  "gpus": [
+    {
+      "index": 0,
+      "mean_utilization_percent": 75.5,
+      "peak_memory_used_mib": 6783
+    },
+    {
+      "index": 1,
+      "mean_utilization_percent": 86.83333333333333,
+      "peak_memory_used_mib": 2288
+    },
+    {
+      "index": 2,
+      "mean_utilization_percent": 83.33333333333333,
+      "peak_memory_used_mib": 2288
+    },
+    {
+      "index": 3,
+      "mean_utilization_percent": 86.08333333333333,
+      "peak_memory_used_mib": 2288
+    }
+  ]
+}
