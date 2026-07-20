@@ -23,7 +23,7 @@ parallel_games_per_process=96
 searches_per_ply=600
 parallel_searches=4
 maximum_batch_size=256
-inference_timeout_microseconds=500
+inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
 cache_capacity=1500000
 telemetry_interval_seconds=2
 expected_processes=$((gpu_count * processes_per_gpu))
@@ -72,7 +72,7 @@ if grep -q -- '-DENABLE_TIMING' "${compile_commands}"; then
 fi
 
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-output_directory="${output_root}/self-play-cpp-baseline-4x8x3x96-${run_timestamp}"
+output_directory="${output_root}/self-play-cpp-baseline-4x8x3x96-timeout${inference_timeout_microseconds}us-${run_timestamp}"
 mkdir -p "${output_directory}"
 exec > >(tee -a "${output_directory}/console.log") 2>&1
 

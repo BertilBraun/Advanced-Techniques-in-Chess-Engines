@@ -1,0 +1,46 @@
+{
+  "run_timestamp_utc": "20260720T073130Z",
+  "source": {
+    "revision": "a27e260d4b9bbdaf0f54c478f8a03f50ee1d9106",
+    "worktree_clean": true,
+    "alpha_zero_cpp_sha256": "9244014abc442f71d14216c19b10e744318b9630e21a08e7c0de2bbd422c76d4"
+  },
+  "build": {
+    "type": "Release",
+    "optimization": "-O3",
+    "timing_instrumentation": "OFF"
+  },
+  "runtime": {
+    "torch_version": "2.12.0+cu130",
+    "cuda_version": "13.0"
+  },
+  "hardware": {
+    "gpu_count": 4,
+    "logical_cpu_count": 64,
+    "gpu_inventory": [
+      "0, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+      "1, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+      "2, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+      "3, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05"
+    ]
+  },
+  "topology": {
+    "processes_per_gpu": 8,
+    "total_processes": 32,
+    "mcts_threads_per_process": 3,
+    "total_mcts_threads": 96,
+    "parallel_games_per_process": 96,
+    "total_parallel_games": 3072
+  },
+  "workload": {
+    "model_path": "/workspace/chess-artifacts/topology-benchmark-model-zero-12x112.jit.pt",
+    "model_sha256": "6d8fb642655715057e5dfe8ea33c09db4cd8228ac1c79fa84574989f3579a98e",
+    "warmup_steps": 2,
+    "measurement_steps": 10,
+    "target_searches_per_ply": 600,
+    "parallel_searches": 4,
+    "maximum_batch_size": 256,
+    "inference_timeout_microseconds": 500,
+    "cache_capacity_per_process": 1500000
+  }
+}
