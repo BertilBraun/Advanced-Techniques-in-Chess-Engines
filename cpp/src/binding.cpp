@@ -27,7 +27,7 @@ static void init() {
 Board *newBoard() {
     Board *board = new Board();
     for (int i = 0; i < 30; ++i) {
-        auto moves = board->validMoves();
+        const std::vector<Move> &moves = board->validMoves();
         if (moves.empty())
             break; // No more valid moves, stop early
         board->makeMove(moves[rand() % moves.size()]);
@@ -179,7 +179,7 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
 Board replayMoves(const std::string &startingFen, const std::vector<std::string> &movesUci) {
     Board board(startingFen);
     for (const std::string &moveUci : movesUci) {
-        const std::vector<Move> legalMoves = board.validMoves();
+        const std::vector<Move> &legalMoves = board.validMoves();
         const auto matchingMove =
             std::find_if(legalMoves.begin(), legalMoves.end(),
                          [&moveUci](const Move move) { return toString(move) == moveUci; });
@@ -402,7 +402,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),
              py::arg("mcts_args"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("search", &MCTS::search, py::arg("boards"),
+        .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
                  Run MCTS search on a list of boards.
                  `boards` should be a list of tuples: (fen_str: str, prev_node: NodeId, full_search: bool).
@@ -410,7 +410,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                      - result: float
                      - visits: List of (encoded_move: int, visit_count: int)
                      - children: List of NodeId (uint32)
-                 and `.mctsStats` contains avg depth/entropy/KL.
+                 When `collect_statistics` is true, `.mctsStats` contains
+                 depth/entropy/KL for one representative root.
              )pbdoc")
         .def("inference", &inference, py::arg("fen"),
              R"pbdoc(

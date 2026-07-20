@@ -38,43 +38,19 @@ MCTSResult gatherResult(const std::shared_ptr<MCTSNode> &root) {
 
 MCTSStatistics mctsStatistics(const std::shared_ptr<MCTSNode> &root) {
     MCTSStatistics stats;
+    stats.averageDepth = static_cast<float>(root->maxDepth());
+    if (root->children.empty())
+        return stats;
 
-    {
-        // Compute the depth of each search tree using a DFS.
-        stats.averageDepth = static_cast<float>(root->maxDepth());
-    }
-    {
-        // Compute the entropy of the visit counts.
-        auto entropy = [&](const std::shared_ptr<MCTSNode> &node) -> float {
-            const int total = node->number_of_visits;
-            float ent = 0.0f;
-            for (const auto &child : node->children) {
-                if (child->number_of_visits > 0) {
-                    const float p = static_cast<float>(child->number_of_visits) / total;
-                    ent -= p * std::log2(p);
-                }
-            }
-            return ent;
-        };
+    const int totalVisits = root->number_of_visits;
+    const float uniformProbability = 1.0f / static_cast<float>(root->children.size());
+    for (const auto &child : root->children) {
+        if (child->number_of_visits == 0)
+            continue;
 
-        stats.averageEntropy = entropy(root);
-    }
-    {
-        auto klDivergence = [&](const std::shared_ptr<MCTSNode> &node) -> float {
-            const int total = node->number_of_visits;
-            float kl = 0.0f;
-            for (const auto &child : node->children) {
-                if (child->number_of_visits > 0) {
-                    const float p = static_cast<float>(child->number_of_visits) / total;
-                    const float q = 1.0f / node->children.size(); // Uniform distribution
-                    if (p > 0.0f)
-                        kl += p * std::log2(p / q);
-                }
-            }
-            return kl;
-        };
-
-        stats.averageKLDivergence = klDivergence(root);
+        const float probability = static_cast<float>(child->number_of_visits) / totalVisits;
+        stats.averageEntropy -= probability * std::log2(probability);
+        stats.averageKLDivergence += probability * std::log2(probability / uniformProbability);
     }
 
     return stats;
@@ -85,8 +61,7 @@ struct RootTask {
     uint32 limit; // visit budget for this root
 };
 
-std::vector<std::pair<MCTSResult, MCTSStatistics>>
-MCTS::searchGames(const std::vector<BoardTuple> &boards) {
+std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::searchGames");
 
     const size_t N = boards.size();
@@ -158,17 +133,17 @@ MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     }
 
     // -----------------------------------------------------------------
-    // Collect the final best-move + statistics for every root.
+    // Collect the final best-move result for every root.
     // -----------------------------------------------------------------
-    std::vector<std::pair<MCTSResult, MCTSStatistics>> results;
+    std::vector<MCTSResult> results;
     results.reserve(roots.size());
     for (const auto &root : roots)
-        results.emplace_back(gatherResult(root), mctsStatistics(root));
+        results.emplace_back(gatherResult(root));
 
     return results;
 }
 
-MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
+MCTSResults MCTS::search(const std::vector<BoardTuple> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
 
     if (boards.empty())
@@ -178,7 +153,7 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     const size_t P = std::max<size_t>(1, m_threadPool.numThreads());
     const size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
 
-    std::vector<std::future<std::vector<std::pair<MCTSResult, MCTSStatistics>>>> futures;
+    std::vector<std::future<std::vector<MCTSResult>>> futures;
     futures.reserve(P);
 
     for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
@@ -190,21 +165,15 @@ MCTSResults MCTS::search(const std::vector<BoardTuple> &boards) {
     }
 
     std::vector<MCTSResult> results;
-    MCTSStatistics stats;
     results.reserve(N);
     for (auto &fut : futures) {
-        for (const auto &[result, rootStats] : fut.get()) {
-            stats.averageDepth += rootStats.averageDepth;
-            stats.averageEntropy += rootStats.averageEntropy;
-            stats.averageKLDivergence += rootStats.averageKLDivergence;
-
-            results.emplace_back(result);
-        }
+        std::vector<MCTSResult> sliceResults = fut.get();
+        results.insert(results.end(), std::make_move_iterator(sliceResults.begin()),
+                       std::make_move_iterator(sliceResults.end()));
     }
 
-    stats.averageDepth /= static_cast<float>(N);
-    stats.averageEntropy /= static_cast<float>(N);
-    stats.averageKLDivergence /= static_cast<float>(N);
+    const MCTSStatistics stats =
+        collectStatistics ? mctsStatistics(results.front().root) : MCTSStatistics{};
 
     return {.results = results, .mctsStats = stats};
 }

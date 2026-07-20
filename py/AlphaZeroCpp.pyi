@@ -151,7 +151,11 @@ class MCTS:
         Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
         The encoded moves are pairs of (encoded_move: int, score: float).
         """
-    def search(self, boards: list[tuple[MCTSNode, bool]]) -> MCTSResults:
+    def search(
+        self,
+        boards: list[tuple[MCTSNode, bool]],
+        collect_statistics: bool = False,
+    ) -> MCTSResults:
         """
         Run MCTS search on a list of boards.
         `boards` should be a list of tuples: (fen_str: str, prev_node: NodeId, full_search: bool).
@@ -159,7 +163,8 @@ class MCTS:
             - result: float
             - visits: List of (encoded_move: int, visit_count: int)
             - children: List of NodeId (uint32)
-        and `.mctsStats` contains avg depth/entropy/KL.
+        When `collect_statistics` is true, `.mctsStats` contains
+        depth/entropy/KL for one representative root.
         """
 
 class MCTSNode:

@@ -72,8 +72,8 @@ struct MCTSResults {
  *         - `result`: The average result score of the root node.
  *         - `visits`: A list of (move, visit count) pairs for each child of the root node.
  *         - `children`: A list of NodeIds for the children of the root node.
- *       - `mctsStats`: Statistics about the MCTS search, including average depth, entropy, and KL
- *                      divergence. These should be logged to TensorBoard.
+ *       - `mctsStats`: Representative depth, entropy, and KL divergence when statistics were
+ *                      requested. These should be logged to TensorBoard.
  *     - The Python side should select one of the moves based on the visit counts.
  *     - The next search can then be performed on the selected move, which will reuse the Search
  *       Tree, if the child node id is provided
@@ -93,7 +93,8 @@ public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs)
         : m_client(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads) {}
 
-    [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards);
+    [[nodiscard]] MCTSResults search(const std::vector<BoardTuple> &boards,
+                                     bool collectStatistics = false);
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics();
 
@@ -104,8 +105,7 @@ private:
     MCTSParams m_args;
     ThreadPool m_threadPool;
 
-    [[nodiscard]] std::vector<std::pair<MCTSResult, MCTSStatistics>>
-    searchGames(const std::vector<BoardTuple> &boards);
+    [[nodiscard]] std::vector<MCTSResult> searchGames(const std::vector<BoardTuple> &boards);
 
     // This method performs several iterations of tree search in parallel.
     void parallelIterate(const std::vector<std::shared_ptr<MCTSNode>> &roots);

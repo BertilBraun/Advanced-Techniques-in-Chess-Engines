@@ -7,6 +7,7 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 from src.util.tensorboard import (
     TensorboardWriter,
     configure_tensorboard_run_directory,
+    is_tensorboard_writer_active,
     log_scalar,
     log_scalars,
 )
@@ -93,3 +94,21 @@ def test_disabled_tensorboard_writer_creates_no_event_file(
         log_scalar('mcts/average_search_depth', 4.0, iteration=0)
 
     assert not Path(writer.log_folder).exists()
+
+
+def test_tensorboard_writer_active_detection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv('TRAINING_TENSORBOARD_LOG_PATH', str(tmp_path))
+    monkeypatch.delenv('TRAINING_TENSORBOARD_RUN_DIRECTORY', raising=False)
+
+    assert not is_tensorboard_writer_active()
+
+    with TensorboardWriter(run=4, suffix='self_play', postfix_pid=False):
+        assert is_tensorboard_writer_active()
+
+    with TensorboardWriter(run=5, suffix='self_play', postfix_pid=False, enabled=False):
+        assert not is_tensorboard_writer_active()
+
+    assert not is_tensorboard_writer_active()

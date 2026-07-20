@@ -24,7 +24,7 @@ from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
-from src.util.tensorboard import log_histogram, log_scalar
+from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
 from src.util.timing import timeit
 
 
@@ -203,7 +203,7 @@ class SelfPlayCpp:
     def search(self, boards: list[tuple[MCTSNode, bool]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        return self.mcts.search(boards)
+        return self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'

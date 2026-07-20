@@ -72,6 +72,10 @@ def _tb_check_active() -> bool:
     return True
 
 
+def is_tensorboard_writer_active() -> bool:
+    return _TB_LOGGING_ENABLED.get() and _TB_SUMMARY.get() is not None
+
+
 def log_scalar(name: str, value: float, iteration: int | None = None) -> None:
     if not _tb_check_active():
         return
