@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Generic, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Generic, List, Optional, Tuple, TypeVar
 
 from src.games.Game import Board
-from src.eval.GridGUI import BaseGridGameGUI
+
+if TYPE_CHECKING:
+    from src.eval.GridGUI import BaseGridGameGUI
 
 _Move = TypeVar('_Move')
 

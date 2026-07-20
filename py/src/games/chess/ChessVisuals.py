@@ -5,9 +5,9 @@ from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING
 from src.util import lerp
 
 if TYPE_CHECKING:
+    from src.eval.GridGUI import BaseGridGameGUI
     from src.mcts.MCTSNode import MCTSNode
 
-from src.eval.GridGUI import BaseGridGameGUI
 from src.games.GameVisuals import GameVisuals
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.ChessGame import BOARD_LENGTH
