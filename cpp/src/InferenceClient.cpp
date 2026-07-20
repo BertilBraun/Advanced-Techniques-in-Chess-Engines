@@ -20,7 +20,10 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
 }
 
 InferenceClient::~InferenceClient() {
-    m_shutdown = true;
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_shutdown = true;
+    }
     m_queueCV.notify_all();
     if (m_inferenceThread.joinable()) {
         m_inferenceThread.join();
@@ -58,6 +61,8 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     };
     std::vector<PendingInference> futures;
     futures.reserve(boards.size());
+    std::vector<InferenceRequest> requests;
+    requests.reserve(boards.size());
     std::vector<std::optional<CachedInferenceResult>> uncachedResults(boards.size());
 
     for (size_t i : range(boards.size())) {
@@ -72,13 +77,21 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             m_totalFingerprintCollisions.fetch_add(1, std::memory_order_relaxed);
         }
 
-        // Create and enqueue a new request.
-        InferenceRequest req;
-        req.boardTensor = toTensor(encodedBoards[i]);
-        futures.push_back(PendingInference{i, cacheResult, std::move(req.promise.get_future())});
+        InferenceRequest request;
+        request.boardTensor = toTensor(encodedBoards[i]);
+        futures.push_back(
+            PendingInference{i, cacheResult, std::move(request.promise.get_future())});
+        requests.push_back(std::move(request));
+    }
+
+    if (!requests.empty()) {
+        const std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_requestQueue.push(std::move(req));
+            for (InferenceRequest &request : requests) {
+                request.enqueuedAt = enqueuedAt;
+                m_requestQueue.push(std::move(request));
+            }
         }
         m_queueCV.notify_one();
     }
@@ -237,22 +250,33 @@ void InferenceClient::inferenceWorker() {
     while (true) {
         {
             std::unique_lock lock(m_queueMutex);
-            m_queueCV.wait_for(
-                lock, std::chrono::microseconds(m_params.microsecondsTimeoutInferenceThread),
-                [this] { return !m_requestQueue.empty() || m_shutdown; });
-            if (m_shutdown && m_requestQueue.empty())
+            m_queueCV.wait(lock, [this] { return !m_requestQueue.empty() || m_shutdown; });
+            if (m_shutdown && m_requestQueue.empty()) {
                 break;
+            }
+
+            const std::chrono::steady_clock::time_point collectionDeadline =
+                m_requestQueue.front().enqueuedAt +
+                std::chrono::microseconds(m_params.microsecondsTimeoutInferenceThread);
+            m_queueCV.wait_until(lock, collectionDeadline, [this] {
+                return m_shutdown ||
+                       m_requestQueue.size() >= static_cast<size_t>(m_params.maxBatchSize);
+            });
 
             // Extract up to m_maxBatchSize requests.
-            while (!m_requestQueue.empty() && promises.size() < m_params.maxBatchSize) {
-                tensorBatch.push_back(m_requestQueue.front().boardTensor);
+            while (!m_requestQueue.empty() &&
+                   promises.size() < static_cast<size_t>(m_params.maxBatchSize)) {
+                tensorBatch.push_back(std::move(m_requestQueue.front().boardTensor));
                 promises.push_back(std::move(m_requestQueue.front().promise));
                 m_requestQueue.pop();
             }
         }
 
         if (!promises.empty()) {
+            assert(promises.size() == tensorBatch.size());
+            assert(promises.size() <= static_cast<size_t>(m_params.maxBatchSize));
             const std::vector<ModelInferenceResult> inferenceResults = modelInference(tensorBatch);
+            assert(inferenceResults.size() == promises.size());
 
             for (auto &&[promise, res] : zip(promises, inferenceResults)) {
                 promise.set_value(res); // Set the promise for each request.

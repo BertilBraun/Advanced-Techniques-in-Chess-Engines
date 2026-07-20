@@ -78,6 +78,7 @@ private:
     struct InferenceRequest {
         torch::Tensor boardTensor;                  // Encoded board representation.
         std::promise<ModelInferenceResult> promise; // Promise to deliver the result.
+        std::chrono::steady_clock::time_point enqueuedAt;
     };
 
     /**
@@ -89,9 +90,9 @@ private:
     /**
      * The dedicated worker thread function.
      *
-     * This function waits for requests (or times out after 2 ms) and then processes up
-     * to m_maxBatchSize requests at once. After performing batched inference, it sets each
-     * request's promise and updates the cache.
+     * This function waits indefinitely for the first request, then collects requests until
+     * the maximum batch size or the oldest request's collection deadline is reached. After
+     * performing batched inference, it sets each request's promise.
      */
     void inferenceWorker();
 
@@ -124,7 +125,7 @@ private:
     std::mutex m_queueMutex;
     std::condition_variable m_queueCV;
     std::queue<InferenceRequest> m_requestQueue;
-    bool m_shutdown;
+    bool m_shutdown; // Guarded by m_queueMutex.
 
     std::thread m_inferenceThread;
     std::mutex m_modelMutex;
