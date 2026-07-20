@@ -286,8 +286,8 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     apply_run_configuration(arguments, configuration)
 
     assert configuration.stage.value == 'clean_retrain'
-    assert configuration.run_name == 'complete-training-run-v2'
-    assert configuration.tensorboard_run_directory == 'complete-training-run-v2'
+    assert configuration.run_name == 'complete-training-run-v3'
+    assert configuration.tensorboard_run_directory == 'complete-training-run-v3'
     assert configuration.resume.mode.value == 'random_initialization'
     assert arguments.num_iterations == 500
     assert arguments.num_games_per_iteration == 3500
@@ -298,12 +298,12 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play_search_warmup_iterations == 15
     assert arguments.self_play_value_warmup_iterations == 30
     assert arguments.self_play_endgame_shortcut_fade_iterations == 50
-    assert arguments.self_play.inference_cache_capacity == 2_500_000
-    assert arguments.self_play.mcts.num_threads == 12
+    assert arguments.self_play.inference_cache_capacity == 1_000_000
+    assert arguments.self_play.mcts.num_threads == 3
     assert arguments.cluster.self_play_tensorboard_processes == 1
     assert arguments.cluster.evaluation_device_cycle == (0, 1, 2, 3)
-    assert arguments.cluster.self_play_device_ids == (0,) * 6 + (1,) * 6 + (2,) * 6 + (3,) * 6
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (21, 22, 23)
+    assert arguments.cluster.self_play_device_ids == (0,) * 8 + (1,) * 8 + (2,) * 8 + (3,) * 8
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (28, 29, 30, 31)
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 100
     assert arguments.evaluation.every_n_iterations == 2
