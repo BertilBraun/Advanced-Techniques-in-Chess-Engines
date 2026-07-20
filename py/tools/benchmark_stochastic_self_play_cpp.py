@@ -163,12 +163,12 @@ def validate_arguments(arguments: Arguments) -> None:
         raise ValueError('--ready-file and --start-barrier must be provided together.')
 
 
-def seed_python_libraries(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+def seed_python_libraries(seed: int, device: int) -> None:
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+        torch.cuda.set_device(device)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
 
 def create_self_play(arguments: Arguments) -> SelfPlayCpp:
@@ -317,7 +317,7 @@ def build_result(
 def main() -> None:
     arguments = parse_arguments()
     validate_arguments(arguments)
-    seed_python_libraries(arguments.seed)
+    seed_python_libraries(arguments.seed, arguments.device)
     self_play = create_self_play(arguments)
     assert self_play.mcts is not None
 
