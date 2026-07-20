@@ -11,6 +11,44 @@
     "gpu_model": "NVIDIA GeForce RTX 4070 SUPER"
   },
   "method": "Synthetic resident batches with no data-loading time. DDP ranks intentionally used identical samples.",
+  "steady_state_four_gpu_ddp": {
+    "batches": 800,
+    "warmup_batches": 20,
+    "seconds_per_batch": 0.05309391975402832,
+    "samples_per_second": 38573.15507101197,
+    "utilization_sampling_interval_seconds": 1,
+    "active_utilization_samples_per_gpu": 18,
+    "gpu_utilization": [
+      {
+        "device": 0,
+        "sm_mean_percent": 63.2,
+        "sm_min_percent": 58,
+        "sm_max_percent": 71
+      },
+      {
+        "device": 1,
+        "sm_mean_percent": 61.7,
+        "sm_min_percent": 53,
+        "sm_max_percent": 77
+      },
+      {
+        "device": 2,
+        "sm_mean_percent": 63.2,
+        "sm_min_percent": 58,
+        "sm_max_percent": 76
+      },
+      {
+        "device": 3,
+        "sm_mean_percent": 39.3,
+        "sm_min_percent": 37,
+        "sm_max_percent": 42
+      }
+    ],
+    "memory_controller_utilization_percent": {
+      "observed_minimum": 15,
+      "observed_maximum": 18
+    }
+  },
   "results": [
     {
       "strategy": "single_gpu",
