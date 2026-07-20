@@ -121,11 +121,17 @@ class SelfPlayParams:
 
 @dataclass
 class ClusterParams:
-    trainer_device_id: int
-    """The CUDA device used for neural-network training."""
+    trainer_device_type: Literal['cuda', 'cpu']
+    """Device type used by every distributed trainer rank."""
 
-    trainer_data_parallel_device_ids: tuple[int, ...]
-    """CUDA devices participating in data-parallel neural-network training."""
+    trainer_process_group_backend: Literal['nccl', 'gloo']
+    """Process-group backend used by the distributed trainer."""
+
+    trainer_rank_zero_device_id: int
+    """Device owned by rank zero and used for trainer side effects."""
+
+    trainer_ddp_device_ids: tuple[int, ...]
+    """One explicit device ID per persistent distributed trainer rank."""
 
     evaluation_device_cycle: tuple[int, ...]
     """CUDA devices assigned cyclically to evaluation tasks."""
@@ -176,8 +182,11 @@ class TrainingParams:
     num_epochs: int
     """This is the number of epochs to train with one batch of self-play data"""
 
-    batch_size: int
-    """This is the size of the batch to train with"""
+    global_batch_size: int
+    """Number of unique replay samples consumed by one optimizer step across all ranks."""
+
+    local_batch_size: int
+    """Number of replay samples consumed by one rank in one optimizer step."""
 
     optimizer: OptimizerType
     """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""

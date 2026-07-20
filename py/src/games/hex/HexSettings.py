@@ -24,7 +24,8 @@ network = NetworkParams(num_layers=12, hidden_size=128)
 training = TrainingParams(
     num_epochs=2,
     optimizer='adamw',  # 'sgd',
-    batch_size=512,  # TODO 2048,
+    global_batch_size=512,  # TODO 2048,
+    local_batch_size=512,
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
@@ -85,8 +86,10 @@ TRAINING_ARGS = TrainingArgs(
         ),
     ),
     cluster=ClusterParams(
-        trainer_device_id=max(0, NUM_GPUS - 1),
-        trainer_data_parallel_device_ids=(max(0, NUM_GPUS - 1),),
+        trainer_device_type='cuda' if USE_GPU else 'cpu',
+        trainer_process_group_backend='nccl' if USE_GPU else 'gloo',
+        trainer_rank_zero_device_id=max(0, NUM_GPUS - 1),
+        trainer_ddp_device_ids=(max(0, NUM_GPUS - 1),),
         evaluation_device_cycle=(max(0, NUM_GPUS - 1),),
         self_play_device_ids=(max(0, NUM_GPUS - 1),) * NUM_SELF_PLAYERS,
         self_play_tensorboard_processes=1,

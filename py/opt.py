@@ -90,7 +90,8 @@ def objective(trial: optuna.Trial) -> float:
     training_params = TrainingParams(
         optimizer=training_optimizer,  # type: ignore
         num_epochs=training_num_epochs,
-        batch_size=training_batch_size,
+        global_batch_size=training_batch_size,
+        local_batch_size=training_batch_size,
         sampling_window=sampling_window,
         learning_rate=learning_rate,
         learning_rate_scheduler=learning_rate_scheduler,
@@ -104,8 +105,10 @@ def objective(trial: optuna.Trial) -> float:
         self_play=self_play_params,
         training=training_params,
         cluster=ClusterParams(
-            trainer_device_id=max(0, torch.cuda.device_count() - 1),
-            trainer_data_parallel_device_ids=(max(0, torch.cuda.device_count() - 1),),
+            trainer_device_type='cuda' if torch.cuda.is_available() else 'cpu',
+            trainer_process_group_backend='nccl' if torch.cuda.is_available() else 'gloo',
+            trainer_rank_zero_device_id=max(0, torch.cuda.device_count() - 1),
+            trainer_ddp_device_ids=(max(0, torch.cuda.device_count() - 1),),
             evaluation_device_cycle=(max(0, torch.cuda.device_count() - 1),),
             self_play_device_ids=(max(0, torch.cuda.device_count() - 1),) * 2,
             self_play_tensorboard_processes=1,

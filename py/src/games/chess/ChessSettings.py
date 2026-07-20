@@ -46,7 +46,8 @@ network = NetworkParams(
 training = TrainingParams(
     num_epochs=1,
     optimizer='adamw',  # 'sgd',
-    batch_size=1024,
+    global_batch_size=1024,
+    local_batch_size=1024,
     sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
@@ -137,8 +138,10 @@ TRAINING_ARGS = TrainingArgs(
         ),
     ),
     cluster=ClusterParams(
-        trainer_device_id=max(0, torch.cuda.device_count() - 1),
-        trainer_data_parallel_device_ids=(max(0, torch.cuda.device_count() - 1),),
+        trainer_device_type='cuda' if USE_GPU else 'cpu',
+        trainer_process_group_backend='nccl' if USE_GPU else 'gloo',
+        trainer_rank_zero_device_id=max(0, torch.cuda.device_count() - 1),
+        trainer_ddp_device_ids=(max(0, torch.cuda.device_count() - 1),),
         evaluation_device_cycle=(max(0, torch.cuda.device_count() - 1),),
         self_play_device_ids=(max(0, torch.cuda.device_count() - 1),),
         self_play_tensorboard_processes=1,

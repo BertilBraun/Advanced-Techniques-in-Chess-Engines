@@ -207,25 +207,29 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
-        dataset = SelfPlayDataset()
-
         try:
-            with h5py.File(file_path, 'r') as file:
-                dataset.stats = SelfPlayDataset._load_stats_from_open_file(file)
-                stored_states = np.asarray(file['states'][...])  # type: ignore
-                stored_visit_counts = np.asarray(file['visit_counts'][...])  # type: ignore
-                stored_value_targets = np.asarray(file['value_targets'][...])  # type: ignore
-
-                dataset.encoded_states = stored_states.tolist()
-                dataset.visit_counts = [visit_count[visit_count[:, 1] > 0] for visit_count in stored_visit_counts]
-                dataset.value_targets = stored_value_targets.tolist()
-
-                return dataset
+            return SelfPlayDataset.load_strict(file_path)
         except Exception as e:
             from src.util.log import log, LogLevel
 
             log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.DEBUG)
             return SelfPlayDataset()
+
+    @staticmethod
+    def load_strict(file_path: str | PathLike) -> SelfPlayDataset:
+        dataset = SelfPlayDataset()
+        with h5py.File(file_path, 'r') as file:
+            dataset.stats = SelfPlayDataset._load_stats_from_open_file(file)
+            stored_states = np.asarray(file['states'][...])  # type: ignore
+            stored_visit_counts = np.asarray(file['visit_counts'][...])  # type: ignore
+            stored_value_targets = np.asarray(file['value_targets'][...])  # type: ignore
+
+            dataset.encoded_states = stored_states.tolist()
+            dataset.visit_counts = [
+                visit_count[visit_count[:, 1] > 0].astype(np.uint16, copy=False) for visit_count in stored_visit_counts
+            ]
+            dataset.value_targets = stored_value_targets.tolist()
+        return dataset
 
     @staticmethod
     def load_stats(file_path: str | PathLike) -> SelfPlayDatasetStats:

@@ -35,6 +35,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
         self._num_samples = 0
         self._max_buffer_samples = max_buffer_samples
         self._logging_threads: list[Thread] = []
+        self._loaded_files: set[Path] = set()
 
     # ---------- public API used by TrainerProcess ------------------------- #
     def update(self, iteration: int, window_iter: int, files: list[Path]) -> None:
@@ -175,11 +176,16 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
     # ---------- helpers --------------------------------------------------- #
     def _add_iteration(self, iteration: int, files: list[Path]) -> None:
         for file in files:
-            assert file.exists(), f'File {file} does not exist for iteration {iteration}.'
+            resolved_file = file.resolve()
+            if resolved_file in self._loaded_files:
+                continue
+            if not resolved_file.exists():
+                raise ValueError(f'File {resolved_file} does not exist for iteration {iteration}.')
 
-            dataset = SelfPlayDataset.load(file)
+            dataset = SelfPlayDataset.load_strict(resolved_file)
             self._buf.append((iteration, dataset))
             self._num_samples += len(dataset)
+            self._loaded_files.add(resolved_file)
 
     def _drop_left(self) -> None:
         _, old = self._buf.popleft()

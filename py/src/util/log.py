@@ -31,6 +31,12 @@ LOG_FILE = LOG_FOLDER + f'/log_{date_str()}_{time_str()}.log'
 LOG_LEVEL = LogLevel.INFO
 os.makedirs(LOG_FOLDER, exist_ok=True)
 GLOBAL_LOG_FILE = None
+LOGGING_ENABLED = True
+
+
+def configure_logging(enabled: bool) -> None:
+    global LOGGING_ENABLED
+    LOGGING_ENABLED = enabled
 
 
 def log(
@@ -40,6 +46,8 @@ def log(
     log_file_name: str = LOG_FILE,
     **kwargs,
 ) -> None:
+    if not LOGGING_ENABLED:
+        return
     timestamp = f'[{time_str()}]'
     log_level = f'[{level.name}]'
 

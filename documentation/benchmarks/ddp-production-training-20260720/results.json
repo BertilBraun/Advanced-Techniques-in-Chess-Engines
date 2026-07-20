@@ -1,0 +1,138 @@
+{
+  "hardware": {
+    "gpu_count": 4,
+    "gpu_model": "NVIDIA GeForce RTX 4070 SUPER",
+    "gpu_memory_mib": 12282,
+    "logical_cpu_count": 64,
+    "torch_version": "2.12.0+cu130",
+    "cuda_version": "13.0"
+  },
+  "isolated_real_replay": {
+    "source_revision": "27149c7c958c4fecc71b3df1788e30e525f6519d",
+    "method": "Persistent production TrainerProcess with NCCL DDP, independent deterministic rank partitions, vectorized replay decoding, and recorded compatible HDF5 replay shards.",
+    "rank_device_ids": [
+      3,
+      2,
+      1,
+      0
+    ],
+    "global_batch_size": 2048,
+    "local_batch_size": 512,
+    "replay_samples": 1641347,
+    "retained_samples": 1640448,
+    "dropped_incomplete_global_batch_samples": 899,
+    "optimizer_steps_per_rank": 801,
+    "samples_per_rank": 410112,
+    "partition_overlap_samples": 0,
+    "duplicated_padding_samples": 0,
+    "aggregated_training_samples": 1640448,
+    "training_phase_seconds": 72.58899978222325,
+    "optimizer_seconds": 71.02438060706481,
+    "production_phase_samples_per_second": 22599.126657228564,
+    "optimizer_samples_per_second": 23096.97016684471,
+    "peak_aggregate_trainer_process_tree_rss_mib": 12404.92578125,
+    "gpu_utilization": [
+      {
+        "rank": 0,
+        "device_id": 3,
+        "samples": 127,
+        "mean_sm_percent": 32.68503937007874,
+        "mean_memory_controller_percent": 10.149606299212598,
+        "peak_memory_mib": 1279
+      },
+      {
+        "rank": 1,
+        "device_id": 2,
+        "samples": 127,
+        "mean_sm_percent": 55.44881889763779,
+        "mean_memory_controller_percent": 10.118110236220472,
+        "peak_memory_mib": 1015
+      },
+      {
+        "rank": 2,
+        "device_id": 1,
+        "samples": 127,
+        "mean_sm_percent": 58.28346456692913,
+        "mean_memory_controller_percent": 9.921259842519685,
+        "peak_memory_mib": 1015
+      },
+      {
+        "rank": 3,
+        "device_id": 0,
+        "samples": 127,
+        "mean_sm_percent": 47.023622047244096,
+        "mean_memory_controller_percent": 10.133858267716535,
+        "peak_memory_mib": 1015
+      }
+    ]
+  },
+  "ddp_with_half_self_play": {
+    "ddp_source_revision": "cbc9d04835169745210ca3e9709e786742995fb6",
+    "ddp_replay": "Generated fixture with vectorized decoding and independent rank partitions.",
+    "ddp_rank_device_ids": [
+      3,
+      2,
+      1,
+      0
+    ],
+    "ddp_global_batch_size": 2048,
+    "ddp_local_batch_size": 512,
+    "ddp_optimizer_steps_per_rank": 200,
+    "ddp_samples_per_rank": 102400,
+    "ddp_aggregated_training_samples": 409600,
+    "ddp_training_phase_seconds": 27.25922498339787,
+    "ddp_optimizer_seconds": 25.77658158307895,
+    "ddp_production_phase_samples_per_second": 15026.105850385158,
+    "ddp_optimizer_samples_per_second": 15890.392551853429,
+    "ddp_peak_process_tree_rss_mib": 9819.84765625,
+    "self_play": {
+      "processes_per_gpu": 5,
+      "total_processes": 20,
+      "mcts_threads_per_process": 3,
+      "parallel_games_per_process": 96,
+      "full_searches": 600,
+      "fast_searches": 100,
+      "inference_cache_enabled": false,
+      "measurement_seconds": 122.4566680281423,
+      "completed_games": 278,
+      "completed_games_per_second": 2.27019079055876,
+      "generated_samples": 3628,
+      "generated_samples_per_second": 29.626806432184104,
+      "retained_samples": 2716,
+      "retained_samples_per_second": 22.179274054523713,
+      "completed_game_plies_per_second": 65.58238215459497,
+      "inference_evaluations": 16200932,
+      "model_calls": 385472,
+      "average_inference_batch_size": 42.02881661962477,
+      "summed_worker_peak_rss_mib": 27192.43359375
+    },
+    "combined_gpu_utilization": [
+      {
+        "device_id": 0,
+        "mean_sm_percent": 96.7,
+        "peak_memory_mib": 5252
+      },
+      {
+        "device_id": 1,
+        "mean_sm_percent": 96.68333333333334,
+        "peak_memory_mib": 2441
+      },
+      {
+        "device_id": 2,
+        "mean_sm_percent": 97.13333333333334,
+        "peak_memory_mib": 2441
+      },
+      {
+        "device_id": 3,
+        "mean_sm_percent": 96.58333333333333,
+        "peak_memory_mib": 2705
+      }
+    ],
+    "peak_host_ram_percent": 25.875
+  },
+  "prior_isolated_reference": {
+    "method": "Synthetic resident batches without production data loading; DDP ranks intentionally received duplicate samples.",
+    "four_gpu_ddp_samples_per_second": 38573.15507101197,
+    "four_gpu_data_parallel_samples_per_second": 13346.000357568888
+  }
+}

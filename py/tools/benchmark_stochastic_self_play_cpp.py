@@ -28,6 +28,7 @@ class Arguments:
     duration_seconds: float | None
     steps: int | None
     searches: int
+    fast_searches: int | None
     parallel_searches: int
     threads: int
     maximum_batch_size: int
@@ -99,6 +100,7 @@ def parse_arguments() -> Arguments:
     measurement.add_argument('--duration-seconds', type=float)
     measurement.add_argument('--steps', type=int)
     parser.add_argument('--searches', type=int, default=600)
+    parser.add_argument('--fast-searches', type=int)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--threads', type=int, default=3)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
@@ -126,6 +128,7 @@ def parse_arguments() -> Arguments:
         duration_seconds=namespace.duration_seconds,
         steps=namespace.steps,
         searches=namespace.searches,
+        fast_searches=namespace.fast_searches,
         parallel_searches=namespace.parallel_searches,
         threads=namespace.threads,
         maximum_batch_size=namespace.maximum_batch_size,
@@ -166,6 +169,10 @@ def validate_arguments(arguments: Arguments) -> None:
         raise ValueError(f'steps must be positive, found {arguments.steps}.')
     if arguments.searches <= arguments.parallel_searches:
         raise ValueError('searches must exceed parallel searches.')
+    if arguments.fast_searches is not None and not (
+        arguments.parallel_searches < arguments.fast_searches < arguments.searches
+    ):
+        raise ValueError('fast searches must exceed parallel searches and remain below full searches.')
     if (arguments.ready_file is None) != (arguments.start_barrier is None):
         raise ValueError('--ready-file and --start-barrier must be provided together.')
 
@@ -192,7 +199,11 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
     self_play.num_searches_per_turn = arguments.searches
     self_play.endgame_shortcut_strength = 0.0
 
-    fast_searches = int(arguments.searches * configuration.self_play.mcts.fast_searches_proportion_of_full_searches)
+    fast_searches = (
+        arguments.fast_searches
+        if arguments.fast_searches is not None
+        else int(arguments.searches * configuration.self_play.mcts.fast_searches_proportion_of_full_searches)
+    )
     if fast_searches <= arguments.parallel_searches:
         raise ValueError(
             f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
@@ -291,8 +302,10 @@ def build_result(
         requested_duration_seconds=arguments.duration_seconds,
         requested_steps=arguments.steps,
         target_full_searches_per_ply=arguments.searches,
-        target_fast_searches_per_ply=int(
-            arguments.searches * self_play.args.mcts.fast_searches_proportion_of_full_searches
+        target_fast_searches_per_ply=(
+            arguments.fast_searches
+            if arguments.fast_searches is not None
+            else int(arguments.searches * self_play.args.mcts.fast_searches_proportion_of_full_searches)
         ),
         parallel_searches=arguments.parallel_searches,
         mcts_threads=arguments.threads,
