@@ -1,0 +1,64 @@
+{
+  "source_revision": "d0dd3a9bdd2240eed49cc1cbe2eb9b8f99c0a1e7",
+  "network": {
+    "layers": 12,
+    "hidden_size": 112,
+    "parameters": 3244641,
+    "precision": "bfloat16"
+  },
+  "hardware": {
+    "gpu_count": 4,
+    "gpu_model": "NVIDIA GeForce RTX 4070 SUPER"
+  },
+  "method": "Synthetic resident batches with no data-loading time. DDP ranks intentionally used identical samples.",
+  "results": [
+    {
+      "strategy": "single_gpu",
+      "devices": [3],
+      "local_batch_size": 1024,
+      "global_batch_size": 1024,
+      "seconds_per_batch": 0.04605132141150534,
+      "samples_per_second": 22236.061172919275
+    },
+    {
+      "strategy": "single_gpu",
+      "devices": [3],
+      "local_batch_size": 2048,
+      "global_batch_size": 2048,
+      "seconds_per_batch": 0.10088756550103425,
+      "samples_per_second": 20299.82574987405
+    },
+    {
+      "strategy": "data_parallel",
+      "devices": [3, 2],
+      "local_batch_size": 1024,
+      "global_batch_size": 2048,
+      "seconds_per_batch": 0.11860892970580608,
+      "samples_per_second": 17266.828097005815
+    },
+    {
+      "strategy": "data_parallel",
+      "devices": [3, 2, 1, 0],
+      "local_batch_size": 512,
+      "global_batch_size": 2048,
+      "seconds_per_batch": 0.15345421438105405,
+      "samples_per_second": 13346.000357568888
+    },
+    {
+      "strategy": "distributed_data_parallel",
+      "devices": [3, 2],
+      "local_batch_size": 1024,
+      "global_batch_size": 2048,
+      "seconds_per_batch": 0.04675055146217346,
+      "samples_per_second": 43806.96988477379
+    },
+    {
+      "strategy": "distributed_data_parallel",
+      "devices": [3, 2, 1, 0],
+      "local_batch_size": 512,
+      "global_batch_size": 2048,
+      "seconds_per_batch": 0.03845911920070648,
+      "samples_per_second": 53251.349551509724
+    }
+  ]
+}
