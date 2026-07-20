@@ -11,13 +11,18 @@
 typedef std::pair<std::vector<MoveScore>, float> InferenceResult;
 
 struct InferenceStatistics {
-    float cacheHitRate = 0.0f;                    // Percentage of cache hits.
+    float cacheHitRate = 0.0f; // Percentage of cache hits.
+    size_t evaluations = 0;
+    size_t cacheHits = 0;
     size_t uniquePositions = 0;                   // Number of unique positions in the cache.
     size_t cacheSizeMB = 0;                       // Size of the cache in megabytes.
     size_t cacheCapacity = 0;                     // Maximum completed cache entries.
     size_t cacheEvictions = 0;                    // Number of completed entries evicted.
     size_t cacheFingerprintCollisions = 0;        // Exact-board mismatches for equal fingerprints.
     std::vector<float> nnOutputValueDistribution; // Distribution of neural network output values.
+    size_t modelInferenceCalls = 0;
+    size_t modelInferencePositions = 0;
+    std::vector<size_t> modelBatchSizeHistogram;
     float averageNumberOfPositionsInInferenceCall =
         0.0f; // Average number of positions in an inference call.
 };
@@ -111,7 +116,9 @@ private:
     std::atomic_size_t m_totalHits = 0;
     std::atomic_size_t m_totalEvals = 0;
     std::atomic_size_t m_totalModelInferenceCalls = 0;
+    std::atomic_size_t m_totalModelInferencePositions = 0;
     std::atomic_size_t m_totalFingerprintCollisions = 0;
+    std::vector<size_t> m_modelBatchSizeHistogram;
 
     // Request queue for asynchronous batching.
     std::mutex m_queueMutex;

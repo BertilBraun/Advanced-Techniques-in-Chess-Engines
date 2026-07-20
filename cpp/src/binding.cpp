@@ -342,6 +342,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<InferenceStatistics>(m, "InferenceStatistics")
         .def(py::init<>())
         .def_readonly("cacheHitRate", &InferenceStatistics::cacheHitRate)
+        .def_readonly("evaluations", &InferenceStatistics::evaluations)
+        .def_readonly("cacheHits", &InferenceStatistics::cacheHits)
         .def_readonly("uniquePositions", &InferenceStatistics::uniquePositions)
         .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
         .def_readonly("cacheCapacity", &InferenceStatistics::cacheCapacity)
@@ -349,6 +351,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("cacheFingerprintCollisions",
                       &InferenceStatistics::cacheFingerprintCollisions)
         .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution)
+        .def_readonly("modelInferenceCalls", &InferenceStatistics::modelInferenceCalls)
+        .def_readonly("modelInferencePositions", &InferenceStatistics::modelInferencePositions)
+        .def_readonly("modelBatchSizeHistogram", &InferenceStatistics::modelBatchSizeHistogram)
         .def_readonly("averageNumberOfPositionsInInferenceCall",
                       &InferenceStatistics::averageNumberOfPositionsInInferenceCall);
 

@@ -4,7 +4,8 @@
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_cache(args.cacheCapacity),
-      m_shutdown(false), m_params(args) {
+      m_modelBatchSizeHistogram(static_cast<size_t>(args.maxBatchSize) + 1), m_shutdown(false),
+      m_params(args) {
     // Use GPU if available, else CPU.
     if (torch::cuda::is_available()) {
         assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
@@ -167,12 +168,22 @@ InferenceStatistics InferenceClient::getStatistics() {
     const size_t totalEvals = m_totalEvals.load(std::memory_order_relaxed);
     const size_t totalModelInferenceCalls =
         m_totalModelInferenceCalls.load(std::memory_order_relaxed);
+    const size_t totalModelInferencePositions =
+        m_totalModelInferencePositions.load(std::memory_order_relaxed);
+    stats.evaluations = totalEvals;
+    stats.cacheHits = m_totalHits.load(std::memory_order_relaxed);
+    stats.modelInferenceCalls = totalModelInferenceCalls;
+    stats.modelInferencePositions = totalModelInferencePositions;
+    {
+        std::lock_guard<std::mutex> lock(m_modelMutex);
+        stats.modelBatchSizeHistogram = m_modelBatchSizeHistogram;
+    }
     if (totalEvals == 0 || totalModelInferenceCalls == 0 || m_cache.empty()) {
         return stats; // Avoid division by zero.
     }
 
-    stats.cacheHitRate = static_cast<float>(m_totalHits.load(std::memory_order_relaxed)) /
-                         static_cast<float>(totalEvals) * 100.0f;
+    stats.cacheHitRate =
+        static_cast<float>(stats.cacheHits) / static_cast<float>(totalEvals) * 100.0f;
     stats.uniquePositions = m_cache.size();
 
     stats.nnOutputValueDistribution.reserve(m_cache.size());
@@ -187,7 +198,8 @@ InferenceStatistics InferenceClient::getStatistics() {
     stats.cacheSizeMB = sizeInBytes / (1024 * 1024); // Convert to MB
 
     stats.averageNumberOfPositionsInInferenceCall =
-        static_cast<float>(totalEvals) / static_cast<float>(totalModelInferenceCalls);
+        static_cast<float>(totalModelInferencePositions) /
+        static_cast<float>(totalModelInferenceCalls);
 
     return stats;
 }
@@ -258,6 +270,9 @@ InferenceClient::modelInference(const std::vector<torch::Tensor> &boards) {
     std::unique_lock<std::mutex> lock(m_modelMutex);
 
     m_totalModelInferenceCalls.fetch_add(1, std::memory_order_relaxed);
+    m_totalModelInferencePositions.fetch_add(boards.size(), std::memory_order_relaxed);
+    assert(boards.size() < m_modelBatchSizeHistogram.size());
+    ++m_modelBatchSizeHistogram[boards.size()];
 
     // Stack the input tensors into a single batch tensor.
     // The model expects a 4D tensor: (batch_size, channels, height, width).
