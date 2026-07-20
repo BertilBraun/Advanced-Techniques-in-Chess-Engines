@@ -289,6 +289,8 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert configuration.run_name == 'complete-training-run-v3'
     assert configuration.tensorboard_run_directory == 'complete-training-run-v3'
     assert configuration.resume.mode.value == 'random_initialization'
+    assert configuration.hardware.minimum_disk_gib == 2
+    assert configuration.safety.minimum_free_disk_gib == 2
     assert arguments.num_iterations == 500
     assert arguments.num_games_per_iteration == 3500
     assert arguments.self_play.num_games_after_which_to_write == 100

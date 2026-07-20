@@ -21,7 +21,7 @@
     "gpu_count": 4,
     "logical_cpu_count": 64,
     "minimum_ram_gib": 120,
-    "minimum_disk_gib": 80
+    "minimum_disk_gib": 2
   },
   "topology": {
     "trainer_device_id": 3,
@@ -69,7 +69,7 @@
   "safety": {
     "maximum_open_file_count": 32768,
     "maximum_host_ram_percent": 95,
-    "minimum_free_disk_gib": 20,
+    "minimum_free_disk_gib": 2,
     "telemetry_interval_seconds": 10
   },
   "retention": {
