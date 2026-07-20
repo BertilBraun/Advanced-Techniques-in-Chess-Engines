@@ -1,6 +1,6 @@
 import pytest
 
-from src.self_play.curriculum import curriculum_progress
+from src.self_play.curriculum import curriculum_fade, curriculum_progress
 
 
 @pytest.mark.parametrize(
@@ -31,3 +31,22 @@ def test_curriculum_rejects_negative_values(
 ) -> None:
     with pytest.raises(ValueError):
         curriculum_progress(iteration, warmup_iterations)
+
+
+@pytest.mark.parametrize(
+    ('iteration', 'fade_iterations', 'expected_strength'),
+    (
+        (0, 0, 0.0),
+        (0, 50, 1.0),
+        (25, 50, 0.5),
+        (49, 50, 0.02),
+        (50, 50, 0.0),
+        (100, 50, 0.0),
+    ),
+)
+def test_curriculum_fade(
+    iteration: int,
+    fade_iterations: int,
+    expected_strength: float,
+) -> None:
+    assert curriculum_fade(iteration, fade_iterations) == pytest.approx(expected_strength)

@@ -156,6 +156,7 @@ class WorkloadConfiguration(BaseModel):
     learning_rate_schedule: tuple[LearningRateStage, ...]
     self_play_search_warmup_iterations: int = Field(ge=0)
     self_play_value_warmup_iterations: int = Field(ge=0)
+    self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
@@ -537,6 +538,7 @@ def apply_run_configuration(
     training_args.random_seed = workload.random_seed
     training_args.self_play_search_warmup_iterations = workload.self_play_search_warmup_iterations
     training_args.self_play_value_warmup_iterations = workload.self_play_value_warmup_iterations
+    training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.inference_cache_capacity = topology.inference_cache_capacity_per_process
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process

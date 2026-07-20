@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from AlphaZeroCpp import MCTSNode, MCTSResults, MCTS
 
 
+import chess
 import numpy as np
 from dataclasses import dataclass
 
@@ -17,14 +18,19 @@ from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.curriculum import curriculum_progress
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
+from src.self_play.curriculum import curriculum_fade, curriculum_progress
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_histogram, log_scalar
 from src.util.timing import timeit
+
+
+ENDGAME_PIECE_THRESHOLD = 8
+LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER = 4
+LOW_MATERIAL_TERMINATION_PROBABILITY = 0.2
 
 
 @dataclass(frozen=True)
@@ -96,6 +102,7 @@ class SelfPlayCpp:
 
         self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
         self.num_searches_per_turn = 0
+        self.endgame_shortcut_strength = 0.0
 
     def update_iteration(self, iteration: int) -> None:
         if len(self.dataset) > 0:
@@ -161,6 +168,11 @@ class SelfPlayCpp:
         )
 
         log_scalar('training/num_searches_per_turn', self.num_searches_per_turn, iteration)
+        self.endgame_shortcut_strength = curriculum_fade(
+            iteration,
+            TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
+        )
+        log_scalar('training/endgame_shortcut_strength', self.endgame_shortcut_strength, iteration)
 
         mcts_args = MCTSParams(
             num_parallel_searches=self.args.mcts.num_parallel_searches,
@@ -199,8 +211,11 @@ class SelfPlayCpp:
 
         boards: list[tuple[MCTSNode, bool]] = []
         for spg in self.self_play_games:
+            force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
             should_run_full_search = (
-                spg.resigned_at_move is None and random.random() < self.args.mcts.playout_cap_randomization
+                not force_fast_endgame_playout
+                and spg.resigned_at_move is None
+                and random.random() < self.args.mcts.playout_cap_randomization
             )
 
             if spg.already_expanded_node is None:
@@ -240,11 +255,43 @@ class SelfPlayCpp:
                     self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result)
                     continue
 
+            if self._should_terminate_low_material_game(spg):
+                approximate_result = spg.board.get_approximate_result_score() * spg.board.current_player
+                self.self_play_games[i] = self._handle_end_of_game(spg, approximate_result)
+                continue
+
             self.self_play_games[i] = self._sample_self_play_game(
                 spg,
                 mcts_result.root,
                 mcts_result.visits,
             )
+
+    def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
+        if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
+            return False
+        if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
+            return False
+        if len(game.board.board.piece_map()) > ENDGAME_PIECE_THRESHOLD:
+            return False
+        return random.random() < self.endgame_shortcut_strength
+
+    def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
+        if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
+            return False
+        if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
+            return False
+
+        pieces = game.board.board.piece_map().values()
+        white_piece_count = sum(piece.color == chess.WHITE for piece in pieces)
+        black_piece_count = sum(piece.color == chess.BLACK for piece in pieces)
+        if (
+            white_piece_count >= LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER
+            and black_piece_count >= LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER
+        ):
+            return False
+
+        termination_probability = LOW_MATERIAL_TERMINATION_PROBABILITY * self.endgame_shortcut_strength
+        return random.random() < termination_probability
 
     @timeit
     def _sample_self_play_game(

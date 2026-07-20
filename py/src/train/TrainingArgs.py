@@ -272,6 +272,7 @@ class TrainingArgs:
     random_seed: int
     self_play_search_warmup_iterations: int
     self_play_value_warmup_iterations: int
+    self_play_endgame_shortcut_fade_iterations: int = 0
     evaluation: EvaluationParams | None = None
     gating: GatingParams | None = None
 

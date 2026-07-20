@@ -146,5 +146,6 @@ TRAINING_ARGS = TrainingArgs(
     random_seed=0,
     self_play_search_warmup_iterations=15,
     self_play_value_warmup_iterations=30,
+    self_play_endgame_shortcut_fade_iterations=50,
     on_startup=on_startup,
 )
