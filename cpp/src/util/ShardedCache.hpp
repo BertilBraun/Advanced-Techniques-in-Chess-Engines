@@ -16,6 +16,11 @@ template <typename KeyType, typename ValueType, std::size_t NumBuckets = 16,
           typename Hash = std::hash<KeyType>, typename KeyEqual = std::equal_to<KeyType>>
 class ShardedCache {
 public:
+    struct Acquisition {
+        bool inserted;
+        const ValueType *value;
+    };
+
     explicit ShardedCache(const std::size_t maximumSize) : m_maximumSize(maximumSize) {
         if (maximumSize == 0) {
             throw std::invalid_argument("ShardedCache maximum size must be positive");
@@ -33,9 +38,14 @@ public:
     ShardedCache(const ShardedCache &) = delete;
     ShardedCache &operator=(const ShardedCache &) = delete;
 
-    // Acquires a lease for key, inserting initialValue when key is absent.
-    // Returns true only when the caller inserted the key and must produce its final value.
-    [[nodiscard]] bool acquireOrInsert(const KeyType &key, const ValueType &initialValue) {
+    // Acquires a lease; the stored-value pointer remains valid until the matching release.
+    [[nodiscard]] Acquisition acquireOrInsert(const KeyType &key, ValueType initialValue) {
+        return acquireOrInsertWithFactory(key, [&initialValue] { return std::move(initialValue); });
+    }
+
+    template <typename ValueFactory>
+    [[nodiscard]] Acquisition acquireOrInsertWithFactory(const KeyType &key,
+                                                         ValueFactory createInitialValue) {
         Bucket &bucket = getBucket(key);
         std::lock_guard lock(bucket.mutex);
         const auto existing = bucket.map.find(key);
@@ -45,15 +55,15 @@ public:
                 bucket.recency.erase(entry.recencyPosition);
             }
             ++entry.leaseCount;
-            return false;
+            return {false, &entry.value};
         }
 
         const auto [inserted, wasInserted] =
-            bucket.map.try_emplace(key, CacheEntry{initialValue, 1});
+            bucket.map.try_emplace(key, CacheEntry{createInitialValue(), 1});
         if (!wasInserted) {
             throw std::logic_error("ShardedCache insertion invariant failed");
         }
-        return true;
+        return {true, &inserted->second.value};
     }
 
     // Updates a leased entry without making it eligible for eviction.
@@ -101,6 +111,7 @@ public:
         evictToCapacity(bucket);
     }
 
+    // Requires all outstanding leases to have been released.
     void clear() {
         for (Bucket &bucket : m_buckets) {
             std::lock_guard lock(bucket.mutex);

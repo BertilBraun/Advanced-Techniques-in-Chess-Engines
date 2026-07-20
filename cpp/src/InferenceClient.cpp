@@ -56,31 +56,37 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     // This will be used to wait for the results of the inference requests.
     struct PendingInference {
         size_t boardIndex;
-        bool cacheResult;
+        std::optional<CachedInferenceProducer> cacheProducer;
         std::future<ModelInferenceResult> future;
     };
     std::vector<PendingInference> futures;
     futures.reserve(boards.size());
     std::vector<InferenceRequest> requests;
     requests.reserve(boards.size());
+    std::vector<CachedInferenceHandle> cachedResults(boards.size());
+    std::vector<bool> cacheLeases(boards.size());
     std::vector<std::optional<CachedInferenceResult>> uncachedResults(boards.size());
 
     for (size_t i : range(boards.size())) {
-        const CacheAcquisition acquisition =
-            m_cache.acquireOrInsert(fingerprints[i], encodedBoards[i], kSentinelResult);
-        if (acquisition == CacheAcquisition::Hit) {
+        InferenceCache::Acquisition acquisition =
+            m_cache.acquireOrInsert(fingerprints[i], encodedBoards[i]);
+        if (acquisition.status == CacheAcquisition::Hit) {
             m_totalHits.fetch_add(1, std::memory_order_relaxed);
+            cachedResults[i] = std::move(acquisition.value);
+            cacheLeases[i] = true;
             continue;
         }
-        const bool cacheResult = acquisition == CacheAcquisition::Inserted;
-        if (!cacheResult) {
+        if (acquisition.status == CacheAcquisition::Inserted) {
+            cachedResults[i] = std::move(acquisition.value);
+            cacheLeases[i] = true;
+        } else {
             m_totalFingerprintCollisions.fetch_add(1, std::memory_order_relaxed);
         }
 
         InferenceRequest request;
         request.boardTensor = toTensor(encodedBoards[i]);
-        futures.push_back(
-            PendingInference{i, cacheResult, std::move(request.promise.get_future())});
+        futures.push_back(PendingInference{i, std::move(acquisition.producer),
+                                           std::move(request.promise.get_future())});
         requests.push_back(std::move(request));
     }
 
@@ -96,80 +102,81 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         m_queueCV.notify_one();
     }
 
-    // Wait for all inference futures to complete.
-    for (PendingInference &pending : futures) {
-        const size_t i = pending.boardIndex;
-        std::future<ModelInferenceResult> &future = pending.future;
-        const auto [policy, value] = future.get();
-
-        assert(std::abs(value) <= 1.0f + 1e-2f &&
-               "InferenceClient::inference_batch: value out of bounds");
-        // if any element in policy is negative, or the sum of the policy is not close to 1.0, throw
-        // an error.
-        assert((policy < 0).any().item<bool>() == false &&
-               "InferenceClient::inference_batch: policy contains negative values");
-        assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
-               "InferenceClient::inference_batch: policy does not sum to 1.0");
-
-        CachedInferenceResult result{filterPolicyThenGetMovesAndProbabilities(policy, boards[i]),
-                                     value};
-        if (pending.cacheResult) {
-            m_cache.update(fingerprints[i], encodedBoards[i], result);
-        } else {
-            uncachedResults[i] = std::move(result);
-        }
-    }
-
-    // Wait for all futures in order.
-    std::vector<InferenceResult> results;
-    results.reserve(boards.size());
-
-    for (size_t i : range(boards.size())) {
-        const BoardFingerprint &fingerprint = fingerprints[i];
-        const Board *board = boards[i];
-        CachedInferenceResult result;
-        if (uncachedResults[i].has_value()) {
-            result = std::move(uncachedResults[i].value());
-        } else {
-            while (true) {
-                if (!m_cache.lookup(fingerprint, encodedBoards[i], result)) {
-                    throw std::runtime_error(
-                        "InferenceClient::inference_batch: cache lookup failed");
-                }
-                // Wait until the real result is available.
-                if (result != kSentinelResult) {
-                    break;
-                }
-                // Sleep to avoid busy-waiting.
-                std::this_thread::sleep_for(std::chrono::microseconds(10));
+    const auto releaseCacheLeases = [this, &fingerprints, &cacheLeases] {
+        for (size_t i : range(cacheLeases.size())) {
+            if (cacheLeases[i]) {
+                m_cache.release(fingerprints[i]);
+                cacheLeases[i] = false;
             }
-            m_cache.release(fingerprint);
+        }
+    };
+
+    try {
+        // Wait for all inference futures to complete.
+        for (PendingInference &pending : futures) {
+            const size_t i = pending.boardIndex;
+            std::future<ModelInferenceResult> &future = pending.future;
+            const auto [policy, value] = future.get();
+
+            assert(std::abs(value) <= 1.0f + 1e-2f &&
+                   "InferenceClient::inference_batch: value out of bounds");
+            // if any element in policy is negative, or the sum of the policy is not close to 1.0,
+            // throw an error.
+            assert((policy < 0).any().item<bool>() == false &&
+                   "InferenceClient::inference_batch: policy contains negative values");
+            assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
+                   "InferenceClient::inference_batch: policy does not sum to 1.0");
+
+            CachedInferenceResult result{
+                filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value};
+            if (pending.cacheProducer.has_value()) {
+                pending.cacheProducer->publish(std::move(result));
+            } else {
+                uncachedResults[i] = std::move(result);
+            }
         }
 
-        const auto &[moves, value] = result;
+        // Wait for all futures in order.
+        std::vector<InferenceResult> results;
+        results.reserve(boards.size());
 
-        // Decode the moves from the cached result using the board.
-        std::vector<int> encodedMoves;
-        std::vector<float> scores;
-        encodedMoves.reserve(moves.size());
-        scores.reserve(moves.size());
-        for (const auto &[encodedMove, score] : moves) {
-            encodedMoves.push_back(encodedMove);
-            scores.push_back(score);
+        for (size_t i : range(boards.size())) {
+            const Board *board = boards[i];
+            const CachedInferenceResult &result = uncachedResults[i].has_value()
+                                                      ? uncachedResults[i].value()
+                                                      : cachedResults[i].get();
+            const auto &[moves, value] = result;
+
+            // Decode the moves from the cached result using the board.
+            std::vector<int> encodedMoves;
+            std::vector<float> scores;
+            encodedMoves.reserve(moves.size());
+            scores.reserve(moves.size());
+            for (const auto &[encodedMove, score] : moves) {
+                encodedMoves.push_back(encodedMove);
+                scores.push_back(score);
+            }
+
+            const std::vector<Move> decodedMoves = decodeMoves(encodedMoves, board);
+
+            std::vector<MoveScore> decodedMovesScores;
+            decodedMovesScores.reserve(decodedMoves.size());
+            for (const auto &&[move, score] : zip(decodedMoves, scores)) {
+                decodedMovesScores.emplace_back(move, score);
+            }
+
+            results.emplace_back(std::move(decodedMovesScores), value);
+            if (cacheLeases[i]) {
+                m_cache.release(fingerprints[i]);
+                cacheLeases[i] = false;
+            }
         }
 
-        const std::vector<Move> decodedMoves = decodeMoves(encodedMoves, board);
-
-        std::vector<MoveScore> decodedMovesScores;
-        decodedMovesScores.reserve(decodedMoves.size());
-        for (const auto &&[move, score] : zip(decodedMoves, scores)) {
-            decodedMovesScores.emplace_back(move, score);
-        }
-
-        results.emplace_back(decodedMovesScores, value);
+        return results;
+    } catch (...) {
+        releaseCacheLeases();
+        throw;
     }
-
-    return results;
 }
 
 InferenceStatistics InferenceClient::getStatistics() {
@@ -202,9 +209,17 @@ InferenceStatistics InferenceClient::getStatistics() {
     stats.nnOutputValueDistribution.reserve(m_cache.size());
     size_t dynamicValueBytes = 0;
     m_cache.forEachValue([&stats, &dynamicValueBytes](const CompressedEncodedBoard &,
-                                                      const CachedInferenceResult &result) {
-        stats.nnOutputValueDistribution.push_back(result.second);
-        dynamicValueBytes += result.first.capacity() * sizeof(EncodedMoveScore);
+                                                      const CachedInferenceHandle &resultHandle) {
+        if (resultHandle.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return;
+        }
+        try {
+            const CachedInferenceResult &result = resultHandle.get();
+            stats.nnOutputValueDistribution.push_back(result.second);
+            dynamicValueBytes += result.first.capacity() * sizeof(EncodedMoveScore);
+        } catch (...) {
+            // A failed producer is excluded from completed-result statistics.
+        }
     });
 
     const size_t sizeInBytes = m_cache.estimatedStaticSizeBytes() + dynamicValueBytes;

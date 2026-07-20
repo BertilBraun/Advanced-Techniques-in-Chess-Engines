@@ -3,6 +3,9 @@
 #include "ShardedCache.hpp"
 
 #include <cstddef>
+#include <exception>
+#include <future>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -16,48 +19,57 @@ template <typename FingerprintType, typename IdentityType, typename ValueType,
           std::size_t NumBuckets = 16, typename Hash = std::hash<FingerprintType>>
 class CollisionCheckedCache {
 public:
+    using ValueHandle = std::shared_future<ValueType>;
+
+    class Producer {
+    public:
+        Producer(const Producer &) = delete;
+        Producer &operator=(const Producer &) = delete;
+        Producer(Producer &&) noexcept = default;
+        Producer &operator=(Producer &&) noexcept = default;
+
+        void publish(ValueType value) { m_promise.set_value(std::move(value)); }
+        void publishException(std::exception_ptr exception) {
+            m_promise.set_exception(std::move(exception));
+        }
+
+    private:
+        friend class CollisionCheckedCache;
+
+        explicit Producer(std::promise<ValueType> promise) : m_promise(std::move(promise)) {}
+
+        std::promise<ValueType> m_promise;
+    };
+
+    struct Acquisition {
+        CacheAcquisition status;
+        ValueHandle value;
+        std::optional<Producer> producer;
+    };
+
     explicit CollisionCheckedCache(const std::size_t maximumSize) : m_cache(maximumSize) {}
 
-    [[nodiscard]] CacheAcquisition acquireOrInsert(const FingerprintType &fingerprint,
-                                                   const IdentityType &identity,
-                                                   const ValueType &initialValue) {
-        const Entry initialEntry{identity, initialValue};
-        if (m_cache.acquireOrInsert(fingerprint, initialEntry)) {
-            return CacheAcquisition::Inserted;
+    [[nodiscard]] Acquisition acquireOrInsert(const FingerprintType &fingerprint,
+                                              const IdentityType &identity) {
+        std::optional<Producer> producer;
+        const typename Cache::Acquisition cacheAcquisition =
+            m_cache.acquireOrInsertWithFactory(fingerprint, [&identity, &producer] {
+                std::promise<ValueType> promise;
+                ValueHandle value = promise.get_future().share();
+                producer.emplace(Producer(std::move(promise)));
+                return Entry{identity, std::move(value)};
+            });
+        if (cacheAcquisition.inserted) {
+            return {CacheAcquisition::Inserted, cacheAcquisition.value->value, std::move(producer)};
         }
 
-        Entry cachedEntry;
-        if (!m_cache.lookup(fingerprint, cachedEntry)) {
-            throw std::logic_error("CollisionCheckedCache lost a leased entry");
-        }
+        const Entry &cachedEntry = *cacheAcquisition.value;
         if (cachedEntry.identity == identity) {
-            return CacheAcquisition::Hit;
+            return {CacheAcquisition::Hit, cachedEntry.value, std::nullopt};
         }
 
         m_cache.release(fingerprint);
-        return CacheAcquisition::FingerprintCollision;
-    }
-
-    void update(const FingerprintType &fingerprint, const IdentityType &identity,
-                const ValueType &value) {
-        Entry cachedEntry;
-        if (!m_cache.lookup(fingerprint, cachedEntry) || !(cachedEntry.identity == identity)) {
-            throw std::logic_error("CollisionCheckedCache update identity mismatch");
-        }
-        m_cache.update(fingerprint, Entry{identity, value});
-    }
-
-    [[nodiscard]] bool lookup(const FingerprintType &fingerprint, const IdentityType &identity,
-                              ValueType &result) const {
-        Entry cachedEntry;
-        if (!m_cache.lookup(fingerprint, cachedEntry)) {
-            return false;
-        }
-        if (!(cachedEntry.identity == identity)) {
-            throw std::logic_error("CollisionCheckedCache lookup identity mismatch");
-        }
-        result = std::move(cachedEntry.value);
-        return true;
+        return {CacheAcquisition::FingerprintCollision, {}, std::nullopt};
     }
 
     void release(const FingerprintType &fingerprint) { m_cache.release(fingerprint); }
@@ -78,8 +90,9 @@ public:
 private:
     struct Entry {
         IdentityType identity;
-        ValueType value;
+        ValueHandle value;
     };
 
-    ShardedCache<FingerprintType, Entry, NumBuckets, Hash> m_cache;
+    using Cache = ShardedCache<FingerprintType, Entry, NumBuckets, Hash>;
+    Cache m_cache;
 };

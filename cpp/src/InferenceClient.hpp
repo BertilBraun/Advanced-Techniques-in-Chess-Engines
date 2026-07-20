@@ -69,8 +69,11 @@ public:
 private:
     typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
     typedef std::pair<torch::Tensor, float> ModelInferenceResult;
-    // Define a sentinel CachedInferenceResult type
-    static inline const CachedInferenceResult kSentinelResult = {{}, -10.0f};
+
+    using InferenceCache = CollisionCheckedCache<BoardFingerprint, CompressedEncodedBoard,
+                                                 CachedInferenceResult, 32, BoardFingerprintHash>;
+    using CachedInferenceHandle = InferenceCache::ValueHandle;
+    using CachedInferenceProducer = InferenceCache::Producer;
 
     /**
      * @brief Structure representing a single asynchronous inference request.
@@ -111,9 +114,7 @@ private:
     torch::Dtype m_torchDtype;
 
     // Fingerprints select buckets; every hit is verified against the exact compressed board.
-    CollisionCheckedCache<BoardFingerprint, CompressedEncodedBoard, CachedInferenceResult, 32,
-                          BoardFingerprintHash>
-        m_cache;
+    InferenceCache m_cache;
     std::atomic_size_t m_totalHits = 0;
     std::atomic_size_t m_totalEvals = 0;
     std::atomic_size_t m_totalModelInferenceCalls = 0;
