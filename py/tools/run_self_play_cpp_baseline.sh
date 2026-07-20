@@ -39,12 +39,13 @@ fi
 
 visible_gpu_count=$(nvidia-smi --query-gpu=index --format=csv,noheader,nounits | wc -l)
 logical_cpu_count=$(nproc)
+maximum_mcts_threads=$((logical_cpu_count * 3 / 2))
 if [[ "${visible_gpu_count}" -ne "${gpu_count}" ]]; then
     echo "Expected ${gpu_count} visible GPUs, found ${visible_gpu_count}"
     exit 1
 fi
-if [[ "${logical_cpu_count}" -lt "${total_mcts_threads}" ]]; then
-    echo "Expected at least ${total_mcts_threads} logical CPUs, found ${logical_cpu_count}"
+if [[ "${total_mcts_threads}" -gt "${maximum_mcts_threads}" ]]; then
+    echo "MCTS threads ${total_mcts_threads} exceed the 1.5x CPU limit ${maximum_mcts_threads}"
     exit 1
 fi
 
