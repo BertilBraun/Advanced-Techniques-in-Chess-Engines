@@ -13,10 +13,11 @@ __all__ = [
     'InferenceClientParams',
     'InferenceStatistics',
     'MCTS',
-    'MCTSNode',
+    'MCTSChild',
     'MCTSParams',
     'MCTSResult',
     'MCTSResults',
+    'MCTSRoot',
     'MCTSStatistics',
     'TimeInfo',
     'encode_board_compressed',
@@ -144,6 +145,8 @@ class InferenceStatistics:
 
 class MCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: MCTSParams) -> None: ...
+    @property
+    def arena_capacity(self) -> int: ...
     def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
     def inference(self, fen: str) -> tuple[list[tuple[int, float]], float]:
         """
@@ -153,7 +156,7 @@ class MCTS:
         """
     def search(
         self,
-        boards: list[tuple[MCTSNode, bool]],
+        boards: list[tuple[MCTSRoot, bool]],
         collect_statistics: bool = False,
     ) -> MCTSResults:
         """
@@ -166,28 +169,45 @@ class MCTS:
         When `collect_statistics` is true, `.mctsStats` contains
         depth/entropy/KL for one representative root.
         """
+    def new_root(self, fen: str) -> MCTSRoot: ...
+    def new_root_with_history(
+        self,
+        starting_fen: str,
+        moves_uci: tuple[str, ...],
+    ) -> MCTSRoot: ...
 
-class MCTSNode:
+class MCTSChild:
+    @property
+    def encoded_move(self) -> int: ...
+    @property
+    def is_materialized(self) -> bool: ...
+    @property
+    def move(self) -> str: ...
+    @property
+    def policy(self) -> float: ...
+    @property
+    def result_sum(self) -> float: ...
+    @property
+    def virtual_loss(self) -> float: ...
+    @property
+    def visits(self) -> int: ...
+
+class MCTSRoot:
     def __repr__(self) -> str: ...
-    def best_child(self, cParam: float) -> MCTSNode: ...
     def discount(self, percentage_of_node_visits_to_keep: float) -> None:
         """
         Discount the node's score and visits by a percentage.
-        This is useful for pruning old nodes in the search tree.
+        Descendant materializations are explicitly pruned when required by the fixed arena.
         """
-    def make_new_root(self, child_index: int) -> MCTSNode:
+    def make_new_root(self, child_index: int) -> MCTSRoot:
         """
         Prune the old tree and return a new root node.
         `child_index` is the index of the child to make the new root.
         """
-    def ucb(self, cParam: float) -> float:
-        """
-        Calculate UCB score given exploration constant cParam.
-        """
     @property
-    def children(self) -> list[MCTSNode]: ...
+    def arena_capacity(self) -> int: ...
     @property
-    def encoded_move(self) -> int: ...
+    def children(self) -> list[MCTSChild]: ...
     @property
     def fen(self) -> str: ...
     @property
@@ -195,17 +215,17 @@ class MCTSNode:
     @property
     def is_terminal(self) -> bool: ...
     @property
+    def live_nodes(self) -> int: ...
+    @property
     def max_depth(self) -> int: ...
     @property
     def move(self) -> str: ...
     @property
-    def parent(self) -> MCTSNode: ...
-    @property
-    def policy(self) -> float: ...
-    @property
     def repetition_count(self) -> int: ...
     @property
     def result_sum(self) -> float: ...
+    @property
+    def total_child_records(self) -> int: ...
     @property
     def virtual_loss(self) -> float: ...
     @property
@@ -236,7 +256,7 @@ class MCTSResult:
     @property
     def result(self) -> float: ...
     @property
-    def root(self) -> MCTSNode: ...
+    def root(self) -> MCTSRoot: ...
     @property
     def visits(self) -> list[tuple[int, int]]: ...
 
@@ -274,17 +294,17 @@ def new_eval_root_with_history(
 ) -> EvalMCTSNode:
     """Create an evaluation MCTS root by replaying a bounded UCI move history."""
 
-def new_root(fen: str) -> MCTSNode:
+def new_root(fen: str, arena_capacity: int) -> MCTSRoot:
     """
-    Create a new root node for MCTS with the given FEN string.
-    Returns a shared pointer to the new MCTSNode.
+    Create a self-play MCTS root with an explicit fixed arena capacity.
     """
 
 def new_root_with_history(
     starting_fen: str,
     moves_uci: tuple[str, ...],
-) -> MCTSNode:
-    """Create an MCTS root by replaying a bounded UCI move history."""
+    arena_capacity: int,
+) -> MCTSRoot:
+    """Create a fixed-capacity MCTS root by replaying bounded UCI history."""
 
 def test_eval_mcts_speed_cpp(
     numBoards: int = 100,

@@ -6,7 +6,7 @@ import pytest
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp.MCTSNode, 'repetition_count'):
+if not hasattr(AlphaZeroCpp.MCTSRoot, 'repetition_count'):
     pytest.skip('AlphaZeroCpp must be rebuilt before native history tests run.', allow_module_level=True)
 
 STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -30,7 +30,14 @@ EIGHT_PLY_CYCLE = (
 
 @pytest.mark.parametrize(
     'root_factory',
-    (AlphaZeroCpp.new_root_with_history, AlphaZeroCpp.new_eval_root_with_history),
+    (
+        lambda starting_fen, moves_uci: AlphaZeroCpp.new_root_with_history(
+            starting_fen,
+            moves_uci,
+            1,
+        ),
+        AlphaZeroCpp.new_eval_root_with_history,
+    ),
 )
 def test_native_threefold_ends_on_third_occurrence(
     root_factory: Callable[[str, tuple[str, ...]], object],
@@ -45,14 +52,14 @@ def test_native_threefold_ends_on_third_occurrence(
 
 
 def test_native_history_supports_longer_cycles() -> None:
-    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, EIGHT_PLY_CYCLE * 2)
+    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, EIGHT_PLY_CYCLE * 2, 1)
 
     assert root.repetition_count == 2
     assert root.is_terminal
 
 
 def test_native_irreversible_move_resets_history() -> None:
-    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, KNIGHT_CYCLE + ('e2e4',))
+    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, KNIGHT_CYCLE + ('e2e4',), 1)
 
     assert root.repetition_count == 0
     assert not root.is_terminal
@@ -60,6 +67,6 @@ def test_native_irreversible_move_resets_history() -> None:
 
 def test_native_history_is_bounded_to_fifty_move_window() -> None:
     reversible_moves = EIGHT_PLY_CYCLE * 13
-    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, reversible_moves)
+    root = AlphaZeroCpp.new_root_with_history(STARTING_FEN, reversible_moves, 1)
 
     assert root.is_terminal

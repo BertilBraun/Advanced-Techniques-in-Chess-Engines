@@ -9,7 +9,7 @@ import chess
 import chess.engine
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTSNode, MCTSParams
+    from AlphaZeroCpp import MCTS, MCTSParams, MCTSRoot
 
 import numpy as np
 
@@ -40,11 +40,9 @@ from src.experiment.evaluation_protocol import (
 from src.value import scalar_to_wdl, wdl_cross_entropy
 
 
-def history_aware_root(board: CurrentBoard) -> MCTSNode:
-    from AlphaZeroCpp import new_root_with_history
-
+def history_aware_root(board: CurrentBoard, mcts: MCTS) -> MCTSRoot:
     history = bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES)
-    return new_root_with_history(history.starting_fen, history.moves_uci)
+    return mcts.new_root_with_history(history.starting_fen, history.moves_uci)
 
 
 class ModelEvaluation:
@@ -179,7 +177,7 @@ class ModelEvaluation:
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search(  # noqa: F821
-                [(history_aware_root(board), False) for board in boards]
+                [(history_aware_root(board, opponent), False) for board in boards]  # noqa: F821
             )
             return [action_probabilities(result.visits) for result in results.results]
 
@@ -330,7 +328,7 @@ class ModelEvaluation:
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search(  # noqa: F821
-                [(history_aware_root(board), False) for board in boards]
+                [(history_aware_root(board, current), False) for board in boards]  # noqa: F821
             )
             return [action_probabilities(result.visits) for result in results.results]
 

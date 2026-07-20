@@ -211,6 +211,23 @@ target_link_libraries(EvalMCTSNodeChildrenTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME EvalMCTSNodeChildrenTest COMMAND EvalMCTSNodeChildrenTest)
 
 add_executable(
+        SearchTreeArenaTest
+        test/TestSearchTreeArena.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/MoveEncoding.cpp
+        src/MCTS/SearchTree.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(SearchTreeArenaTest PRIVATE src)
+target_link_libraries(SearchTreeArenaTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME SearchTreeArenaTest COMMAND SearchTreeArenaTest)
+
+add_executable(
         MovePolicyProcessingTest
         test/TestMovePolicyProcessing.cpp
         src/Board.cpp

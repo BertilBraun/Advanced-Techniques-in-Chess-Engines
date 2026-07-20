@@ -16,7 +16,7 @@ import torch
 
 import chess
 import random
-from AlphaZeroCpp import MCTS, MCTSNode, MCTSParams, InferenceClientParams, MCTSResults, new_root, test_encode
+from AlphaZeroCpp import MCTS, MCTSParams, MCTSRoot, InferenceClientParams, MCTSResults, new_root, test_encode
 from src.settings import TRAINING_ARGS, CurrentGame
 from src.games.chess.ChessBoard import ChessBoard
 from src.Encoding import decode_board_state, encode_board_state
@@ -118,7 +118,7 @@ def run_mcts_py(fens: list[str], model_path: str):
 
     start = time.time()
     for _ in range(10):
-        results = mcts.search(boards, [True] * len(boards))  # type: ignore[call-arg]
+        mcts.search(boards, [True] * len(boards))  # type: ignore[call-arg]
     end = time.time()
     print(f'PY: Search took {end - start:.2f} seconds for {len(boards)} boards.')
 
@@ -126,9 +126,8 @@ def run_mcts_py(fens: list[str], model_path: str):
 
 
 def run_mcts_cpp(fens: list[str], model_path: str):
-    inputs = [
-        (fen, INVALID_NODE, TRAINING_ARGS.self_play.mcts.num_searches_per_turn) for fen in fens
-    ]  # Use the FEN string to create the input for MCTS
+    del model_path
+    inputs = [(mcts.new_root(fen), True) for fen in fens]
     start = time.time()
     for _ in range(10):
         mcts.search(inputs)  # type: ignore[call-arg]
@@ -176,7 +175,7 @@ input_fens = [STARTING_FEN]
 
 # Suppose we want to run 800 sims from the initial position,
 # and we have no “previous node,” so we pass INVALID_NODE:
-boards = [(new_root(STARTING_FEN), True)] * 12
+boards = [(mcts.new_root(STARTING_FEN), True)] * 12
 # TODO check this for end game positions - does that find the mate moves?
 # TODO check the node reuse, does it work as expected?
 
@@ -225,7 +224,7 @@ def run_mate_puzzle_regression():
                 break
     print('Found', len(mate_puzzles), 'mate puzzles.')
 
-    inputs: list[tuple[MCTSNode, bool]] = []
+    inputs: list[tuple[MCTSRoot, bool]] = []
     metadata: list[tuple[str, str, str]] = []  # (PuzzleId, expected_move, Themes)
 
     for puzzle in mate_puzzles:
@@ -245,7 +244,7 @@ def run_mate_puzzle_regression():
         else:
             expected_move = moves[0]
 
-        inputs.append((new_root(board.board.fen()), True))
+        inputs.append((mcts.new_root(board.board.fen()), True))
         metadata.append((puzzle_id, expected_move, puzzle))
 
     # Run batch MCTS search.
@@ -320,11 +319,11 @@ def run_mate_puzzle_regression():
 if __name__ == '__main__' and False:
     try:
         run_mate_puzzle_regression()
-    except:
+    except Exception:
         pass
 
 
-def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Callable[[str], Any]) -> None:
+def display_node(root: MCTSRoot, inspect_or_search: bool, search_function: Callable[[str], Any]) -> None:
     import time
     import numpy as np
 
@@ -511,7 +510,7 @@ def display_node(root: MCTSNode, inspect_or_search: bool, search_function: Calla
                     print('No child found corresponding to that move')
 
 
-def dis(node: MCTSNode) -> None:
+def dis(node: MCTSRoot) -> None:
     inp = [(node, True)]  # Use the FEN string to create the input for MCTS
     results: MCTSResults = mcts.search(inp)
     root = results.results[0].root
@@ -529,6 +528,6 @@ def dis(node: MCTSNode) -> None:
     )
 
 
-dis(new_root(MATE_IN_ONE_FEN))
+dis(new_root(MATE_IN_ONE_FEN, mcts.arena_capacity))
 
 input('Press Enter to exit...')  # Keep the script running to see the output in the console.

@@ -94,8 +94,7 @@ void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
         std::vector<BoardTuple> boards;
         boards.reserve(numBoards);
         for (auto &&board : newBoards(numBoards)) {
-            // Create a root node for each board
-            boards.emplace_back(MCTSNode::createRoot(board->fen()), true);
+            boards.emplace_back(mcts.newRoot(board->fen()), true);
         }
 
         auto start = std::chrono::high_resolution_clock::now();
@@ -196,88 +195,59 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     init();
 
-    /**
-     * NOTE - USAGE:
-     * you want to searh a board FEN with MCTS:
-     * 1. Create an MCTS instance with the desired parameters.
-     * 2. Create a MCTSNode as the root node with the board FEN.
-     * 3. Call the `search` method on the MCTS instance with a list of boards.
-     * 4. Select the best move based on the visit counts from the MCTSResult.
-     * 5. Select the child from the root node that corresponds to the best move.
-     * 6. Call makeNewRoot on the MCTSNode to create a new root for the next search.
-     * 7. Repeat steps 3-6 for subsequent searches with the new root node.
-     */
+    py::class_<MCTSChild>(m, "MCTSChild")
+        .def_readonly("move", &MCTSChild::move)
+        .def_readonly("encoded_move", &MCTSChild::encoded_move)
+        .def_readonly("policy", &MCTSChild::policy)
+        .def_readonly("visits", &MCTSChild::visits)
+        .def_readonly("result_sum", &MCTSChild::result_sum)
+        .def_readonly("virtual_loss", &MCTSChild::virtual_loss)
+        .def_readonly("is_materialized", &MCTSChild::is_materialized);
 
-    py::class_<MCTSNode, std::shared_ptr<MCTSNode>>(m, "MCTSNode")
-        .def_property_readonly("fen", [](const MCTSNode &n) { return n.board.fen(); })
-        .def_property_readonly("move",
-                               [](const MCTSNode &n) { return toString(n.move_to_get_here); })
-        .def_property_readonly("encoded_move",
-                               [](const MCTSNode &n) {
-                                   return encodeMove(n.move_to_get_here, &n.parent.lock()->board);
-                               })
-        .def_readonly("visits", &MCTSNode::number_of_visits)
-        .def_readonly("virtual_loss", &MCTSNode::virtual_loss)
-        .def_readonly("result_sum", &MCTSNode::result_sum)
-        .def_readonly("policy", &MCTSNode::policy)
-        .def(
-            "ucb",
-            [](const MCTSNode &n, const float cParam) {
-                return n.ucb(cParam * std::sqrt(n.number_of_visits),
-                             n.result_sum / static_cast<float>(n.number_of_visits));
-            },
-            py::arg("cParam"),
-            R"pbdoc(Calculate UCB score given exploration constant cParam.)pbdoc")
-        .def_property_readonly("is_terminal", &MCTSNode::isTerminal)
+    py::class_<MCTSRoot>(m, "MCTSRoot")
+        .def_property_readonly("fen", [](const MCTSRoot &root) { return root.board().fen(); })
+        .def_property_readonly("move", &MCTSRoot::move)
+        .def_property_readonly("visits", &MCTSRoot::visits)
+        .def_property_readonly("virtual_loss", &MCTSRoot::virtualLoss)
+        .def_property_readonly("result_sum", &MCTSRoot::resultSum)
+        .def_property_readonly("is_terminal", &MCTSRoot::isTerminal)
         .def_property_readonly("repetition_count",
-                               [](const MCTSNode &node) { return node.board.repetitionCount(); })
-        .def_property_readonly("is_expanded", &MCTSNode::isExpanded)
-        .def_property_readonly("max_depth", &MCTSNode::maxDepth)
-
-        // Relations
-        .def_property_readonly("parent",
-                               [](const MCTSNode &node) {
-                                   return node.parent.lock(); // returns shared_ptr or None
-                               })
-        .def_property_readonly(
-            "children",
-            [](const MCTSNode &node) {
-                return node.children; // returns vector<shared_ptr<MCTSNode>>
-            },
-            py::return_value_policy::reference_internal)
-
-        .def("best_child", &MCTSNode::bestChild, py::arg("cParam"))
-
-        // Pruning and re-rooting
-        .def("make_new_root", &MCTSNode::makeNewRoot, py::arg("child_index"),
+                               [](const MCTSRoot &root) { return root.board().repetitionCount(); })
+        .def_property_readonly("is_expanded", &MCTSRoot::isExpanded)
+        .def_property_readonly("max_depth", &MCTSRoot::maxDepth)
+        .def_property_readonly("children", &MCTSRoot::children)
+        .def_property_readonly("live_nodes", &MCTSRoot::liveNodeCount)
+        .def_property_readonly("total_child_records", &MCTSRoot::totalChildCount)
+        .def_property_readonly("arena_capacity", &MCTSRoot::arenaCapacity)
+        .def("make_new_root", &MCTSRoot::makeNewRoot, py::arg("child_index"),
              R"pbdoc(
             Prune the old tree and return a new root node.
             `child_index` is the index of the child to make the new root.
             )pbdoc")
-
-        .def("discount", &MCTSNode::discount, py::arg("percentage_of_node_visits_to_keep"),
+        .def("discount", &MCTSRoot::discount, py::arg("percentage_of_node_visits_to_keep"),
              R"pbdoc(
             Discount the node's score and visits by a percentage.
-            This is useful for pruning old nodes in the search tree.
+            Descendant materializations are explicitly pruned when required by the fixed arena.
             )pbdoc")
+        .def("__repr__", &MCTSRoot::repr);
 
-        .def("__repr__", &MCTSNode::repr);
-
-    // Root creation helper
     m.def(
-        "new_root", [](const std::string &fen) { return MCTSNode::createRoot(fen); },
-        py::arg("fen"),
+        "new_root",
+        [](const std::string &fen, const uint32 arenaCapacity) {
+            return MCTSRoot::create(fen, arenaCapacity);
+        },
+        py::arg("fen"), py::arg("arena_capacity"),
         R"pbdoc(
-            Create a new root node for MCTS with the given FEN string.
-            Returns a shared pointer to the new MCTSNode.
+            Create a self-play MCTS root with an explicit fixed arena capacity.
           )pbdoc");
     m.def(
         "new_root_with_history",
-        [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
-            return MCTSNode::createRoot(replayMoves(startingFen, movesUci));
+        [](const std::string &startingFen, const std::vector<std::string> &movesUci,
+           const uint32 arenaCapacity) {
+            return MCTSRoot::create(replayMoves(startingFen, movesUci), arenaCapacity);
         },
-        py::arg("starting_fen"), py::arg("moves_uci"),
-        R"pbdoc(Create an MCTS root by replaying a bounded UCI move history.)pbdoc");
+        py::arg("starting_fen"), py::arg("moves_uci"), py::arg("arena_capacity"),
+        R"pbdoc(Create a fixed-capacity MCTS root by replaying bounded UCI history.)pbdoc");
 
     m.def(
         "encode_board_compressed",
@@ -401,6 +371,17 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<const InferenceClientParams &, const MCTSParams &>(), py::arg("client_args"),
              py::arg("mcts_args"))
+        .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
+        .def(
+            "new_root", [](const MCTS &self, const std::string &fen) { return self.newRoot(fen); },
+            py::arg("fen"))
+        .def(
+            "new_root_with_history",
+            [](const MCTS &self, const std::string &startingFen,
+               const std::vector<std::string> &movesUci) {
+                return self.newRoot(replayMoves(startingFen, movesUci));
+            },
+            py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(

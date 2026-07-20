@@ -5,252 +5,274 @@
 
 thread_local std::mt19937 randomEngine(std::random_device{}());
 
-std::vector<float> dirichlet(const float alpha, const size_t n) {
-    // Sample from a Dirichlet distribution with parameter alpha.
+namespace {
+struct RootTask {
+    MCTSRoot root;
+    uint32 limit;
+};
+
+struct SelectedNode {
+    SearchTree *tree;
+    NodeIndex index;
+};
+
+thread_local std::vector<SelectedNode> selectedNodes;
+thread_local std::vector<const Board *> selectedBoards;
+
+std::vector<float> dirichlet(const float alpha, const size_t count) {
     std::gamma_distribution<float> gamma(alpha, 1.0);
 
-    std::vector<float> noise(n);
+    std::vector<float> noise(count);
     float sum = 0.0f;
-    for (size_t i = 0; i < n; i++) {
-        noise[i] = gamma(randomEngine);
-        sum += noise[i];
+    for (float &sample : noise) {
+        sample = gamma(randomEngine);
+        sum += sample;
     }
 
-    const float norm = 1.0f / sum;
-    for (size_t i = 0; i < n; i++) {
-        noise[i] *= norm;
+    const float normalization = 1.0f / sum;
+    for (float &sample : noise) {
+        sample *= normalization;
     }
-
     return noise;
 }
 
-MCTSResult gatherResult(const std::shared_ptr<MCTSNode> &root) {
+MCTSResult gatherResult(const MCTSRoot &root) {
+    const SearchNode &rootNode = root.tree().node(root.rootIndex());
     VisitCounts visitCounts;
-    visitCounts.reserve(root->children.size());
-    for (const auto &child : root->children) {
-        int encodedMove = encodeMove(child->move_to_get_here, &root->board);
-        visitCounts.emplace_back(encodedMove, child->number_of_visits);
+    visitCounts.reserve(rootNode.children.size());
+    for (const Child &child : rootNode.children) {
+        visitCounts.emplace_back(encodeMove(child.move, &rootNode.board),
+                                 static_cast<int>(child.number_of_visits));
     }
 
-    return MCTSResult(root->result_sum / static_cast<float>(root->number_of_visits), visitCounts,
-                      root);
+    return MCTSResult(root.resultSum() / static_cast<float>(root.visits()), visitCounts, root);
 }
 
-MCTSStatistics mctsStatistics(const std::shared_ptr<MCTSNode> &root) {
-    MCTSStatistics stats;
-    stats.averageDepth = static_cast<float>(root->maxDepth());
-    if (root->children.empty())
-        return stats;
+MCTSStatistics mctsStatistics(const MCTSRoot &root) {
+    MCTSStatistics statistics;
+    statistics.averageDepth = static_cast<float>(root.maxDepth());
+    const SearchNode &rootNode = root.tree().node(root.rootIndex());
+    if (rootNode.children.empty()) {
+        return statistics;
+    }
 
-    const int totalVisits = root->number_of_visits;
-    const float uniformProbability = 1.0f / static_cast<float>(root->children.size());
-    for (const auto &child : root->children) {
-        if (child->number_of_visits == 0)
+    const float totalVisits = static_cast<float>(root.visits());
+    const float uniformProbability = 1.0f / static_cast<float>(rootNode.children.size());
+    for (const Child &child : rootNode.children) {
+        if (child.number_of_visits == 0) {
             continue;
+        }
 
-        const float probability = static_cast<float>(child->number_of_visits) / totalVisits;
-        stats.averageEntropy -= probability * std::log2(probability);
-        stats.averageKLDivergence += probability * std::log2(probability / uniformProbability);
+        const float probability = static_cast<float>(child.number_of_visits) / totalVisits;
+        statistics.averageEntropy -= probability * std::log2(probability);
+        statistics.averageKLDivergence += probability * std::log2(probability / uniformProbability);
     }
+    return statistics;
+}
+} // namespace
 
-    return stats;
+MCTSParams::MCTSParams(const int numParallelSearches, const uint32 numFullSearches,
+                       const uint32 numFastSearches, const float cParam, const float dirichletAlpha,
+                       const float dirichletEpsilon, const uint8 minVisitCount,
+                       const uint8 numThreads)
+    : num_parallel_searches(numParallelSearches), num_full_searches(numFullSearches),
+      num_fast_searches(numFastSearches), c_param(cParam), dirichlet_alpha(dirichletAlpha),
+      dirichlet_epsilon(dirichletEpsilon), min_visit_count(minVisitCount), num_threads(numThreads) {
+    if (num_parallel_searches <= 0) {
+        throw std::invalid_argument("num_parallel_searches must be positive");
+    }
+    if (num_full_searches == 0 || num_fast_searches == 0) {
+        throw std::invalid_argument("MCTS search budgets must be positive");
+    }
+    if (num_threads == 0) {
+        throw std::invalid_argument("num_threads must be positive");
+    }
 }
 
-struct RootTask {
-    std::shared_ptr<MCTSNode> root;
-    uint32 limit; // visit budget for this root
-};
+uint32 MCTSParams::arenaCapacity() const {
+    const uint64 maximumSearches = std::max(num_full_searches, num_fast_searches);
+    const uint64 capacity = maximumSearches + static_cast<uint64>(num_parallel_searches) + 1U;
+    if (capacity > std::numeric_limits<uint32>::max()) {
+        throw std::overflow_error("MCTS search parameters exceed the node index capacity");
+    }
+    return static_cast<uint32>(capacity);
+}
+
+MCTSRoot MCTS::newRoot(const std::string &fen) const {
+    return MCTSRoot::create(fen, m_arenaCapacity);
+}
+
+MCTSRoot MCTS::newRoot(Board board) const {
+    return MCTSRoot::create(std::move(board), m_arenaCapacity);
+}
 
 std::vector<MCTSResult> MCTS::searchGames(const std::vector<BoardTuple> &boards) {
     TIMEIT("MCTS::searchGames");
 
-    const size_t N = boards.size();
-
-    std::vector<std::shared_ptr<MCTSNode>> roots;
-    roots.reserve(N);
+    const size_t numberOfBoards = boards.size();
+    std::vector<MCTSRoot> roots;
+    roots.reserve(numberOfBoards);
 
     std::vector<size_t> newBoardIndices;
     std::vector<const Board *> newBoards;
-    newBoardIndices.reserve(N);
-    newBoards.reserve(N);
+    newBoardIndices.reserve(numberOfBoards);
+    newBoards.reserve(numberOfBoards);
 
-    for (const auto &[i, board] : enumerate(boards)) {
+    for (const auto &[index, board] : enumerate(boards)) {
         const auto &[root, runFullSearch] = board;
-
-        assert(!root->parent.lock() && "Root node should not have a parent");
-
+        static_cast<void>(runFullSearch);
+        if (root.arenaCapacity() != m_arenaCapacity) {
+            throw std::invalid_argument("MCTSRoot arena capacity does not match MCTS parameters");
+        }
         roots.push_back(root);
 
-        if (!root->isExpanded()) {
-            newBoardIndices.emplace_back(i);
-            newBoards.emplace_back(&root->board);
+        if (!root.isExpanded()) {
+            newBoardIndices.emplace_back(index);
+            newBoards.emplace_back(&root.board());
         }
     }
 
     const std::vector<InferenceResult> inferenceResults = m_client.inferenceBatch(newBoards);
-
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
-        const std::vector<MoveScore> &moves = result.first;
-        roots[rootIndex]->expand(moves);
+        roots[rootIndex].tree().expand(roots[rootIndex].rootIndex(), result.first);
     }
 
-    for (const auto &[root, board] : zip(roots, boards)) {
-        if (const bool shouldRunFullSearch = get<1>(board)) {
-            // If we are running a full search, we need to add the noise to the root node's policy.
-            addNoise(root);
+    for (size_t index = 0; index < roots.size(); ++index) {
+        if (get<1>(boards[index])) {
+            addNoise(roots[index]);
         }
     }
 
-    // -----------------------------------------------------------------
-    // Pre-compute the per-root visit limit and build the active list
-    // -----------------------------------------------------------------
-
     std::vector<RootTask> active;
-    active.reserve(N);
-
-    for (const int i : range(N)) {
+    active.reserve(numberOfBoards);
+    for (size_t index = 0; index < numberOfBoards; ++index) {
         const uint32 limit =
-            get<1>(boards[i]) ? m_args.num_full_searches : m_args.num_fast_searches;
-        active.emplace_back(roots[i], limit);
+            get<1>(boards[index]) ? m_args.num_full_searches : m_args.num_fast_searches;
+        active.push_back({roots[index], limit});
     }
 
-    // -----------------------------------------------------------------
-    // Main search loop – continues until every root reaches its limit
-    // -----------------------------------------------------------------
     while (!active.empty()) {
-
-        // Expose just the raw node pointers to the parallel routine.
-        std::vector<std::shared_ptr<MCTSNode>> batch;
+        std::vector<MCTSRoot> batch;
         batch.reserve(active.size());
-        for (auto &[root, limit] : active)
-            batch.emplace_back(root);
+        for (const RootTask &task : active) {
+            batch.push_back(task.root);
+        }
 
         parallelIterate(batch);
-
-        // Keep only the roots that still need work.
         std::erase_if(active,
-                      [](const RootTask &t) { return t.root->number_of_visits >= t.limit; });
+                      [](const RootTask &task) { return task.root.visits() >= task.limit; });
     }
 
-    // -----------------------------------------------------------------
-    // Collect the final best-move result for every root.
-    // -----------------------------------------------------------------
     std::vector<MCTSResult> results;
     results.reserve(roots.size());
-    for (const auto &root : roots)
+    for (const MCTSRoot &root : roots) {
         results.emplace_back(gatherResult(root));
-
+    }
     return results;
 }
 
 MCTSResults MCTS::search(const std::vector<BoardTuple> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
-
-    if (boards.empty())
+    if (boards.empty()) {
         return {.results = {}, .mctsStats = {}};
+    }
 
-    const size_t N = boards.size();
-    const size_t P = std::max<size_t>(1, m_threadPool.numThreads());
-    const size_t sliceSize = (boards.size() + P - 1) / P; // ceiling div
+    const size_t numberOfBoards = boards.size();
+    const size_t numberOfThreads = std::max<size_t>(1, m_threadPool.numThreads());
+    const size_t sliceSize = (numberOfBoards + numberOfThreads - 1) / numberOfThreads;
 
     std::vector<std::future<std::vector<MCTSResult>>> futures;
-    futures.reserve(P);
-
-    for (std::size_t slice = 0; slice < P && slice * sliceSize < boards.size(); ++slice) {
-        auto begin = boards.begin() + slice * sliceSize;
-        auto end = begin + std::min(sliceSize, boards.size() - slice * sliceSize);
-        std::vector<BoardTuple> myBoards(begin, end);
-
-        futures.emplace_back(m_threadPool.enqueue(&MCTS::searchGames, this, std::move(myBoards)));
+    futures.reserve(numberOfThreads);
+    for (size_t slice = 0; slice < numberOfThreads && slice * sliceSize < numberOfBoards; ++slice) {
+        const auto begin = boards.begin() + static_cast<std::ptrdiff_t>(slice * sliceSize);
+        const auto end = begin + static_cast<std::ptrdiff_t>(
+                                     std::min(sliceSize, numberOfBoards - slice * sliceSize));
+        std::vector<BoardTuple> slicedBoards(begin, end);
+        futures.emplace_back(
+            m_threadPool.enqueue(&MCTS::searchGames, this, std::move(slicedBoards)));
     }
 
     std::vector<MCTSResult> results;
-    results.reserve(N);
-    for (auto &fut : futures) {
-        std::vector<MCTSResult> sliceResults = fut.get();
+    results.reserve(numberOfBoards);
+    for (std::future<std::vector<MCTSResult>> &future : futures) {
+        std::vector<MCTSResult> sliceResults = future.get();
         results.insert(results.end(), std::make_move_iterator(sliceResults.begin()),
                        std::make_move_iterator(sliceResults.end()));
     }
 
-    const MCTSStatistics stats =
+    const MCTSStatistics statistics =
         collectStatistics ? mctsStatistics(results.front().root) : MCTSStatistics{};
-
-    return {.results = results, .mctsStats = stats};
+    return {.results = std::move(results), .mctsStats = statistics};
 }
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     return {m_client.getStatistics(), resetTimes()};
 }
 
-// These variables are initialized only once per thread
-// and retain their values between function calls
-thread_local std::vector<std::shared_ptr<MCTSNode>> nodes;
-thread_local std::vector<const Board *> boards;
-
-void MCTS::parallelIterate(const std::vector<std::shared_ptr<MCTSNode>> &roots) {
+void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
     TIMEIT("MCTS::parallelIterate");
+    selectedNodes.clear();
+    selectedBoards.clear();
+    const size_t selectionCapacity =
+        static_cast<size_t>(m_args.num_parallel_searches) * roots.size();
+    selectedNodes.reserve(selectionCapacity);
+    selectedBoards.reserve(selectionCapacity);
 
-    // Clear contents but maintain capacity
-    nodes.clear();
-    boards.clear();
-    nodes.reserve(m_args.num_parallel_searches * roots.size());
-    boards.reserve(m_args.num_parallel_searches * roots.size());
-
-    for (const std::shared_ptr<MCTSNode> &root : roots) {
-        for (int _ : range(m_args.num_parallel_searches)) {
-            std::shared_ptr<MCTSNode> node = getBestChildOrBackPropagate(root, m_args.c_param);
-            if (node != nullptr) {
-                node->addVirtualLoss();
-                nodes.push_back(node);
-                boards.emplace_back(&node->board);
+    for (MCTSRoot root : roots) {
+        for (int search = 0; search < m_args.num_parallel_searches; ++search) {
+            const std::optional<NodeIndex> selected =
+                getBestChildOrBackPropagate(root, m_args.c_param);
+            if (selected.has_value()) {
+                SearchTree &tree = root.tree();
+                tree.addVirtualLoss(*selected);
+                selectedNodes.push_back({&tree, *selected});
+                selectedBoards.push_back(&tree.node(*selected).board);
             }
         }
     }
 
-    if (nodes.empty())
+    if (selectedNodes.empty()) {
         return;
+    }
 
-    // Run inference in batch.
-    const std::vector<InferenceResult> results = m_client.inferenceBatch(boards);
-
-    for (auto [node, result] : zip(nodes, results)) {
+    const std::vector<InferenceResult> results = m_client.inferenceBatch(selectedBoards);
+    for (const auto [selected, result] : zip(selectedNodes, results)) {
         const auto &[moves, value] = result;
-        node->expand(moves);
-        node->backPropagateAndRemoveVirtualLoss(value);
+        selected.tree->expand(selected.index, moves);
+        selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, value);
     }
 }
 
-void MCTS::addNoise(const std::shared_ptr<MCTSNode> &root) const {
-
-    const std::vector<float> noise = dirichlet(m_args.dirichlet_alpha, root->children.size());
-
-    for (const auto &[i, child] : enumerate(root->children)) {
-        child->policy = lerp(child->policy, noise[i], m_args.dirichlet_epsilon);
+void MCTS::addNoise(MCTSRoot &root) const {
+    SearchNode &rootNode = root.tree().node(root.rootIndex());
+    const std::vector<float> noise = dirichlet(m_args.dirichlet_alpha, rootNode.children.size());
+    for (size_t index = 0; index < rootNode.children.size(); ++index) {
+        Child &child = rootNode.children[index];
+        child.policy = lerp(child.policy, noise[index], m_args.dirichlet_epsilon);
     }
 }
 
-// Traverse the tree to find the best child or, if the node is terminal,
-// back-propagate the board’s result.
-std::shared_ptr<MCTSNode> MCTS::getBestChildOrBackPropagate(std::shared_ptr<MCTSNode> root,
-                                                            const float cParam) const {
+std::optional<NodeIndex> MCTS::getBestChildOrBackPropagate(MCTSRoot &root,
+                                                           const float cParam) const {
     TIMEIT("MCTS::getBestChildOrBackPropagate");
-
-    for (const auto &child : root->children) {
-        if (child->number_of_visits < m_args.min_visit_count) {
-            // If the child has not been visited enough, we should traverse it.
-            root = child;
+    SearchTree &tree = root.tree();
+    NodeIndex selectedIndex = root.rootIndex();
+    SearchNode &rootNode = tree.node(selectedIndex);
+    for (uint32 childIndex = 0; childIndex < rootNode.children.size(); ++childIndex) {
+        if (rootNode.children[childIndex].number_of_visits < m_args.min_visit_count) {
+            selectedIndex = tree.materializeChild(selectedIndex, childIndex);
             break;
         }
     }
 
-    // We need to traverse the tree until we find a node that is not fully expanded
-    std::shared_ptr<MCTSNode> node = root;
-    while (node->isExpanded())
-        node = node->bestChild(cParam);
-
-    if (node->isTerminal()) {
-        node->backPropagate(getBoardResultScore(node->board));
-        return nullptr;
+    while (tree.node(selectedIndex).isExpanded()) {
+        const uint32 childIndex = tree.bestChildIndex(selectedIndex, cParam);
+        selectedIndex = tree.materializeChild(selectedIndex, childIndex);
     }
-    return node;
+
+    if (tree.node(selectedIndex).isTerminal()) {
+        tree.backPropagate(selectedIndex, getBoardResultScore(tree.node(selectedIndex).board));
+        return std::nullopt;
+    }
+    return selectedIndex;
 }

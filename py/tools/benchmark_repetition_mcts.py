@@ -11,7 +11,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSNode, MCTSParams, new_root
+from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams, MCTSRoot
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ class Arguments:
 
 @dataclass(frozen=True)
 class SearchStepsResult:
-    roots: list[MCTSNode]
+    roots: list[MCTSRoot]
     terminal_roots: int
     searches_completed: int
 
@@ -122,7 +122,7 @@ def sample_gpu_until_stopped(
         samples.append(query_gpu(device_id))
 
 
-def choose_root(result_root: MCTSNode, visits: list[tuple[int, int]]) -> MCTSNode:
+def choose_root(result_root: MCTSRoot, visits: list[tuple[int, int]]) -> MCTSRoot:
     if not visits:
         raise ValueError('MCTS returned no visits for a nonterminal root.')
     child_index = max(range(len(visits)), key=lambda index: visits[index][1])
@@ -142,7 +142,7 @@ def wait_for_synchronized_start(args: Arguments) -> None:
 
 def run_search_steps(
     mcts: MCTS,
-    roots: list[MCTSNode],
+    roots: list[MCTSRoot],
     openings: tuple[str, ...],
     steps: int,
 ) -> SearchStepsResult:
@@ -153,12 +153,12 @@ def run_search_steps(
         search_results = mcts.search([(root, False) for root in roots])
         searches_completed += sum(result.root.visits for result in search_results.results) - visits_before
 
-        next_roots: list[MCTSNode] = []
+        next_roots: list[MCTSRoot] = []
         for opening_index, result in enumerate(search_results.results):
             root = choose_root(result.root, result.visits)
             if root.is_terminal:
                 terminal_roots += 1
-                root = new_root(openings[opening_index])
+                root = mcts.new_root(openings[opening_index])
             next_roots.append(root)
         roots = next_roots
     return SearchStepsResult(
@@ -176,8 +176,6 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
     if args.gpu_sampling_interval_seconds < 0:
         raise ValueError('GPU sampling interval cannot be negative.')
 
-    openings = load_openings(args.openings, args.games)
-    roots = [new_root(fen) for fen in openings]
     mcts = MCTS(
         InferenceClientParams(
             args.device,
@@ -197,6 +195,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             args.threads,
         ),
     )
+    openings = load_openings(args.openings, args.games)
+    roots = [mcts.new_root(fen) for fen in openings]
     warmup_result = run_search_steps(mcts, roots, openings, args.warmup_steps)
     roots = warmup_result.roots
     warmup_inference_statistics, _ = mcts.get_inference_statistics()

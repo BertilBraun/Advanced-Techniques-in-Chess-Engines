@@ -67,6 +67,9 @@ class BenchmarkResult:
     generated_samples: int
     retained_samples: int
     retained_sample_proportion: float
+    live_materialized_nodes: int
+    total_child_records: int
+    arena_capacity_per_game: int
     process_cpu_percent: float
     peak_rss_mib: float
     inference_evaluations: int
@@ -269,6 +272,10 @@ def build_result(
         for batch_size, calls in enumerate(final_statistics.modelBatchSizeHistogram)
         if calls > initial_statistics.modelBatchSizeHistogram[batch_size]
     )
+    active_roots = [
+        game.already_expanded_node for game in self_play.self_play_games if game.already_expanded_node is not None
+    ]
+    assert self_play.mcts is not None
     return BenchmarkResult(
         process_id=os.getpid(),
         device_id=arguments.device,
@@ -292,6 +299,9 @@ def build_result(
         generated_samples=len(dataset),
         retained_samples=retained_samples,
         retained_sample_proportion=retained_sample_proportion,
+        live_materialized_nodes=sum(root.live_nodes for root in active_roots),
+        total_child_records=sum(root.total_child_records for root in active_roots),
+        arena_capacity_per_game=self_play.mcts.arena_capacity,
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         inference_evaluations=evaluations,

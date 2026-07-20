@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTSNode, MCTSResults, MCTS
+    from AlphaZeroCpp import MCTSRoot, MCTSResults, MCTS
 
 
 import chess
@@ -46,7 +46,7 @@ class SelfPlayGame:
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.encoded_moves: list[int] = []
-        self.already_expanded_node: Optional[MCTSNode] = None
+        self.already_expanded_node: Optional[MCTSRoot] = None
         self.start_generation_time = time.time()
 
         # The move at which the player resigned, if any. None if the game is still ongoing.
@@ -200,16 +200,14 @@ class SelfPlayCpp:
             spg.already_expanded_node = None
 
     @timeit
-    def search(self, boards: list[tuple[MCTSNode, bool]]) -> MCTSResults:
+    def search(self, boards: list[tuple[MCTSRoot, bool]]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
         return self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
-        from AlphaZeroCpp import new_root_with_history
-
-        boards: list[tuple[MCTSNode, bool]] = []
+        boards: list[tuple[MCTSRoot, bool]] = []
         for spg in self.self_play_games:
             force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
             should_run_full_search = (
@@ -221,7 +219,10 @@ class SelfPlayCpp:
             if spg.already_expanded_node is None:
                 # If the node is not already expanded, create a new root node for the MCTS search
                 history = bounded_repetition_history(spg.board.board, REPETITION_HISTORY_PLIES)
-                spg.already_expanded_node = new_root_with_history(history.starting_fen, history.moves_uci)
+                spg.already_expanded_node = self.mcts.new_root_with_history(
+                    history.starting_fen,
+                    history.moves_uci,
+                )
 
             if should_run_full_search:
                 # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
@@ -297,7 +298,7 @@ class SelfPlayCpp:
     def _sample_self_play_game(
         self,
         current: SelfPlayGame,
-        root: MCTSNode,
+        root: MCTSRoot,
         visit_counts: list[tuple[int, int]],
     ) -> SelfPlayGame:
         # Sample a move from the action probabilities then create a new game state with that move
