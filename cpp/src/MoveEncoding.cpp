@@ -125,27 +125,6 @@ int encodeMove(const Move move, const Board *board) {
     return actionIndex;
 }
 
-torch::Tensor encodeMoves(const std::vector<Move> &moves, const Board *board) {
-    // Encodes a list of moves into a 1D tensor.
-    //
-    // Each entry in the array represents a possible move on the board. If the
-    // corresponding move is in the list, the entry is 1, and 0 otherwise. The array
-    // has a length of TOTAL_MOVES, representing all possible moves from all squares
-    // to all reachable squares.
-    //
-    // param moves: The list of moves to encode.
-    // param board: The current board state.
-    // :return: A 1D tensor representing the encoded moves.
-
-    torch::Tensor movesEncoded = torch::zeros({ACTION_SIZE}, torch::kInt8);
-
-    for (const Move &move : moves) {
-        movesEncoded[encodeMove(move, board)] = 1;
-    }
-
-    return movesEncoded;
-}
-
 std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *board) {
     // Decodes an array of move indices into a list of chess moves.
     //
@@ -196,64 +175,53 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *
     return moves;
 }
 
-torch::Tensor encodeLegalMoves(const Board *board) {
-    // Encodes the legal moves of a chess board into a 1D tensor.
-    //
-    // Each entry in the array represents a possible move on the board. If the
-    // corresponding move is legal, the entry is 1, and 0 otherwise. The array
-    // has a length of TOTAL_MOVES, representing all possible moves from all squares
-    // to all reachable squares.
-    //
-    // param board: The chess board to encode.
-    // :return: A 1D tensor representing the encoded legal moves.
-    return encodeMoves(board->validMoves(), board);
-}
+std::vector<EncodedMoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
+                                                                       const Board *board) {
+    assert(policy.device().is_cpu() && "Policy must reside on the CPU");
+    assert(policy.scalar_type() == torch::kFloat32 && "Policy must use float32");
+    assert(policy.dim() == 1 && policy.numel() == ACTION_SIZE &&
+           "Policy must contain one score per encoded move");
+    assert(policy.is_contiguous() && "Policy must be contiguous");
 
-torch::Tensor filterPolicyWithLegalMoves(const torch::Tensor &policy, const Board *board) {
-    // Filters a policy with the legal moves of a chess board.
-    //
-    // The policy is a 1D tensor representing the probabilities of each move
-    // in the board. The legal moves are encoded in a 1D tensor, where each
-    // entry is 1 if the corresponding move is legal, and 0 otherwise. The policy
-    // is then filtered to only include the probabilities of the legal moves.
-    //
-    // param policy: The policy to filter.
-    // param board: The chess board to filter the policy with.
-    // :return: The filtered policy.
-
-    const torch::Tensor legalMovesEncoded = encodeLegalMoves(board);
-    const torch::Tensor filteredPolicy = policy * legalMovesEncoded;
-    const float filteredPolicySum = filteredPolicy.sum().item<float>();
-    if (filteredPolicySum < 0.00001) return legalMovesEncoded / legalMovesEncoded.sum();
-    return filteredPolicy / filteredPolicySum;
-}
-
-std::vector<EncodedMoveScore> mapPolicyToMoves(const torch::Tensor &policy) {
-    const torch::Tensor nonzeroIndices = torch::nonzero(policy > 0);
-    const size_t n = nonzeroIndices.size(0);
-
-    std::vector<EncodedMoveScore> movesWithProbabilities;
-    movesWithProbabilities.reserve(n);
-    for (const size_t i : range(n)) {
-        const int encodedMove = nonzeroIndices[i].item<int>();
-        movesWithProbabilities.emplace_back(encodedMove, policy[encodedMove].item<float>());
+    const std::vector<Move> &legalMoves = board->validMoves();
+    if (legalMoves.empty()) {
+        return {};
     }
 
+    const float *policyData = policy.data_ptr<float>();
+    std::vector<EncodedMoveScore> movesWithProbabilities;
+    movesWithProbabilities.reserve(legalMoves.size());
+
+    for (const Move move : legalMoves) {
+        const int encodedMove = encodeMove(move, board);
+        const float score = policyData[encodedMove];
+        movesWithProbabilities.emplace_back(encodedMove, score);
+    }
+
+    // Preserve the encoded-index order produced by the previous Torch implementation.
+    std::sort(movesWithProbabilities.begin(), movesWithProbabilities.end(),
+              [](const EncodedMoveScore &left, const EncodedMoveScore &right) {
+                  return left.first < right.first;
+              });
+
+    float legalPolicySum = 0.0f;
+    for (const EncodedMoveScore &moveWithProbability : movesWithProbabilities) {
+        legalPolicySum += moveWithProbability.second;
+    }
+
+    if (legalPolicySum < 0.00001f) {
+        const float uniformProbability = 1.0f / static_cast<float>(movesWithProbabilities.size());
+        for (EncodedMoveScore &moveWithProbability : movesWithProbabilities) {
+            moveWithProbability.second = uniformProbability;
+        }
+        return movesWithProbabilities;
+    }
+
+    for (EncodedMoveScore &moveWithProbability : movesWithProbabilities) {
+        moveWithProbability.second /= legalPolicySum;
+    }
+    std::erase_if(movesWithProbabilities, [](const EncodedMoveScore &moveWithProbability) {
+        return !(moveWithProbability.second > 0.0f);
+    });
     return movesWithProbabilities;
-}
-
-std::vector<EncodedMoveScore> filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy,
-                                                                const Board *board) {
-    // Gets a list of moves with their corresponding probabilities from a policy.
-    //
-    // The policy is a 1D tensor representing the probabilities of each move
-    // in the board. The list of moves is a list of tuples, where each tuple contains
-    // a move and its corresponding probability.
-    //
-    // param policy: The policy to get the moves and probabilities from.
-    // param board: The chess board to filter the policy with.
-    // :return: The list of moves with their corresponding probabilities.
-
-    const torch::Tensor filteredPolicy = filterPolicyWithLegalMoves(policy, board);
-    return mapPolicyToMoves(filteredPolicy);
 }

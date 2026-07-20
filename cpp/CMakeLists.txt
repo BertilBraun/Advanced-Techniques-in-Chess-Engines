@@ -191,6 +191,21 @@ target_include_directories(BoardLegalMovesCacheTest PRIVATE src)
 target_link_libraries(BoardLegalMovesCacheTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
 
+add_executable(
+        MovePolicyProcessingTest
+        test/TestMovePolicyProcessing.cpp
+        src/Board.cpp
+        src/MoveEncoding.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(MovePolicyProcessingTest PRIVATE src)
+target_link_libraries(MovePolicyProcessingTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME MovePolicyProcessingTest COMMAND MovePolicyProcessingTest)
+
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20
         PREFIX ""
