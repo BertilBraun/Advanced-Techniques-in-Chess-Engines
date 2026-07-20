@@ -446,6 +446,11 @@ if [[ "${exit_status}" -ne 0 ]]; then
     exit "${exit_status}"
 fi
 
+worker_results="${output_directory}/worker-results.jsonl"
+for worker_output in "${output_directory}"/worker-*.json; do
+    tail -n 1 "${worker_output}"
+done > "${worker_results}"
+
 jq -s \
     --argjson gpu_count "${gpu_count}" \
     '{
@@ -549,7 +554,7 @@ jq -s \
                 maximum_elapsed_seconds: $makespan
             }
         }
-    ' "${output_directory}"/worker-*.json \
+    ' "${worker_results}" \
     | tee "${output_directory}/summary.json"
 
 echo "${output_directory}"
