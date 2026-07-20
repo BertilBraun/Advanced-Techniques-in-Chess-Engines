@@ -23,6 +23,7 @@
 class EvalMCTSNode : public std::enable_shared_from_this<EvalMCTSNode> {
 public:
     using ChildVector = std::vector<std::shared_ptr<EvalMCTSNode>>;
+    using ChildSnapshot = std::shared_ptr<const ChildVector>;
 
     /* ──────────────────────────  factory ───────────────────────────── */
     static std::shared_ptr<EvalMCTSNode> createRoot(const std::string &fen) {
@@ -36,7 +37,7 @@ public:
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
     [[nodiscard]] bool isTerminal() const { return board.isGameOver(); }
-    [[nodiscard]] bool isExpanded() const { return !children().empty(); }
+    [[nodiscard]] bool isExpanded() const { return children() != nullptr; }
 
     /* ──────────────────────  core search helpers  ───────────────────── */
     [[nodiscard]] float ucb(float uCommon) const;
@@ -72,22 +73,13 @@ public:
 
     std::weak_ptr<EvalMCTSNode> parent;
 
-    ChildVector children() const {
-        const auto cvec = childrenRaw.load(std::memory_order_acquire);
-        return cvec ? *cvec : ChildVector{};
+    [[nodiscard]] ChildSnapshot children() const {
+        return childrenPublished.load(std::memory_order_acquire);
     }
 
 private:
-    /*
-     * Children are stored in a heap‑allocated vector.  `childrenPtr` acts as a
-     * once‑initialised atomic pointer: null → not expanded, non‑null → fully
-     * expanded.  After publication the vector is *never* mutated again, so
-     * readers require no synchronisation at all.
-     */
-    /* 1️⃣ owning pointer (written once under lock, then never touched)   */
-    std::shared_ptr<ChildVector> childrenStrong;
-    /* 2️⃣ raw pointer published atomically for readers                   */
-    std::atomic<ChildVector *> childrenRaw{nullptr};
+    // Readers own an immutable snapshot while traversing concurrently.
+    std::atomic<ChildSnapshot> childrenPublished;
 
     /* 1‑byte spin‑lock used only while *building* the child vector */
     mutable std::atomic_flag expand_lock = ATOMIC_FLAG_INIT;
@@ -149,8 +141,7 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves) {
             new EvalMCTSNode{std::move(next), policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
-    childrenStrong = newChildren;                                    // own the memory
-    childrenRaw.store(newChildren.get(), std::memory_order_release); // publish
+    childrenPublished.store(std::move(newChildren), std::memory_order_release);
 }
 
 inline void EvalMCTSNode::addVirtualLoss() {
@@ -178,16 +169,16 @@ inline void EvalMCTSNode::backPropagate(float result) {
 
 inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::bestChild(const float cParam) const {
     const auto childVec = children();
-    if (childVec.empty())
+    if (childVec == nullptr || childVec->empty())
         return nullptr; // caller treats as leaf
 
     const int visits = number_of_visits.load(std::memory_order_relaxed);
     const float uCommon = cParam * std::sqrt(static_cast<float>(visits));
 
-    auto best = childVec[0];
+    auto best = childVec->front();
     float bestV = -std::numeric_limits<float>::infinity();
 
-    for (const auto &child : childVec) {
+    for (const auto &child : *childVec) {
         const float v = child->ucb(uCommon);
         if (v > bestV) {
             bestV = v;
@@ -199,20 +190,23 @@ inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::bestChild(const float cParam)
 
 inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::makeNewRoot(const size_t childIdx) {
     const auto childVec = children();
-    assert(childIdx < childVec.size());
+    assert(childVec != nullptr && childIdx < childVec->size());
 
-    auto newRoot = childVec[childIdx];
+    auto newRoot = (*childVec)[childIdx];
     newRoot->parent.reset();
 
     /* Drop every other subtree (only we hold shared_ptr copies here) */
-    childrenRaw.store(nullptr, std::memory_order_release); // release the old pointer
-    childrenStrong.reset();                                // release the old vector
+    childrenPublished.store(nullptr, std::memory_order_release);
     return newRoot;
 }
 
 inline int EvalMCTSNode::maxDepth() const {
     int depth = 0;
-    for (const auto &child : children()) {
+    const auto childVec = children();
+    if (childVec == nullptr)
+        return 1;
+
+    for (const auto &child : *childVec) {
         const int childDepth = child->maxDepth();
         if (childDepth > depth)
             depth = childDepth;
@@ -223,8 +217,11 @@ inline int EvalMCTSNode::maxDepth() const {
 inline VisitCounts EvalMCTSNode::gatherVisitCounts() const {
     const auto childVec = children();
     VisitCounts visitCounts;
-    visitCounts.reserve(childVec.size());
-    for (const auto &child : childVec) {
+    if (childVec == nullptr)
+        return visitCounts;
+
+    visitCounts.reserve(childVec->size());
+    for (const auto &child : *childVec) {
         int encodedMove = encodeMove(child->moveToGetHere, &board);
         visitCounts.emplace_back(encodedMove,
                                  child->number_of_visits.load(std::memory_order_relaxed));

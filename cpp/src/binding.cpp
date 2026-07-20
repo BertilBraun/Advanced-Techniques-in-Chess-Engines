@@ -438,8 +438,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_property_readonly(
             "repetition_count",
             [](const EvalMCTSNode &node) { return node.board.repetitionCount(); })
-        .def_property_readonly("children", &EvalMCTSNode::children,
-                               py::return_value_policy::reference_internal)
+        .def_property_readonly("children",
+                               [](const EvalMCTSNode &node) {
+                                   const auto children = node.children();
+                                   return children == nullptr ? EvalMCTSNode::ChildVector{}
+                                                              : *children;
+                               })
         .def("best_child", &EvalMCTSNode::bestChild, py::arg("c_param"),
              R"pbdoc(
             Get the best child node based on UCB score.
