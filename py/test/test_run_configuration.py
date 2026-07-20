@@ -76,6 +76,7 @@ def training_args() -> TrainingArgs:
             ),
             num_parallel_games=1,
             inference_cache_capacity=1,
+            use_inference_cache=True,
             num_moves_after_which_to_play_greedy=10,
             portion_of_samples_to_keep=0.5,
         ),
@@ -261,6 +262,7 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.self_play.mcts.num_threads == 2
     assert arguments.self_play.num_parallel_games == 64
     assert arguments.self_play.inference_cache_capacity == 250_000
+    assert arguments.self_play.use_inference_cache
     assert arguments.training.num_workers == 0
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0002)
     assert pickle.dumps(arguments.training.learning_rate)
@@ -278,6 +280,42 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.evaluation.stockfish_nodes_per_move == 1_000
     assert arguments.evaluation.stockfish_threads == 1
     assert arguments.evaluation.stockfish_hash_mib == 128
+
+
+def test_run_configuration_selects_non_cached_inference_client() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    topology = configuration.topology.model_copy(
+        update={
+            'use_inference_cache': False,
+            'inference_cache_capacity_per_process': 0,
+        }
+    )
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration.model_copy(update={'topology': topology}))
+
+    assert not arguments.self_play.use_inference_cache
+    assert arguments.self_play.inference_cache_capacity == 0
+
+
+@pytest.mark.parametrize(
+    ('use_inference_cache', 'capacity'),
+    (
+        (True, 0),
+        (False, 1),
+    ),
+)
+def test_run_configuration_rejects_inconsistent_inference_cache_settings(
+    use_inference_cache: bool,
+    capacity: int,
+) -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['use_inference_cache'] = use_inference_cache
+    data['topology']['inference_cache_capacity_per_process'] = capacity
+
+    with pytest.raises(ValidationError, match='Inference cache capacity'):
+        RunConfiguration.model_validate(data)
 
 
 def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
@@ -304,6 +342,7 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 50
     assert arguments.self_play.inference_cache_capacity == 100_000
+    assert arguments.self_play.use_inference_cache
     assert arguments.self_play.mcts.num_threads == 6
     assert arguments.self_play.num_parallel_games == 96
     assert arguments.cluster.self_play_tensorboard_processes == 1

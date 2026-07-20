@@ -193,7 +193,11 @@ class SelfPlayCpp:
             microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
             cacheCapacity=self.args.inference_cache_capacity,
         )
-        self.mcts = MCTS(client_args, mcts_args)
+        self.mcts = MCTS(
+            client_args,
+            mcts_args,
+            use_inference_cache=self.args.use_inference_cache,
+        )
 
         # Reset the already expanded node for all self-play games
         for spg in self.self_play_games:

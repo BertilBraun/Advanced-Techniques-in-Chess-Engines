@@ -113,6 +113,7 @@ TRAINING_ARGS = TrainingArgs(
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
         inference_cache_capacity=250_000,
+        use_inference_cache=True,
         num_moves_after_which_to_play_greedy=50,  # even number - no bias towards white
         result_score_weight=0.1,
         resignation_threshold=-5.0,  # TODO -0.9 or so
