@@ -43,6 +43,7 @@ SHUTDOWN_CONFIGURATION_PATH = Path('configs/chess-continuation-4x4070-shutdown-s
 TUNING_CONFIGURATION_PATHS = tuple(Path(f'configs/chess-clean-tuning-{variant}.json') for variant in ('a', 'b', 'c'))
 MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
 V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
+V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
 
 
 def sampling_window(_: int) -> int:
@@ -170,6 +171,7 @@ def resolved_pilot_hardware() -> ResolvedHardware:
         *TUNING_CONFIGURATION_PATHS,
         MAIN_CONFIGURATION_PATH,
         V4_CONFIGURATION_PATH,
+        V5_CONFIGURATION_PATH,
     ),
 )
 def test_pilot_configuration_is_valid_for_quoted_hardware(configuration_path: Path) -> None:
@@ -526,6 +528,18 @@ def test_v4_configuration_matches_approved_launch_parameters() -> None:
     assert arguments.evaluation.maximum_game_plies is None
     assert arguments.evaluation.max_concurrent_tasks == 16
     assert arguments.evaluation.stockfish_hash_mib == 1024
+
+
+def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
+    v4_configuration = load_run_configuration(V4_CONFIGURATION_PATH)
+    v5_configuration = load_run_configuration(V5_CONFIGURATION_PATH)
+    expected = v4_configuration.model_dump()
+    expected['run_name'] = 'complete-training-run-v5'
+    expected['tensorboard_run_directory'] = 'complete-training-run-v5'
+    expected['output_path'] = 'py/training_data/complete-training-run-v5'
+    expected['evaluation_protocol']['reference_model_path'] = 'py/training_data/complete-training-run-v5/model_0.pt'
+
+    assert v5_configuration.model_dump() == expected
 
 
 @pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))
