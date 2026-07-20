@@ -6,6 +6,7 @@ git_source_root=$(git -C "${script_directory}" rev-parse --show-toplevel)
 source_root=${2:-${git_source_root}}
 python_root="${source_root}/py"
 python_binary=${PYTHON_BINARY:-python3}
+build_directory=${BUILD_DIRECTORY:-"${source_root}/cpp/build"}
 if [[ "$#" -lt 1 ]]; then
     echo "Usage: $0 MODEL_PATH [SOURCE_ROOT]"
     echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, MCTS_THREADS_PER_PROCESS, PARALLEL_GAMES_PER_PROCESS"
@@ -219,10 +220,10 @@ affinity_assignments_json=$(
     done | jq -s .
 )
 
-cmake_cache="${source_root}/cpp/build/CMakeCache.txt"
-compile_commands="${source_root}/cpp/build/compile_commands.json"
+cmake_cache="${build_directory}/CMakeCache.txt"
+compile_commands="${build_directory}/compile_commands.json"
 if [[ ! -f "${cmake_cache}" || ! -f "${compile_commands}" ]]; then
-    echo "Release build metadata is missing from ${source_root}/cpp/build"
+    echo "Release build metadata is missing from ${build_directory}"
     exit 1
 fi
 
@@ -548,6 +549,19 @@ jq -s \
                     summed_worker_peak_rss_mib: ($workers | map(.peak_rss_mib) | add)
                 }
             ),
+            search_trees: {
+                live_materialized_nodes_at_end: (
+                    $workers
+                    | map(.live_materialized_nodes)
+                    | add
+                ),
+                total_child_records_at_end: (
+                    $workers
+                    | map(.total_child_records)
+                    | add
+                ),
+                arena_capacity_per_game: ($workers[0].arena_capacity_per_game)
+            },
             workers: {
                 count: ($workers | length),
                 minimum_elapsed_seconds: ($workers | map(.elapsed_seconds) | min),
