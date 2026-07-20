@@ -9,7 +9,7 @@ static void testMoveEncoding() {
         Board board;
 
         while (!board.isGameOver()) {
-            const auto moves = board.validMoves();
+            const std::vector<Move> &moves = board.validMoves();
             // play a random move
             if (moves.empty()) {
                 std::cout << "No valid moves available. Game over." << std::endl;

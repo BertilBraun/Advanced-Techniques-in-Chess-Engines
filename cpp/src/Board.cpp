@@ -27,6 +27,17 @@ Board::Board(const std::string &fen) {
     setFen(fen);
 }
 
+Board::Board(const Board &other) : m_pos(other.m_pos), m_history(other.m_history) {}
+
+Board &Board::operator=(const Board &other) {
+    if (this != &other) {
+        m_pos = other.m_pos;
+        m_history = other.m_history;
+        m_validMoves.reset();
+    }
+    return *this;
+}
+
 void Board::makeMove(Move m) {
     TIMEIT("Board::makeMove");
 
@@ -43,12 +54,14 @@ void Board::makeMove(Move m) {
         resetsRepetitionHistory || historyIsAtCapacity ? nullptr : m_history;
     m_history =
         std::make_shared<const PositionHistory>(m_pos.repetition_key(), std::move(previous));
+    m_validMoves.reset();
     validateHistory();
 }
 
 void Board::setFen(const std::string &fen) {
     m_pos.set(fen, false);
     m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
+    m_validMoves.reset();
     validateHistory();
 }
 
@@ -87,21 +100,21 @@ void Board::validateHistory() const {
 bool Board::isGameOver() const {
     TIMEIT("Board::isGameOver");
 
-    const MoveList<LEGAL> legalMoves(m_pos);
+    const std::vector<Move> &legalMoves = validMoves();
     const bool fiftyMoveDraw =
-        m_pos.rule50_count() >= 100 && (m_pos.checkers() == 0ULL || legalMoves.size() > 0);
+        m_pos.rule50_count() >= 100 && (m_pos.checkers() == 0ULL || !legalMoves.empty());
     if (fiftyMoveDraw || repetitionCount() >= 2 || drawByInsufficientMaterial()) {
         return true;
     }
 
-    return legalMoves.size() == 0;
+    return legalMoves.empty();
 }
 
 std::optional<int> Board::checkWinner() const {
     TIMEIT("Board::checkWinner");
 
     // If there is at least one legal move, the game is not over.
-    if (MoveList<LEGAL>(m_pos).size() > 0) {
+    if (!validMoves().empty()) {
         return std::nullopt;
     }
 
@@ -117,8 +130,12 @@ std::optional<int> Board::checkWinner() const {
         return std::nullopt;
     }
 }
-std::vector<Move> Board::validMoves() const {
+const std::vector<Move> &Board::validMoves() const {
     TIMEIT("Board::validMoves");
+
+    if (m_validMoves.has_value()) {
+        return *m_validMoves;
+    }
 
     const MoveList<LEGAL> ml(m_pos);
     std::vector<Move> legalMoves;
@@ -126,7 +143,8 @@ std::vector<Move> Board::validMoves() const {
     for (auto m : ml) {
         legalMoves.emplace_back(m.raw());
     }
-    return legalMoves;
+    m_validMoves.emplace(std::move(legalMoves));
+    return *m_validMoves;
 }
 
 double Board::approximateResultScore() const {

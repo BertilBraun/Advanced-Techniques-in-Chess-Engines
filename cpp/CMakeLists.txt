@@ -177,6 +177,20 @@ add_executable(ShardedCacheTest test/TestShardedCache.cpp)
 target_include_directories(ShardedCacheTest PRIVATE src)
 add_test(NAME ShardedCacheTest COMMAND ShardedCacheTest)
 
+add_executable(
+        BoardLegalMovesCacheTest
+        test/TestBoardLegalMovesCache.cpp
+        src/Board.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(BoardLegalMovesCacheTest PRIVATE src)
+target_link_libraries(BoardLegalMovesCacheTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
+
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20
         PREFIX ""

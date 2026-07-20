@@ -18,9 +18,9 @@ public:
 
     explicit Board(
         const std::string &fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    Board(const Board &) = default;
+    Board(const Board &other);
     Board(Board &&) noexcept = default;
-    Board &operator=(const Board &) = default;
+    Board &operator=(const Board &other);
     Board &operator=(Board &&) noexcept = default;
 
     /// Returns +1 if White to move, -1 if Black to move.
@@ -39,8 +39,8 @@ public:
      */
     [[nodiscard]] std::optional<int> checkWinner() const;
 
-    /// Generates every legal move, including all promotion choices.
-    [[nodiscard]] std::vector<Move> validMoves() const;
+    /// Returns every legal move, including all promotion choices.
+    [[nodiscard]] const std::vector<Move> &validMoves() const;
 
     /// Returns a 64‐bit Zobrist hash of the current position.
     [[nodiscard]] std::uint64_t quickHash() const { return m_pos.key(); }
@@ -95,6 +95,7 @@ private:
 
     Position m_pos;
     std::shared_ptr<const PositionHistory> m_history;
+    mutable std::optional<std::vector<Move>> m_validMoves;
 
     [[nodiscard]] static constexpr const char *pieceSymbol(PieceType pt, Color c);
 

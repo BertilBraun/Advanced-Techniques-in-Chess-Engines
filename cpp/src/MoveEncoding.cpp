@@ -156,7 +156,7 @@ std::vector<Move> decodeMoves(const std::vector<int> &moveIndices, const Board *
         return {};
     }
 
-    const std::vector<Move> legalMoves = board->validMoves();
+    const std::vector<Move> &legalMoves = board->validMoves();
 
     std::vector<Move> moves;
     moves.reserve(moveIndices.size());
