@@ -11,13 +11,16 @@ def select_historical_model_iterations(
     historical_model_iterations: tuple[int, ...],
     milestone_interval: int,
     rotation_period: int,
+    evaluation_interval: int = 1,
 ) -> tuple[int, ...]:
     if milestone_interval <= 0:
         raise ValueError('Milestone interval must be positive.')
     if rotation_period <= 0:
         raise ValueError('Historical-model rotation period must be positive.')
+    if evaluation_interval <= 0:
+        raise ValueError('Evaluation interval must be positive.')
 
-    current_bucket = current_iteration % rotation_period
+    current_bucket = (current_iteration // evaluation_interval) % rotation_period
     return tuple(
         historical_iteration
         for historical_iteration in historical_model_iterations

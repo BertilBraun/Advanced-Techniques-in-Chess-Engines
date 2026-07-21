@@ -4,6 +4,7 @@ import torch
 from torch import multiprocessing as mp
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.eval.ModelEvaluationPy import Results
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
@@ -401,88 +402,102 @@ class EvaluationProcess:
         max_concurrent_tasks = self.eval_args.max_concurrent_tasks
         evaluation_task_index = 0
 
-        def create_model_evaluation() -> ModelEvaluation:
+        def create_model_evaluation() -> tuple[ModelEvaluation, int]:
             nonlocal evaluation_task_index
             device_cycle = self.args.cluster.evaluation_device_cycle
-            device_id = evaluation_device_for_task(device_cycle, evaluation_task_index) if USE_GPU else 0
+            physical_device_id = evaluation_device_for_task(device_cycle, evaluation_task_index) if USE_GPU else 0
             evaluation_task_index += 1
-            return ModelEvaluation(
-                iteration,
-                self.args,
-                device_id=device_id,
-                num_games=self.eval_args.num_games,
-                num_searches_per_turn=self.eval_args.num_searches_per_turn,
+            return (
+                ModelEvaluation(
+                    iteration,
+                    self.args,
+                    device_id=0,
+                    num_games=self.eval_args.num_games,
+                    num_searches_per_turn=self.eval_args.num_searches_per_turn,
+                ),
+                physical_device_id,
             )
 
-        def start_process(process: mp.Process) -> None:
+        def start_process(process: mp.Process, physical_device_id: int) -> None:
             _reap_evaluation_tasks(processes)
             _wait_for_evaluation_slot(processes, max_concurrent_tasks)
-            process.start()
+            if USE_GPU:
+                start_process_on_cuda_device(process, physical_device_id)
+            else:
+                process.start()
             processes.append(process)
 
         try:
             # Spawn subprocesses for each evaluation
             if self.eval_args.dataset_path:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_dataset,
-                    args=(run, create_model_evaluation(), iteration, self.eval_args.dataset_path),
+                    args=(run, model_evaluation, iteration, self.eval_args.dataset_path),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             for how_many_previous in self.eval_args.previous_model_offsets:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_previous,
-                    args=(run, create_model_evaluation(), iteration, self.args.save_path, how_many_previous),
+                    args=(run, model_evaluation, iteration, self.args.save_path, how_many_previous),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             if self.eval_args.reference_model_path is not None:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_reference,
-                    args=(run, create_model_evaluation(), iteration, self.args),
+                    args=(run, model_evaluation, iteration, self.args),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             if self.eval_args.stockfish_binary_path is not None:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish_fixed,
-                    args=(run, create_model_evaluation(), iteration, self.args),
+                    args=(run, model_evaluation, iteration, self.args),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             if self.eval_args.evaluate_random:
                 for evaluation_function in [_eval_vs_random, _eval_policy_vs_random]:
+                    model_evaluation, physical_device_id = create_model_evaluation()
                     p = mp.Process(
                         target=evaluation_function,
-                        args=(run, create_model_evaluation(), iteration, self.args.save_path),
+                        args=(run, model_evaluation, iteration, self.args.save_path),
                     )
-                    start_process(p)
+                    start_process(p, physical_device_id)
 
             historical_model_iterations = select_historical_model_iterations(
                 iteration,
                 self.eval_args.historical_model_iterations,
                 self.args.artifact_retention.milestone_inference_interval,
                 self.eval_args.historical_model_rotation_period,
+                self.eval_args.every_n_iterations,
             )
             for historical_iteration in historical_model_iterations:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_iteration,
                     args=(
                         run,
-                        create_model_evaluation(),
+                        model_evaluation,
                         historical_iteration,
                         self.args.save_path,
                         iteration,
                     ),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             for level in self.eval_args.stockfish_skill_levels:
+                model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish,
-                    args=(run, create_model_evaluation(), level, iteration),
+                    args=(run, model_evaluation, level, iteration),
                 )
-                start_process(p)
+                start_process(p, physical_device_id)
 
             _wait_for_all_evaluation_tasks(processes)
         except BaseException:

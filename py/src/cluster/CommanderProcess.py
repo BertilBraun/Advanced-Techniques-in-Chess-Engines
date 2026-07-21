@@ -6,6 +6,7 @@ from pathlib import Path
 from time import monotonic
 
 from src.cluster.GatingProcess import GatingProcess
+from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.util.communication import Communication, pause_self_play_workers, resume_self_play_workers
@@ -345,9 +346,9 @@ class CommanderProcess:
         """Starts a SelfPlay process for the given node_id and returns the process."""
         process = Process(
             target=run_self_play_process,
-            args=(self.run_id, self.args, self.communication_folder, device_id, node_id),
+            args=(self.run_id, self.args, self.communication_folder, 0, node_id),
         )
-        process.start()
+        start_process_on_cuda_device(process, device_id)
         return process
 
     def _ensure_processes_are_running(self) -> None:

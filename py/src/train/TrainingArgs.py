@@ -95,7 +95,10 @@ class SelfPlayParams:
     """Maximum self-play game length while the iteration limit is active."""
 
     maximum_game_plies_until_iteration: int = 0
-    """Exclusive iteration at which the self-play game-length limit is disabled."""
+    """Iteration at which the game-length schedule reaches its final value."""
+
+    final_maximum_game_plies: int | None = None
+    """Maximum self-play game length after the scheduled interpolation, or None to disable the cap."""
 
     only_store_sampled_moves: bool = False
     """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""

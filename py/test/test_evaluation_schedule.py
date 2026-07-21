@@ -42,7 +42,7 @@ def test_evaluation_device_assignment_rejects_invalid_inputs(
         (342, (40, 140, 240, 340)),
     ),
 )
-def test_historical_models_rotate_across_five_iteration_buckets(
+def test_historical_models_rotate_across_five_evaluation_buckets(
     current_iteration: int,
     expected_iterations: tuple[int, ...],
 ) -> None:
@@ -51,6 +51,7 @@ def test_historical_models_rotate_across_five_iteration_buckets(
         HISTORICAL_MODELS,
         milestone_interval=20,
         rotation_period=5,
+        evaluation_interval=1,
     )
 
     assert selected == expected_iterations
@@ -65,6 +66,29 @@ def test_rotation_period_one_preserves_full_historical_sweep() -> None:
     )
 
     assert selected == (20, 40, 60, 80, 100, 120, 140)
+
+
+@pytest.mark.parametrize(
+    ('current_iteration', 'expected_iterations'),
+    (
+        (76, (0, 40)),
+        (78, (20, 60)),
+        (80, (0, 40)),
+    ),
+)
+def test_historical_models_alternate_on_every_evaluation(
+    current_iteration: int,
+    expected_iterations: tuple[int, ...],
+) -> None:
+    selected = select_historical_model_iterations(
+        current_iteration,
+        (0, 20, 40, 60, 80),
+        milestone_interval=20,
+        rotation_period=2,
+        evaluation_interval=2,
+    )
+
+    assert selected == expected_iterations
 
 
 @pytest.mark.parametrize(
@@ -86,3 +110,8 @@ def test_historical_model_rotation_rejects_non_positive_periods(
             milestone_interval,
             rotation_period,
         )
+
+
+def test_historical_model_rotation_rejects_non_positive_evaluation_intervals() -> None:
+    with pytest.raises(ValueError, match='Evaluation interval'):
+        select_historical_model_iterations(10, HISTORICAL_MODELS, 20, 2, evaluation_interval=0)

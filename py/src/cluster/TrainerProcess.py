@@ -19,6 +19,7 @@ from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
 
 from src.experiment.artifact_retention import apply_artifact_retention
+from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.DistributedTraining import DistributedTrainingBatchSampler, distributed_epoch_seed
@@ -331,6 +332,7 @@ class TrainerProcess:
         self._processes = []
         initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
         for rank in range(self.world_size):
+            physical_device_id = self.args.cluster.trainer_ddp_device_ids[rank]
             parent_connection, child_connection = self._context.Pipe(duplex=True)
             process = self._context.Process(
                 target=run_trainer_rank,
@@ -345,7 +347,7 @@ class TrainerProcess:
                 ),
                 name=f'ddp-trainer-rank-{rank}',
             )
-            process.start()
+            start_process_on_cuda_device(process, physical_device_id)
             child_connection.close()
             self._connections.append(parent_connection)
             self._processes.append(process)
@@ -447,9 +449,9 @@ def _load_rank_model_and_optimizer(
 def _training_device(args: TrainingArgs, rank: int) -> torch.device:
     if args.cluster.trainer_device_type == 'cpu':
         return torch.device('cpu')
-    device_id = args.cluster.trainer_ddp_device_ids[rank]
-    torch.cuda.set_device(device_id)
-    return torch.device('cuda', device_id)
+    assert rank < len(args.cluster.trainer_ddp_device_ids)
+    torch.cuda.set_device(0)
+    return torch.device('cuda', 0)
 
 
 def _wrap_distributed_model(

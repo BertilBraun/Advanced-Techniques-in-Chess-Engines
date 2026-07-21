@@ -542,6 +542,12 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['self_play_processes_per_device_during_training'] = (10, 10, 5, 5)
     expected['topology']['max_concurrent_evaluation_tasks'] = 8
     expected['workload']['training_global_batch_size'] = 1024
+    expected['workload']['self_play_maximum_game_plies_until_iteration'] = 150
+    expected['workload']['self_play_final_maximum_game_plies'] = 400
+    expected['evaluation_protocol']['historical_model_iterations'] = (0,) + expected['evaluation_protocol'][
+        'historical_model_iterations'
+    ]
+    expected['evaluation_protocol']['historical_model_rotation_period'] = 2
 
     assert v5_configuration.model_dump() == expected
 

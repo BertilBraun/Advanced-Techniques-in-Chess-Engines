@@ -350,14 +350,23 @@ class SelfPlayCpp:
                 result = 0.0
             return self._handle_end_of_game(game, result)
 
-        maximum_game_plies = self.args.maximum_game_plies
-        if (
-            maximum_game_plies is not None
-            and self.iteration < self.args.maximum_game_plies_until_iteration
-            and len(game.played_moves) >= maximum_game_plies
-        ):
+        maximum_game_plies = self._maximum_game_plies()
+        if maximum_game_plies is not None and len(game.played_moves) >= maximum_game_plies:
             return self._handle_end_of_game(game, 0.0)
         return None
+
+    def _maximum_game_plies(self) -> int | None:
+        initial_maximum = self.args.maximum_game_plies
+        if initial_maximum is None:
+            return None
+        schedule_end = self.args.maximum_game_plies_until_iteration
+        final_maximum = self.args.final_maximum_game_plies
+        if self.iteration >= schedule_end:
+            return final_maximum
+        if final_maximum is None:
+            return initial_maximum
+        increase = final_maximum - initial_maximum
+        return initial_maximum + increase * self.iteration // schedule_end
 
     def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'

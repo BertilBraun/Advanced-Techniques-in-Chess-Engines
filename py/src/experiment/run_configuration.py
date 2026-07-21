@@ -190,6 +190,7 @@ class WorkloadConfiguration(BaseModel):
     self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
+    self_play_final_maximum_game_plies: int | None = Field(default=None, gt=0)
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
@@ -210,11 +211,11 @@ class WorkloadConfiguration(BaseModel):
             raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
         if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_iteration == 0):
             raise ValueError('Self-play maximum game plies and its iteration limit must be configured together.')
-        if (
-            self.self_play_maximum_game_plies is not None
-            and self.self_play_maximum_game_plies_until_iteration != self.self_play_endgame_shortcut_fade_iterations
-        ):
-            raise ValueError('Self-play ply cap must end when the endgame-shortcut fade ends.')
+        if self.self_play_final_maximum_game_plies is not None:
+            if self.self_play_maximum_game_plies is None:
+                raise ValueError('Final self-play maximum game plies require an initial maximum.')
+            if self.self_play_final_maximum_game_plies < self.self_play_maximum_game_plies:
+                raise ValueError('Final self-play maximum game plies cannot be lower than the initial maximum.')
         return self
 
 
@@ -265,8 +266,8 @@ class EvaluationProtocolConfiguration(BaseModel):
             raise ValueError('Evaluation dataset path must be configured exactly when dataset evaluation is enabled.')
         if any(offset <= 0 for offset in self.previous_model_offsets):
             raise ValueError('Previous-model offsets must be positive.')
-        if any(iteration <= 0 for iteration in self.historical_model_iterations):
-            raise ValueError('Historical model iterations must be positive.')
+        if any(iteration < 0 for iteration in self.historical_model_iterations):
+            raise ValueError('Historical model iterations cannot be negative.')
         if tuple(sorted(set(self.historical_model_iterations))) != self.historical_model_iterations:
             raise ValueError('Historical model iterations must be unique and increasing.')
         if any(not 0 <= level <= 20 for level in self.stockfish_skill_levels):
@@ -601,6 +602,7 @@ def apply_run_configuration(
     training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies
     training_args.self_play.maximum_game_plies_until_iteration = workload.self_play_maximum_game_plies_until_iteration
+    training_args.self_play.final_maximum_game_plies = workload.self_play_final_maximum_game_plies
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.use_inference_cache = topology.use_inference_cache
     training_args.self_play.inference_cache_capacity = topology.inference_cache_capacity_per_process

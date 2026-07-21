@@ -72,7 +72,8 @@
     "self_play_value_warmup_iterations": 30,
     "self_play_endgame_shortcut_fade_iterations": 50,
     "self_play_maximum_game_plies": 200,
-    "self_play_maximum_game_plies_until_iteration": 50,
+    "self_play_maximum_game_plies_until_iteration": 150,
+    "self_play_final_maximum_game_plies": 400,
     "random_seed": 20260717,
     "evaluation_games": 100,
     "evaluation_searches_per_turn": 64,
@@ -103,6 +104,7 @@
     "evaluate_initial_checkpoint": true,
     "previous_model_offsets": [5, 10],
     "historical_model_iterations": [
+      0,
       20,
       40,
       60,
@@ -128,7 +130,7 @@
       460,
       480
     ],
-    "historical_model_rotation_period": 5,
+    "historical_model_rotation_period": 2,
     "stockfish_skill_levels": [0, 1, 2, 3],
     "evaluate_random": true,
     "stockfish_binary_path": "/workspace/chess/stockfish-18",
