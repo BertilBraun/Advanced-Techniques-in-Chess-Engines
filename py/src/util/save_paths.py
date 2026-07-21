@@ -174,12 +174,17 @@ def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) 
     return model
 
 
-def load_optimizer(path: str | PathLike, model: Network, type: OptimizerType) -> torch.optim.Optimizer:
+def load_optimizer(
+    path: str | PathLike,
+    model: Network,
+    type: OptimizerType,
+    device: torch.device,
+) -> torch.optim.Optimizer:
     optimizer = create_optimizer(model, type)
     try:
         for _ in range(5):
             try:
-                data = torch.load(path, weights_only=True)
+                data = torch.load(path, weights_only=True, map_location=device)
                 break
             except EOFError:
                 sleep(1)
@@ -209,7 +214,7 @@ def load_model_and_optimizer(
 
     manifest = load_checkpoint_manifest(iteration, save_folder)
     model = load_model(Path(save_folder) / manifest.model_path, args, device)
-    optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type)
+    optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type, device)
     log(f'Model and optimizer loaded from iteration {iteration}')
     return model, optimizer
 

@@ -84,7 +84,10 @@ def test_rank_failure_aborts_every_peer_and_preserves_remote_error() -> None:
     assert coordinator._processes == []
 
 
-def test_unwrapped_checkpoint_remains_single_rank_compatible(tmp_path: Path) -> None:
+def test_unwrapped_checkpoint_remains_single_rank_compatible(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
     distributed.init_process_group(
         backend='gloo',
@@ -102,6 +105,21 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(tmp_path: Path) -> 
         assert all(not key.startswith('module.') for key in model.state_dict())
 
         save_model_and_optimizer(model, optimizer, 0, tmp_path)
+        original_torch_load = torch.load
+        optimizer_map_locations: list[torch.device] = []
+
+        def load_checkpoint(
+            path: str | Path,
+            *,
+            weights_only: bool,
+            map_location: torch.device | None = None,
+        ) -> object:
+            if Path(path).name.startswith('optimizer_'):
+                assert map_location is not None
+                optimizer_map_locations.append(map_location)
+            return original_torch_load(path, weights_only=weights_only, map_location=map_location)
+
+        monkeypatch.setattr(torch, 'load', load_checkpoint)
         loaded_model, loaded_optimizer = load_model_and_optimizer(
             0,
             TRAINING_ARGS.network,
@@ -114,3 +132,4 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(tmp_path: Path) -> 
 
     assert loaded_model.state_dict().keys() == model.state_dict().keys()
     assert loaded_optimizer.state_dict()['param_groups'] == optimizer.state_dict()['param_groups']
+    assert optimizer_map_locations == [device]
