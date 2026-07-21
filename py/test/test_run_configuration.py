@@ -538,7 +538,10 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['tensorboard_run_directory'] = 'complete-training-run-v5'
     expected['output_path'] = 'py/training_data/complete-training-run-v5'
     expected['evaluation_protocol']['reference_model_path'] = None
+    expected['topology']['trainer_ddp_device_ids'] = (3, 2)
+    expected['topology']['self_play_processes_per_device_during_training'] = (10, 10, 5, 5)
     expected['topology']['max_concurrent_evaluation_tasks'] = 8
+    expected['workload']['training_global_batch_size'] = 1024
 
     assert v5_configuration.model_dump() == expected
 
