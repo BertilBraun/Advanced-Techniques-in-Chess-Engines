@@ -61,7 +61,7 @@ deployed Modal API URL.
 
 ## Modal deployment
 
-The deployment builds the native extension into an ephemeral image. It has zero
+The deployment builds the CPU-only native extension into an ephemeral image. It has zero
 warm containers, at most one container, a 300-second scale-down window, a
 90-second request timeout, and no Modal Volume. At container startup it downloads
 the named `.pt` and `.jit.pt` artifacts into the revision-aware Hugging Face
@@ -97,4 +97,3 @@ npm run build
 
 If the static host origin changes, update `CHESS_WEB_ALLOWED_ORIGINS` and redeploy
 the API. Do not use `*` in production.
-

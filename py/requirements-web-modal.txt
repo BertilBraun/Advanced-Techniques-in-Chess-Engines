@@ -1,0 +1,8 @@
+chess==1.11.2
+fastapi==0.136.1
+huggingface-hub==1.24.0
+modal==1.5.2
+pydantic==2.13.2
+pybind11-stubgen==2.5.5
+uvicorn==0.38.0
+

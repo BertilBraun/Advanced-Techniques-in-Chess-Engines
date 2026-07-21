@@ -13,7 +13,11 @@ image = (
     modal.Image.debian_slim(python_version="3.10")
     .apt_install("build-essential", "cmake", "git")
     .pip_install_from_requirements(
-        str(_REPOSITORY_ROOT / "py" / "requirements-web.txt")
+        str(_REPOSITORY_ROOT / "py" / "requirements-web-modal.txt")
+    )
+    .pip_install(
+        "torch==2.7.1+cpu",
+        index_url="https://download.pytorch.org/whl/cpu",
     )
     .add_local_dir(
         _REPOSITORY_ROOT / "cpp",
