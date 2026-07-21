@@ -54,12 +54,23 @@ void testSnapshotSurvivesRerooting() {
     require(snapshot->front() == newRoot, "rerooting selected an unexpected child");
     require(newRoot->parent.expired(), "new root retained its former parent");
 }
+
+void testEvaluationClaimIsExclusiveUntilReleased() {
+    const std::shared_ptr<EvalMCTSNode> root = EvalMCTSNode::createRoot(Board{});
+
+    require(root->tryBeginEvaluation(), "first leaf evaluation claim failed");
+    require(!root->tryBeginEvaluation(), "leaf allowed concurrent evaluation claims");
+    root->endEvaluation();
+    require(root->tryBeginEvaluation(), "released leaf evaluation claim stayed locked");
+    root->endEvaluation();
+}
 } // namespace
 
 int main() {
     initializeStockfish();
     testChildrenUseStableImmutableSnapshot();
     testSnapshotSurvivesRerooting();
+    testEvaluationClaimIsExclusiveUntilReleased();
     std::cout << "Eval MCTS child snapshot tests passed\n";
     return 0;
 }

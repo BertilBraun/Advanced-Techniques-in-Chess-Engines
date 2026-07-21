@@ -41,16 +41,22 @@ public:
                     continue;
 
                 leaf->addVirtualLoss();
-                oneBoard[0] = &leaf->board; // reuse small buffer
+                try {
+                    oneBoard[0] = &leaf->board; // reuse small buffer
 
-                /* 2) immediate single-board inference
-                       (merged into a large batch inside InferenceClient) */
-                auto nnOut = m_client.inferenceBatch(oneBoard);
-                const auto &[moves, value] = nnOut[0];
+                    /* 2) immediate single-board inference
+                           (merged into a large batch inside InferenceClient) */
+                    auto nnOut = m_client.inferenceBatch(oneBoard);
+                    const auto &[moves, value] = nnOut[0];
 
-                /* 3) expansion + backup */
-                leaf->expand(moves);
-                leaf->backPropagateAndRemoveVirtualLoss(value);
+                    /* 3) expansion + backup */
+                    leaf->expand(moves);
+                    leaf->backPropagateAndRemoveVirtualLoss(value);
+                } catch (...) {
+                    leaf->endEvaluation();
+                    throw;
+                }
+                leaf->endEvaluation();
             }
         };
 
@@ -62,7 +68,7 @@ public:
 
         for (auto &f : futures)
             f.get(); // wait for all threads to finish
-        
+
         return EvalMCTSResult{root->result_sum / static_cast<float>(root->number_of_visits),
                               root->gatherVisitCounts(), root};
     }
@@ -77,14 +83,21 @@ private:
         TIMEIT("MCTS::getBestChildOrBackPropagate");
 
         // We need to traverse the tree until we find a node that is not fully expanded
-        std::shared_ptr<EvalMCTSNode> node = root;
-        while (node->isExpanded())
-            node = node->bestChild(m_args.c_param);
+        while (true) {
+            std::shared_ptr<EvalMCTSNode> node = root;
+            while (node->isExpanded())
+                node = node->bestChild(m_args.c_param);
 
-        if (node->isTerminal()) {
-            node->backPropagate(getBoardResultScore(node->board));
-            return nullptr;
+            if (!node->tryBeginEvaluation()) {
+                std::this_thread::yield();
+                continue;
+            }
+            if (node->isTerminal()) {
+                node->backPropagate(getBoardResultScore(node->board));
+                node->endEvaluation();
+                return nullptr;
+            }
+            return node;
         }
-        return node;
     }
 };

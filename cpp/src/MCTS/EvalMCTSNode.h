@@ -49,6 +49,9 @@ public:
      */
     void expand(const std::vector<MoveScore> &moves);
 
+    [[nodiscard]] bool tryBeginEvaluation();
+    void endEvaluation();
+
     void addVirtualLoss();
     void backPropagateAndRemoveVirtualLoss(float result);
 
@@ -80,6 +83,7 @@ public:
 private:
     // Readers own an immutable snapshot while traversing concurrently.
     std::atomic<ChildSnapshot> childrenPublished;
+    std::atomic_flag evaluationInProgress = ATOMIC_FLAG_INIT;
 
     /* 1‑byte spin‑lock used only while *building* the child vector */
     mutable std::atomic_flag expand_lock = ATOMIC_FLAG_INIT;
@@ -143,6 +147,12 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves) {
     /* Publish fully‑built vector – release makes sure all contents are visible */
     childrenPublished.store(std::move(newChildren), std::memory_order_release);
 }
+
+inline bool EvalMCTSNode::tryBeginEvaluation() {
+    return !evaluationInProgress.test_and_set(std::memory_order_acquire);
+}
+
+inline void EvalMCTSNode::endEvaluation() { evaluationInProgress.clear(std::memory_order_release); }
 
 inline void EvalMCTSNode::addVirtualLoss() {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
