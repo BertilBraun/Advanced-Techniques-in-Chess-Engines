@@ -67,4 +67,24 @@ describe("ChessApi", () => {
       new ApiError("Illegal move."),
     );
   });
+
+  it("explains network failures from a busy or starting engine", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await expect(new ChessApi("").createGame("fen", [])).rejects.toEqual(
+      new ApiError(
+        "The chess engine did not respond. It may be starting up or analyzing another game. Wait a moment, then try again.",
+      ),
+    );
+  });
+
+  it("explains transient gateway responses without an API detail", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+
+    await expect(new ChessApi("").createGame("fen", [])).rejects.toEqual(
+      new ApiError(
+        "The chess engine did not respond. It may be starting up or analyzing another game. Wait a moment, then try again.",
+      ),
+    );
+  });
 });

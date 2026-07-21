@@ -11,6 +11,10 @@ export class ApiError extends Error {
   }
 }
 
+const NETWORK_ERROR_MESSAGE =
+  "The chess engine did not respond. It may be starting up or analyzing another game. Wait a moment, then try again.";
+const TRANSIENT_HTTP_STATUSES = new Set([429, 502, 503, 504]);
+
 export function normalizeApiBaseUrl(value: string | undefined): string {
   return (value ?? "").trim().replace(/\/+$/, "");
 }
@@ -25,9 +29,17 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const body = (await response.json()) as { detail?: string };
     if (body.detail) detail = body.detail;
   } catch {
-    // The status still gives the user a useful error when the body is not JSON.
+    if (TRANSIENT_HTTP_STATUSES.has(response.status)) detail = NETWORK_ERROR_MESSAGE;
   }
   throw new ApiError(detail);
+}
+
+async function fetchApi(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new ApiError(NETWORK_ERROR_MESSAGE);
+  }
 }
 
 export class ChessApi {
@@ -37,7 +49,7 @@ export class ChessApi {
     startingFen: string,
     movesUci: readonly string[],
   ): Promise<CreateGameResponse> {
-    const response = await fetch(`${this.baseUrl}/api/games`, {
+    const response = await fetchApi(`${this.baseUrl}/api/games`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ starting_fen: startingFen, moves_uci: movesUci }),
@@ -49,7 +61,7 @@ export class ChessApi {
     gameToken: string,
     request: PlayTurnRequest,
   ): Promise<PlayTurnResponse> {
-    const response = await fetch(
+    const response = await fetchApi(
       `${this.baseUrl}/api/games/${encodeURIComponent(gameToken)}/turns`,
       {
         method: "POST",
@@ -61,7 +73,7 @@ export class ChessApi {
   }
 
   public async endGame(gameToken: string): Promise<void> {
-    const response = await fetch(
+    const response = await fetchApi(
       `${this.baseUrl}/api/games/${encodeURIComponent(gameToken)}`,
       { method: "DELETE" },
     );
