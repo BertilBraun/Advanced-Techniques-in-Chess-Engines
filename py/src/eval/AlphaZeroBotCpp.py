@@ -1,109 +1,77 @@
+from __future__ import annotations
+
 import multiprocessing
-from typing import Optional
 
-from src.self_play.SelfPlayCpp import new_game
-from src.util.log import log
+import chess
+
 from src.eval.Bot import Bot
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, PLAY_C_PARAM
-from AlphaZeroCpp import EvalMCTSNode, new_eval_root, EvalMCTS, InferenceClientParams, EvalMCTSParams, MCTSParams, MCTS
-
-
-NUM_SEARCHES_PER_TURN = 512
+from src.eval.InteractiveEngine import AnalysisMode, InteractiveEngine, InteractiveGame
+from src.settings import CurrentBoard, CurrentGameMove, PLAY_C_PARAM
+from src.util.log import log
 
 
 class AlphaZeroBot(Bot):
     def __init__(
-        self, current_model_path: str, device_id: int, max_time_to_think: float = 1.0, network_eval_only: bool = False
+        self,
+        current_model_path: str,
+        device_id: int,
+        max_time_to_think: float = 1.0,
+        network_eval_only: bool = False,
     ) -> None:
-        super().__init__('AlphaZeroBot', max_time_to_think)
-
-        mcts_args = EvalMCTSParams(c_param=PLAY_C_PARAM, num_threads=min(multiprocessing.cpu_count(), 16))
-        self.inference_args = InferenceClientParams(
+        super().__init__("AlphaZeroBot", max_time_to_think)
+        if not network_eval_only and not 1.0 <= max_time_to_think < 31.0:
+            raise ValueError("MCTS max_time_to_think must be between 1 and 30 seconds")
+        self.engine = InteractiveEngine(
+            model_path=current_model_path,
             device_id=device_id,
-            currentModelPath=current_model_path,
-            maxBatchSize=256,
-            microsecondsTimeoutInferenceThread=500,
-            cacheCapacity=250_000,
+            search_threads=min(multiprocessing.cpu_count(), 16),
+            c_param=PLAY_C_PARAM,
+        )
+        self.network_eval_only = network_eval_only
+        self.time_limit_seconds = int(max_time_to_think)
+        self.game: InteractiveGame | None = None
+
+    @staticmethod
+    def _history(board: CurrentBoard) -> tuple[str, tuple[str, ...]]:
+        native_board = board.board
+        return native_board.root().fen(), tuple(
+            move.uci() for move in native_board.move_stack
         )
 
-        self.mcts = EvalMCTS(self.inference_args, mcts_args)
+    def _synchronize_game(self, board: CurrentBoard) -> InteractiveGame:
+        starting_fen, moves_uci = self._history(board)
+        if (
+            self.game is None
+            or self.game.starting_fen != starting_fen
+            or moves_uci[: len(self.game.moves_uci)] != self.game.moves_uci
+        ):
+            self.game = self.engine.new_game(starting_fen, moves_uci)
+            return self.game
 
-        self.network_eval_only = network_eval_only
-
-        # run some inferences to compile and warm up the model
-        for _ in range(5):
-            self.mcts.eval_search(new_eval_root(new_game().board.board.fen()), 64)
-
-        self.last_root: Optional[EvalMCTSNode] = None
+        for move_uci in moves_uci[len(self.game.moves_uci) :]:
+            self.game.apply_move(move_uci)
+        return self.game
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
-        if self.network_eval_only:
-            network_only_mcts = MCTS(
-                self.inference_args,
-                MCTSParams(
-                    num_fast_searches=1,
-                    num_full_searches=1,
-                    num_parallel_searches=1,
-                    c_param=PLAY_C_PARAM,
-                    num_threads=1,
-                    dirichlet_alpha=0.3,
-                    dirichlet_epsilon=0.0,
-                    min_visit_count=1,
-                ),
+        game = self._synchronize_game(board)
+        mode = AnalysisMode.POLICY if self.network_eval_only else AnalysisMode.MCTS
+        time_limit_seconds = None if self.network_eval_only else self.time_limit_seconds
+        result = game.analyze(mode=mode, time_limit_seconds=time_limit_seconds)
+        move = chess.Move.from_uci(result.chosen_move_uci)
+        if move not in board.get_valid_moves():
+            raise ValueError(
+                f"Engine returned illegal move {move.uci()} in FEN {board.board.fen()}"
             )
-            encoded_moves, value = network_only_mcts.inference(board.board.fen())
-            encoded_move, policy = max(encoded_moves, key=lambda move: move[1])
-            move = CurrentGame.decode_move(encoded_move, board)
 
-            log('---------------------- Alpha Zero Best Move ----------------------')
-            log('Best move:', move)
-            log('Best move probability:', policy)
-            log('Move probabilities:', encoded_moves)
-            log('Result value:', value)
-            log('------------------------------------------------------------------')
-
-            return move
-
-        board_fen = board.board.fen()
-
-        root = None
-        if self.last_root is not None:
-            # We must look for the children of the children of the last root since 2 plies were already played
-            # If the fen is the same, we can reuse the last root
-            for child in self.last_root.children:
-                for i, grandchild in enumerate(child.children):
-                    if grandchild.fen == board_fen:
-                        log('Reusing last root for the same position')
-                        root = child.make_new_root(i)
-                        break
-
-        if root is None:
-            root = new_eval_root(board_fen)
-
-        res = self.mcts.eval_search(root, NUM_SEARCHES_PER_TURN)
-
-        while not self.time_is_up:
-            res = self.mcts.eval_search(root, NUM_SEARCHES_PER_TURN)
-
-        best_child = root.best_child(PLAY_C_PARAM)
-        best_move = CurrentGame.decode_move(best_child.encoded_move, board)
-
-        if best_move not in board.get_valid_moves():
-            raise Exception(f'Best move {best_move} is not legal in FEN {board.board.fen()}\n{repr(board)}')
-
-        children = [child for child in root.children if child.visits > 0]
-
-        log('---------------------- Alpha Zero Best Move ----------------------')
-        log('Total number of searches:', root.visits)
-        log(f'Results of the search: {res.result:.4f}')
-        log('Max depth:', root.max_depth)
-        log('Best move:', best_move)
-        log(f'Best child has {best_child.visits} visits')
-        log(f'Best child has {best_child.result_sum / best_child.visits:.4f} result_score')
-        log('Child moves:', [child.move for child in children])
-        log('Child visits:', [child.visits for child in children])
-        log('Child result_scores:', [round(child.result_sum / child.visits, 2) for child in children])
-        log('Child priors:', [round(child.policy, 2) for child in children])
-        log('------------------------------------------------------------------')
-
-        return best_move
+        game.apply_move(result.chosen_move_uci)
+        log("---------------------- Alpha Zero Best Move ----------------------")
+        log("Mode:", mode.value)
+        log("Best move:", result.chosen_move_uci)
+        log("Root value:", result.value)
+        log("Completed searches:", result.searches)
+        log("Maximum depth:", result.maximum_depth)
+        log("Elapsed milliseconds:", result.elapsed_milliseconds)
+        log("Principal variation:", result.principal_variation)
+        log("Candidates:", result.candidates)
+        log("------------------------------------------------------------------")
+        return move

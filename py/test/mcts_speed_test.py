@@ -32,7 +32,7 @@ mcts_params = MCTSParams(
 )
 
 
-def test_mcts_speed_py(num_boards: int, num_iterations: int) -> None:
+def benchmark_mcts_speed_py(num_boards: int, num_iterations: int) -> None:
     client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
     client.update_iteration(0)
     mcts = MCTS(client, mcts_params)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
             print(f'Number of threads: {num_threads}')
 
             print('Python:', '=' * 20)
-            test_mcts_speed_py(num_boards, num_iterations)
+            benchmark_mcts_speed_py(num_boards, num_iterations)
             print('Finished Python mcts speed test.')
 
             print('C++:', '=' * 20)
