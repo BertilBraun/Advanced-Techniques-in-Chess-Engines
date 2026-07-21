@@ -6,8 +6,10 @@ from pathlib import Path
 import modal
 from fastapi import FastAPI
 
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _REMOTE_ROOT = "/opt/chess"
+_REPOSITORY_ROOT = (
+    Path(__file__).resolve().parents[2] if modal.is_local() else Path(_REMOTE_ROOT)
+)
 
 image = (
     modal.Image.debian_slim(python_version="3.10")
