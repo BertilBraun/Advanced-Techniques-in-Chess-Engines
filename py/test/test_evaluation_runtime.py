@@ -6,8 +6,15 @@ from types import ModuleType
 from typing import cast
 
 import pytest
+from torch import multiprocessing as mp
 
+import src.cluster.EvaluationProcess as evaluation_process_module
 import src.eval.ModelEvaluationCpp as evaluation_module
+from src.cluster.EvaluationProcess import (
+    _activate_evaluation_device,
+    _reap_evaluation_tasks,
+    _terminate_evaluation_tasks,
+)
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 from src.eval.ModelEvaluationPy import EvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
@@ -44,6 +51,65 @@ class _FakeInferenceClientParameters:
 class _FakeMctsBoard:
     root: object
     should_run_full_search: bool
+
+
+class _FakeEvaluationProcess:
+    def __init__(self, process_id: int, alive: bool, exit_code: int | None) -> None:
+        self.pid = process_id
+        self.exitcode = exit_code
+        self.alive = alive
+        self.join_count = 0
+        self.was_terminated = False
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def join(self, timeout: float | None = None) -> None:
+        del timeout
+        self.join_count += 1
+
+    def terminate(self) -> None:
+        self.was_terminated = True
+        self.alive = False
+        self.exitcode = -15
+
+
+def test_evaluation_task_activates_assigned_cuda_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    activated_devices: list[int] = []
+    model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
+    model_evaluation.device_id = 2
+    monkeypatch.setattr(evaluation_process_module, 'USE_GPU', True)
+    monkeypatch.setattr(evaluation_process_module.torch.cuda, 'set_device', activated_devices.append)
+
+    _activate_evaluation_device(model_evaluation)
+
+    assert activated_devices == [2]
+
+
+def test_failed_evaluation_task_is_detected_while_another_task_is_alive() -> None:
+    active_process = _FakeEvaluationProcess(process_id=10, alive=True, exit_code=None)
+    failed_process = _FakeEvaluationProcess(process_id=11, alive=False, exit_code=1)
+    processes = cast(list[mp.Process], [active_process, failed_process])
+
+    with pytest.raises(RuntimeError, match='11: 1'):
+        _reap_evaluation_tasks(processes)
+
+    assert processes == [active_process]
+    assert failed_process.join_count == 1
+
+
+def test_evaluation_task_cleanup_terminates_active_peers() -> None:
+    active_process = _FakeEvaluationProcess(process_id=10, alive=True, exit_code=None)
+    completed_process = _FakeEvaluationProcess(process_id=11, alive=False, exit_code=0)
+    processes = cast(list[mp.Process], [active_process, completed_process])
+
+    _terminate_evaluation_tasks(processes)
+
+    assert active_process.was_terminated
+    assert active_process.join_count == 1
+    assert not completed_process.was_terminated
+    assert completed_process.join_count == 1
+    assert processes == []
 
 
 def test_model_comparison_uses_configured_inference_client_for_both_models(

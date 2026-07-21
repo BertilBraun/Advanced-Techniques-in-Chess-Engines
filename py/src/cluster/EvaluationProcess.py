@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import torch
 from torch import multiprocessing as mp
 
 from src.eval.ModelEvaluationCpp import ModelEvaluation
@@ -30,6 +31,49 @@ from src.experiment.run_configuration import RunManifest
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
+EVALUATION_PROCESS_POLL_SECONDS = 1.0
+
+
+def _activate_evaluation_device(model_evaluation: ModelEvaluation) -> None:
+    if USE_GPU:
+        torch.cuda.set_device(model_evaluation.device_id)
+
+
+def _reap_evaluation_tasks(processes: list[mp.Process]) -> None:
+    active_processes: list[mp.Process] = []
+    failed_processes: list[mp.Process] = []
+    for process in processes:
+        if process.is_alive():
+            active_processes.append(process)
+            continue
+        process.join()
+        if process.exitcode != 0:
+            failed_processes.append(process)
+    processes[:] = active_processes
+    if failed_processes:
+        failures = ', '.join(f'{process.pid}: {process.exitcode}' for process in failed_processes)
+        raise RuntimeError(f'Evaluation tasks exited unsuccessfully: {failures}.')
+
+
+def _wait_for_evaluation_slot(processes: list[mp.Process], maximum_processes: int) -> None:
+    while len(processes) >= maximum_processes:
+        processes[0].join(timeout=EVALUATION_PROCESS_POLL_SECONDS)
+        _reap_evaluation_tasks(processes)
+
+
+def _wait_for_all_evaluation_tasks(processes: list[mp.Process]) -> None:
+    while processes:
+        processes[0].join(timeout=EVALUATION_PROCESS_POLL_SECONDS)
+        _reap_evaluation_tasks(processes)
+
+
+def _terminate_evaluation_tasks(processes: list[mp.Process]) -> None:
+    for process in processes:
+        if process.is_alive():
+            process.terminate()
+    for process in processes:
+        process.join(timeout=10)
+    processes.clear()
 
 
 def _result_metrics(results: Results) -> dict[str, float | int]:
@@ -67,6 +111,7 @@ def _eval_vs_dataset(
     iteration: int,
     dataset_path: str,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_dataset', postfix_pid=False):
         dataset = SelfPlayDataset.load(dataset_path)
         (
@@ -101,6 +146,7 @@ def _eval_vs_previous(
     save_path: str,
     how_many_previous: int,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     previous_model_path = model_save_path(iteration - how_many_previous, save_path)
     if not previous_model_path.exists():
         return
@@ -119,6 +165,7 @@ def _eval_vs_previous(
 def _eval_vs_iteration(
     run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     model_path = model_save_path(iteration, save_path)
     if not inference_model_path(model_path).exists():
         return
@@ -140,6 +187,7 @@ def _eval_vs_reference(
     iteration: int,
     args: TrainingArgs,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
     if evaluation is None or evaluation.reference_model_path is None:
         return
@@ -213,6 +261,7 @@ def _eval_vs_stockfish_fixed(
     iteration: int,
     args: TrainingArgs,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
     if evaluation is None or evaluation.stockfish_binary_path is None:
         return
@@ -288,6 +337,7 @@ def _eval_vs_stockfish_fixed(
 
 
 def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str) -> None:
+    _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_vs_random', postfix_pid=False):
         results = model_evaluation.play_vs_random()
         log(f'Results after playing vs random at iteration {iteration}:', results)
@@ -305,6 +355,7 @@ def _eval_policy_vs_random(
     iteration: int,
     save_path: str,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_policy_vs_random', postfix_pid=False):
         results = model_evaluation.play_policy_vs_random()
         log(f'Results after playing the current policy only vs random at iteration {iteration}:', results)
@@ -322,6 +373,7 @@ def _eval_vs_stockfish(
     level: int,
     iteration: int,
 ) -> None:
+    _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, f'evaluation_vs_stockfish_level_{level}', postfix_pid=False):
         results = model_evaluation.play_vs_stockfish(level)
         log(f'Results after playing vs stockfish level {level} at iteration {iteration}:', results)
@@ -362,92 +414,80 @@ class EvaluationProcess:
                 num_searches_per_turn=self.eval_args.num_searches_per_turn,
             )
 
-        def join_process(process: mp.Process) -> None:
-            process.join()
-            if process.exitcode != 0:
-                raise RuntimeError(f'Evaluation task {process.pid} exited with code {process.exitcode}.')
-
         def start_process(process: mp.Process) -> None:
-            active_processes: list[mp.Process] = []
-            for running_process in processes:
-                if running_process.is_alive():
-                    active_processes.append(running_process)
-                else:
-                    join_process(running_process)
-            processes[:] = active_processes
-
-            while len(processes) >= max_concurrent_tasks:
-                join_process(processes.pop(0))
-
+            _reap_evaluation_tasks(processes)
+            _wait_for_evaluation_slot(processes, max_concurrent_tasks)
             process.start()
             processes.append(process)
 
-        # Spawn subprocesses for each evaluation
-        if self.eval_args.dataset_path:
-            p = mp.Process(
-                target=_eval_vs_dataset,
-                args=(run, create_model_evaluation(), iteration, self.eval_args.dataset_path),
-            )
-            start_process(p)
-
-        for how_many_previous in self.eval_args.previous_model_offsets:
-            p = mp.Process(
-                target=_eval_vs_previous,
-                args=(run, create_model_evaluation(), iteration, self.args.save_path, how_many_previous),
-            )
-            start_process(p)
-
-        if self.eval_args.reference_model_path is not None:
-            p = mp.Process(
-                target=_eval_vs_reference,
-                args=(run, create_model_evaluation(), iteration, self.args),
-            )
-            start_process(p)
-
-        if self.eval_args.stockfish_binary_path is not None:
-            p = mp.Process(
-                target=_eval_vs_stockfish_fixed,
-                args=(run, create_model_evaluation(), iteration, self.args),
-            )
-            start_process(p)
-
-        if self.eval_args.evaluate_random:
-            for fn in [_eval_vs_random, _eval_policy_vs_random]:
+        try:
+            # Spawn subprocesses for each evaluation
+            if self.eval_args.dataset_path:
                 p = mp.Process(
-                    target=fn,
-                    args=(run, create_model_evaluation(), iteration, self.args.save_path),
+                    target=_eval_vs_dataset,
+                    args=(run, create_model_evaluation(), iteration, self.eval_args.dataset_path),
                 )
                 start_process(p)
 
-        historical_model_iterations = select_historical_model_iterations(
-            iteration,
-            self.eval_args.historical_model_iterations,
-            self.args.artifact_retention.milestone_inference_interval,
-            self.eval_args.historical_model_rotation_period,
-        )
-        for historical_iteration in historical_model_iterations:
-            p = mp.Process(
-                target=_eval_vs_iteration,
-                args=(
-                    run,
-                    create_model_evaluation(),
-                    historical_iteration,
-                    self.args.save_path,
-                    iteration,
-                ),
-            )
-            start_process(p)
+            for how_many_previous in self.eval_args.previous_model_offsets:
+                p = mp.Process(
+                    target=_eval_vs_previous,
+                    args=(run, create_model_evaluation(), iteration, self.args.save_path, how_many_previous),
+                )
+                start_process(p)
 
-        for level in self.eval_args.stockfish_skill_levels:
-            p = mp.Process(
-                target=_eval_vs_stockfish,
-                args=(run, create_model_evaluation(), level, iteration),
-            )
-            start_process(p)
+            if self.eval_args.reference_model_path is not None:
+                p = mp.Process(
+                    target=_eval_vs_reference,
+                    args=(run, create_model_evaluation(), iteration, self.args),
+                )
+                start_process(p)
 
-        # Wait for all to finish
-        for p in processes:
-            join_process(p)
+            if self.eval_args.stockfish_binary_path is not None:
+                p = mp.Process(
+                    target=_eval_vs_stockfish_fixed,
+                    args=(run, create_model_evaluation(), iteration, self.args),
+                )
+                start_process(p)
+
+            if self.eval_args.evaluate_random:
+                for evaluation_function in [_eval_vs_random, _eval_policy_vs_random]:
+                    p = mp.Process(
+                        target=evaluation_function,
+                        args=(run, create_model_evaluation(), iteration, self.args.save_path),
+                    )
+                    start_process(p)
+
+            historical_model_iterations = select_historical_model_iterations(
+                iteration,
+                self.eval_args.historical_model_iterations,
+                self.args.artifact_retention.milestone_inference_interval,
+                self.eval_args.historical_model_rotation_period,
+            )
+            for historical_iteration in historical_model_iterations:
+                p = mp.Process(
+                    target=_eval_vs_iteration,
+                    args=(
+                        run,
+                        create_model_evaluation(),
+                        historical_iteration,
+                        self.args.save_path,
+                        iteration,
+                    ),
+                )
+                start_process(p)
+
+            for level in self.eval_args.stockfish_skill_levels:
+                p = mp.Process(
+                    target=_eval_vs_stockfish,
+                    args=(run, create_model_evaluation(), level, iteration),
+                )
+                start_process(p)
+
+            _wait_for_all_evaluation_tasks(processes)
+        except BaseException:
+            _terminate_evaluation_tasks(processes)
+            raise
 
 
 def evaluate_iteration(iteration: int, run_id: int) -> None:
