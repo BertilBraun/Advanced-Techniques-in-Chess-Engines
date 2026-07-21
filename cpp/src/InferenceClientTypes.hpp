@@ -2,7 +2,22 @@
 
 #include "common.hpp"
 
-using InferenceResult = std::pair<std::vector<MoveScore>, float>;
+struct WdlPrediction {
+    float win;
+    float draw;
+    float loss;
+
+    [[nodiscard]] float expectedValue() const { return win - loss; }
+};
+
+struct InferenceResult {
+    std::vector<MoveScore> moves;
+    WdlPrediction outcome;
+
+    [[nodiscard]] float value() const { return outcome.expectedValue(); }
+};
+
+enum class InferenceDevice { Auto, Cpu, Cuda };
 
 struct InferenceStatistics {
     float cacheHitRate = 0.0f;
@@ -26,11 +41,20 @@ struct InferenceClientParams {
     int maxBatchSize;
     int microsecondsTimeoutInferenceThread;
     size_t cacheCapacity;
+    InferenceDevice device;
 
     InferenceClientParams(int device_id, std::string currentModelPath, int maxBatchSize,
-                          int microsecondsTimeoutInferenceThread, size_t cacheCapacity)
+                          int microsecondsTimeoutInferenceThread, size_t cacheCapacity,
+                          InferenceDevice device = InferenceDevice::Auto)
         : device_id(device_id), currentModelPath(std::move(currentModelPath)),
           maxBatchSize(maxBatchSize),
           microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread),
-          cacheCapacity(cacheCapacity) {}
+          cacheCapacity(cacheCapacity), device(device) {
+        if (maxBatchSize <= 0) {
+            throw std::invalid_argument("maxBatchSize must be positive");
+        }
+        if (microsecondsTimeoutInferenceThread < 0) {
+            throw std::invalid_argument("microsecondsTimeoutInferenceThread cannot be negative");
+        }
+    }
 };

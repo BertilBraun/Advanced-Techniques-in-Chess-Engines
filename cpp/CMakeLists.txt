@@ -211,6 +211,21 @@ target_link_libraries(EvalMCTSNodeChildrenTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME EvalMCTSNodeChildrenTest COMMAND EvalMCTSNodeChildrenTest)
 
 add_executable(
+        GameHistoryTest
+        test/TestGameHistory.cpp
+        src/Board.cpp
+        src/GameHistory.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(GameHistoryTest PRIVATE src)
+target_link_libraries(GameHistoryTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME GameHistoryTest COMMAND GameHistoryTest)
+
+add_executable(
         SearchTreeArenaTest
         test/TestSearchTreeArena.cpp
         src/Board.cpp

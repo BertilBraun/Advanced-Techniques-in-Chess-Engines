@@ -47,9 +47,11 @@ public:
      * return immediately.  The fully‑built vector is *atomically published*
      * so readers never observe an incompletely initialised child.
      */
-    void expand(const std::vector<MoveScore> &moves);
+    void expand(const std::vector<MoveScore> &moves,
+                std::optional<WdlPrediction> outcome = std::nullopt);
 
     void addVirtualLoss();
+    void cancelVirtualLoss();
     void backPropagateAndRemoveVirtualLoss(float result);
 
     void backPropagate(float result);
@@ -70,6 +72,7 @@ public:
     std::atomic<int> virtual_loss{0};
     std::atomic<float> result_sum{0.f};
     float policy = 0.f; // immutable
+    std::optional<WdlPrediction> networkOutcome;
 
     std::weak_ptr<EvalMCTSNode> parent;
 
@@ -106,11 +109,6 @@ private:
 static inline constexpr int VIRTUAL_LOSS_DELTA =
     1; // How much to increase the virtual loss by each time
 
-static inline constexpr float TURN_DISCOUNT =
-    0.99f; // Discount factor for the result score when backpropagating
-// this makes the result score decay over time, simulating the fact that very long searches add
-// more uncertainty to the result.
-
 inline float EvalMCTSNode::ucb(const float uCommon) const {
     const int v = number_of_visits.load(std::memory_order_relaxed);
     const float uScore = policy * uCommon / static_cast<float>(1 + v);
@@ -124,13 +122,16 @@ inline float EvalMCTSNode::ucb(const float uCommon) const {
     return uScore + qScore;
 }
 
-inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves) {
+inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
+                                 const std::optional<WdlPrediction> outcome) {
     if (isExpanded() || moves.empty())
         return;
 
     SpinGuard g{expand_lock}; // serialize builders
     if (isExpanded())
         return; // another thread won the race
+
+    networkOutcome = outcome;
 
     const auto newChildren = std::make_shared<ChildVector>();
     newChildren->reserve(moves.size());
@@ -151,11 +152,18 @@ inline void EvalMCTSNode::addVirtualLoss() {
     }
 }
 
+inline void EvalMCTSNode::cancelVirtualLoss() {
+    for (auto node = shared_from_this(); node; node = node->parent.lock()) {
+        node->virtual_loss.fetch_sub(VIRTUAL_LOSS_DELTA, std::memory_order_relaxed);
+        node->number_of_visits.fetch_sub(1, std::memory_order_relaxed);
+    }
+}
+
 inline void EvalMCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
         n->result_sum.fetch_add(result, std::memory_order_relaxed);
         n->virtual_loss.fetch_sub(VIRTUAL_LOSS_DELTA, std::memory_order_relaxed);
-        result = -result * TURN_DISCOUNT;
+        result = -result;
     }
 }
 
@@ -163,7 +171,7 @@ inline void EvalMCTSNode::backPropagate(float result) {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
         n->result_sum.fetch_add(result, std::memory_order_relaxed);
         n->number_of_visits.fetch_add(1, std::memory_order_relaxed);
-        result = -result * TURN_DISCOUNT;
+        result = -result;
     }
 }
 

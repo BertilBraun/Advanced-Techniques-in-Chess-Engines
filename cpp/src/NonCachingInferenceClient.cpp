@@ -7,9 +7,15 @@
 NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32),
       m_modelBatchSizeHistogram(static_cast<size_t>(args.maxBatchSize) + 1), m_params(args) {
-    if (torch::cuda::is_available()) {
-        assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
-               "Invalid device ID for CUDA");
+    const bool useCuda = args.device == InferenceDevice::Cuda ||
+                         (args.device == InferenceDevice::Auto && torch::cuda::is_available());
+    if (useCuda) {
+        if (!torch::cuda::is_available()) {
+            throw std::invalid_argument("CUDA inference requested but CUDA is unavailable");
+        }
+        if (args.device_id < 0 || args.device_id >= torch::cuda::device_count()) {
+            throw std::invalid_argument("Invalid CUDA device ID");
+        }
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16;
     }
@@ -61,13 +67,15 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
     for (size_t index : range(boards.size())) {
-        const auto [policy, value] = futures[index].get();
-        assert(std::abs(value) <= 1.0f + 1e-2f &&
-               "NonCachingInferenceClient::inferenceBatch: value out of bounds");
-        assert((policy < 0).any().item<bool>() == false &&
-               "NonCachingInferenceClient::inferenceBatch: policy contains negative values");
-        assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
-               "NonCachingInferenceClient::inferenceBatch: policy does not sum to 1.0");
+        ModelInferenceResult modelResult = futures[index].get();
+        const torch::Tensor &policy = modelResult.policy;
+        const float value = modelResult.outcome.expectedValue();
+        if (policy.dim() != 1 || !torch::isfinite(policy).all().item<bool>() ||
+            (policy < 0).any().item<bool>() ||
+            std::abs(policy.sum().item<float>() - 1.0f) > 1e-2f || !std::isfinite(value) ||
+            std::abs(value) > 1.0f + 1e-2f) {
+            throw std::runtime_error("Inference model returned an invalid policy or value");
+        }
         const std::vector<EncodedMoveScore> encodedMoveScores =
             filterPolicyThenGetMovesAndProbabilities(policy, boards[index]);
         std::vector<int> encodedMoves;
@@ -85,7 +93,7 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
         for (size_t moveIndex : range(moves.size())) {
             moveScores.emplace_back(moves[moveIndex], scores[moveIndex]);
         }
-        results.emplace_back(std::move(moveScores), value);
+        results.push_back({std::move(moveScores), modelResult.outcome});
     }
     return results;
 }
@@ -189,8 +197,16 @@ void NonCachingInferenceClient::resolveWorker() {
             for (size_t index : range(completedBatch->promises.size())) {
                 torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(index)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(index)];
-                const float value = values[0].item<float>() - values[2].item<float>();
-                completedBatch->promises[index].set_value({std::move(policy), value});
+                if (values.dim() != 1 || values.numel() != 3 ||
+                    !torch::isfinite(values).all().item<bool>() ||
+                    (values < 0).any().item<bool>() ||
+                    std::abs(values.sum().item<float>() - 1.0f) > 1e-2f) {
+                    throw std::runtime_error(
+                        "Inference model WDL output must be three probabilities");
+                }
+                const WdlPrediction outcome{values[0].item<float>(), values[1].item<float>(),
+                                            values[2].item<float>()};
+                completedBatch->promises[index].set_value({std::move(policy), outcome});
             }
         } catch (...) {
             const std::exception_ptr exception = std::current_exception();

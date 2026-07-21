@@ -5,35 +5,121 @@ pybind11 bindings for custom MCTS + inference client
 from __future__ import annotations
 
 __all__ = [
-    'EvalMCTS',
-    'EvalMCTSNode',
-    'EvalMCTSParams',
-    'EvalMCTSResult',
-    'FunctionTimeInfo',
-    'InferenceClientParams',
-    'InferenceStatistics',
-    'MCTS',
-    'MCTSBoard',
-    'MCTSChild',
-    'MCTSParams',
-    'MCTSResult',
-    'MCTSResults',
-    'MCTSRoot',
-    'MCTSStatistics',
-    'TimeInfo',
-    'encode_board_compressed',
-    'new_eval_root',
-    'new_root',
-    'test_eval_mcts_speed_cpp',
-    'test_inference_speed_cpp',
-    'test_mcts_speed_cpp',
+    "AnalysisMode",
+    "AnalysisResult",
+    "CandidateAnalysis",
+    "EvalMCTS",
+    "EvalMCTSNode",
+    "EvalMCTSParams",
+    "EvalMCTSResult",
+    "FunctionTimeInfo",
+    "InferenceClientParams",
+    "InferenceDevice",
+    "InferenceStatistics",
+    "MCTS",
+    "MCTSBoard",
+    "MCTSChild",
+    "MCTSParams",
+    "MCTSResult",
+    "MCTSResults",
+    "MCTSRoot",
+    "MCTSStatistics",
+    "InteractiveEngine",
+    "InteractiveGame",
+    "TimeInfo",
+    "WdlPrediction",
+    "encode_board_compressed",
+    "new_eval_root",
+    "new_root",
+    "test_eval_mcts_speed_cpp",
+    "test_inference_speed_cpp",
+    "test_mcts_speed_cpp",
 ]
+
+class AnalysisMode:
+    POLICY: AnalysisMode
+    MCTS: AnalysisMode
+
+class WdlPrediction:
+    @property
+    def win(self) -> float: ...
+    @property
+    def draw(self) -> float: ...
+    @property
+    def loss(self) -> float: ...
+    @property
+    def value(self) -> float: ...
+
+class CandidateAnalysis:
+    @property
+    def move_uci(self) -> str: ...
+    @property
+    def policy_prior(self) -> float: ...
+    @property
+    def visits(self) -> int: ...
+    @property
+    def visit_share(self) -> float: ...
+    @property
+    def mean_value(self) -> float | None: ...
+
+class AnalysisResult:
+    @property
+    def chosen_move_uci(self) -> str: ...
+    @property
+    def value(self) -> float: ...
+    @property
+    def outcome(self) -> WdlPrediction | None: ...
+    @property
+    def candidates(self) -> list[CandidateAnalysis]: ...
+    @property
+    def searches(self) -> int: ...
+    @property
+    def maximum_depth(self) -> int: ...
+    @property
+    def elapsed_milliseconds(self) -> int: ...
+    @property
+    def principal_variation(self) -> list[str]: ...
+
+class InferenceDevice:
+    AUTO: InferenceDevice
+    CPU: InferenceDevice
+    CUDA: InferenceDevice
+
+class InteractiveEngine:
+    def __init__(
+        self,
+        client_parameters: InferenceClientParams,
+        search_parameters: EvalMCTSParams,
+    ) -> None: ...
+    def new_game(
+        self, starting_fen: str, moves_uci: tuple[str, ...]
+    ) -> InteractiveGame: ...
+    def get_inference_statistics(self) -> InferenceStatistics: ...
+
+class InteractiveGame:
+    def apply_move(self, move_uci: str) -> None: ...
+    def analyze(
+        self,
+        mode: AnalysisMode,
+        time_limit_seconds: int | None = None,
+        search_limit: int | None = None,
+    ) -> AnalysisResult: ...
+    @property
+    def fen(self) -> str: ...
+    @property
+    def starting_fen(self) -> str: ...
+    @property
+    def moves_uci(self) -> list[str]: ...
+    @property
+    def root_visits(self) -> int: ...
 
 def encode_board_compressed(fen: str) -> tuple[list[int], list[int]]:
     """Encode a FEN into the canonical compressed binary and scalar planes."""
 
 class EvalMCTS:
-    def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None: ...
+    def __init__(
+        self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams
+    ) -> None: ...
     def eval_search(self, root: EvalMCTSNode, searches: int) -> EvalMCTSResult:
         """
         Run evaluation MCTS search on a given root node.
@@ -77,6 +163,8 @@ class EvalMCTSParams:
 
 class EvalMCTSResult:
     @property
+    def completed_searches(self) -> int: ...
+    @property
     def result(self) -> float: ...
     @property
     def root(self) -> EvalMCTSNode: ...
@@ -98,6 +186,7 @@ class InferenceClientParams:
     currentModelPath: str
     device_id: int
     maxBatchSize: int
+    device: InferenceDevice
     def __init__(
         self,
         device_id: int,
@@ -105,6 +194,7 @@ class InferenceClientParams:
         maxBatchSize: int,
         microsecondsTimeoutInferenceThread: int,
         cacheCapacity: int,
+        device: InferenceDevice = InferenceDevice.AUTO,
     ) -> None: ...
     @property
     def microsecondsTimeoutInferenceThread(self) -> int:

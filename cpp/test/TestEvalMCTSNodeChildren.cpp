@@ -48,11 +48,36 @@ void testSnapshotSurvivesRerooting() {
     const EvalMCTSNode::ChildSnapshot snapshot = root->children();
     require(snapshot != nullptr, "expanded root did not publish children");
 
+    const std::shared_ptr<EvalMCTSNode> selectedChild = snapshot->front();
+    const std::vector<Move> &replyMoves = selectedChild->board.validMoves();
+    selectedChild->expand({{replyMoves.front(), 1.0F}});
+    const EvalMCTSNode::ChildSnapshot replies = selectedChild->children();
+    require(replies != nullptr, "selected child did not retain a reply subtree");
+
     const std::shared_ptr<EvalMCTSNode> newRoot = root->makeNewRoot(0);
     require(root->children() == nullptr, "old root retained its published children");
     require(snapshot->size() == 2, "existing snapshot was invalidated by rerooting");
     require(snapshot->front() == newRoot, "rerooting selected an unexpected child");
     require(newRoot->parent.expired(), "new root retained its former parent");
+    require(newRoot->children() == replies, "rerooting discarded the reusable subtree");
+}
+
+void testBackupAlternatesPerspectiveWithoutDiscount() {
+    const std::shared_ptr<EvalMCTSNode> root = EvalMCTSNode::createRoot(Board{});
+    const Move move = root->board.validMoves().front();
+    const WdlPrediction outcome{0.6F, 0.3F, 0.1F};
+    root->expand({{move, 1.0F}}, outcome);
+
+    const EvalMCTSNode::ChildSnapshot children = root->children();
+    require(children != nullptr, "expanded root had no children");
+    const std::shared_ptr<EvalMCTSNode> child = children->front();
+    child->addVirtualLoss();
+    child->backPropagateAndRemoveVirtualLoss(0.5F);
+
+    require(child->result_sum.load() == 0.5F, "child value was not child-to-move perspective");
+    require(root->result_sum.load() == -0.5F, "root value did not alternate perspective");
+    require(root->networkOutcome.has_value(), "root WDL prediction was not retained");
+    require(root->networkOutcome->draw == outcome.draw, "root WDL prediction changed");
 }
 } // namespace
 
@@ -60,6 +85,7 @@ int main() {
     initializeStockfish();
     testChildrenUseStableImmutableSnapshot();
     testSnapshotSurvivesRerooting();
+    testBackupAlternatesPerspectiveWithoutDiscount();
     std::cout << "Eval MCTS child snapshot tests passed\n";
     return 0;
 }

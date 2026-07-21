@@ -20,7 +20,10 @@ public:
     void updateModel(const std::string &modelPath);
 
 private:
-    using ModelInferenceResult = std::pair<torch::Tensor, float>;
+    struct ModelInferenceResult {
+        torch::Tensor policy;
+        WdlPrediction outcome;
+    };
 
     struct InferenceRequest {
         torch::Tensor boardTensor;
