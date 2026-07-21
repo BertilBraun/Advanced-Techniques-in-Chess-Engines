@@ -20,5 +20,7 @@ allowed_origins = tuple(
     for origin in _required_environment("CHESS_WEB_ALLOWED_ORIGINS").split(",")
     if origin.strip()
 )
-engine = NativeInteractiveEngine(NativeEngineConfiguration.for_model(model_path))
+engine = NativeInteractiveEngine(
+    NativeEngineConfiguration.for_model(model_path, search_threads=1)
+)
 app = create_app(GameService(engine), allowed_origins)

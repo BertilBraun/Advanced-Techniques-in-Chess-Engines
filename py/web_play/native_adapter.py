@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import multiprocessing
 import time
 from dataclasses import dataclass
 
@@ -44,12 +43,14 @@ class NativeEngineConfiguration:
 
     @classmethod
     def for_model(
-        cls, model_path: str, device_id: int = 0
+        cls, model_path: str, search_threads: int, device_id: int = 0
     ) -> NativeEngineConfiguration:
+        if search_threads < 1:
+            raise ValueError("search_threads must be positive.")
         return cls(
             model_path=model_path,
             device_id=device_id,
-            search_threads=min(multiprocessing.cpu_count(), 16),
+            search_threads=search_threads,
             cache_capacity=250_000,
             maximum_batch_size=256,
             inference_batch_timeout_microseconds=500,

@@ -27,15 +27,16 @@ image = (
         copy=True,
         ignore=["build/**", "libtorch*/**"],
     )
+    .run_commands(
+        f"cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build -DCMAKE_BUILD_TYPE=Release",
+        f"cmake --build {_REMOTE_ROOT}/cpp/build --parallel 2",
+        f"ctest --test-dir {_REMOTE_ROOT}/cpp/build --output-on-failure",
+    )
     .add_local_dir(
         _REPOSITORY_ROOT / "py",
         f"{_REMOTE_ROOT}/py",
         copy=True,
         ignore=["test/**", "**/__pycache__/**", "*.pt", "*.pyd", "*.so"],
-    )
-    .run_commands(
-        f"cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build -DCMAKE_BUILD_TYPE=Release",
-        f"cmake --build {_REMOTE_ROOT}/cpp/build --parallel 2",
     )
     .env({"PYTHONPATH": f"{_REMOTE_ROOT}/py"})
 )
@@ -49,6 +50,8 @@ app = modal.App("chess-model-web-play")
     min_containers=0,
     max_containers=1,
     scaledown_window=300,
+    cpu=4.0,
+    memory=4096,
     timeout=90,
     startup_timeout=900,
 )
@@ -76,7 +79,7 @@ class ChessWebPlay:
             downloader=hf_hub_download,
         )
         engine = NativeInteractiveEngine(
-            NativeEngineConfiguration.for_model(str(model_path))
+            NativeEngineConfiguration.for_model(str(model_path), search_threads=1)
         )
         self._web_application = create_app(
             GameService(engine), configuration.allowed_origins

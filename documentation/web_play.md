@@ -24,7 +24,9 @@ turn, so a request can recover after Modal has scaled the only container to zero
   and benchmarks; the public API does not expose them.
 
 Only one request enters the Modal container at a time, and `GameService` also
-serializes engine work. An individual game must never be called concurrently.
+serializes engine work. The deployment currently uses one native search worker
+because the legacy `EvalMCTS` parallel evaluator is not stable for long-running
+interactive searches. An individual game must never be called concurrently.
 
 ## Local backend
 
@@ -61,11 +63,13 @@ deployed Modal API URL.
 
 ## Modal deployment
 
-The deployment builds the CPU-only native extension into an ephemeral image. It has zero
-warm containers, at most one container, a 300-second scale-down window, a
-90-second request timeout, and no Modal Volume. At container startup it downloads
-the named `.pt` and `.jit.pt` artifacts into the revision-aware Hugging Face
-cache, then loads the TorchScript model once.
+The deployment builds the CPU-only native extension into an ephemeral image. It
+has zero warm containers, at most one container, four requested CPU cores, 4 GiB
+of requested memory, a 300-second scale-down window, a 90-second request timeout,
+and no Modal Volume. The explicit memory request is needed because the native
+MCTS tree retains expanded positions throughout a search. At container startup
+it downloads the named `.pt` and `.jit.pt` artifacts into the revision-aware
+Hugging Face cache, then loads the TorchScript model once.
 
 Create the fixed-name Modal secret with every required setting. The revision must
 be the full 40-character commit hash; branch names, tags, `main`, and abbreviated
