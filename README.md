@@ -1,5 +1,8 @@
 # AlphaZero-Clone: General Deep Reinforcement Learning for Board Games
 
+Play the trained chess model through the browser with the
+[public web-play API, UI, and Modal deployment guide](documentation/web_play.md).
+
 > **Achievement:** Intermediate-level Chess AI (~2000-2100 Elo) trained on a $350 personal R&D budget with final model costing $13 to train.
 
 ## **Project Overview**
