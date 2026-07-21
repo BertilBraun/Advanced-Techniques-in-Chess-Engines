@@ -1,6 +1,7 @@
 #include "NonCachingInferenceClient.hpp"
 
 #include "BoardEncoding.hpp"
+#include "InferenceModel.hpp"
 #include "MoveEncoding.hpp"
 
 NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams &args)
@@ -12,7 +13,7 @@ NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16;
     }
-    loadModel(args.currentModelPath);
+    m_model = loadInferenceModel(args.currentModelPath, m_device, m_torchDtype);
 
     m_prepareThread = std::thread(&NonCachingInferenceClient::prepareWorker, this);
     m_modelThread = std::thread(&NonCachingInferenceClient::modelWorker, this);
@@ -106,19 +107,13 @@ InferenceStatistics NonCachingInferenceClient::getStatistics() {
     return statistics;
 }
 
-void NonCachingInferenceClient::loadModel(const std::string &modelPath) {
-    std::string modelPathToLoad = modelPath;
-    assert((modelPathToLoad.ends_with(".jit.pt") || modelPathToLoad.ends_with(".pt")) &&
-           "Model path must end with '.jit.pt' or '.pt'");
-    if (!modelPathToLoad.ends_with(".jit.pt")) {
-        modelPathToLoad = modelPathToLoad.substr(0, modelPathToLoad.size() - 3) + ".jit.pt";
-    }
-    assert(std::filesystem::exists(modelPathToLoad) &&
-           ("Model file does not exist: " + modelPathToLoad).c_str());
-
-    m_model = torch::jit::load(modelPathToLoad, m_device);
-    m_model.to(m_torchDtype);
-    m_model.eval();
+void NonCachingInferenceClient::updateModel(const std::string &modelPath) {
+    updateInferenceModel(m_model, modelPath, m_device, m_torchDtype);
+    m_totalEvals.store(0, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(m_modelStatisticsMutex);
+    m_totalModelInferenceCalls = 0;
+    m_totalModelInferencePositions = 0;
+    std::ranges::fill(m_modelBatchSizeHistogram, 0);
 }
 
 void NonCachingInferenceClient::prepareWorker() {

@@ -74,6 +74,8 @@ public:
 
     void release(const FingerprintType &fingerprint) { m_cache.release(fingerprint); }
 
+    void clear() { m_cache.clear(); }
+
     [[nodiscard]] std::size_t size() const { return m_cache.size(); }
     [[nodiscard]] bool empty() const { return m_cache.empty(); }
     [[nodiscard]] std::size_t maximumSize() const { return m_cache.maximumSize(); }

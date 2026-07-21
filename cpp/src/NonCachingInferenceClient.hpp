@@ -17,6 +17,7 @@ public:
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatch(const std::vector<const Board *> &boards);
     [[nodiscard]] InferenceStatistics getStatistics();
+    void updateModel(const std::string &modelPath);
 
 private:
     using ModelInferenceResult = std::pair<torch::Tensor, float>;
@@ -39,7 +40,6 @@ private:
         std::exception_ptr exception;
     };
 
-    void loadModel(const std::string &modelPath);
     void prepareWorker();
     void modelWorker();
     void resolveWorker();

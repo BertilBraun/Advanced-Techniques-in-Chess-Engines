@@ -1,5 +1,6 @@
 #include "InferenceClient.hpp"
 #include "BoardEncoding.hpp"
+#include "InferenceModel.hpp"
 #include "MoveEncoding.hpp"
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)
@@ -12,7 +13,7 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16; // Use half precision for inference.
     }
-    loadModel(args.currentModelPath);
+    m_model = loadInferenceModel(args.currentModelPath, m_device, m_torchDtype);
 
     m_prepareThread = std::thread(&InferenceClient::prepareWorker, this);
     m_modelThread = std::thread(&InferenceClient::modelWorker, this);
@@ -231,26 +232,16 @@ InferenceStatistics InferenceClient::getStatistics() {
     return stats;
 }
 
-void InferenceClient::loadModel(const std::string &modelPath) {
-    std::string modelPathToLoad = modelPath;
-
-    // check if model ends with ".jit.pt" or ".pt", if not, throw an error.
-    assert((modelPathToLoad.ends_with(".jit.pt") || modelPathToLoad.ends_with(".pt")) &&
-           "Model path must end with '.jit.pt' or '.pt'");
-
-    // If it ends with ".pt", change the extension to ".jit.pt".
-    if (!modelPathToLoad.ends_with(".jit.pt")) {
-        // modelPath ends with ".pt", remove it, and append ".jit.pt" instead
-        modelPathToLoad = modelPathToLoad.substr(0, modelPathToLoad.size() - 3) + ".jit.pt";
-    }
-
-    // Assert that the model file exists.
-    assert(std::filesystem::exists(modelPathToLoad) &&
-           ("Model file does not exist: " + modelPathToLoad).c_str());
-
-    m_model = torch::jit::load(modelPathToLoad, m_device);
-    m_model.to(m_torchDtype);
-    m_model.eval();
+void InferenceClient::updateModel(const std::string &modelPath) {
+    updateInferenceModel(m_model, modelPath, m_device, m_torchDtype);
+    m_cache.clear();
+    m_totalHits.store(0, std::memory_order_relaxed);
+    m_totalEvals.store(0, std::memory_order_relaxed);
+    m_totalFingerprintCollisions.store(0, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(m_modelStatisticsMutex);
+    m_totalModelInferenceCalls = 0;
+    m_totalModelInferencePositions = 0;
+    std::ranges::fill(m_modelBatchSizeHistogram, 0);
 }
 
 void InferenceClient::prepareWorker() {

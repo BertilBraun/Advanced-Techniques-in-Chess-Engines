@@ -143,8 +143,11 @@ class SelfPlayCpp:
                 log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
                 log_scalar('timing/total_time_cpp', time_info.totalTime)
 
-            del self.mcts  # Clear the previous MCTS instance to free memory
-            gc.collect()  # Force garbage collection to free memory
+            # Release tree handles before model-update allocations can overlap their storage.
+            for self_play_game in self.self_play_games:
+                self_play_game.already_expanded_node = None
+
+            gc.collect()
 
         self._set_mcts(iteration)
 
@@ -193,15 +196,14 @@ class SelfPlayCpp:
             microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
             cacheCapacity=self.args.inference_cache_capacity,
         )
-        self.mcts = MCTS(
-            client_args,
-            mcts_args,
-            use_inference_cache=self.args.use_inference_cache,
-        )
-
-        # Reset the already expanded node for all self-play games
-        for spg in self.self_play_games:
-            spg.already_expanded_node = None
+        if self.mcts is None:
+            self.mcts = MCTS(
+                client_args,
+                mcts_args,
+                use_inference_cache=self.args.use_inference_cache,
+            )
+        else:
+            self.mcts.update(client_args.currentModelPath, mcts_args)
 
     @timeit
     def search(self, boards: list[MCTSBoard]) -> MCTSResults:

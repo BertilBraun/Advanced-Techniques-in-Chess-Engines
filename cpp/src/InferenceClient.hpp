@@ -31,6 +31,7 @@ public:
     inferenceBatch(const std::vector<const Board *> &boards);
 
     [[nodiscard]] InferenceStatistics getStatistics();
+    void updateModel(const std::string &modelPath);
 
 private:
     typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
@@ -61,12 +62,6 @@ private:
         torch::Tensor values;
         std::exception_ptr exception;
     };
-
-    /**
-     * Loads the TorchScript model from file and moves it to the proper device.
-     * Assumes the model file is valid.
-     */
-    void loadModel(const std::string &modelPath);
 
     /**
      * Collects requests through the oldest request's deadline and stacks their CPU tensors.

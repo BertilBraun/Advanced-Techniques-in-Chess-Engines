@@ -221,6 +221,15 @@ std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     return {statistics, resetTimes()};
 }
 
+void MCTS::update(const std::string &modelPath, const MCTSParams &mctsArgs) {
+    if (mctsArgs.num_threads != m_args.num_threads) {
+        throw std::invalid_argument("MCTS thread count cannot change during a persistent run");
+    }
+    std::visit([&modelPath](auto &client) { client->updateModel(modelPath); }, m_client);
+    m_args = mctsArgs;
+    m_arenaCapacity = mctsArgs.arenaCapacity();
+}
+
 std::vector<InferenceResult> MCTS::inferenceBatch(const std::vector<const Board *> &boards) {
     return std::visit([&boards](auto &client) { return client->inferenceBatch(boards); }, m_client);
 }

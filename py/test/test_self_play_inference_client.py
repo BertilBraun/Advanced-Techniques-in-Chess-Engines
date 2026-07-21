@@ -2,6 +2,7 @@ import copy
 import sys
 from dataclasses import dataclass
 from types import ModuleType
+from types import SimpleNamespace
 
 import pytest
 
@@ -44,6 +45,35 @@ class _FakeMcts:
         _FakeMcts.use_inference_cache = use_inference_cache
 
 
+class _LifecycleMcts:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def get_inference_statistics(self) -> tuple[SimpleNamespace, SimpleNamespace]:
+        inference_statistics = SimpleNamespace(
+            cacheHitRate=0.0,
+            uniquePositions=0,
+            cacheSizeMB=0,
+            cacheCapacity=0,
+            cacheEvictions=0,
+            cacheFingerprintCollisions=0,
+            nnOutputValueDistribution=[],
+            averageNumberOfPositionsInInferenceCall=0.0,
+        )
+        return inference_statistics, SimpleNamespace(functionTimes=[])
+
+    def __del__(self) -> None:
+        self.events.append('destroy_mcts')
+
+
+class _LifecycleRoot:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def __del__(self) -> None:
+        self.events.append('release_root')
+
+
 def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
@@ -59,3 +89,26 @@ def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.Monk
     self_play._set_mcts(iteration=50)
 
     assert _FakeMcts.use_inference_cache is False
+
+
+def test_iteration_update_releases_roots_and_reuses_mcts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    self_play = object.__new__(SelfPlayCpp)
+    self_play.dataset = []
+    self_play.iteration = 0
+    self_play.self_play_games = [SimpleNamespace(already_expanded_node=_LifecycleRoot(events))]
+    self_play.mcts = _LifecycleMcts(events)
+    previous_mcts = self_play.mcts
+
+    def update_mcts(iteration: int) -> None:
+        assert iteration == 1
+        assert self_play.mcts is previous_mcts
+        events.append('update_mcts')
+
+    monkeypatch.setattr(self_play, '_set_mcts', update_mcts)
+
+    self_play.update_iteration(1)
+
+    assert events == ['release_root', 'update_mcts']

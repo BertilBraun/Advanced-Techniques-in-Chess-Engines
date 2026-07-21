@@ -66,6 +66,7 @@ public:
     [[nodiscard]] uint32 arenaCapacity() const { return m_arenaCapacity; }
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics();
+    void update(const std::string &modelPath, const MCTSParams &mctsArgs);
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatch(const std::vector<const Board *> &boards);
 

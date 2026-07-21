@@ -388,6 +388,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
+        .def("update", &MCTS::update, py::arg("model_path"), py::arg("mcts_args"))
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
                  Run MCTS search on a list of boards.
