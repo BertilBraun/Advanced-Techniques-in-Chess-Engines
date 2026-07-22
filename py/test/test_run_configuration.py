@@ -581,6 +581,11 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['self_play_processes_per_device_during_training'] = (1, 1, 1, 1)
     expected['topology']['max_concurrent_evaluation_tasks'] = 8
     expected['workload']['training_sampling_window'] = 15
+    expected['workload']['learning_rate_schedule'] = (
+        {'start_iteration': 0, 'learning_rate': 0.01},
+        {'start_iteration': 50, 'learning_rate': 0.007},
+        {'start_iteration': 100, 'learning_rate': 0.004},
+    )
     expected['workload']['self_play_fast_searches_per_turn'] = 150
     expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
@@ -607,6 +612,9 @@ def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training(
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
     assert arguments.training.global_batch_size == 2048
     assert arguments.training.local_batch_size == 512
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.01)
+    assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.007)
+    assert arguments.training.learning_rate(190, 'adamw') == pytest.approx(0.004)
     assert arguments.cluster.self_play_device_ids == (0, 0, 1, 1, 2, 2, 3, 3)
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (1, 3, 5, 7)
     assert arguments.self_play.mcts.num_threads == 1

@@ -62,15 +62,15 @@
     "learning_rate_schedule": [
       {
         "start_iteration": 0,
-        "learning_rate": 0.005
+        "learning_rate": 0.01
       },
       {
         "start_iteration": 50,
-        "learning_rate": 0.0035
+        "learning_rate": 0.007
       },
       {
         "start_iteration": 100,
-        "learning_rate": 0.002
+        "learning_rate": 0.004
       }
     ],
     "self_play_search_warmup_iterations": 15,
