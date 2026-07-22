@@ -16,9 +16,9 @@ class AlphaZeroBot(Bot):
         max_time_to_think: float = 1.0,
         network_eval_only: bool = False,
     ) -> None:
-        super().__init__("AlphaZeroBot", max_time_to_think)
+        super().__init__('AlphaZeroBot', max_time_to_think)
         if not network_eval_only and not 1.0 <= max_time_to_think < 31.0:
-            raise ValueError("MCTS max_time_to_think must be between 1 and 30 seconds")
+            raise ValueError('MCTS max_time_to_think must be between 1 and 30 seconds')
         self.engine = InteractiveEngine(
             model_path=current_model_path,
             device_id=device_id,
@@ -34,9 +34,7 @@ class AlphaZeroBot(Bot):
     @staticmethod
     def _history(board: CurrentBoard) -> tuple[str, tuple[str, ...]]:
         native_board = board.board
-        return native_board.root().fen(), tuple(
-            move.uci() for move in native_board.move_stack
-        )
+        return native_board.root().fen(), tuple(move.uci() for move in native_board.move_stack)
 
     def _synchronize_game(self, board: CurrentBoard) -> InteractiveGame:
         starting_fen, moves_uci = self._history(board)
@@ -59,19 +57,17 @@ class AlphaZeroBot(Bot):
         result = game.analyze(mode=mode, time_limit_seconds=time_limit_seconds)
         move = chess.Move.from_uci(result.chosen_move_uci)
         if move not in board.get_valid_moves():
-            raise ValueError(
-                f"Engine returned illegal move {move.uci()} in FEN {board.board.fen()}"
-            )
+            raise ValueError(f'Engine returned illegal move {move.uci()} in FEN {board.board.fen()}')
 
         game.apply_move(result.chosen_move_uci)
-        log("---------------------- Alpha Zero Best Move ----------------------")
-        log("Mode:", mode.value)
-        log("Best move:", result.chosen_move_uci)
-        log("Root value:", result.value)
-        log("Completed searches:", result.searches)
-        log("Maximum depth:", result.maximum_depth)
-        log("Elapsed milliseconds:", result.elapsed_milliseconds)
-        log("Principal variation:", result.principal_variation)
-        log("Candidates:", result.candidates)
-        log("------------------------------------------------------------------")
+        log('---------------------- Alpha Zero Best Move ----------------------')
+        log('Mode:', mode.value)
+        log('Best move:', result.chosen_move_uci)
+        log('Root value:', result.value)
+        log('Completed searches:', result.searches)
+        log('Maximum depth:', result.maximum_depth)
+        log('Elapsed milliseconds:', result.elapsed_milliseconds)
+        log('Principal variation:', result.principal_variation)
+        log('Candidates:', result.candidates)
+        log('------------------------------------------------------------------')
         return move

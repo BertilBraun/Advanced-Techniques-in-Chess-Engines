@@ -16,20 +16,20 @@ from pydantic import BaseModel, ConfigDict
 
 
 class BenchmarkMode(str, Enum):
-    DIRECT = "direct"
-    PIPELINE = "pipeline"
-    CACHED = "cached"
-    NONCACHED = "noncached"
-    REPLICAS = "replicas"
+    DIRECT = 'direct'
+    PIPELINE = 'pipeline'
+    CACHED = 'cached'
+    NONCACHED = 'noncached'
+    REPLICAS = 'replicas'
 
 
 class Comparison(str, Enum):
-    DIRECT = "direct"
-    PIPELINE = "pipeline"
-    CACHED = "cached"
-    NONCACHED = "noncached"
-    REPLICAS = "replicas"
-    DIRECT_COMBINED_BATCH = "direct_combined_batch"
+    DIRECT = 'direct'
+    PIPELINE = 'pipeline'
+    CACHED = 'cached'
+    NONCACHED = 'noncached'
+    REPLICAS = 'replicas'
+    DIRECT_COMBINED_BATCH = 'direct_combined_batch'
 
 
 @dataclass(frozen=True)
@@ -120,27 +120,25 @@ class BenchmarkReport(FrozenModel):
 
 
 def parse_integer_list(value: str) -> tuple[int, ...]:
-    values = tuple(int(item) for item in value.split(","))
+    values = tuple(int(item) for item in value.split(','))
     if not values or any(item <= 0 for item in values):
-        raise argparse.ArgumentTypeError("values must be positive integers")
+        raise argparse.ArgumentTypeError('values must be positive integers')
     return values
 
 
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--executable", required=True, type=Path)
-    parser.add_argument("--model", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
-    parser.add_argument(
-        "--batch-sizes", default="16,32,48,50,64,128,256", type=parse_integer_list
-    )
-    parser.add_argument("--workers", default="1,2,3,4,5,6,7,8", type=parse_integer_list)
-    parser.add_argument("--iterations", default=100, type=int)
-    parser.add_argument("--seed", default=7, type=int)
+    parser.add_argument('--executable', required=True, type=Path)
+    parser.add_argument('--model', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--device', choices=('cpu', 'cuda'), default='cuda')
+    parser.add_argument('--batch-sizes', default='16,32,48,50,64,128,256', type=parse_integer_list)
+    parser.add_argument('--workers', default='1,2,3,4,5,6,7,8', type=parse_integer_list)
+    parser.add_argument('--iterations', default=100, type=int)
+    parser.add_argument('--seed', default=7, type=int)
     parsed = parser.parse_args()
     if parsed.iterations <= 0:
-        parser.error("--iterations must be positive")
+        parser.error('--iterations must be positive')
     return Arguments(
         executable=parsed.executable,
         model=parsed.model,
@@ -157,9 +155,9 @@ def sample_gpu(stop_event: threading.Event, samples: list[GpuSample]) -> None:
     while not stop_event.wait(0.1):
         completed = subprocess.run(
             [
-                "nvidia-smi",
-                "--query-gpu=utilization.gpu,memory.used",
-                "--format=csv,noheader,nounits",
+                'nvidia-smi',
+                '--query-gpu=utilization.gpu,memory.used',
+                '--format=csv,noheader,nounits',
             ],
             check=False,
             capture_output=True,
@@ -167,7 +165,7 @@ def sample_gpu(stop_event: threading.Event, samples: list[GpuSample]) -> None:
         )
         if completed.returncode != 0:
             continue
-        utilization, memory_used = completed.stdout.strip().split(", ")
+        utilization, memory_used = completed.stdout.strip().split(', ')
         samples.append(GpuSample(int(utilization), int(memory_used)))
 
 
@@ -186,25 +184,25 @@ def run_configuration(
     samples: list[GpuSample] = []
     stop_event = threading.Event()
     sampler = threading.Thread(target=sample_gpu, args=(stop_event, samples))
-    if device == "cuda":
+    if device == 'cuda':
         sampler.start()
     started_at = time.perf_counter()
     completed = subprocess.run(
         [
             str(executable),
-            "--model",
+            '--model',
             str(model),
-            "--mode",
+            '--mode',
             mode.value,
-            "--device",
+            '--device',
             device,
-            "--batch-size",
+            '--batch-size',
             str(batch_size),
-            "--workers",
+            '--workers',
             str(workers),
-            "--iterations",
+            '--iterations',
             str(iterations),
-            "--seed",
+            '--seed',
             str(seed),
         ],
         check=False,
@@ -213,7 +211,7 @@ def run_configuration(
     )
     wall_seconds = time.perf_counter() - started_at
     stop_event.set()
-    if device == "cuda":
+    if device == 'cuda':
         sampler.join()
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip())
@@ -235,16 +233,10 @@ def run_configuration(
         workers=native.workers,
         process_wall_seconds=wall_seconds,
         gpu_utilization_mean_percent=(
-            statistics.fmean(sample.utilization_percent for sample in samples)
-            if samples
-            else None
+            statistics.fmean(sample.utilization_percent for sample in samples) if samples else None
         ),
-        gpu_utilization_peak_percent=(
-            max(sample.utilization_percent for sample in samples) if samples else None
-        ),
-        gpu_memory_peak_mib=(
-            max(sample.memory_used_mib for sample in samples) if samples else None
-        ),
+        gpu_utilization_peak_percent=(max(sample.utilization_percent for sample in samples) if samples else None),
+        gpu_memory_peak_mib=(max(sample.memory_used_mib for sample in samples) if samples else None),
         comparison=comparison,
         worker_batch_size=worker_batch_size,
     )
@@ -252,13 +244,13 @@ def run_configuration(
 
 def command_output(command: list[str]) -> str:
     completed = subprocess.run(command, check=False, capture_output=True, text=True)
-    return completed.stdout.strip() if completed.returncode == 0 else "unavailable"
+    return completed.stdout.strip() if completed.returncode == 0 else 'unavailable'
 
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for block in iter(lambda: file.read(1024 * 1024), b""):
+    with path.open('rb') as file:
+        for block in iter(lambda: file.read(1024 * 1024), b''):
             digest.update(block)
     return digest.hexdigest()
 
@@ -272,10 +264,7 @@ def configurations(
         (Comparison.CACHED, BenchmarkMode.CACHED, 1, batch_size),
         (Comparison.NONCACHED, BenchmarkMode.NONCACHED, 1, batch_size),
     ]
-    values.extend(
-        (Comparison.REPLICAS, BenchmarkMode.REPLICAS, workers, batch_size)
-        for workers in worker_counts
-    )
+    values.extend((Comparison.REPLICAS, BenchmarkMode.REPLICAS, workers, batch_size) for workers in worker_counts)
     values.extend(
         (
             Comparison.DIRECT_COMBINED_BATCH,
@@ -294,9 +283,7 @@ def main() -> None:
     results: list[BenchmarkResult] = []
     failures: list[BenchmarkFailure] = []
     for worker_batch_size in arguments.batch_sizes:
-        for comparison, mode, workers, batch_size in configurations(
-            worker_batch_size, arguments.workers
-        ):
+        for comparison, mode, workers, batch_size in configurations(worker_batch_size, arguments.workers):
             try:
                 result = run_configuration(
                     arguments.executable,
@@ -328,19 +315,19 @@ def main() -> None:
             command=tuple(sys.argv),
             platform=platform.platform(),
             python=platform.python_version(),
-            compiler=command_output(["c++", "--version"]).splitlines()[0],
+            compiler=command_output(['c++', '--version']).splitlines()[0],
             gpu=command_output(
                 [
-                    "nvidia-smi",
-                    "--query-gpu=name,driver_version,memory.total",
-                    "--format=csv,noheader",
+                    'nvidia-smi',
+                    '--query-gpu=name,driver_version,memory.total',
+                    '--format=csv,noheader',
                 ]
             ),
             torch=command_output(
                 [
-                    "python",
-                    "-c",
-                    "import torch; print(torch.__version__, torch.version.cuda)",
+                    'python',
+                    '-c',
+                    'import torch; print(torch.__version__, torch.version.cuda)',
                 ]
             ),
             executable_path=str(arguments.executable.resolve()),
@@ -352,23 +339,21 @@ def main() -> None:
         ),
         methodology=Methodology(
             iterations_per_worker=arguments.iterations,
-            states="seeded random legal games, generated and compressed before timed inference",
-            direct_combined_batch="one model forward with batch workers * worker_batch_size",
-            replicas="one model replica and dedicated CUDA stream per worker",
-            pipeline="one producer and one model-owning thread with three reusable SPSC slots",
+            states='seeded random legal games, generated and compressed before timed inference',
+            direct_combined_batch='one model forward with batch workers * worker_batch_size',
+            replicas='one model replica and dedicated CUDA stream per worker',
+            pipeline='one producer and one model-owning thread with three reusable SPSC slots',
             gpu_sampling=(
-                "nvidia-smi process-level sampling every 100 ms, including model load and warmup; "
-                "use only as a coarse indicator"
+                'nvidia-smi process-level sampling every 100 ms, including model load and warmup; '
+                'use only as a coarse indicator'
             ),
         ),
         results=tuple(results),
         failures=tuple(failures),
     )
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    arguments.output.write_text(
-        report.model_dump_json(indent=2) + "\n", encoding="utf-8"
-    )
+    arguments.output.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

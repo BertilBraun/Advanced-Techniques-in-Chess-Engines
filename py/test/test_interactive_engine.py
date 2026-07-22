@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch import Tensor, nn
 
-pytest.importorskip("AlphaZeroCpp")
+pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import InteractiveSearchParams
 
 from src.eval.InteractiveEngine import AnalysisMode, InferenceTarget, InteractiveEngine
@@ -27,18 +27,14 @@ class _UniformModel(nn.Module):
             dtype=inputs.dtype,
             device=inputs.device,
         )
-        outcome = torch.tensor(
-            [0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device
-        )
+        outcome = torch.tensor([0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device)
         return policy, outcome.repeat(batch_size, 1)
 
 
 class _InvalidOutcomeModel(_UniformModel):
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         policy, _ = super().forward(inputs)
-        outcome = torch.tensor(
-            [1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device
-        )
+        outcome = torch.tensor([1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device)
         return policy, outcome.repeat(inputs.size(0), 1)
 
 
@@ -47,7 +43,7 @@ def model_path(tmp_path: Path) -> Path:
     channels, rows, columns = CurrentGame.representation_shape
     model = _UniformModel(CurrentGame.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
-    path = tmp_path / "interactive.jit.pt"
+    path = tmp_path / 'interactive.jit.pt'
     traced.save(str(path))
     return path
 
@@ -72,7 +68,7 @@ def invalid_engine(tmp_path: Path) -> InteractiveEngine:
     channels, rows, columns = CurrentGame.representation_shape
     model = _InvalidOutcomeModel(CurrentGame.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
-    path = tmp_path / "invalid-outcome.jit.pt"
+    path = tmp_path / 'invalid-outcome.jit.pt'
     traced.save(str(path))
     return InteractiveEngine(
         model_path=str(path),
@@ -95,13 +91,11 @@ def test_policy_preserves_wdl_and_bypasses_search(engine: InteractiveEngine) -> 
     assert result.outcome.win == pytest.approx(0.6)
     assert result.outcome.draw == pytest.approx(0.3)
     assert result.outcome.loss == pytest.approx(0.1)
-    assert result.chosen_move_uci == min(
-        candidate.move_uci for candidate in result.candidates
-    )
+    assert result.chosen_move_uci == min(candidate.move_uci for candidate in result.candidates)
 
 
 def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
-    with pytest.raises(ValueError, match="outstanding_batches_per_worker"):
+    with pytest.raises(ValueError, match='outstanding_batches_per_worker'):
         InteractiveEngine(
             model_path=str(model_path),
             device_id=0,
@@ -137,13 +131,8 @@ def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(
         )
     )
     assert result.chosen_move_uci == result.candidates[0].move_uci
-    assert sum(
-        candidate.visit_share for candidate in result.candidates
-    ) == pytest.approx(1.0)
-    assert all(
-        candidate.mean_value is None or -1.0 <= candidate.mean_value <= 1.0
-        for candidate in result.candidates
-    )
+    assert sum(candidate.visit_share for candidate in result.candidates) == pytest.approx(1.0)
+    assert all(candidate.mean_value is None or -1.0 <= candidate.mean_value <= 1.0 for candidate in result.candidates)
 
     game.apply_move(result.chosen_move_uci)
     retained_visits = game.root_visits
@@ -162,9 +151,7 @@ def test_human_reply_reuses_a_less_searched_descendant(
     game.apply_move(engine_result.chosen_move_uci)
 
     reply_analysis = game.analyze(AnalysisMode.MCTS, search_limit=64)
-    searched_replies = tuple(
-        candidate for candidate in reply_analysis.candidates if candidate.visits > 0
-    )
+    searched_replies = tuple(candidate for candidate in reply_analysis.candidates if candidate.visits > 0)
     assert len(searched_replies) > 1
     human_reply = min(
         searched_replies,
@@ -183,13 +170,13 @@ def test_history_replay_and_apply_move_reject_illegal_continuations(
     engine: InteractiveEngine,
 ) -> None:
     starting_fen = chess.STARTING_FEN
-    repetition = ("g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8")
+    repetition = ('g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8')
     terminal_game = engine.new_game(starting_fen, repetition)
 
-    with pytest.raises(ValueError, match="Illegal UCI move"):
-        engine.new_game(starting_fen, ("e2e5",))
-    with pytest.raises(ValueError, match="game over"):
-        terminal_game.apply_move("e2e4")
+    with pytest.raises(ValueError, match='Illegal UCI move'):
+        engine.new_game(starting_fen, ('e2e5',))
+    with pytest.raises(ValueError, match='game over'):
+        terminal_game.apply_move('e2e4')
 
 
 def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
@@ -211,10 +198,10 @@ def test_inference_failure_cancels_every_tree_reservation(
 ) -> None:
     game = invalid_engine.new_game(chess.STARTING_FEN, ())
 
-    with pytest.raises(RuntimeError, match="WDL output"):
+    with pytest.raises(RuntimeError, match='WDL output'):
         game.analyze(AnalysisMode.MCTS, search_limit=16)
     assert game.root_visits == 0
 
-    with pytest.raises(RuntimeError, match="WDL output"):
+    with pytest.raises(RuntimeError, match='WDL output'):
         game.analyze(AnalysisMode.MCTS, search_limit=16)
     assert game.root_visits == 0

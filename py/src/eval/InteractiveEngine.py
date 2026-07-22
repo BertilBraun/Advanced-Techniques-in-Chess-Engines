@@ -14,14 +14,14 @@ from AlphaZeroCpp import (
 
 
 class AnalysisMode(str, Enum):
-    POLICY = "policy"
-    MCTS = "mcts"
+    POLICY = 'policy'
+    MCTS = 'mcts'
 
 
 class InferenceTarget(str, Enum):
-    AUTO = "auto"
-    CPU = "cpu"
-    CUDA = "cuda"
+    AUTO = 'auto'
+    CPU = 'cpu'
+    CUDA = 'cuda'
 
 
 @dataclass(frozen=True)
@@ -99,9 +99,7 @@ class InteractiveEngine:
             InferenceTarget.CPU: InferenceDevice.CPU,
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
-        resolved_batch_size = (
-            parallel_searches if maximum_batch_size is None else maximum_batch_size
-        )
+        resolved_batch_size = parallel_searches if maximum_batch_size is None else maximum_batch_size
         client_parameters = InferenceClientParams(
             device_id=device_id,
             currentModelPath=model_path,
@@ -120,9 +118,7 @@ class InteractiveEngine:
             ),
         )
 
-    def new_game(
-        self, starting_fen: str, moves_uci: tuple[str, ...]
-    ) -> InteractiveGame:
+    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame:
         return InteractiveGame(self._native.new_game(starting_fen, moves_uci))
 
     def inference_metrics(self) -> InferenceMetrics:
@@ -173,11 +169,7 @@ class InteractiveGame:
         time_limit_seconds: int | None = None,
         search_limit: int | None = None,
     ) -> AnalysisResult:
-        native_mode = (
-            NativeAnalysisMode.POLICY
-            if mode is AnalysisMode.POLICY
-            else NativeAnalysisMode.MCTS
-        )
+        native_mode = NativeAnalysisMode.POLICY if mode is AnalysisMode.POLICY else NativeAnalysisMode.MCTS
         result = self._native.analyze(native_mode, time_limit_seconds, search_limit)
         outcome = (
             None

@@ -26,14 +26,14 @@ from src.eval.InteractiveEngine import (
 
 
 class RunStatus(str, Enum):
-    COMPLETED = "completed"
-    SKIPPED = "skipped"
-    ERROR = "error"
+    COMPLETED = 'completed'
+    SKIPPED = 'skipped'
+    ERROR = 'error'
 
 
 class WorkloadKind(str, Enum):
-    TIMED = "timed"
-    FIXED_SEARCHES = "fixed_searches"
+    TIMED = 'timed'
+    FIXED_SEARCHES = 'fixed_searches'
 
 
 class BenchmarkConfiguration(BaseModel):
@@ -161,56 +161,42 @@ class ParsedArguments(BaseModel):
 
 
 def _parse_integer_list(value: str) -> tuple[int, ...]:
-    parsed = tuple(int(item) for item in value.split(","))
+    parsed = tuple(int(item) for item in value.split(','))
     if not parsed or any(item <= 0 for item in parsed):
-        raise argparse.ArgumentTypeError(
-            "expected a comma-separated list of positive integers"
-        )
+        raise argparse.ArgumentTypeError('expected a comma-separated list of positive integers')
     return parsed
 
 
 def _parse_devices(value: str) -> tuple[InferenceTarget, ...]:
     try:
-        return tuple(InferenceTarget(item) for item in value.split(","))
+        return tuple(InferenceTarget(item) for item in value.split(','))
     except ValueError as error:
-        raise argparse.ArgumentTypeError(
-            "devices must contain auto, cpu, or cuda"
-        ) from error
+        raise argparse.ArgumentTypeError('devices must contain auto, cpu, or cuda') from error
 
 
 def parse_arguments() -> ParsedArguments:
-    parser = argparse.ArgumentParser(
-        description="Benchmark one long-lived interactive game position."
-    )
-    parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--starting-fen", default=chess.STARTING_FEN)
-    parser.add_argument("--move", action="append", default=[])
+    parser = argparse.ArgumentParser(description='Benchmark one long-lived interactive game position.')
+    parser.add_argument('--model', type=Path, required=True)
+    parser.add_argument('--output-directory', type=Path, required=True)
+    parser.add_argument('--starting-fen', default=chess.STARTING_FEN)
+    parser.add_argument('--move', action='append', default=[])
+    parser.add_argument('--devices', type=_parse_devices, default=(InferenceTarget.CPU,))
+    parser.add_argument('--device-id', type=int, default=0)
+    parser.add_argument('--inference-workers', type=_parse_integer_list, default=(1, 2, 3, 4))
     parser.add_argument(
-        "--devices", type=_parse_devices, default=(InferenceTarget.CPU,)
-    )
-    parser.add_argument("--device-id", type=int, default=0)
-    parser.add_argument(
-        "--inference-workers", type=_parse_integer_list, default=(1, 2, 3, 4)
-    )
-    parser.add_argument(
-        "--outstanding-batches-per-worker",
+        '--outstanding-batches-per-worker',
         type=_parse_integer_list,
         default=(1,),
     )
-    parser.add_argument("--batch-sizes", type=_parse_integer_list, default=(1, 8, 32))
+    parser.add_argument('--batch-sizes', type=_parse_integer_list, default=(1, 8, 32))
+    parser.add_argument('--time-budgets-seconds', type=_parse_integer_list, default=(1, 3))
+    parser.add_argument('--search-limits', type=_parse_integer_list, default=(256, 1024))
+    parser.add_argument('--reference-searches', type=int, default=4096)
+    parser.add_argument('--c-param', type=float, default=1.0)
+    parser.add_argument('--cache-capacity', type=int, default=250_000)
     parser.add_argument(
-        "--time-budgets-seconds", type=_parse_integer_list, default=(1, 3)
-    )
-    parser.add_argument(
-        "--search-limits", type=_parse_integer_list, default=(256, 1024)
-    )
-    parser.add_argument("--reference-searches", type=int, default=4096)
-    parser.add_argument("--c-param", type=float, default=1.0)
-    parser.add_argument("--cache-capacity", type=int, default=250_000)
-    parser.add_argument(
-        "--source-revision",
-        help="Source revision for exported source trees without Git metadata.",
+        '--source-revision',
+        help='Source revision for exported source trees without Git metadata.',
     )
     namespace = parser.parse_args()
     return ParsedArguments(
@@ -234,8 +220,8 @@ def parse_arguments() -> ParsedArguments:
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as model_file:
-        for block in iter(lambda: model_file.read(1024 * 1024), b""):
+    with path.open('rb') as model_file:
+        for block in iter(lambda: model_file.read(1024 * 1024), b''):
             digest.update(block)
     return digest.hexdigest()
 
@@ -243,7 +229,7 @@ def _sha256(path: Path) -> str:
 def _git_output(arguments: tuple[str, ...]) -> str | None:
     try:
         completed = subprocess.run(
-            ("git", *arguments),
+            ('git', *arguments),
             check=True,
             capture_output=True,
             text=True,
@@ -254,14 +240,12 @@ def _git_output(arguments: tuple[str, ...]) -> str | None:
 
 
 def collect_provenance(arguments: ParsedArguments) -> Provenance:
-    cuda_names = tuple(
-        torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())
-    )
-    detected_revision = _git_output(("rev-parse", "HEAD"))
-    status = _git_output(("status", "--porcelain"))
+    cuda_names = tuple(torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count()))
+    detected_revision = _git_output(('rev-parse', 'HEAD'))
+    status = _git_output(('status', '--porcelain'))
     return Provenance(
         command=tuple(sys.argv),
-        git_revision=arguments.source_revision or detected_revision or "unavailable",
+        git_revision=arguments.source_revision or detected_revision or 'unavailable',
         git_dirty=None if status is None else bool(status),
         model_path=str(arguments.model.resolve()),
         model_sha256=_sha256(arguments.model),
@@ -276,17 +260,10 @@ def collect_provenance(arguments: ParsedArguments) -> Provenance:
 
 
 def _quality(result: AnalysisResult, reference: AnalysisResult) -> QualityMetrics:
-    ranks = {
-        candidate.move_uci: index + 1
-        for index, candidate in enumerate(result.candidates)
-    }
-    shares = {
-        candidate.move_uci: candidate.visit_share for candidate in result.candidates
-    }
+    ranks = {candidate.move_uci: index + 1 for index, candidate in enumerate(result.candidates)}
+    shares = {candidate.move_uci: candidate.visit_share for candidate in result.candidates}
     common_prefix = 0
-    for actual_move, reference_move in zip(
-        result.principal_variation, reference.principal_variation
-    ):
+    for actual_move, reference_move in zip(result.principal_variation, reference.principal_variation):
         if actual_move != reference_move:
             break
         common_prefix += 1
@@ -331,9 +308,7 @@ def _completed_record(
             for candidate in result.candidates
         ),
         searches=result.searches,
-        searches_per_second=result.searches / elapsed_seconds
-        if elapsed_seconds > 0
-        else 0.0,
+        searches_per_second=result.searches / elapsed_seconds if elapsed_seconds > 0 else 0.0,
         maximum_depth=result.maximum_depth,
         elapsed_milliseconds=result.elapsed_milliseconds,
         deadline_overshoot_milliseconds=overshoot,
@@ -358,9 +333,7 @@ def _completed_record(
     )
 
 
-def _skipped_record(
-    configuration: BenchmarkConfiguration, reason: str
-) -> BenchmarkRecord:
+def _skipped_record(configuration: BenchmarkConfiguration, reason: str) -> BenchmarkRecord:
     return BenchmarkRecord(
         status=RunStatus.SKIPPED,
         configuration=configuration,
@@ -394,11 +367,9 @@ def _skipped_record(
     )
 
 
-def _error_record(
-    configuration: BenchmarkConfiguration, reason: str
-) -> BenchmarkRecord:
+def _error_record(configuration: BenchmarkConfiguration, reason: str) -> BenchmarkRecord:
     skipped = _skipped_record(configuration, reason)
-    return skipped.model_copy(update={"status": RunStatus.ERROR})
+    return skipped.model_copy(update={'status': RunStatus.ERROR})
 
 
 def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration, ...]:
@@ -434,9 +405,7 @@ def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration,
     return tuple(configurations)
 
 
-def _engine(
-    arguments: ParsedArguments, configuration: BenchmarkConfiguration
-) -> InteractiveEngine:
+def _engine(arguments: ParsedArguments, configuration: BenchmarkConfiguration) -> InteractiveEngine:
     return InteractiveEngine(
         model_path=str(arguments.model),
         device_id=configuration.device_id,
@@ -455,16 +424,10 @@ def run_configuration(
     configuration: BenchmarkConfiguration,
     reference: AnalysisResult,
 ) -> BenchmarkRecord:
-    if (
-        configuration.inference_target is InferenceTarget.CUDA
-        and not torch.cuda.is_available()
-    ):
-        return _skipped_record(configuration, "CUDA requested but unavailable")
-    if (
-        configuration.inference_target is InferenceTarget.CUDA
-        and configuration.device_id >= torch.cuda.device_count()
-    ):
-        return _skipped_record(configuration, "CUDA device ID is unavailable")
+    if configuration.inference_target is InferenceTarget.CUDA and not torch.cuda.is_available():
+        return _skipped_record(configuration, 'CUDA requested but unavailable')
+    if configuration.inference_target is InferenceTarget.CUDA and configuration.device_id >= torch.cuda.device_count():
+        return _skipped_record(configuration, 'CUDA device ID is unavailable')
 
     if configuration.inference_target is InferenceTarget.CUDA:
         torch.cuda.reset_peak_memory_stats(configuration.device_id)
@@ -472,9 +435,7 @@ def run_configuration(
     game: InteractiveGame | None = None
     try:
         engine = _engine(arguments, configuration)
-        engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
-            AnalysisMode.POLICY
-        )
+        engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(AnalysisMode.POLICY)
         game = engine.new_game(arguments.starting_fen, arguments.moves_uci)
         root_visits_before = game.root_visits
         result = (
@@ -497,7 +458,7 @@ def run_configuration(
             peak_cuda_memory_mib,
         )
     except (MemoryError, RuntimeError) as error:
-        return _error_record(configuration, f"{type(error).__name__}: {error}")
+        return _error_record(configuration, f'{type(error).__name__}: {error}')
     finally:
         game = None
         engine = None
@@ -509,7 +470,7 @@ def run_configuration(
 def main() -> None:
     arguments = parse_arguments()
     if arguments.reference_searches <= 0:
-        raise ValueError("reference_searches must be positive")
+        raise ValueError('reference_searches must be positive')
     arguments.output_directory.mkdir(parents=True, exist_ok=True)
     manifest = BenchmarkManifest(
         created_unix_nanoseconds=time_ns(),
@@ -518,8 +479,8 @@ def main() -> None:
         reference_searches=arguments.reference_searches,
         provenance=collect_provenance(arguments),
     )
-    (arguments.output_directory / "manifest.json").write_text(
-        manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
+    (arguments.output_directory / 'manifest.json').write_text(
+        manifest.model_dump_json(indent=2) + '\n', encoding='utf-8'
     )
 
     reference_configuration = BenchmarkConfiguration(
@@ -532,21 +493,21 @@ def main() -> None:
         budget=arguments.reference_searches,
     )
     reference_engine = _engine(arguments, reference_configuration)
-    reference = reference_engine.new_game(
-        arguments.starting_fen, arguments.moves_uci
-    ).analyze(AnalysisMode.MCTS, search_limit=arguments.reference_searches)
+    reference = reference_engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
+        AnalysisMode.MCTS, search_limit=arguments.reference_searches
+    )
     del reference_engine
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
     records: list[BenchmarkRecord] = []
-    results_path = arguments.output_directory / "results.jsonl"
-    with results_path.open("w", encoding="utf-8") as results_file:
+    results_path = arguments.output_directory / 'results.jsonl'
+    with results_path.open('w', encoding='utf-8') as results_file:
         for configuration in _configurations(arguments):
             record = run_configuration(arguments, configuration, reference)
             records.append(record)
-            results_file.write(record.model_dump_json() + "\n")
+            results_file.write(record.model_dump_json() + '\n')
             results_file.flush()
 
     completed = [record for record in records if record.status is RunStatus.COMPLETED]
@@ -556,16 +517,12 @@ def main() -> None:
         completed_runs=len(completed),
         skipped_runs=len(skipped),
         error_runs=len(errors),
-        best_searches_per_second=max(
-            (record.searches_per_second for record in completed), default=0.0
-        ),
+        best_searches_per_second=max((record.searches_per_second for record in completed), default=0.0),
         reference_move_uci=reference.chosen_move_uci,
         reference_value=reference.value,
     )
-    (arguments.output_directory / "summary.json").write_text(
-        summary.model_dump_json(indent=2) + "\n", encoding="utf-8"
-    )
+    (arguments.output_directory / 'summary.json').write_text(summary.model_dump_json(indent=2) + '\n', encoding='utf-8')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

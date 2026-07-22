@@ -5,36 +5,36 @@ pybind11 bindings for custom MCTS + inference client
 from __future__ import annotations
 
 __all__ = [
-    "AnalysisMode",
-    "AnalysisResult",
-    "CandidateAnalysis",
-    "EvalMCTS",
-    "EvalMCTSNode",
-    "EvalMCTSParams",
-    "EvalMCTSResult",
-    "FunctionTimeInfo",
-    "InferenceClientParams",
-    "InferenceDevice",
-    "InferenceStatistics",
-    "MCTS",
-    "MCTSBoard",
-    "MCTSChild",
-    "MCTSParams",
-    "MCTSResult",
-    "MCTSResults",
-    "MCTSRoot",
-    "MCTSStatistics",
-    "InteractiveEngine",
-    "InteractiveGame",
-    "InteractiveSearchParams",
-    "TimeInfo",
-    "WdlPrediction",
-    "encode_board_compressed",
-    "new_eval_root",
-    "new_root",
-    "test_eval_mcts_speed_cpp",
-    "test_inference_speed_cpp",
-    "test_mcts_speed_cpp",
+    'AnalysisMode',
+    'AnalysisResult',
+    'CandidateAnalysis',
+    'EvalMCTS',
+    'EvalMCTSNode',
+    'EvalMCTSParams',
+    'EvalMCTSResult',
+    'FunctionTimeInfo',
+    'InferenceClientParams',
+    'InferenceDevice',
+    'InferenceStatistics',
+    'MCTS',
+    'MCTSBoard',
+    'MCTSChild',
+    'MCTSParams',
+    'MCTSResult',
+    'MCTSResults',
+    'MCTSRoot',
+    'MCTSStatistics',
+    'InteractiveEngine',
+    'InteractiveGame',
+    'InteractiveSearchParams',
+    'TimeInfo',
+    'WdlPrediction',
+    'encode_board_compressed',
+    'new_eval_root',
+    'new_root',
+    'test_eval_mcts_speed_cpp',
+    'test_inference_speed_cpp',
+    'test_mcts_speed_cpp',
 ]
 
 class AnalysisMode:
@@ -105,9 +105,7 @@ class InteractiveEngine:
         client_parameters: InferenceClientParams,
         search_parameters: InteractiveSearchParams,
     ) -> None: ...
-    def new_game(
-        self, starting_fen: str, moves_uci: tuple[str, ...]
-    ) -> InteractiveGame: ...
+    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame: ...
     def get_inference_statistics(self) -> InferenceStatistics: ...
 
 class InteractiveGame:
@@ -131,9 +129,7 @@ def encode_board_compressed(fen: str) -> tuple[list[int], list[int]]:
     """Encode a FEN into the canonical compressed binary and scalar planes."""
 
 class EvalMCTS:
-    def __init__(
-        self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams
-    ) -> None: ...
+    def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None: ...
     def eval_search(self, root: EvalMCTSNode, searches: int) -> EvalMCTSResult:
         """
         Run evaluation MCTS search on a given root node.
