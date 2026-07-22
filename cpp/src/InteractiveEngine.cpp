@@ -11,26 +11,26 @@ bool candidatePreference(const CandidateAnalysis &left, const CandidateAnalysis 
     return left.move_uci < right.move_uci;
 }
 
-std::vector<CandidateAnalysis> gatherMctsCandidates(const std::shared_ptr<EvalMCTSNode> &root) {
-    const EvalMCTSNode::ChildSnapshot children = root->children();
-    if (children == nullptr) {
+std::vector<CandidateAnalysis> gatherMctsCandidates(const EvalSearchTree &tree) {
+    const EvalSearchNode &root = tree.node(tree.rootIndex());
+    if (!root.expanded) {
         return {};
     }
 
     int totalChildVisits = 0;
-    for (const std::shared_ptr<EvalMCTSNode> &child : *children) {
-        totalChildVisits += child->number_of_visits.load(std::memory_order_relaxed);
+    for (const EvalSearchEdge &child : root.children.edges()) {
+        totalChildVisits += static_cast<int>(child.statistics.visits);
     }
 
     std::vector<CandidateAnalysis> candidates;
-    candidates.reserve(children->size());
-    for (const std::shared_ptr<EvalMCTSNode> &child : *children) {
-        const int visits = child->number_of_visits.load(std::memory_order_relaxed);
+    candidates.reserve(root.children.size());
+    for (const EvalSearchEdge &child : root.children.edges()) {
+        const int visits = static_cast<int>(child.statistics.visits);
         const std::optional<float> meanValue =
-            visits == 0 ? std::nullopt
-                        : std::optional<float>{-child->result_sum.load(std::memory_order_relaxed) /
-                                               static_cast<float>(visits)};
-        candidates.push_back({toString(child->moveToGetHere), child->policy, visits,
+            visits == 0
+                ? std::nullopt
+                : std::optional<float>{-child.statistics.result_sum / static_cast<float>(visits)};
+        candidates.push_back({toString(child.move), child.policy, visits,
                               totalChildVisits == 0 ? 0.0f
                                                     : static_cast<float>(visits) /
                                                           static_cast<float>(totalChildVisits),
@@ -56,32 +56,29 @@ std::vector<CandidateAnalysis> gatherPolicyCandidates(const InferenceResult &inf
     return candidates;
 }
 
-std::vector<std::string> principalVariation(const std::shared_ptr<EvalMCTSNode> &root) {
+std::vector<std::string> principalVariation(const EvalSearchTree &tree) {
     std::vector<std::string> variation;
-    std::shared_ptr<EvalMCTSNode> node = root;
+    EvalNodeIndex nodeIndex = tree.rootIndex();
     while (true) {
-        const EvalMCTSNode::ChildSnapshot children = node->children();
-        if (children == nullptr || children->empty()) {
+        const EvalSearchNode &node = tree.node(nodeIndex);
+        if (!node.expanded || node.children.empty()) {
             break;
         }
-        const auto best =
-            std::ranges::max_element(*children, [](const std::shared_ptr<EvalMCTSNode> &left,
-                                                   const std::shared_ptr<EvalMCTSNode> &right) {
-                const int leftVisits = left->number_of_visits.load(std::memory_order_relaxed);
-                const int rightVisits = right->number_of_visits.load(std::memory_order_relaxed);
-                if (leftVisits != rightVisits) {
-                    return leftVisits < rightVisits;
+        const auto best = std::ranges::max_element(
+            node.children.edges(), [](const EvalSearchEdge &left, const EvalSearchEdge &right) {
+                if (left.statistics.visits != right.statistics.visits) {
+                    return left.statistics.visits < right.statistics.visits;
                 }
-                if (left->policy != right->policy) {
-                    return left->policy < right->policy;
+                if (left.policy != right.policy) {
+                    return left.policy < right.policy;
                 }
-                return toString(left->moveToGetHere) > toString(right->moveToGetHere);
+                return toString(left.move) > toString(right.move);
             });
-        if ((*best)->number_of_visits.load(std::memory_order_relaxed) == 0) {
+        if (best->statistics.visits == 0 || best->child == INVALID_EVAL_NODE_INDEX) {
             break;
         }
-        variation.push_back(toString((*best)->moveToGetHere));
-        node = *best;
+        variation.push_back(toString(best->move));
+        nodeIndex = best->child;
     }
     return variation;
 }
@@ -101,19 +98,19 @@ InteractiveGame::InteractiveGame(std::shared_ptr<InteractiveEngine> engine, std:
 }
 
 void InteractiveGame::reconstructRoot() {
-    m_root = EvalMCTSNode::createRoot(replayMoves(m_startingFen, m_movesUci));
+    m_tree = std::make_unique<EvalSearchTree>(replayMoves(m_startingFen, m_movesUci));
 }
 
 void InteractiveGame::applyMove(const std::string &moveUci) {
-    if (m_root->isTerminal()) {
+    if (m_tree->rootBoard().isGameOver()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
-    const Move move = findLegalMove(m_root->board(), moveUci);
-    const EvalMCTSNode::ChildSnapshot children = m_root->children();
-    if (children != nullptr) {
-        for (size_t index = 0; index < children->size(); ++index) {
-            if ((*children)[index]->moveToGetHere == move) {
-                m_root = m_root->makeNewRoot(index);
+    const Move move = findLegalMove(m_tree->rootBoard(), moveUci);
+    const EvalSearchNode &root = m_tree->node(m_tree->rootIndex());
+    if (root.expanded) {
+        for (std::uint32_t index = 0; index < root.children.size(); ++index) {
+            if (root.children[index].move == move) {
+                static_cast<void>(m_tree->reroot(index));
                 m_movesUci.push_back(moveUci);
                 return;
             }
@@ -128,12 +125,12 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
                                         const std::optional<int> timeLimitSeconds,
                                         const std::optional<int> searchLimit) {
     const auto startedAt = std::chrono::steady_clock::now();
-    if (m_root->isTerminal()) {
+    if (m_tree->rootBoard().isGameOver()) {
         throw std::invalid_argument("Cannot analyze a terminal position");
     }
 
     if (mode == AnalysisMode::Policy) {
-        const InferenceResult inferenceResult = m_engine->m_search.evaluate(m_root->board());
+        const InferenceResult inferenceResult = m_engine->m_search.evaluate(m_tree->rootBoard());
         std::vector<CandidateAnalysis> candidates = gatherPolicyCandidates(inferenceResult);
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");
@@ -160,12 +157,13 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
         throw std::invalid_argument("search_limit must be positive");
     }
 
-    EvalMCTSResult searchResult =
+    const InteractiveSearchResult searchResult = m_engine->m_search.search(
+        *m_tree,
         timeLimitSeconds.has_value()
-            ? m_engine->m_search.evalSearchUntil(
-                  m_root, startedAt + std::chrono::seconds(*timeLimitSeconds), searchLimit)
-            : m_engine->m_search.evalSearch(m_root, *searchLimit);
-    std::vector<CandidateAnalysis> candidates = gatherMctsCandidates(m_root);
+            ? std::optional{startedAt + std::chrono::seconds(*timeLimitSeconds)}
+            : std::nullopt,
+        searchLimit);
+    std::vector<CandidateAnalysis> candidates = gatherMctsCandidates(*m_tree);
     if (candidates.empty()) {
         throw std::runtime_error("MCTS returned no legal candidates");
     }
@@ -173,10 +171,10 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
         std::chrono::steady_clock::now() - startedAt);
     return {candidates.front().move_uci,
             searchResult.result,
-            m_root->networkOutcome,
+            m_tree->node(m_tree->rootIndex()).network_outcome,
             std::move(candidates),
             searchResult.completed_searches,
-            m_root->maxDepth(),
+            m_tree->maximumDepth(),
             elapsed.count(),
-            principalVariation(m_root)};
+            principalVariation(*m_tree)};
 }

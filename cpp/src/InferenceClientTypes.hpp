@@ -33,6 +33,13 @@ struct InferenceStatistics {
     size_t modelInferencePositions = 0;
     std::vector<size_t> modelBatchSizeHistogram;
     float averageNumberOfPositionsInInferenceCall = 0.0f;
+    std::uint64_t treeSelectionNanoseconds = 0;
+    std::uint64_t boardEncodingNanoseconds = 0;
+    std::uint64_t resultProcessingNanoseconds = 0;
+    std::uint64_t treeBackupNanoseconds = 0;
+    std::uint64_t treeOwnerWaitNanoseconds = 0;
+    std::uint64_t directInferenceNanoseconds = 0;
+    float directWorkerUtilization = 0.0F;
 };
 
 struct InferenceClientParams {

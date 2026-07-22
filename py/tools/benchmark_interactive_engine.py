@@ -38,9 +38,8 @@ class BenchmarkConfiguration(BaseModel):
 
     inference_target: InferenceTarget
     device_id: int
-    parallel_searches: int
-    maximum_batch_size: int
-    batch_timeout_microseconds: int
+    inference_workers: int
+    inference_batch_size: int
     workload: WorkloadKind
     budget: int
 
@@ -89,6 +88,13 @@ class BenchmarkRecord(BaseModel):
     model_inference_calls: int
     model_inference_positions: int
     average_model_batch_size: float
+    tree_selection_nanoseconds: int
+    board_encoding_nanoseconds: int
+    result_processing_nanoseconds: int
+    tree_backup_nanoseconds: int
+    tree_owner_wait_nanoseconds: int
+    direct_inference_nanoseconds: int
+    direct_worker_utilization: float
 
 
 class Provenance(BaseModel):
@@ -137,9 +143,8 @@ class ParsedArguments(BaseModel):
     moves_uci: tuple[str, ...]
     devices: tuple[InferenceTarget, ...]
     device_id: int
-    parallel_searches: tuple[int, ...]
+    inference_workers: tuple[int, ...]
     batch_sizes: tuple[int, ...]
-    batch_timeouts_microseconds: tuple[int, ...]
     time_budgets_seconds: tuple[int, ...]
     search_limits: tuple[int, ...]
     reference_searches: int
@@ -179,12 +184,9 @@ def parse_arguments() -> ParsedArguments:
     )
     parser.add_argument("--device-id", type=int, default=0)
     parser.add_argument(
-        "--parallel-searches", type=_parse_integer_list, default=(1, 8, 16)
+        "--inference-workers", type=_parse_integer_list, default=(1, 2, 3, 4)
     )
     parser.add_argument("--batch-sizes", type=_parse_integer_list, default=(1, 8, 32))
-    parser.add_argument(
-        "--batch-timeouts-microseconds", type=_parse_integer_list, default=(50, 500)
-    )
     parser.add_argument(
         "--time-budgets-seconds", type=_parse_integer_list, default=(1, 3)
     )
@@ -206,9 +208,8 @@ def parse_arguments() -> ParsedArguments:
         moves_uci=tuple(namespace.move),
         devices=namespace.devices,
         device_id=namespace.device_id,
-        parallel_searches=namespace.parallel_searches,
+        inference_workers=namespace.inference_workers,
         batch_sizes=namespace.batch_sizes,
-        batch_timeouts_microseconds=namespace.batch_timeouts_microseconds,
         time_budgets_seconds=namespace.time_budgets_seconds,
         search_limits=namespace.search_limits,
         reference_searches=namespace.reference_searches,
@@ -332,6 +333,13 @@ def _completed_record(
         model_inference_calls=inference_metrics.model_calls,
         model_inference_positions=inference_metrics.model_positions,
         average_model_batch_size=inference_metrics.average_model_batch_size,
+        tree_selection_nanoseconds=inference_metrics.tree_selection_nanoseconds,
+        board_encoding_nanoseconds=inference_metrics.board_encoding_nanoseconds,
+        result_processing_nanoseconds=inference_metrics.result_processing_nanoseconds,
+        tree_backup_nanoseconds=inference_metrics.tree_backup_nanoseconds,
+        tree_owner_wait_nanoseconds=inference_metrics.tree_owner_wait_nanoseconds,
+        direct_inference_nanoseconds=inference_metrics.direct_inference_nanoseconds,
+        direct_worker_utilization=inference_metrics.direct_worker_utilization,
     )
 
 
@@ -360,39 +368,43 @@ def _skipped_record(
         model_inference_calls=0,
         model_inference_positions=0,
         average_model_batch_size=0.0,
+        tree_selection_nanoseconds=0,
+        board_encoding_nanoseconds=0,
+        result_processing_nanoseconds=0,
+        tree_backup_nanoseconds=0,
+        tree_owner_wait_nanoseconds=0,
+        direct_inference_nanoseconds=0,
+        direct_worker_utilization=0.0,
     )
 
 
 def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration, ...]:
     configurations: list[BenchmarkConfiguration] = []
     for target in arguments.devices:
-        for parallel_searches in arguments.parallel_searches:
+        for inference_workers in arguments.inference_workers:
             for batch_size in arguments.batch_sizes:
-                for timeout in arguments.batch_timeouts_microseconds:
-                    for budget in arguments.time_budgets_seconds:
-                        configurations.append(
-                            BenchmarkConfiguration(
-                                inference_target=target,
-                                device_id=arguments.device_id,
-                                parallel_searches=parallel_searches,
-                                maximum_batch_size=batch_size,
-                                batch_timeout_microseconds=timeout,
-                                workload=WorkloadKind.TIMED,
-                                budget=budget,
-                            )
+                for budget in arguments.time_budgets_seconds:
+                    configurations.append(
+                        BenchmarkConfiguration(
+                            inference_target=target,
+                            device_id=arguments.device_id,
+                            inference_workers=inference_workers,
+                            inference_batch_size=batch_size,
+                            workload=WorkloadKind.TIMED,
+                            budget=budget,
                         )
-                    for budget in arguments.search_limits:
-                        configurations.append(
-                            BenchmarkConfiguration(
-                                inference_target=target,
-                                device_id=arguments.device_id,
-                                parallel_searches=parallel_searches,
-                                maximum_batch_size=batch_size,
-                                batch_timeout_microseconds=timeout,
-                                workload=WorkloadKind.FIXED_SEARCHES,
-                                budget=budget,
-                            )
+                    )
+                for budget in arguments.search_limits:
+                    configurations.append(
+                        BenchmarkConfiguration(
+                            inference_target=target,
+                            device_id=arguments.device_id,
+                            inference_workers=inference_workers,
+                            inference_batch_size=batch_size,
+                            workload=WorkloadKind.FIXED_SEARCHES,
+                            budget=budget,
                         )
+                    )
     return tuple(configurations)
 
 
@@ -402,10 +414,10 @@ def _engine(
     return InteractiveEngine(
         model_path=str(arguments.model),
         device_id=configuration.device_id,
-        parallel_searches=configuration.parallel_searches,
+        parallel_searches=configuration.inference_batch_size,
         c_param=arguments.c_param,
-        maximum_batch_size=configuration.maximum_batch_size,
-        batch_collection_timeout_microseconds=configuration.batch_timeout_microseconds,
+        maximum_batch_size=configuration.inference_batch_size,
+        inference_workers=configuration.inference_workers,
         cache_capacity=arguments.cache_capacity,
         inference_target=configuration.inference_target,
     )
@@ -465,11 +477,10 @@ def main() -> None:
     )
 
     reference_configuration = BenchmarkConfiguration(
-        inference_target=InferenceTarget.CPU,
-        device_id=0,
-        parallel_searches=1,
-        maximum_batch_size=1,
-        batch_timeout_microseconds=50,
+        inference_target=arguments.devices[0],
+        device_id=arguments.device_id,
+        inference_workers=1,
+        inference_batch_size=1,
         workload=WorkloadKind.FIXED_SEARCHES,
         budget=arguments.reference_searches,
     )

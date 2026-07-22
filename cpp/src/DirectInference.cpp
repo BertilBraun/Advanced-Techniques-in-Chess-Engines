@@ -151,6 +151,18 @@ DirectInferencePipeline::WritableBatch DirectInferencePipeline::acquireWritableB
     return {m_producerCursor, slot.input.data_ptr<int8>(), m_runner.maximumBatchSize()};
 }
 
+void DirectInferencePipeline::discardWritableBatch(const size_t slotIndex) {
+    if (slotIndex != m_producerCursor) {
+        throw std::invalid_argument("Direct inference batches must be discarded in order");
+    }
+    Slot &slot = slotAt(slotIndex);
+    if (slot.state.load(std::memory_order_acquire) != SlotState::Filling) {
+        throw std::logic_error("Direct inference slot was not acquired for writing");
+    }
+    slot.state.store(SlotState::Empty, std::memory_order_release);
+    slot.state.notify_one();
+}
+
 void DirectInferencePipeline::submit(const size_t slotIndex, const size_t batchSize) {
     if (slotIndex != m_producerCursor) {
         throw std::invalid_argument("Direct inference batches must be submitted in order");
@@ -220,7 +232,13 @@ void DirectInferencePipeline::inferenceLoop() {
         }
         slot.state.store(SlotState::Running, std::memory_order_release);
         try {
+            const auto startedAt = std::chrono::steady_clock::now();
             m_runner.forwardInto(slot.input, slot.batchSize, slot.output);
+            m_inferenceNanoseconds.fetch_add(
+                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                               std::chrono::steady_clock::now() - startedAt)
+                                               .count()),
+                std::memory_order_relaxed);
             slot.state.store(SlotState::Complete, std::memory_order_release);
         } catch (...) {
             slot.exception = std::current_exception();

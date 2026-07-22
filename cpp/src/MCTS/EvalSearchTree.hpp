@@ -84,6 +84,7 @@ struct EvalSearchNode {
     std::uint32_t parent_edge = std::numeric_limits<std::uint32_t>::max();
     std::optional<WdlPrediction> network_outcome;
     bool expanded = false;
+    bool evaluating = false;
 
     EvalSearchNode(Board board, EvalNodeIndex parent, std::uint32_t parentEdge,
                    EvalEdgeStorage edgeStorage, std::pmr::memory_resource *edgeResource)
@@ -129,6 +130,9 @@ public:
     [[nodiscard]] std::uint32_t preferredRootEdge() const;
     [[nodiscard]] EvalNodeIndex selectLeaf(float explorationConstant);
 
+    void reserveLeaf(EvalNodeIndex leafIndex);
+    void cancelReservation(EvalNodeIndex leafIndex);
+    void completeReservation(EvalNodeIndex leafIndex, float result);
     void addVirtualLoss(EvalNodeIndex leafIndex);
     void cancelVirtualLoss(EvalNodeIndex leafIndex);
     void backPropagate(EvalNodeIndex leafIndex, float result);
@@ -137,6 +141,8 @@ public:
     [[nodiscard]] EvalNodeIndex reroot(std::uint32_t edgeIndex);
     [[nodiscard]] int maximumDepth() const;
     [[nodiscard]] EvalVisitCounts gatherVisitCounts() const;
+    [[nodiscard]] std::size_t evaluatingNodeCount() const;
+    [[nodiscard]] std::uint64_t totalVirtualLoss() const;
 
 private:
     struct NodeSlot {
@@ -166,4 +172,6 @@ private:
     void reclaimSubtree(EvalNodeIndex index);
     [[nodiscard]] EvalSearchStatistics &statistics(EvalNodeIndex index);
     [[nodiscard]] const EvalSearchStatistics &statistics(EvalNodeIndex index) const;
+    [[nodiscard]] EvalNodeIndex selectAvailableLeaf(EvalNodeIndex nodeIndex,
+                                                    float explorationConstant);
 };

@@ -22,8 +22,9 @@ class AlphaZeroBot(Bot):
         self.engine = InteractiveEngine(
             model_path=current_model_path,
             device_id=device_id,
-            parallel_searches=16,
+            parallel_searches=64,
             c_param=PLAY_C_PARAM,
+            inference_workers=2,
         )
         self.network_eval_only = network_eval_only
         self.time_limit_seconds = int(max_time_to_think)

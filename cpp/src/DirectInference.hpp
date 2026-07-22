@@ -54,9 +54,13 @@ public:
     DirectInferencePipeline &operator=(const DirectInferencePipeline &) = delete;
 
     [[nodiscard]] WritableBatch acquireWritableBatch();
+    void discardWritableBatch(size_t slotIndex);
     void submit(size_t slotIndex, size_t batchSize);
     [[nodiscard]] DirectInferenceOutput waitCompleted(size_t slotIndex);
     void release(size_t slotIndex);
+    [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
+        return m_inferenceNanoseconds.load(std::memory_order_relaxed);
+    }
 
 private:
     enum class SlotState : uint8_t { Empty, Filling, Ready, Running, Complete, Failed, Stopped };
@@ -74,6 +78,7 @@ private:
     size_t m_producerCursor = 0;
     size_t m_consumerCursor = 0;
     std::atomic<bool> m_stopping = false;
+    std::atomic<std::uint64_t> m_inferenceNanoseconds = 0;
     std::thread m_inferenceThread;
 
     void inferenceLoop();

@@ -338,7 +338,16 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("modelInferencePositions", &InferenceStatistics::modelInferencePositions)
         .def_readonly("modelBatchSizeHistogram", &InferenceStatistics::modelBatchSizeHistogram)
         .def_readonly("averageNumberOfPositionsInInferenceCall",
-                      &InferenceStatistics::averageNumberOfPositionsInInferenceCall);
+                      &InferenceStatistics::averageNumberOfPositionsInInferenceCall)
+        .def_readonly("treeSelectionNanoseconds", &InferenceStatistics::treeSelectionNanoseconds)
+        .def_readonly("boardEncodingNanoseconds", &InferenceStatistics::boardEncodingNanoseconds)
+        .def_readonly("resultProcessingNanoseconds",
+                      &InferenceStatistics::resultProcessingNanoseconds)
+        .def_readonly("treeBackupNanoseconds", &InferenceStatistics::treeBackupNanoseconds)
+        .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
+        .def_readonly("directInferenceNanoseconds",
+                      &InferenceStatistics::directInferenceNanoseconds)
+        .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
 
     // --- (2.4) MCTSResult ---
     py::class_<MCTSResult>(m, "MCTSResult")
@@ -423,12 +432,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                                    return node.board().fen();
                                })
         .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
-        .def_property_readonly(
-            "repetition_count",
-            [](EvalMCTSNode &node) {
-                node.materializeBoard();
-                return node.board().repetitionCount();
-            })
+        .def_property_readonly("repetition_count",
+                               [](EvalMCTSNode &node) {
+                                   node.materializeBoard();
+                                   return node.board().repetitionCount();
+                               })
         .def_property_readonly("children",
                                [](const EvalMCTSNode &node) {
                                    const auto children = node.children();
@@ -512,8 +520,15 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("elapsed_milliseconds", &AnalysisResult::elapsed_milliseconds)
         .def_readonly("principal_variation", &AnalysisResult::principal_variation);
 
+    py::class_<InteractiveSearchParams>(m, "InteractiveSearchParams")
+        .def(py::init<float, int, int>(), py::arg("exploration_constant"),
+             py::arg("inference_workers"), py::arg("inference_batch_size"))
+        .def_readwrite("exploration_constant", &InteractiveSearchParams::exploration_constant)
+        .def_readwrite("inference_workers", &InteractiveSearchParams::inference_workers)
+        .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size);
+
     py::class_<InteractiveEngine, std::shared_ptr<InteractiveEngine>>(m, "InteractiveEngine")
-        .def(py::init<const InferenceClientParams &, const EvalMCTSParams &>(),
+        .def(py::init<const InferenceClientParams &, const InteractiveSearchParams &>(),
              py::arg("client_parameters"), py::arg("search_parameters"))
         .def("new_game", &InteractiveEngine::newGame, py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &InteractiveEngine::inferenceStatistics);

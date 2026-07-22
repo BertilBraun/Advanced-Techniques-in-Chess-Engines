@@ -32,6 +32,15 @@ class _UniformModel(nn.Module):
         return policy, outcome.repeat(batch_size, 1)
 
 
+class _InvalidOutcomeModel(_UniformModel):
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
+        policy, _ = super().forward(inputs)
+        outcome = torch.tensor(
+            [1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device
+        )
+        return policy, outcome.repeat(inputs.size(0), 1)
+
+
 @pytest.fixture
 def model_path(tmp_path: Path) -> Path:
     channels, rows, columns = CurrentGame.representation_shape
@@ -52,6 +61,23 @@ def engine(model_path: Path) -> InteractiveEngine:
         maximum_batch_size=2,
         batch_collection_timeout_microseconds=50,
         cache_capacity=10_000,
+        inference_target=InferenceTarget.CPU,
+    )
+
+
+@pytest.fixture
+def invalid_engine(tmp_path: Path) -> InteractiveEngine:
+    channels, rows, columns = CurrentGame.representation_shape
+    model = _InvalidOutcomeModel(CurrentGame.action_size).eval()
+    traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
+    path = tmp_path / "invalid-outcome.jit.pt"
+    traced.save(str(path))
+    return InteractiveEngine(
+        model_path=str(path),
+        device_id=0,
+        parallel_searches=8,
+        c_param=1.0,
+        inference_workers=2,
         inference_target=InferenceTarget.CPU,
     )
 
@@ -143,3 +169,31 @@ def test_history_replay_and_apply_move_reject_illegal_continuations(
         engine.new_game(starting_fen, ("e2e5",))
     with pytest.raises(ValueError, match="game over"):
         terminal_game.apply_move("e2e4")
+
+
+def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
+    game = engine.new_game(chess.STARTING_FEN, ())
+    result = game.analyze(AnalysisMode.MCTS, time_limit_seconds=1)
+    metrics = engine.inference_metrics()
+
+    assert result.searches > 0
+    assert 900 <= result.elapsed_milliseconds <= 1_100
+    assert game.root_visits == result.searches
+    assert metrics.model_positions == result.searches
+    assert 0.0 < metrics.direct_worker_utilization <= 1.0
+    assert metrics.tree_selection_nanoseconds > 0
+    assert metrics.board_encoding_nanoseconds > 0
+
+
+def test_inference_failure_cancels_every_tree_reservation(
+    invalid_engine: InteractiveEngine,
+) -> None:
+    game = invalid_engine.new_game(chess.STARTING_FEN, ())
+
+    with pytest.raises(RuntimeError, match="WDL output"):
+        game.analyze(AnalysisMode.MCTS, search_limit=16)
+    assert game.root_visits == 0
+
+    with pytest.raises(RuntimeError, match="WDL output"):
+        game.analyze(AnalysisMode.MCTS, search_limit=16)
+    assert game.root_visits == 0

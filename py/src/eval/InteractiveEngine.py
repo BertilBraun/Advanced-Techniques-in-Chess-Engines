@@ -5,11 +5,11 @@ from enum import Enum
 
 from AlphaZeroCpp import (
     AnalysisMode as NativeAnalysisMode,
-    EvalMCTSParams,
     InferenceClientParams,
     InferenceDevice,
     InteractiveEngine as NativeInteractiveEngine,
     InteractiveGame as NativeInteractiveGame,
+    InteractiveSearchParams,
 )
 
 
@@ -71,6 +71,13 @@ class InferenceMetrics:
     model_calls: int
     model_positions: int
     average_model_batch_size: float
+    tree_selection_nanoseconds: int
+    board_encoding_nanoseconds: int
+    result_processing_nanoseconds: int
+    tree_backup_nanoseconds: int
+    tree_owner_wait_nanoseconds: int
+    direct_inference_nanoseconds: int
+    direct_worker_utilization: float
 
 
 class InteractiveEngine:
@@ -80,6 +87,7 @@ class InteractiveEngine:
         device_id: int,
         parallel_searches: int,
         c_param: float,
+        inference_workers: int = 3,
         maximum_batch_size: int | None = None,
         batch_collection_timeout_microseconds: int = 500,
         cache_capacity: int = 250_000,
@@ -103,7 +111,11 @@ class InteractiveEngine:
         )
         self._native = NativeInteractiveEngine(
             client_parameters,
-            EvalMCTSParams(c_param=c_param, parallel_searches=parallel_searches),
+            InteractiveSearchParams(
+                exploration_constant=c_param,
+                inference_workers=inference_workers,
+                inference_batch_size=resolved_batch_size,
+            ),
         )
 
     def new_game(
@@ -120,6 +132,13 @@ class InteractiveEngine:
             model_calls=statistics.modelInferenceCalls,
             model_positions=statistics.modelInferencePositions,
             average_model_batch_size=statistics.averageNumberOfPositionsInInferenceCall,
+            tree_selection_nanoseconds=statistics.treeSelectionNanoseconds,
+            board_encoding_nanoseconds=statistics.boardEncodingNanoseconds,
+            result_processing_nanoseconds=statistics.resultProcessingNanoseconds,
+            tree_backup_nanoseconds=statistics.treeBackupNanoseconds,
+            tree_owner_wait_nanoseconds=statistics.treeOwnerWaitNanoseconds,
+            direct_inference_nanoseconds=statistics.directInferenceNanoseconds,
+            direct_worker_utilization=statistics.directWorkerUtilization,
         )
 
 

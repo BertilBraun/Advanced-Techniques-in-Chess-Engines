@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GameHistory.hpp"
-#include "MCTS/EvalMCTS.hpp"
+#include "InteractiveSearch.hpp"
 
 enum class AnalysisMode { Policy, Mcts };
 
@@ -29,7 +29,7 @@ class InteractiveGame;
 class InteractiveEngine : public std::enable_shared_from_this<InteractiveEngine> {
 public:
     InteractiveEngine(const InferenceClientParams &clientParameters,
-                      const EvalMCTSParams &searchParameters)
+                      const InteractiveSearchParams &searchParameters)
         : m_search(clientParameters, searchParameters) {}
 
     [[nodiscard]] std::shared_ptr<InteractiveGame>
@@ -41,7 +41,7 @@ public:
 
 private:
     friend class InteractiveGame;
-    EvalMCTS m_search;
+    InteractiveSearch m_search;
 };
 
 class InteractiveGame {
@@ -54,18 +54,18 @@ public:
     [[nodiscard]] AnalysisResult analyze(AnalysisMode mode, std::optional<int> timeLimitSeconds,
                                          std::optional<int> searchLimit);
 
-    [[nodiscard]] std::string fen() const { return m_root->board().fen(); }
+    [[nodiscard]] std::string fen() const { return m_tree->rootBoard().fen(); }
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
     [[nodiscard]] const std::vector<std::string> &movesUci() const { return m_movesUci; }
     [[nodiscard]] int rootVisits() const {
-        return m_root->number_of_visits.load(std::memory_order_relaxed);
+        return static_cast<int>(m_tree->rootStatistics().visits);
     }
 
 private:
     std::shared_ptr<InteractiveEngine> m_engine;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
-    std::shared_ptr<EvalMCTSNode> m_root;
+    std::unique_ptr<EvalSearchTree> m_tree;
 
     void reconstructRoot();
 };

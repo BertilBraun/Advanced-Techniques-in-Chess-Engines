@@ -190,11 +190,86 @@ std::uint32_t EvalSearchTree::preferredRootEdge() const {
 }
 
 EvalNodeIndex EvalSearchTree::selectLeaf(const float explorationConstant) {
-    EvalNodeIndex selected = m_rootIndex;
-    while (node(selected).expanded && !node(selected).children.empty()) {
-        selected = materializeChild(selected, bestChildEdge(selected, explorationConstant));
+    return selectAvailableLeaf(m_rootIndex, explorationConstant);
+}
+
+EvalNodeIndex EvalSearchTree::selectAvailableLeaf(const EvalNodeIndex nodeIndex,
+                                                  const float explorationConstant) {
+    const EvalSearchNode &selectedNode = node(nodeIndex);
+    if (!selectedNode.expanded || selectedNode.children.empty()) {
+        return selectedNode.evaluating ? INVALID_EVAL_NODE_INDEX : nodeIndex;
     }
-    return selected;
+    const std::size_t childCount = selectedNode.children.size();
+
+    const std::uint32_t preferred = bestChildEdge(nodeIndex, explorationConstant);
+    EvalNodeIndex child = materializeChild(nodeIndex, preferred);
+    EvalNodeIndex leaf = selectAvailableLeaf(child, explorationConstant);
+    if (leaf != INVALID_EVAL_NODE_INDEX) {
+        return leaf;
+    }
+
+    // Saturation is uncommon once the frontier is broad, so allocate fallback bookkeeping only
+    // after the UCB-preferred subtree has no leaf available.
+    std::vector<bool> attempted(childCount, false);
+    attempted[preferred] = true;
+    for (std::size_t attempt = 1; attempt < childCount; ++attempt) {
+        float bestScore = -std::numeric_limits<float>::infinity();
+        std::uint32_t bestIndex = 0;
+        const float common =
+            explorationConstant * std::sqrt(static_cast<float>(statistics(nodeIndex).visits));
+        for (std::uint32_t edgeIndex = 0; edgeIndex < childCount; ++edgeIndex) {
+            if (attempted[edgeIndex]) {
+                continue;
+            }
+            const EvalSearchEdge &candidate = node(nodeIndex).children[edgeIndex];
+            const float exploration =
+                candidate.policy * common / static_cast<float>(1U + candidate.statistics.visits);
+            const float action = candidate.statistics.visits == 0
+                                     ? 0.0F
+                                     : -(candidate.statistics.result_sum +
+                                         static_cast<float>(candidate.statistics.virtual_loss)) /
+                                           static_cast<float>(candidate.statistics.visits);
+            const float score = exploration + action;
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = edgeIndex;
+            }
+        }
+        attempted[bestIndex] = true;
+        child = materializeChild(nodeIndex, bestIndex);
+        leaf = selectAvailableLeaf(child, explorationConstant);
+        if (leaf != INVALID_EVAL_NODE_INDEX) {
+            return leaf;
+        }
+    }
+    return INVALID_EVAL_NODE_INDEX;
+}
+
+void EvalSearchTree::reserveLeaf(const EvalNodeIndex leafIndex) {
+    EvalSearchNode &leaf = node(leafIndex);
+    if (leaf.evaluating) {
+        throw std::logic_error("EvalSearchTree leaf is already being evaluated");
+    }
+    leaf.evaluating = true;
+    addVirtualLoss(leafIndex);
+}
+
+void EvalSearchTree::cancelReservation(const EvalNodeIndex leafIndex) {
+    EvalSearchNode &leaf = node(leafIndex);
+    if (!leaf.evaluating) {
+        throw std::logic_error("EvalSearchTree leaf has no evaluation reservation");
+    }
+    cancelVirtualLoss(leafIndex);
+    leaf.evaluating = false;
+}
+
+void EvalSearchTree::completeReservation(const EvalNodeIndex leafIndex, const float result) {
+    EvalSearchNode &leaf = node(leafIndex);
+    if (!leaf.evaluating) {
+        throw std::logic_error("EvalSearchTree leaf has no evaluation reservation");
+    }
+    backPropagateAndRemoveVirtualLoss(leafIndex, result);
+    leaf.evaluating = false;
 }
 
 void EvalSearchTree::addVirtualLoss(EvalNodeIndex leafIndex) {
@@ -342,4 +417,23 @@ EvalVisitCounts EvalSearchTree::gatherVisitCounts() const {
                             static_cast<int>(rootEdge.statistics.visits));
     }
     return counts;
+}
+
+std::size_t EvalSearchTree::evaluatingNodeCount() const {
+    return static_cast<std::size_t>(std::ranges::count_if(m_slots, [](const NodeSlot &slot) {
+        return slot.value.has_value() && slot.value->evaluating;
+    }));
+}
+
+std::uint64_t EvalSearchTree::totalVirtualLoss() const {
+    std::uint64_t total = m_rootStatistics.virtual_loss;
+    for (const NodeSlot &slot : m_slots) {
+        if (!slot.value.has_value()) {
+            continue;
+        }
+        for (const EvalSearchEdge &edge : slot.value->children.edges()) {
+            total += edge.statistics.virtual_loss;
+        }
+    }
+    return total;
 }
