@@ -96,7 +96,7 @@ class Provenance(BaseModel):
 
     command: tuple[str, ...]
     git_revision: str
-    git_dirty: bool
+    git_dirty: bool | None
     model_path: str
     model_sha256: str
     python_version: str
@@ -145,6 +145,7 @@ class ParsedArguments(BaseModel):
     reference_searches: int
     c_param: float
     cache_capacity: int
+    source_revision: str | None
 
 
 def _parse_integer_list(value: str) -> tuple[int, ...]:
@@ -191,6 +192,10 @@ def parse_arguments() -> ParsedArguments:
     parser.add_argument("--reference-searches", type=int, default=4096)
     parser.add_argument("--c-param", type=float, default=1.0)
     parser.add_argument("--cache-capacity", type=int, default=250_000)
+    parser.add_argument(
+        "--source-revision",
+        help="Source revision for exported source trees without Git metadata.",
+    )
     namespace = parser.parse_args()
     return ParsedArguments(
         model=namespace.model,
@@ -207,6 +212,7 @@ def parse_arguments() -> ParsedArguments:
         reference_searches=namespace.reference_searches,
         c_param=namespace.c_param,
         cache_capacity=namespace.cache_capacity,
+        source_revision=namespace.source_revision,
     )
 
 
@@ -218,13 +224,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _git_output(arguments: tuple[str, ...]) -> str:
-    completed = subprocess.run(
-        ("git", *arguments),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+def _git_output(arguments: tuple[str, ...]) -> str | None:
+    try:
+        completed = subprocess.run(
+            ("git", *arguments),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
     return completed.stdout.strip()
 
 
@@ -232,10 +241,12 @@ def collect_provenance(arguments: ParsedArguments) -> Provenance:
     cuda_names = tuple(
         torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())
     )
+    detected_revision = _git_output(("rev-parse", "HEAD"))
+    status = _git_output(("status", "--porcelain"))
     return Provenance(
         command=tuple(sys.argv),
-        git_revision=_git_output(("rev-parse", "HEAD")),
-        git_dirty=bool(_git_output(("status", "--porcelain"))),
+        git_revision=arguments.source_revision or detected_revision or "unavailable",
+        git_dirty=None if status is None else bool(status),
         model_path=str(arguments.model.resolve()),
         model_sha256=_sha256(arguments.model),
         python_version=sys.version,

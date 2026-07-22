@@ -107,6 +107,31 @@ def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(
     assert recovered.root_visits == 0
 
 
+def test_human_reply_reuses_a_less_searched_descendant(
+    engine: InteractiveEngine,
+) -> None:
+    game = engine.new_game(chess.STARTING_FEN, ())
+    engine_result = game.analyze(AnalysisMode.MCTS, search_limit=96)
+    game.apply_move(engine_result.chosen_move_uci)
+
+    reply_analysis = game.analyze(AnalysisMode.MCTS, search_limit=64)
+    searched_replies = tuple(
+        candidate for candidate in reply_analysis.candidates if candidate.visits > 0
+    )
+    assert len(searched_replies) > 1
+    human_reply = min(
+        searched_replies,
+        key=lambda candidate: (candidate.visits, candidate.move_uci),
+    )
+
+    game.apply_move(human_reply.move_uci)
+    assert game.root_visits == human_reply.visits
+
+    additional_searches = 16
+    game.analyze(AnalysisMode.MCTS, search_limit=additional_searches)
+    assert game.root_visits == human_reply.visits + additional_searches
+
+
 def test_history_replay_and_apply_move_reject_illegal_continuations(
     engine: InteractiveEngine,
 ) -> None:
