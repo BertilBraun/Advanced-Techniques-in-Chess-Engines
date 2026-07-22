@@ -89,7 +89,7 @@ class ChessWebPlay:
             downloader=hf_hub_download,
         )
         engine = NativeInteractiveEngine(
-            NativeEngineConfiguration.for_model(str(model_path), search_threads=1)
+            NativeEngineConfiguration.for_model(str(model_path))
         )
         self._web_application = create_app(
             GameService(engine), configuration.allowed_origins

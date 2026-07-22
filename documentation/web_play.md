@@ -10,8 +10,8 @@ turn, so a request can recover after Modal has scaled the only container to zero
 - `policy` evaluates a fresh history-aware root exactly once and chooses the
   highest policy prior. Ties are broken by ascending UCI text.
 - `mcts` reuses the current tree where possible and chooses the largest final
-  visit count. Ties are broken by ascending UCI text. UCB is used only inside
-  native traversal.
+  visit count. Ties are broken by higher policy prior and then ascending UCI
+  text. UCB is used only inside native traversal.
 - `root_value` is `P(win) - P(loss)` from the side-to-move perspective at the
   analyzed root. `outcome_prediction` preserves the model's win, draw, and loss
   probabilities at that root in the same side-to-move perspective. For MCTS it
@@ -19,15 +19,18 @@ turn, so a request can recover after Modal has scaled the only container to zero
 - Candidate `mean_search_value` is converted to the analyzed root player's
   perspective. Candidate visits and shares describe the retained tree; the
   `searches` metric reports work added by the current request.
-- Timed MCTS accepts only 1–30 seconds and stops scheduling native search chunks
-  at the deadline. One already-running native inference cannot be interrupted.
+- Timed MCTS accepts only 1–30 seconds. The native engine stops issuing direct
+  inference batches before the deadline using its measured inference latency,
+  then drains all submitted work.
   Count-based limits exist only in the engine contract for deterministic tests
   and benchmarks; the public API does not expose them.
 
 Only one request enters the Modal container at a time, and `GameService` also
-serializes engine work. The deployment currently uses one native search worker
-because the legacy `EvalMCTS` parallel evaluator is not stable for long-running
-interactive searches. An individual game must never be called concurrently.
+serializes engine work. The deployment uses the production indexed interactive
+search tree with two direct inference workers, batches of up to 64 positions,
+and at most two outstanding batches per worker. Policy mode evaluates exactly
+one position without mutating the MCTS frontier. An individual game must never
+be called concurrently.
 
 ## Local backend
 

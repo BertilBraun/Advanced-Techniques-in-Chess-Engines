@@ -21,6 +21,6 @@ allowed_origins = tuple(
     if origin.strip()
 )
 engine = NativeInteractiveEngine(
-    NativeEngineConfiguration.for_model(model_path, search_threads=1)
+    NativeEngineConfiguration.for_model(model_path)
 )
 app = create_app(GameService(engine), allowed_origins)
