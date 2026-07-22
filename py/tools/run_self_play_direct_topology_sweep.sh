@@ -55,3 +55,4 @@ run_case direct-p1-w2-g512-b64 1 1 512 1 2 64 1 2000
 run_case direct-p2-w2-g512-b64 2 1 512 1 2 64 1 3000
 run_case direct-p2-w3-g768-b64 2 1 768 1 3 64 1 4000
 run_case direct-p3-w2-g512-b64 3 1 512 1 2 64 1 5000
+run_case direct-p2-w4-g2048-b64-q2 2 1 2048 1 4 64 2 6000
