@@ -67,15 +67,20 @@ deployed Modal API URL.
 
 ## Modal deployment
 
-The deployment builds the CPU-only native extension into an ephemeral image. It
-has zero warm containers, at most one container, four requested CPU cores, 4 GiB
-of requested memory, a 300-second scale-down window, a 90-second request timeout,
-and no Modal Volume. The explicit memory request is needed because the native
-MCTS tree retains expanded positions throughout a search. At container startup
-it downloads the named `.pt` and `.jit.pt` artifacts into the revision-aware
-Hugging Face cache, then loads the TorchScript model once. With revision `main`,
-each cold container resolves the branch to one commit before downloading either
-artifact, so both files come from the same latest snapshot.
+The deployment builds the CUDA-enabled native extension into an ephemeral image.
+It requests one NVIDIA A10 GPU, has zero warm containers, at most one container,
+four CPU cores, 4 GiB of requested system memory, a 300-second scale-down window,
+a 90-second request timeout, and no Modal Volume. CUDA is required explicitly;
+startup fails instead of silently falling back to CPU inference. At container
+startup it downloads the named `.pt` and `.jit.pt` artifacts into the
+revision-aware Hugging Face cache, then loads two TorchScript replicas once for
+the direct inference workers. Startup warms the single-position path on both
+workers, then runs a fixed 4,096-search warm-up to initialize full batches and
+stabilize the native deadline estimator before the first request. The native
+extension also disables build-host-specific CPU instructions because Modal may
+serve the image on a different host. With revision `main`, each cold container
+resolves the branch to one commit before downloading either artifact, so both
+files come from the same latest snapshot.
 
 Create the fixed-name Modal secret with every required setting. Use revision
 `main` to load the newest snapshot after scale-to-zero, or a full 40-character

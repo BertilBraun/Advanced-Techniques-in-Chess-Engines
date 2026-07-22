@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "common.hpp"
 
 #include "MoveEncoding.hpp"
@@ -90,12 +92,12 @@ public:
     std::weak_ptr<EvalMCTSNode> parent;
 
     [[nodiscard]] ChildSnapshot children() const {
-        return childrenPublished.load(std::memory_order_acquire);
+        return std::atomic_load_explicit(&childrenPublished, std::memory_order_acquire);
     }
 
 private:
     // Readers own an immutable snapshot while traversing concurrently.
-    std::atomic<ChildSnapshot> childrenPublished;
+    ChildSnapshot childrenPublished;
     std::atomic_flag evaluationInProgress = ATOMIC_FLAG_INIT;
 
     /* 1‑byte spin‑lock used only while *building* the child vector */
@@ -157,7 +159,8 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
             new EvalMCTSNode{nullptr, policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
-    childrenPublished.store(std::move(newChildren), std::memory_order_release);
+    std::atomic_store_explicit(&childrenPublished, ChildSnapshot{std::move(newChildren)},
+                               std::memory_order_release);
 }
 
 inline void EvalMCTSNode::materializeBoard() {
@@ -243,7 +246,7 @@ inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::makeNewRoot(const size_t chil
     newRoot->parent.reset();
 
     /* Drop every other subtree (only we hold shared_ptr copies here) */
-    childrenPublished.store(nullptr, std::memory_order_release);
+    std::atomic_store_explicit(&childrenPublished, ChildSnapshot{}, std::memory_order_release);
     return newRoot;
 }
 

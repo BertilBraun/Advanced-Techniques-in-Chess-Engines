@@ -37,7 +37,12 @@ class NativeEngineConfiguration:
     inference_target: InferenceTarget
 
     @classmethod
-    def for_model(cls, model_path: str, device_id: int = 0) -> NativeEngineConfiguration:
+    def for_model(
+        cls,
+        model_path: str,
+        device_id: int = 0,
+        inference_target: InferenceTarget = InferenceTarget.AUTO,
+    ) -> NativeEngineConfiguration:
         return cls(
             model_path=model_path,
             device_id=device_id,
@@ -48,7 +53,7 @@ class NativeEngineConfiguration:
             maximum_batch_size=64,
             batch_collection_timeout_microseconds=500,
             cache_capacity=250_000,
-            inference_target=InferenceTarget.AUTO,
+            inference_target=inference_target,
         )
 
 
@@ -62,14 +67,20 @@ class NativeInteractiveEngine:
             parallel_searches=configuration.parallel_searches,
             c_param=configuration.exploration_constant,
             inference_workers=configuration.inference_workers,
-            outstanding_batches_per_worker=(configuration.outstanding_batches_per_worker),
+            outstanding_batches_per_worker=(
+                configuration.outstanding_batches_per_worker
+            ),
             maximum_batch_size=configuration.maximum_batch_size,
-            batch_collection_timeout_microseconds=(configuration.batch_collection_timeout_microseconds),
+            batch_collection_timeout_microseconds=(
+                configuration.batch_collection_timeout_microseconds
+            ),
             cache_capacity=configuration.cache_capacity,
             inference_target=configuration.inference_target,
         )
 
-    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> NativeInteractiveGame:
+    def new_game(
+        self, starting_fen: str, moves_uci: tuple[str, ...]
+    ) -> NativeInteractiveGame:
         return NativeInteractiveGame(self._engine.new_game(starting_fen, moves_uci))
 
 
@@ -90,7 +101,11 @@ class NativeInteractiveGame:
     @property
     def result(self) -> str | None:
         board = chess.Board(self.fen)
-        return board.result(claim_draw=True) if board.is_game_over(claim_draw=True) else None
+        return (
+            board.result(claim_draw=True)
+            if board.is_game_over(claim_draw=True)
+            else None
+        )
 
     def apply_move(self, move_uci: str) -> None:
         self._game.apply_move(move_uci)
