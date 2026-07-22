@@ -403,6 +403,7 @@ def test_run_configuration_selects_direct_self_play_inference() -> None:
             'direct_self_play_inference_workers': 2,
             'direct_self_play_inference_batch_size': 64,
             'direct_self_play_outstanding_batches_per_worker': 1,
+            'self_play_parallel_searches': 1,
         }
     )
     arguments = training_args()
@@ -413,6 +414,7 @@ def test_run_configuration_selects_direct_self_play_inference() -> None:
     assert arguments.self_play.direct_inference.inference_workers == 2
     assert arguments.self_play.direct_inference.inference_batch_size == 64
     assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 1
+    assert arguments.self_play.mcts.num_parallel_searches == 1
 
 
 def test_run_configuration_rejects_cached_direct_self_play_inference() -> None:

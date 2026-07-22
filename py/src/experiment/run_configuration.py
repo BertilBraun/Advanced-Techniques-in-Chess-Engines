@@ -112,6 +112,7 @@ class TopologyConfiguration(BaseModel):
     self_play_processes_per_device: tuple[int, ...]
     self_play_tensorboard_processes: int = Field(ge=1)
     mcts_threads_per_process: int = Field(gt=0)
+    self_play_parallel_searches: int = Field(default=4, gt=0)
     parallel_games_per_process: int = Field(gt=0)
     use_inference_cache: bool
     inference_cache_capacity_per_process: int = Field(ge=0)
@@ -662,6 +663,7 @@ def apply_run_configuration(
         else None
     )
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
+    training_args.self_play.mcts.num_parallel_searches = topology.self_play_parallel_searches
     training_args.training.num_workers = topology.dataloader_workers
     training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
     training_args.cluster = ClusterParams(
