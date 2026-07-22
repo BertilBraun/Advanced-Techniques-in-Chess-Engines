@@ -403,6 +403,7 @@ def test_run_configuration_selects_direct_self_play_inference() -> None:
             'direct_self_play_inference_workers': 2,
             'direct_self_play_inference_batch_size': 64,
             'direct_self_play_outstanding_batches_per_worker': 1,
+            'self_play_parallel_searches': 1,
         }
     )
     arguments = training_args()
@@ -413,6 +414,7 @@ def test_run_configuration_selects_direct_self_play_inference() -> None:
     assert arguments.self_play.direct_inference.inference_workers == 2
     assert arguments.self_play.direct_inference.inference_batch_size == 64
     assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 1
+    assert arguments.self_play.mcts.num_parallel_searches == 1
 
 
 def test_run_configuration_rejects_cached_direct_self_play_inference() -> None:
@@ -569,14 +571,28 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['tensorboard_run_directory'] = 'complete-training-run-v5'
     expected['output_path'] = 'py/training_data/complete-training-run-v5'
     expected['evaluation_protocol']['reference_model_path'] = None
-    expected['topology']['trainer_ddp_device_ids'] = (3, 2)
-    expected['topology']['self_play_processes_per_device_during_training'] = (10, 10, 5, 5)
+    expected['topology']['self_play_processes_per_device'] = (2, 2, 2, 2)
+    expected['topology']['mcts_threads_per_process'] = 1
+    expected['topology']['self_play_parallel_searches'] = 1
+    expected['topology']['parallel_games_per_process'] = 2048
+    expected['topology']['direct_self_play_inference_workers'] = 4
+    expected['topology']['direct_self_play_inference_batch_size'] = 64
+    expected['topology']['direct_self_play_outstanding_batches_per_worker'] = 2
+    expected['topology']['self_play_processes_per_device_during_training'] = (1, 1, 1, 1)
     expected['topology']['max_concurrent_evaluation_tasks'] = 8
-    expected['workload']['training_global_batch_size'] = 1024
     expected['workload']['training_sampling_window'] = 15
+    expected['workload']['learning_rate_schedule'] = (
+        {'start_iteration': 0, 'learning_rate': 0.01},
+        {'start_iteration': 50, 'learning_rate': 0.007},
+        {'start_iteration': 100, 'learning_rate': 0.004},
+    )
     expected['workload']['self_play_fast_searches_per_turn'] = 150
+    expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
-    expected['workload']['self_play_final_maximum_game_plies'] = 300
+    expected['workload']['self_play_final_maximum_game_plies'] = 250
+    expected['workload']['self_play_low_material_termination_minimum_plies'] = 50
+    expected['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 4
+    expected['workload']['self_play_low_material_termination_probability'] = 0.7
     expected['retention']['replay_window_iterations'] = 15
     expected['evaluation_protocol']['historical_model_iterations'] = (0,) + expected['evaluation_protocol'][
         'historical_model_iterations'
@@ -584,6 +600,30 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['evaluation_protocol']['historical_model_rotation_period'] = 2
 
     assert v5_configuration.model_dump() == expected
+
+
+def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training() -> None:
+    configuration = load_run_configuration(V5_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    validate_run_configuration(configuration, resolved_pilot_hardware())
+    apply_run_configuration(arguments, configuration)
+
+    assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
+    assert arguments.training.global_batch_size == 2048
+    assert arguments.training.local_batch_size == 512
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.01)
+    assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.007)
+    assert arguments.training.learning_rate(190, 'adamw') == pytest.approx(0.004)
+    assert arguments.cluster.self_play_device_ids == (0, 0, 1, 1, 2, 2, 3, 3)
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (1, 3, 5, 7)
+    assert arguments.self_play.mcts.num_threads == 1
+    assert arguments.self_play.mcts.num_parallel_searches == 1
+    assert arguments.self_play.num_parallel_games == 2048
+    assert arguments.self_play.direct_inference is not None
+    assert arguments.self_play.direct_inference.inference_workers == 4
+    assert arguments.self_play.direct_inference.inference_batch_size == 64
+    assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
 
 
 def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
@@ -599,7 +639,19 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
     assert arguments.artifact_retention.replay_window_iterations == 15
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
-    assert arguments.self_play.final_maximum_game_plies == 300
+    assert arguments.self_play.final_maximum_game_plies == 250
+    assert arguments.self_play.low_material_termination_minimum_plies == 50
+    assert arguments.self_play.low_material_termination_piece_threshold_per_player == 4
+    assert arguments.self_play.low_material_termination_probability == 0.7
+
+
+def test_run_configuration_rejects_low_material_probability_without_a_piece_threshold() -> None:
+    configuration = load_run_configuration(V5_CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 0
+
+    with pytest.raises(ValidationError, match='Low-material termination'):
+        RunConfiguration.model_validate(data)
 
 
 @pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))

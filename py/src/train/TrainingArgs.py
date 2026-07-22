@@ -107,6 +107,15 @@ class SelfPlayParams:
     final_maximum_game_plies: int | None = None
     """Maximum self-play game length after the scheduled interpolation, or None to disable the cap."""
 
+    low_material_termination_minimum_plies: int = 0
+    """Earliest ply at which the one-shot low-material termination rule may be evaluated."""
+
+    low_material_termination_piece_threshold_per_player: int = 0
+    """Terminate eligibility requires either player to have fewer pieces than this threshold."""
+
+    low_material_termination_probability: float = 0.0
+    """Probability of terminating the first eligible low-material position with a material result."""
+
     only_store_sampled_moves: bool = False
     """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 from collections.abc import Sequence
-from math import ceil
 
 import h5py
 import torch
@@ -327,18 +326,15 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
 
     def chunked_save(self, folder_path: str | PathLike, iteration: int, chunk_size: int) -> list[Path]:
         chunked_files = []
-        for i in range(0, len(self), chunk_size):
+        for chunk_index, i in enumerate(range(0, len(self), chunk_size)):
             chunk = SelfPlayDataset()
             chunk.encoded_states = self.encoded_states[i : i + chunk_size]
             chunk.visit_counts = self.visit_counts[i : i + chunk_size]
             chunk.value_targets = self.value_targets[i : i + chunk_size]
-            fract_of_games = ceil(len(self) / chunk_size)
-            chunk.stats = SelfPlayDatasetStats(
-                num_samples=len(chunk),
-                num_games=self.stats.num_games // fract_of_games,
-                total_generation_time=self.stats.total_generation_time / fract_of_games,
-                resignations=self.stats.resignations // fract_of_games,
-            )
+            if chunk_index == 0:
+                chunk.stats = self.stats.overwrite(num_samples=len(chunk))
+            else:
+                chunk.stats = SelfPlayDatasetStats(num_samples=len(chunk))
 
             chunked_files.append(chunk.save(folder_path, iteration, f'chunk_{i // chunk_size}_{random_id()}'))
 

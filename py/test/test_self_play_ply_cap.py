@@ -15,6 +15,9 @@ def self_play_client(iteration: int, final_maximum_game_plies: int | None = None
         maximum_game_plies=200,
         maximum_game_plies_until_iteration=50,
         final_maximum_game_plies=final_maximum_game_plies,
+        low_material_termination_minimum_plies=0,
+        low_material_termination_piece_threshold_per_player=0,
+        low_material_termination_probability=0.0,
     )
     client.iteration = iteration
     client.dataset = SelfPlayDataset()
@@ -85,17 +88,17 @@ def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyP
     ('iteration', 'expected_maximum'),
     (
         (0, 200),
-        (40, 250),
-        (79, 298),
-        (80, 300),
-        (300, 300),
+        (40, 225),
+        (79, 249),
+        (80, 250),
+        (300, 250),
     ),
 )
-def test_maximum_game_plies_increases_from_200_to_300(
+def test_maximum_game_plies_increases_from_200_to_250(
     iteration: int,
     expected_maximum: int,
 ) -> None:
-    client = self_play_client(iteration, final_maximum_game_plies=300)
+    client = self_play_client(iteration, final_maximum_game_plies=250)
     client.args.maximum_game_plies_until_iteration = 80
 
     assert client._maximum_game_plies() == expected_maximum

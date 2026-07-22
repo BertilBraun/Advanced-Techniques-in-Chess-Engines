@@ -162,6 +162,21 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
                 log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
                 log_histogram('dataset/capped_game_material_scores', accumulated_stats.capped_game_material_scores)
 
+            if accumulated_stats.low_material_termination_evaluations > 0:
+                log_scalars(
+                    'dataset/low_material_termination',
+                    {
+                        'evaluations': accumulated_stats.low_material_termination_evaluations,
+                        'terminations': accumulated_stats.low_material_terminations,
+                        'declines': accumulated_stats.low_material_termination_declines,
+                    },
+                )
+            if accumulated_stats.low_material_termination_material_scores:
+                log_histogram(
+                    'dataset/low_material_termination_material_scores',
+                    accumulated_stats.low_material_termination_material_scores,
+                )
+
             log_scalar('dataset/num_games', accumulated_stats.num_games)
             log_scalar('dataset/num_samples', accumulated_stats.num_samples)
             log_scalar(

@@ -29,8 +29,6 @@ from src.util.timing import timeit
 
 
 ENDGAME_PIECE_THRESHOLD = 8
-LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER = 4
-LOW_MATERIAL_TERMINATION_PROBABILITY = 0.2
 
 
 @dataclass(frozen=True)
@@ -53,6 +51,7 @@ class SelfPlayGame:
         self.resigned_at_move: Optional[int] = None
         # The player who resigned, if any. None if the game is still ongoing.
         self.resignee: Optional[Player] = None
+        self.low_material_termination_evaluated = False
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
@@ -71,6 +70,7 @@ class SelfPlayGame:
         game.start_generation_time = self.start_generation_time
         game.resigned_at_move = self.resigned_at_move
         game.resignee = self.resignee
+        game.low_material_termination_evaluated = self.low_material_termination_evaluated
         return game
 
     def __hash__(self) -> int:
@@ -279,6 +279,11 @@ class SelfPlayCpp:
 
             if self._should_terminate_low_material_game(spg):
                 approximate_result = spg.board.get_approximate_result_score() * spg.board.current_player
+                self.dataset.stats += SelfPlayDatasetStats(
+                    low_material_termination_evaluations=1,
+                    low_material_terminations=1,
+                    low_material_termination_material_scores=[approximate_result],
+                )
                 self.self_play_games[i] = self._handle_end_of_game(spg, approximate_result)
                 continue
 
@@ -298,22 +303,30 @@ class SelfPlayCpp:
         return random.random() < self.endgame_shortcut_strength
 
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
-        if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
+        if CURRENT_GAME != 'chess' or game.low_material_termination_evaluated:
             return False
-        if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
+        if len(game.played_moves) < self.args.low_material_termination_minimum_plies:
+            return False
+        if self.args.low_material_termination_probability <= 0.0:
             return False
 
         pieces = game.board.board.piece_map().values()
         white_piece_count = sum(piece.color == chess.WHITE for piece in pieces)
         black_piece_count = sum(piece.color == chess.BLACK for piece in pieces)
         if (
-            white_piece_count >= LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER
-            and black_piece_count >= LOW_MATERIAL_PIECE_THRESHOLD_PER_PLAYER
+            white_piece_count >= self.args.low_material_termination_piece_threshold_per_player
+            and black_piece_count >= self.args.low_material_termination_piece_threshold_per_player
         ):
             return False
 
-        termination_probability = LOW_MATERIAL_TERMINATION_PROBABILITY * self.endgame_shortcut_strength
-        return random.random() < termination_probability
+        game.low_material_termination_evaluated = True
+        if random.random() < self.args.low_material_termination_probability:
+            return True
+        self.dataset.stats += SelfPlayDatasetStats(
+            low_material_termination_evaluations=1,
+            low_material_termination_declines=1,
+        )
+        return False
 
     @timeit
     def _sample_self_play_game(
