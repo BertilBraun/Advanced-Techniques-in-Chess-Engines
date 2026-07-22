@@ -193,7 +193,6 @@ function renderHistory(): void {
       (row) => `<li><span>${row.number}.</span><strong>${row.white}</strong><strong>${row.black ?? ""}</strong></li>`,
     )
     .join("");
-  history.lastElementChild?.scrollIntoView({ block: "nearest" });
 }
 
 function renderAnalysis(analysis: AnalysisResult | null): void {
