@@ -12,7 +12,7 @@ Use `lichess-bot` with this repository's UCI process. This is cleaner than a `ho
 
 The adapter is `python -m src.uci --model MODEL.jit.pt`. It accepts `uci`, `isready`, `setoption name SearchMode value policy|mcts`, `ucinewgame`, `position startpos|fen ... moves ...`, `go movetime 1000..30000`, `stop`, and `quit`. It owns the production `src.eval.InteractiveEngine`, which uses the native indexed search tree and direct pipelined inference workers. It advances a game when the new complete history extends the old one and reconstructs from the supplied starting FEN and complete UCI history after divergence or process recovery. MCTS selects the final move by maximum visit count; UCB remains internal traversal policy. Only UCI protocol output is written to stdout and diagnostics go to stderr.
 
-The native `analyze` binding releases the Python GIL. UCI MCTS divides a requested move time into optimized one-second native searches, preserving the same reusable native tree while allowing `stop` to be observed between slices. The direct-inference defaults are two workers, batches of 64, and two outstanding batches per worker, matching the integrated RTX 3060 benchmark recommendation.
+The native `analyze` binding releases the Python GIL. UCI MCTS divides a requested move time into optimized native searches of up to five seconds by default, preserving the same reusable native tree while allowing `stop` to be observed between chunks. One-second chunks substantially underfill the direct CUDA pipeline on the measured RTX 3060 deployment. The direct-inference defaults are two workers, batches of 64, and two outstanding batches per worker; use `--search-slice-seconds` to trade throughput for lower stop latency.
 
 ## Creating a BOT account and token
 
