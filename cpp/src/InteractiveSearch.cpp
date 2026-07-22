@@ -1,5 +1,6 @@
 #include "InteractiveSearch.hpp"
 
+#include "InferenceResultProcessing.hpp"
 #include "MoveEncoding.hpp"
 
 namespace {
@@ -37,29 +38,15 @@ InteractiveSearch::InteractiveSearch(const InferenceClientParams &clientParamete
 
 InferenceResult InteractiveSearch::decode(const torch::Tensor &policy, const torch::Tensor &outcome,
                                           const Board &board) {
+    if (policy.device().is_cuda() || policy.scalar_type() != torch::kFloat32 || policy.dim() != 1 ||
+        policy.numel() != ACTION_SIZE || !policy.is_contiguous()) {
+        throw std::runtime_error("Inference model policy output must contain one float per action");
+    }
     if (outcome.device().is_cuda() || outcome.scalar_type() != torch::kFloat32 ||
-        outcome.dim() != 1 || outcome.numel() != 3 ||
-        !torch::isfinite(outcome).all().item<bool>() || (outcome < 0).any().item<bool>() ||
-        std::abs(outcome.sum().item<float>() - 1.0F) > 1e-2F) {
+        outcome.dim() != 1 || outcome.numel() != 3 || !outcome.is_contiguous()) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
     }
-    const WdlPrediction prediction{outcome[0].item<float>(), outcome[1].item<float>(),
-                                   outcome[2].item<float>()};
-    const std::vector<EncodedMoveScore> encodedMoves =
-        filterPolicyThenGetMovesAndProbabilities(policy, &board);
-    std::vector<int> indices;
-    indices.reserve(encodedMoves.size());
-    for (const auto &[encodedMove, score] : encodedMoves) {
-        static_cast<void>(score);
-        indices.push_back(encodedMove);
-    }
-    const std::vector<Move> moves = decodeMoves(indices, &board);
-    std::vector<MoveScore> moveScores;
-    moveScores.reserve(moves.size());
-    for (std::size_t index = 0; index < moves.size(); ++index) {
-        moveScores.emplace_back(moves[index], encodedMoves[index].second);
-    }
-    return {std::move(moveScores), prediction};
+    return processInferenceResult(policy.data_ptr<float>(), outcome.data_ptr<float>(), board);
 }
 
 InferenceResult InteractiveSearch::evaluate(const Board &board) {
@@ -139,13 +126,14 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
                                            std::chrono::steady_clock::now() - waitStartedAt)
                                            .count());
         outputReady = true;
+        const float *policyData = output.policies.data_ptr<float>();
+        const float *outcomeData = output.outcomes.data_ptr<float>();
         for (; processed < pending->leaves.size(); ++processed) {
             const EvalNodeIndex leafIndex = pending->leaves[processed];
             EvalSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
-            const InferenceResult inferenceResult =
-                decode(output.policies[static_cast<int64_t>(processed)],
-                       output.outcomes[static_cast<int64_t>(processed)], leaf.board);
+            const InferenceResult inferenceResult = processInferenceResult(
+                policyData + processed * ACTION_SIZE, outcomeData + processed * 3, leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)

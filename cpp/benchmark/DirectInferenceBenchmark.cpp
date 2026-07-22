@@ -2,10 +2,12 @@
 #include "BoardEncoding.hpp"
 #include "DirectInference.hpp"
 #include "InferenceClient.hpp"
+#include "InferenceResultProcessing.hpp"
 #include "NonCachingInferenceClient.hpp"
 
 #include <barrier>
 #include <nlohmann/json.hpp>
+#include <numeric>
 
 namespace {
 constexpr size_t WARMUP_ITERATIONS = 5;
@@ -129,6 +131,34 @@ nlohmann::json runDirect(const Arguments &arguments,
     return {{"elapsed_seconds", seconds}, {"checksum", outputChecksum(output)}};
 }
 
+nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<Board> &boards,
+                                  const std::vector<CompressedEncodedBoard> &encodings) {
+    DirectInferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize,
+                                 true);
+    torch::Tensor input = runner.createInputBuffer();
+    DirectInferenceOutput output = runner.createOutputBuffer();
+    fillInput(input, encodings, 0, arguments.batchSize);
+    for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
+        runner.forwardInto(input, arguments.batchSize, output);
+    }
+
+    double checksum = 0.0;
+    const auto startedAt = std::chrono::steady_clock::now();
+    for (size_t iteration = 0; iteration < arguments.iterations; ++iteration) {
+        runner.forwardInto(input, arguments.batchSize, output);
+        const float *policyData = output.policies.data_ptr<float>();
+        const float *outcomeData = output.outcomes.data_ptr<float>();
+        for (size_t position = 0; position < arguments.batchSize; ++position) {
+            const InferenceResult result = processInferenceResult(
+                policyData + position * ACTION_SIZE, outcomeData + position * 3, boards[position]);
+            checksum += result.value() + static_cast<double>(result.moves.size());
+        }
+    }
+    const double seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - startedAt).count();
+    return {{"elapsed_seconds", seconds}, {"checksum", checksum}};
+}
+
 nlohmann::json runPipeline(const Arguments &arguments,
                            const std::vector<CompressedEncodedBoard> &encodings) {
     DirectInferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
@@ -220,6 +250,60 @@ nlohmann::json runReplicas(const Arguments &arguments,
     return {{"elapsed_seconds", seconds}, {"checksum", checksum}};
 }
 
+nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vector<Board> &boards,
+                                    const std::vector<CompressedEncodedBoard> &encodings) {
+    std::vector<std::unique_ptr<DirectInferenceRunner>> runners;
+    std::vector<torch::Tensor> inputs;
+    std::vector<DirectInferenceOutput> outputs;
+    runners.reserve(arguments.workers);
+    inputs.reserve(arguments.workers);
+    outputs.reserve(arguments.workers);
+    for (size_t worker = 0; worker < arguments.workers; ++worker) {
+        auto runner = std::make_unique<DirectInferenceRunner>(arguments.modelPath, arguments.device,
+                                                              0, arguments.batchSize, true);
+        torch::Tensor input = runner->createInputBuffer();
+        DirectInferenceOutput output = runner->createOutputBuffer();
+        fillInput(input, encodings, worker * arguments.batchSize, arguments.batchSize);
+        for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
+            runner->forwardInto(input, arguments.batchSize, output);
+        }
+        inputs.push_back(std::move(input));
+        outputs.push_back(std::move(output));
+        runners.push_back(std::move(runner));
+    }
+
+    std::barrier startBarrier(static_cast<std::ptrdiff_t>(arguments.workers + 1));
+    std::vector<double> checksums(arguments.workers, 0.0);
+    std::vector<std::thread> threads;
+    threads.reserve(arguments.workers);
+    for (size_t worker = 0; worker < arguments.workers; ++worker) {
+        threads.emplace_back([&, worker]() {
+            startBarrier.arrive_and_wait();
+            for (size_t iteration = 0; iteration < arguments.iterations; ++iteration) {
+                runners[worker]->forwardInto(inputs[worker], arguments.batchSize, outputs[worker]);
+                const float *policyData = outputs[worker].policies.data_ptr<float>();
+                const float *outcomeData = outputs[worker].outcomes.data_ptr<float>();
+                for (size_t position = 0; position < arguments.batchSize; ++position) {
+                    const size_t boardIndex = worker * arguments.batchSize + position;
+                    const InferenceResult result =
+                        processInferenceResult(policyData + position * ACTION_SIZE,
+                                               outcomeData + position * 3, boards[boardIndex]);
+                    checksums[worker] += result.value() + static_cast<double>(result.moves.size());
+                }
+            }
+        });
+    }
+    startBarrier.arrive_and_wait();
+    const auto startedAt = std::chrono::steady_clock::now();
+    for (std::thread &thread : threads) {
+        thread.join();
+    }
+    const double seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - startedAt).count();
+    return {{"elapsed_seconds", seconds},
+            {"checksum", std::accumulate(checksums.begin(), checksums.end(), 0.0)}};
+}
+
 template <typename Client>
 nlohmann::json runClient(const Arguments &arguments, const std::vector<Board> &boards,
                          const size_t cacheCapacity) {
@@ -278,17 +362,22 @@ int main(const int argumentCount, char **argumentValues) {
         nlohmann::json result;
         if (arguments.mode == "direct") {
             result = runDirect(arguments, encodings);
+        } else if (arguments.mode == "processed_direct") {
+            result = runProcessedDirect(arguments, boards, encodings);
         } else if (arguments.mode == "pipeline") {
             result = runPipeline(arguments, encodings);
         } else if (arguments.mode == "replicas") {
             result = runReplicas(arguments, encodings);
+        } else if (arguments.mode == "processed_replicas") {
+            result = runProcessedReplicas(arguments, boards, encodings);
         } else if (arguments.mode == "cached") {
             result = runClient<InferenceClient>(arguments, boards, positions * 2);
         } else if (arguments.mode == "noncached") {
             result = runClient<NonCachingInferenceClient>(arguments, boards, 0);
         } else {
             throw std::invalid_argument(
-                "Mode must be direct, pipeline, replicas, cached, or noncached");
+                "Mode must be direct, processed_direct, pipeline, replicas, processed_replicas, "
+                "cached, or noncached");
         }
 
         const double elapsedSeconds = result.at("elapsed_seconds").get<double>();

@@ -225,3 +225,40 @@ std::vector<EncodedMoveScore> filterPolicyThenGetMovesAndProbabilities(const tor
     });
     return movesWithProbabilities;
 }
+
+std::vector<MoveScore> filterPolicyThenGetMoveScores(const float *policyData, const Board *board) {
+    const std::vector<Move> &legalMoves = board->validMoves();
+    if (legalMoves.empty()) {
+        return {};
+    }
+
+    std::vector<MoveScore> movesWithProbabilities;
+    movesWithProbabilities.reserve(legalMoves.size());
+    for (const Move move : legalMoves) {
+        movesWithProbabilities.emplace_back(move, policyData[encodeMove(move, board)]);
+    }
+
+    std::ranges::sort(movesWithProbabilities, {}, [board](const MoveScore &moveWithProbability) {
+        return encodeMove(moveWithProbability.first, board);
+    });
+
+    float legalPolicySum = 0.0F;
+    for (const MoveScore &moveWithProbability : movesWithProbabilities) {
+        legalPolicySum += moveWithProbability.second;
+    }
+    if (legalPolicySum < 0.00001F) {
+        const float uniformProbability = 1.0F / static_cast<float>(movesWithProbabilities.size());
+        for (MoveScore &moveWithProbability : movesWithProbabilities) {
+            moveWithProbability.second = uniformProbability;
+        }
+        return movesWithProbabilities;
+    }
+
+    for (MoveScore &moveWithProbability : movesWithProbabilities) {
+        moveWithProbability.second /= legalPolicySum;
+    }
+    std::erase_if(movesWithProbabilities, [](const MoveScore &moveWithProbability) {
+        return !(moveWithProbability.second > 0.0F);
+    });
+    return movesWithProbabilities;
+}

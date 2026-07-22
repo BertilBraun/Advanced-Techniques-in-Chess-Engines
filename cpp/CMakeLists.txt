@@ -280,6 +280,7 @@ add_executable(
         MovePolicyProcessingTest
         test/TestMovePolicyProcessing.cpp
         src/Board.cpp
+        src/InferenceResultProcessing.cpp
         src/MoveEncoding.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -322,6 +323,7 @@ add_executable(
         src/BoardEncoding.cpp
         src/DirectInference.cpp
         src/InferenceClient.cpp
+        src/InferenceResultProcessing.cpp
         src/MoveEncoding.cpp
         src/NonCachingInferenceClient.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
