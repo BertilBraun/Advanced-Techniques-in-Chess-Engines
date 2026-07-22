@@ -6,10 +6,18 @@
 InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32), m_cache(args.cacheCapacity),
       m_modelBatchSizeHistogram(static_cast<size_t>(args.maxBatchSize) + 1), m_params(args) {
-    // Use GPU if available, else CPU.
-    if (torch::cuda::is_available()) {
-        assert(args.device_id >= 0 && args.device_id < torch::cuda::device_count() &&
-               "Invalid device ID for CUDA");
+    if (args.cacheCapacity == 0) {
+        throw std::invalid_argument("cacheCapacity must be positive for cached inference");
+    }
+    const bool useCuda = args.device == InferenceDevice::Cuda ||
+                         (args.device == InferenceDevice::Auto && torch::cuda::is_available());
+    if (useCuda) {
+        if (!torch::cuda::is_available()) {
+            throw std::invalid_argument("CUDA inference requested but CUDA is unavailable");
+        }
+        if (args.device_id < 0 || args.device_id >= torch::cuda::device_count()) {
+            throw std::invalid_argument("Invalid CUDA device ID");
+        }
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16; // Use half precision for inference.
     }
@@ -116,23 +124,22 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         for (PendingInference &pending : futures) {
             const size_t i = pending.boardIndex;
             std::future<ModelInferenceResult> &future = pending.future;
-            const ModelInferenceResult modelResult = future.get();
+            ModelInferenceResult modelResult = future.get();
             const torch::Tensor &policy = modelResult.policy;
-            const OutcomeProbabilities outcome = modelResult.outcome;
+            const float value = modelResult.outcome.expectedValue();
 
-            assert(std::abs(outcome.value()) <= 1.0f + 1e-2f &&
-                   "InferenceClient::inference_batch: value out of bounds");
-            // if any element in policy is negative, or the sum of the policy is not close to 1.0,
-            // throw an error.
-            assert((policy < 0).any().item<bool>() == false &&
-                   "InferenceClient::inference_batch: policy contains negative values");
-            assert(std::abs(policy.sum().item<float>()) < 1.0f + 1e-2f &&
-                   "InferenceClient::inference_batch: policy does not sum to 1.0");
+            if (policy.dim() != 1 || !torch::isfinite(policy).all().item<bool>() ||
+                (policy < 0).any().item<bool>() ||
+                std::abs(policy.sum().item<float>() - 1.0f) > 1e-2f || !std::isfinite(value) ||
+                std::abs(value) > 1.0f + 1e-2f) {
+                throw std::runtime_error("Inference model returned an invalid policy or value");
+            }
 
             CachedInferenceResult result{
-                filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), outcome};
+                filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), modelResult.outcome};
             if (pending.cacheProducer.has_value()) {
                 pending.cacheProducer->publish(std::move(result));
+                pending.cacheProducer.reset();
             } else {
                 uncachedResults[i] = std::move(result);
             }
@@ -147,12 +154,14 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             const CachedInferenceResult &result = uncachedResults[i].has_value()
                                                       ? uncachedResults[i].value()
                                                       : cachedResults[i].get();
+            const std::vector<EncodedMoveScore> &moves = result.moves;
+
             // Decode the moves from the cached result using the board.
             std::vector<int> encodedMoves;
             std::vector<float> scores;
-            encodedMoves.reserve(result.moves.size());
-            scores.reserve(result.moves.size());
-            for (const auto &[encodedMove, score] : result.moves) {
+            encodedMoves.reserve(moves.size());
+            scores.reserve(moves.size());
+            for (const auto &[encodedMove, score] : moves) {
                 encodedMoves.push_back(encodedMove);
                 scores.push_back(score);
             }
@@ -174,8 +183,15 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
         return results;
     } catch (...) {
+        const std::exception_ptr exception = std::current_exception();
+        for (PendingInference &pending : futures) {
+            if (pending.cacheProducer.has_value()) {
+                pending.cacheProducer->publishException(exception);
+                pending.cacheProducer.reset();
+            }
+        }
         releaseCacheLeases();
-        throw;
+        std::rethrow_exception(exception);
     }
 }
 
@@ -215,7 +231,7 @@ InferenceStatistics InferenceClient::getStatistics() {
         }
         try {
             const CachedInferenceResult &result = resultHandle.get();
-            stats.nnOutputValueDistribution.push_back(result.outcome.value());
+            stats.nnOutputValueDistribution.push_back(result.outcome.expectedValue());
             dynamicValueBytes += result.moves.capacity() * sizeof(EncodedMoveScore);
         } catch (...) {
             // A failed producer is excluded from completed-result statistics.
@@ -322,11 +338,15 @@ void InferenceClient::resolveWorker() {
             for (size_t i : range(completedBatch->promises.size())) {
                 const torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(i)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(i)];
-                const OutcomeProbabilities outcome{
-                    values[0].item<float>(),
-                    values[1].item<float>(),
-                    values[2].item<float>(),
-                };
+                if (values.dim() != 1 || values.numel() != 3 ||
+                    !torch::isfinite(values).all().item<bool>() ||
+                    (values < 0).any().item<bool>() ||
+                    std::abs(values.sum().item<float>() - 1.0f) > 1e-2f) {
+                    throw std::runtime_error(
+                        "Inference model WDL output must be three probabilities");
+                }
+                const WdlPrediction outcome{values[0].item<float>(), values[1].item<float>(),
+                                            values[2].item<float>()};
                 results.push_back({policy, outcome});
             }
 

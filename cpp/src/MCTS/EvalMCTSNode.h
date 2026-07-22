@@ -31,13 +31,20 @@ public:
     }
 
     static std::shared_ptr<EvalMCTSNode> createRoot(Board board) {
-        return std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{std::move(board), 1.0f, Move::null(), std::weak_ptr<EvalMCTSNode>()});
+        return std::shared_ptr<EvalMCTSNode>(new EvalMCTSNode{
+            std::make_unique<Board>(std::move(board)), 1.0f, Move::null(),
+            std::weak_ptr<EvalMCTSNode>()});
     }
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
-    [[nodiscard]] bool isTerminal() const { return board.isGameOver(); }
+    [[nodiscard]] bool isTerminal() const { return board().isGameOver(); }
     [[nodiscard]] bool isExpanded() const { return children() != nullptr; }
+    [[nodiscard]] bool hasMaterializedBoard() const { return m_board != nullptr; }
+    [[nodiscard]] const Board &board() const {
+        assert(m_board != nullptr);
+        return *m_board;
+    }
+    void materializeBoard();
 
     /* ──────────────────────  core search helpers  ───────────────────── */
     [[nodiscard]] float ucb(float uCommon) const;
@@ -47,16 +54,18 @@ public:
      * return immediately.  The fully‑built vector is *atomically published*
      * so readers never observe an incompletely initialised child.
      */
-    void expand(const std::vector<MoveScore> &moves, OutcomeProbabilities outcome);
+    void expand(const std::vector<MoveScore> &moves,
+                std::optional<WdlPrediction> outcome = std::nullopt);
 
-    [[nodiscard]] const std::optional<OutcomeProbabilities> &outcomePrediction() const {
-        return outcome_prediction;
+    [[nodiscard]] const std::optional<WdlPrediction> &outcomePrediction() const {
+        return networkOutcome;
     }
 
     [[nodiscard]] bool tryBeginEvaluation();
     void endEvaluation();
 
     void addVirtualLoss();
+    void cancelVirtualLoss();
     void backPropagateAndRemoveVirtualLoss(float result);
 
     void backPropagate(float result);
@@ -70,13 +79,13 @@ public:
     [[nodiscard]] VisitCounts gatherVisitCounts() const;
 
     /* ──────────────────────  public data  ──────────────────────────── */
-    Board board;
     Move moveToGetHere = Move::null();
 
     std::atomic<int> number_of_visits{0};
     std::atomic<int> virtual_loss{0};
     std::atomic<float> result_sum{0.f};
     float policy = 0.f; // immutable
+    std::optional<WdlPrediction> networkOutcome;
 
     std::weak_ptr<EvalMCTSNode> parent;
 
@@ -87,7 +96,6 @@ public:
 private:
     // Readers own an immutable snapshot while traversing concurrently.
     std::atomic<ChildSnapshot> childrenPublished;
-    std::optional<OutcomeProbabilities> outcome_prediction;
     std::atomic_flag evaluationInProgress = ATOMIC_FLAG_INIT;
 
     /* 1‑byte spin‑lock used only while *building* the child vector */
@@ -102,9 +110,12 @@ private:
     };
 
     /* ────────────────────  construction only via factory  ──────────── */
-    EvalMCTSNode(Board board, const float policy, const Move move,
+    EvalMCTSNode(std::unique_ptr<Board> board, const float policy, const Move move,
                  std::weak_ptr<EvalMCTSNode> parent)
-        : board{std::move(board)}, moveToGetHere{move}, policy{policy}, parent{std::move(parent)} {}
+        : m_board{std::move(board)}, moveToGetHere{move}, policy{policy},
+          parent{std::move(parent)} {}
+
+    std::unique_ptr<Board> m_board;
 };
 
 /* =====================================================================
@@ -114,11 +125,6 @@ private:
 // (i.e. multiply delta by 2-5?)
 static inline constexpr int VIRTUAL_LOSS_DELTA =
     1; // How much to increase the virtual loss by each time
-
-static inline constexpr float TURN_DISCOUNT =
-    0.99f; // Discount factor for the result score when backpropagating
-// this makes the result score decay over time, simulating the fact that very long searches add
-// more uncertainty to the result.
 
 inline float EvalMCTSNode::ucb(const float uCommon) const {
     const int v = number_of_visits.load(std::memory_order_relaxed);
@@ -134,7 +140,7 @@ inline float EvalMCTSNode::ucb(const float uCommon) const {
 }
 
 inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
-                                 const OutcomeProbabilities outcome) {
+                                 const std::optional<WdlPrediction> outcome) {
     if (isExpanded() || moves.empty())
         return;
 
@@ -142,24 +148,40 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
     if (isExpanded())
         return; // another thread won the race
 
+    networkOutcome = outcome;
+
     const auto newChildren = std::make_shared<ChildVector>();
     newChildren->reserve(moves.size());
     for (const auto &[move, policy] : moves) {
-        Board next = board;
-        next.makeMove(move);
         newChildren->emplace_back(std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{std::move(next), policy, move, weak_from_this()}));
+            new EvalMCTSNode{nullptr, policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
-    outcome_prediction = outcome;
     childrenPublished.store(std::move(newChildren), std::memory_order_release);
+}
+
+inline void EvalMCTSNode::materializeBoard() {
+    if (m_board != nullptr) {
+        return;
+    }
+
+    SpinGuard guard{expand_lock};
+    if (m_board != nullptr) {
+        return;
+    }
+    const std::shared_ptr<EvalMCTSNode> parentNode = parent.lock();
+    assert(parentNode != nullptr);
+    m_board = std::make_unique<Board>(parentNode->board());
+    m_board->makeMove(moveToGetHere);
 }
 
 inline bool EvalMCTSNode::tryBeginEvaluation() {
     return !evaluationInProgress.test_and_set(std::memory_order_acquire);
 }
 
-inline void EvalMCTSNode::endEvaluation() { evaluationInProgress.clear(std::memory_order_release); }
+inline void EvalMCTSNode::endEvaluation() {
+    evaluationInProgress.clear(std::memory_order_release);
+}
 
 inline void EvalMCTSNode::addVirtualLoss() {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
@@ -168,11 +190,18 @@ inline void EvalMCTSNode::addVirtualLoss() {
     }
 }
 
+inline void EvalMCTSNode::cancelVirtualLoss() {
+    for (auto node = shared_from_this(); node; node = node->parent.lock()) {
+        node->virtual_loss.fetch_sub(VIRTUAL_LOSS_DELTA, std::memory_order_relaxed);
+        node->number_of_visits.fetch_sub(1, std::memory_order_relaxed);
+    }
+}
+
 inline void EvalMCTSNode::backPropagateAndRemoveVirtualLoss(float result) {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
         n->result_sum.fetch_add(result, std::memory_order_relaxed);
         n->virtual_loss.fetch_sub(VIRTUAL_LOSS_DELTA, std::memory_order_relaxed);
-        result = -result * TURN_DISCOUNT;
+        result = -result;
     }
 }
 
@@ -180,7 +209,7 @@ inline void EvalMCTSNode::backPropagate(float result) {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {
         n->result_sum.fetch_add(result, std::memory_order_relaxed);
         n->number_of_visits.fetch_add(1, std::memory_order_relaxed);
-        result = -result * TURN_DISCOUNT;
+        result = -result;
     }
 }
 
@@ -210,6 +239,7 @@ inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::makeNewRoot(const size_t chil
     assert(childVec != nullptr && childIdx < childVec->size());
 
     auto newRoot = (*childVec)[childIdx];
+    newRoot->materializeBoard();
     newRoot->parent.reset();
 
     /* Drop every other subtree (only we hold shared_ptr copies here) */
@@ -239,7 +269,7 @@ inline VisitCounts EvalMCTSNode::gatherVisitCounts() const {
 
     visitCounts.reserve(childVec->size());
     for (const auto &child : *childVec) {
-        int encodedMove = encodeMove(child->moveToGetHere, &board);
+        int encodedMove = encodeMove(child->moveToGetHere, &board());
         visitCounts.emplace_back(encodedMove,
                                  child->number_of_visits.load(std::memory_order_relaxed));
     }

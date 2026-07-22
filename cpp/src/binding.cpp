@@ -2,6 +2,7 @@
 
 #include "BoardEncoding.hpp"
 #include "InferenceClient.hpp"
+#include "InteractiveEngine.hpp"
 #include "MCTS/MCTS.hpp"
 #include "MoveEncoding.hpp"
 
@@ -170,26 +171,11 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
         encodedMoves.emplace_back(encodeMove(move, &board), score);
     }
 
-    return {encodedMoves, inferenceResult.outcome.value()};
+    return {encodedMoves, inferenceResult.value()};
 }
 
 // ——————————————————————————————————————————————
 // Bind everything with pybind11:
-Board replayMoves(const std::string &startingFen, const std::vector<std::string> &movesUci) {
-    Board board(startingFen);
-    for (const std::string &moveUci : movesUci) {
-        const std::vector<Move> &legalMoves = board.validMoves();
-        const auto matchingMove =
-            std::find_if(legalMoves.begin(), legalMoves.end(),
-                         [&moveUci](const Move move) { return toString(move) == moveUci; });
-        if (matchingMove == legalMoves.end()) {
-            throw std::invalid_argument("Illegal move " + moveUci + " while replaying history");
-        }
-        board.makeMove(*matchingMove);
-    }
-    return board;
-}
-
 PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.doc() = "pybind11 bindings for custom MCTS + inference client";
 
@@ -310,10 +296,19 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readwrite("num_threads", &MCTSParams::num_threads);
 
     // --- (2.2) InferenceClientParams ---
+    py::enum_<InferenceDevice>(m, "InferenceDevice")
+        .value("AUTO", InferenceDevice::Auto)
+        .value("CPU", InferenceDevice::Cpu)
+        .value("CUDA", InferenceDevice::Cuda);
+
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
         .def(py::init<int, std::string, int, int, size_t>(), py::arg("device_id"),
              py::arg("currentModelPath"), py::arg("maxBatchSize"),
              py::arg("microsecondsTimeoutInferenceThread"), py::arg("cacheCapacity"))
+        .def(py::init<int, std::string, int, int, size_t, InferenceDevice>(), py::arg("device_id"),
+             py::arg("currentModelPath"), py::arg("maxBatchSize"),
+             py::arg("microsecondsTimeoutInferenceThread"), py::arg("cacheCapacity"),
+             py::arg("device"))
         .def_readwrite("device_id", &InferenceClientParams::device_id)
         .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
         .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize)
@@ -323,7 +318,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                 Timeout for the inference thread in microseconds.
                 Default is 500 microseconds.
             )pbdoc")
-        .def_readwrite("cacheCapacity", &InferenceClientParams::cacheCapacity);
+        .def_readwrite("cacheCapacity", &InferenceClientParams::cacheCapacity)
+        .def_readwrite("device", &InferenceClientParams::device);
 
     // --- (2.3) InferenceStatistics ---
     py::class_<InferenceStatistics>(m, "InferenceStatistics")
@@ -342,7 +338,16 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("modelInferencePositions", &InferenceStatistics::modelInferencePositions)
         .def_readonly("modelBatchSizeHistogram", &InferenceStatistics::modelBatchSizeHistogram)
         .def_readonly("averageNumberOfPositionsInInferenceCall",
-                      &InferenceStatistics::averageNumberOfPositionsInInferenceCall);
+                      &InferenceStatistics::averageNumberOfPositionsInInferenceCall)
+        .def_readonly("treeSelectionNanoseconds", &InferenceStatistics::treeSelectionNanoseconds)
+        .def_readonly("boardEncodingNanoseconds", &InferenceStatistics::boardEncodingNanoseconds)
+        .def_readonly("resultProcessingNanoseconds",
+                      &InferenceStatistics::resultProcessingNanoseconds)
+        .def_readonly("treeBackupNanoseconds", &InferenceStatistics::treeBackupNanoseconds)
+        .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
+        .def_readonly("directInferenceNanoseconds",
+                      &InferenceStatistics::directInferenceNanoseconds)
+        .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
 
     // --- (2.4) MCTSResult ---
     py::class_<MCTSResult>(m, "MCTSResult")
@@ -419,17 +424,18 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readwrite("c_param", &EvalMCTSParams::c_param)
         .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
 
-    py::class_<OutcomeProbabilities>(m, "OutcomeProbabilities")
-        .def_readonly("win", &OutcomeProbabilities::win)
-        .def_readonly("draw", &OutcomeProbabilities::draw)
-        .def_readonly("loss", &OutcomeProbabilities::loss);
-
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
-        .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
+        .def_property_readonly("fen",
+                               [](EvalMCTSNode &node) {
+                                   node.materializeBoard();
+                                   return node.board().fen();
+                               })
         .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
-        .def_property_readonly(
-            "repetition_count",
-            [](const EvalMCTSNode &node) { return node.board.repetitionCount(); })
+        .def_property_readonly("repetition_count",
+                               [](EvalMCTSNode &node) {
+                                   node.materializeBoard();
+                                   return node.board().repetitionCount();
+                               })
         .def_property_readonly("children",
                                [](const EvalMCTSNode &node) {
                                    const auto children = node.children();
@@ -449,7 +455,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                                [](const EvalMCTSNode &n) { return toString(n.moveToGetHere); })
         .def_property_readonly("encoded_move",
                                [](const EvalMCTSNode &n) {
-                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board);
+                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board());
                                })
         .def_property_readonly(
             "result_sum",
@@ -486,4 +492,57 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         },
         py::arg("starting_fen"), py::arg("moves_uci"),
         R"pbdoc(Create an evaluation MCTS root by replaying a bounded UCI move history.)pbdoc");
+
+    py::enum_<AnalysisMode>(m, "AnalysisMode")
+        .value("POLICY", AnalysisMode::Policy)
+        .value("MCTS", AnalysisMode::Mcts);
+
+    py::class_<WdlPrediction>(m, "WdlPrediction")
+        .def_readonly("win", &WdlPrediction::win)
+        .def_readonly("draw", &WdlPrediction::draw)
+        .def_readonly("loss", &WdlPrediction::loss)
+        .def_property_readonly("value", &WdlPrediction::expectedValue);
+    m.attr("OutcomeProbabilities") = m.attr("WdlPrediction");
+
+    py::class_<CandidateAnalysis>(m, "CandidateAnalysis")
+        .def_readonly("move_uci", &CandidateAnalysis::move_uci)
+        .def_readonly("policy_prior", &CandidateAnalysis::policy_prior)
+        .def_readonly("visits", &CandidateAnalysis::visits)
+        .def_readonly("visit_share", &CandidateAnalysis::visit_share)
+        .def_readonly("mean_value", &CandidateAnalysis::mean_value);
+
+    py::class_<AnalysisResult>(m, "AnalysisResult")
+        .def_readonly("chosen_move_uci", &AnalysisResult::chosen_move_uci)
+        .def_readonly("value", &AnalysisResult::value)
+        .def_readonly("outcome", &AnalysisResult::outcome)
+        .def_readonly("candidates", &AnalysisResult::candidates)
+        .def_readonly("searches", &AnalysisResult::searches)
+        .def_readonly("maximum_depth", &AnalysisResult::maximum_depth)
+        .def_readonly("elapsed_milliseconds", &AnalysisResult::elapsed_milliseconds)
+        .def_readonly("principal_variation", &AnalysisResult::principal_variation);
+
+    py::class_<InteractiveSearchParams>(m, "InteractiveSearchParams")
+        .def(py::init<float, int, int, int>(), py::arg("exploration_constant"),
+             py::arg("inference_workers"), py::arg("inference_batch_size"),
+             py::arg("outstanding_batches_per_worker") = 2)
+        .def_readwrite("exploration_constant", &InteractiveSearchParams::exploration_constant)
+        .def_readwrite("inference_workers", &InteractiveSearchParams::inference_workers)
+        .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size)
+        .def_readwrite("outstanding_batches_per_worker",
+                       &InteractiveSearchParams::outstanding_batches_per_worker);
+
+    py::class_<InteractiveEngine, std::shared_ptr<InteractiveEngine>>(m, "InteractiveEngine")
+        .def(py::init<const InferenceClientParams &, const InteractiveSearchParams &>(),
+             py::arg("client_parameters"), py::arg("search_parameters"))
+        .def("new_game", &InteractiveEngine::newGame, py::arg("starting_fen"), py::arg("moves_uci"))
+        .def("get_inference_statistics", &InteractiveEngine::inferenceStatistics);
+
+    py::class_<InteractiveGame, std::shared_ptr<InteractiveGame>>(m, "InteractiveGame")
+        .def("apply_move", &InteractiveGame::applyMove, py::arg("move_uci"))
+        .def("analyze", &InteractiveGame::analyze, py::arg("mode"),
+             py::arg("time_limit_seconds") = std::nullopt, py::arg("search_limit") = std::nullopt)
+        .def_property_readonly("fen", &InteractiveGame::fen)
+        .def_property_readonly("starting_fen", &InteractiveGame::startingFen)
+        .def_property_readonly("moves_uci", &InteractiveGame::movesUci)
+        .def_property_readonly("root_visits", &InteractiveGame::rootVisits);
 }

@@ -42,7 +42,7 @@ public:
 
                 leaf->addVirtualLoss();
                 try {
-                    oneBoard[0] = &leaf->board; // reuse small buffer
+                    oneBoard[0] = &leaf->board(); // reuse small buffer
 
                     /* 2) immediate single-board inference
                            (merged into a large batch inside InferenceClient) */
@@ -92,8 +92,9 @@ private:
                 std::this_thread::yield();
                 continue;
             }
+            node->materializeBoard();
             if (node->isTerminal()) {
-                node->backPropagate(getBoardResultScore(node->board));
+                node->backPropagate(getBoardResultScore(node->board()));
                 node->endEvaluation();
                 return nullptr;
             }

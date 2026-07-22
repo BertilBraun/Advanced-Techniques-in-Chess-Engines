@@ -36,12 +36,11 @@ public:
 private:
     struct CachedInferenceResult {
         std::vector<EncodedMoveScore> moves;
-        OutcomeProbabilities outcome;
+        WdlPrediction outcome;
     };
-
     struct ModelInferenceResult {
         torch::Tensor policy;
-        OutcomeProbabilities outcome;
+        WdlPrediction outcome;
     };
 
     using InferenceCache = CollisionCheckedCache<BoardFingerprint, CompressedEncodedBoard,

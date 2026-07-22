@@ -263,7 +263,7 @@ void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
     const std::vector<InferenceResult> results = inferenceBatch(selectedBoards);
     for (const auto [selected, result] : zip(selectedNodes, results)) {
         selected.tree->expand(selected.index, result.moves);
-        selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, result.outcome.value());
+        selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, result.value());
     }
 }
 

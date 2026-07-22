@@ -18,7 +18,7 @@ import torch  # noqa
 from AlphaZeroCpp import test_inference_speed_cpp
 
 
-def test_inference_speed_py(num_boards: int, num_iterations: int) -> None:
+def benchmark_inference_speed_py(num_boards: int, num_iterations: int) -> None:
     client = InferenceClient(0, TRAINING_ARGS.network, TRAINING_ARGS.save_path)
     client.update_iteration(0)
     total_time = 0.0
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     save_model_and_optimizer(network, optimizer, 0, TRAINING_ARGS.save_path)
 
     print('Python:', '=' * 20)
-    test_inference_speed_py(num_boards, num_iterations)
+    benchmark_inference_speed_py(num_boards, num_iterations)
     print('Finished Python inference speed test.')
 
     print('C++:', '=' * 20)

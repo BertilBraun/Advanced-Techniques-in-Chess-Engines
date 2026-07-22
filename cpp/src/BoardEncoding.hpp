@@ -48,4 +48,8 @@ struct BoardFingerprintHash {
 
 [[nodiscard]] torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
 
+void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination);
+
+void encodeBoardInto(const Board &board, int8 *destination);
+
 [[nodiscard]] float getBoardResultScore(const Board &board);

@@ -22,7 +22,7 @@ public:
 private:
     struct ModelInferenceResult {
         torch::Tensor policy;
-        OutcomeProbabilities outcome;
+        WdlPrediction outcome;
     };
 
     struct InferenceRequest {

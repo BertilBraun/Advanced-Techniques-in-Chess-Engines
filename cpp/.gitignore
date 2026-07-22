@@ -1,7 +1,6 @@
 NumCpp/**
 libtorch**/**
-build/**
-build-*/**
+build*/**
 .cache/**
 .vs/**
 out/**

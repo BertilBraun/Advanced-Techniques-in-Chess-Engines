@@ -1,0 +1,42 @@
+{
+  "created_unix_nanoseconds": 1784730052382003504,
+  "starting_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "moves_uci": [],
+  "reference_searches": 1024,
+  "provenance": {
+    "command": [
+      "tools/benchmark_interactive_engine.py",
+      "--model",
+      "/workspace/chess-engine-benchmark/chess-12x112.jit.pt",
+      "--output-directory",
+      "/workspace/chess-engine-benchmark/integrated-rtx3060-run3",
+      "--devices",
+      "cuda",
+      "--inference-workers",
+      "1,2,3,4",
+      "--batch-sizes",
+      "32,50,64",
+      "--time-budgets-seconds",
+      "3",
+      "--search-limits",
+      "1",
+      "--reference-searches",
+      "1024",
+      "--source-revision",
+      "integrated-working-tree"
+    ],
+    "git_revision": "integrated-working-tree",
+    "git_dirty": null,
+    "model_path": "/workspace/chess-engine-benchmark/chess-12x112.jit.pt",
+    "model_sha256": "d85f782970cbd1cdc07f0d2c71ce3b9480517720fe0a858f61eaa99341d36e7d",
+    "python_version": "3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 16:50:00) [GCC 14.3.0]",
+    "torch_version": "2.12.0+cu130",
+    "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "logical_cpu_count": 8,
+    "cuda_available": true,
+    "cuda_device_names": [
+      "NVIDIA GeForce RTX 3060"
+    ]
+  }
+}

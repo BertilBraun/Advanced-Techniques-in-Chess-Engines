@@ -1,3 +1,4 @@
+#include "InferenceResultProcessing.hpp"
 #include "MoveEncoding.hpp"
 
 #include "bitboard.h"
@@ -59,6 +60,16 @@ void requireEquivalent(const Board &board, const torch::Tensor &policy,
                 description + ": encoded move ordering differs");
         require(std::abs(actual[index].second - expected[index].second) <= SCORE_TOLERANCE,
                 description + ": normalized score differs");
+    }
+
+    const std::vector<MoveScore> moveScores =
+        filterPolicyThenGetMoveScores(policy.data_ptr<float>(), &board);
+    require(moveScores.size() == expected.size(), description + ": direct move count differs");
+    for (size_t index = 0; index < expected.size(); ++index) {
+        require(encodeMove(moveScores[index].first, &board) == expected[index].first,
+                description + ": direct move ordering differs");
+        require(std::abs(moveScores[index].second - expected[index].second) <= SCORE_TOLERANCE,
+                description + ": direct normalized score differs");
     }
 }
 
@@ -122,6 +133,41 @@ void testTerminalPosition() {
     require(filterPolicyThenGetMovesAndProbabilities(positivePolicy(), &board).empty(),
             "terminal position returned policy moves");
 }
+
+void testWdlProcessing() {
+    const Board board;
+    const torch::Tensor policy = positivePolicy();
+    const std::array<float, 3> outcome = {0.25F, 0.5F, 0.25F};
+    const InferenceResult result =
+        processInferenceResult(policy.data_ptr<float>(), outcome.data(), board);
+    require(std::abs(result.outcome.win - outcome[0]) <= SCORE_TOLERANCE,
+            "WDL processing changed win probability");
+    require(std::abs(result.outcome.draw - outcome[1]) <= SCORE_TOLERANCE,
+            "WDL processing changed draw probability");
+    require(std::abs(result.outcome.loss - outcome[2]) <= SCORE_TOLERANCE,
+            "WDL processing changed loss probability");
+}
+
+void testInvalidWdlProcessing() {
+    const Board board;
+    const torch::Tensor policy = positivePolicy();
+    const std::array<std::array<float, 3>, 4> invalidOutcomes = {
+        std::array<float, 3>{NAN, 0.5F, 0.5F},
+        std::array<float, 3>{0.5F, INFINITY, 0.5F},
+        std::array<float, 3>{-0.1F, 0.6F, 0.5F},
+        std::array<float, 3>{0.2F, 0.2F, 0.2F},
+    };
+    for (const std::array<float, 3> &outcome : invalidOutcomes) {
+        bool rejected = false;
+        try {
+            static_cast<void>(
+                processInferenceResult(policy.data_ptr<float>(), outcome.data(), board));
+        } catch (const std::runtime_error &) {
+            rejected = true;
+        }
+        require(rejected, "invalid WDL output was accepted");
+    }
+}
 } // namespace
 
 int main() {
@@ -134,6 +180,8 @@ int main() {
     testUniformFallback();
     testZeroProbabilityMovesAreOmitted();
     testTerminalPosition();
+    testWdlProcessing();
+    testInvalidWdlProcessing();
     std::cout << "Move policy processing tests passed\n";
     return 0;
 }

@@ -1,0 +1,42 @@
+{
+  "created_unix_nanoseconds": 1784734749824048520,
+  "starting_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "moves_uci": [],
+  "reference_searches": 4096,
+  "provenance": {
+    "command": [
+      "tools/benchmark_interactive_engine.py",
+      "--model",
+      "../cpp/build/interactive-benchmark.jit.pt",
+      "--output-directory",
+      "/tmp/interactive-outstanding-final",
+      "--devices",
+      "cpu",
+      "--inference-workers",
+      "1,2",
+      "--outstanding-batches-per-worker",
+      "1,2",
+      "--batch-sizes",
+      "32,64",
+      "--time-budgets-seconds",
+      "3",
+      "--search-limits",
+      "4096",
+      "--reference-searches",
+      "4096",
+      "--source-revision",
+      "f3e78b4fd058c6059f728cbc867a49bce6875c79"
+    ],
+    "git_revision": "f3e78b4fd058c6059f728cbc867a49bce6875c79",
+    "git_dirty": null,
+    "model_path": "/mnt/c/Users/berti/.codex/worktrees/6f92/main/cpp/build/interactive-benchmark.jit.pt",
+    "model_sha256": "c2bc0b7b99737c7fbbc3811bb25e4d29ec3f4bed193a0f57e04544db6548fab8",
+    "python_version": "3.10.18 (main, Jun  4 2025, 08:56:00) [GCC 13.3.0]",
+    "torch_version": "2.7.1+cpu",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "logical_cpu_count": 4,
+    "cuda_available": false,
+    "cuda_device_names": []
+  }
+}
