@@ -74,7 +74,7 @@ deployed Modal API URL.
 
 The deployment builds the CUDA-enabled native extension into an ephemeral image.
 It requests one NVIDIA A10 GPU, has zero warm containers, at most one container,
-four CPU cores, 4 GiB of requested system memory, a 300-second scale-down window,
+four CPU cores, 4 GiB of requested system memory, a 120-second scale-down window,
 a 90-second request timeout, and no Modal Volume. CUDA is required explicitly;
 startup fails instead of silently falling back to CPU inference. At container
 startup it downloads the named `.pt` and `.jit.pt` artifacts into the
@@ -87,7 +87,7 @@ serve the image on a different host. With revision `main`, each cold container
 resolves the branch to one commit before downloading either artifact, so both
 files come from the same latest snapshot.
 
-The 300-second window is five minutes after the container becomes idle. Scaling
+The 120-second window is two minutes after the container becomes idle. Scaling
 to zero discards in-memory sessions, inference cache, and search subtrees, but it
 does not lose a browser game: each subsequent turn contains the starting FEN and
 complete move history. Recovery may pay another cold-start delay and does not
