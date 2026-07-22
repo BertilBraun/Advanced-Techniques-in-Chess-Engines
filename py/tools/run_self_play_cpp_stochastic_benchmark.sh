@@ -513,6 +513,7 @@ jq -s \
         | ($workers | map(.self_play_steps) | add) as $self_play_steps
         | ($workers | map(.game_updates) | add) as $game_updates
         | ($workers | map(.completed_game_plies) | add) as $completed_game_plies
+        | ($workers | map(.searches_completed) | add) as $searches_completed
         | ($workers | map(.inference_model_calls) | add) as $model_calls
         | ($workers | map(.inference_model_positions) | add) as $model_positions
         | ($workers | map(.inference_evaluations) | add) as $evaluations
@@ -535,7 +536,9 @@ jq -s \
                 game_updates_per_second: ($game_updates / $makespan),
                 milliseconds_per_game_update: (1000 * $makespan / $game_updates),
                 completed_game_plies: $completed_game_plies,
-                completed_game_plies_per_second: ($completed_game_plies / $makespan)
+                completed_game_plies_per_second: ($completed_game_plies / $makespan),
+                searches_completed: $searches_completed,
+                searches_per_second: ($searches_completed / $makespan)
             },
             inference: {
                 evaluations: $evaluations,

@@ -44,6 +44,7 @@ struct MCTSStatistics {
 struct MCTSResults {
     std::vector<MCTSResult> results;
     MCTSStatistics mctsStats;
+    uint64 searchesCompleted;
 };
 
 struct MCTSBoard {
@@ -79,7 +80,7 @@ private:
     ThreadPool m_threadPool;
     uint32 m_arenaCapacity;
 
-    [[nodiscard]] std::vector<MCTSResult> searchGames(const std::vector<MCTSBoard> &boards);
+    [[nodiscard]] MCTSResults searchGames(const std::vector<MCTSBoard> &boards);
     void parallelIterate(const std::vector<MCTSRoot> &roots);
     void addNoise(MCTSRoot &root) const;
     [[nodiscard]] std::optional<NodeIndex> getBestChildOrBackPropagate(MCTSRoot &root,

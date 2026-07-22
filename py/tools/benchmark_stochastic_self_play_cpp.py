@@ -62,6 +62,8 @@ class BenchmarkResult:
     parallel_searches: int
     mcts_threads: int
     elapsed_seconds: float
+    searches_completed: int
+    searches_per_second: float
     self_play_steps: int
     game_updates: int
     completed_games: int
@@ -266,6 +268,7 @@ def build_result(
     elapsed_seconds: float,
     process_seconds: float,
     self_play_steps: int,
+    initial_completed_searches: int,
 ) -> BenchmarkResult:
     dataset = self_play.dataset
     retained_sample_proportion = self_play.args.portion_of_samples_to_keep
@@ -292,6 +295,8 @@ def build_result(
         game.already_expanded_node for game in self_play.self_play_games if game.already_expanded_node is not None
     ]
     assert self_play.mcts is not None
+    searches_completed = self_play.completed_searches - initial_completed_searches
+    assert searches_completed >= 0
     return BenchmarkResult(
         process_id=os.getpid(),
         device_id=arguments.device,
@@ -310,6 +315,8 @@ def build_result(
         parallel_searches=arguments.parallel_searches,
         mcts_threads=arguments.threads,
         elapsed_seconds=elapsed_seconds,
+        searches_completed=searches_completed,
+        searches_per_second=searches_completed / elapsed_seconds,
         self_play_steps=self_play_steps,
         game_updates=self_play_steps * arguments.games,
         completed_games=dataset.stats.num_games,
@@ -351,6 +358,7 @@ def main() -> None:
     assert self_play.mcts is not None
 
     run_warmup(self_play, arguments.warmup_steps)
+    initial_completed_searches = self_play.completed_searches
     initial_statistics, _ = self_play.mcts.get_inference_statistics()
     wait_for_synchronized_start(arguments)
 
@@ -372,6 +380,7 @@ def main() -> None:
         elapsed_seconds,
         process_seconds,
         self_play_steps,
+        initial_completed_searches,
     )
     print(json.dumps(asdict(result), separators=(',', ':')))
 

@@ -363,8 +363,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (2.6) MCTSResults ---
     py::class_<MCTSResults>(m, "MCTSResults")
-        .def_readonly("results", &MCTSResults::results)      // vector<PyMCTSResult>
-        .def_readonly("mctsStats", &MCTSResults::mctsStats); // PyMCTSStatistics
+        .def_readonly("results", &MCTSResults::results)     // vector<PyMCTSResult>
+        .def_readonly("mctsStats", &MCTSResults::mctsStats) // PyMCTSStatistics
+        .def_readonly("searchesCompleted", &MCTSResults::searchesCompleted);
 
     py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
         .def_readonly("name", &FunctionTimeInfo::name)

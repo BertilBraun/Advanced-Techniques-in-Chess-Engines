@@ -3,6 +3,8 @@
 #include "../BoardEncoding.hpp"
 #include "MoveEncoding.hpp"
 
+#include <numeric>
+
 thread_local std::mt19937 randomEngine(std::random_device{}());
 
 namespace {
@@ -115,7 +117,7 @@ MCTSRoot MCTS::newRoot(Board board) const {
     return MCTSRoot::create(std::move(board), m_arenaCapacity);
 }
 
-std::vector<MCTSResult> MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
+MCTSResults MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
     TIMEIT("MCTS::searchGames");
 
     const size_t numberOfBoards = boards.size();
@@ -153,12 +155,14 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<MCTSBoard> &boards) 
 
     std::vector<RootTask> active;
     active.reserve(numberOfBoards);
+    uint64 startingVisits = 0;
     for (size_t index = 0; index < numberOfBoards; ++index) {
         const uint32 limit = boards[index].should_run_full_search ? m_args.num_full_searches
                                                                   : m_args.num_fast_searches;
         roots[index].tree().prepareForSearch(limit,
                                              static_cast<uint32>(m_args.num_parallel_searches));
         active.push_back({roots[index], limit});
+        startingVisits += roots[index].visits();
     }
 
     while (!active.empty()) {
@@ -178,20 +182,26 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<MCTSBoard> &boards) 
     for (const MCTSRoot &root : roots) {
         results.emplace_back(gatherResult(root));
     }
-    return results;
+    const uint64 finalVisits = std::accumulate(
+        roots.begin(), roots.end(), uint64{0},
+        [](const uint64 total, const MCTSRoot &root) { return total + root.visits(); });
+    assert(finalVisits >= startingVisits);
+    return {.results = std::move(results),
+            .mctsStats = {},
+            .searchesCompleted = finalVisits - startingVisits};
 }
 
 MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
     if (boards.empty()) {
-        return {.results = {}, .mctsStats = {}};
+        return {.results = {}, .mctsStats = {}, .searchesCompleted = 0};
     }
 
     const size_t numberOfBoards = boards.size();
     const size_t numberOfThreads = std::max<size_t>(1, m_threadPool.numThreads());
     const size_t sliceSize = (numberOfBoards + numberOfThreads - 1) / numberOfThreads;
 
-    std::vector<std::future<std::vector<MCTSResult>>> futures;
+    std::vector<std::future<MCTSResults>> futures;
     futures.reserve(numberOfThreads);
     for (size_t slice = 0; slice < numberOfThreads && slice * sliceSize < numberOfBoards; ++slice) {
         const auto begin = boards.begin() + static_cast<std::ptrdiff_t>(slice * sliceSize);
@@ -204,15 +214,19 @@ MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collec
 
     std::vector<MCTSResult> results;
     results.reserve(numberOfBoards);
-    for (std::future<std::vector<MCTSResult>> &future : futures) {
-        std::vector<MCTSResult> sliceResults = future.get();
-        results.insert(results.end(), std::make_move_iterator(sliceResults.begin()),
-                       std::make_move_iterator(sliceResults.end()));
+    uint64 searchesCompleted = 0;
+    for (std::future<MCTSResults> &future : futures) {
+        MCTSResults sliceResults = future.get();
+        searchesCompleted += sliceResults.searchesCompleted;
+        results.insert(results.end(), std::make_move_iterator(sliceResults.results.begin()),
+                       std::make_move_iterator(sliceResults.results.end()));
     }
 
     const MCTSStatistics statistics =
         collectStatistics ? mctsStatistics(results.front().root) : MCTSStatistics{};
-    return {.results = std::move(results), .mctsStats = statistics};
+    return {.results = std::move(results),
+            .mctsStats = statistics,
+            .searchesCompleted = searchesCompleted};
 }
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {

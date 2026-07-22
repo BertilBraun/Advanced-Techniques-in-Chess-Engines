@@ -103,6 +103,7 @@ class SelfPlayCpp:
         self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
         self.num_searches_per_turn = 0
         self.endgame_shortcut_strength = 0.0
+        self.completed_searches = 0
 
     def update_iteration(self, iteration: int) -> None:
         if len(self.dataset) > 0:
@@ -209,7 +210,9 @@ class SelfPlayCpp:
     def search(self, boards: list[MCTSBoard]) -> MCTSResults:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
 
-        return self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
+        results = self.mcts.search(boards, collect_statistics=is_tensorboard_writer_active())
+        self.completed_searches += results.searchesCompleted
+        return results
 
     def self_play(self) -> None:
         from AlphaZeroCpp import MCTSBoard
