@@ -5,7 +5,6 @@
 #include "EvalMCTSNode.h"
 
 #include "../InferenceClient.hpp"
-#include "util/ThreadPool.h"
 
 struct EvalMCTSParams {
     // The c parameter used in the UCB1 formula to balance exploration and exploitation.
@@ -33,7 +32,7 @@ struct EvalMCTSResult {
 class EvalMCTS {
 public:
     EvalMCTS(const InferenceClientParams &clientArgs, const EvalMCTSParams &mctsArgs)
-        : m_client(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads) {}
+        : m_client(clientArgs), m_args(mctsArgs) {}
 
     [[nodiscard]] InferenceResult evaluate(const Board &board) {
         const std::vector<const Board *> boards{&board};
@@ -63,78 +62,63 @@ public:
 private:
     InferenceClient m_client;
     EvalMCTSParams m_args;
-    ThreadPool m_threadPool;
 
     [[nodiscard]] EvalMCTSResult
     search(const std::shared_ptr<EvalMCTSNode> &root,
            const std::optional<std::chrono::steady_clock::time_point> deadline,
            const std::optional<int> searchLimit) {
-        std::atomic<int> claimed{0};
-        std::atomic<int> completed{0};
+        int claimed = 0;
+        int completed = 0;
+        std::vector<std::shared_ptr<EvalMCTSNode>> leaves;
+        std::vector<const Board *> boards;
+        leaves.reserve(static_cast<size_t>(m_args.num_threads));
+        boards.reserve(static_cast<size_t>(m_args.num_threads));
 
-        auto worker = [&] {
-            thread_local std::vector<const Board *> oneBoard{nullptr}; // size = 1
-
-            while (true) {
-                if (deadline.has_value() && std::chrono::steady_clock::now() >= *deadline) {
+        while ((!deadline.has_value() || std::chrono::steady_clock::now() < *deadline) &&
+               (!searchLimit.has_value() || claimed < *searchLimit)) {
+            leaves.clear();
+            boards.clear();
+            for (int parallelSearch = 0; parallelSearch < m_args.num_threads; ++parallelSearch) {
+                if ((deadline.has_value() && std::chrono::steady_clock::now() >= *deadline) ||
+                    (searchLimit.has_value() && claimed >= *searchLimit)) {
                     break;
                 }
-                int claim = claimed.load(std::memory_order_relaxed);
-                while (true) {
-                    if (searchLimit.has_value() && claim >= *searchLimit) {
-                        return;
-                    }
-                    if (claimed.compare_exchange_weak(claim, claim + 1,
-                                                      std::memory_order_relaxed)) {
-                        break;
-                    }
-                }
-                /* 1) selection */
-                const auto leaf = getBestChildOrBackPropagate(root);
-                if (!leaf) {
-                    completed.fetch_add(1, std::memory_order_relaxed);
+                ++claimed;
+                const std::shared_ptr<EvalMCTSNode> leaf = getBestChildOrBackPropagate(root);
+                if (leaf == nullptr) {
+                    ++completed;
                     continue;
                 }
-
+                if (std::ranges::find(leaves, leaf) != leaves.end()) {
+                    --claimed;
+                    break;
+                }
                 leaf->addVirtualLoss();
-                oneBoard[0] = &leaf->board(); // reuse small buffer
-
-                /* 2) immediate single-board inference
-                       (merged into a large batch inside InferenceClient) */
-                try {
-                    const std::vector<InferenceResult> inferenceResults =
-                        m_client.inferenceBatch(oneBoard);
-                    const InferenceResult &inferenceResult = inferenceResults.front();
-
-                    /* 3) expansion + backup */
-                    leaf->expand(inferenceResult.moves, inferenceResult.outcome);
-                    leaf->backPropagateAndRemoveVirtualLoss(inferenceResult.value());
-                } catch (...) {
-                    leaf->cancelVirtualLoss();
-                    throw;
-                }
-                completed.fetch_add(1, std::memory_order_relaxed);
+                leaves.push_back(leaf);
+                boards.push_back(&leaf->board());
             }
-        };
 
-        const size_t P = std::max<size_t>(1, m_threadPool.numThreads());
-        std::vector<std::future<void>> futures;
-        futures.reserve(P);
-        for (int _ : range(P))
-            futures.emplace_back(m_threadPool.enqueue(worker));
-
-        std::exception_ptr workerException;
-        for (auto &future : futures) {
+            if (leaves.empty()) {
+                continue;
+            }
+            size_t backedUp = 0;
             try {
-                future.get();
-            } catch (...) {
-                if (workerException == nullptr) {
-                    workerException = std::current_exception();
+                const std::vector<InferenceResult> inferenceResults =
+                    m_client.inferenceBatch(boards);
+                assert(inferenceResults.size() == leaves.size());
+                for (size_t index = 0; index < leaves.size(); ++index) {
+                    const InferenceResult &inferenceResult = inferenceResults[index];
+                    leaves[index]->expand(inferenceResult.moves, inferenceResult.outcome);
+                    leaves[index]->backPropagateAndRemoveVirtualLoss(inferenceResult.value());
+                    ++backedUp;
+                    ++completed;
                 }
+            } catch (...) {
+                for (size_t index = backedUp; index < leaves.size(); ++index) {
+                    leaves[index]->cancelVirtualLoss();
+                }
+                throw;
             }
-        }
-        if (workerException != nullptr) {
-            std::rethrow_exception(workerException);
         }
 
         const int visits = root->number_of_visits.load(std::memory_order_relaxed);
@@ -142,7 +126,7 @@ private:
                                          : root->result_sum.load(std::memory_order_relaxed) /
                                                static_cast<float>(visits);
         return EvalMCTSResult{result, root->gatherVisitCounts(), root,
-                              completed.load(std::memory_order_relaxed)};
+                              completed};
     }
 
     [[nodiscard]] std::shared_ptr<EvalMCTSNode>

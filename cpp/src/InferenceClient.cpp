@@ -139,6 +139,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
                 filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), modelResult.outcome};
             if (pending.cacheProducer.has_value()) {
                 pending.cacheProducer->publish(std::move(result));
+                pending.cacheProducer.reset();
             } else {
                 uncachedResults[i] = std::move(result);
             }
@@ -182,8 +183,15 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 
         return results;
     } catch (...) {
+        const std::exception_ptr exception = std::current_exception();
+        for (PendingInference &pending : futures) {
+            if (pending.cacheProducer.has_value()) {
+                pending.cacheProducer->publishException(exception);
+                pending.cacheProducer.reset();
+            }
+        }
         releaseCacheLeases();
-        throw;
+        std::rethrow_exception(exception);
     }
 }
 
