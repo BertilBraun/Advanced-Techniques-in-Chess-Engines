@@ -322,6 +322,32 @@ target_link_libraries(DirectInferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME DirectInferencePipelineTest COMMAND DirectInferencePipelineTest)
 
 add_executable(
+        DirectSelfPlaySearchTest
+        test/TestDirectSelfPlaySearch.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/DirectInference.cpp
+        src/InferenceClient.cpp
+        src/InferenceResultProcessing.cpp
+        src/MCTS/DirectSelfPlaySearch.cpp
+        src/MCTS/MCTS.cpp
+        src/MCTS/SearchTree.cpp
+        src/MoveEncoding.cpp
+        src/NonCachingInferenceClient.cpp
+        src/util/Log.cpp
+        src/util/ThreadPool.cpp
+        src/util/TimeItGuard.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(DirectSelfPlaySearchTest PRIVATE src)
+target_link_libraries(DirectSelfPlaySearchTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME DirectSelfPlaySearchTest COMMAND DirectSelfPlaySearchTest)
+
+add_executable(
         DirectInferenceBenchmark
         benchmark/DirectInferenceBenchmark.cpp
         src/Board.cpp

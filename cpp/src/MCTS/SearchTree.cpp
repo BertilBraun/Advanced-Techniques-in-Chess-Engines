@@ -182,6 +182,22 @@ void SearchTree::addVirtualLoss(NodeIndex leafIndex) {
     ++m_rootStatistics.number_of_visits;
 }
 
+void SearchTree::removeVirtualLoss(NodeIndex leafIndex) {
+    while (leafIndex != m_rootIndex) {
+        const SearchNode &selectedNode = node(leafIndex);
+        Child &incomingEdge = child(selectedNode.parent_index, selectedNode.parent_child_index);
+        assert(incomingEdge.virtual_loss >= static_cast<float>(VIRTUAL_LOSS_DELTA));
+        assert(incomingEdge.number_of_visits >= VIRTUAL_LOSS_DELTA);
+        incomingEdge.virtual_loss -= static_cast<float>(VIRTUAL_LOSS_DELTA);
+        incomingEdge.number_of_visits -= VIRTUAL_LOSS_DELTA;
+        leafIndex = selectedNode.parent_index;
+    }
+    assert(m_rootStatistics.virtual_loss >= static_cast<float>(VIRTUAL_LOSS_DELTA));
+    assert(m_rootStatistics.number_of_visits >= VIRTUAL_LOSS_DELTA);
+    m_rootStatistics.virtual_loss -= static_cast<float>(VIRTUAL_LOSS_DELTA);
+    m_rootStatistics.number_of_visits -= VIRTUAL_LOSS_DELTA;
+}
+
 void SearchTree::backPropagate(NodeIndex leafIndex, float result) {
     TIMEIT("SearchTree::backPropagate");
     while (leafIndex != m_rootIndex) {

@@ -1,6 +1,7 @@
 #include "MCTS.hpp"
 
 #include "../BoardEncoding.hpp"
+#include "DirectSelfPlaySearch.hpp"
 #include "MoveEncoding.hpp"
 
 #include <numeric>
@@ -91,14 +92,42 @@ MCTSParams::MCTSParams(const int numParallelSearches, const uint32 numFullSearch
     }
 }
 
+DirectSelfPlayInferenceParams::DirectSelfPlayInferenceParams(const int inferenceWorkers,
+                                                             const int inferenceBatchSize,
+                                                             const int outstandingBatchesPerWorker)
+    : inference_workers(inferenceWorkers), inference_batch_size(inferenceBatchSize),
+      outstanding_batches_per_worker(outstandingBatchesPerWorker) {
+    if (inference_workers <= 0) {
+        throw std::invalid_argument("inference_workers must be positive");
+    }
+    if (inference_batch_size <= 0) {
+        throw std::invalid_argument("inference_batch_size must be positive");
+    }
+    if (outstanding_batches_per_worker <= 0 || outstanding_batches_per_worker > 2) {
+        throw std::invalid_argument("outstanding_batches_per_worker must be 1 or 2");
+    }
+}
+
 MCTS::MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-           const bool useInferenceCache)
-    : m_client(
-          useInferenceCache
-              ? InferenceClientVariant{std::make_unique<InferenceClient>(clientArgs)}
-              : InferenceClientVariant{std::make_unique<NonCachingInferenceClient>(clientArgs)}),
-      m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
-      m_arenaCapacity(mctsArgs.arenaCapacity()) {}
+           const bool useInferenceCache,
+           std::optional<DirectSelfPlayInferenceParams> directInferenceParams)
+    : m_clientArgs(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
+      m_arenaCapacity(mctsArgs.arenaCapacity()),
+      m_directInferenceParams(std::move(directInferenceParams)) {
+    if (m_directInferenceParams.has_value()) {
+        if (useInferenceCache) {
+            throw std::invalid_argument("Direct self-play inference does not support caching");
+        }
+        m_directSearch =
+            std::make_unique<DirectSelfPlaySearch>(m_clientArgs, m_args, *m_directInferenceParams);
+    } else if (useInferenceCache) {
+        m_client = std::make_unique<InferenceClient>(m_clientArgs);
+    } else {
+        m_client = std::make_unique<NonCachingInferenceClient>(m_clientArgs);
+    }
+}
+
+MCTS::~MCTS() = default;
 
 uint32 MCTSParams::arenaCapacity() const {
     const uint64 maximumSearches = std::max(num_full_searches, num_fast_searches);
@@ -193,6 +222,9 @@ MCTSResults MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
 
 MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
+    if (m_directSearch != nullptr) {
+        return m_directSearch->search(boards, collectStatistics);
+    }
     if (boards.empty()) {
         return {.results = {}, .mctsStats = {}, .searchesCompleted = 0};
     }
@@ -231,7 +263,18 @@ MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collec
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     const InferenceStatistics statistics =
-        std::visit([](auto &client) { return client->getStatistics(); }, m_client);
+        m_directSearch != nullptr
+            ? m_directSearch->inferenceStatistics()
+            : std::visit(
+                  [](auto &client) -> InferenceStatistics {
+                      using Client = std::decay_t<decltype(client)>;
+                      if constexpr (std::same_as<Client, std::monostate>) {
+                          throw std::logic_error("MCTS inference is not configured");
+                      } else {
+                          return client->getStatistics();
+                      }
+                  },
+                  m_client);
     return {statistics, resetTimes()};
 }
 
@@ -239,13 +282,43 @@ void MCTS::update(const std::string &modelPath, const MCTSParams &mctsArgs) {
     if (mctsArgs.num_threads != m_args.num_threads) {
         throw std::invalid_argument("MCTS thread count cannot change during a persistent run");
     }
-    std::visit([&modelPath](auto &client) { client->updateModel(modelPath); }, m_client);
     m_args = mctsArgs;
     m_arenaCapacity = mctsArgs.arenaCapacity();
+    m_clientArgs.currentModelPath = modelPath;
+    if (m_directInferenceParams.has_value()) {
+        m_directSearch =
+            std::make_unique<DirectSelfPlaySearch>(m_clientArgs, m_args, *m_directInferenceParams);
+    } else {
+        std::visit(
+            [&modelPath](auto &client) {
+                using Client = std::decay_t<decltype(client)>;
+                if constexpr (!std::same_as<Client, std::monostate>) {
+                    client->updateModel(modelPath);
+                }
+            },
+            m_client);
+    }
 }
 
 std::vector<InferenceResult> MCTS::inferenceBatch(const std::vector<const Board *> &boards) {
-    return std::visit([&boards](auto &client) { return client->inferenceBatch(boards); }, m_client);
+    if (m_directSearch != nullptr) {
+        std::vector<InferenceResult> results;
+        results.reserve(boards.size());
+        for (const Board *board : boards) {
+            results.push_back(m_directSearch->evaluate(*board));
+        }
+        return results;
+    }
+    return std::visit(
+        [&boards](auto &client) -> std::vector<InferenceResult> {
+            using Client = std::decay_t<decltype(client)>;
+            if constexpr (std::same_as<Client, std::monostate>) {
+                throw std::logic_error("MCTS inference is not configured");
+            } else {
+                return client->inferenceBatch(boards);
+            }
+        },
+        m_client);
 }
 
 void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {

@@ -43,6 +43,13 @@ class MCTSParams:
     """The minimum number of visits that each root child should recieve. Typically this value is < 5 or in proportion to the num_searches_per_turn. This is used to ensure that the MCTS algorithm has explored the search tree enough to make a good decision. If the number of visits is too low, the MCTS algorithm might not explore enough to learn the best moves to play."""
 
 
+@dataclass(frozen=True)
+class DirectSelfPlayParams:
+    inference_workers: int
+    inference_batch_size: int
+    outstanding_batches_per_worker: int
+
+
 class SEPlacement(str, Enum):
     DISABLED = 'disabled'
     EVERY_BLOCK = 'every_block'
@@ -120,6 +127,9 @@ class SelfPlayParams:
 
     resignation_threshold: float = -0.85
     """This is the threshold to use for the resignation of a game. If the mcts result score is below this threshold the game is resigned. The lower the threshold the more games are resigned. The higher the threshold the less games are resigned. Typically -0.85 to -0.99 for self-play."""
+
+    direct_inference: DirectSelfPlayParams | None = None
+    """Direct reusable inference pipeline configuration, or None for the general cached client."""
 
 
 @dataclass

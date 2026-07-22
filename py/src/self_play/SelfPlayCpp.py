@@ -153,7 +153,7 @@ class SelfPlayCpp:
         self._set_mcts(iteration)
 
     def _set_mcts(self, iteration: int) -> None:
-        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSParams
+        from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS, MCTSParams
 
         """Set the MCTS parameters for the current iteration."""
         # start with 10% of the searches, scale up to 100% over the first 5% of total iterations
@@ -198,10 +198,20 @@ class SelfPlayCpp:
             cacheCapacity=self.args.inference_cache_capacity,
         )
         if self.mcts is None:
+            direct_inference_params = (
+                DirectSelfPlayInferenceParams(
+                    self.args.direct_inference.inference_workers,
+                    self.args.direct_inference.inference_batch_size,
+                    self.args.direct_inference.outstanding_batches_per_worker,
+                )
+                if self.args.direct_inference is not None
+                else None
+            )
             self.mcts = MCTS(
                 client_args,
                 mcts_args,
                 use_inference_cache=self.args.use_inference_cache,
+                direct_inference_params=direct_inference_params,
             )
         else:
             self.mcts.update(client_args.currentModelPath, mcts_args)

@@ -391,6 +391,37 @@ def test_run_configuration_selects_non_cached_inference_client() -> None:
 
     assert not arguments.self_play.use_inference_cache
     assert arguments.self_play.inference_cache_capacity == 0
+    assert arguments.self_play.direct_inference is None
+
+
+def test_run_configuration_selects_direct_self_play_inference() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    topology = configuration.topology.model_copy(
+        update={
+            'use_inference_cache': False,
+            'inference_cache_capacity_per_process': 0,
+            'direct_self_play_inference_workers': 2,
+            'direct_self_play_inference_batch_size': 64,
+            'direct_self_play_outstanding_batches_per_worker': 1,
+        }
+    )
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration.model_copy(update={'topology': topology}))
+
+    assert arguments.self_play.direct_inference is not None
+    assert arguments.self_play.direct_inference.inference_workers == 2
+    assert arguments.self_play.direct_inference.inference_batch_size == 64
+    assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 1
+
+
+def test_run_configuration_rejects_cached_direct_self_play_inference() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['direct_self_play_inference_workers'] = 1
+
+    with pytest.raises(ValidationError, match='mutually exclusive'):
+        RunConfiguration.model_validate(data)
 
 
 @pytest.mark.parametrize(

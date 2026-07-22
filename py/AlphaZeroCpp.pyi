@@ -8,6 +8,7 @@ __all__ = [
     'AnalysisMode',
     'AnalysisResult',
     'CandidateAnalysis',
+    'DirectSelfPlayInferenceParams',
     'EvalMCTS',
     'EvalMCTSNode',
     'EvalMCTSParams',
@@ -250,6 +251,7 @@ class MCTS:
         client_args: InferenceClientParams,
         mcts_args: MCTSParams,
         use_inference_cache: bool = True,
+        direct_inference_params: DirectSelfPlayInferenceParams | None = None,
     ) -> None: ...
     @property
     def arena_capacity(self) -> int: ...
@@ -289,6 +291,17 @@ class MCTSBoard:
     def root(self) -> MCTSRoot: ...
     @property
     def should_run_full_search(self) -> bool: ...
+
+class DirectSelfPlayInferenceParams:
+    def __init__(
+        self,
+        inference_workers: int,
+        inference_batch_size: int,
+        outstanding_batches_per_worker: int = 2,
+    ) -> None: ...
+    inference_workers: int
+    inference_batch_size: int
+    outstanding_batches_per_worker: int
 
 class MCTSChild:
     @property

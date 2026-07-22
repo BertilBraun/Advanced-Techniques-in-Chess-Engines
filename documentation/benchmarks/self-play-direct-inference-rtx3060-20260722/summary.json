@@ -1,0 +1,39 @@
+{
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "gpu_memory_mib": 12288,
+    "logical_cpu_count": 8,
+    "host_memory_gib": 32
+  },
+  "workload": {
+    "full_searches_per_ply": 600,
+    "fast_searches_per_ply": 150,
+    "warmup_steps": 1,
+    "requested_duration_seconds": 30
+  },
+  "baseline": {
+    "parallel_games": 192,
+    "parallel_searches_per_tree": 4,
+    "mcts_threads": 4,
+    "cache_capacity": 3000000,
+    "searches_per_second": [13089.571118260252, 13505.981544206466, 13194.945071572236],
+    "median_searches_per_second": 13194.945071572236,
+    "median_process_cpu_percent": 253.64653839818465,
+    "median_model_batch_size": 76.5521568627451,
+    "median_peak_rss_mib": 1735.85546875
+  },
+  "direct": {
+    "parallel_games": 512,
+    "parallel_searches_per_tree": 1,
+    "inference_workers": 2,
+    "inference_batch_size": 64,
+    "outstanding_batches_per_worker": 1,
+    "searches_per_second": [22088.102882204043, 21661.187050177025, 22027.877673105362],
+    "median_searches_per_second": 22027.877673105362,
+    "median_process_cpu_percent": 181.65573733733694,
+    "median_model_batch_size": 61.433263816475495,
+    "median_direct_worker_utilization_percent": 79.63190546860699,
+    "median_peak_rss_mib": 1688.16796875
+  },
+  "median_throughput_improvement_percent": 66.94179137253993
+}

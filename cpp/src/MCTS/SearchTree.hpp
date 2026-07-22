@@ -72,6 +72,7 @@ public:
     [[nodiscard]] uint32 bestChildIndex(NodeIndex parentIndex, float cParam) const;
 
     void addVirtualLoss(NodeIndex leafIndex);
+    void removeVirtualLoss(NodeIndex leafIndex);
     void backPropagate(NodeIndex leafIndex, float result);
     void backPropagateAndRemoveVirtualLoss(NodeIndex leafIndex, float result);
 
