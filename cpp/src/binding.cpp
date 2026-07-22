@@ -162,15 +162,15 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
 
     const auto result = self.inferenceBatch(boards);
     assert(result.size() == 1 && "Inference should return exactly one result for one board");
-    const auto &[moves, value] = result[0];
+    const InferenceResult &inferenceResult = result[0];
 
     std::vector<std::pair<int, float>> encodedMoves;
-    encodedMoves.reserve(moves.size());
-    for (const auto &[move, score] : moves) {
+    encodedMoves.reserve(inferenceResult.moves.size());
+    for (const auto &[move, score] : inferenceResult.moves) {
         encodedMoves.emplace_back(encodeMove(move, &board), score);
     }
 
-    return {encodedMoves, value};
+    return {encodedMoves, inferenceResult.outcome.value()};
 }
 
 // ——————————————————————————————————————————————
@@ -419,6 +419,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readwrite("c_param", &EvalMCTSParams::c_param)
         .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
 
+    py::class_<OutcomeProbabilities>(m, "OutcomeProbabilities")
+        .def_readonly("win", &OutcomeProbabilities::win)
+        .def_readonly("draw", &OutcomeProbabilities::draw)
+        .def_readonly("loss", &OutcomeProbabilities::loss);
+
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
         .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
         .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
@@ -450,6 +455,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             "result_sum",
             [](const EvalMCTSNode &n) { return n.result_sum.load(std::memory_order_acquire); })
         .def_readonly("policy", &EvalMCTSNode::policy)
+        .def_property_readonly("outcome_prediction", &EvalMCTSNode::outcomePrediction)
         .def_property_readonly("max_depth", &EvalMCTSNode::maxDepth)
         .def("make_new_root", &EvalMCTSNode::makeNewRoot, py::arg("child_index"),
              R"pbdoc(

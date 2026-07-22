@@ -116,9 +116,11 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
         for (PendingInference &pending : futures) {
             const size_t i = pending.boardIndex;
             std::future<ModelInferenceResult> &future = pending.future;
-            const auto [policy, value] = future.get();
+            const ModelInferenceResult modelResult = future.get();
+            const torch::Tensor &policy = modelResult.policy;
+            const OutcomeProbabilities outcome = modelResult.outcome;
 
-            assert(std::abs(value) <= 1.0f + 1e-2f &&
+            assert(std::abs(outcome.value()) <= 1.0f + 1e-2f &&
                    "InferenceClient::inference_batch: value out of bounds");
             // if any element in policy is negative, or the sum of the policy is not close to 1.0,
             // throw an error.
@@ -128,7 +130,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
                    "InferenceClient::inference_batch: policy does not sum to 1.0");
 
             CachedInferenceResult result{
-                filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), value};
+                filterPolicyThenGetMovesAndProbabilities(policy, boards[i]), outcome};
             if (pending.cacheProducer.has_value()) {
                 pending.cacheProducer->publish(std::move(result));
             } else {
@@ -145,14 +147,12 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
             const CachedInferenceResult &result = uncachedResults[i].has_value()
                                                       ? uncachedResults[i].value()
                                                       : cachedResults[i].get();
-            const auto &[moves, value] = result;
-
             // Decode the moves from the cached result using the board.
             std::vector<int> encodedMoves;
             std::vector<float> scores;
-            encodedMoves.reserve(moves.size());
-            scores.reserve(moves.size());
-            for (const auto &[encodedMove, score] : moves) {
+            encodedMoves.reserve(result.moves.size());
+            scores.reserve(result.moves.size());
+            for (const auto &[encodedMove, score] : result.moves) {
                 encodedMoves.push_back(encodedMove);
                 scores.push_back(score);
             }
@@ -165,7 +165,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
                 decodedMovesScores.emplace_back(move, score);
             }
 
-            results.emplace_back(std::move(decodedMovesScores), value);
+            results.push_back({std::move(decodedMovesScores), result.outcome});
             if (cacheLeases[i]) {
                 m_cache.release(fingerprints[i]);
                 cacheLeases[i] = false;
@@ -215,8 +215,8 @@ InferenceStatistics InferenceClient::getStatistics() {
         }
         try {
             const CachedInferenceResult &result = resultHandle.get();
-            stats.nnOutputValueDistribution.push_back(result.second);
-            dynamicValueBytes += result.first.capacity() * sizeof(EncodedMoveScore);
+            stats.nnOutputValueDistribution.push_back(result.outcome.value());
+            dynamicValueBytes += result.moves.capacity() * sizeof(EncodedMoveScore);
         } catch (...) {
             // A failed producer is excluded from completed-result statistics.
         }
@@ -322,8 +322,12 @@ void InferenceClient::resolveWorker() {
             for (size_t i : range(completedBatch->promises.size())) {
                 const torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(i)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(i)];
-                const float value = values[0].item<float>() - values[2].item<float>();
-                results.emplace_back(policy, value);
+                const OutcomeProbabilities outcome{
+                    values[0].item<float>(),
+                    values[1].item<float>(),
+                    values[2].item<float>(),
+                };
+                results.push_back({policy, outcome});
             }
 
             for (size_t i : range(completedBatch->promises.size())) {

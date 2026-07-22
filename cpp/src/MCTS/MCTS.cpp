@@ -142,7 +142,7 @@ std::vector<MCTSResult> MCTS::searchGames(const std::vector<MCTSBoard> &boards) 
 
     const std::vector<InferenceResult> inferenceResults = inferenceBatch(newBoards);
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
-        roots[rootIndex].tree().expand(roots[rootIndex].rootIndex(), result.first);
+        roots[rootIndex].tree().expand(roots[rootIndex].rootIndex(), result.moves);
     }
 
     for (size_t index = 0; index < roots.size(); ++index) {
@@ -262,9 +262,8 @@ void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
 
     const std::vector<InferenceResult> results = inferenceBatch(selectedBoards);
     for (const auto [selected, result] : zip(selectedNodes, results)) {
-        const auto &[moves, value] = result;
-        selected.tree->expand(selected.index, moves);
-        selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, value);
+        selected.tree->expand(selected.index, result.moves);
+        selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, result.outcome.value());
     }
 }
 
