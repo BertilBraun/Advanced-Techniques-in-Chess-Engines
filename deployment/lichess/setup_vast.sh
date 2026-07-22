@@ -82,6 +82,7 @@ cmake -S "${engine_repository_root}/cpp" -B "${build_root}" \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_NATIVE_ARCH=ON \
+    -DUSE_SYSTEM_NVTX=ON \
     -DPYTHON_EXECUTABLE="${virtual_environment_root}/bin/python"
 cmake --build "${build_root}" --parallel "${build_jobs}"
 
