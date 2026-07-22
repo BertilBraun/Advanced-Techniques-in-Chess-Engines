@@ -1,0 +1,75 @@
+token: "overridden-by-LICHESS_BOT_TOKEN"
+url: "https://lichess.org/"
+
+engine:
+  dir: "/usr/local/bin"
+  name: "alphazero-uci"
+  working_dir: "/workspace/py"
+  protocol: "uci"
+  ponder: false
+  debug: false
+  uci_options:
+    SearchMode: "mcts"
+  go_commands:
+    movetime: 10000
+  polyglot:
+    enabled: false
+  draw_or_resign:
+    resign_enabled: false
+    offer_draw_enabled: false
+  online_moves:
+    max_retries: 2
+    online_egtb:
+      enabled: false
+    chessdb_book:
+      enabled: false
+    lichess_cloud_analysis:
+      enabled: false
+    lichess_opening_explorer:
+      enabled: false
+  lichess_bot_tbs:
+    syzygy:
+      enabled: false
+    gaviota:
+      enabled: false
+
+challenge:
+  concurrency: 1
+  accept_bot: true
+  only_bot: true
+  min_base: 600
+  max_base: 600
+  min_increment: 10
+  max_increment: 10
+  variants:
+    - standard
+  time_controls:
+    - rapid
+  modes:
+    - casual
+
+matchmaking:
+  allow_matchmaking: false
+  challenge_timeout: 30
+  challenge_initial_time:
+    - 600
+  challenge_increment:
+    - 10
+  challenge_variant: "standard"
+  challenge_mode: "casual"
+  opponent_min_rating: 600
+  opponent_max_rating: 4000
+
+correspondence:
+  move_time: 10
+  checkin_period: 300
+  disconnect_time: 150
+  ponder: false
+
+pgn_directory: "/data/pgn"
+pgn_file_grouping: "game"
+quit_after_all_games_finish: true
+abort_time: 30
+move_overhead: 2000
+rate_limiting_delay: 100
+max_takebacks_accepted: 0

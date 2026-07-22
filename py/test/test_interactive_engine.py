@@ -1,17 +1,31 @@
 from __future__ import annotations
 
+import io
+import time
 from pathlib import Path
+from threading import Event, Thread
 
 import chess
 import pytest
 import torch
 from torch import Tensor, nn
 
-pytest.importorskip('AlphaZeroCpp')
+pytest.importorskip("AlphaZeroCpp")
 from AlphaZeroCpp import InteractiveSearchParams
 
-from src.eval.InteractiveEngine import AnalysisMode, InferenceTarget, InteractiveEngine
+from src.eval.InteractiveEngine import (
+    AnalysisMode,
+    AnalysisResult,
+    InferenceTarget,
+    InteractiveEngine,
+)
 from src.settings import CurrentGame
+from src.uci.optimized import (
+    OptimizedEngineConfiguration,
+    OptimizedUciEngine,
+    OptimizedUciGame,
+)
+from src.uci.server import SearchMode, SearchRequest, UciServer
 
 
 class _UniformModel(nn.Module):
@@ -27,14 +41,18 @@ class _UniformModel(nn.Module):
             dtype=inputs.dtype,
             device=inputs.device,
         )
-        outcome = torch.tensor([0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device)
+        outcome = torch.tensor(
+            [0.6, 0.3, 0.1], dtype=inputs.dtype, device=inputs.device
+        )
         return policy, outcome.repeat(batch_size, 1)
 
 
 class _InvalidOutcomeModel(_UniformModel):
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         policy, _ = super().forward(inputs)
-        outcome = torch.tensor([1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device)
+        outcome = torch.tensor(
+            [1.2, -0.1, -0.1], dtype=inputs.dtype, device=inputs.device
+        )
         return policy, outcome.repeat(inputs.size(0), 1)
 
 
@@ -43,7 +61,7 @@ def model_path(tmp_path: Path) -> Path:
     channels, rows, columns = CurrentGame.representation_shape
     model = _UniformModel(CurrentGame.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
-    path = tmp_path / 'interactive.jit.pt'
+    path = tmp_path / "interactive.jit.pt"
     traced.save(str(path))
     return path
 
@@ -68,7 +86,7 @@ def invalid_engine(tmp_path: Path) -> InteractiveEngine:
     channels, rows, columns = CurrentGame.representation_shape
     model = _InvalidOutcomeModel(CurrentGame.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
-    path = tmp_path / 'invalid-outcome.jit.pt'
+    path = tmp_path / "invalid-outcome.jit.pt"
     traced.save(str(path))
     return InteractiveEngine(
         model_path=str(path),
@@ -91,11 +109,13 @@ def test_policy_preserves_wdl_and_bypasses_search(engine: InteractiveEngine) -> 
     assert result.outcome.win == pytest.approx(0.6)
     assert result.outcome.draw == pytest.approx(0.3)
     assert result.outcome.loss == pytest.approx(0.1)
-    assert result.chosen_move_uci == min(candidate.move_uci for candidate in result.candidates)
+    assert result.chosen_move_uci == min(
+        candidate.move_uci for candidate in result.candidates
+    )
 
 
 def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
-    with pytest.raises(ValueError, match='outstanding_batches_per_worker'):
+    with pytest.raises(ValueError, match="outstanding_batches_per_worker"):
         InteractiveEngine(
             model_path=str(model_path),
             device_id=0,
@@ -131,8 +151,13 @@ def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(
         )
     )
     assert result.chosen_move_uci == result.candidates[0].move_uci
-    assert sum(candidate.visit_share for candidate in result.candidates) == pytest.approx(1.0)
-    assert all(candidate.mean_value is None or -1.0 <= candidate.mean_value <= 1.0 for candidate in result.candidates)
+    assert sum(
+        candidate.visit_share for candidate in result.candidates
+    ) == pytest.approx(1.0)
+    assert all(
+        candidate.mean_value is None or -1.0 <= candidate.mean_value <= 1.0
+        for candidate in result.candidates
+    )
 
     game.apply_move(result.chosen_move_uci)
     retained_visits = game.root_visits
@@ -151,7 +176,9 @@ def test_human_reply_reuses_a_less_searched_descendant(
     game.apply_move(engine_result.chosen_move_uci)
 
     reply_analysis = game.analyze(AnalysisMode.MCTS, search_limit=64)
-    searched_replies = tuple(candidate for candidate in reply_analysis.candidates if candidate.visits > 0)
+    searched_replies = tuple(
+        candidate for candidate in reply_analysis.candidates if candidate.visits > 0
+    )
     assert len(searched_replies) > 1
     human_reply = min(
         searched_replies,
@@ -170,13 +197,13 @@ def test_history_replay_and_apply_move_reject_illegal_continuations(
     engine: InteractiveEngine,
 ) -> None:
     starting_fen = chess.STARTING_FEN
-    repetition = ('g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8')
+    repetition = ("g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8")
     terminal_game = engine.new_game(starting_fen, repetition)
 
-    with pytest.raises(ValueError, match='Illegal UCI move'):
-        engine.new_game(starting_fen, ('e2e5',))
-    with pytest.raises(ValueError, match='game over'):
-        terminal_game.apply_move('e2e4')
+    with pytest.raises(ValueError, match="Illegal UCI move"):
+        engine.new_game(starting_fen, ("e2e5",))
+    with pytest.raises(ValueError, match="game over"):
+        terminal_game.apply_move("e2e4")
 
 
 def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
@@ -198,10 +225,64 @@ def test_inference_failure_cancels_every_tree_reservation(
 ) -> None:
     game = invalid_engine.new_game(chess.STARTING_FEN, ())
 
-    with pytest.raises(RuntimeError, match='WDL output'):
+    with pytest.raises(RuntimeError, match="WDL output"):
         game.analyze(AnalysisMode.MCTS, search_limit=16)
     assert game.root_visits == 0
 
-    with pytest.raises(RuntimeError, match='WDL output'):
+    with pytest.raises(RuntimeError, match="WDL output"):
         game.analyze(AnalysisMode.MCTS, search_limit=16)
     assert game.root_visits == 0
+
+
+def test_optimized_uci_search_observes_stop_between_native_slices(
+    engine: InteractiveEngine,
+) -> None:
+    game = OptimizedUciGame(engine.new_game(chess.STARTING_FEN, ()))
+    stop_event = Event()
+    results: list[AnalysisResult] = []
+
+    def analyze() -> None:
+        results.append(game.analyze(SearchRequest(SearchMode.MCTS, 3, stop_event)))
+
+    started = time.monotonic()
+    search_thread = Thread(target=analyze)
+    search_thread.start()
+    time.sleep(0.1)
+    stop_event.set()
+    search_thread.join(timeout=2)
+
+    assert not search_thread.is_alive()
+    assert time.monotonic() - started < 2
+    assert len(results) == 1
+    assert chess.Move.from_uci(results[0].chosen_move_uci) in chess.Board().legal_moves
+
+
+def test_optimized_uci_server_returns_legal_bestmove(model_path: Path) -> None:
+    engine = OptimizedUciEngine(
+        OptimizedEngineConfiguration(
+            model_path=str(model_path),
+            device_id=0,
+            parallel_searches=2,
+            exploration_constant=1.0,
+            inference_workers=2,
+            outstanding_batches_per_worker=2,
+            maximum_batch_size=2,
+            inference_target=InferenceTarget.CPU,
+        )
+    )
+    output = io.StringIO()
+    server = UciServer(engine, output, io.StringIO())
+    server.process("uci")
+    server.process("isready")
+    server.process("position startpos moves e2e4 e7e5")
+    server.process("go movetime 1000")
+    server._stop_search(wait=True)
+
+    bestmove_line = next(
+        line for line in output.getvalue().splitlines() if line.startswith("bestmove ")
+    )
+    move = chess.Move.from_uci(bestmove_line.removeprefix("bestmove "))
+    board = chess.Board()
+    board.push_uci("e2e4")
+    board.push_uci("e7e5")
+    assert move in board.legal_moves

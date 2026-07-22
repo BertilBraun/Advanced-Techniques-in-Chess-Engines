@@ -541,7 +541,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<InteractiveGame, std::shared_ptr<InteractiveGame>>(m, "InteractiveGame")
         .def("apply_move", &InteractiveGame::applyMove, py::arg("move_uci"))
         .def("analyze", &InteractiveGame::analyze, py::arg("mode"),
-             py::arg("time_limit_seconds") = std::nullopt, py::arg("search_limit") = std::nullopt)
+             py::arg("time_limit_seconds") = std::nullopt, py::arg("search_limit") = std::nullopt,
+             py::call_guard<py::gil_scoped_release>())
         .def_property_readonly("fen", &InteractiveGame::fen)
         .def_property_readonly("starting_fen", &InteractiveGame::startingFen)
         .def_property_readonly("moves_uci", &InteractiveGame::movesUci)

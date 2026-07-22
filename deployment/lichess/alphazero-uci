@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${MODEL_PATH:?MODEL_PATH must point to the downloaded TorchScript model}"
+
+engine_repository_root="${ENGINE_REPOSITORY_ROOT:-/workspace}"
+engine_python="${ENGINE_PYTHON:-python3.10}"
+
+cd "${engine_repository_root}/py"
+exec "${engine_python}" -m src.uci \
+    --model "${MODEL_PATH}" \
+    --device-id "${ENGINE_DEVICE_ID:-0}" \
+    --parallel-searches "${ENGINE_PARALLEL_SEARCHES:-64}" \
+    --inference-workers "${ENGINE_INFERENCE_WORKERS:-2}" \
+    --outstanding-batches-per-worker "${ENGINE_OUTSTANDING_BATCHES_PER_WORKER:-2}" \
+    --maximum-batch-size "${ENGINE_MAXIMUM_BATCH_SIZE:-64}" \
+    --inference-target cuda
