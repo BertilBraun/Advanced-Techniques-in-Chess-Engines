@@ -211,6 +211,40 @@ target_link_libraries(EvalMCTSNodeChildrenTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME EvalMCTSNodeChildrenTest COMMAND EvalMCTSNodeChildrenTest)
 
 add_executable(
+        EvalSearchTreeTest
+        test/TestEvalSearchTree.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/GameHistory.cpp
+        src/MoveEncoding.cpp
+        src/MCTS/EvalSearchTree.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(EvalSearchTreeTest PRIVATE src)
+target_link_libraries(EvalSearchTreeTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME EvalSearchTreeTest COMMAND EvalSearchTreeTest)
+
+add_executable(
+        EvalSearchTreeBenchmark
+        benchmark/BenchmarkEvalSearchTree.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/MoveEncoding.cpp
+        src/MCTS/EvalSearchTree.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(EvalSearchTreeBenchmark PRIVATE src)
+target_link_libraries(EvalSearchTreeBenchmark PRIVATE "${TORCH_LIBRARIES}")
+
+add_executable(
         GameHistoryTest
         test/TestGameHistory.cpp
         src/Board.cpp
