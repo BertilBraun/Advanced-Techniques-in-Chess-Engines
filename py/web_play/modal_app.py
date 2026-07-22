@@ -59,7 +59,7 @@ app = modal.App("chess-model-web-play")
 class ChessWebPlay:
     @modal.enter()
     def load_engine(self) -> None:
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import HfApi, hf_hub_download
 
         from web_play.api import create_app
         from web_play.deployment import (
@@ -73,9 +73,19 @@ class ChessWebPlay:
         from web_play.service import GameService
 
         configuration = DeploymentConfiguration.from_environment(os.environ)
+        hugging_face_token = os.environ.get("HF_TOKEN")
+        model_information = HfApi().model_info(
+            repo_id=configuration.hugging_face_repository_id,
+            revision=configuration.hugging_face_revision,
+            token=hugging_face_token,
+        )
+        resolved_revision = model_information.sha
+        if resolved_revision is None:
+            raise ValueError("Hugging Face returned no resolved model revision.")
         model_path = download_model_artifacts(
             configuration=configuration,
-            token=os.environ.get("HF_TOKEN"),
+            resolved_revision=resolved_revision,
+            token=hugging_face_token,
             downloader=hf_hub_download,
         )
         engine = NativeInteractiveEngine(

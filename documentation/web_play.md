@@ -70,16 +70,19 @@ of requested memory, a 300-second scale-down window, a 90-second request timeout
 and no Modal Volume. The explicit memory request is needed because the native
 MCTS tree retains expanded positions throughout a search. At container startup
 it downloads the named `.pt` and `.jit.pt` artifacts into the revision-aware
-Hugging Face cache, then loads the TorchScript model once.
+Hugging Face cache, then loads the TorchScript model once. With revision `main`,
+each cold container resolves the branch to one commit before downloading either
+artifact, so both files come from the same latest snapshot.
 
-Create the fixed-name Modal secret with every required setting. The revision must
-be the full 40-character commit hash; branch names, tags, `main`, and abbreviated
+Create the fixed-name Modal secret with every required setting. Use revision
+`main` to load the newest snapshot after scale-to-zero, or a full 40-character
+commit hash for a fixed deployment. Other branch names, tags, and abbreviated
 hashes are rejected.
 
 ```powershell
 modal secret create chess-web-play `
   CHESS_MODEL_REPO_ID=owner/repository `
-  CHESS_MODEL_REVISION=0123456789abcdef0123456789abcdef01234567 `
+  CHESS_MODEL_REVISION=main `
   CHESS_MODEL_CHECKPOINT_FILENAME=model.pt `
   CHESS_MODEL_TORCHSCRIPT_FILENAME=model.jit.pt `
   CHESS_WEB_ALLOWED_ORIGINS=https://your-static-site.example

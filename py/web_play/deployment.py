@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 _COMMIT_REVISION = re.compile(r"^[0-9a-f]{40}$")
+_LATEST_REVISION = "main"
 
 
 @dataclass(frozen=True)
@@ -31,9 +32,9 @@ class DeploymentConfiguration:
 
         if "/" not in repository_id:
             raise ValueError("CHESS_MODEL_REPO_ID must be a namespace/repository id.")
-        if _COMMIT_REVISION.fullmatch(revision) is None:
+        if revision != _LATEST_REVISION and _COMMIT_REVISION.fullmatch(revision) is None:
             raise ValueError(
-                "CHESS_MODEL_REVISION must be a full 40-character commit hash."
+                "CHESS_MODEL_REVISION must be 'main' or a full 40-character commit hash."
             )
         if not checkpoint_filename.endswith(".pt") or checkpoint_filename.endswith(
             ".jit.pt"
@@ -73,9 +74,12 @@ class ArtifactDownloader(Protocol):
 
 def download_model_artifacts(
     configuration: DeploymentConfiguration,
+    resolved_revision: str,
     token: str | None,
     downloader: ArtifactDownloader,
 ) -> Path:
+    if _COMMIT_REVISION.fullmatch(resolved_revision) is None:
+        raise ValueError("The resolved Hugging Face revision must be a commit hash.")
     torchscript_path: Path | None = None
     for filename in (
         configuration.checkpoint_filename,
@@ -84,7 +88,7 @@ def download_model_artifacts(
         downloaded_path = downloader(
             repo_id=configuration.hugging_face_repository_id,
             filename=filename,
-            revision=configuration.hugging_face_revision,
+            revision=resolved_revision,
             token=token,
         )
         if filename == configuration.torchscript_filename:
