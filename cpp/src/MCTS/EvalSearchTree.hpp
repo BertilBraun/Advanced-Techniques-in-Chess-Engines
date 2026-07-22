@@ -5,6 +5,7 @@
 #include "InferenceClientTypes.hpp"
 
 #include <memory_resource>
+#include <span>
 
 using EvalNodeIndex = std::uint64_t;
 using EvalVisitCount = std::pair<int, int>;

@@ -3,23 +3,30 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import chess
 import modal
 from fastapi import FastAPI
 
 _REMOTE_ROOT = "/opt/chess"
+_GPU_SINGLE_POSITION_WARMUPS = 2
+_GPU_WARMUP_SEARCHES = 4096
 _REPOSITORY_ROOT = (
     Path(__file__).resolve().parents[2] if modal.is_local() else Path(_REMOTE_ROOT)
 )
 
 image = (
-    modal.Image.debian_slim(python_version="3.10")
+    modal.Image.from_registry(
+        "nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04",
+        add_python="3.10",
+    )
+    .entrypoint([])
     .apt_install("build-essential", "cmake", "git")
     .pip_install_from_requirements(
         str(_REPOSITORY_ROOT / "py" / "requirements-web-modal.txt")
     )
     .pip_install(
-        "torch==2.7.1+cpu",
-        index_url="https://download.pytorch.org/whl/cpu",
+        "torch==2.7.1",
+        index_url="https://download.pytorch.org/whl/cu126",
     )
     .add_local_dir(
         _REPOSITORY_ROOT / "cpp",
@@ -28,7 +35,8 @@ image = (
         ignore=["build/**", "libtorch*/**"],
     )
     .run_commands(
-        f"cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build -DCMAKE_BUILD_TYPE=Release",
+        f"cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build "
+        "-DCMAKE_BUILD_TYPE=Release -DENABLE_NATIVE_ARCHITECTURE=OFF",
         f"cmake --build {_REMOTE_ROOT}/cpp/build --parallel 2",
         f"ctest --test-dir {_REMOTE_ROOT}/cpp/build --output-on-failure",
     )
@@ -49,9 +57,10 @@ app = modal.App("chess-model-web-play")
     secrets=[modal.Secret.from_name("chess-web-play")],
     min_containers=0,
     max_containers=1,
-    scaledown_window=300,
-    cpu=4.0,
-    memory=4096,
+    scaledown_window=120,
+    gpu="A10",
+    cpu=2.0,
+    memory=2048,
     timeout=90,
     startup_timeout=900,
 )
@@ -59,9 +68,12 @@ app = modal.App("chess-model-web-play")
 class ChessWebPlay:
     @modal.enter()
     def load_engine(self) -> None:
+        import torch
         from huggingface_hub import HfApi, hf_hub_download
 
+        from src.eval.InteractiveEngine import InferenceTarget
         from web_play.api import create_app
+        from web_play.contracts import AnalysisMode, CountedAnalysis
         from web_play.deployment import (
             DeploymentConfiguration,
             download_model_artifacts,
@@ -88,8 +100,24 @@ class ChessWebPlay:
             token=hugging_face_token,
             downloader=hf_hub_download,
         )
+        if not torch.cuda.is_available():
+            raise RuntimeError("The GPU deployment cannot access CUDA.")
+        print(f"Loading interactive engine on {torch.cuda.get_device_name(0)}.")
         engine = NativeInteractiveEngine(
-            NativeEngineConfiguration.for_model(str(model_path))
+            NativeEngineConfiguration.for_model(
+                str(model_path), inference_target=InferenceTarget.CUDA
+            )
+        )
+        for _ in range(_GPU_SINGLE_POSITION_WARMUPS):
+            engine.new_game(chess.STARTING_FEN, ()).analyze(
+                CountedAnalysis(mode=AnalysisMode.MCTS, searches=1)
+            )
+        warmup_result = engine.new_game(chess.STARTING_FEN, ()).analyze(
+            CountedAnalysis(mode=AnalysisMode.MCTS, searches=_GPU_WARMUP_SEARCHES)
+        )
+        print(
+            f"Warmed CUDA inference with {warmup_result.metrics.searches} searches "
+            f"in {warmup_result.metrics.elapsed_milliseconds} ms."
         )
         self._web_application = create_app(
             GameService(engine), configuration.allowed_origins

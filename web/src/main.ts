@@ -23,6 +23,11 @@ import {
   reconstructGame,
   signedValue,
 } from "./game.ts";
+import {
+  clearStoredGame,
+  loadStoredGame,
+  saveStoredGame,
+} from "./persistence.ts";
 import "./style.css";
 
 type UiPhase = "setup" | "cold" | "thinking" | "playing" | "game-over" | "error";
@@ -161,7 +166,10 @@ function setPhase(nextPhase: UiPhase, detail?: string): void {
   card.dataset.phase = nextPhase;
   const labels: Record<UiPhase, readonly [string, string]> = {
     setup: ["Configure a game", "Choose your side and search mode."],
-    cold: ["Waking the engine", "A cold start can take a moment. Your game will begin automatically."],
+    cold: [
+      "Waking the engine",
+      detail ?? "A cold start can take a moment. Your game will begin automatically.",
+    ],
     thinking: ["Engine is thinking", "Searching candidate lines. Please keep this tab open."],
     playing: ["Your move", "Drag a piece or click its destination."],
     "game-over": ["Game over", detail ?? authoritativeState?.result ?? "The game has ended."],
@@ -228,12 +236,26 @@ async function acceptState(state: GameState, animate: boolean): Promise<void> {
   game = reconstructGame(state.starting_fen, state.moves_uci);
   await board.setPosition(state.fen, animate);
   renderHistory();
+  persistCurrentGame();
   requiredElement("#turn-label").textContent = state.game_over
     ? state.result ?? "Game over"
     : `${state.side_to_move === "white" ? "White" : "Black"} to move`;
   if (state.game_over) {
     setPhase("game-over", state.result ?? "The game has ended.");
   }
+}
+
+function persistCurrentGame(): void {
+  if (!gameToken || !authoritativeState) return;
+  const options = analysisOptions();
+  saveStoredGame(window.localStorage, {
+    version: 1,
+    game_token: gameToken,
+    state: authoritativeState,
+    player_side: playerSide,
+    analysis_mode: options.mode,
+    time_limit_seconds: options.time_limit_seconds,
+  });
 }
 
 function enablePlayerInput(): void {
@@ -278,6 +300,7 @@ async function startGame(): Promise<void> {
   const previousToken = gameToken;
   gameToken = null;
   authoritativeState = null;
+  clearStoredGame(window.localStorage);
   if (previousToken) void api.endGame(previousToken).catch(() => undefined);
   playerSide = selectedValue<PlayerSide>("side");
   await board.setOrientation(playerSide === "white" ? COLOR.white : COLOR.black);
@@ -300,19 +323,52 @@ async function startGame(): Promise<void> {
   }
 }
 
+async function restoreGame(): Promise<void> {
+  const stored = loadStoredGame(window.localStorage);
+  if (stored === null) return;
+
+  gameToken = stored.game_token;
+  playerSide = stored.player_side;
+  document.querySelectorAll<HTMLInputElement>('input[name="side"]').forEach((input) => {
+    input.checked = input.value === stored.player_side;
+  });
+  document.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((input) => {
+    input.checked = input.value === stored.analysis_mode;
+  });
+  timeRange.value = String(stored.time_limit_seconds);
+  timeOutput.value = `${stored.time_limit_seconds}s`;
+  timeControl.hidden = stored.analysis_mode !== "mcts";
+  await board.setOrientation(playerSide === "white" ? COLOR.white : COLOR.black);
+  renderAnalysis(null);
+  await acceptState(stored.state, false);
+
+  if (stored.state.game_over) return;
+  if (stored.state.side_to_move === playerSide) {
+    enablePlayerInput();
+  } else {
+    setPhase("cold", "Restoring your game and waking the engine.");
+    await requestTurn(null);
+  }
+}
+
 document.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((input) => {
   input.addEventListener("change", () => {
     timeControl.hidden = selectedValue<AnalysisMode>("mode") !== "mcts";
+    persistCurrentGame();
   });
 });
 timeRange.addEventListener("input", () => {
   timeOutput.value = `${timeRange.value}s`;
+  persistCurrentGame();
 });
 startButton.addEventListener("click", () => void startGame());
 newGameButton.addEventListener("click", () => {
+  const previousToken = gameToken;
+  gameToken = null;
+  authoritativeState = null;
+  clearStoredGame(window.localStorage);
+  if (previousToken) void api.endGame(previousToken).catch(() => undefined);
   setPhase("setup");
   requiredElement(".setup-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 });
-window.addEventListener("pagehide", () => {
-  if (gameToken) void api.endGame(gameToken);
-});
+void restoreGame();

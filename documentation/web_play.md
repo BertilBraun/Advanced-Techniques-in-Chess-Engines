@@ -4,6 +4,11 @@ The web-play deployment consists of a static Vite client in `web/` and a typed
 FastAPI service in `py/web_play/`. The API is authoritative for FEN and move
 validation. The browser sends the starting FEN and complete UCI history on every
 turn, so a request can recover after Modal has scaled the only container to zero.
+The client stores the last authoritative game state and play settings in browser
+local storage. Reloading the same site origin restores the board immediately;
+the next turn reuses the UUID session when it still exists or reconstructs the
+game from complete history after a cold start. Starting a new game clears the
+stored state.
 
 ## Analysis semantics
 
@@ -67,15 +72,26 @@ deployed Modal API URL.
 
 ## Modal deployment
 
-The deployment builds the CPU-only native extension into an ephemeral image. It
-has zero warm containers, at most one container, four requested CPU cores, 4 GiB
-of requested memory, a 300-second scale-down window, a 90-second request timeout,
-and no Modal Volume. The explicit memory request is needed because the native
-MCTS tree retains expanded positions throughout a search. At container startup
-it downloads the named `.pt` and `.jit.pt` artifacts into the revision-aware
-Hugging Face cache, then loads the TorchScript model once. With revision `main`,
-each cold container resolves the branch to one commit before downloading either
-artifact, so both files come from the same latest snapshot.
+The deployment builds the CUDA-enabled native extension into an ephemeral image.
+It requests one NVIDIA A10 GPU, has zero warm containers, at most one container,
+two CPU cores, 2 GiB of requested system memory, a 120-second scale-down window,
+a 90-second request timeout, and no Modal Volume. CUDA is required explicitly;
+startup fails instead of silently falling back to CPU inference. At container
+startup it downloads the named `.pt` and `.jit.pt` artifacts into the
+revision-aware Hugging Face cache, then loads two TorchScript replicas once for
+the direct inference workers. Startup warms the single-position path on both
+workers, then runs a fixed 4,096-search warm-up to initialize full batches and
+stabilize the native deadline estimator before the first request. The native
+extension also disables build-host-specific CPU instructions because Modal may
+serve the image on a different host. With revision `main`, each cold container
+resolves the branch to one commit before downloading either artifact, so both
+files come from the same latest snapshot.
+
+The 120-second window is two minutes after the container becomes idle. Scaling
+to zero discards in-memory sessions, inference cache, and search subtrees, but it
+does not lose a browser game: each subsequent turn contains the starting FEN and
+complete move history. Recovery may pay another cold-start delay and does not
+retain the previous search tree, but produces the same correct position.
 
 Create the fixed-name Modal secret with every required setting. Use revision
 `main` to load the newest snapshot after scale-to-zero, or a full 40-character
