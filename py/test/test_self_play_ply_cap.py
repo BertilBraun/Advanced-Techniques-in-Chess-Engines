@@ -101,6 +101,41 @@ def test_empty_non_terminal_search_result_fails_clearly() -> None:
         client._finish_terminal_search_root(SelfPlayGame(), SimpleNamespace(is_terminal=False))
 
 
+def test_unexpanded_reused_root_is_rebuilt_with_history() -> None:
+    client = self_play_client(iteration=50)
+    replacement = SimpleNamespace(is_terminal=False, is_expanded=False)
+    root_factory = SimpleNamespace(
+        new_root_with_history=lambda starting_fen, moves_uci: replacement,
+    )
+    client.mcts = root_factory
+    game = SelfPlayGame()
+    game.already_expanded_node = SimpleNamespace(is_terminal=False, is_expanded=False)
+
+    client._prepare_search_root(game)
+
+    assert game.already_expanded_node is replacement
+
+
+@pytest.mark.parametrize(
+    'retained_root',
+    (
+        SimpleNamespace(is_terminal=True, is_expanded=False),
+        SimpleNamespace(is_terminal=False, is_expanded=True),
+    ),
+)
+def test_terminal_or_expanded_reused_root_is_retained(retained_root: SimpleNamespace) -> None:
+    client = self_play_client(iteration=50)
+    client.mcts = SimpleNamespace(
+        new_root_with_history=lambda *_: pytest.fail('Reusable root must not be rebuilt.'),
+    )
+    game = SelfPlayGame()
+    game.already_expanded_node = retained_root
+
+    client._prepare_search_root(game)
+
+    assert game.already_expanded_node is retained_root
+
+
 @pytest.mark.parametrize(
     ('iteration', 'expected_maximum'),
     (

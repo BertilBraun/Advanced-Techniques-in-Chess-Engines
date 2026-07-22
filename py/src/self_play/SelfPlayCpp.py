@@ -237,13 +237,7 @@ class SelfPlayCpp:
                 and random.random() < self.args.mcts.playout_cap_randomization
             )
 
-            if spg.already_expanded_node is None:
-                # If the node is not already expanded, create a new root node for the MCTS search
-                history = bounded_repetition_history(spg.board.board, REPETITION_HISTORY_PLIES)
-                spg.already_expanded_node = self.mcts.new_root_with_history(
-                    history.starting_fen,
-                    history.moves_uci,
-                )
+            self._prepare_search_root(spg)
 
             if should_run_full_search:
                 # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
@@ -303,6 +297,17 @@ class SelfPlayCpp:
         finished_game = self._finish_game_after_move(game, native_game_over=True)
         assert finished_game is not None
         return finished_game
+
+    def _prepare_search_root(self, game: SelfPlayGame) -> None:
+        assert self.mcts is not None
+        root = game.already_expanded_node
+        if root is not None and (root.is_terminal or root.is_expanded):
+            return
+        history = bounded_repetition_history(game.board.board, REPETITION_HISTORY_PLIES)
+        game.already_expanded_node = self.mcts.new_root_with_history(
+            history.starting_fen,
+            history.moves_uci,
+        )
 
     def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
         if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
