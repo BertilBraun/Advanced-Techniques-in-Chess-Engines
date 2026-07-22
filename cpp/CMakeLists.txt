@@ -291,6 +291,48 @@ target_include_directories(MovePolicyProcessingTest PRIVATE src)
 target_link_libraries(MovePolicyProcessingTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME MovePolicyProcessingTest COMMAND MovePolicyProcessingTest)
 
+add_executable(
+        DirectBoardEncodingTest
+        test/TestDirectBoardEncoding.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(DirectBoardEncodingTest PRIVATE src)
+target_link_libraries(DirectBoardEncodingTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME DirectBoardEncodingTest COMMAND DirectBoardEncodingTest)
+
+add_executable(
+        DirectInferencePipelineTest
+        test/TestDirectInferencePipeline.cpp
+        src/DirectInference.cpp
+)
+target_include_directories(DirectInferencePipelineTest PRIVATE src)
+target_link_libraries(DirectInferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME DirectInferencePipelineTest COMMAND DirectInferencePipelineTest)
+
+add_executable(
+        DirectInferenceBenchmark
+        benchmark/DirectInferenceBenchmark.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/DirectInference.cpp
+        src/InferenceClient.cpp
+        src/MoveEncoding.cpp
+        src/NonCachingInferenceClient.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(DirectInferenceBenchmark PRIVATE src)
+target_link_libraries(DirectInferenceBenchmark PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20
         PREFIX ""

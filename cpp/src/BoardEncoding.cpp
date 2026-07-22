@@ -98,12 +98,17 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
     auto t =
         torch::empty({BOARD_C, BOARD_LEN, BOARD_LEN}, torch::TensorOptions().dtype(torch::kInt8));
 
-    int8 *dst = t.data_ptr<int8>();
+    writeTensorEncoding(compressed, t.data_ptr<int8>());
+    return t;
+}
+
+void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination) {
+    assert(destination != nullptr);
 
     // -------- binary planes -------------------------------------------------
     for (int ch = 0; ch < BINARY_C; ++ch) {
         const uint64 bits = compressed.bits[ch];
-        int8 *d = dst + ch * 64;
+        int8 *d = destination + ch * 64;
 
         // unroll for speed: eight bytes at a time
         for (int byte = 0; byte < 8; ++byte) {
@@ -122,11 +127,13 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
 
     // -------- scalar planes -------------------------------------------------
     for (int i = 0; i < SCALAR_C; ++i) {
-        int8 *d = dst + (BINARY_C + i) * 64;
+        int8 *d = destination + (BINARY_C + i) * 64;
         std::memset(d, compressed.scal[i], 64); // broadcast 1 byte → 64 bytes
     }
+}
 
-    return t;
+void encodeBoardInto(const Board &board, int8 *destination) {
+    writeTensorEncoding(encodeBoard(&board), destination);
 }
 
 float getBoardResultScore(const Board &board) {
