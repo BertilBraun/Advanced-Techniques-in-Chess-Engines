@@ -21,6 +21,7 @@ from src.eval.InteractiveEngine import (
     InferenceMetrics,
     InferenceTarget,
     InteractiveEngine,
+    InteractiveGame,
 )
 
 
@@ -467,6 +468,8 @@ def run_configuration(
 
     if configuration.inference_target is InferenceTarget.CUDA:
         torch.cuda.reset_peak_memory_stats(configuration.device_id)
+    engine: InteractiveEngine | None = None
+    game: InteractiveGame | None = None
     try:
         engine = _engine(arguments, configuration)
         engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
@@ -496,6 +499,8 @@ def run_configuration(
     except (MemoryError, RuntimeError) as error:
         return _error_record(configuration, f"{type(error).__name__}: {error}")
     finally:
+        game = None
+        engine = None
         gc.collect()
         if configuration.inference_target is InferenceTarget.CUDA:
             torch.cuda.empty_cache()
