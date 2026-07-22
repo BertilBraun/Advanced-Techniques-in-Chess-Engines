@@ -390,6 +390,14 @@ class PiecewiseLearningRate:
         return selected_stage.learning_rate
 
 
+@dataclass(frozen=True)
+class FixedSamplingWindow:
+    window_size: int
+
+    def __call__(self, _: int) -> int:
+        return self.window_size
+
+
 def load_run_configuration(path: Path) -> RunConfiguration:
     return RunConfiguration.model_validate_json(path.read_text(encoding='utf-8'))
 
@@ -570,10 +578,7 @@ def _piecewise_learning_rate(
 
 
 def _fixed_sampling_window(window_size: int) -> Callable[[int], int]:
-    def sampling_window(_: int) -> int:
-        return window_size
-
-    return sampling_window
+    return FixedSamplingWindow(window_size)
 
 
 def apply_run_configuration(

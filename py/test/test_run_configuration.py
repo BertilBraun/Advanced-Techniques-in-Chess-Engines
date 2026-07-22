@@ -563,6 +563,7 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
 
     assert arguments.training.sampling_window(0) == 15
     assert arguments.training.sampling_window(500) == 15
+    assert pickle.loads(pickle.dumps(arguments.training.sampling_window))(144) == 15
     assert arguments.artifact_retention.replay_window_iterations == 15
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
