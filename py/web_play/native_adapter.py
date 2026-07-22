@@ -11,7 +11,6 @@ from src.eval.InteractiveEngine import (
     InteractiveEngine as OptimizedInteractiveEngine,
     InteractiveGame as OptimizedInteractiveGame,
 )
-from src.settings import PLAY_C_PARAM
 from web_play.contracts import (
     AnalysisLimit,
     AnalysisMode,
@@ -43,7 +42,7 @@ class NativeEngineConfiguration:
             model_path=model_path,
             device_id=device_id,
             parallel_searches=64,
-            exploration_constant=PLAY_C_PARAM,
+            exploration_constant=1.0,
             inference_workers=2,
             outstanding_batches_per_worker=2,
             maximum_batch_size=64,
