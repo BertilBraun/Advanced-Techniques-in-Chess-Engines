@@ -352,7 +352,12 @@ class SelfPlayCpp:
 
         maximum_game_plies = self._maximum_game_plies()
         if maximum_game_plies is not None and len(game.played_moves) >= maximum_game_plies:
-            return self._handle_end_of_game(game, 0.0)
+            capped_game_outcome = game.board.get_approximate_result_score() * game.board.current_player
+            self.dataset.stats += SelfPlayDatasetStats(
+                num_too_long_games=1,
+                capped_game_material_scores=[capped_game_outcome],
+            )
+            return self._handle_end_of_game(game, capped_game_outcome)
         return None
 
     def _maximum_game_plies(self) -> int | None:

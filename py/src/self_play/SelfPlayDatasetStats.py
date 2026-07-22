@@ -11,6 +11,7 @@ class SelfPlayDatasetStats(NamedTuple):
     game_lengths: list[int] = []
     total_generation_time: float = 0.0
     num_too_long_games: int = 0
+    capped_game_material_scores: list[float] = []
 
     resignations: int = 0
     num_resignations_evaluated_to_end: int = 0
@@ -24,6 +25,7 @@ class SelfPlayDatasetStats(NamedTuple):
         game_lengths: list[int] | None = None,
         total_generation_time: float | None = None,
         num_too_long_games: int | None = None,
+        capped_game_material_scores: list[float] | None = None,
         resignations: int | None = None,
         num_resignations_evaluated_to_end: int | None = None,
         num_winnable_resignations: int | None = None,
@@ -37,6 +39,11 @@ class SelfPlayDatasetStats(NamedTuple):
             if total_generation_time is not None
             else self.total_generation_time,
             num_too_long_games=num_too_long_games if num_too_long_games is not None else self.num_too_long_games,
+            capped_game_material_scores=(
+                capped_game_material_scores
+                if capped_game_material_scores is not None
+                else self.capped_game_material_scores
+            ),
             resignations=resignations if resignations is not None else self.resignations,
             num_resignations_evaluated_to_end=num_resignations_evaluated_to_end
             if num_resignations_evaluated_to_end is not None
@@ -68,6 +75,7 @@ Average moves after resignation: {self.num_moves_after_resignation / self.num_re
             game_lengths=self.game_lengths + other.game_lengths,
             total_generation_time=self.total_generation_time + other.total_generation_time,
             num_too_long_games=self.num_too_long_games + other.num_too_long_games,
+            capped_game_material_scores=self.capped_game_material_scores + other.capped_game_material_scores,
             resignations=self.resignations + other.resignations,
             num_resignations_evaluated_to_end=self.num_resignations_evaluated_to_end
             + other.num_resignations_evaluated_to_end,

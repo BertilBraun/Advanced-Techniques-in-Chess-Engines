@@ -6,6 +6,7 @@ import chess
 import pytest
 
 from src.self_play.SelfPlayCpp import SelfPlayCpp, SelfPlayGame
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 
 
 def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> SelfPlayCpp:
@@ -16,6 +17,7 @@ def self_play_client(iteration: int, final_maximum_game_plies: int | None = None
         final_maximum_game_plies=final_maximum_game_plies,
     )
     client.iteration = iteration
+    client.dataset = SelfPlayDataset()
     return client
 
 
@@ -25,7 +27,13 @@ def game_at_200_plies() -> SelfPlayGame:
     return game
 
 
-def test_iteration_49_caps_game_at_200_plies_as_draw(monkeypatch: pytest.MonkeyPatch) -> None:
+def game_at_300_plies() -> SelfPlayGame:
+    game = SelfPlayGame()
+    game.played_moves = [chess.Move.null()] * 300
+    return game
+
+
+def test_iteration_49_caps_game_at_200_plies_with_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
     client = self_play_client(iteration=49)
     game = game_at_200_plies()
     replacement = SelfPlayGame()
@@ -40,6 +48,25 @@ def test_iteration_49_caps_game_at_200_plies_as_draw(monkeypatch: pytest.MonkeyP
 
     assert client._finish_game_after_move(game, native_game_over=False) is replacement
     assert handled_outcomes == [0.0]
+    assert client.dataset.stats.num_too_long_games == 1
+    assert client.dataset.stats.capped_game_material_scores == [0.0]
+
+
+def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = self_play_client(iteration=50, final_maximum_game_plies=300)
+    game = game_at_300_plies()
+    replacement = SelfPlayGame()
+
+    monkeypatch.setattr(game.board, 'get_approximate_result_score', lambda: 0.5)
+    monkeypatch.setattr(
+        client,
+        '_handle_end_of_game',
+        lambda _, __: replacement,
+    )
+
+    assert client._finish_game_after_move(game, native_game_over=False) is replacement
+    assert client.dataset.stats.num_too_long_games == 1
+    assert client.dataset.stats.capped_game_material_scores == [0.5]
 
 
 def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,17 +85,17 @@ def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyP
     ('iteration', 'expected_maximum'),
     (
         (0, 200),
-        (40, 300),
-        (79, 397),
-        (80, 400),
-        (300, 400),
+        (40, 250),
+        (79, 298),
+        (80, 300),
+        (300, 300),
     ),
 )
-def test_maximum_game_plies_increases_from_200_to_400(
+def test_maximum_game_plies_increases_from_200_to_300(
     iteration: int,
     expected_maximum: int,
 ) -> None:
-    client = self_play_client(iteration, final_maximum_game_plies=400)
+    client = self_play_client(iteration, final_maximum_game_plies=300)
     client.args.maximum_game_plies_until_iteration = 80
 
     assert client._maximum_game_plies() == expected_maximum

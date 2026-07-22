@@ -119,8 +119,27 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
             )
 
             spikiness = float(np.mean(policy_maxima))
+            target_abs_values = np.abs(value_targets)
+            value_target_probabilities = np.stack(
+                (
+                    np.maximum(value_targets, 0),
+                    1 - target_abs_values,
+                    np.maximum(-value_targets, 0),
+                ),
+                axis=-1,
+            )
+            value_target_entropy = float(
+                np.mean(
+                    -np.sum(
+                        value_target_probabilities * np.log(np.clip(value_target_probabilities, 1e-12, None)),
+                        axis=-1,
+                    )
+                )
+            )
 
             log_scalar('dataset/policy_spikiness', spikiness)
+            log_scalar('dataset/value_target_entropy', value_target_entropy)
+            log_scalar('dataset/value_uniform_cross_entropy', float(np.log(3)))
 
             log_histogram('dataset/policy_targets', policy_maxima)
             log_histogram('dataset/value_targets', value_targets)
@@ -141,6 +160,7 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
 
             if accumulated_stats.num_too_long_games > 0:
                 log_scalar('dataset/num_too_long_games', accumulated_stats.num_too_long_games)
+                log_histogram('dataset/capped_game_material_scores', accumulated_stats.capped_game_material_scores)
 
             log_scalar('dataset/num_games', accumulated_stats.num_games)
             log_scalar('dataset/num_samples', accumulated_stats.num_samples)

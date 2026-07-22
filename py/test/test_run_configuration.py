@@ -544,7 +544,7 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['workload']['training_global_batch_size'] = 1024
     expected['workload']['training_sampling_window'] = 15
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
-    expected['workload']['self_play_final_maximum_game_plies'] = 400
+    expected['workload']['self_play_final_maximum_game_plies'] = 300
     expected['retention']['replay_window_iterations'] = 15
     expected['evaluation_protocol']['historical_model_iterations'] = (0,) + expected['evaluation_protocol'][
         'historical_model_iterations'
@@ -567,7 +567,7 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
     assert arguments.artifact_retention.replay_window_iterations == 15
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
-    assert arguments.self_play.final_maximum_game_plies == 400
+    assert arguments.self_play.final_maximum_game_plies == 300
 
 
 @pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))
