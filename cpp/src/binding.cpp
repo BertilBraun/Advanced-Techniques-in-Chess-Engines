@@ -367,6 +367,14 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("mctsStats", &MCTSResults::mctsStats) // PyMCTSStatistics
         .def_readonly("searchesCompleted", &MCTSResults::searchesCompleted);
 
+    py::class_<DirectSelfPlayInferenceParams>(m, "DirectSelfPlayInferenceParams")
+        .def(py::init<int, int, int>(), py::arg("inference_workers"),
+             py::arg("inference_batch_size"), py::arg("outstanding_batches_per_worker") = 2)
+        .def_readwrite("inference_workers", &DirectSelfPlayInferenceParams::inference_workers)
+        .def_readwrite("inference_batch_size", &DirectSelfPlayInferenceParams::inference_batch_size)
+        .def_readwrite("outstanding_batches_per_worker",
+                       &DirectSelfPlayInferenceParams::outstanding_batches_per_worker);
+
     py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
         .def_readonly("name", &FunctionTimeInfo::name)
         .def_readonly("percent", &FunctionTimeInfo::percent)
@@ -380,8 +388,10 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
-        .def(py::init<const InferenceClientParams &, const MCTSParams &, bool>(),
-             py::arg("client_args"), py::arg("mcts_args"), py::arg("use_inference_cache") = true)
+        .def(py::init<const InferenceClientParams &, const MCTSParams &, bool,
+                      std::optional<DirectSelfPlayInferenceParams>>(),
+             py::arg("client_args"), py::arg("mcts_args"), py::arg("use_inference_cache") = true,
+             py::arg("direct_inference_params") = std::nullopt)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
         .def(
             "new_root", [](const MCTS &self, const std::string &fen) { return self.newRoot(fen); },

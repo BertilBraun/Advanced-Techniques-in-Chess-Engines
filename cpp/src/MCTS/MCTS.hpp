@@ -9,6 +9,8 @@
 #include "util/ThreadPool.h"
 #include <variant>
 
+class DirectSelfPlaySearch;
+
 using VisitCount = std::pair<int, int>;
 using VisitCounts = std::vector<VisitCount>;
 
@@ -27,6 +29,15 @@ struct MCTSParams {
                uint8 num_threads);
 
     [[nodiscard]] uint32 arenaCapacity() const;
+};
+
+struct DirectSelfPlayInferenceParams {
+    int inference_workers;
+    int inference_batch_size;
+    int outstanding_batches_per_worker;
+
+    DirectSelfPlayInferenceParams(int inferenceWorkers, int inferenceBatchSize,
+                                  int outstandingBatchesPerWorker = 2);
 };
 
 struct MCTSResult {
@@ -58,7 +69,9 @@ struct MCTSBoard {
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-         bool useInferenceCache = true);
+         bool useInferenceCache = true,
+         std::optional<DirectSelfPlayInferenceParams> directInferenceParams = std::nullopt);
+    ~MCTS();
 
     [[nodiscard]] MCTSResults search(const std::vector<MCTSBoard> &boards,
                                      bool collectStatistics = false);
@@ -72,13 +85,16 @@ public:
     inferenceBatch(const std::vector<const Board *> &boards);
 
 private:
-    using InferenceClientVariant =
-        std::variant<std::unique_ptr<InferenceClient>, std::unique_ptr<NonCachingInferenceClient>>;
+    using InferenceClientVariant = std::variant<std::monostate, std::unique_ptr<InferenceClient>,
+                                                std::unique_ptr<NonCachingInferenceClient>>;
 
     InferenceClientVariant m_client;
+    InferenceClientParams m_clientArgs;
     MCTSParams m_args;
     ThreadPool m_threadPool;
     uint32 m_arenaCapacity;
+    std::optional<DirectSelfPlayInferenceParams> m_directInferenceParams;
+    std::unique_ptr<DirectSelfPlaySearch> m_directSearch;
 
     [[nodiscard]] MCTSResults searchGames(const std::vector<MCTSBoard> &boards);
     void parallelIterate(const std::vector<MCTSRoot> &roots);

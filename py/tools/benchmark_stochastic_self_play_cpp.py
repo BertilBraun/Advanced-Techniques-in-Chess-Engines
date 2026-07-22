@@ -13,7 +13,13 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from AlphaZeroCpp import InferenceClientParams, InferenceStatistics, MCTS, MCTSParams
+from AlphaZeroCpp import (
+    DirectSelfPlayInferenceParams,
+    InferenceClientParams,
+    InferenceStatistics,
+    MCTS,
+    MCTSParams,
+)
 from src.self_play.SelfPlayCpp import SelfPlayCpp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS
@@ -35,6 +41,9 @@ class Arguments:
     inference_timeout_microseconds: int
     cache_capacity: int
     use_inference_cache: bool
+    direct_inference_workers: int
+    direct_inference_batch_size: int
+    direct_outstanding_batches_per_worker: int
     seed: int
     iteration: int
     ready_file: Path | None
@@ -53,6 +62,9 @@ class BenchmarkResult:
     device_id: int
     seed: int
     use_inference_cache: bool
+    direct_inference_workers: int
+    direct_inference_batch_size: int
+    direct_outstanding_batches_per_worker: int
     parallel_games: int
     warmup_steps: int
     requested_duration_seconds: float | None
@@ -88,6 +100,13 @@ class BenchmarkResult:
     inference_model_positions: int
     inference_average_batch_size: float
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
+    tree_selection_seconds: float
+    board_encoding_seconds: float
+    result_processing_seconds: float
+    tree_backup_seconds: float
+    tree_owner_wait_seconds: float
+    direct_inference_seconds: float
+    direct_worker_utilization_percent: float
 
 
 def parse_arguments() -> Arguments:
@@ -109,6 +128,9 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--cache-capacity', type=int, default=1_500_000)
     parser.add_argument('--no-inference-cache', action='store_false', dest='use_inference_cache')
+    parser.add_argument('--direct-inference-workers', type=int, default=0)
+    parser.add_argument('--direct-inference-batch-size', type=int, default=64)
+    parser.add_argument('--direct-outstanding-batches-per-worker', type=int, default=2)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument(
         '--iteration',
@@ -137,6 +159,9 @@ def parse_arguments() -> Arguments:
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         cache_capacity=namespace.cache_capacity,
         use_inference_cache=namespace.use_inference_cache,
+        direct_inference_workers=namespace.direct_inference_workers,
+        direct_inference_batch_size=namespace.direct_inference_batch_size,
+        direct_outstanding_batches_per_worker=namespace.direct_outstanding_batches_per_worker,
         seed=namespace.seed,
         iteration=namespace.iteration,
         ready_file=namespace.ready_file,
@@ -165,6 +190,14 @@ def validate_arguments(arguments: Arguments) -> None:
         raise ValueError(f'device must be nonnegative, found {arguments.device}.')
     if arguments.warmup_steps < 0:
         raise ValueError(f'warmup steps cannot be negative, found {arguments.warmup_steps}.')
+    if arguments.direct_inference_workers < 0:
+        raise ValueError('direct inference workers cannot be negative.')
+    if arguments.direct_inference_batch_size < 1:
+        raise ValueError('direct inference batch size must be positive.')
+    if arguments.direct_outstanding_batches_per_worker not in (1, 2):
+        raise ValueError('direct outstanding batches per worker must be 1 or 2.')
+    if arguments.direct_inference_workers > 0 and arguments.use_inference_cache:
+        raise ValueError('direct self-play inference does not support the inference cache.')
     if arguments.duration_seconds is not None and arguments.duration_seconds <= 0:
         raise ValueError(f'duration must be positive, found {arguments.duration_seconds}.')
     if arguments.steps is not None and arguments.steps < 1:
@@ -229,6 +262,15 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
             arguments.threads,
         ),
         use_inference_cache=arguments.use_inference_cache,
+        direct_inference_params=(
+            DirectSelfPlayInferenceParams(
+                arguments.direct_inference_workers,
+                arguments.direct_inference_batch_size,
+                arguments.direct_outstanding_batches_per_worker,
+            )
+            if arguments.direct_inference_workers > 0
+            else None
+        ),
     )
     return self_play
 
@@ -283,6 +325,10 @@ def build_result(
         final_statistics.modelInferencePositions,
         initial_statistics.modelInferencePositions,
     )
+    direct_inference_nanoseconds = difference(
+        final_statistics.directInferenceNanoseconds,
+        initial_statistics.directInferenceNanoseconds,
+    )
     batch_size_distribution = tuple(
         BatchSizeCount(
             batch_size=batch_size,
@@ -302,6 +348,9 @@ def build_result(
         device_id=arguments.device,
         seed=arguments.seed,
         use_inference_cache=arguments.use_inference_cache,
+        direct_inference_workers=arguments.direct_inference_workers,
+        direct_inference_batch_size=arguments.direct_inference_batch_size,
+        direct_outstanding_batches_per_worker=arguments.direct_outstanding_batches_per_worker,
         parallel_games=arguments.games,
         warmup_steps=arguments.warmup_steps,
         requested_duration_seconds=arguments.duration_seconds,
@@ -347,6 +396,37 @@ def build_result(
         inference_model_positions=model_positions,
         inference_average_batch_size=model_positions / model_calls if model_calls else 0.0,
         inference_batch_size_distribution=batch_size_distribution,
+        tree_selection_seconds=difference(
+            final_statistics.treeSelectionNanoseconds,
+            initial_statistics.treeSelectionNanoseconds,
+        )
+        / 1e9,
+        board_encoding_seconds=difference(
+            final_statistics.boardEncodingNanoseconds,
+            initial_statistics.boardEncodingNanoseconds,
+        )
+        / 1e9,
+        result_processing_seconds=difference(
+            final_statistics.resultProcessingNanoseconds,
+            initial_statistics.resultProcessingNanoseconds,
+        )
+        / 1e9,
+        tree_backup_seconds=difference(
+            final_statistics.treeBackupNanoseconds,
+            initial_statistics.treeBackupNanoseconds,
+        )
+        / 1e9,
+        tree_owner_wait_seconds=difference(
+            final_statistics.treeOwnerWaitNanoseconds,
+            initial_statistics.treeOwnerWaitNanoseconds,
+        )
+        / 1e9,
+        direct_inference_seconds=direct_inference_nanoseconds / 1e9,
+        direct_worker_utilization_percent=(
+            100 * direct_inference_nanoseconds / (elapsed_seconds * 1e9 * arguments.direct_inference_workers)
+            if arguments.direct_inference_workers > 0
+            else 0.0
+        ),
     )
 
 

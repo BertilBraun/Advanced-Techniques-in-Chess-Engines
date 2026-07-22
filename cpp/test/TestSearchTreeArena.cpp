@@ -95,6 +95,25 @@ void testSelectionVirtualLossAndBackupStatistics() {
                 "backup missed selected edge value");
 }
 
+void testVirtualLossCanBeCancelled() {
+    SearchTree tree(Board{}, 4);
+    const NodeIndex rootIndex = tree.rootIndex();
+    tree.expand(rootIndex, legalMoveScores(tree.node(rootIndex).board, 1));
+    const NodeIndex childIndex = tree.materializeChild(rootIndex, 0);
+
+    tree.addVirtualLoss(childIndex);
+    tree.removeVirtualLoss(childIndex);
+
+    require(tree.rootStatistics().number_of_visits == 0,
+            "cancelled reservation retained a root visit");
+    requireNear(tree.rootStatistics().virtual_loss, 0.0F,
+                "cancelled reservation retained root virtual loss");
+    require(tree.child(rootIndex, 0).number_of_visits == 0,
+            "cancelled reservation retained an edge visit");
+    requireNear(tree.child(rootIndex, 0).virtual_loss, 0.0F,
+                "cancelled reservation retained edge virtual loss");
+}
+
 void testRerootReclaimsAndReusesSlotsWithStaleDetection() {
     SearchTree tree(Board{}, 8);
     const NodeIndex oldRootIndex = tree.rootIndex();
@@ -255,6 +274,7 @@ int main() {
     testExpansionCreatesOnlyChildRecords();
     testMaterializationConsumesOneSlot();
     testSelectionVirtualLossAndBackupStatistics();
+    testVirtualLossCanBeCancelled();
     testRerootReclaimsAndReusesSlotsWithStaleDetection();
     testDiscountPrunesToTightCapacityInvariant();
     testSearchPreparationReservesRemainingBudgetAndRerootSlot();

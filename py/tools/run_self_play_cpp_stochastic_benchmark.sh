@@ -30,6 +30,9 @@ maximum_batch_size=${MAXIMUM_BATCH_SIZE:-256}
 inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
 cache_capacity=${CACHE_CAPACITY:-1500000}
 use_inference_cache=${USE_INFERENCE_CACHE:-1}
+direct_inference_workers=${DIRECT_INFERENCE_WORKERS:-0}
+direct_inference_batch_size=${DIRECT_INFERENCE_BATCH_SIZE:-64}
+direct_outstanding_batches_per_worker=${DIRECT_OUTSTANDING_BATCHES_PER_WORKER:-2}
 seed_base=${SEED_BASE:-1}
 pin_workers_to_cpus=${PIN_WORKERS_TO_CPUS:-0}
 maximum_host_ram_percent=${MAXIMUM_HOST_RAM_PERCENT:-95}
@@ -66,6 +69,9 @@ require_positive_integer MAXIMUM_BATCH_SIZE "${maximum_batch_size}"
 require_positive_integer INFERENCE_TIMEOUT_MICROSECONDS "${inference_timeout_microseconds}"
 require_positive_integer CACHE_CAPACITY "${cache_capacity}"
 require_nonnegative_integer SEED_BASE "${seed_base}"
+require_nonnegative_integer DIRECT_INFERENCE_WORKERS "${direct_inference_workers}"
+require_positive_integer DIRECT_INFERENCE_BATCH_SIZE "${direct_inference_batch_size}"
+require_positive_integer DIRECT_OUTSTANDING_BATCHES_PER_WORKER "${direct_outstanding_batches_per_worker}"
 require_positive_integer MAXIMUM_HOST_RAM_PERCENT "${maximum_host_ram_percent}"
 if [[ "${maximum_host_ram_percent}" -gt 100 ]]; then
     echo "MAXIMUM_HOST_RAM_PERCENT must not exceed 100, found: ${maximum_host_ram_percent}"
@@ -77,6 +83,14 @@ if [[ "${pin_workers_to_cpus}" != "0" && "${pin_workers_to_cpus}" != "1" ]]; the
 fi
 if [[ "${use_inference_cache}" != "0" && "${use_inference_cache}" != "1" ]]; then
     echo "USE_INFERENCE_CACHE must be 0 or 1, found: ${use_inference_cache}"
+    exit 1
+fi
+if [[ "${direct_outstanding_batches_per_worker}" -gt 2 ]]; then
+    echo "DIRECT_OUTSTANDING_BATCHES_PER_WORKER must be 1 or 2"
+    exit 1
+fi
+if [[ "${direct_inference_workers}" -gt 0 && "${use_inference_cache}" -eq 1 ]]; then
+    echo "Direct self-play inference does not support USE_INFERENCE_CACHE=1"
     exit 1
 fi
 if [[ "${fast_searches_per_ply}" -gt 0 ]] && {
@@ -309,6 +323,9 @@ jq -n \
     --argjson inference_timeout_microseconds "${inference_timeout_microseconds}" \
     --argjson cache_capacity "${cache_capacity}" \
     --argjson use_inference_cache "${use_inference_cache}" \
+    --argjson direct_inference_workers "${direct_inference_workers}" \
+    --argjson direct_inference_batch_size "${direct_inference_batch_size}" \
+    --argjson direct_outstanding_batches_per_worker "${direct_outstanding_batches_per_worker}" \
     --argjson seed_base "${seed_base}" \
     --argjson maximum_host_ram_percent "${maximum_host_ram_percent}" \
     --arg affinity_mode "${affinity_mode}" \
@@ -361,6 +378,9 @@ jq -n \
             inference_timeout_microseconds: $inference_timeout_microseconds,
             cache_capacity_per_process: $cache_capacity,
             use_inference_cache: ($use_inference_cache == 1),
+            direct_inference_workers: $direct_inference_workers,
+            direct_inference_batch_size: $direct_inference_batch_size,
+            direct_outstanding_batches_per_worker: $direct_outstanding_batches_per_worker,
             seed_base: $seed_base
         },
         safety: {
@@ -393,6 +413,13 @@ for ((device = 0; device < gpu_count; device++)); do
         )
         if [[ "${use_inference_cache}" -eq 0 ]]; then
             worker_command+=(--no-inference-cache)
+        fi
+        if [[ "${direct_inference_workers}" -gt 0 ]]; then
+            worker_command+=(
+                --direct-inference-workers "${direct_inference_workers}"
+                --direct-inference-batch-size "${direct_inference_batch_size}"
+                --direct-outstanding-batches-per-worker "${direct_outstanding_batches_per_worker}"
+            )
         fi
         if [[ "${fast_searches_per_ply}" -gt 0 ]]; then
             worker_command+=(--fast-searches "${fast_searches_per_ply}")
