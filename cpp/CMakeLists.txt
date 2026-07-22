@@ -137,8 +137,11 @@ FetchContent_Declare(
         Stockfish
         GIT_REPOSITORY https://github.com/BertilBraun/Stockfish.git
         GIT_TAG 22956373a5618da5634966e22a250a0482680d9c
-        PATCH_COMMAND git apply --whitespace=nowarn
-        ${CMAKE_CURRENT_SOURCE_DIR}/patches/stockfish-bounded-repetition.patch
+        PATCH_COMMAND
+        ${CMAKE_COMMAND}
+        -DREPOSITORY=<SOURCE_DIR>
+        -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/stockfish-bounded-repetition.patch
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplyPatchOnce.cmake
 )
 
 # --- Fetch Nlohmann JSON ---
