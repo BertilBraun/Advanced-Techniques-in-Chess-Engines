@@ -1,0 +1,8 @@
+{
+  "completed_runs": 128,
+  "skipped_runs": 0,
+  "error_runs": 0,
+  "best_searches_per_second": 18115.191986644408,
+  "reference_move_uci": "a2a3",
+  "reference_value": 0.0
+}

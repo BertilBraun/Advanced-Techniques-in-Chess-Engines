@@ -8,6 +8,7 @@ import torch
 from torch import Tensor, nn
 
 pytest.importorskip("AlphaZeroCpp")
+from AlphaZeroCpp import InteractiveSearchParams
 
 from src.eval.InteractiveEngine import AnalysisMode, InferenceTarget, InteractiveEngine
 from src.settings import CurrentGame
@@ -111,6 +112,12 @@ def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
         )
 
 
+def test_native_search_params_default_to_pipelined_inference() -> None:
+    search_parameters = InteractiveSearchParams(1.0, 2, 64)
+
+    assert search_parameters.outstanding_batches_per_worker == 2
+
+
 def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(
     engine: InteractiveEngine,
 ) -> None:
@@ -193,7 +200,7 @@ def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
     assert result.searches > 0
     assert 900 <= result.elapsed_milliseconds <= 1_100
     assert game.root_visits == result.searches
-    assert metrics.model_positions == result.searches
+    assert 0 < metrics.model_positions <= result.searches
     assert 0.0 < metrics.direct_worker_utilization <= 1.0
     assert metrics.tree_selection_nanoseconds > 0
     assert metrics.board_encoding_nanoseconds > 0

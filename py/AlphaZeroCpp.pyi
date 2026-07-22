@@ -92,7 +92,7 @@ class InteractiveSearchParams:
         exploration_constant: float,
         inference_workers: int,
         inference_batch_size: int,
-        outstanding_batches_per_worker: int = 1,
+        outstanding_batches_per_worker: int = 2,
     ) -> None: ...
     exploration_constant: float
     inference_workers: int

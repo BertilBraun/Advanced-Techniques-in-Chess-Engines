@@ -25,6 +25,7 @@ class AlphaZeroBot(Bot):
             parallel_searches=64,
             c_param=PLAY_C_PARAM,
             inference_workers=2,
+            outstanding_batches_per_worker=2,
         )
         self.network_eval_only = network_eval_only
         self.time_limit_seconds = int(max_time_to_think)

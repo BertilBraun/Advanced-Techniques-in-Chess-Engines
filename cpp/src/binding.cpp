@@ -523,7 +523,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<InteractiveSearchParams>(m, "InteractiveSearchParams")
         .def(py::init<float, int, int, int>(), py::arg("exploration_constant"),
              py::arg("inference_workers"), py::arg("inference_batch_size"),
-             py::arg("outstanding_batches_per_worker") = 1)
+             py::arg("outstanding_batches_per_worker") = 2)
         .def_readwrite("exploration_constant", &InteractiveSearchParams::exploration_constant)
         .def_readwrite("inference_workers", &InteractiveSearchParams::inference_workers)
         .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size)

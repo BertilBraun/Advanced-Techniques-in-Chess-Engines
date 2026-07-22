@@ -59,9 +59,9 @@ The old RTX profile attributed 1.605 seconds for 31,317 positions to result conv
 position in the same stage. Hardware differs, so this is not a CUDA speedup claim, but it verifies
 that dispatcher-heavy conversion no longer dominates the tree owner.
 
-Two outstanding batches are not universally better: they hurt both one-replica configurations,
-while improving the two-replica batch-32 run in this matrix. The production default therefore
-remains one; two is an explicit benchmark/tuning option pending the CUDA sweep. Fixed-search runs
-completed exactly 4,096 searches, and the Python failure-path test with two outstanding batches
-verified that exceptions drain all reservations and virtual loss. Move/rank variation in the raw
-records is expected from tied uniform priors in the untrained model.
+Two outstanding batches were not universally better in this CPU-only matrix. The subsequent
+RTX 3060 sweep in `../interactive-result-processing-rtx3060-20260722` established two replicas,
+batch 64, and two outstanding batches as the production default. Fixed-search runs completed
+exactly 4,096 searches, and the Python failure-path test with two outstanding batches verified that
+exceptions drain all reservations and virtual loss. Move/rank variation in the raw records is
+expected from tied uniform priors in the untrained model.
