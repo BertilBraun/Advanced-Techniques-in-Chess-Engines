@@ -74,7 +74,7 @@ deployed Modal API URL.
 
 The deployment builds the CUDA-enabled native extension into an ephemeral image.
 It requests one NVIDIA A10 GPU, has zero warm containers, at most one container,
-four CPU cores, 4 GiB of requested system memory, a 120-second scale-down window,
+two CPU cores, 2 GiB of requested system memory, a 120-second scale-down window,
 a 90-second request timeout, and no Modal Volume. CUDA is required explicitly;
 startup fails instead of silently falling back to CPU inference. At container
 startup it downloads the named `.pt` and `.jit.pt` artifacts into the

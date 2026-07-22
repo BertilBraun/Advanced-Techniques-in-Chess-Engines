@@ -59,8 +59,8 @@ app = modal.App("chess-model-web-play")
     max_containers=1,
     scaledown_window=120,
     gpu="A10",
-    cpu=4.0,
-    memory=4096,
+    cpu=2.0,
+    memory=2048,
     timeout=90,
     startup_timeout=900,
 )
