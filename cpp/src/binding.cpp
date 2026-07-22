@@ -417,11 +417,18 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
 
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
-        .def_property_readonly("fen", [](const EvalMCTSNode &n) { return n.board.fen(); })
+        .def_property_readonly("fen",
+                               [](EvalMCTSNode &node) {
+                                   node.materializeBoard();
+                                   return node.board().fen();
+                               })
         .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
         .def_property_readonly(
             "repetition_count",
-            [](const EvalMCTSNode &node) { return node.board.repetitionCount(); })
+            [](EvalMCTSNode &node) {
+                node.materializeBoard();
+                return node.board().repetitionCount();
+            })
         .def_property_readonly("children",
                                [](const EvalMCTSNode &node) {
                                    const auto children = node.children();
@@ -441,7 +448,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                                [](const EvalMCTSNode &n) { return toString(n.moveToGetHere); })
         .def_property_readonly("encoded_move",
                                [](const EvalMCTSNode &n) {
-                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board);
+                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board());
                                })
         .def_property_readonly(
             "result_sum",

@@ -108,7 +108,7 @@ void InteractiveGame::applyMove(const std::string &moveUci) {
     if (m_root->isTerminal()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
-    const Move move = findLegalMove(m_root->board, moveUci);
+    const Move move = findLegalMove(m_root->board(), moveUci);
     const EvalMCTSNode::ChildSnapshot children = m_root->children();
     if (children != nullptr) {
         for (size_t index = 0; index < children->size(); ++index) {
@@ -133,7 +133,7 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
     }
 
     if (mode == AnalysisMode::Policy) {
-        const InferenceResult inferenceResult = m_engine->m_search.evaluate(m_root->board);
+        const InferenceResult inferenceResult = m_engine->m_search.evaluate(m_root->board());
         std::vector<CandidateAnalysis> candidates = gatherPolicyCandidates(inferenceResult);
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");

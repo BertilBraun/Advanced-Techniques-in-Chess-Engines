@@ -36,8 +36,14 @@ public:
     }
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
-    [[nodiscard]] bool isTerminal() const { return board.isGameOver(); }
+    [[nodiscard]] bool isTerminal() const { return board().isGameOver(); }
     [[nodiscard]] bool isExpanded() const { return children() != nullptr; }
+    [[nodiscard]] bool hasMaterializedBoard() const { return m_board.has_value(); }
+    [[nodiscard]] const Board &board() const {
+        assert(m_board.has_value());
+        return *m_board;
+    }
+    void materializeBoard();
 
     /* ──────────────────────  core search helpers  ───────────────────── */
     [[nodiscard]] float ucb(float uCommon) const;
@@ -65,7 +71,6 @@ public:
     [[nodiscard]] VisitCounts gatherVisitCounts() const;
 
     /* ──────────────────────  public data  ──────────────────────────── */
-    Board board;
     Move moveToGetHere = Move::null();
 
     std::atomic<int> number_of_visits{0};
@@ -96,9 +101,12 @@ private:
     };
 
     /* ────────────────────  construction only via factory  ──────────── */
-    EvalMCTSNode(Board board, const float policy, const Move move,
+    EvalMCTSNode(std::optional<Board> board, const float policy, const Move move,
                  std::weak_ptr<EvalMCTSNode> parent)
-        : board{std::move(board)}, moveToGetHere{move}, policy{policy}, parent{std::move(parent)} {}
+        : m_board{std::move(board)}, moveToGetHere{move}, policy{policy},
+          parent{std::move(parent)} {}
+
+    std::optional<Board> m_board;
 };
 
 /* =====================================================================
@@ -136,13 +144,27 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
     const auto newChildren = std::make_shared<ChildVector>();
     newChildren->reserve(moves.size());
     for (const auto &[move, policy] : moves) {
-        Board next = board;
-        next.makeMove(move);
         newChildren->emplace_back(std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{std::move(next), policy, move, weak_from_this()}));
+            new EvalMCTSNode{std::nullopt, policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
     childrenPublished.store(std::move(newChildren), std::memory_order_release);
+}
+
+inline void EvalMCTSNode::materializeBoard() {
+    if (m_board.has_value()) {
+        return;
+    }
+
+    SpinGuard guard{expand_lock};
+    if (m_board.has_value()) {
+        return;
+    }
+    const std::shared_ptr<EvalMCTSNode> parentNode = parent.lock();
+    assert(parentNode != nullptr);
+    Board childBoard = parentNode->board();
+    childBoard.makeMove(moveToGetHere);
+    m_board = std::move(childBoard);
 }
 
 inline void EvalMCTSNode::addVirtualLoss() {
@@ -201,6 +223,7 @@ inline std::shared_ptr<EvalMCTSNode> EvalMCTSNode::makeNewRoot(const size_t chil
     assert(childVec != nullptr && childIdx < childVec->size());
 
     auto newRoot = (*childVec)[childIdx];
+    newRoot->materializeBoard();
     newRoot->parent.reset();
 
     /* Drop every other subtree (only we hold shared_ptr copies here) */
@@ -230,7 +253,7 @@ inline VisitCounts EvalMCTSNode::gatherVisitCounts() const {
 
     visitCounts.reserve(childVec->size());
     for (const auto &child : *childVec) {
-        int encodedMove = encodeMove(child->moveToGetHere, &board);
+        int encodedMove = encodeMove(child->moveToGetHere, &board());
         visitCounts.emplace_back(encodedMove,
                                  child->number_of_visits.load(std::memory_order_relaxed));
     }

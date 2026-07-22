@@ -97,7 +97,7 @@ private:
                 }
 
                 leaf->addVirtualLoss();
-                oneBoard[0] = &leaf->board; // reuse small buffer
+                oneBoard[0] = &leaf->board(); // reuse small buffer
 
                 /* 2) immediate single-board inference
                        (merged into a large batch inside InferenceClient) */
@@ -154,8 +154,9 @@ private:
         while (node->isExpanded())
             node = node->bestChild(m_args.c_param);
 
+        node->materializeBoard();
         if (node->isTerminal()) {
-            node->backPropagate(getBoardResultScore(node->board));
+            node->backPropagate(getBoardResultScore(node->board()));
             return nullptr;
         }
         return node;

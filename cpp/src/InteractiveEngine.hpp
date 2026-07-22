@@ -54,7 +54,7 @@ public:
     [[nodiscard]] AnalysisResult analyze(AnalysisMode mode, std::optional<int> timeLimitSeconds,
                                          std::optional<int> searchLimit);
 
-    [[nodiscard]] std::string fen() const { return m_root->board.fen(); }
+    [[nodiscard]] std::string fen() const { return m_root->board().fen(); }
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
     [[nodiscard]] const std::vector<std::string> &movesUci() const { return m_movesUci; }
     [[nodiscard]] int rootVisits() const {
