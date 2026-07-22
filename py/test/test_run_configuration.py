@@ -574,10 +574,10 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['self_play_processes_per_device'] = (2, 2, 2, 2)
     expected['topology']['mcts_threads_per_process'] = 1
     expected['topology']['self_play_parallel_searches'] = 1
-    expected['topology']['parallel_games_per_process'] = 512
-    expected['topology']['direct_self_play_inference_workers'] = 2
+    expected['topology']['parallel_games_per_process'] = 2048
+    expected['topology']['direct_self_play_inference_workers'] = 4
     expected['topology']['direct_self_play_inference_batch_size'] = 64
-    expected['topology']['direct_self_play_outstanding_batches_per_worker'] = 1
+    expected['topology']['direct_self_play_outstanding_batches_per_worker'] = 2
     expected['topology']['self_play_processes_per_device_during_training'] = (1, 1, 1, 1)
     expected['topology']['max_concurrent_evaluation_tasks'] = 8
     expected['workload']['training_sampling_window'] = 15
@@ -611,11 +611,11 @@ def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training(
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (1, 3, 5, 7)
     assert arguments.self_play.mcts.num_threads == 1
     assert arguments.self_play.mcts.num_parallel_searches == 1
-    assert arguments.self_play.num_parallel_games == 512
+    assert arguments.self_play.num_parallel_games == 2048
     assert arguments.self_play.direct_inference is not None
-    assert arguments.self_play.direct_inference.inference_workers == 2
+    assert arguments.self_play.direct_inference.inference_workers == 4
     assert arguments.self_play.direct_inference.inference_batch_size == 64
-    assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 1
+    assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
 
 
 def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
