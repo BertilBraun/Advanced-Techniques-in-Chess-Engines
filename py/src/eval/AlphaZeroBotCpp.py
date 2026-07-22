@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import multiprocessing
-
 import chess
 
 from src.eval.Bot import Bot
@@ -24,7 +22,7 @@ class AlphaZeroBot(Bot):
         self.engine = InteractiveEngine(
             model_path=current_model_path,
             device_id=device_id,
-            search_threads=min(multiprocessing.cpu_count(), 16),
+            parallel_searches=16,
             c_param=PLAY_C_PARAM,
         )
         self.network_eval_only = network_eval_only

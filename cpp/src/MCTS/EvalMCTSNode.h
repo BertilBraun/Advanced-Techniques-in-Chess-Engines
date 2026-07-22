@@ -31,16 +31,17 @@ public:
     }
 
     static std::shared_ptr<EvalMCTSNode> createRoot(Board board) {
-        return std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{std::move(board), 1.0f, Move::null(), std::weak_ptr<EvalMCTSNode>()});
+        return std::shared_ptr<EvalMCTSNode>(new EvalMCTSNode{
+            std::make_unique<Board>(std::move(board)), 1.0f, Move::null(),
+            std::weak_ptr<EvalMCTSNode>()});
     }
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
     [[nodiscard]] bool isTerminal() const { return board().isGameOver(); }
     [[nodiscard]] bool isExpanded() const { return children() != nullptr; }
-    [[nodiscard]] bool hasMaterializedBoard() const { return m_board.has_value(); }
+    [[nodiscard]] bool hasMaterializedBoard() const { return m_board != nullptr; }
     [[nodiscard]] const Board &board() const {
-        assert(m_board.has_value());
+        assert(m_board != nullptr);
         return *m_board;
     }
     void materializeBoard();
@@ -101,12 +102,12 @@ private:
     };
 
     /* ────────────────────  construction only via factory  ──────────── */
-    EvalMCTSNode(std::optional<Board> board, const float policy, const Move move,
+    EvalMCTSNode(std::unique_ptr<Board> board, const float policy, const Move move,
                  std::weak_ptr<EvalMCTSNode> parent)
         : m_board{std::move(board)}, moveToGetHere{move}, policy{policy},
           parent{std::move(parent)} {}
 
-    std::optional<Board> m_board;
+    std::unique_ptr<Board> m_board;
 };
 
 /* =====================================================================
@@ -145,26 +146,25 @@ inline void EvalMCTSNode::expand(const std::vector<MoveScore> &moves,
     newChildren->reserve(moves.size());
     for (const auto &[move, policy] : moves) {
         newChildren->emplace_back(std::shared_ptr<EvalMCTSNode>(
-            new EvalMCTSNode{std::nullopt, policy, move, weak_from_this()}));
+            new EvalMCTSNode{nullptr, policy, move, weak_from_this()}));
     }
     /* Publish fully‑built vector – release makes sure all contents are visible */
     childrenPublished.store(std::move(newChildren), std::memory_order_release);
 }
 
 inline void EvalMCTSNode::materializeBoard() {
-    if (m_board.has_value()) {
+    if (m_board != nullptr) {
         return;
     }
 
     SpinGuard guard{expand_lock};
-    if (m_board.has_value()) {
+    if (m_board != nullptr) {
         return;
     }
     const std::shared_ptr<EvalMCTSNode> parentNode = parent.lock();
     assert(parentNode != nullptr);
-    Board childBoard = parentNode->board();
-    childBoard.makeMove(moveToGetHere);
-    m_board = std::move(childBoard);
+    m_board = std::make_unique<Board>(parentNode->board());
+    m_board->makeMove(moveToGetHere);
 }
 
 inline void EvalMCTSNode::addVirtualLoss() {

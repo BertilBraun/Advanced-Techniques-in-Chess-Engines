@@ -38,7 +38,7 @@ class BenchmarkConfiguration(BaseModel):
 
     inference_target: InferenceTarget
     device_id: int
-    threads: int
+    parallel_searches: int
     maximum_batch_size: int
     batch_timeout_microseconds: int
     workload: WorkloadKind
@@ -137,7 +137,7 @@ class ParsedArguments(BaseModel):
     moves_uci: tuple[str, ...]
     devices: tuple[InferenceTarget, ...]
     device_id: int
-    threads: tuple[int, ...]
+    parallel_searches: tuple[int, ...]
     batch_sizes: tuple[int, ...]
     batch_timeouts_microseconds: tuple[int, ...]
     time_budgets_seconds: tuple[int, ...]
@@ -178,7 +178,9 @@ def parse_arguments() -> ParsedArguments:
         "--devices", type=_parse_devices, default=(InferenceTarget.CPU,)
     )
     parser.add_argument("--device-id", type=int, default=0)
-    parser.add_argument("--threads", type=_parse_integer_list, default=(1, 2, 4))
+    parser.add_argument(
+        "--parallel-searches", type=_parse_integer_list, default=(1, 8, 16)
+    )
     parser.add_argument("--batch-sizes", type=_parse_integer_list, default=(1, 8, 32))
     parser.add_argument(
         "--batch-timeouts-microseconds", type=_parse_integer_list, default=(50, 500)
@@ -204,7 +206,7 @@ def parse_arguments() -> ParsedArguments:
         moves_uci=tuple(namespace.move),
         devices=namespace.devices,
         device_id=namespace.device_id,
-        threads=namespace.threads,
+        parallel_searches=namespace.parallel_searches,
         batch_sizes=namespace.batch_sizes,
         batch_timeouts_microseconds=namespace.batch_timeouts_microseconds,
         time_budgets_seconds=namespace.time_budgets_seconds,
@@ -364,7 +366,7 @@ def _skipped_record(
 def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration, ...]:
     configurations: list[BenchmarkConfiguration] = []
     for target in arguments.devices:
-        for threads in arguments.threads:
+        for parallel_searches in arguments.parallel_searches:
             for batch_size in arguments.batch_sizes:
                 for timeout in arguments.batch_timeouts_microseconds:
                     for budget in arguments.time_budgets_seconds:
@@ -372,7 +374,7 @@ def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration,
                             BenchmarkConfiguration(
                                 inference_target=target,
                                 device_id=arguments.device_id,
-                                threads=threads,
+                                parallel_searches=parallel_searches,
                                 maximum_batch_size=batch_size,
                                 batch_timeout_microseconds=timeout,
                                 workload=WorkloadKind.TIMED,
@@ -384,7 +386,7 @@ def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration,
                             BenchmarkConfiguration(
                                 inference_target=target,
                                 device_id=arguments.device_id,
-                                threads=threads,
+                                parallel_searches=parallel_searches,
                                 maximum_batch_size=batch_size,
                                 batch_timeout_microseconds=timeout,
                                 workload=WorkloadKind.FIXED_SEARCHES,
@@ -400,7 +402,7 @@ def _engine(
     return InteractiveEngine(
         model_path=str(arguments.model),
         device_id=configuration.device_id,
-        search_threads=configuration.threads,
+        parallel_searches=configuration.parallel_searches,
         c_param=arguments.c_param,
         maximum_batch_size=configuration.maximum_batch_size,
         batch_collection_timeout_microseconds=configuration.batch_timeout_microseconds,
@@ -465,7 +467,7 @@ def main() -> None:
     reference_configuration = BenchmarkConfiguration(
         inference_target=InferenceTarget.CPU,
         device_id=0,
-        threads=1,
+        parallel_searches=1,
         maximum_batch_size=1,
         batch_timeout_microseconds=50,
         workload=WorkloadKind.FIXED_SEARCHES,

@@ -10,14 +10,15 @@ struct EvalMCTSParams {
     // The c parameter used in the UCB1 formula to balance exploration and exploitation.
     float c_param;
 
-    int num_threads; // Number of threads to use for parallel processing.
+    int parallel_searches;
 
-    EvalMCTSParams(float c_param, int num_threads) : c_param(c_param), num_threads(num_threads) {
+    EvalMCTSParams(float c_param, int parallel_searches)
+        : c_param(c_param), parallel_searches(parallel_searches) {
         if (!std::isfinite(c_param) || c_param < 0.0f) {
             throw std::invalid_argument("c_param must be finite and non-negative");
         }
-        if (num_threads <= 0) {
-            throw std::invalid_argument("num_threads must be positive");
+        if (parallel_searches <= 0) {
+            throw std::invalid_argument("parallel_searches must be positive");
         }
     }
 };
@@ -71,14 +72,15 @@ private:
         int completed = 0;
         std::vector<std::shared_ptr<EvalMCTSNode>> leaves;
         std::vector<const Board *> boards;
-        leaves.reserve(static_cast<size_t>(m_args.num_threads));
-        boards.reserve(static_cast<size_t>(m_args.num_threads));
+        leaves.reserve(static_cast<size_t>(m_args.parallel_searches));
+        boards.reserve(static_cast<size_t>(m_args.parallel_searches));
 
         while ((!deadline.has_value() || std::chrono::steady_clock::now() < *deadline) &&
                (!searchLimit.has_value() || claimed < *searchLimit)) {
             leaves.clear();
             boards.clear();
-            for (int parallelSearch = 0; parallelSearch < m_args.num_threads; ++parallelSearch) {
+            for (int parallelSearch = 0; parallelSearch < m_args.parallel_searches;
+                 ++parallelSearch) {
                 if ((deadline.has_value() && std::chrono::steady_clock::now() >= *deadline) ||
                     (searchLimit.has_value() && claimed >= *searchLimit)) {
                     break;

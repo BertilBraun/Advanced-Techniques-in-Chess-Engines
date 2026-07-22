@@ -78,9 +78,9 @@ class InteractiveEngine:
         self,
         model_path: str,
         device_id: int,
-        search_threads: int,
+        parallel_searches: int,
         c_param: float,
-        maximum_batch_size: int = 256,
+        maximum_batch_size: int | None = None,
         batch_collection_timeout_microseconds: int = 500,
         cache_capacity: int = 250_000,
         inference_target: InferenceTarget = InferenceTarget.AUTO,
@@ -90,17 +90,20 @@ class InteractiveEngine:
             InferenceTarget.CPU: InferenceDevice.CPU,
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
+        resolved_batch_size = (
+            parallel_searches if maximum_batch_size is None else maximum_batch_size
+        )
         client_parameters = InferenceClientParams(
             device_id=device_id,
             currentModelPath=model_path,
-            maxBatchSize=maximum_batch_size,
+            maxBatchSize=resolved_batch_size,
             microsecondsTimeoutInferenceThread=batch_collection_timeout_microseconds,
             cacheCapacity=cache_capacity,
             device=target_mapping[inference_target],
         )
         self._native = NativeInteractiveEngine(
             client_parameters,
-            EvalMCTSParams(c_param=c_param, num_threads=search_threads),
+            EvalMCTSParams(c_param=c_param, parallel_searches=parallel_searches),
         )
 
     def new_game(

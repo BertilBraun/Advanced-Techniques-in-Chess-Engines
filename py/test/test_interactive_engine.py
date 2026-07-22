@@ -47,7 +47,7 @@ def engine(model_path: Path) -> InteractiveEngine:
     return InteractiveEngine(
         model_path=str(model_path),
         device_id=0,
-        search_threads=2,
+        parallel_searches=2,
         c_param=1.0,
         maximum_batch_size=2,
         batch_collection_timeout_microseconds=50,

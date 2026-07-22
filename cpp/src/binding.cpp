@@ -412,9 +412,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("root", &EvalMCTSResult::root);
 
     py::class_<EvalMCTSParams>(m, "EvalMCTSParams")
-        .def(py::init<float, int>(), py::arg("c_param"), py::arg("num_threads"))
+        .def(py::init<float, int>(), py::arg("c_param"), py::arg("parallel_searches"))
         .def_readwrite("c_param", &EvalMCTSParams::c_param)
-        .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
+        .def_readwrite("parallel_searches", &EvalMCTSParams::parallel_searches);
 
     py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
         .def_property_readonly("fen",
