@@ -182,6 +182,7 @@ class WorkloadConfiguration(BaseModel):
     games_per_replay_file: int = Field(gt=0)
     training_global_batch_size: int = Field(gt=0)
     training_local_batch_size: int = Field(gt=0)
+    training_sampling_window: int | None = Field(default=None, gt=0)
     self_play_searches_per_turn: int = Field(gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...]
@@ -568,6 +569,13 @@ def _piecewise_learning_rate(
     return PiecewiseLearningRate(stages)
 
 
+def _fixed_sampling_window(window_size: int) -> Callable[[int], int]:
+    def sampling_window(_: int) -> int:
+        return window_size
+
+    return sampling_window
+
+
 def apply_run_configuration(
     training_args: TrainingArgs,
     configuration: RunConfiguration,
@@ -577,8 +585,10 @@ def apply_run_configuration(
     retention = configuration.retention
     if retention is None:
         raise ValueError('Artifact retention must be configured for training.')
-    maximum_sampling_window = max(
-        training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1)
+    maximum_sampling_window = (
+        workload.training_sampling_window
+        if workload.training_sampling_window is not None
+        else max(training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1))
     )
     if retention.replay_window_iterations < maximum_sampling_window:
         raise ValueError(
@@ -592,6 +602,8 @@ def apply_run_configuration(
     training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
     training_args.training.global_batch_size = workload.training_global_batch_size
     training_args.training.local_batch_size = workload.training_local_batch_size
+    if workload.training_sampling_window is not None:
+        training_args.training.sampling_window = _fixed_sampling_window(workload.training_sampling_window)
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
     training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
         workload.self_play_fast_searches_per_turn / workload.self_play_searches_per_turn

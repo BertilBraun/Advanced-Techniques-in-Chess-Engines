@@ -52,6 +52,7 @@
     "games_per_replay_file": 100,
     "training_global_batch_size": 1024,
     "training_local_batch_size": 512,
+    "training_sampling_window": 15,
     "self_play_searches_per_turn": 600,
     "self_play_fast_searches_per_turn": 100,
     "learning_rate_schedule": [
@@ -72,7 +73,7 @@
     "self_play_value_warmup_iterations": 30,
     "self_play_endgame_shortcut_fade_iterations": 50,
     "self_play_maximum_game_plies": 200,
-    "self_play_maximum_game_plies_until_iteration": 150,
+    "self_play_maximum_game_plies_until_iteration": 80,
     "self_play_final_maximum_game_plies": 400,
     "random_seed": 20260717,
     "evaluation_games": 100,
@@ -87,7 +88,7 @@
   },
   "retention": {
     "checkpoint_count": 5,
-    "replay_window_iterations": 30,
+    "replay_window_iterations": 15,
     "recent_inference_checkpoint_count": 11,
     "milestone_inference_interval": 20
   },

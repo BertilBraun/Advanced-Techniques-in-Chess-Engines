@@ -58,9 +58,9 @@ def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyP
     ('iteration', 'expected_maximum'),
     (
         (0, 200),
-        (75, 300),
-        (149, 398),
-        (150, 400),
+        (40, 300),
+        (79, 397),
+        (80, 400),
         (300, 400),
     ),
 )
@@ -69,6 +69,6 @@ def test_maximum_game_plies_increases_from_200_to_400(
     expected_maximum: int,
 ) -> None:
     client = self_play_client(iteration, final_maximum_game_plies=400)
-    client.args.maximum_game_plies_until_iteration = 150
+    client.args.maximum_game_plies_until_iteration = 80
 
     assert client._maximum_game_plies() == expected_maximum
