@@ -554,7 +554,12 @@ def validate_run_configuration(
             f'found {resolved_hardware.free_disk_gib:.1f} GiB.'
         )
 
-    self_play_cpu_slots = sum(topology.self_play_processes_per_device) * topology.mcts_threads_per_process
+    self_play_threads_per_process = (
+        1 + topology.direct_self_play_inference_workers
+        if topology.direct_self_play_inference_workers > 0
+        else topology.mcts_threads_per_process
+    )
+    self_play_cpu_slots = sum(topology.self_play_processes_per_device) * self_play_threads_per_process
     trainer_world_size = len(topology.trainer_ddp_device_ids)
     required_cpu_slots = (
         self_play_cpu_slots
