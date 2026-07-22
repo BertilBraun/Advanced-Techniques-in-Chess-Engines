@@ -47,11 +47,11 @@ public:
                     /* 2) immediate single-board inference
                            (merged into a large batch inside InferenceClient) */
                     auto nnOut = m_client.inferenceBatch(oneBoard);
-                    const auto &[moves, value] = nnOut[0];
+                    const InferenceResult &inferenceResult = nnOut[0];
 
                     /* 3) expansion + backup */
-                    leaf->expand(moves);
-                    leaf->backPropagateAndRemoveVirtualLoss(value);
+                    leaf->expand(inferenceResult.moves, inferenceResult.outcome);
+                    leaf->backPropagateAndRemoveVirtualLoss(inferenceResult.outcome.value());
                 } catch (...) {
                     leaf->endEvaluation();
                     throw;

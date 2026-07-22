@@ -61,8 +61,10 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
     std::vector<InferenceResult> results;
     results.reserve(boards.size());
     for (size_t index : range(boards.size())) {
-        const auto [policy, value] = futures[index].get();
-        assert(std::abs(value) <= 1.0f + 1e-2f &&
+        const ModelInferenceResult modelResult = futures[index].get();
+        const torch::Tensor &policy = modelResult.policy;
+        const OutcomeProbabilities outcome = modelResult.outcome;
+        assert(std::abs(outcome.value()) <= 1.0f + 1e-2f &&
                "NonCachingInferenceClient::inferenceBatch: value out of bounds");
         assert((policy < 0).any().item<bool>() == false &&
                "NonCachingInferenceClient::inferenceBatch: policy contains negative values");
@@ -85,7 +87,7 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
         for (size_t moveIndex : range(moves.size())) {
             moveScores.emplace_back(moves[moveIndex], scores[moveIndex]);
         }
-        results.emplace_back(std::move(moveScores), value);
+        results.push_back({std::move(moveScores), outcome});
     }
     return results;
 }
@@ -189,8 +191,12 @@ void NonCachingInferenceClient::resolveWorker() {
             for (size_t index : range(completedBatch->promises.size())) {
                 torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(index)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(index)];
-                const float value = values[0].item<float>() - values[2].item<float>();
-                completedBatch->promises[index].set_value({std::move(policy), value});
+                const OutcomeProbabilities outcome{
+                    values[0].item<float>(),
+                    values[1].item<float>(),
+                    values[2].item<float>(),
+                };
+                completedBatch->promises[index].set_value({std::move(policy), outcome});
             }
         } catch (...) {
             const std::exception_ptr exception = std::current_exception();

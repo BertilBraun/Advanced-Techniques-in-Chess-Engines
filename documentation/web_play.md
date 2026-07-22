@@ -13,8 +13,9 @@ turn, so a request can recover after Modal has scaled the only container to zero
   visit count. Ties are broken by ascending UCI text. UCB is used only inside
   native traversal.
 - `root_value` is `P(win) - P(loss)` from the side-to-move perspective at the
-  analyzed root. The current native binding discards the model's separate draw
-  probability, so `outcome_prediction` is `null` instead of inventing W/D/L.
+  analyzed root. `outcome_prediction` preserves the model's win, draw, and loss
+  probabilities at that root in the same side-to-move perspective. For MCTS it
+  is the root network evaluation, while visits and mean values describe search.
 - Candidate `mean_search_value` is converted to the analyzed root player's
   perspective. Candidate visits and shares describe the retained tree; the
   `searches` metric reports work added by the current request.

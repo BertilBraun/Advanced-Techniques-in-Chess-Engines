@@ -2,7 +2,19 @@
 
 #include "common.hpp"
 
-using InferenceResult = std::pair<std::vector<MoveScore>, float>;
+struct OutcomeProbabilities {
+    float win;
+    float draw;
+    float loss;
+
+    [[nodiscard]] float value() const { return win - loss; }
+    bool operator==(const OutcomeProbabilities &) const = default;
+};
+
+struct InferenceResult {
+    std::vector<MoveScore> moves;
+    OutcomeProbabilities outcome;
+};
 
 struct InferenceStatistics {
     float cacheHitRate = 0.0f;

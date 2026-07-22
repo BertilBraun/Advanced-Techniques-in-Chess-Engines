@@ -10,6 +10,7 @@ from web_play.contracts import (
     AnalysisLimit,
     AnalysisResult,
     CandidateMove,
+    OutcomePrediction,
     SearchMetrics,
 )
 from web_play.service import GameService
@@ -43,7 +44,7 @@ class FakeGame:
         return AnalysisResult(
             chosen_move_uci=move,
             root_value=0.25,
-            outcome_prediction=None,
+            outcome_prediction=OutcomePrediction(win=0.5, draw=0.3, loss=0.2),
             candidates=(
                 CandidateMove(
                     move_uci=move,
@@ -93,6 +94,9 @@ def test_turn_uses_complete_history_and_returns_authoritative_moves() -> None:
     assert payload["state"]["moves_uci"][0] == "e2e4"
     assert payload["state"]["moves_uci"][1] == payload["engine_move_uci"]
     assert payload["analysis"]["metrics"]["searches"] == 8
+    assert OutcomePrediction.model_validate(
+        payload["analysis"]["outcome_prediction"]
+    ) == OutcomePrediction(win=0.5, draw=0.3, loss=0.2)
     assert engine.creations == 1
 
 

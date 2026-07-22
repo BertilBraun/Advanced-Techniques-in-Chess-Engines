@@ -24,6 +24,7 @@ from web_play.contracts import (
     AnalysisResult,
     CandidateMove,
     CountedAnalysis,
+    OutcomePrediction,
     SearchMetrics,
     TimedAnalysis,
 )
@@ -193,10 +194,17 @@ class NativeInteractiveGame:
         if not candidates:
             raise ValueError("The native engine returned no legal candidate moves.")
         root_value = root.result_sum / root.visits if root.visits > 0 else 0.0
+        outcome = root.outcome_prediction
+        if outcome is None:
+            raise ValueError("The native engine returned no root outcome prediction.")
         return AnalysisResult(
             chosen_move_uci=candidates[0].move_uci,
             root_value=_clamp_value(root_value),
-            outcome_prediction=None,
+            outcome_prediction=OutcomePrediction(
+                win=outcome.win,
+                draw=outcome.draw,
+                loss=outcome.loss,
+            ),
             candidates=candidates,
             metrics=SearchMetrics(
                 searches=searches,

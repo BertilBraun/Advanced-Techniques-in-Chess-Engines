@@ -34,8 +34,15 @@ public:
     void updateModel(const std::string &modelPath);
 
 private:
-    typedef std::pair<std::vector<EncodedMoveScore>, float> CachedInferenceResult;
-    typedef std::pair<torch::Tensor, float> ModelInferenceResult;
+    struct CachedInferenceResult {
+        std::vector<EncodedMoveScore> moves;
+        OutcomeProbabilities outcome;
+    };
+
+    struct ModelInferenceResult {
+        torch::Tensor policy;
+        OutcomeProbabilities outcome;
+    };
 
     using InferenceCache = CollisionCheckedCache<BoardFingerprint, CompressedEncodedBoard,
                                                  CachedInferenceResult, 32, BoardFingerprintHash>;

@@ -8,6 +8,8 @@
 #include "MCTS/EvalMCTSNode.h"
 
 namespace {
+constexpr OutcomeProbabilities TEST_OUTCOME{0.5F, 0.3F, 0.2F};
+
 void require(const bool condition, const std::string &message) {
     if (!condition) {
         throw std::runtime_error(message);
@@ -28,22 +30,26 @@ void testChildrenUseStableImmutableSnapshot() {
         {legalMoves[0], 0.5F},
         {legalMoves[1], 0.5F},
     };
-    root->expand(moves);
+    root->expand(moves, TEST_OUTCOME);
 
     const EvalMCTSNode::ChildSnapshot first = root->children();
     const EvalMCTSNode::ChildSnapshot second = root->children();
     require(first != nullptr, "expanded root did not publish children");
     require(first == second, "successive reads did not share the published child vector");
     require(first->size() == moves.size(), "published child vector has the wrong size");
+    require(root->outcomePrediction() == TEST_OUTCOME,
+            "expanded root did not retain its outcome prediction");
 }
 
 void testSnapshotSurvivesRerooting() {
     const std::shared_ptr<EvalMCTSNode> root = EvalMCTSNode::createRoot(Board{});
     const std::vector<Move> &legalMoves = root->board.validMoves();
-    root->expand({
-        {legalMoves[0], 0.5F},
-        {legalMoves[1], 0.5F},
-    });
+    root->expand(
+        {
+            {legalMoves[0], 0.5F},
+            {legalMoves[1], 0.5F},
+        },
+        TEST_OUTCOME);
 
     const EvalMCTSNode::ChildSnapshot snapshot = root->children();
     require(snapshot != nullptr, "expanded root did not publish children");
