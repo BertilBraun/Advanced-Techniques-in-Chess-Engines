@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import os
 import platform
@@ -26,6 +27,7 @@ from src.eval.InteractiveEngine import (
 class RunStatus(str, Enum):
     COMPLETED = "completed"
     SKIPPED = "skipped"
+    ERROR = "error"
 
 
 class WorkloadKind(str, Enum):
@@ -96,6 +98,7 @@ class BenchmarkRecord(BaseModel):
     tree_owner_wait_nanoseconds: int
     direct_inference_nanoseconds: int
     direct_worker_utilization: float
+    peak_cuda_memory_mib: float
 
 
 class Provenance(BaseModel):
@@ -130,6 +133,7 @@ class BenchmarkSummary(BaseModel):
 
     completed_runs: int
     skipped_runs: int
+    error_runs: int
     best_searches_per_second: float
     reference_move_uci: str
     reference_value: float
@@ -301,6 +305,7 @@ def _completed_record(
     root_visits_after: int,
     reference: AnalysisResult,
     inference_metrics: InferenceMetrics,
+    peak_cuda_memory_mib: float,
 ) -> BenchmarkRecord:
     elapsed_seconds = result.elapsed_milliseconds / 1000.0
     overshoot = (
@@ -348,6 +353,7 @@ def _completed_record(
         tree_owner_wait_nanoseconds=inference_metrics.tree_owner_wait_nanoseconds,
         direct_inference_nanoseconds=inference_metrics.direct_inference_nanoseconds,
         direct_worker_utilization=inference_metrics.direct_worker_utilization,
+        peak_cuda_memory_mib=peak_cuda_memory_mib,
     )
 
 
@@ -383,7 +389,15 @@ def _skipped_record(
         tree_owner_wait_nanoseconds=0,
         direct_inference_nanoseconds=0,
         direct_worker_utilization=0.0,
+        peak_cuda_memory_mib=0.0,
     )
+
+
+def _error_record(
+    configuration: BenchmarkConfiguration, reason: str
+) -> BenchmarkRecord:
+    skipped = _skipped_record(configuration, reason)
+    return skipped.model_copy(update={"status": RunStatus.ERROR})
 
 
 def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration, ...]:
@@ -451,25 +465,40 @@ def run_configuration(
     ):
         return _skipped_record(configuration, "CUDA device ID is unavailable")
 
-    engine = _engine(arguments, configuration)
-    engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
-        AnalysisMode.POLICY
-    )
-    game = engine.new_game(arguments.starting_fen, arguments.moves_uci)
-    root_visits_before = game.root_visits
-    result = (
-        game.analyze(AnalysisMode.MCTS, time_limit_seconds=configuration.budget)
-        if configuration.workload is WorkloadKind.TIMED
-        else game.analyze(AnalysisMode.MCTS, search_limit=configuration.budget)
-    )
-    return _completed_record(
-        configuration,
-        result,
-        root_visits_before,
-        game.root_visits,
-        reference,
-        engine.inference_metrics(),
-    )
+    if configuration.inference_target is InferenceTarget.CUDA:
+        torch.cuda.reset_peak_memory_stats(configuration.device_id)
+    try:
+        engine = _engine(arguments, configuration)
+        engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
+            AnalysisMode.POLICY
+        )
+        game = engine.new_game(arguments.starting_fen, arguments.moves_uci)
+        root_visits_before = game.root_visits
+        result = (
+            game.analyze(AnalysisMode.MCTS, time_limit_seconds=configuration.budget)
+            if configuration.workload is WorkloadKind.TIMED
+            else game.analyze(AnalysisMode.MCTS, search_limit=configuration.budget)
+        )
+        peak_cuda_memory_mib = (
+            torch.cuda.max_memory_reserved(configuration.device_id) / (1024 * 1024)
+            if configuration.inference_target is InferenceTarget.CUDA
+            else 0.0
+        )
+        return _completed_record(
+            configuration,
+            result,
+            root_visits_before,
+            game.root_visits,
+            reference,
+            engine.inference_metrics(),
+            peak_cuda_memory_mib,
+        )
+    except (MemoryError, RuntimeError) as error:
+        return _error_record(configuration, f"{type(error).__name__}: {error}")
+    finally:
+        gc.collect()
+        if configuration.inference_target is InferenceTarget.CUDA:
+            torch.cuda.empty_cache()
 
 
 def main() -> None:
@@ -501,6 +530,10 @@ def main() -> None:
     reference = reference_engine.new_game(
         arguments.starting_fen, arguments.moves_uci
     ).analyze(AnalysisMode.MCTS, search_limit=arguments.reference_searches)
+    del reference_engine
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     records: list[BenchmarkRecord] = []
     results_path = arguments.output_directory / "results.jsonl"
@@ -512,9 +545,12 @@ def main() -> None:
             results_file.flush()
 
     completed = [record for record in records if record.status is RunStatus.COMPLETED]
+    skipped = [record for record in records if record.status is RunStatus.SKIPPED]
+    errors = [record for record in records if record.status is RunStatus.ERROR]
     summary = BenchmarkSummary(
         completed_runs=len(completed),
-        skipped_runs=len(records) - len(completed),
+        skipped_runs=len(skipped),
+        error_runs=len(errors),
         best_searches_per_second=max(
             (record.searches_per_second for record in completed), default=0.0
         ),
