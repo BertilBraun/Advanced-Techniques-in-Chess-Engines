@@ -26,6 +26,7 @@ __all__ = [
     "MCTSStatistics",
     "InteractiveEngine",
     "InteractiveGame",
+    "InteractiveSearchParams",
     "TimeInfo",
     "WdlPrediction",
     "encode_board_compressed",
@@ -85,11 +86,24 @@ class InferenceDevice:
     CPU: InferenceDevice
     CUDA: InferenceDevice
 
+class InteractiveSearchParams:
+    def __init__(
+        self,
+        exploration_constant: float,
+        inference_workers: int,
+        inference_batch_size: int,
+        outstanding_batches_per_worker: int = 1,
+    ) -> None: ...
+    exploration_constant: float
+    inference_workers: int
+    inference_batch_size: int
+    outstanding_batches_per_worker: int
+
 class InteractiveEngine:
     def __init__(
         self,
         client_parameters: InferenceClientParams,
-        search_parameters: EvalMCTSParams,
+        search_parameters: InteractiveSearchParams,
     ) -> None: ...
     def new_game(
         self, starting_fen: str, moves_uci: tuple[str, ...]

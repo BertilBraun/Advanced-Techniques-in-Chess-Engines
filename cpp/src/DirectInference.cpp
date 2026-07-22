@@ -180,6 +180,14 @@ void DirectInferencePipeline::submit(const size_t slotIndex, const size_t batchS
     m_producerCursor = (m_producerCursor + 1) % m_slots.size();
 }
 
+bool DirectInferencePipeline::isCompleted(const size_t slotIndex) const {
+    if (slotIndex != m_consumerCursor) {
+        return false;
+    }
+    const SlotState state = slotAt(slotIndex).state.load(std::memory_order_acquire);
+    return state == SlotState::Complete || state == SlotState::Failed;
+}
+
 DirectInferenceOutput DirectInferencePipeline::waitCompleted(const size_t slotIndex) {
     if (slotIndex != m_consumerCursor) {
         throw std::invalid_argument("Direct inference completions must be consumed in order");
@@ -250,6 +258,13 @@ void DirectInferencePipeline::inferenceLoop() {
 }
 
 DirectInferencePipeline::Slot &DirectInferencePipeline::slotAt(const size_t slotIndex) {
+    if (slotIndex >= m_slots.size()) {
+        throw std::invalid_argument("Direct inference slot index is out of range");
+    }
+    return *m_slots[slotIndex];
+}
+
+const DirectInferencePipeline::Slot &DirectInferencePipeline::slotAt(const size_t slotIndex) const {
     if (slotIndex >= m_slots.size()) {
         throw std::invalid_argument("Direct inference slot index is out of range");
     }

@@ -88,6 +88,7 @@ class InteractiveEngine:
         parallel_searches: int,
         c_param: float,
         inference_workers: int = 3,
+        outstanding_batches_per_worker: int = 1,
         maximum_batch_size: int | None = None,
         batch_collection_timeout_microseconds: int = 500,
         cache_capacity: int = 250_000,
@@ -115,6 +116,7 @@ class InteractiveEngine:
                 exploration_constant=c_param,
                 inference_workers=inference_workers,
                 inference_batch_size=resolved_batch_size,
+                outstanding_batches_per_worker=outstanding_batches_per_worker,
             ),
         )
 

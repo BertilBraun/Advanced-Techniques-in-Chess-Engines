@@ -3,13 +3,16 @@
 #include "DirectInference.hpp"
 #include "MCTS/EvalSearchTree.hpp"
 
+#include <deque>
+
 struct InteractiveSearchParams {
     float exploration_constant;
     int inference_workers;
     int inference_batch_size;
+    int outstanding_batches_per_worker;
 
-    InteractiveSearchParams(float explorationConstant, int inferenceWorkers,
-                            int inferenceBatchSize);
+    InteractiveSearchParams(float explorationConstant, int inferenceWorkers, int inferenceBatchSize,
+                            int outstandingBatchesPerWorker = 1);
 };
 
 struct InteractiveSearchResult {
@@ -40,7 +43,7 @@ private:
 
     InteractiveSearchParams m_parameters;
     std::vector<std::unique_ptr<DirectInferencePipeline>> m_workers;
-    std::vector<std::optional<PendingBatch>> m_pending;
+    std::vector<std::deque<PendingBatch>> m_pending;
     std::size_t m_nextWorker = 0;
     std::uint64_t m_evaluations = 0;
     std::uint64_t m_modelCalls = 0;
@@ -60,6 +63,7 @@ private:
     mayIssue(const std::optional<std::chrono::steady_clock::time_point> &deadline,
              const std::optional<int> &searchLimit, int claimed) const;
     [[nodiscard]] std::optional<std::size_t> freeWorker() const;
+    [[nodiscard]] std::optional<std::size_t> readyWorker(std::size_t firstWorker) const;
     void completeWorker(EvalSearchTree &tree, std::size_t workerIndex, int &completed);
     void cancelPending(EvalSearchTree &tree) noexcept;
     void recordBatch(std::size_t batchSize, std::chrono::steady_clock::duration inferenceDuration);

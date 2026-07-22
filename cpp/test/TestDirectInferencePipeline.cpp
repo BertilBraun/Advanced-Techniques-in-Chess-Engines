@@ -41,6 +41,13 @@ int main() {
         const DirectInferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
         std::memset(first.data, 0, first.capacity * BOARD_C * BOARD_LEN * BOARD_LEN);
         pipeline.submit(first.slotIndex, 2);
+        const auto readinessDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!pipeline.isCompleted(first.slotIndex) &&
+               std::chrono::steady_clock::now() < readinessDeadline) {
+            std::this_thread::yield();
+        }
+        require(pipeline.isCompleted(first.slotIndex),
+                "pipeline did not publish nonblocking completion readiness");
         const DirectInferenceOutput completed = pipeline.waitCompleted(first.slotIndex);
         require(completed.policies.size(0) == 2, "pipeline returned wrong policy batch size");
         require(completed.outcomes.size(0) == 2, "pipeline returned wrong outcome batch size");
@@ -50,6 +57,8 @@ int main() {
         require(second.slotIndex != first.slotIndex, "pipeline did not advance through its slots");
         std::memset(second.data, 0, second.capacity * BOARD_C * BOARD_LEN * BOARD_LEN);
         pipeline.submit(second.slotIndex, 4);
+        require(!pipeline.isCompleted(first.slotIndex),
+                "pipeline reported a released slot as completed");
         static_cast<void>(pipeline.waitCompleted(second.slotIndex));
         pipeline.release(second.slotIndex);
     } catch (...) {

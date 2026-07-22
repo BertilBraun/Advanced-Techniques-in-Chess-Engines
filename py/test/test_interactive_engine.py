@@ -59,6 +59,7 @@ def engine(model_path: Path) -> InteractiveEngine:
         parallel_searches=2,
         c_param=1.0,
         maximum_batch_size=2,
+        outstanding_batches_per_worker=2,
         batch_collection_timeout_microseconds=50,
         cache_capacity=10_000,
         inference_target=InferenceTarget.CPU,
@@ -78,6 +79,7 @@ def invalid_engine(tmp_path: Path) -> InteractiveEngine:
         parallel_searches=8,
         c_param=1.0,
         inference_workers=2,
+        outstanding_batches_per_worker=2,
         inference_target=InferenceTarget.CPU,
     )
 
@@ -95,6 +97,18 @@ def test_policy_preserves_wdl_and_bypasses_search(engine: InteractiveEngine) -> 
     assert result.chosen_move_uci == min(
         candidate.move_uci for candidate in result.candidates
     )
+
+
+def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
+    with pytest.raises(ValueError, match="outstanding_batches_per_worker"):
+        InteractiveEngine(
+            model_path=str(model_path),
+            device_id=0,
+            parallel_searches=2,
+            c_param=1.0,
+            outstanding_batches_per_worker=3,
+            inference_target=InferenceTarget.CPU,
+        )
 
 
 def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(

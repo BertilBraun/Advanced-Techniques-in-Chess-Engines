@@ -40,6 +40,7 @@ class BenchmarkConfiguration(BaseModel):
     device_id: int
     inference_workers: int
     inference_batch_size: int
+    outstanding_batches_per_worker: int
     workload: WorkloadKind
     budget: int
 
@@ -144,6 +145,7 @@ class ParsedArguments(BaseModel):
     devices: tuple[InferenceTarget, ...]
     device_id: int
     inference_workers: tuple[int, ...]
+    outstanding_batches_per_worker: tuple[int, ...]
     batch_sizes: tuple[int, ...]
     time_budgets_seconds: tuple[int, ...]
     search_limits: tuple[int, ...]
@@ -186,6 +188,11 @@ def parse_arguments() -> ParsedArguments:
     parser.add_argument(
         "--inference-workers", type=_parse_integer_list, default=(1, 2, 3, 4)
     )
+    parser.add_argument(
+        "--outstanding-batches-per-worker",
+        type=_parse_integer_list,
+        default=(1,),
+    )
     parser.add_argument("--batch-sizes", type=_parse_integer_list, default=(1, 8, 32))
     parser.add_argument(
         "--time-budgets-seconds", type=_parse_integer_list, default=(1, 3)
@@ -209,6 +216,7 @@ def parse_arguments() -> ParsedArguments:
         devices=namespace.devices,
         device_id=namespace.device_id,
         inference_workers=namespace.inference_workers,
+        outstanding_batches_per_worker=namespace.outstanding_batches_per_worker,
         batch_sizes=namespace.batch_sizes,
         time_budgets_seconds=namespace.time_budgets_seconds,
         search_limits=namespace.search_limits,
@@ -382,29 +390,32 @@ def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration,
     configurations: list[BenchmarkConfiguration] = []
     for target in arguments.devices:
         for inference_workers in arguments.inference_workers:
-            for batch_size in arguments.batch_sizes:
-                for budget in arguments.time_budgets_seconds:
-                    configurations.append(
-                        BenchmarkConfiguration(
-                            inference_target=target,
-                            device_id=arguments.device_id,
-                            inference_workers=inference_workers,
-                            inference_batch_size=batch_size,
-                            workload=WorkloadKind.TIMED,
-                            budget=budget,
+            for outstanding_batches in arguments.outstanding_batches_per_worker:
+                for batch_size in arguments.batch_sizes:
+                    for budget in arguments.time_budgets_seconds:
+                        configurations.append(
+                            BenchmarkConfiguration(
+                                inference_target=target,
+                                device_id=arguments.device_id,
+                                inference_workers=inference_workers,
+                                inference_batch_size=batch_size,
+                                outstanding_batches_per_worker=outstanding_batches,
+                                workload=WorkloadKind.TIMED,
+                                budget=budget,
+                            )
                         )
-                    )
-                for budget in arguments.search_limits:
-                    configurations.append(
-                        BenchmarkConfiguration(
-                            inference_target=target,
-                            device_id=arguments.device_id,
-                            inference_workers=inference_workers,
-                            inference_batch_size=batch_size,
-                            workload=WorkloadKind.FIXED_SEARCHES,
-                            budget=budget,
+                    for budget in arguments.search_limits:
+                        configurations.append(
+                            BenchmarkConfiguration(
+                                inference_target=target,
+                                device_id=arguments.device_id,
+                                inference_workers=inference_workers,
+                                inference_batch_size=batch_size,
+                                outstanding_batches_per_worker=outstanding_batches,
+                                workload=WorkloadKind.FIXED_SEARCHES,
+                                budget=budget,
+                            )
                         )
-                    )
     return tuple(configurations)
 
 
@@ -418,6 +429,7 @@ def _engine(
         c_param=arguments.c_param,
         maximum_batch_size=configuration.inference_batch_size,
         inference_workers=configuration.inference_workers,
+        outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
         cache_capacity=arguments.cache_capacity,
         inference_target=configuration.inference_target,
     )
@@ -481,6 +493,7 @@ def main() -> None:
         device_id=arguments.device_id,
         inference_workers=1,
         inference_batch_size=1,
+        outstanding_batches_per_worker=1,
         workload=WorkloadKind.FIXED_SEARCHES,
         budget=arguments.reference_searches,
     )

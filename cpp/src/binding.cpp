@@ -521,11 +521,14 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .def_readonly("principal_variation", &AnalysisResult::principal_variation);
 
     py::class_<InteractiveSearchParams>(m, "InteractiveSearchParams")
-        .def(py::init<float, int, int>(), py::arg("exploration_constant"),
-             py::arg("inference_workers"), py::arg("inference_batch_size"))
+        .def(py::init<float, int, int, int>(), py::arg("exploration_constant"),
+             py::arg("inference_workers"), py::arg("inference_batch_size"),
+             py::arg("outstanding_batches_per_worker") = 1)
         .def_readwrite("exploration_constant", &InteractiveSearchParams::exploration_constant)
         .def_readwrite("inference_workers", &InteractiveSearchParams::inference_workers)
-        .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size);
+        .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size)
+        .def_readwrite("outstanding_batches_per_worker",
+                       &InteractiveSearchParams::outstanding_batches_per_worker);
 
     py::class_<InteractiveEngine, std::shared_ptr<InteractiveEngine>>(m, "InteractiveEngine")
         .def(py::init<const InferenceClientParams &, const InteractiveSearchParams &>(),

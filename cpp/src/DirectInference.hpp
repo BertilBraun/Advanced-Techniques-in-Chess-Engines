@@ -56,6 +56,7 @@ public:
     [[nodiscard]] WritableBatch acquireWritableBatch();
     void discardWritableBatch(size_t slotIndex);
     void submit(size_t slotIndex, size_t batchSize);
+    [[nodiscard]] bool isCompleted(size_t slotIndex) const;
     [[nodiscard]] DirectInferenceOutput waitCompleted(size_t slotIndex);
     void release(size_t slotIndex);
     [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
@@ -83,4 +84,5 @@ private:
 
     void inferenceLoop();
     [[nodiscard]] Slot &slotAt(size_t slotIndex);
+    [[nodiscard]] const Slot &slotAt(size_t slotIndex) const;
 };

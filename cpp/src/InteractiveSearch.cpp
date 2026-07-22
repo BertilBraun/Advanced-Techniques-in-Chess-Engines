@@ -9,9 +9,11 @@ constexpr std::size_t ENCODED_BOARD_SIZE = BOARD_C * BOARD_LEN * BOARD_LEN;
 
 InteractiveSearchParams::InteractiveSearchParams(const float explorationConstant,
                                                  const int inferenceWorkers,
-                                                 const int inferenceBatchSize)
+                                                 const int inferenceBatchSize,
+                                                 const int outstandingBatchesPerWorker)
     : exploration_constant(explorationConstant), inference_workers(inferenceWorkers),
-      inference_batch_size(inferenceBatchSize) {
+      inference_batch_size(inferenceBatchSize),
+      outstanding_batches_per_worker(outstandingBatchesPerWorker) {
     if (!std::isfinite(exploration_constant) || exploration_constant < 0.0F) {
         throw std::invalid_argument("exploration_constant must be finite and non-negative");
     }
@@ -20,6 +22,9 @@ InteractiveSearchParams::InteractiveSearchParams(const float explorationConstant
     }
     if (inference_batch_size <= 0) {
         throw std::invalid_argument("inference_batch_size must be positive");
+    }
+    if (outstanding_batches_per_worker <= 0 || outstanding_batches_per_worker > 2) {
+        throw std::invalid_argument("outstanding_batches_per_worker must be 1 or 2");
     }
 }
 
@@ -32,7 +37,9 @@ InteractiveSearch::InteractiveSearch(const InferenceClientParams &clientParamete
     for (int worker = 0; worker < searchParameters.inference_workers; ++worker) {
         m_workers.push_back(std::make_unique<DirectInferencePipeline>(
             clientParameters.currentModelPath, clientParameters.device, clientParameters.device_id,
-            static_cast<std::size_t>(searchParameters.inference_batch_size), 2, true));
+            static_cast<std::size_t>(searchParameters.inference_batch_size),
+            static_cast<std::size_t>(std::max(2, searchParameters.outstanding_batches_per_worker)),
+            true));
     }
 }
 
@@ -80,15 +87,28 @@ bool InteractiveSearch::mayIssue(
         return true;
     }
     const auto safetyMargin =
-        std::max(std::chrono::microseconds(5'000), m_inferenceLatencyEstimate * 2);
+        std::max(std::chrono::microseconds(5'000),
+                 m_inferenceLatencyEstimate * (m_parameters.outstanding_batches_per_worker + 1));
     return std::chrono::steady_clock::now() + safetyMargin < *deadline;
 }
 
 std::optional<std::size_t> InteractiveSearch::freeWorker() const {
     for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
         const std::size_t index = (m_nextWorker + offset) % m_workers.size();
-        if (!m_pending[index].has_value()) {
+        if (m_pending[index].size() <
+            static_cast<std::size_t>(m_parameters.outstanding_batches_per_worker)) {
             return index;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::size_t> InteractiveSearch::readyWorker(const std::size_t firstWorker) const {
+    for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
+        const std::size_t workerIndex = (firstWorker + offset) % m_workers.size();
+        if (!m_pending[workerIndex].empty() &&
+            m_workers[workerIndex]->isCompleted(m_pending[workerIndex].front().slot_index)) {
+            return workerIndex;
         }
     }
     return std::nullopt;
@@ -111,16 +131,17 @@ void InteractiveSearch::recordBatch(const std::size_t batchSize,
 
 void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t workerIndex,
                                        int &completed) {
-    std::optional<PendingBatch> &pending = m_pending[workerIndex];
-    if (!pending.has_value()) {
+    std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
+    if (pendingBatches.empty()) {
         throw std::logic_error("Cannot complete an idle direct inference worker");
     }
+    PendingBatch &pending = pendingBatches.front();
     DirectInferencePipeline &worker = *m_workers[workerIndex];
     std::size_t processed = 0;
     bool outputReady = false;
     try {
         const auto waitStartedAt = std::chrono::steady_clock::now();
-        DirectInferenceOutput output = worker.waitCompleted(pending->slot_index);
+        DirectInferenceOutput output = worker.waitCompleted(pending.slot_index);
         m_waitNanoseconds +=
             static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                            std::chrono::steady_clock::now() - waitStartedAt)
@@ -128,8 +149,8 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
         outputReady = true;
         const float *policyData = output.policies.data_ptr<float>();
         const float *outcomeData = output.outcomes.data_ptr<float>();
-        for (; processed < pending->leaves.size(); ++processed) {
-            const EvalNodeIndex leafIndex = pending->leaves[processed];
+        for (; processed < pending.leaves.size(); ++processed) {
+            const EvalNodeIndex leafIndex = pending.leaves[processed];
             EvalSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult = processInferenceResult(
@@ -147,40 +168,39 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
                                                .count());
             ++completed;
         }
-        worker.release(pending->slot_index);
-        recordBatch(pending->leaves.size(),
-                    std::chrono::steady_clock::now() - pending->submitted_at);
-        pending.reset();
+        worker.release(pending.slot_index);
+        recordBatch(pending.leaves.size(), std::chrono::steady_clock::now() - pending.submitted_at);
+        pendingBatches.pop_front();
     } catch (...) {
         if (outputReady) {
-            worker.release(pending->slot_index);
+            worker.release(pending.slot_index);
         }
-        for (std::size_t index = processed; index < pending->leaves.size(); ++index) {
-            tree.cancelReservation(pending->leaves[index]);
+        for (std::size_t index = processed; index < pending.leaves.size(); ++index) {
+            tree.cancelReservation(pending.leaves[index]);
         }
-        pending.reset();
+        pendingBatches.pop_front();
         throw;
     }
 }
 
 void InteractiveSearch::cancelPending(EvalSearchTree &tree) noexcept {
     for (std::size_t workerIndex = 0; workerIndex < m_pending.size(); ++workerIndex) {
-        std::optional<PendingBatch> &pending = m_pending[workerIndex];
-        if (!pending.has_value()) {
-            continue;
-        }
-        try {
-            static_cast<void>(m_workers[workerIndex]->waitCompleted(pending->slot_index));
-            m_workers[workerIndex]->release(pending->slot_index);
-        } catch (...) {
-        }
-        for (const EvalNodeIndex leafIndex : pending->leaves) {
+        std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
+        while (!pendingBatches.empty()) {
+            PendingBatch &pending = pendingBatches.front();
             try {
-                tree.cancelReservation(leafIndex);
+                static_cast<void>(m_workers[workerIndex]->waitCompleted(pending.slot_index));
+                m_workers[workerIndex]->release(pending.slot_index);
             } catch (...) {
             }
+            for (const EvalNodeIndex leafIndex : pending.leaves) {
+                try {
+                    tree.cancelReservation(leafIndex);
+                } catch (...) {
+                }
+            }
+            pendingBatches.pop_front();
         }
-        pending.reset();
     }
 }
 
@@ -251,23 +271,30 @@ InteractiveSearch::search(EvalSearchTree &tree,
                     worker.discardWritableBatch(writable.slotIndex);
                 } else {
                     worker.submit(writable.slotIndex, leaves.size());
-                    m_pending[workerIndex] = PendingBatch{writable.slotIndex, std::move(leaves),
-                                                          std::chrono::steady_clock::now()};
+                    m_pending[workerIndex].push_back(PendingBatch{
+                        writable.slotIndex, std::move(leaves), std::chrono::steady_clock::now()});
                     m_nextWorker = (workerIndex + 1) % m_workers.size();
                     continue;
                 }
             }
 
             const bool hasPending =
-                std::ranges::any_of(m_pending, [](const auto &batch) { return batch.has_value(); });
+                std::ranges::any_of(m_pending, [](const std::deque<PendingBatch> &batches) {
+                    return !batches.empty();
+                });
             if (!hasPending) {
                 if (!mayIssue(deadline, searchLimit, claimed)) {
                     break;
                 }
                 throw std::logic_error("No selectable leaf and no pending inference");
             }
-            while (!m_pending[completionCursor].has_value()) {
-                completionCursor = (completionCursor + 1) % m_pending.size();
+            const std::optional<std::size_t> completedWorker = readyWorker(completionCursor);
+            if (completedWorker.has_value()) {
+                completionCursor = *completedWorker;
+            } else {
+                while (m_pending[completionCursor].empty()) {
+                    completionCursor = (completionCursor + 1) % m_pending.size();
+                }
             }
             completeWorker(tree, completionCursor, completed);
             completionCursor = (completionCursor + 1) % m_pending.size();
