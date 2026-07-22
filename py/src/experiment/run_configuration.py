@@ -204,6 +204,9 @@ class WorkloadConfiguration(BaseModel):
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
     self_play_final_maximum_game_plies: int | None = Field(default=None, gt=0)
+    self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
+    self_play_low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
+    self_play_low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
@@ -229,6 +232,11 @@ class WorkloadConfiguration(BaseModel):
                 raise ValueError('Final self-play maximum game plies require an initial maximum.')
             if self.self_play_final_maximum_game_plies < self.self_play_maximum_game_plies:
                 raise ValueError('Final self-play maximum game plies cannot be lower than the initial maximum.')
+        if (
+            self.self_play_low_material_termination_probability > 0.0
+            and self.self_play_low_material_termination_piece_threshold_per_player == 0
+        ):
+            raise ValueError('Low-material termination requires a positive per-player piece threshold.')
         return self
 
 
@@ -632,6 +640,15 @@ def apply_run_configuration(
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies
     training_args.self_play.maximum_game_plies_until_iteration = workload.self_play_maximum_game_plies_until_iteration
     training_args.self_play.final_maximum_game_plies = workload.self_play_final_maximum_game_plies
+    training_args.self_play.low_material_termination_minimum_plies = (
+        workload.self_play_low_material_termination_minimum_plies
+    )
+    training_args.self_play.low_material_termination_piece_threshold_per_player = (
+        workload.self_play_low_material_termination_piece_threshold_per_player
+    )
+    training_args.self_play.low_material_termination_probability = (
+        workload.self_play_low_material_termination_probability
+    )
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.use_inference_cache = topology.use_inference_cache
     training_args.self_play.inference_cache_capacity = topology.inference_cache_capacity_per_process

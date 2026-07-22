@@ -12,6 +12,10 @@ class SelfPlayDatasetStats(NamedTuple):
     total_generation_time: float = 0.0
     num_too_long_games: int = 0
     capped_game_material_scores: list[float] = []
+    low_material_termination_evaluations: int = 0
+    low_material_terminations: int = 0
+    low_material_termination_declines: int = 0
+    low_material_termination_material_scores: list[float] = []
 
     resignations: int = 0
     num_resignations_evaluated_to_end: int = 0
@@ -26,6 +30,10 @@ class SelfPlayDatasetStats(NamedTuple):
         total_generation_time: float | None = None,
         num_too_long_games: int | None = None,
         capped_game_material_scores: list[float] | None = None,
+        low_material_termination_evaluations: int | None = None,
+        low_material_terminations: int | None = None,
+        low_material_termination_declines: int | None = None,
+        low_material_termination_material_scores: list[float] | None = None,
         resignations: int | None = None,
         num_resignations_evaluated_to_end: int | None = None,
         num_winnable_resignations: int | None = None,
@@ -43,6 +51,24 @@ class SelfPlayDatasetStats(NamedTuple):
                 capped_game_material_scores
                 if capped_game_material_scores is not None
                 else self.capped_game_material_scores
+            ),
+            low_material_termination_evaluations=(
+                low_material_termination_evaluations
+                if low_material_termination_evaluations is not None
+                else self.low_material_termination_evaluations
+            ),
+            low_material_terminations=(
+                low_material_terminations if low_material_terminations is not None else self.low_material_terminations
+            ),
+            low_material_termination_declines=(
+                low_material_termination_declines
+                if low_material_termination_declines is not None
+                else self.low_material_termination_declines
+            ),
+            low_material_termination_material_scores=(
+                low_material_termination_material_scores
+                if low_material_termination_material_scores is not None
+                else self.low_material_termination_material_scores
             ),
             resignations=resignations if resignations is not None else self.resignations,
             num_resignations_evaluated_to_end=num_resignations_evaluated_to_end
@@ -63,6 +89,7 @@ Total generation time: {self.total_generation_time:.2f}s
 Average game length: {np.mean(self.game_lengths):.2f}
 Average generation time: {self.total_generation_time / self.num_games:.2f}s/game
 Too long games: {self.num_too_long_games}
+Low-material terminations: {self.low_material_terminations} / {self.low_material_termination_evaluations}
 Resignations: {self.resignations / self.num_games * 100:.2f}% ({self.resignations})
 Resignations evaluated to end: {self.num_resignations_evaluated_to_end / self.num_games * 100:.2f}% ({self.num_resignations_evaluated_to_end})
 Winnable resignations: {self.num_winnable_resignations / self.num_resignations_evaluated_to_end * 100:.2f}% ({self.num_winnable_resignations})
@@ -76,6 +103,16 @@ Average moves after resignation: {self.num_moves_after_resignation / self.num_re
             total_generation_time=self.total_generation_time + other.total_generation_time,
             num_too_long_games=self.num_too_long_games + other.num_too_long_games,
             capped_game_material_scores=self.capped_game_material_scores + other.capped_game_material_scores,
+            low_material_termination_evaluations=(
+                self.low_material_termination_evaluations + other.low_material_termination_evaluations
+            ),
+            low_material_terminations=self.low_material_terminations + other.low_material_terminations,
+            low_material_termination_declines=(
+                self.low_material_termination_declines + other.low_material_termination_declines
+            ),
+            low_material_termination_material_scores=(
+                self.low_material_termination_material_scores + other.low_material_termination_material_scores
+            ),
             resignations=self.resignations + other.resignations,
             num_resignations_evaluated_to_end=self.num_resignations_evaluated_to_end
             + other.num_resignations_evaluated_to_end,

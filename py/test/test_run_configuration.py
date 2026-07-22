@@ -575,8 +575,12 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['workload']['training_global_batch_size'] = 1024
     expected['workload']['training_sampling_window'] = 15
     expected['workload']['self_play_fast_searches_per_turn'] = 150
+    expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
-    expected['workload']['self_play_final_maximum_game_plies'] = 300
+    expected['workload']['self_play_final_maximum_game_plies'] = 250
+    expected['workload']['self_play_low_material_termination_minimum_plies'] = 50
+    expected['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 4
+    expected['workload']['self_play_low_material_termination_probability'] = 0.7
     expected['retention']['replay_window_iterations'] = 15
     expected['evaluation_protocol']['historical_model_iterations'] = (0,) + expected['evaluation_protocol'][
         'historical_model_iterations'
@@ -599,7 +603,19 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
     assert arguments.artifact_retention.replay_window_iterations == 15
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
-    assert arguments.self_play.final_maximum_game_plies == 300
+    assert arguments.self_play.final_maximum_game_plies == 250
+    assert arguments.self_play.low_material_termination_minimum_plies == 50
+    assert arguments.self_play.low_material_termination_piece_threshold_per_player == 4
+    assert arguments.self_play.low_material_termination_probability == 0.7
+
+
+def test_run_configuration_rejects_low_material_probability_without_a_piece_threshold() -> None:
+    configuration = load_run_configuration(V5_CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 0
+
+    with pytest.raises(ValidationError, match='Low-material termination'):
+        RunConfiguration.model_validate(data)
 
 
 @pytest.mark.parametrize('run_directory', ('../escape', 'nested/run', 'run name'))
