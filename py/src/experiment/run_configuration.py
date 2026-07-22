@@ -119,6 +119,10 @@ class TopologyConfiguration(BaseModel):
     direct_self_play_inference_workers: int = Field(default=0, ge=0)
     direct_self_play_inference_batch_size: int = Field(default=64, gt=0)
     direct_self_play_outstanding_batches_per_worker: int = Field(default=2, ge=1, le=2)
+    direct_evaluation_inference_workers: int = Field(default=0, ge=0)
+    direct_evaluation_inference_batch_size: int = Field(default=64, gt=0)
+    direct_evaluation_outstanding_batches_per_worker: int = Field(default=2, ge=1, le=2)
+    evaluation_parallel_searches: int = Field(default=1, gt=0)
     use_evaluation_inference_cache: bool
     evaluation_inference_cache_capacity_per_process: int = Field(ge=0)
     trainer_cpu_threads: int = Field(gt=0)
@@ -163,6 +167,8 @@ class TopologyConfiguration(BaseModel):
             raise ValueError('Inference cache capacity must be positive exactly when inference caching is enabled.')
         if self.direct_self_play_inference_workers > 0 and self.use_inference_cache:
             raise ValueError('Direct self-play inference and inference caching are mutually exclusive.')
+        if self.direct_evaluation_inference_workers > 0 and self.use_evaluation_inference_cache:
+            raise ValueError('Direct evaluation inference and evaluation inference caching are mutually exclusive.')
         if self.use_evaluation_inference_cache != (self.evaluation_inference_cache_capacity_per_process > 0):
             raise ValueError(
                 'Evaluation inference cache capacity must be positive exactly when evaluation caching is enabled.'
@@ -560,9 +566,15 @@ def validate_run_configuration(
         else topology.mcts_threads_per_process
     )
     self_play_cpu_slots = sum(topology.self_play_processes_per_device) * self_play_threads_per_process
+    evaluation_cpu_slots = (
+        topology.max_concurrent_evaluation_tasks * (1 + topology.direct_evaluation_inference_workers)
+        if topology.direct_evaluation_inference_workers > 0
+        else 0
+    )
     trainer_world_size = len(topology.trainer_ddp_device_ids)
     required_cpu_slots = (
         self_play_cpu_slots
+        + evaluation_cpu_slots
         + topology.trainer_cpu_threads * trainer_world_size
         + topology.dataloader_workers * trainer_world_size
         + topology.reserved_logical_cpus
@@ -709,8 +721,18 @@ def apply_run_configuration(
         training_args.evaluation.num_searches_per_turn = workload.evaluation_searches_per_turn
         training_args.evaluation.every_n_iterations = workload.evaluation_every_iterations
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
+        training_args.evaluation.parallel_searches = topology.evaluation_parallel_searches
         training_args.evaluation.use_inference_cache = topology.use_evaluation_inference_cache
         training_args.evaluation.inference_cache_capacity = topology.evaluation_inference_cache_capacity_per_process
+        training_args.evaluation.direct_inference = (
+            DirectSelfPlayParams(
+                inference_workers=topology.direct_evaluation_inference_workers,
+                inference_batch_size=topology.direct_evaluation_inference_batch_size,
+                outstanding_batches_per_worker=topology.direct_evaluation_outstanding_batches_per_worker,
+            )
+            if topology.direct_evaluation_inference_workers > 0
+            else None
+        )
         training_args.evaluation.evaluate_initial_checkpoint = evaluation_protocol.evaluate_initial_checkpoint
         training_args.evaluation.dataset_path = (
             str(_resolve_source_path(evaluation_protocol.evaluation_dataset_path))

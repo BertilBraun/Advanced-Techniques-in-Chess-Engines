@@ -89,6 +89,39 @@ def _result_metrics(results: Results) -> dict[str, float | int]:
     }
 
 
+def _model_engine_condition(
+    model_evaluation: ModelEvaluation,
+    artifact_sha256: str,
+    identifier: str,
+) -> EngineCondition:
+    evaluation = model_evaluation.args.evaluation
+    if evaluation is None:
+        raise ValueError('Evaluation settings are required for model engine provenance.')
+    direct_inference = evaluation.direct_inference
+    settings = (
+        (
+            EngineSetting(name='InferenceScheduler', value='direct_multi_tree'),
+            EngineSetting(name='InferenceWorkers', value=str(direct_inference.inference_workers)),
+            EngineSetting(name='InferenceBatchSize', value=str(direct_inference.inference_batch_size)),
+            EngineSetting(
+                name='OutstandingBatchesPerWorker',
+                value=str(direct_inference.outstanding_batches_per_worker),
+            ),
+            EngineSetting(name='ParallelSearchesPerTree', value=str(evaluation.parallel_searches)),
+        )
+        if direct_inference is not None
+        else ()
+    )
+    return EngineCondition(
+        artifact_sha256=artifact_sha256,
+        identifier=identifier,
+        search_limit_name='mcts_root_visits',
+        search_limit_value=model_evaluation.num_searches_per_turn,
+        threads=1 if direct_inference is not None else evaluation.mcts_threads,
+        settings=settings,
+    )
+
+
 def _evaluation_source_revision() -> str:
     completed = subprocess.run(
         ['git', 'rev-parse', 'HEAD'],
@@ -222,13 +255,10 @@ def _eval_vs_reference(
         )
 
     opening_suite_path = Path(evaluation.opening_suite_path)
-    condition = EngineCondition(
-        artifact_sha256=file_sha256(candidate_inference_path),
-        identifier=f'candidate-model-{iteration}',
-        search_limit_name='mcts_root_visits',
-        search_limit_value=evaluation.num_searches_per_turn,
-        threads=evaluation.mcts_threads,
-        settings=(),
+    condition = _model_engine_condition(
+        model_evaluation,
+        file_sha256(candidate_inference_path),
+        f'candidate-model-{iteration}',
     )
     report = MatchReport(
         conditions=MatchConditions(
@@ -237,13 +267,10 @@ def _eval_vs_reference(
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
             candidate=condition,
-            opponent=EngineCondition(
-                artifact_sha256=file_sha256(reference_inference_path),
-                identifier='archived-best-model-reexported-as-model-0',
-                search_limit_name=condition.search_limit_name,
-                search_limit_value=condition.search_limit_value,
-                threads=condition.threads,
-                settings=(),
+            opponent=_model_engine_condition(
+                model_evaluation,
+                file_sha256(reference_inference_path),
+                'archived-best-model-reexported-as-model-0',
             ),
             maximum_game_plies=evaluation.maximum_game_plies,
             bootstrap_seed=evaluation.bootstrap_seed,
@@ -307,13 +334,10 @@ def _eval_vs_stockfish_fixed(
             evaluation_source_revision=_evaluation_source_revision(),
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
-            candidate=EngineCondition(
-                artifact_sha256=file_sha256(candidate_inference_path),
-                identifier=f'candidate-model-{iteration}',
-                search_limit_name='mcts_root_visits',
-                search_limit_value=evaluation.num_searches_per_turn,
-                threads=evaluation.mcts_threads,
-                settings=(),
+            candidate=_model_engine_condition(
+                model_evaluation,
+                file_sha256(candidate_inference_path),
+                f'candidate-model-{iteration}',
             ),
             opponent=EngineCondition(
                 artifact_sha256=run_manifest.stockfish_binary_sha256,

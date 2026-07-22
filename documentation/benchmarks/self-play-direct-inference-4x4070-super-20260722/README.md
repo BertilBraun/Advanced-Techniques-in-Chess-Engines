@@ -88,6 +88,39 @@ and completion-driven result processing. Self-play gains additional throughput b
 leaf from each of thousands of independent trees rather than issuing many virtual-loss searches
 into one tree.
 
+## Direct inference for training evaluation
+
+The periodic training evaluator originally remained on the general MCTS inference client even
+after the optimized interactive and self-play schedulers were merged. Search-based matches against
+previous, historical, reference, random, and Stockfish opponents created a non-caching client with
+a 16-position maximum batch and a 500-microsecond collector. Dataset metrics and policy-only games
+do not use MCTS and were already on the appropriate paths.
+
+Training evaluation now uses the direct multi-tree MCTS scheduler. This is deliberately not the
+single-tree interactive wrapper: a 100-game paired match presents about 50 same-side roots at each
+ply, so the multi-tree scheduler can batch one leaf from every independent game while preserving
+one outstanding search per tree and an exact 64-visit move budget. Candidate and neural opponent
+each receive their own snapshot-scoped pipeline inside the spawned evaluation task.
+
+The conservative production evaluation topology is one inference worker, batch 64, one outstanding
+batch, and parallel width one per model. Only four evaluation tasks may run concurrently, assigning
+at most one task to each physical GPU. A second worker cannot normally be fed at width one because
+the roughly 50 active roots are all waiting after the first batch; it would add a model replica
+without increasing useful concurrency. Direct evaluation and evaluation caching are validated as
+mutually exclusive.
+
+A same-node proxy benchmark used checkpoint 196, 50 parallel games, width one, and 64 fast/65 full
+searches per ply. The previous four-thread, batch-16 non-caching client completed **2,601
+searches/s** with a mean model batch of 10.32. The direct one-worker, batch-64, queue-one scheduler
+completed **7,270 searches/s** with a mean batch of 40.76: a **2.80x throughput increase**, while
+process CPU fell from 163% to 99%. Each run covered ten measured seconds after warmup and no game
+state or tree was shared between the legacy and direct processes.
+
+Match-report provenance now records `direct_multi_tree`, inference workers, inference batch size,
+outstanding depth, parallel searches per tree, one serial tree-owner thread, and the unchanged
+`mcts_root_visits=64` search limit. Legacy configurations retain the general cached/non-cached path
+when direct evaluation is not configured.
+
 ## Training configuration
 
 The four-GPU trainer uses one NCCL rank per GPU, devices `(3, 2, 1, 0)`, global batch 2,048, and

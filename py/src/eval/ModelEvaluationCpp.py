@@ -72,7 +72,7 @@ class ModelEvaluation:
         from AlphaZeroCpp import MCTSParams
 
         return MCTSParams(
-            num_parallel_searches=self.args.self_play.mcts.num_parallel_searches,
+            num_parallel_searches=self.args.evaluation.parallel_searches,
             c_param=PLAY_C_PARAM,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
@@ -80,6 +80,37 @@ class ModelEvaluation:
             num_threads=self.args.evaluation.mcts_threads,
             num_full_searches=self.num_searches_per_turn,
             num_fast_searches=self.num_searches_per_turn,
+        )
+
+    def _create_mcts(self, inference_path: Path) -> MCTS:
+        from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
+
+        evaluation = self.args.evaluation
+        if evaluation is None:
+            raise ValueError('Evaluation settings are required for MCTS evaluation.')
+        direct_parameters = (
+            DirectSelfPlayInferenceParams(
+                evaluation.direct_inference.inference_workers,
+                evaluation.direct_inference.inference_batch_size,
+                evaluation.direct_inference.outstanding_batches_per_worker,
+            )
+            if evaluation.direct_inference is not None
+            else None
+        )
+        maximum_batch_size = (
+            evaluation.direct_inference.inference_batch_size if evaluation.direct_inference is not None else 16
+        )
+        return MCTS(
+            InferenceClientParams(
+                self.device_id,
+                str(inference_path),
+                maximum_batch_size,
+                500,
+                evaluation.inference_cache_capacity,
+            ),
+            self.mcts_args,
+            use_inference_cache=evaluation.use_inference_cache,
+            direct_inference_params=direct_parameters,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
@@ -156,7 +187,7 @@ class ModelEvaluation:
         self,
         model_path: str | PathLike,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard
+        from AlphaZeroCpp import MCTSBoard
 
         opponent_inference_path = inference_model_path(model_path)
         if not opponent_inference_path.is_file():
@@ -164,17 +195,7 @@ class ModelEvaluation:
         if self.paired_schedule is None or self.args.evaluation is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
-        opponent = MCTS(
-            InferenceClientParams(
-                self.device_id,
-                str(opponent_inference_path),
-                16,
-                500,
-                self.args.evaluation.inference_cache_capacity,
-            ),
-            self.mcts_args,
-            use_inference_cache=self.args.evaluation.use_inference_cache,
-        )
+        opponent = self._create_mcts(opponent_inference_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
@@ -308,7 +329,7 @@ class ModelEvaluation:
         eval_model: EvaluationModel,
         name: str,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
-        from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard
+        from AlphaZeroCpp import MCTSBoard
 
         if self.paired_schedule is None or self.args.evaluation is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
@@ -316,17 +337,7 @@ class ModelEvaluation:
         current_inference_path = inference_model_path(model_save_path(self.iteration, self.args.save_path))
         if not current_inference_path.is_file():
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
-        current = MCTS(
-            InferenceClientParams(
-                self.device_id,
-                str(current_inference_path),
-                16,
-                500,
-                self.args.evaluation.inference_cache_capacity,
-            ),
-            self.mcts_args,
-            use_inference_cache=self.args.evaluation.use_inference_cache,
-        )
+        current = self._create_mcts(current_inference_path)
 
         def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'

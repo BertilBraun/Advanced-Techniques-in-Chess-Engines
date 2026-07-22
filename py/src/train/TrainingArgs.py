@@ -298,6 +298,9 @@ class EvaluationParams:
     stockfish_threads: int
     stockfish_hash_mib: int
     evaluate_random: bool
+    parallel_searches: int = 1
+    direct_inference: DirectSelfPlayParams | None = None
+    """Direct reusable inference pipeline configuration, or None for the general evaluation client."""
 
 
 @dataclass

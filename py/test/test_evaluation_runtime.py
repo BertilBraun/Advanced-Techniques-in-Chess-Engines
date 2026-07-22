@@ -12,13 +12,14 @@ import src.cluster.EvaluationProcess as evaluation_process_module
 import src.eval.ModelEvaluationCpp as evaluation_module
 from src.cluster.EvaluationProcess import (
     _activate_evaluation_device,
+    _model_engine_condition,
     _reap_evaluation_tasks,
     _terminate_evaluation_tasks,
 )
 from src.eval.ModelEvaluationCpp import ModelEvaluation
 from src.eval.ModelEvaluationPy import EvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import DirectSelfPlayParams, TrainingArgs
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class _EvaluationSettings:
     inference_cache_capacity: int
     use_inference_cache: bool = True
     mcts_threads: int = 1
+    parallel_searches: int = 1
+    direct_inference: DirectSelfPlayParams | None = None
     maximum_game_plies: int | None = 200
     stockfish_binary_path: str | None = None
     stockfish_hash_mib: int = 128
@@ -51,6 +54,13 @@ class _FakeInferenceClientParameters:
 class _FakeMctsBoard:
     root: object
     should_run_full_search: bool
+
+
+@dataclass(frozen=True)
+class _FakeDirectInferenceParameters:
+    inference_workers: int
+    inference_batch_size: int
+    outstanding_batches_per_worker: int
 
 
 class _FakeEvaluationProcess:
@@ -122,7 +132,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     current_model_path.touch()
     opponent_model_path.touch()
 
-    inference_clients: list[tuple[int, bool]] = []
+    inference_clients: list[tuple[int, bool, _FakeDirectInferenceParameters | None]] = []
 
     class FakeMcts:
         def __init__(
@@ -130,9 +140,12 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
             inference_parameters: _FakeInferenceClientParameters,
             mcts_parameters: str,
             use_inference_cache: bool,
+            direct_inference_params: _FakeDirectInferenceParameters | None,
         ) -> None:
             assert mcts_parameters == 'mcts-parameters'
-            inference_clients.append((inference_parameters.cache_capacity, use_inference_cache))
+            inference_clients.append(
+                (inference_parameters.cache_capacity, use_inference_cache, direct_inference_params)
+            )
 
     def fake_paired_match(
         *,
@@ -156,6 +169,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParameters
+    fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectInferenceParameters
     fake_alpha_zero_cpp.MCTS = FakeMcts
     fake_alpha_zero_cpp.MCTSBoard = _FakeMctsBoard
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
@@ -172,6 +186,11 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
             evaluation=_EvaluationSettings(
                 inference_cache_capacity=0,
                 use_inference_cache=False,
+                direct_inference=DirectSelfPlayParams(
+                    inference_workers=1,
+                    inference_batch_size=64,
+                    outstanding_batches_per_worker=1,
+                ),
             ),
         ),
     )
@@ -179,7 +198,45 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     model_evaluation.play_two_models_paired(tmp_path / 'model_0.pt')
 
-    assert inference_clients == [(0, False), (0, False)]
+    expected_direct_parameters = _FakeDirectInferenceParameters(1, 64, 1)
+    assert inference_clients == [
+        (0, False, expected_direct_parameters),
+        (0, False, expected_direct_parameters),
+    ]
+
+
+def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
+    model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
+    model_evaluation.num_searches_per_turn = 64
+    model_evaluation.args = cast(
+        TrainingArgs,
+        _EvaluationTrainingArguments(
+            save_path='unused',
+            evaluation=_EvaluationSettings(
+                inference_cache_capacity=0,
+                use_inference_cache=False,
+                parallel_searches=1,
+                direct_inference=DirectSelfPlayParams(
+                    inference_workers=1,
+                    inference_batch_size=64,
+                    outstanding_batches_per_worker=1,
+                ),
+            ),
+        ),
+    )
+
+    condition = _model_engine_condition(model_evaluation, 'a' * 64, 'candidate-model-1')
+
+    assert condition.search_limit_name == 'mcts_root_visits'
+    assert condition.search_limit_value == 64
+    assert condition.threads == 1
+    assert {(setting.name, setting.value) for setting in condition.settings} == {
+        ('InferenceScheduler', 'direct_multi_tree'),
+        ('InferenceWorkers', '1'),
+        ('InferenceBatchSize', '64'),
+        ('OutstandingBatchesPerWorker', '1'),
+        ('ParallelSearchesPerTree', '1'),
+    }
 
 
 def test_policy_evaluation_uses_non_cached_inference_client(

@@ -26,6 +26,7 @@ from src.experiment.run_configuration import (
 from src.train.TrainingArgs import (
     ArtifactRetention,
     ClusterParams,
+    DirectSelfPlayParams,
     EvaluationParams,
     MCTSParams,
     NetworkParams,
@@ -426,6 +427,42 @@ def test_run_configuration_rejects_cached_direct_self_play_inference() -> None:
         RunConfiguration.model_validate(data)
 
 
+def test_run_configuration_selects_direct_evaluation_inference() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    topology = configuration.topology.model_copy(
+        update={
+            'use_evaluation_inference_cache': False,
+            'evaluation_inference_cache_capacity_per_process': 0,
+            'direct_evaluation_inference_workers': 1,
+            'direct_evaluation_inference_batch_size': 64,
+            'direct_evaluation_outstanding_batches_per_worker': 1,
+            'evaluation_parallel_searches': 1,
+        }
+    )
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration.model_copy(update={'topology': topology}))
+
+    assert arguments.evaluation is not None
+    assert arguments.evaluation.parallel_searches == 1
+    assert arguments.evaluation.direct_inference == DirectSelfPlayParams(
+        inference_workers=1,
+        inference_batch_size=64,
+        outstanding_batches_per_worker=1,
+    )
+
+
+def test_run_configuration_rejects_cached_direct_evaluation_inference() -> None:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['topology']['use_evaluation_inference_cache'] = True
+    data['topology']['evaluation_inference_cache_capacity_per_process'] = 1
+    data['topology']['direct_evaluation_inference_workers'] = 1
+
+    with pytest.raises(ValidationError, match='mutually exclusive'):
+        RunConfiguration.model_validate(data)
+
+
 @pytest.mark.parametrize(
     ('use_inference_cache', 'capacity'),
     (
@@ -578,8 +615,12 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['direct_self_play_inference_workers'] = 4
     expected['topology']['direct_self_play_inference_batch_size'] = 64
     expected['topology']['direct_self_play_outstanding_batches_per_worker'] = 2
+    expected['topology']['direct_evaluation_inference_workers'] = 1
+    expected['topology']['direct_evaluation_inference_batch_size'] = 64
+    expected['topology']['direct_evaluation_outstanding_batches_per_worker'] = 1
+    expected['topology']['evaluation_parallel_searches'] = 1
     expected['topology']['self_play_processes_per_device_during_training'] = (1, 1, 1, 1)
-    expected['topology']['max_concurrent_evaluation_tasks'] = 8
+    expected['topology']['max_concurrent_evaluation_tasks'] = 4
     expected['workload']['training_sampling_window'] = 15
     expected['workload']['learning_rate_schedule'] = (
         {'start_iteration': 0, 'learning_rate': 0.01},
@@ -624,6 +665,13 @@ def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training(
     assert arguments.self_play.direct_inference.inference_workers == 4
     assert arguments.self_play.direct_inference.inference_batch_size == 64
     assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
+    assert arguments.evaluation is not None
+    assert arguments.evaluation.parallel_searches == 1
+    assert arguments.evaluation.max_concurrent_tasks == 4
+    assert arguments.evaluation.direct_inference is not None
+    assert arguments.evaluation.direct_inference.inference_workers == 1
+    assert arguments.evaluation.direct_inference.inference_batch_size == 64
+    assert arguments.evaluation.direct_inference.outstanding_batches_per_worker == 1
 
 
 def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
