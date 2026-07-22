@@ -26,6 +26,10 @@ def test_command_uses_paired_openings_and_fixed_move_time() -> None:
     assert "option.UCI_LimitStrength=true" in command
     assert "option.UCI_Elo=1800" in command
     assert "policy=round" in command
+    assert command[command.index("-games") + 1] == "2"
+    assert command[command.index("-rounds") + 1] == "12"
+    assert "cmd=stockfish" in command
+    assert all(",cmd=" not in argument for argument in command)
 
 
 def test_prepare_openings_converts_tsv_and_selects_one_per_game_pair(
