@@ -261,6 +261,10 @@ class SelfPlayCpp:
         log_scalar('mcts/average_search_kl_divergence', stats.averageKLDivergence)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
+            if not mcts_result.visits:
+                self.self_play_games[i] = self._finish_terminal_search_root(spg, mcts_result.root)
+                continue
+
             was_full_searched = boards[i].should_run_full_search
             if was_full_searched:
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
@@ -292,6 +296,13 @@ class SelfPlayCpp:
                 mcts_result.root,
                 mcts_result.visits,
             )
+
+    def _finish_terminal_search_root(self, game: SelfPlayGame, root: MCTSRoot) -> SelfPlayGame:
+        if not root.is_terminal:
+            raise RuntimeError('MCTS returned no visit counts for a non-terminal root.')
+        finished_game = self._finish_game_after_move(game, native_game_over=True)
+        assert finished_game is not None
+        return finished_game
 
     def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
         if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:

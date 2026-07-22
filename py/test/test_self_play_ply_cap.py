@@ -84,6 +84,23 @@ def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyP
     assert client._finish_game_after_move(game, native_game_over=False) is None
 
 
+def test_empty_terminal_search_result_finishes_game(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = self_play_client(iteration=50)
+    game = SelfPlayGame()
+    replacement = SelfPlayGame()
+
+    monkeypatch.setattr(client, '_handle_end_of_game', lambda _, __: replacement)
+
+    assert client._finish_terminal_search_root(game, SimpleNamespace(is_terminal=True)) is replacement
+
+
+def test_empty_non_terminal_search_result_fails_clearly() -> None:
+    client = self_play_client(iteration=50)
+
+    with pytest.raises(RuntimeError, match='no visit counts for a non-terminal root'):
+        client._finish_terminal_search_root(SelfPlayGame(), SimpleNamespace(is_terminal=False))
+
+
 @pytest.mark.parametrize(
     ('iteration', 'expected_maximum'),
     (
