@@ -9,6 +9,7 @@ lichess_bot_revision="${LICHESS_BOT_REVISION:-36ba4575b3299646956c911b11487b1c34
 virtual_environment_root="${ENGINE_VENV_ROOT:-/workspace/alphazero-venv}"
 build_root="${ENGINE_BUILD_ROOT:-${engine_repository_root}/cpp/build}"
 build_jobs="${ENGINE_BUILD_JOBS:-$(nproc)}"
+bootstrap_python="${ENGINE_BOOTSTRAP_PYTHON:-python3}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
     echo "Run setup_vast.sh as root in the Vast SSH instance." >&2
@@ -27,10 +28,12 @@ apt-get install --yes --no-install-recommends \
     cmake \
     git \
     ninja-build \
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
+    python3 \
+    python3-dev \
+    python3-venv \
     python3-pip
+"${bootstrap_python}" -c \
+    "import sys; assert sys.version_info >= (3, 10), f'Python 3.10+ is required, found {sys.version}'"
 mkdir -p /workspace /data
 
 echo "[3/8] Cloning or updating the engine repository"
@@ -52,7 +55,7 @@ echo "Engine revision: ${resolved_engine_revision}"
 
 echo "[4/8] Creating the Python environment"
 if [[ ! -x "${virtual_environment_root}/bin/python" ]]; then
-    python3.10 -m venv "${virtual_environment_root}"
+    "${bootstrap_python}" -m venv "${virtual_environment_root}"
 fi
 "${virtual_environment_root}/bin/python" -m pip install --no-cache-dir uv==0.11.14
 "${virtual_environment_root}/bin/uv" pip install \

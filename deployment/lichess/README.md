@@ -4,7 +4,7 @@ This directory contains the runtime glue for one standard-chess Lichess BOT acco
 
 ## Short version
 
-Rent an Ubuntu 22.04 CUDA/PyTorch development instance with SSH access, connect as root, and run:
+Rent an Ubuntu 22.04 or newer CUDA/PyTorch development instance with SSH access, connect as root, and run:
 
 ```text
 curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/lichess/setup_vast.sh | bash
@@ -21,7 +21,7 @@ The first command clones the latest `master`, installs dependencies, compiles `A
 
 ### 1. Rent a development instance
 
-Choose a Vast recommended Ubuntu 22.04 CUDA/PyTorch **development** template with SSH launch mode; the setup uses the distribution's Python 3.10 packages. For an RTX 50-series GPU, Vast currently recommends its `[Automatic]` template so CUDA 12.8 and a compatible PyTorch are selected—confirm that the selected automatic image is Ubuntu 22.04. Allocate about 50 GB disk, one GPU, 4+ CPU cores, and 8–16 GB system RAM. Prefer on-demand and a reliable/verified host for the first run.
+Choose a Vast recommended Ubuntu 22.04 or newer CUDA/PyTorch **development** template with SSH launch mode; the setup uses the distribution's Python 3 packages and requires Python 3.10 or newer. For an RTX 50-series GPU, Vast currently recommends its `[Automatic]` template so CUDA 12.8 and a compatible PyTorch are selected. Allocate about 50 GB disk, one GPU, 4+ CPU cores, and 8–16 GB system RAM. Prefer on-demand and a reliable/verified host for the first run.
 
 SSH launch mode gives an ordinary interactive shell. Nothing in this workflow automatically starts the chess bot.
 
@@ -56,7 +56,7 @@ Set `ENGINE_REVISION` only when intentionally reproducing an older run or testin
 `setup_vast.sh` is idempotent where practical and refuses to overwrite a non-Git directory. It:
 
 1. checks `nvidia-smi`;
-2. installs the compiler, CMake, Ninja, Python 3.10, and Git;
+2. installs the compiler, CMake, Ninja, the distribution's Python 3 development packages, and Git;
 3. clones/checks out the latest `origin/master`, or `ENGINE_REVISION` when supplied;
 4. creates `/workspace/alphazero-venv` and installs the hash-locked CUDA dependencies;
 5. asserts PyTorch can see CUDA and prints the GPU;
