@@ -706,6 +706,25 @@ include a two-rank DDP comparison.
 - Self-play remains enabled before, during, and after a training quantum.
 - A failed publication does not consume credits.
 
+### Stage 5 implementation status
+
+The persistent credit ledger and runtime are implemented on `master` through
+`1c8a83b73da6e7a330f8c766de044fc87fe0cc27`. The runtime keeps four DDP ranks
+alive, admits only complete 50-step quanta, reconstructs deterministic disjoint
+rank partitions from the disk replay, leaves continuous self-play enabled, and
+commits credits only after every self-play process acknowledges the newly saved
+model version. A prepared but unacknowledged publication is resumed without
+retraining after restart.
+
+Local validation completed with 324 passing and 5 skipped tests. The compute node
+completed the focused credit/replay/DDP suite with 99 passing tests. A separate
+four-GPU NCCL backend smoke executed 50 optimizer steps at global/local batches
+of 1,024/256 in 5.05 optimizer seconds and processed all 51,200 expected
+presentations. That smoke validates the production model and collective backend;
+the complete credit scheduler, self-play refresh, interruption, and evaluation
+sequence remains the Stage 7 end-to-end canary rather than being inferred from
+this component test.
+
 ## Stage 6: publication, evaluation, and observability
 
 ### Task 6A: immutable versions
