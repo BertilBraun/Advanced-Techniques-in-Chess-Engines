@@ -71,7 +71,6 @@ TRAINING_ARGS = TrainingArgs(
         inference_cache_capacity=250_000,
         use_inference_cache=True,
         num_moves_after_which_to_play_greedy=SIZE * 6,  # even number - no bias towards white
-        result_score_weight=0.4,
         starting_temperature=1.0,
         num_games_after_which_to_write=4,
         portion_of_samples_to_keep=0.2,
@@ -103,5 +102,4 @@ TRAINING_ARGS = TrainingArgs(
     evaluation=evaluation,
     random_seed=0,
     self_play_search_warmup_iterations=18,
-    self_play_value_warmup_iterations=35,
 )

@@ -197,15 +197,17 @@ void NonCachingInferenceClient::resolveWorker() {
             for (size_t index : range(completedBatch->promises.size())) {
                 torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(index)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(index)];
-                if (values.dim() != 1 || values.numel() != 3 ||
+                if (values.dim() != 1 || values.numel() != static_cast<int64_t>(WDL_OUTPUT_SIZE) ||
                     !torch::isfinite(values).all().item<bool>() ||
                     (values < 0).any().item<bool>() ||
                     std::abs(values.sum().item<float>() - 1.0f) > 1e-2f) {
                     throw std::runtime_error(
                         "Inference model WDL output must be three probabilities");
                 }
-                const WdlPrediction outcome{values[0].item<float>(), values[1].item<float>(),
-                                            values[2].item<float>()};
+                const WdlPrediction outcome{
+                    values[static_cast<int64_t>(WdlIndex::Win)].item<float>(),
+                    values[static_cast<int64_t>(WdlIndex::Draw)].item<float>(),
+                    values[static_cast<int64_t>(WdlIndex::Loss)].item<float>()};
                 completedBatch->promises[index].set_value({std::move(policy), outcome});
             }
         } catch (...) {

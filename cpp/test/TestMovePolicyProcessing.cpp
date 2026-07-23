@@ -12,6 +12,10 @@
 
 namespace {
 constexpr float SCORE_TOLERANCE = 1e-6f;
+static_assert(static_cast<size_t>(WdlIndex::Win) == 0);
+static_assert(static_cast<size_t>(WdlIndex::Draw) == 1);
+static_assert(static_cast<size_t>(WdlIndex::Loss) == 2);
+static_assert(static_cast<size_t>(WdlIndex::Count) == 3);
 
 void require(const bool condition, const std::string &message) {
     if (!condition) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import h5py
 import torch
@@ -14,16 +15,55 @@ from src.Encoding import decode_board_state, decode_board_states, encode_board_s
 from src.mcts.MCTS import action_probabilities
 from src.settings import CurrentGame, USE_GPU
 from src.util import random_id
-from src.util.log import warn
 from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.self_play.value_target import (
+    REPLAY_SCHEMA_VERSION,
+    FinalOutcome,
+    ReplayValueTarget,
+    TerminationReason,
+)
+
+
+class ReplaySchemaVersionError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class TrainingBatch:
+    states: torch.Tensor
+    policy_targets: torch.Tensor
+    final_outcomes: torch.Tensor
+    mcts_root_values: torch.Tensor
+    outcome_target_eligible: torch.Tensor
+    termination_reasons: torch.Tensor
+
+    def pin_memory(self) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.pin_memory(),
+            policy_targets=self.policy_targets.pin_memory(),
+            final_outcomes=self.final_outcomes.pin_memory(),
+            mcts_root_values=self.mcts_root_values.pin_memory(),
+            outcome_target_eligible=self.outcome_target_eligible.pin_memory(),
+            termination_reasons=self.termination_reasons.pin_memory(),
+        )
+
+
+@dataclass(frozen=True)
+class TrainingSample:
+    state: torch.Tensor
+    policy_target: torch.Tensor
+    final_outcome: torch.Tensor
+    mcts_root_value: torch.Tensor
+    outcome_target_eligible: torch.Tensor
+    termination_reason: torch.Tensor
 
 
 def training_batch_from_raw_samples(
     encoded_states: Sequence[bytes],
     visit_counts: Sequence[npt.NDArray[np.uint16]],
-    value_targets: Sequence[float],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    value_targets: Sequence[ReplayValueTarget],
+) -> TrainingBatch:
     batch_size = len(encoded_states)
     if len(visit_counts) != batch_size or len(value_targets) != batch_size:
         raise ValueError('Training batch inputs must contain the same number of samples.')
@@ -42,25 +82,33 @@ def training_batch_from_raw_samples(
         raise ValueError('Visit counts must contain a positive total.')
     policies /= policy_totals
 
-    return (
-        states,
-        torch.from_numpy(policies),
-        torch.from_numpy(np.asarray(value_targets, dtype=np.float32)),
+    return TrainingBatch(
+        states=states,
+        policy_targets=torch.from_numpy(policies),
+        final_outcomes=torch.from_numpy(
+            np.fromiter((int(target.final_outcome) for target in value_targets), dtype=np.int64)
+        ),
+        mcts_root_values=torch.from_numpy(
+            np.fromiter((target.mcts_root_value for target in value_targets), dtype=np.float32)
+        ),
+        outcome_target_eligible=torch.from_numpy(
+            np.fromiter((target.outcome_target_eligible for target in value_targets), dtype=np.bool_)
+        ),
+        termination_reasons=torch.from_numpy(
+            np.fromiter((int(target.termination_reason) for target in value_targets), dtype=np.int64)
+        ),
     )
-
-
-TrainingBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
 def preserve_prebatched_samples(batch: TrainingBatch) -> TrainingBatch:
     return batch
 
 
-class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+class SelfPlayDataset(Dataset[TrainingSample]):
     """Each sample is represented by:
     state: torch.Tensor
     policy_targets: torch.Tensor
-    value_target: float
+    value_target: ReplayValueTarget
 
     For efficiency, we store the states, policy targets and value targets in separate lists.
 
@@ -76,7 +124,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     def __init__(self) -> None:
         self.encoded_states: list[bytes] = []
         self.visit_counts: list[npt.NDArray[np.uint16]] = []
-        self.value_targets: list[float] = []
+        self.value_targets: list[ReplayValueTarget] = []
         self.stats = SelfPlayDatasetStats()
 
     def add_generation_stats(self, game_length: int, generation_time: float) -> None:
@@ -86,13 +134,13 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             total_generation_time=generation_time,
         )
 
-    def add_sample(self, state: npt.NDArray[np.int8], visit_counts: list[tuple[int, int]], value_target: float) -> None:
+    def add_sample(
+        self,
+        state: npt.NDArray[np.int8],
+        visit_counts: list[tuple[int, int]],
+        value_target: ReplayValueTarget,
+    ) -> None:
         assert len(visit_counts) > 0, 'Visit counts must not be empty'
-        assert -1 - 1e-2 <= value_target <= 1 + 1e-2, f'Value target ({value_target}) must be in the range [-1, 1]'
-        # if value target is nan or inf, we skip the sample
-        if not (-1 - 1e-2 <= value_target <= 1 + 1e-2) or np.isnan(value_target) or np.isinf(value_target):
-            warn('Skipping sample with invalid value target:', value_target)
-            return
 
         self.encoded_states.append(encode_board_state(state))
         self.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
@@ -102,26 +150,30 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     def __len__(self) -> int:
         return len(self.encoded_states)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> TrainingSample:
         state = decode_board_state(self.encoded_states[idx])
         probabilities = action_probabilities(self.visit_counts[idx])
 
         assert 1 - 1e-2 <= np.sum(probabilities) <= 1 + 1e-2, 'Probabilities must sum to 1'
 
-        return (
-            torch.from_numpy(state).to(dtype=torch.float32, non_blocking=USE_GPU),
-            torch.from_numpy(probabilities).to(dtype=torch.float32, non_blocking=USE_GPU),
-            torch.tensor(self.value_targets[idx], dtype=torch.float32),
+        value_target = self.value_targets[idx]
+        return TrainingSample(
+            state=torch.from_numpy(state).to(dtype=torch.float32, non_blocking=USE_GPU),
+            policy_target=torch.from_numpy(probabilities).to(dtype=torch.float32, non_blocking=USE_GPU),
+            final_outcome=torch.tensor(int(value_target.final_outcome), dtype=torch.int64),
+            mcts_root_value=torch.tensor(value_target.mcts_root_value, dtype=torch.float32),
+            outcome_target_eligible=torch.tensor(value_target.outcome_target_eligible, dtype=torch.bool),
+            termination_reason=torch.tensor(int(value_target.termination_reason), dtype=torch.int64),
         )
 
-    def __getitems__(self, indices: list[int]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitems__(self, indices: list[int]) -> TrainingBatch:
         return training_batch_from_raw_samples(
             [self.encoded_states[index] for index in indices],
             [self.visit_counts[index] for index in indices],
             [self.value_targets[index] for index in indices],
         )
 
-    def raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], float]:
+    def raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], ReplayValueTarget]:
         return self.encoded_states[idx], self.visit_counts[idx], self.value_targets[idx]
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
@@ -134,40 +186,31 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
 
     @timeit
     def deduplicate(self) -> SelfPlayDataset:
-        """Deduplicate the data based on the board state by averaging the policy and value targets"""
-        mp: dict[bytes, tuple[int, tuple[npt.NDArray[np.uint16], float]]] = {}
+        """Merge only samples whose board and complete value-target provenance agree."""
+        merged_samples: dict[
+            tuple[bytes, ReplayValueTarget],
+            npt.NDArray[np.uint16],
+        ] = {}
 
         for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
-            if state in mp:
-                count, (visit_count_sum, value_target_sum) = mp[state]
-                new_visit_counts = []
-                for move, visit_count in visit_counts:
-                    # find the move in the existing visit counts and add the visit count
-                    for existing_move, existing_visit_count in visit_count_sum:
-                        if move == existing_move:
-                            new_visit_counts.append((move, visit_count + existing_visit_count))
-                            break
-                    else:
-                        new_visit_counts.append((move, visit_count))
-
-                mp[state] = (
-                    count + 1,
-                    (np.array(new_visit_counts, dtype=np.uint16), value_target_sum + value_target),
-                )
+            sample_key = (state, value_target)
+            if sample_key in merged_samples:
+                visit_count_sum = merged_samples[sample_key]
+                counts_by_move = {int(move): int(count) for move, count in visit_count_sum}
+                for move, count in visit_counts:
+                    counts_by_move[int(move)] = counts_by_move.get(int(move), 0) + int(count)
+                merged_samples[sample_key] = np.asarray(tuple(counts_by_move.items()), dtype=np.uint16)
             else:
-                mp[state] = (
-                    1,
-                    (visit_counts, value_target),
-                )
+                merged_samples[sample_key] = visit_counts
 
         deduplicated_dataset = SelfPlayDataset()
 
-        for state, (count, (visit_count_sum, value_target_sum)) in mp.items():
+        for (state, value_target), visit_count_sum in merged_samples.items():
             deduplicated_dataset.encoded_states.append(state)
             deduplicated_dataset.visit_counts.append(visit_count_sum)
-            deduplicated_dataset.value_targets.append(value_target_sum / count)
+            deduplicated_dataset.value_targets.append(value_target)
 
-        deduplicated_dataset.stats = self.stats.overwrite(num_samples=len(mp))
+        deduplicated_dataset.stats = self.stats.overwrite(num_samples=len(merged_samples))
         return deduplicated_dataset
 
     def shuffle(self) -> SelfPlayDataset:
@@ -194,28 +237,55 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     @timeit
     @staticmethod
     def load(file_path: str | PathLike) -> SelfPlayDataset:
-        try:
-            return SelfPlayDataset.load_strict(file_path)
-        except Exception as e:
-            from src.util.log import log, LogLevel
-
-            log(f'Error loading dataset from {file_path}: {e}', level=LogLevel.DEBUG)
-            return SelfPlayDataset()
+        return SelfPlayDataset.load_strict(file_path)
 
     @staticmethod
     def load_strict(file_path: str | PathLike) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
         with h5py.File(file_path, 'r') as file:
+            SelfPlayDataset._require_current_schema(file, file_path)
             dataset.stats = SelfPlayDataset._load_stats_from_open_file(file)
             stored_states = np.asarray(file['states'][...])  # type: ignore
             stored_visit_counts = np.asarray(file['visit_counts'][...])  # type: ignore
-            stored_value_targets = np.asarray(file['value_targets'][...])  # type: ignore
+            stored_final_outcomes = np.asarray(file['final_outcomes'][...], dtype=np.uint8)  # type: ignore
+            stored_mcts_root_values = np.asarray(file['mcts_root_values'][...], dtype=np.float32)  # type: ignore
+            stored_outcome_eligibility = np.asarray(
+                file['outcome_target_eligible'][...],
+                dtype=np.bool_,
+            )  # type: ignore
+            stored_termination_reasons = np.asarray(
+                file['termination_reasons'][...],
+                dtype=np.uint8,
+            )  # type: ignore
+            stored_lengths = {
+                len(stored_states),
+                len(stored_visit_counts),
+                len(stored_final_outcomes),
+                len(stored_mcts_root_values),
+                len(stored_outcome_eligibility),
+                len(stored_termination_reasons),
+            }
+            if len(stored_lengths) != 1:
+                raise ValueError(f'Replay {file_path} has inconsistent sample-column lengths.')
 
             dataset.encoded_states = stored_states.tolist()
             dataset.visit_counts = [
                 visit_count[visit_count[:, 1] > 0].astype(np.uint16, copy=False) for visit_count in stored_visit_counts
             ]
-            dataset.value_targets = stored_value_targets.tolist()
+            dataset.value_targets = [
+                ReplayValueTarget(
+                    final_outcome=FinalOutcome(int(final_outcome)),
+                    mcts_root_value=float(mcts_root_value),
+                    termination_reason=TerminationReason(int(termination_reason)),
+                    outcome_target_eligible=bool(outcome_target_eligible),
+                )
+                for final_outcome, mcts_root_value, termination_reason, outcome_target_eligible in zip(
+                    stored_final_outcomes,
+                    stored_mcts_root_values,
+                    stored_termination_reasons,
+                    stored_outcome_eligibility,
+                )
+            ]
         return dataset
 
     @staticmethod
@@ -223,6 +293,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         try:
             with h5py.File(file_path, 'r') as file:
                 return SelfPlayDataset._load_stats_from_open_file(file)
+        except ReplaySchemaVersionError:
+            raise
         except Exception as e:
             from src.util.log import log, LogLevel
 
@@ -231,12 +303,26 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
 
     @staticmethod
     def _load_stats_from_open_file(file: h5py.File) -> SelfPlayDatasetStats:
+        SelfPlayDataset._require_current_schema(file, file.filename)
         metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
         message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
         assert metadata == SelfPlayDataset._get_current_metadata(), message
 
         stats: dict[str, Any] = eval(file.attrs['stats'])  # type: ignore
         return SelfPlayDatasetStats(**stats)
+
+    @staticmethod
+    def _require_current_schema(file: h5py.File, file_path: str | PathLike) -> None:
+        schema_version = file.attrs.get('replay_schema_version')
+        if schema_version is None:
+            raise ReplaySchemaVersionError(
+                f'Replay {file_path} has no schema version and is legacy replay; '
+                f'expected schema {REPLAY_SCHEMA_VERSION}. Legacy mixed scalar targets cannot be converted.'
+            )
+        if int(schema_version) != REPLAY_SCHEMA_VERSION:
+            raise ReplaySchemaVersionError(
+                f'Replay {file_path} uses schema {schema_version}; expected {REPLAY_SCHEMA_VERSION}.'
+            )
 
     @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int) -> SelfPlayDataset:
@@ -261,6 +347,8 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         return old_save_format
 
     def save_to_path(self, file_path: Path) -> bool:
+        if len({len(self.encoded_states), len(self.visit_counts), len(self.value_targets)}) != 1:
+            raise ValueError('Replay sample columns must contain the same number of entries.')
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         tmp_folder = file_path.parent.parent / 'tmp'
@@ -279,8 +367,36 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
                     for j, (move, count) in enumerate(visit_count):
                         padded_visit_counts[i, j] = [move, count]
                 file.create_dataset('visit_counts', data=padded_visit_counts)
-                file.create_dataset('value_targets', data=np.array(self.value_targets))
+                file.create_dataset(
+                    'final_outcomes',
+                    data=np.fromiter(
+                        (int(target.final_outcome) for target in self.value_targets),
+                        dtype=np.uint8,
+                    ),
+                )
+                file.create_dataset(
+                    'mcts_root_values',
+                    data=np.fromiter(
+                        (target.mcts_root_value for target in self.value_targets),
+                        dtype=np.float32,
+                    ),
+                )
+                file.create_dataset(
+                    'outcome_target_eligible',
+                    data=np.fromiter(
+                        (target.outcome_target_eligible for target in self.value_targets),
+                        dtype=np.bool_,
+                    ),
+                )
+                file.create_dataset(
+                    'termination_reasons',
+                    data=np.fromiter(
+                        (int(target.termination_reason) for target in self.value_targets),
+                        dtype=np.uint8,
+                    ),
+                )
                 # write the metadata information about the current game, action size, representation shape, etc.
+                file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
                 file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
                 # write the stats information about the dataset, num_games, total_generation_time
                 file.attrs['stats'] = str(self.stats._asdict())

@@ -46,7 +46,6 @@ TRAINING_ARGS = TrainingArgs(
         inference_cache_capacity=250_000,
         use_inference_cache=True,
         num_moves_after_which_to_play_greedy=5,
-        result_score_weight=0.15,
         mcts=MCTSParams(
             num_searches_per_turn=200,
             dirichlet_epsilon=0.25,
@@ -108,7 +107,6 @@ TRAINING_ARGS = TrainingArgs(
     ),
     random_seed=0,
     self_play_search_warmup_iterations=1,
-    self_play_value_warmup_iterations=2,
 )
 
 if TRAINING_ARGS.evaluation and TRAINING_ARGS.evaluation.dataset_path:

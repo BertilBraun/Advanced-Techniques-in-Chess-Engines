@@ -123,14 +123,8 @@ class SelfPlayParams:
     starting_temperature: float = 1.25
     """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation. This value is linearly interpolated to the final_temperature over the first num_moves_after_which_to_play_greedy moves."""
 
-    game_outcome_discount_per_move: float = 0.00
-    """This is the discount factor to use for the game outcome per move. This is used to reduce the impact of the game outcome on the score of the moves played in the very beginning of the game, as the game outcome (especially in amateur games) is not very correlated with the moves played in the beginning of the game. The higher the value, the more the game outcome is discounted. Typically 0.001-0.01 for self-play."""
-
     final_temperature: float = 0.1
     """This is the final temperature to use for in self-play to sample new moves from the policy after num_moves_after_which_to_play_greedy moves. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. See ``starting_temperature`` for more details."""
-
-    result_score_weight: float = 0.5
-    """This is the weight to use for the interpolation between final game outcome as score and the mcts result score. Weight of 0 is only the final game outcome, weight of 1 is only the mcts result score."""
 
     num_games_after_which_to_write: int = 5
     """This is the number of games to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough games are collected. Typically 5-50 for self-play."""
@@ -249,12 +243,22 @@ class TrainingParams:
     """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
 
     value_loss_weight: float = 0.5
-    """This is the weight applied to the WDL cross-entropy value loss."""
+    """Overall weight applied to the combined WDL and MCTS auxiliary value objective."""
+    outcome_value_loss_weight: float = 0.85
+    """Weight of eligible hard-outcome WDL cross entropy within the value objective."""
+    mcts_value_loss_weight: float = 0.15
+    """Weight of expected-score Huber loss against the stored MCTS root value."""
     policy_loss_weight: float = 1.0
     """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
 
     num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
+
+    def __post_init__(self) -> None:
+        if self.outcome_value_loss_weight < 0.0 or self.mcts_value_loss_weight < 0.0:
+            raise ValueError('Value-objective component weights cannot be negative.')
+        if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
+            raise ValueError('Value-objective component weights must sum to 1.')
 
 
 @dataclass
@@ -338,7 +342,6 @@ class TrainingArgs:
     artifact_retention: ArtifactRetention
     random_seed: int
     self_play_search_warmup_iterations: int
-    self_play_value_warmup_iterations: int
     self_play_endgame_shortcut_fade_iterations: int = 0
     evaluation: EvaluationParams | None = None
     gating: GatingParams | None = None

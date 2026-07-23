@@ -41,7 +41,6 @@ from src.experiment.evaluation_protocol import (
     build_paired_schedule,
     load_opening_suite,
 )
-from src.value import scalar_to_wdl, wdl_cross_entropy
 
 
 def history_aware_root(board: CurrentBoard, mcts: MCTS) -> MCTSRoot:
@@ -137,13 +136,14 @@ class ModelEvaluation:
         total_top10_correct = 0
         total_policy_total = 0
         total_value_loss = 0.0
+        total_value_targets = 0
 
         with torch.no_grad():
             for batch in dataloader:
-                board, moves, outcome = batch
-                board = board.to(model.device)
-                moves = moves.to(model.device)
-                outcome = outcome.to(model.device)
+                board = batch.states.to(model.device)
+                moves = batch.policy_targets.to(model.device)
+                final_outcomes = batch.final_outcomes.to(model.device)
+                outcome_target_eligible = batch.outcome_target_eligible.to(model.device)
 
                 policy_pred, value_output = model(board)
 
@@ -162,12 +162,22 @@ class ModelEvaluation:
 
                     total_policy_total += 1
 
-                total_value_loss += wdl_cross_entropy(value_output, scalar_to_wdl(outcome)).item()
+                if torch.any(outcome_target_eligible):
+                    eligible_probabilities = value_output[outcome_target_eligible]
+                    eligible_outcomes = final_outcomes[outcome_target_eligible]
+                    total_value_loss += float(
+                        torch.nn.functional.nll_loss(
+                            torch.log(eligible_probabilities.clamp_min(1e-7)),
+                            eligible_outcomes,
+                            reduction='sum',
+                        ).item()
+                    )
+                    total_value_targets += int(outcome_target_eligible.sum().item())
 
         top1_accuracy = total_top1_correct / total_policy_total
         top5_accuracy = total_top5_correct / total_policy_total
         top10_accuracy = total_top10_correct / total_policy_total
-        avg_value_loss = total_value_loss / len(dataloader)
+        avg_value_loss = total_value_loss / total_value_targets if total_value_targets else 0.0
 
         return top1_accuracy, top5_accuracy, top10_accuracy, avg_value_loss
 

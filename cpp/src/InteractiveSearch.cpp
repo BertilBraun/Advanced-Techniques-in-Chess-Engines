@@ -50,7 +50,8 @@ InferenceResult InteractiveSearch::decode(const torch::Tensor &policy, const tor
         throw std::runtime_error("Inference model policy output must contain one float per action");
     }
     if (outcome.device().is_cuda() || outcome.scalar_type() != torch::kFloat32 ||
-        outcome.dim() != 1 || outcome.numel() != 3 || !outcome.is_contiguous()) {
+        outcome.dim() != 1 || outcome.numel() != static_cast<int64_t>(WDL_OUTPUT_SIZE) ||
+        !outcome.is_contiguous()) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
     }
     return processInferenceResult(policy.data_ptr<float>(), outcome.data_ptr<float>(), board);
@@ -154,7 +155,8 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
             EvalSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult = processInferenceResult(
-                policyData + processed * ACTION_SIZE, outcomeData + processed * 3, leaf.board);
+                policyData + processed * ACTION_SIZE, outcomeData + processed * WDL_OUTPUT_SIZE,
+                leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)

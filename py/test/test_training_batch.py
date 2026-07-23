@@ -3,12 +3,19 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 import torch
 
 from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
-from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
+from src.self_play.SelfPlayDataset import (
+    ReplaySchemaVersionError,
+    SelfPlayDataset,
+    TrainingBatch,
+    preserve_prebatched_samples,
+)
+from src.self_play.value_target import ReplayValueTarget, TerminationReason
 from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
-from src.train.Trainer import TrainingBatch, prefetch_training_batches
+from src.train.Trainer import prefetch_training_batches
 
 
 class FixedBatchLoader:
@@ -20,6 +27,15 @@ class FixedBatchLoader:
 
     def __len__(self) -> int:
         return len(self.batches)
+
+
+def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch) -> None:
+    torch.testing.assert_close(actual.states, expected.states)
+    torch.testing.assert_close(actual.policy_targets, expected.policy_targets)
+    torch.testing.assert_close(actual.final_outcomes, expected.final_outcomes)
+    torch.testing.assert_close(actual.mcts_root_values, expected.mcts_root_values)
+    torch.testing.assert_close(actual.outcome_target_eligible, expected.outcome_target_eligible)
+    torch.testing.assert_close(actual.termination_reasons, expected.termination_reasons)
 
 
 def encoded_state(seed: int) -> bytes:
@@ -44,14 +60,19 @@ def dataset() -> SelfPlayDataset:
     result = SelfPlayDataset()
     result.encoded_states = [encoded_state(seed) for seed in range(4)]
     result.visit_counts = [np.asarray(((seed, seed + 1), (seed + 10, seed + 2)), dtype=np.uint16) for seed in range(4)]
-    result.value_targets = [-1.0, -0.25, 0.5, 1.0]
+    result.value_targets = [
+        ReplayValueTarget.from_scores(-1.0, -0.8, TerminationReason.NATURAL),
+        ReplayValueTarget.from_scores(0.0, -0.25, TerminationReason.NATURAL),
+        ReplayValueTarget.from_scores(1.0, 0.5, TerminationReason.PLY_CAP),
+        ReplayValueTarget.from_scores(1.0, 1.0, TerminationReason.RESIGNATION),
+    ]
     return result
 
 
 def test_vectorized_board_decode_matches_individual_decode() -> None:
     samples = dataset()
 
-    individual_states = torch.stack([samples[index][0] for index in range(len(samples))])
+    individual_states = torch.stack([samples[index].state for index in range(len(samples))])
     batched_states = torch.from_numpy(decode_board_states(samples.encoded_states)).to(dtype=torch.float32)
 
     torch.testing.assert_close(batched_states, individual_states)
@@ -59,14 +80,19 @@ def test_vectorized_board_decode_matches_individual_decode() -> None:
 
 def test_prebatched_dataset_matches_individual_samples() -> None:
     samples = dataset()
-    expected = tuple(
-        torch.stack([samples[index][component] for index in range(len(samples))]) for component in range(3)
+    individual = [samples[index] for index in range(len(samples))]
+    expected = TrainingBatch(
+        states=torch.stack([sample.state for sample in individual]),
+        policy_targets=torch.stack([sample.policy_target for sample in individual]),
+        final_outcomes=torch.stack([sample.final_outcome for sample in individual]),
+        mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
+        outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
+        termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
     )
 
     batch = samples.__getitems__(list(range(len(samples))))
 
-    for actual_component, expected_component in zip(batch, expected):
-        torch.testing.assert_close(actual_component, expected_component)
+    assert_training_batches_equal(batch, expected)
 
 
 def test_prebatched_dataset_dataloader_preserves_components() -> None:
@@ -80,9 +106,12 @@ def test_prebatched_dataset_dataloader_preserves_components() -> None:
 
     batch = next(iter(loader))
 
-    assert batch[0].shape == (len(samples), C, H, W)
-    assert batch[1].shape == (len(samples), 1880)
-    assert batch[2].shape == (len(samples),)
+    assert batch.states.shape == (len(samples), C, H, W)
+    assert batch.policy_targets.shape == (len(samples), 1880)
+    assert batch.final_outcomes.shape == (len(samples),)
+    assert batch.mcts_root_values.shape == (len(samples),)
+    assert batch.outcome_target_eligible.shape == (len(samples),)
+    assert batch.termination_reasons.shape == (len(samples),)
 
 
 def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
@@ -93,12 +122,18 @@ def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
     with h5py.File(memory_path, 'r') as file:
         expected_states = [bytes(state) for state in file['states']]
         expected_visit_counts = [visit_count[visit_count[:, 1] > 0] for visit_count in file['visit_counts']]
-        expected_value_targets = [value_target for value_target in file['value_targets']]
+        expected_final_outcomes = [int(outcome) for outcome in file['final_outcomes']]
+        expected_mcts_root_values = [float(value) for value in file['mcts_root_values']]
+        expected_eligibility = [bool(value) for value in file['outcome_target_eligible']]
+        expected_reasons = [int(reason) for reason in file['termination_reasons']]
 
     loaded_samples = SelfPlayDataset.load(memory_path)
 
     assert loaded_samples.encoded_states == expected_states
-    assert loaded_samples.value_targets == expected_value_targets
+    assert [int(target.final_outcome) for target in loaded_samples.value_targets] == expected_final_outcomes
+    assert [target.mcts_root_value for target in loaded_samples.value_targets] == expected_mcts_root_values
+    assert [target.outcome_target_eligible for target in loaded_samples.value_targets] == expected_eligibility
+    assert [int(target.termination_reason) for target in loaded_samples.value_targets] == expected_reasons
     assert len(loaded_samples.visit_counts) == len(expected_visit_counts)
     for loaded_visit_counts, expected_visit_counts in zip(
         loaded_samples.visit_counts,
@@ -118,8 +153,7 @@ def test_background_prefetch_preserves_batch_order_and_values() -> None:
 
     assert len(prefetched) == 2
     for actual_batch, expected_batch in zip(prefetched, (first_batch, second_batch)):
-        for actual_component, expected_component in zip(actual_batch, expected_batch):
-            torch.testing.assert_close(actual_component, expected_component)
+        assert_training_batches_equal(actual_batch, expected_batch)
 
 
 def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path) -> None:
@@ -139,14 +173,19 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
     rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=10)
     rolling_buffer.update(iteration=0, window_iter=1, files=[first_path, second_path])
     shuffled_indices = [3, 0, 2, 1]
-    expected = tuple(
-        torch.stack([rolling_buffer[index][component] for index in shuffled_indices]) for component in range(3)
+    individual = [rolling_buffer[index] for index in shuffled_indices]
+    expected = TrainingBatch(
+        states=torch.stack([sample.state for sample in individual]),
+        policy_targets=torch.stack([sample.policy_target for sample in individual]),
+        final_outcomes=torch.stack([sample.final_outcome for sample in individual]),
+        mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
+        outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
+        termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
     )
 
     batch = rolling_buffer.__getitems__(shuffled_indices)
 
-    for actual_component, expected_component in zip(batch, expected):
-        torch.testing.assert_close(actual_component, expected_component)
+    assert_training_batches_equal(batch, expected)
 
 
 def test_rolling_buffer_replay_updates_are_idempotent(tmp_path: Path) -> None:
@@ -159,3 +198,25 @@ def test_rolling_buffer_replay_updates_are_idempotent(tmp_path: Path) -> None:
     rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
 
     assert len(rolling_buffer) == len(samples)
+
+
+def test_legacy_mixed_scalar_replay_is_rejected(tmp_path: Path) -> None:
+    legacy_path = tmp_path / 'legacy.hdf5'
+    with h5py.File(legacy_path, 'w') as file:
+        file.create_dataset('states', data=np.asarray((encoded_state(0),)))
+        file.create_dataset('visit_counts', data=np.asarray(((((0, 1),)),)))
+        file.create_dataset('value_targets', data=np.asarray((0.25,), dtype=np.float32))
+
+    with pytest.raises(ReplaySchemaVersionError, match='Legacy mixed scalar targets cannot be converted'):
+        SelfPlayDataset.load_strict(legacy_path)
+
+
+def test_deduplicate_preserves_conflicting_hard_targets_and_provenance() -> None:
+    samples = dataset()
+    samples.encoded_states[1] = samples.encoded_states[0]
+    samples.visit_counts[1] = samples.visit_counts[0]
+
+    deduplicated = samples.deduplicate()
+
+    assert len(deduplicated) == len(samples)
+    assert deduplicated.value_targets[0] != deduplicated.value_targets[1]

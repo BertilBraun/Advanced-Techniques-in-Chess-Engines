@@ -27,6 +27,11 @@ from src.self_play.resignation import (
 )
 from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.value_target import (
+    ReplayValueTarget,
+    TerminationReason,
+    outcome_from_sample_perspective,
+)
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
@@ -543,7 +548,7 @@ class SelfPlayCpp:
     ) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
         # self.mcts.get_inference_statistics()
-        self._add_training_data(spg, game_outcome)
+        self._add_training_data(spg, game_outcome, _replay_termination_reason(termination_reason))
 
         if spg.is_resignation_audit:
             audit = CompletedResignationAudit(
@@ -602,7 +607,12 @@ class SelfPlayCpp:
         return self._new_game()
 
     @timeit
-    def _add_training_data(self, spg: SelfPlayGame, game_outcome: float) -> None:
+    def _add_training_data(
+        self,
+        spg: SelfPlayGame,
+        game_outcome: float,
+        termination_reason: TerminationReason,
+    ) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
         self._log_game(spg, game_outcome)
@@ -613,27 +623,22 @@ class SelfPlayCpp:
         )
 
         for mem in spg.memory[::-1]:
-            turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
+            turn_game_outcome = outcome_from_sample_perspective(
+                game_outcome,
+                final_current_player=spg.board.current_player,
+                sample_current_player=mem.board.current_player,
+            )
 
             for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
-                    lerp(
-                        turn_game_outcome,
-                        mem.result_score,
-                        # Scale up the proportion of the mcts result score based on the iteration number
-                        # This is to ensure that the mcts result score is less significant in the early iterations where the value network is not yet well trained
-                        curriculum_progress(
-                            self.iteration,
-                            TRAINING_ARGS.self_play_value_warmup_iterations,
-                        )
-                        * self.args.result_score_weight,
+                    ReplayValueTarget.from_scores(
+                        final_score=turn_game_outcome,
+                        mcts_root_value=mem.result_score,
+                        termination_reason=termination_reason,
                     ),
                 )
-
-            # Discount the game outcome for each move in the game
-            game_outcome *= 1 - self.args.game_outcome_discount_per_move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more
@@ -669,6 +674,18 @@ def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: fl
     action_index = np.random.choice(len(action_probabilities), p=temperature_action_probabilities)
 
     return action_index
+
+
+def _replay_termination_reason(reason: ResignationTerminationReason) -> TerminationReason:
+    match reason:
+        case ResignationTerminationReason.NATURAL:
+            return TerminationReason.NATURAL
+        case ResignationTerminationReason.RESIGNATION:
+            return TerminationReason.RESIGNATION
+        case ResignationTerminationReason.PLY_CAP:
+            return TerminationReason.PLY_CAP
+        case ResignationTerminationReason.LOW_MATERIAL:
+            return TerminationReason.MATERIAL_ADJUDICATION
 
 
 def new_game(

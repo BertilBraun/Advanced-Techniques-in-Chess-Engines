@@ -78,8 +78,8 @@
       }
     ],
     "self_play_search_warmup_iterations": 15,
-    "self_play_value_warmup_iterations": 30,
-    "self_play_mcts_value_target_weight": 0.15,
+    "outcome_value_loss_weight": 0.85,
+    "mcts_value_loss_weight": 0.15,
     "self_play_endgame_shortcut_fade_iterations": 0,
     "self_play_maximum_game_plies": 200,
     "self_play_maximum_game_plies_until_iteration": 80,

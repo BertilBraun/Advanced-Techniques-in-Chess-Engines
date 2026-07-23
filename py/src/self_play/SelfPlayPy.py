@@ -3,7 +3,6 @@ import copy
 import random
 import time
 
-import chess
 import numpy as np
 from dataclasses import dataclass
 
@@ -14,6 +13,11 @@ from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.value_target import (
+    ReplayValueTarget,
+    TerminationReason,
+    outcome_from_sample_perspective,
+)
 from src.self_play.curriculum import curriculum_progress
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
@@ -135,43 +139,11 @@ class SelfPlayPy:
                 if len(spg.played_moves) >= 250:
                     # If the game is too long, end it and add it to the dataset
                     self.dataset.stats += SelfPlayDatasetStats(num_too_long_games=1)
-                    self.self_play_games[i] = self._handle_end_of_game(spg, 0.0)
-                    continue
-
-                pieces = list(spg.board.board.piece_map().values())
-                white_pieces = sum(1 for piece in pieces if piece.color == chess.WHITE)
-                black_pieces = sum(1 for piece in pieces if piece.color == chess.BLACK)
-                if (
-                    False
-                    and (white_pieces < 4 or black_pieces < 4)
-                    and len(spg.played_moves) >= 80
-                    and random.random() < 0.2
-                ):
-                    # If there are only a few pieces left, and the game has been going on for a while, have a chance to end the game early and add it to the dataset to avoid noisy long games
-                    from src.games.chess.ChessBoard import PIECE_VALUE
-
-                    white_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.WHITE)
-                    black_value = sum(PIECE_VALUE[piece.piece_type] for piece in pieces if piece.color == chess.BLACK)
-
-                    # Convert to result from current player's perspective
-                    if spg.board.current_player == 1:  # White's perspective
-                        if white_value > black_value:
-                            game_outcome = 1.0
-                        elif black_value > white_value:
-                            game_outcome = -1.0
-                        else:
-                            game_outcome = 0.0
-                    else:  # Black's perspective
-                        if black_value > white_value:
-                            game_outcome = 1.0
-                        elif white_value > black_value:
-                            game_outcome = -1.0
-                        else:
-                            game_outcome = 0.0
-
-                    game_outcome *= 0.9  # somewhat unsure about the game outcome, therefore discount if with 0.9
-                    self._add_training_data(spg, game_outcome)
-                    self.self_play_games[i] = SelfPlayGame()
+                    self.self_play_games[i] = self._handle_end_of_game(
+                        spg,
+                        0.0,
+                        TerminationReason.PLY_CAP,
+                    )
                     continue
 
             spg_action_probabilities = action_probabilities(mcts_result.visit_counts)
@@ -209,8 +181,13 @@ class SelfPlayPy:
                 else:
                     self.self_play_games[i] = new_spg
 
-    def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
-        self._add_training_data(spg, game_outcome)
+    def _handle_end_of_game(
+        self,
+        spg: SelfPlayGame,
+        game_outcome: float,
+        termination_reason: TerminationReason = TerminationReason.NATURAL,
+    ) -> SelfPlayGame:
+        self._add_training_data(spg, game_outcome, termination_reason)
 
         if spg.resigned_at_move is not None:
             self.dataset.stats += SelfPlayDatasetStats(
@@ -266,7 +243,12 @@ class SelfPlayPy:
         return CurrentGame.decode_move(action, board)
 
     @timeit
-    def _add_training_data(self, spg: SelfPlayGame, game_outcome: float) -> None:
+    def _add_training_data(
+        self,
+        spg: SelfPlayGame,
+        game_outcome: float,
+        termination_reason: TerminationReason,
+    ) -> None:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
         self._log_game(spg, game_outcome)
@@ -277,24 +259,22 @@ class SelfPlayPy:
         )
 
         for mem in spg.memory[::-1]:
-            turn_game_outcome = game_outcome if mem.board.current_player == spg.board.current_player else -game_outcome
+            turn_game_outcome = outcome_from_sample_perspective(
+                game_outcome,
+                final_current_player=spg.board.current_player,
+                sample_current_player=mem.board.current_player,
+            )
 
             for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
                 self.dataset.add_sample(
                     board.astype(np.int8).copy(),
                     self._preprocess_visit_counts(visit_counts),
-                    lerp(
-                        turn_game_outcome,
-                        mem.result_score,
-                        curriculum_progress(
-                            self.iteration,
-                            TRAINING_ARGS.self_play_value_warmup_iterations,
-                        )
-                        * self.args.result_score_weight,
+                    ReplayValueTarget.from_scores(
+                        final_score=turn_game_outcome,
+                        mcts_root_value=mem.result_score,
+                        termination_reason=termination_reason,
                     ),
                 )
-
-            game_outcome *= 0.995  # discount the game outcome for each move
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more

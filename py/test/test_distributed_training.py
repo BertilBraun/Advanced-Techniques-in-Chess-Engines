@@ -1,10 +1,15 @@
 from collections.abc import Sized
+from multiprocessing.connection import Connection
+import socket
 
 import pytest
 import torch
+import torch.multiprocessing as multiprocessing
 
+from src.self_play.value_target import TerminationReason
 from src.train.DistributedTraining import DistributedTrainingBatchSampler, distributed_epoch_seed
-from src.train.TrainingStats import TrainingStats
+from src.train.TrainingStats import TrainingStats, ValueMetrics
+from test_helpers.ddp_masked_gradient import masked_value_gradient_rank
 
 
 class FixedSizeDataset(Sized):
@@ -13,6 +18,12 @@ class FixedSizeDataset(Sized):
 
     def __len__(self) -> int:
         return self.size
+
+
+def available_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind(('127.0.0.1', 0))
+        return int(server.getsockname()[1])
 
 
 def rank_batches(
@@ -93,33 +104,88 @@ def test_rank_partitions_are_deterministic_and_change_with_epoch_seed() -> None:
 def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> None:
     first = TrainingStats(
         policy_loss_sum=2.0,
-        value_loss_sum=4.0,
-        total_loss_sum=6.0,
         sample_count=2,
+        value_metrics=ValueMetrics(
+            outcome_cross_entropy_sum=4.0,
+            outcome_target_count=2,
+            mcts_huber_sum=1.0,
+            mcts_target_count=2,
+        ),
+        termination_value_metrics=tuple(ValueMetrics() for _ in TerminationReason),
         value_sum=0.0,
         value_square_sum=2.0,
         gradient_norm_sum=0.5,
         gradient_norm_count=1,
         num_batches=1,
+        outcome_value_loss_weight=0.85,
+        mcts_value_loss_weight=0.15,
+        policy_loss_weight=1.0,
+        value_loss_weight=0.5,
     )
     second = TrainingStats(
         policy_loss_sum=12.0,
-        value_loss_sum=18.0,
-        total_loss_sum=30.0,
         sample_count=6,
+        value_metrics=ValueMetrics(
+            outcome_cross_entropy_sum=18.0,
+            outcome_target_count=6,
+            mcts_huber_sum=3.0,
+            mcts_target_count=6,
+        ),
+        termination_value_metrics=tuple(ValueMetrics() for _ in TerminationReason),
         value_sum=2.0,
         value_square_sum=6.0,
         gradient_norm_sum=1.5,
         gradient_norm_count=1,
         num_batches=1,
+        outcome_value_loss_weight=0.85,
+        mcts_value_loss_weight=0.15,
+        policy_loss_weight=1.0,
+        value_loss_weight=0.5,
     )
 
     combined = TrainingStats.combine([first, second])
 
     assert combined.policy_loss == pytest.approx(14 / 8)
-    assert combined.value_loss == pytest.approx(22 / 8)
-    assert combined.total_loss == pytest.approx(36 / 8)
+    assert combined.value_metrics.outcome_cross_entropy == pytest.approx(22 / 8)
+    assert combined.value_metrics.mcts_huber == pytest.approx(4 / 8)
+    assert combined.value_loss == pytest.approx(0.85 * 22 / 8 + 0.15 * 4 / 8)
+    assert combined.total_loss == pytest.approx(combined.policy_loss + 0.5 * combined.value_loss)
     assert combined.value_mean == pytest.approx(2 / 8)
     assert combined.value_std == pytest.approx(((8 - 4 / 8) / 7) ** 0.5)
     assert combined.gradient_norm == pytest.approx(1.0)
     assert combined.num_batches == 2
+
+
+def test_ddp_outcome_gradient_uses_global_eligible_sample_mean() -> None:
+    context = multiprocessing.get_context('spawn')
+    initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
+    processes: list[multiprocessing.Process] = []
+    read_connections: list[Connection] = []
+    for rank in range(2):
+        read_connection, write_connection = context.Pipe(duplex=False)
+        process = context.Process(
+            target=masked_value_gradient_rank,
+            args=(rank, initialization_method, write_connection),
+        )
+        process.start()
+        write_connection.close()
+        processes.append(process)
+        read_connections.append(read_connection)
+
+    try:
+        assert all(connection.poll(30) for connection in read_connections)
+        gradients = tuple(connection.recv() for connection in read_connections)
+        for process in processes:
+            process.join(timeout=30)
+            assert process.exitcode == 0
+    finally:
+        for connection in read_connections:
+            connection.close()
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=10)
+
+    expected_gradient = (0.0, 0.85 / 3.0, -0.85 / 3.0)
+    assert gradients[0] == pytest.approx(expected_gradient, abs=1e-7)
+    assert gradients[1] == pytest.approx(expected_gradient, abs=1e-7)

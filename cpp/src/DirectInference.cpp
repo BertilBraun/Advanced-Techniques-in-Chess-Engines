@@ -75,7 +75,8 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
         output.policies.dim() != 2 || output.policies.size(0) < static_cast<int64_t>(batchSize) ||
         output.policies.size(1) != ACTION_SIZE || output.outcomes.device().is_cuda() ||
         output.outcomes.scalar_type() != torch::kFloat32 || output.outcomes.dim() != 2 ||
-        output.outcomes.size(0) < static_cast<int64_t>(batchSize) || output.outcomes.size(1) != 3) {
+        output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
+        output.outcomes.size(1) != static_cast<int64_t>(WDL_OUTPUT_SIZE)) {
         throw std::invalid_argument("Direct inference output buffers have invalid shapes or types");
     }
 

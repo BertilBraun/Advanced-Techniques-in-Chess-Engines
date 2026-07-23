@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 import numpy as np
 import numpy.typing as npt
 from pathlib import Path
@@ -10,7 +9,13 @@ from torch.utils.data import Dataset
 
 from src.settings import log_histogram, log_scalar
 from src.util.tensorboard import TensorboardWriter, log_scalars
-from src.self_play.SelfPlayDataset import SelfPlayDataset, training_batch_from_raw_samples
+from src.self_play.SelfPlayDataset import (
+    SelfPlayDataset,
+    TrainingBatch,
+    TrainingSample,
+    training_batch_from_raw_samples,
+)
+from src.self_play.value_target import FinalOutcome
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 
 
@@ -22,7 +27,7 @@ def maximum_action_probability(visit_counts: npt.NDArray[np.uint16]) -> float:
     return float(np.max(counts) / total_visits)
 
 
-class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
+class RollingSelfPlayBuffer(Dataset[TrainingSample]):
     """
     Keeps a sliding window of recent SelfPlayDataset objects in RAM.
     • The window size in *iterations* comes from  args.training.sampling_window(i)
@@ -67,12 +72,12 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
     def __len__(self) -> int:
         return self._num_samples
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> TrainingSample:
         dataset_index = int(np.searchsorted(self._prefix, idx + 1) - 1)
         inner_index = idx - int(self._prefix[dataset_index])
         return self._buf[dataset_index][1][inner_index]  # (state, π-target, v-target)
 
-    def __getitems__(self, indices: list[int]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitems__(self, indices: list[int]) -> TrainingBatch:
         sample_indices = np.asarray(indices, dtype=np.int64)
         dataset_indices = np.searchsorted(self._prefix, sample_indices + 1) - 1
         raw_samples = [
@@ -112,37 +117,38 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
                 dtype=np.float32,
                 count=len(self),
             )
-            value_targets = np.fromiter(
-                (value for _, dataset in self._buf for value in dataset.value_targets),
+            final_outcomes = np.fromiter(
+                (int(target.final_outcome) for _, dataset in self._buf for target in dataset.value_targets),
+                dtype=np.int8,
+                count=len(self),
+            )
+            mcts_root_values = np.fromiter(
+                (target.mcts_root_value for _, dataset in self._buf for target in dataset.value_targets),
                 dtype=np.float32,
+                count=len(self),
+            )
+            outcome_eligible = np.fromiter(
+                (target.outcome_target_eligible for _, dataset in self._buf for target in dataset.value_targets),
+                dtype=np.bool_,
                 count=len(self),
             )
 
             spikiness = float(np.mean(policy_maxima))
-            target_abs_values = np.abs(value_targets)
-            value_target_probabilities = np.stack(
-                (
-                    np.maximum(value_targets, 0),
-                    1 - target_abs_values,
-                    np.maximum(-value_targets, 0),
-                ),
-                axis=-1,
-            )
-            value_target_entropy = float(
-                np.mean(
-                    -np.sum(
-                        value_target_probabilities * np.log(np.clip(value_target_probabilities, 1e-12, None)),
-                        axis=-1,
-                    )
-                )
-            )
 
             log_scalar('dataset/policy_spikiness', spikiness)
-            log_scalar('dataset/value_target_entropy', value_target_entropy)
             log_scalar('dataset/value_uniform_cross_entropy', float(np.log(3)))
+            log_scalar('dataset/outcome_target_eligible', int(np.count_nonzero(outcome_eligible)))
+            log_scalar(
+                'dataset/outcome_target_excluded', int(len(outcome_eligible) - np.count_nonzero(outcome_eligible))
+            )
+            for outcome in FinalOutcome:
+                log_scalar(
+                    f'dataset/final_outcome_fraction/{outcome.name.lower()}',
+                    float(np.mean(final_outcomes == int(outcome))),
+                )
 
             log_histogram('dataset/policy_targets', policy_maxima)
-            log_histogram('dataset/value_targets', value_targets)
+            log_histogram('dataset/mcts_root_values', mcts_root_values)
 
             # dataset.deduplicate()
             # log_histogram('dataset/value_targets_deduplicated', np.array(dataset.value_targets))

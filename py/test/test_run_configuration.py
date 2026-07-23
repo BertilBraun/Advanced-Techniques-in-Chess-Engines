@@ -123,7 +123,6 @@ def training_args() -> TrainingArgs:
         ),
         random_seed=0,
         self_play_search_warmup_iterations=1,
-        self_play_value_warmup_iterations=1,
         evaluation=EvaluationParams(
             num_searches_per_turn=8,
             num_games=2,
@@ -364,7 +363,8 @@ def test_run_configuration_applies_explicit_topology_and_workload() -> None:
     assert arguments.num_games_per_iteration == 200
     assert arguments.self_play.num_games_after_which_to_write == 2
     assert arguments.self_play_search_warmup_iterations == 1
-    assert arguments.self_play_value_warmup_iterations == 1
+    assert arguments.training.outcome_value_loss_weight == pytest.approx(0.85)
+    assert arguments.training.mcts_value_loss_weight == pytest.approx(0.15)
     assert arguments.random_seed == 20260717
     assert arguments.evaluation is not None
     assert arguments.evaluation.num_games == 16
@@ -522,7 +522,8 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.0035)
     assert arguments.training.learning_rate(100, 'adamw') == pytest.approx(0.002)
     assert arguments.self_play_search_warmup_iterations == 15
-    assert arguments.self_play_value_warmup_iterations == 30
+    assert arguments.training.outcome_value_loss_weight == pytest.approx(0.85)
+    assert arguments.training.mcts_value_loss_weight == pytest.approx(0.15)
     assert arguments.self_play_endgame_shortcut_fade_iterations == 50
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 50
@@ -630,7 +631,8 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
         {'start_iteration': 100, 'learning_rate': 0.002},
     )
     expected['workload']['self_play_fast_searches_per_turn'] = 150
-    expected['workload']['self_play_mcts_value_target_weight'] = 0.15
+    expected['workload']['outcome_value_loss_weight'] = 0.85
+    expected['workload']['mcts_value_loss_weight'] = 0.15
     expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
     expected['workload']['self_play_final_maximum_game_plies'] = 250
@@ -694,7 +696,8 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
     assert arguments.self_play.final_maximum_game_plies == 250
-    assert arguments.self_play.result_score_weight == pytest.approx(0.15)
+    assert arguments.training.outcome_value_loss_weight == pytest.approx(0.85)
+    assert arguments.training.mcts_value_loss_weight == pytest.approx(0.15)
     assert arguments.self_play.low_material_termination_minimum_plies == 120
     assert arguments.self_play.low_material_termination_piece_threshold_per_player == 4
     assert arguments.self_play.low_material_termination_probability == 0.5
@@ -706,6 +709,15 @@ def test_run_configuration_rejects_low_material_probability_without_a_piece_thre
     data['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 0
 
     with pytest.raises(ValidationError, match='Low-material termination'):
+        RunConfiguration.model_validate(data)
+
+
+def test_run_configuration_rejects_value_objective_weights_that_do_not_sum_to_one() -> None:
+    configuration = load_run_configuration(V5_CONFIGURATION_PATH)
+    data = configuration.model_dump()
+    data['workload']['outcome_value_loss_weight'] = 0.8
+
+    with pytest.raises(ValidationError, match='Value-objective component weights must sum to 1'):
         RunConfiguration.model_validate(data)
 
 

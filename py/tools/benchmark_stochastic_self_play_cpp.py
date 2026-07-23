@@ -137,7 +137,6 @@ def parse_arguments() -> Arguments:
         type=int,
         default=max(
             TRAINING_ARGS.self_play_search_warmup_iterations,
-            TRAINING_ARGS.self_play_value_warmup_iterations,
             TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
         ),
     )

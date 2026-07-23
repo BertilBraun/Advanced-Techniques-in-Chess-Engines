@@ -3,6 +3,7 @@ import torch
 from torch import nn, Tensor
 
 from src.settings import CurrentGame
+from src.self_play.value_target import FinalOutcome
 from src.train.TrainingArgs import NetworkParams
 from src.util.log import log
 
@@ -57,7 +58,7 @@ class Network(nn.Module):
             nn.Flatten(),
             nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
             nn.ReLU(inplace=True),
-            nn.Linear(args.value_fc_size, 3),
+            nn.Linear(args.value_fc_size, len(FinalOutcome)),
         )
 
         # init weights

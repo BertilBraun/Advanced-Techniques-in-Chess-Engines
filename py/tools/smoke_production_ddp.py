@@ -16,13 +16,11 @@ import numpy as np
 import psutil
 import torch
 
-from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, encode_board_state
 from src.cluster.TrainerProcess import TrainerProcess
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.settings import CurrentGame, TRAINING_ARGS
+from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import ClusterParams, TrainingArgs
 from src.util.save_paths import create_model, create_optimizer, save_model_and_optimizer
+from tools.production_ddp_fixture import PRODUCTION_GLOBAL_BATCH_SIZE, write_replay_fixture
 
 
 @dataclass(frozen=True)
@@ -150,8 +148,10 @@ def parse_arguments() -> Arguments:
     device_ids = tuple(namespace.device_ids)
     if not device_ids or len(set(device_ids)) != len(device_ids):
         raise ValueError('Device IDs must be nonempty and unique.')
-    if 2048 % len(device_ids) != 0:
-        raise ValueError('The 2,048-sample global batch must divide evenly across trainer devices.')
+    if PRODUCTION_GLOBAL_BATCH_SIZE % len(device_ids) != 0:
+        raise ValueError(
+            f'The {PRODUCTION_GLOBAL_BATCH_SIZE:,}-sample global batch must divide evenly across trainer devices.'
+        )
     if namespace.samples <= 0:
         raise ValueError('Sample count must be positive.')
     replay_source_directories = tuple(namespace.replay_source_directories)
@@ -178,50 +178,6 @@ def source_revision() -> str:
         text=True,
     )
     return completed.stdout.strip()
-
-
-def encoded_state_templates(count: int, seed: int) -> tuple[bytes, ...]:
-    generator = np.random.default_rng(seed)
-    templates: list[bytes] = []
-    for _ in range(count):
-        state = np.zeros((C, H, W), dtype=np.int8)
-        state[list(BINARY_CHANNELS)] = generator.integers(
-            0,
-            2,
-            size=(len(BINARY_CHANNELS), H, W),
-            dtype=np.int8,
-        )
-        state[list(SCALAR_CHANNELS)] = generator.integers(
-            -1,
-            2,
-            size=(len(SCALAR_CHANNELS), 1, 1),
-            dtype=np.int8,
-        )
-        templates.append(encode_board_state(state))
-    return tuple(templates)
-
-
-def write_replay_fixture(path: Path, sample_count: int, seed: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=False)
-    templates = encoded_state_templates(min(sample_count, 4096), seed)
-    states = np.asarray([templates[index % len(templates)] for index in range(sample_count)])
-    visit_counts = np.zeros((sample_count, 1, 2), dtype=np.int32)
-    visit_counts[:, 0, 0] = np.arange(sample_count) % CurrentGame.action_size
-    visit_counts[:, 0, 1] = 600
-    value_targets = np.linspace(-1.0, 1.0, num=sample_count, dtype=np.float32)
-    game_count = max(1, sample_count // 50)
-    stats = SelfPlayDatasetStats(
-        num_samples=sample_count,
-        num_games=game_count,
-        game_lengths=[50] * game_count,
-        total_generation_time=float(game_count),
-    )
-    with h5py.File(path, 'w') as file:
-        file.create_dataset('states', data=states)
-        file.create_dataset('visit_counts', data=visit_counts)
-        file.create_dataset('value_targets', data=value_targets)
-        file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
-        file.attrs['stats'] = str(stats._asdict())
 
 
 def stage_replay_files(
@@ -256,8 +212,8 @@ def smoke_arguments(arguments: Arguments) -> TrainingArgs:
     training_args.num_iterations = 1
     training_args.num_games_per_iteration = max(1, arguments.samples // 50)
     training_args.training.num_epochs = 1
-    training_args.training.global_batch_size = 2048
-    training_args.training.local_batch_size = 2048 // len(arguments.device_ids)
+    training_args.training.global_batch_size = PRODUCTION_GLOBAL_BATCH_SIZE
+    training_args.training.local_batch_size = PRODUCTION_GLOBAL_BATCH_SIZE // len(arguments.device_ids)
     training_args.training.num_workers = 0
     training_args.cluster = ClusterParams(
         trainer_device_type='cuda',

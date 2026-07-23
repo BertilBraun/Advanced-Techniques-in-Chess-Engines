@@ -177,7 +177,8 @@ void DirectSelfPlaySearch::completeWorker(std::vector<RootTask> &tasks,
             SearchNode &leaf = tree.node(pendingLeaf.node_index);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult = processInferenceResult(
-                policyData + processed * ACTION_SIZE, outcomeData + processed * 3, leaf.board);
+                policyData + processed * ACTION_SIZE, outcomeData + processed * WDL_OUTPUT_SIZE,
+                leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)

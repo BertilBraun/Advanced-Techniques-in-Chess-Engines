@@ -87,6 +87,8 @@ def get_best_moves(board: TicTacToeBoard) -> Tuple[List[int], int]:
 
 
 def generate_database(path: Path):
+    from src.self_play.value_target import ReplayValueTarget, TerminationReason
+
     game = TicTacToeGame()
 
     # To keep track of all states to process
@@ -113,7 +115,11 @@ def generate_database(path: Path):
             dataset.add_sample(
                 game.get_canonical_board(current_board),
                 visit_counts,
-                outcome if current_board.current_player == 1 else -outcome,
+                ReplayValueTarget.from_scores(
+                    final_score=outcome if current_board.current_player == 1 else -outcome,
+                    mcts_root_value=0.0,
+                    termination_reason=TerminationReason.DIAGNOSTIC,
+                ),
             )
             dataset.add_generation_stats(1, 0.0, False)
             generated_states.add(key)

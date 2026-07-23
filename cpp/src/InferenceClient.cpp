@@ -338,15 +338,17 @@ void InferenceClient::resolveWorker() {
             for (size_t i : range(completedBatch->promises.size())) {
                 const torch::Tensor policy = completedBatch->policies[static_cast<int64_t>(i)];
                 const torch::Tensor values = completedBatch->values[static_cast<int64_t>(i)];
-                if (values.dim() != 1 || values.numel() != 3 ||
+                if (values.dim() != 1 || values.numel() != static_cast<int64_t>(WDL_OUTPUT_SIZE) ||
                     !torch::isfinite(values).all().item<bool>() ||
                     (values < 0).any().item<bool>() ||
                     std::abs(values.sum().item<float>() - 1.0f) > 1e-2f) {
                     throw std::runtime_error(
                         "Inference model WDL output must be three probabilities");
                 }
-                const WdlPrediction outcome{values[0].item<float>(), values[1].item<float>(),
-                                            values[2].item<float>()};
+                const WdlPrediction outcome{
+                    values[static_cast<int64_t>(WdlIndex::Win)].item<float>(),
+                    values[static_cast<int64_t>(WdlIndex::Draw)].item<float>(),
+                    values[static_cast<int64_t>(WdlIndex::Loss)].item<float>()};
                 results.push_back({policy, outcome});
             }
 
@@ -388,7 +390,7 @@ InferenceClient::modelInference(const torch::Tensor &inputTensor) {
     // Run the model and get the output.
     // The output is a tuple of (policies, values).
     // policies: (batch_size, ACTION_SIZE)
-    // values: (batch_size, 3), ordered win/draw/loss
+    // values: (batch_size, WDL_OUTPUT_SIZE), ordered win/draw/loss
     const torch::jit::IValue output = m_model.forward(inputs);
     const auto outputTuple = output.toTuple();
 

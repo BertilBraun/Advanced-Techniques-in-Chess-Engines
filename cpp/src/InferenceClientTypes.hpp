@@ -2,6 +2,9 @@
 
 #include "common.hpp"
 
+enum class WdlIndex : size_t { Win = 0, Draw = 1, Loss = 2, Count = 3 };
+constexpr size_t WDL_OUTPUT_SIZE = static_cast<size_t>(WdlIndex::Count);
+
 struct WdlPrediction {
     float win;
     float draw;

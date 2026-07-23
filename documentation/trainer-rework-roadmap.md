@@ -371,8 +371,13 @@ Add:
 - MCTS auxiliary Huber loss;
 - WDL calibration by class;
 - expected-score calibration;
-- metrics split by termination reason, ply, and material;
+- metrics split by termination reason;
 - target eligibility and exclusion counts.
+
+Ply- and material-sliced value metrics are deferred to Stage 4. The Stage 2 replay
+contract deliberately does not add those two sample attributes immediately before
+Stage 4 replaces replay serialization and indexing. Stage 4 must persist the required
+typed metadata, and Stage 6 must expose the resulting slices in TensorBoard.
 
 ### Stage 2 tests
 
@@ -499,6 +504,9 @@ The manifest contains:
 - termination counts;
 - content hash;
 - creation timestamp.
+
+Each stored sample also carries the typed ply and material metadata required for the
+value-quality slices deferred from Stage 2.
 
 The trainer never reads a temporary or unmanifested shard.
 
@@ -663,6 +671,7 @@ Use `trained_position_presentations` as the primary training x-axis. Also log:
 - instantaneous and cumulative replay ratio;
 - replay buffer occupancy and age;
 - model staleness of generated samples;
+- value metrics sliced by sample ply and material;
 - refresh pause and acknowledgement latency;
 - loader wait time;
 - self-play and DDP throughput;

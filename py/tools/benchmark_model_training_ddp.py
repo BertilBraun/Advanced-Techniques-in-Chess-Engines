@@ -15,9 +15,11 @@ from torch.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
 from src.Network import Network
+from src.self_play.SelfPlayDataset import TrainingBatch
+from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import CurrentGame
 from src.train.TrainingArgs import NetworkParams, SEPlacement
-from src.value import scalar_to_wdl
+from src.value import wdl_to_scalar
 
 
 @dataclass(frozen=True)
@@ -87,15 +89,17 @@ def train_batch(
     model: DistributedDataParallel,
     optimizer: torch.optim.Optimizer,
     scaler: GradScaler,
-    batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    batch: TrainingBatch,
 ) -> None:
-    state, policy_targets, value_targets = batch
     optimizer.zero_grad()
     with autocast('cuda', dtype=torch.bfloat16):
-        policy_logits, value_logits = model(state)
-        policy_loss = functional.cross_entropy(policy_logits, policy_targets)
-        value_loss = functional.cross_entropy(value_logits, scalar_to_wdl(value_targets))
-        total_loss = policy_loss + 0.5 * value_loss
+        policy_logits, value_logits = model(batch.states)
+        policy_loss = functional.cross_entropy(policy_logits, batch.policy_targets)
+        outcome_loss = functional.cross_entropy(value_logits, batch.final_outcomes)
+        expected_scores = wdl_to_scalar(torch.softmax(value_logits, dim=1))
+        mcts_auxiliary_loss = functional.huber_loss(expected_scores, batch.mcts_root_values)
+        combined_value_loss = 0.85 * outcome_loss + 0.15 * mcts_auxiliary_loss
+        total_loss = policy_loss + 0.5 * combined_value_loss
     scaler.scale(total_loss).backward()
     scaler.unscale_(optimizer)
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -150,8 +154,24 @@ def benchmark_rank(
             device=device,
         )
         policy_targets[:, 0] = 1
-        value_targets = torch.zeros(arguments.local_batch_size, device=device)
-        batch = (state, policy_targets, value_targets)
+        final_outcomes = torch.arange(arguments.local_batch_size, device=device, dtype=torch.int64) % len(FinalOutcome)
+        batch = TrainingBatch(
+            states=state,
+            policy_targets=policy_targets,
+            final_outcomes=final_outcomes,
+            mcts_root_values=torch.zeros(arguments.local_batch_size, device=device),
+            outcome_target_eligible=torch.ones(
+                arguments.local_batch_size,
+                dtype=torch.bool,
+                device=device,
+            ),
+            termination_reasons=torch.full(
+                (arguments.local_batch_size,),
+                int(TerminationReason.NATURAL),
+                dtype=torch.int64,
+                device=device,
+            ),
+        )
 
         for _ in range(arguments.warmup_batches):
             train_batch(model, optimizer, scaler, batch)

@@ -35,8 +35,6 @@ def objective(trial: optuna.Trial) -> float:
     mcts_dirichlet_alpha = trial.suggest_float('mcts_dirichlet_alpha', 0.2, 0.4, step=0.1)
     mcts_c_param = trial.suggest_float('mcts_c_param', 1.0, 6.0, step=1)
 
-    self_play_weighting = trial.suggest_float('self_play_weighting', 0.25, 0.75, step=0.25)
-
     network_num_layers = trial.suggest_int('network_num_layers', 2, 8, step=3)
     network_hidden_size_exponent = trial.suggest_int('network_hidden_size_exponent', 5, 9, step=2)  # 32, 128, 512
     network_hidden_size = 2**network_hidden_size_exponent
@@ -81,7 +79,6 @@ def objective(trial: optuna.Trial) -> float:
         num_parallel_games=128,
         inference_cache_capacity=250_000,
         use_inference_cache=True,
-        result_score_weight=self_play_weighting,
         mcts=mcts_params,
         num_moves_after_which_to_play_greedy=10,
         portion_of_samples_to_keep=0.5,

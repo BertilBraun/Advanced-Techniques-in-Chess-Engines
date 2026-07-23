@@ -62,7 +62,8 @@
       }
     ],
     "self_play_search_warmup_iterations": 1,
-    "self_play_value_warmup_iterations": 1,
+    "outcome_value_loss_weight": 0.85,
+    "mcts_value_loss_weight": 0.15,
     "random_seed": 20260717,
     "evaluation_games": 16,
     "evaluation_searches_per_turn": 64,

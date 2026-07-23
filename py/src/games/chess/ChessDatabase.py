@@ -43,6 +43,7 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessGame import ChessGame
     from src.self_play.SelfPlayDataset import SelfPlayDataset
+    from src.self_play.value_target import ReplayValueTarget, TerminationReason
     from src.settings import TRAINING_ARGS
 
     chess_game = ChessGame()
@@ -65,7 +66,11 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
                         dataset.add_sample(
                             board_variation.copy().astype(np.int8),
                             visits,
-                            winner * board.current_player,
+                            ReplayValueTarget.from_scores(
+                                final_score=winner * board.current_player,
+                                mcts_root_value=0.0,
+                                termination_reason=TerminationReason.DIAGNOSTIC,
+                            ),
                         )
 
                 board.make_move(move)
