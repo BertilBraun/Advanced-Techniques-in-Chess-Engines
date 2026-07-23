@@ -15,11 +15,13 @@ def self_play_client(shortcut_strength: float) -> SelfPlayCpp:
     client.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=50,
         low_material_termination_minimum_plies=50,
+        low_material_termination_start_iteration=0,
         low_material_termination_piece_threshold_per_player=4,
         low_material_termination_probability=0.7,
     )
     client.dataset = SelfPlayDataset()
     client.endgame_shortcut_strength = shortcut_strength
+    client.iteration = 0
     return client
 
 
@@ -102,3 +104,19 @@ def test_low_material_termination_requires_one_side_below_four_pieces(
     monkeypatch.setattr('src.self_play.SelfPlayCpp.random.random', lambda: 0.0)
 
     assert not client._should_terminate_low_material_game(game)
+
+
+def test_low_material_termination_waits_for_its_configured_start_iteration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = self_play_client(0.0)
+    client.args.low_material_termination_start_iteration = 120
+    game = game_from_fen('8/8/8/8/8/4K3/7P/4k3 w - - 0 1')
+    monkeypatch.setattr('src.self_play.SelfPlayCpp.random.random', lambda: 0.0)
+
+    assert not client._should_terminate_low_material_game(game)
+    assert not game.low_material_termination_evaluated
+
+    client.iteration = 120
+
+    assert client._should_terminate_low_material_game(game)

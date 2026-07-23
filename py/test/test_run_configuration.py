@@ -516,7 +516,7 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert configuration.hardware.minimum_disk_gib == 2
     assert configuration.safety.minimum_free_disk_gib == 2
     assert arguments.num_iterations == 500
-    assert arguments.num_games_per_iteration == 3500
+    assert arguments.num_games_per_iteration == 5000
     assert arguments.self_play.num_games_after_which_to_write == 100
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.0035)
@@ -628,12 +628,14 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
         {'start_iteration': 100, 'learning_rate': 0.002},
     )
     expected['workload']['self_play_fast_searches_per_turn'] = 150
+    expected['workload']['self_play_mcts_value_target_weight'] = 0.15
     expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
     expected['workload']['self_play_maximum_game_plies_until_iteration'] = 80
     expected['workload']['self_play_final_maximum_game_plies'] = 250
     expected['workload']['self_play_low_material_termination_minimum_plies'] = 50
+    expected['workload']['self_play_low_material_termination_start_iteration'] = 120
     expected['workload']['self_play_low_material_termination_piece_threshold_per_player'] = 4
-    expected['workload']['self_play_low_material_termination_probability'] = 0.7
+    expected['workload']['self_play_low_material_termination_probability'] = 0.5
     expected['retention']['replay_window_iterations'] = 15
     expected['evaluation_protocol']['historical_model_iterations'] = (0,) + expected['evaluation_protocol'][
         'historical_model_iterations'
@@ -690,9 +692,11 @@ def test_v5_configuration_uses_a_fixed_15_iteration_replay_window() -> None:
     assert arguments.self_play.maximum_game_plies == 200
     assert arguments.self_play.maximum_game_plies_until_iteration == 80
     assert arguments.self_play.final_maximum_game_plies == 250
+    assert arguments.self_play.result_score_weight == pytest.approx(0.15)
     assert arguments.self_play.low_material_termination_minimum_plies == 50
+    assert arguments.self_play.low_material_termination_start_iteration == 120
     assert arguments.self_play.low_material_termination_piece_threshold_per_player == 4
-    assert arguments.self_play.low_material_termination_probability == 0.7
+    assert arguments.self_play.low_material_termination_probability == 0.5
 
 
 def test_run_configuration_rejects_low_material_probability_without_a_piece_threshold() -> None:
