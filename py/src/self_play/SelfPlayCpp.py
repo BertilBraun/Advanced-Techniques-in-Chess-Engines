@@ -79,14 +79,22 @@ class SelfPlayGame:
 
 def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
     """Convert visit counts to probabilities."""
-    assert len(visit_counts) > 0, f'No visit counts found for board: {board.board.fen()}'
+    if not has_positive_visit_counts(visit_counts):
+        raise ValueError(f'Visit counts must contain a positive visit for board: {board.board.fen()}')
 
     probabilities = np.zeros(len(visit_counts), dtype=np.float32)
     for i, (_, count) in enumerate(visit_counts):
         probabilities[i] = count
 
-    assert np.sum(probabilities) > 0, f'No visits found for board: {board.board.fen()}'
     return probabilities / np.sum(probabilities)
+
+
+def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
+    return (
+        bool(visit_counts)
+        and all(count >= 0 for _, count in visit_counts)
+        and sum(count for _, count in visit_counts) > 0
+    )
 
 
 class SelfPlayCpp:
@@ -257,6 +265,11 @@ class SelfPlayCpp:
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
             if not mcts_result.visits:
                 self.self_play_games[i] = self._finish_terminal_search_root(spg, mcts_result.root)
+                continue
+
+            if not has_positive_visit_counts(mcts_result.visits):
+                log(f'Discarding self-play game after zero-visit MCTS root: {spg.board.board.fen()}')
+                self.self_play_games[i] = new_game()
                 continue
 
             was_full_searched = boards[i].should_run_full_search

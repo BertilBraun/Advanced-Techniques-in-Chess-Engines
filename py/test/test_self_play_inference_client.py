@@ -6,9 +6,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlayCpp import SelfPlayCpp
+from src.self_play.SelfPlayCpp import SelfPlayCpp, has_positive_visit_counts
 from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import DirectSelfPlayParams
+
+
+@pytest.mark.parametrize(
+    ('visit_counts', 'expected'),
+    (
+        ([], False),
+        ([(1, 0), (2, 0)], False),
+        ([(1, -1), (2, 2)], False),
+        ([(1, 1), (2, 0)], True),
+    ),
+)
+def test_positive_visit_count_validation(visit_counts: list[tuple[int, int]], expected: bool) -> None:
+    assert has_positive_visit_counts(visit_counts) is expected
 
 
 @dataclass(frozen=True)
