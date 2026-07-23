@@ -10,10 +10,12 @@ from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS
 from src.util.communication import (
     Communication,
     FLUSH_REPLAY_SHARD,
+    LATEST_SELF_PLAY_MODEL_VERSION,
     RESUME_SELF_PLAY,
     SELF_PLAY_PAUSED,
     SELF_PLAY_RESUMED,
     SNAPSHOT_SELF_PLAY_STATISTICS,
+    START_CONTINUOUS_SELF_PLAY,
     STOP_SELF_PLAY,
     refresh_self_play_model_message,
     self_play_model_refreshed_message,
@@ -75,6 +77,7 @@ class SelfPlayProcess:
         current_iteration = -1
         running = False
         paused = False
+        credit_training = self.args.training.credit_training
         usage_logger: BackgroundWorker | None = None
 
         try:
@@ -86,7 +89,7 @@ class SelfPlayProcess:
                     if self.self_play.dataset.stats.num_games >= self.args.self_play.num_games_after_which_to_write:
                         self.flush_replay_shard(current_iteration)
 
-                    if (
+                    if credit_training is None and (
                         number_of_games_in_iteration(current_iteration, self.args.save_path)
                         >= TRAINING_ARGS.num_games_per_iteration * 5
                     ):
@@ -111,6 +114,10 @@ class SelfPlayProcess:
                     paused = False
                     running = current_iteration >= 0
                     self.communication.send_to_id(SELF_PLAY_RESUMED, self.node_id)
+                continuous_running = self._continuous_self_play_state(current_iteration)
+                if continuous_running is not None:
+                    paused = False
+                    running = continuous_running
                 if self.communication.try_receive_from_id(FLUSH_REPLAY_SHARD, self.node_id):
                     self.flush_replay_shard(current_iteration)
                 if self.communication.try_receive_from_id(
@@ -122,7 +129,12 @@ class SelfPlayProcess:
                 self._update_search_schedule_if_requested()
                 current_iteration = self._refresh_model_if_requested(current_iteration)
 
-                for iteration in range(self.args.num_iterations, current_iteration, -1) if not paused else ():
+                legacy_iterations = (
+                    range(self.args.num_iterations, current_iteration, -1)
+                    if credit_training is None and not paused
+                    else ()
+                )
+                for iteration in legacy_iterations:
                     start_recieved = self.communication.is_received(f'START AT ITERATION: {iteration}')
                     load_received = self.communication.is_received(f'LOAD MODEL: {iteration}')
                     if start_recieved:
@@ -152,6 +164,31 @@ class SelfPlayProcess:
         log('Self play process stopped.')
 
     def _refresh_model_if_requested(self, current_model_version: int) -> int:
+        if self.args.training.credit_training is not None:
+            published_version = self.communication.try_read(LATEST_SELF_PLAY_MODEL_VERSION)
+            if published_version is None:
+                return current_model_version
+            try:
+                model_version = int(published_version)
+            except ValueError as error:
+                raise ValueError('Published model version must be an integer.') from error
+            if model_version < 0:
+                raise ValueError('Published model version must be nonnegative.')
+            if model_version > self._maximum_model_version():
+                raise ValueError(f'Published model version exceeds the configured maximum: {model_version}')
+            if model_version <= current_model_version:
+                return current_model_version
+            self.self_play.update_search_schedule(self.self_play.search_schedule(model_version))
+            self.self_play.refresh_model(
+                model_version,
+                model_save_path(model_version, self.args.save_path).with_suffix('.jit.pt'),
+            )
+            self.communication.send_to_id(
+                self_play_model_refreshed_message(model_version),
+                self.node_id,
+            )
+            return model_version
+
         for model_version in range(self.args.num_iterations, current_model_version, -1):
             if not self.communication.is_received(refresh_self_play_model_message(model_version)):
                 continue
@@ -166,9 +203,24 @@ class SelfPlayProcess:
             return model_version
         return current_model_version
 
+    def _maximum_model_version(self) -> int:
+        credit_training = self.args.training.credit_training
+        if credit_training is None:
+            return self.args.num_iterations
+        return credit_training.maximum_optimizer_steps // credit_training.optimizer_steps_per_quantum
+
+    def _continuous_self_play_state(self, current_model_version: int) -> bool | None:
+        if not self.communication.is_received(START_CONTINUOUS_SELF_PLAY):
+            return None
+        if self.args.training.credit_training is None:
+            raise RuntimeError('Continuous self-play requires credit-driven training.')
+        return current_model_version >= 0
+
     def _update_search_schedule_if_requested(self) -> None:
         current_schedule = self.self_play.search_schedule_state
         current_schedule_version = current_schedule.schedule_version if current_schedule is not None else -1
+        if self.args.training.credit_training is not None:
+            return
         for schedule_version in range(
             self.args.num_iterations,
             current_schedule_version,

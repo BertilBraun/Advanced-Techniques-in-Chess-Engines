@@ -163,8 +163,6 @@ def validate_distributed_training_configuration(
         case 'cpu':
             if cluster.trainer_process_group_backend != 'gloo':
                 raise ValueError('CPU distributed training requires the Gloo backend.')
-            if device_ids != (0,):
-                raise ValueError('CPU distributed training uses the single logical device ID 0.')
 
 
 def available_tcp_port() -> int:

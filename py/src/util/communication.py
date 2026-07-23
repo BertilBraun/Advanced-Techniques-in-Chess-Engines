@@ -2,8 +2,10 @@
 # for now this is via files, but in the future this could be via sockets or other means
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import time
+import uuid
 
 
 STOP_SELF_PLAY = 'STOP SELF PLAY'
@@ -12,6 +14,8 @@ RESUME_SELF_PLAY = 'RESUME SELF PLAY'
 SELF_PLAY_RESUMED = 'SELF PLAY RESUMED'
 FLUSH_REPLAY_SHARD = 'FLUSH REPLAY SHARD'
 SNAPSHOT_SELF_PLAY_STATISTICS = 'SNAPSHOT SELF PLAY STATISTICS'
+START_CONTINUOUS_SELF_PLAY = 'START CONTINUOUS SELF PLAY'
+LATEST_SELF_PLAY_MODEL_VERSION = 'LATEST SELF PLAY MODEL VERSION'
 
 
 def refresh_self_play_model_message(model_version: int) -> str:
@@ -42,6 +46,16 @@ class Communication:
         """Sends a message by creating a file with the identifier."""
         with open(self._file_path(identifier), 'w') as f:
             f.write(message)
+
+    def publish_persistent_value(self, identifier: str, value: str) -> None:
+        """Atomically replace a persistent command value read by many workers."""
+        path = self._file_path(identifier)
+        temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
+        with temporary_path.open('x', encoding='utf-8') as file:
+            file.write(value)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, path)
 
     def is_received(self, identifier: str) -> bool:
         """Checks if a message has been received by checking for the existence of the file."""
