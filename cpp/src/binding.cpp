@@ -406,7 +406,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"), py::arg("model_path"))
+        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"),
+             py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
         .def("update_search_schedule", &MCTS::updateSearchSchedule, py::arg("mcts_args"))
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
