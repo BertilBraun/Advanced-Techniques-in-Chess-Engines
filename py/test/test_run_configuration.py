@@ -516,7 +516,7 @@ def test_rule_complete_main_applies_training_and_monitoring_schedule() -> None:
     assert configuration.hardware.minimum_disk_gib == 2
     assert configuration.safety.minimum_free_disk_gib == 2
     assert arguments.num_iterations == 500
-    assert arguments.num_games_per_iteration == 5000
+    assert arguments.num_games_per_iteration == 3500
     assert arguments.self_play.num_games_after_which_to_write == 100
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.0035)
@@ -622,6 +622,7 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['self_play_processes_per_device_during_training'] = (1, 1, 1, 1)
     expected['topology']['max_concurrent_evaluation_tasks'] = 4
     expected['workload']['training_sampling_window'] = 15
+    expected['workload']['games_per_iteration'] = 5000
     expected['workload']['learning_rate_schedule'] = (
         {'start_iteration': 0, 'learning_rate': 0.005},
         {'start_iteration': 50, 'learning_rate': 0.0035},
