@@ -7,6 +7,7 @@
 #include "../InferenceClient.hpp"
 #include "../NonCachingInferenceClient.hpp"
 #include "util/ThreadPool.h"
+#include <shared_mutex>
 #include <variant>
 
 class DirectSelfPlaySearch;
@@ -70,19 +71,23 @@ class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
          bool useInferenceCache = true,
-         std::optional<DirectSelfPlayInferenceParams> directInferenceParams = std::nullopt);
+         std::optional<DirectSelfPlayInferenceParams> directInferenceParams = std::nullopt,
+         uint64 initialModelVersion = 0);
     ~MCTS();
 
     [[nodiscard]] MCTSResults search(const std::vector<MCTSBoard> &boards,
                                      bool collectStatistics = false);
     [[nodiscard]] MCTSRoot newRoot(const std::string &fen) const;
     [[nodiscard]] MCTSRoot newRoot(Board board) const;
-    [[nodiscard]] uint32 arenaCapacity() const { return m_arenaCapacity; }
+    [[nodiscard]] uint32 arenaCapacity() const;
+    [[nodiscard]] uint64 modelVersion() const;
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> getInferenceStatistics();
-    void update(const std::string &modelPath, const MCTSParams &mctsArgs);
+    void refreshModel(uint64 modelVersion, const std::string &modelPath);
+    [[nodiscard]] bool updateSearchSchedule(const MCTSParams &mctsArgs);
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatch(const std::vector<const Board *> &boards);
+    [[nodiscard]] std::vector<std::uintptr_t> directWorkerIdentityTokens() const;
 
 private:
     using InferenceClientVariant = std::variant<std::monostate, std::unique_ptr<InferenceClient>,
@@ -93,10 +98,14 @@ private:
     MCTSParams m_args;
     ThreadPool m_threadPool;
     uint32 m_arenaCapacity;
+    uint64 m_modelVersion;
     std::optional<DirectSelfPlayInferenceParams> m_directInferenceParams;
     std::unique_ptr<DirectSelfPlaySearch> m_directSearch;
+    mutable std::shared_mutex m_operationMutex;
 
     [[nodiscard]] MCTSResults searchGames(const std::vector<MCTSBoard> &boards);
+    [[nodiscard]] std::vector<InferenceResult>
+    inferenceBatchUnlocked(const std::vector<const Board *> &boards);
     void parallelIterate(const std::vector<MCTSRoot> &roots);
     void addNoise(MCTSRoot &root) const;
     [[nodiscard]] std::optional<NodeIndex> getBestChildOrBackPropagate(MCTSRoot &root,

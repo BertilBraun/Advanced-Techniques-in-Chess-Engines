@@ -10,6 +10,26 @@ STOP_SELF_PLAY = 'STOP SELF PLAY'
 SELF_PLAY_PAUSED = 'SELF PLAY PAUSED'
 RESUME_SELF_PLAY = 'RESUME SELF PLAY'
 SELF_PLAY_RESUMED = 'SELF PLAY RESUMED'
+FLUSH_REPLAY_SHARD = 'FLUSH REPLAY SHARD'
+SNAPSHOT_SELF_PLAY_STATISTICS = 'SNAPSHOT SELF PLAY STATISTICS'
+
+
+def refresh_self_play_model_message(model_version: int) -> str:
+    if model_version < 0:
+        raise ValueError('Model version must be nonnegative.')
+    return f'REFRESH SELF PLAY MODEL: {model_version}'
+
+
+def self_play_model_refreshed_message(model_version: int) -> str:
+    if model_version < 0:
+        raise ValueError('Model version must be nonnegative.')
+    return f'SELF PLAY MODEL REFRESHED: {model_version}'
+
+
+def update_self_play_search_schedule_message(schedule_version: int) -> str:
+    if schedule_version < 0:
+        raise ValueError('Search schedule version must be nonnegative.')
+    return f'UPDATE SELF PLAY SEARCH SCHEDULE: {schedule_version}'
 
 
 class Communication:

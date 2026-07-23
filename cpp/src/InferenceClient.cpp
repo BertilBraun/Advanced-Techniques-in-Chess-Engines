@@ -21,7 +21,8 @@ InferenceClient::InferenceClient(const InferenceClientParams &args)
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16; // Use half precision for inference.
     }
-    m_model = loadInferenceModel(args.currentModelPath, m_device, m_torchDtype);
+    m_model = std::make_unique<torch::jit::script::Module>(
+        loadInferenceModel(args.currentModelPath, m_device, m_torchDtype));
 
     m_prepareThread = std::thread(&InferenceClient::prepareWorker, this);
     m_modelThread = std::thread(&InferenceClient::modelWorker, this);
@@ -44,6 +45,7 @@ InferenceClient::~InferenceClient() {
 std::vector<InferenceResult>
 InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     TIMEIT("InferenceClient::inferenceBatch");
+    const std::shared_lock refreshLock(m_refreshMutex);
 
     if (boards.empty()) {
         return {};
@@ -196,6 +198,7 @@ InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
 }
 
 InferenceStatistics InferenceClient::getStatistics() {
+    const std::shared_lock refreshLock(m_refreshMutex);
     InferenceStatistics stats;
     stats.cacheCapacity = m_cache.maximumSize();
     stats.cacheEvictions = m_cache.evictionCount();
@@ -248,16 +251,15 @@ InferenceStatistics InferenceClient::getStatistics() {
     return stats;
 }
 
-void InferenceClient::updateModel(const std::string &modelPath) {
-    updateInferenceModel(m_model, modelPath, m_device, m_torchDtype);
+void InferenceClient::refreshModel(const std::string &modelPath) {
+    const std::unique_lock refreshLock(m_refreshMutex);
+    const torch::Tensor validationInput =
+        torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
+                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    PreparedInferenceModel updatedModel =
+        prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput);
+    commitInferenceModelUpdate(m_model, std::move(updatedModel));
     m_cache.clear();
-    m_totalHits.store(0, std::memory_order_relaxed);
-    m_totalEvals.store(0, std::memory_order_relaxed);
-    m_totalFingerprintCollisions.store(0, std::memory_order_relaxed);
-    std::lock_guard<std::mutex> lock(m_modelStatisticsMutex);
-    m_totalModelInferenceCalls = 0;
-    m_totalModelInferencePositions = 0;
-    std::ranges::fill(m_modelBatchSizeHistogram, 0);
 }
 
 void InferenceClient::prepareWorker() {
@@ -391,7 +393,7 @@ InferenceClient::modelInference(const torch::Tensor &inputTensor) {
     // The output is a tuple of (policies, values).
     // policies: (batch_size, ACTION_SIZE)
     // values: (batch_size, WDL_OUTPUT_SIZE), ordered win/draw/loss
-    const torch::jit::IValue output = m_model.forward(inputs);
+    const torch::jit::IValue output = m_model->forward(inputs);
     const auto outputTuple = output.toTuple();
 
     torch::Tensor policies = outputTuple->elements()[0].toTensor();

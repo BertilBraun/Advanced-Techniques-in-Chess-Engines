@@ -110,9 +110,10 @@ DirectSelfPlayInferenceParams::DirectSelfPlayInferenceParams(const int inference
 
 MCTS::MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
            const bool useInferenceCache,
-           std::optional<DirectSelfPlayInferenceParams> directInferenceParams)
+           std::optional<DirectSelfPlayInferenceParams> directInferenceParams,
+           const uint64 initialModelVersion)
     : m_clientArgs(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
-      m_arenaCapacity(mctsArgs.arenaCapacity()),
+      m_arenaCapacity(mctsArgs.arenaCapacity()), m_modelVersion(initialModelVersion),
       m_directInferenceParams(std::move(directInferenceParams)) {
     if (m_directInferenceParams.has_value()) {
         if (useInferenceCache) {
@@ -139,11 +140,23 @@ uint32 MCTSParams::arenaCapacity() const {
 }
 
 MCTSRoot MCTS::newRoot(const std::string &fen) const {
+    const std::shared_lock operationLock(m_operationMutex);
     return MCTSRoot::create(fen, m_arenaCapacity);
 }
 
 MCTSRoot MCTS::newRoot(Board board) const {
+    const std::shared_lock operationLock(m_operationMutex);
     return MCTSRoot::create(std::move(board), m_arenaCapacity);
+}
+
+uint32 MCTS::arenaCapacity() const {
+    const std::shared_lock operationLock(m_operationMutex);
+    return m_arenaCapacity;
+}
+
+uint64 MCTS::modelVersion() const {
+    const std::shared_lock operationLock(m_operationMutex);
+    return m_modelVersion;
 }
 
 MCTSResults MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
@@ -171,7 +184,7 @@ MCTSResults MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
         }
     }
 
-    const std::vector<InferenceResult> inferenceResults = inferenceBatch(newBoards);
+    const std::vector<InferenceResult> inferenceResults = inferenceBatchUnlocked(newBoards);
     for (const auto [rootIndex, result] : zip(newBoardIndices, inferenceResults)) {
         roots[rootIndex].tree().expand(roots[rootIndex].rootIndex(), result.moves);
     }
@@ -222,6 +235,7 @@ MCTSResults MCTS::searchGames(const std::vector<MCTSBoard> &boards) {
 
 MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collectStatistics) {
     TIMEIT("MCTS::search");
+    const std::shared_lock operationLock(m_operationMutex);
     if (m_directSearch != nullptr) {
         return m_directSearch->search(boards, collectStatistics);
     }
@@ -262,6 +276,7 @@ MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collec
 }
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
+    const std::shared_lock operationLock(m_operationMutex);
     const InferenceStatistics statistics =
         m_directSearch != nullptr
             ? m_directSearch->inferenceStatistics()
@@ -278,29 +293,49 @@ std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     return {statistics, resetTimes()};
 }
 
-void MCTS::update(const std::string &modelPath, const MCTSParams &mctsArgs) {
-    if (mctsArgs.num_threads != m_args.num_threads) {
-        throw std::invalid_argument("MCTS thread count cannot change during a persistent run");
+void MCTS::refreshModel(const uint64 modelVersion, const std::string &modelPath) {
+    const std::unique_lock operationLock(m_operationMutex);
+    if (modelVersion <= m_modelVersion) {
+        throw std::invalid_argument("Refreshed model version must increase");
     }
-    m_args = mctsArgs;
-    m_arenaCapacity = mctsArgs.arenaCapacity();
-    m_clientArgs.currentModelPath = modelPath;
-    if (m_directInferenceParams.has_value()) {
-        m_directSearch =
-            std::make_unique<DirectSelfPlaySearch>(m_clientArgs, m_args, *m_directInferenceParams);
+    if (m_directSearch != nullptr) {
+        m_directSearch->refreshModel(modelPath);
     } else {
         std::visit(
             [&modelPath](auto &client) {
                 using Client = std::decay_t<decltype(client)>;
                 if constexpr (!std::same_as<Client, std::monostate>) {
-                    client->updateModel(modelPath);
+                    client->refreshModel(modelPath);
                 }
             },
             m_client);
     }
+    m_clientArgs.currentModelPath = modelPath;
+    m_modelVersion = modelVersion;
+}
+
+bool MCTS::updateSearchSchedule(const MCTSParams &mctsArgs) {
+    const std::unique_lock operationLock(m_operationMutex);
+    if (mctsArgs.num_threads != m_args.num_threads) {
+        throw std::invalid_argument("MCTS thread count cannot change during a persistent run");
+    }
+    const uint32 updatedArenaCapacity = mctsArgs.arenaCapacity();
+    const bool arenaCapacityChanged = updatedArenaCapacity != m_arenaCapacity;
+    m_args = mctsArgs;
+    m_arenaCapacity = updatedArenaCapacity;
+    if (m_directSearch != nullptr) {
+        m_directSearch->updateSearchSchedule(mctsArgs);
+    }
+    return arenaCapacityChanged;
 }
 
 std::vector<InferenceResult> MCTS::inferenceBatch(const std::vector<const Board *> &boards) {
+    const std::shared_lock operationLock(m_operationMutex);
+    return inferenceBatchUnlocked(boards);
+}
+
+std::vector<InferenceResult>
+MCTS::inferenceBatchUnlocked(const std::vector<const Board *> &boards) {
     if (m_directSearch != nullptr) {
         std::vector<InferenceResult> results;
         results.reserve(boards.size());
@@ -319,6 +354,14 @@ std::vector<InferenceResult> MCTS::inferenceBatch(const std::vector<const Board 
             }
         },
         m_client);
+}
+
+std::vector<std::uintptr_t> MCTS::directWorkerIdentityTokens() const {
+    const std::shared_lock operationLock(m_operationMutex);
+    if (m_directSearch == nullptr) {
+        return {};
+    }
+    return m_directSearch->workerIdentityTokens();
 }
 
 void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
@@ -347,7 +390,7 @@ void MCTS::parallelIterate(const std::vector<MCTSRoot> &roots) {
         return;
     }
 
-    const std::vector<InferenceResult> results = inferenceBatch(selectedBoards);
+    const std::vector<InferenceResult> results = inferenceBatchUnlocked(selectedBoards);
     for (const auto [selected, result] : zip(selectedNodes, results)) {
         selected.tree->expand(selected.index, result.moves);
         selected.tree->backPropagateAndRemoveVirtualLoss(selected.index, result.value());

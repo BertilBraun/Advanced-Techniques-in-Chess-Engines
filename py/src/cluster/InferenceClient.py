@@ -31,7 +31,8 @@ class InferenceClient:
     def __init__(self, device_id: int, network_args: NetworkParams, save_path: str) -> None:
         self.network_args = network_args
         self.save_path = save_path
-        self.model: Network = None  # type: ignore
+        self.model: Network | None = None
+        self.model_version: int | None = None
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
         self.dtype = torch.bfloat16 if USE_GPU else torch.float32  # Use bfloat16 on GPU for better performance
         # NOTE: There does not seem to be a significant performance difference between bfloat16 and float16 on the GPU
@@ -43,51 +44,43 @@ class InferenceClient:
         channels, rows, cols = CurrentGame.representation_shape
         self.hasher = ZobristHasherNumpy(channels, rows, cols)
 
-    def load_model(self, model_path: str | PathLike) -> None:
+    def _prepare_model(self, model_path: str | PathLike[str]) -> Network:
         for _ in range(5):
             try:
-                if hasattr(self, 'model'):
-                    del self.model
+                model = load_model(model_path, self.network_args, self.device)
+                model.to(dtype=self.dtype, device=self.device, non_blocking=True)
+                model.disable_auto_grad()
+                model.eval()
+                model.fuse_model()
+                return model
+            except RuntimeError as exception:
+                warn(f'Failed to load model: "{exception}" retrying...')
+                sleep(random() * 60)
+        raise RuntimeError('Failed to load model after 5 retries')
 
-                # sync and gc collect to free up memory before loading the model
-                if USE_GPU:
-                    torch.cuda.empty_cache()
-                    import gc
+    def load_model(self, model_path: str | PathLike[str]) -> None:
+        self.model = self._prepare_model(model_path)
 
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-
-                self.model = load_model(model_path, self.network_args, self.device)
-                self.model.to(dtype=self.dtype, device=self.device, non_blocking=True)
-                self.model.disable_auto_grad()
-                self.model.eval()
-                self.model.fuse_model()
-                break
-            except RuntimeError as e:
-                warn(f'Failed to load model: "{e}" retrying...')
-                sleep(random() * 60)  # sleep for a random amount of time to avoid overloading the GPU VRAM
-        else:
-            raise RuntimeError('Failed to load model after 5 retries')
-
-    def update_iteration(self, iteration: int) -> None:
-        """Update the Inference Client to use the model for the given iteration.
+    def update_iteration(self, model_version: int) -> None:
+        """Update the Inference Client to use the model for the given model_version.
         Slighly optimizes the model for inference and resets the cache and stats."""
 
-        self.load_model(model_save_path(iteration, self.save_path))
+        self.refresh_model(model_version, model_save_path(model_version, self.save_path))
+
+    def refresh_model(self, model_version: int, model_path: str | PathLike[str]) -> None:
+        if self.model_version is not None and model_version <= self.model_version:
+            raise ValueError('Model version must increase on every refresh.')
+        updated_model = self._prepare_model(model_path)
 
         if self.total_evals != 0:
             cache_hit_rate = (self.total_hits / self.total_evals) * 100
-            log_scalar('cache/hit_rate', cache_hit_rate, iteration)
-            log_scalar('cache/unique_positions', len(self.inference_cache), iteration)
-            if iteration > 1:
+            log_scalar('cache/hit_rate', cache_hit_rate, model_version)
+            log_scalar('cache/unique_positions', len(self.inference_cache), model_version)
+            if model_version > 1:
                 log_histogram(
                     'nn_output_value_distribution',
                     np.array([v for _, v in self.inference_cache.values()]),
-                    iteration,
+                    model_version,
                 )
 
             size_in_mb = 0
@@ -95,11 +88,13 @@ class InferenceClient:
                 size_in_mb += getsizeof(key) + getsizeof(value) + getsizeof(policy) + getsizeof(policy[0]) * len(policy)
 
             size_in_mb /= 1024 * 1024
-            log_scalar('cache/size_mb', size_in_mb, iteration)
+            log_scalar('cache/size_mb', size_in_mb, model_version)
             log(
                 f'Cache hit rate: {cache_hit_rate:.2f}% on cache size {len(self.inference_cache)} ({size_in_mb:.2f} MB)',
                 level=LogLevel.DEBUG,
             )
+        self.model = updated_model
+        self.model_version = model_version
         self.inference_cache.clear()
 
     def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[list[MoveScore], float]]:

@@ -3,8 +3,10 @@
 #include "common.hpp"
 
 #include "InferenceClientTypes.hpp"
+#include "InferenceModel.hpp"
 #include "util/BlockingQueue.hpp"
 #include <ATen/core/TensorBody.h>
+#include <shared_mutex>
 
 /**
  * @brief Asynchronous inference client with no cache allocation or cache operations.
@@ -17,7 +19,7 @@ public:
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatch(const std::vector<const Board *> &boards);
     [[nodiscard]] InferenceStatistics getStatistics();
-    void updateModel(const std::string &modelPath);
+    void refreshModel(const std::string &modelPath);
 
 private:
     struct ModelInferenceResult {
@@ -49,7 +51,7 @@ private:
     [[nodiscard]] std::pair<torch::Tensor, torch::Tensor>
     modelInference(const torch::Tensor &inputTensor);
 
-    torch::jit::script::Module m_model;
+    PreparedInferenceModel m_model;
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
@@ -67,6 +69,7 @@ private:
     std::thread m_prepareThread;
     std::thread m_modelThread;
     std::thread m_resolveThread;
+    mutable std::shared_mutex m_refreshMutex;
     std::mutex m_modelStatisticsMutex;
     InferenceClientParams m_params;
 };

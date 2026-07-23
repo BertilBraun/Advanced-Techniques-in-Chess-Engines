@@ -4,10 +4,12 @@
 
 #include "BoardEncoding.hpp"
 #include "InferenceClientTypes.hpp"
+#include "InferenceModel.hpp"
 
 #include "util/BlockingQueue.hpp"
 #include "util/CollisionCheckedCache.hpp"
 #include <ATen/core/TensorBody.h>
+#include <shared_mutex>
 
 /**
  * @brief InferenceClient batches and caches inference requests.
@@ -31,7 +33,7 @@ public:
     inferenceBatch(const std::vector<const Board *> &boards);
 
     [[nodiscard]] InferenceStatistics getStatistics();
-    void updateModel(const std::string &modelPath);
+    void refreshModel(const std::string &modelPath);
 
 private:
     struct CachedInferenceResult {
@@ -93,7 +95,7 @@ private:
     modelInference(const torch::Tensor &inputTensor);
 
     // Member variables.
-    torch::jit::script::Module m_model;
+    PreparedInferenceModel m_model;
     torch::Device m_device;
     torch::Dtype m_torchDtype;
 
@@ -115,6 +117,7 @@ private:
     std::thread m_prepareThread;
     std::thread m_modelThread;
     std::thread m_resolveThread;
+    mutable std::shared_mutex m_refreshMutex;
     std::mutex m_modelStatisticsMutex;
     InferenceClientParams m_params; // Store the parameters for easy access
 };

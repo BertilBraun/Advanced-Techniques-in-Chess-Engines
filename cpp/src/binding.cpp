@@ -389,10 +389,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<const InferenceClientParams &, const MCTSParams &, bool,
-                      std::optional<DirectSelfPlayInferenceParams>>(),
+                      std::optional<DirectSelfPlayInferenceParams>, uint64>(),
              py::arg("client_args"), py::arg("mcts_args"), py::arg("use_inference_cache") = true,
-             py::arg("direct_inference_params") = std::nullopt)
+             py::arg("direct_inference_params") = std::nullopt,
+             py::arg("initial_model_version") = 0)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
+        .def_property_readonly("model_version", &MCTS::modelVersion)
         .def(
             "new_root", [](const MCTS &self, const std::string &fen) { return self.newRoot(fen); },
             py::arg("fen"))
@@ -404,7 +406,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("update", &MCTS::update, py::arg("model_path"), py::arg("mcts_args"))
+        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"), py::arg("model_path"))
+        .def("update_search_schedule", &MCTS::updateSearchSchedule, py::arg("mcts_args"))
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
                  Run MCTS search on a list of boards.

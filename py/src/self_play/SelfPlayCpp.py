@@ -1,22 +1,33 @@
 from __future__ import annotations
-import gc
+
 import random
 import time
 import uuid
 
+from dataclasses import dataclass
+from os import PathLike
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTS, MCTSBoard, MCTSResult, MCTSResults, MCTSRoot
+    from AlphaZeroCpp import (
+        InferenceStatistics,
+        MCTS,
+        MCTSBoard,
+        MCTSParams,
+        MCTSResult,
+        MCTSResults,
+        MCTSRoot,
+        TimeInfo,
+    )
 
 
 import chess
 import numpy as np
-from dataclasses import dataclass
 
 from src.games.Board import Player
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.self_play.model_refresh import SearchScheduleState
 from src.self_play.resignation import (
     CompletedResignationAudit,
     ResignationCalibrationState,
@@ -52,6 +63,14 @@ class SelfPlayGameMemory:
     result_score: float
 
 
+@dataclass(frozen=True)
+class SelfPlayStatisticsSnapshot:
+    model_version: int | None
+    inference: InferenceStatistics
+    timing: TimeInfo
+    completed_searches: int
+
+
 class SelfPlayGame:
     def __init__(
         self,
@@ -75,6 +94,17 @@ class SelfPlayGame:
         self.resignation_trigger_ply: int | None = None
         self.resignee: Player | None = None
         self.low_material_termination_evaluated = False
+        self.oldest_model_version: int | None = None
+        self.newest_model_version: int | None = None
+
+    def acknowledge_model_version(self, model_version: int) -> None:
+        if model_version < 0:
+            raise ValueError('Model version must be nonnegative.')
+        if self.newest_model_version is not None and model_version < self.newest_model_version:
+            raise ValueError('Game model versions cannot move backwards.')
+        if self.oldest_model_version is None:
+            self.oldest_model_version = model_version
+        self.newest_model_version = model_version
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
@@ -100,6 +130,8 @@ class SelfPlayGame:
         game.resignation_trigger_ply = self.resignation_trigger_ply
         game.resignee = self.resignee
         game.low_material_termination_evaluated = self.low_material_termination_evaluated
+        game.oldest_model_version = self.oldest_model_version
+        game.newest_model_version = self.newest_model_version
         return game
 
     def __hash__(self) -> int:
@@ -134,6 +166,9 @@ class SelfPlayCpp:
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
 
         self.iteration = 0
+        self.model_version: int | None = None
+        self.model_refresh_acknowledgements: list[int] = []
+        self.search_schedule_state: SearchScheduleState | None = None
         self.dataset = SelfPlayDataset()
         self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.args.num_parallel_games)]
 
@@ -143,98 +178,142 @@ class SelfPlayCpp:
         self.completed_searches = 0
 
     def update_iteration(self, iteration: int) -> None:
-        if len(self.dataset) > 0:
-            log(f'Warning: Dataset should be empty when updating iteration. Discarding {len(self.dataset)} samples.')
+        self.snapshot_statistics(iteration - 1)
         self.iteration = iteration
-        self.dataset = SelfPlayDataset()
+        self.update_search_schedule(self.search_schedule(iteration))
+        self.refresh_model(
+            iteration,
+            model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
+        )
 
-        if self.mcts is not None:
-            # log inference statistics from the previous iteration
-            inference_stats, time_info = self.mcts.get_inference_statistics()
-            log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, iteration - 1)
-            log_scalar('inference/unique_positions', inference_stats.uniquePositions, iteration - 1)
-            log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, iteration - 1)
-            log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, iteration - 1)
-            log_scalar('inference/cache_evictions', inference_stats.cacheEvictions, iteration - 1)
-            log_scalar(
-                'inference/cache_fingerprint_collisions',
-                inference_stats.cacheFingerprintCollisions,
-                iteration - 1,
-            )
-            log_histogram(
-                'inference/nn_output_value_distribution',
-                np.array(inference_stats.nnOutputValueDistribution),
-                iteration - 1,
-            )
-            log_scalar(
-                'inference/average_number_of_positions_in_inference_call',
-                inference_stats.averageNumberOfPositionsInInferenceCall,
-                iteration - 1,
-            )
+    def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
+        if self.mcts is None:
+            return None
+        inference_stats, time_info = self.mcts.get_inference_statistics()
+        log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, tensorboard_step)
+        log_scalar('inference/unique_positions', inference_stats.uniquePositions, tensorboard_step)
+        log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, tensorboard_step)
+        log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, tensorboard_step)
+        log_scalar('inference/cache_evictions', inference_stats.cacheEvictions, tensorboard_step)
+        log_scalar(
+            'inference/cache_fingerprint_collisions',
+            inference_stats.cacheFingerprintCollisions,
+            tensorboard_step,
+        )
+        log_histogram(
+            'inference/nn_output_value_distribution',
+            np.array(inference_stats.nnOutputValueDistribution),
+            tensorboard_step,
+        )
+        log_scalar(
+            'inference/average_number_of_positions_in_inference_call',
+            inference_stats.averageNumberOfPositionsInInferenceCall,
+            tensorboard_step,
+        )
 
-            if time_info.functionTimes:
-                for element in time_info.functionTimes:
-                    log_scalar(f'timing/{element.name}_percent_of_execution_time', element.percent)
-                    log_scalar(f'timing/{element.name}_total_time', element.total)
-                    log_scalar(f'timing/{element.name}_total_invocations', element.invocations)
+        if time_info.functionTimes:
+            for element in time_info.functionTimes:
+                log_scalar(f'timing/{element.name}_percent_of_execution_time', element.percent)
+                log_scalar(f'timing/{element.name}_total_time', element.total)
+                log_scalar(f'timing/{element.name}_total_invocations', element.invocations)
 
-                log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
-                log_scalar('timing/total_time_cpp', time_info.totalTime)
+            log_scalar('timing/total_traced_percent_cpp', time_info.percentRecorded)
+            log_scalar('timing/total_time_cpp', time_info.totalTime)
 
-            # Release tree handles before model-update allocations can overlap their storage.
-            for self_play_game in self.self_play_games:
-                self_play_game.already_expanded_node = None
+        return SelfPlayStatisticsSnapshot(
+            model_version=self.model_version,
+            inference=inference_stats,
+            timing=time_info,
+            completed_searches=self.completed_searches,
+        )
 
-            gc.collect()
-
-        self._set_mcts(iteration)
-
-    def _set_mcts(self, iteration: int) -> None:
-        from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS, MCTSParams
-
-        """Set the MCTS parameters for the current iteration."""
-        # start with 10% of the searches, scale up to 100% over the first 5% of total iterations
-        self.num_searches_per_turn = int(
+    def search_schedule(self, schedule_version: int) -> SearchScheduleState:
+        if schedule_version < 0:
+            raise ValueError('Search schedule version must be nonnegative.')
+        num_full_searches = int(
             lerp(
                 self.args.mcts.num_searches_per_turn / 2,
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
-                    iteration,
+                    schedule_version,
                     TRAINING_ARGS.self_play_search_warmup_iterations,
                 ),
             )
         )
-        assert self.num_searches_per_turn > self.args.mcts.num_parallel_searches, (
-            f'Number of searches per turn ({self.num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
-        )
-
-        log_scalar('training/num_searches_per_turn', self.num_searches_per_turn, iteration)
-        self.endgame_shortcut_strength = curriculum_fade(
-            iteration,
-            TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
-        )
-        log_scalar('training/endgame_shortcut_strength', self.endgame_shortcut_strength, iteration)
-
-        mcts_args = MCTSParams(
+        return SearchScheduleState(
+            schedule_version=schedule_version,
             num_parallel_searches=self.args.mcts.num_parallel_searches,
-            num_full_searches=self.num_searches_per_turn,
-            num_fast_searches=int(
-                self.num_searches_per_turn * self.args.mcts.fast_searches_proportion_of_full_searches
+            num_full_searches=num_full_searches,
+            num_fast_searches=int(num_full_searches * self.args.mcts.fast_searches_proportion_of_full_searches),
+            endgame_shortcut_strength=curriculum_fade(
+                schedule_version,
+                TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
             ),
+        )
+
+    def update_search_schedule(self, schedule: SearchScheduleState) -> None:
+        if schedule.num_full_searches <= self.args.mcts.num_parallel_searches:
+            raise ValueError('Full-search budget must exceed the parallel-search count.')
+        if schedule.num_fast_searches <= 0:
+            raise ValueError('Fast-search budget must be positive.')
+
+        previous_arena_capacity = self.mcts.arena_capacity if self.mcts is not None else None
+        self.num_searches_per_turn = schedule.num_full_searches
+        self.endgame_shortcut_strength = schedule.endgame_shortcut_strength
+        self.iteration = schedule.schedule_version
+        self.search_schedule_state = schedule
+
+        log_scalar('training/num_searches_per_turn', self.num_searches_per_turn, schedule.schedule_version)
+        log_scalar(
+            'training/endgame_shortcut_strength',
+            self.endgame_shortcut_strength,
+            schedule.schedule_version,
+        )
+        if self.mcts is not None:
+            arena_capacity_changed = self.mcts.update_search_schedule(self._native_mcts_params(schedule))
+            if arena_capacity_changed:
+                assert previous_arena_capacity != schedule.arena_capacity
+                for game in self.self_play_games:
+                    game.already_expanded_node = None
+
+    def _native_mcts_params(self, schedule: SearchScheduleState) -> MCTSParams:
+        from AlphaZeroCpp import MCTSParams
+
+        return MCTSParams(
+            num_parallel_searches=self.args.mcts.num_parallel_searches,
+            num_full_searches=schedule.num_full_searches,
+            num_fast_searches=schedule.num_fast_searches,
             dirichlet_alpha=self.args.mcts.dirichlet_alpha,
             dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
             c_param=self.args.mcts.c_param,
             min_visit_count=self.args.mcts.min_visit_count,
             num_threads=self.args.mcts.num_threads,
         )
-        client_args = InferenceClientParams(
-            self.device_id,
-            currentModelPath=str(model_save_path(iteration, self.save_path).with_suffix('.jit.pt').absolute()),
-            maxBatchSize=256,  # TODO: adjust based on the model size and available memory
-            microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
-            cacheCapacity=self.args.inference_cache_capacity,
-        )
+
+    def refresh_model(
+        self,
+        model_version: int,
+        model_path: str | PathLike[str],
+        *,
+        discard_roots: bool = False,
+    ) -> None:
+        if model_version < 0:
+            raise ValueError('Model version must be nonnegative.')
+        if self.model_version is not None and model_version <= self.model_version:
+            raise ValueError('Model version must increase on every refresh.')
+        schedule = self.search_schedule_state
+        if schedule is None:
+            raise RuntimeError('Search schedule must be initialized before loading a model.')
         if self.mcts is None:
+            from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
+
+            client_args = InferenceClientParams(
+                self.device_id,
+                currentModelPath=str(model_path),
+                maxBatchSize=256,  # TODO: adjust based on the model size and available memory
+                microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
+                cacheCapacity=self.args.inference_cache_capacity,
+            )
             direct_inference_params = (
                 DirectSelfPlayInferenceParams(
                     self.args.direct_inference.inference_workers,
@@ -246,12 +325,26 @@ class SelfPlayCpp:
             )
             self.mcts = MCTS(
                 client_args,
-                mcts_args,
+                self._native_mcts_params(schedule),
                 use_inference_cache=self.args.use_inference_cache,
                 direct_inference_params=direct_inference_params,
+                initial_model_version=model_version,
             )
         else:
-            self.mcts.update(client_args.currentModelPath, mcts_args)
+            self.mcts.refresh_model(model_version, str(model_path))
+        self.model_version = model_version
+        self.model_refresh_acknowledgements.append(model_version)
+        log_scalar('inference/acknowledged_model_version', model_version)
+        if discard_roots:
+            for game in self.self_play_games:
+                game.already_expanded_node = None
+
+    def _set_mcts(self, iteration: int) -> None:
+        self.update_search_schedule(self.search_schedule(iteration))
+        self.refresh_model(
+            iteration,
+            model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
+        )
 
     @timeit
     def search(self, boards: list[MCTSBoard]) -> MCTSResults:
@@ -267,6 +360,9 @@ class SelfPlayCpp:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
         boards: list[MCTSBoard] = []
         for spg in self.self_play_games:
+            if self.model_version is None:
+                raise RuntimeError('A model must be refreshed before self-play starts.')
+            spg.acknowledge_model_version(self.model_version)
             force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
             should_run_full_search = self._should_run_full_search(
                 spg,
@@ -616,6 +712,11 @@ class SelfPlayCpp:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
         self._log_game(spg, game_outcome)
+        if spg.oldest_model_version is None or spg.newest_model_version is None:
+            raise RuntimeError('Completed game has no acknowledged inference model.')
+        self.dataset.stats += SelfPlayDatasetStats(
+            game_model_version_ranges=[(spg.oldest_model_version, spg.newest_model_version)],
+        )
 
         self.dataset.add_generation_stats(
             game_length=len(spg.played_moves),

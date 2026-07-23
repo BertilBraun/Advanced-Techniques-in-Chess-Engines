@@ -165,10 +165,7 @@ def verify_model_update(
             use_inference_cache=use_inference_cache,
         )
         initial_output = mcts.inference(INITIAL_FEN)
-        mcts.update(
-            str(updated_model_path),
-            create_mcts_parameters(searches, parallel_searches, threads),
-        )
+        mcts.refresh_model(1, str(updated_model_path))
         updated_output = mcts.inference(INITIAL_FEN)
         if updated_output == initial_output:
             client_kind = 'caching' if use_inference_cache else 'non-caching'
@@ -197,14 +194,11 @@ def run_diagnostic(
         snapshots.append(read_memory_snapshot(transition, 'after_statistics'))
 
         if persistent_mcts:
+            mcts.refresh_model(transition + 1, str(model_path))
+            snapshots.append(read_memory_snapshot(transition, 'after_model_update'))
             roots.clear()
             gc.collect()
             snapshots.append(read_memory_snapshot(transition, 'after_root_release'))
-            mcts.update(
-                str(model_path),
-                create_mcts_parameters(searches, parallel_searches, threads),
-            )
-            snapshots.append(read_memory_snapshot(transition, 'after_model_update'))
             roots = populate_roots(mcts, root_count)
             snapshots.append(read_memory_snapshot(transition, 'after_gameplay'))
             continue

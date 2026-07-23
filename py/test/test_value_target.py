@@ -122,6 +122,7 @@ def test_self_play_stores_hard_outcome_and_independent_root_values_without_disco
     self_play.dataset = SelfPlayDataset()
     self_play.iteration = 0
     game = SelfPlayGame()
+    game.acknowledge_model_version(0)
     game.memory = [
         SelfPlayGameMemory(game.board.copy(), [(0, 1)], 0.2),
         SelfPlayGameMemory(game.board.copy(), [(0, 1)], -0.4),

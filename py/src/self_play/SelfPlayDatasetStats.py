@@ -9,6 +9,7 @@ class SelfPlayDatasetStats(NamedTuple):
     num_samples: int = 0
     num_games: int = 0
     game_lengths: list[int] = []
+    game_model_version_ranges: list[tuple[int, int]] = []
     total_generation_time: float = 0.0
     num_too_long_games: int = 0
     capped_game_material_scores: list[float] = []
@@ -44,6 +45,7 @@ class SelfPlayDatasetStats(NamedTuple):
         num_samples: int | None = None,
         num_games: int | None = None,
         game_lengths: list[int] | None = None,
+        game_model_version_ranges: list[tuple[int, int]] | None = None,
         total_generation_time: float | None = None,
         num_too_long_games: int | None = None,
         capped_game_material_scores: list[float] | None = None,
@@ -77,6 +79,9 @@ class SelfPlayDatasetStats(NamedTuple):
             num_samples=num_samples if num_samples is not None else self.num_samples,
             num_games=num_games if num_games is not None else self.num_games,
             game_lengths=game_lengths if game_lengths is not None else self.game_lengths,
+            game_model_version_ranges=(
+                game_model_version_ranges if game_model_version_ranges is not None else self.game_model_version_ranges
+            ),
             total_generation_time=total_generation_time
             if total_generation_time is not None
             else self.total_generation_time,
@@ -213,6 +218,7 @@ Average moves after resignation: {self.num_moves_after_resignation / self.num_re
             num_samples=self.num_samples + other.num_samples,
             num_games=self.num_games + other.num_games,
             game_lengths=self.game_lengths + other.game_lengths,
+            game_model_version_ranges=(self.game_model_version_ranges + other.game_model_version_ranges),
             total_generation_time=self.total_generation_time + other.total_generation_time,
             num_too_long_games=self.num_too_long_games + other.num_too_long_games,
             capped_game_material_scores=self.capped_game_material_scores + other.capped_game_material_scores,

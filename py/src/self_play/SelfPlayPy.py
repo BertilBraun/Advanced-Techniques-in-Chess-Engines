@@ -3,11 +3,14 @@ import copy
 import random
 import time
 
+from os import PathLike
+
 import numpy as np
 from dataclasses import dataclass
 
 from src.games.Board import Player
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.self_play.model_refresh import SearchScheduleState
 from src.util import lerp
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
@@ -23,6 +26,7 @@ from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMov
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
+from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
 
@@ -45,6 +49,13 @@ class SelfPlayGame:
         self.resigned_at_move: int | None = None
         # The player who resigned, if any. None if the game is still ongoing.
         self.resignee: Player | None = None
+        self.oldest_model_version: int | None = None
+        self.newest_model_version: int | None = None
+
+    def acknowledge_model_version(self, model_version: int) -> None:
+        if self.oldest_model_version is None:
+            self.oldest_model_version = model_version
+        self.newest_model_version = model_version
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
@@ -60,6 +71,8 @@ class SelfPlayGame:
         game.start_generation_time = self.start_generation_time
         game.resigned_at_move = self.resigned_at_move
         game.resignee = self.resignee
+        game.oldest_model_version = self.oldest_model_version
+        game.newest_model_version = self.newest_model_version
         return game
 
     def __hash__(self) -> int:
@@ -77,43 +90,80 @@ class SelfPlayPy:
         self.dataset = SelfPlayDataset()
 
         self.iteration = 0
+        self.model_version: int | None = None
+        self.model_refresh_acknowledgements: list[int] = []
+        self.search_schedule_state: SearchScheduleState | None = None
 
         self.mcts: MCTS | None = None
 
     def update_iteration(self, iteration: int) -> None:
-        if len(self.dataset) > 0:
-            log(f'Warning: Dataset should be empty when updating iteration. Discarding {len(self.dataset)} samples.')
-        self.iteration = iteration
-        self.dataset = SelfPlayDataset()
-        self.client.update_iteration(iteration)
+        self.update_search_schedule(self.search_schedule(iteration))
+        self.refresh_model(iteration, model_save_path(iteration, self.client.save_path))
 
-        self._set_mcts(iteration)
+    def snapshot_statistics(self, _tensorboard_step: int) -> None:
+        return
 
-    def _set_mcts(self, iteration: int) -> None:
-        """Set the MCTS parameters for the current iteration."""
-        # start with 10% of the searches, scale up to 100% over the first 10% of total iterations
-        num_searches_per_turn = int(
+    def search_schedule(self, schedule_version: int) -> SearchScheduleState:
+        num_full_searches = int(
             lerp(
                 self.args.mcts.num_searches_per_turn / 5,
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
-                    iteration,
+                    schedule_version,
                     TRAINING_ARGS.self_play_search_warmup_iterations,
                 ),
             )
         )
-        assert num_searches_per_turn > self.args.mcts.num_parallel_searches, (
-            f'Number of searches per turn ({num_searches_per_turn}) must be greater than number of parallel searches ({self.args.mcts.num_parallel_searches}).'
+        return SearchScheduleState(
+            schedule_version=schedule_version,
+            num_parallel_searches=self.args.mcts.num_parallel_searches,
+            num_full_searches=num_full_searches,
+            num_fast_searches=max(1, num_full_searches // 4),
+            endgame_shortcut_strength=0.0,
         )
 
-        log_scalar('dataset/num_searches_per_turn', num_searches_per_turn, iteration)
-
+    def update_search_schedule(self, schedule: SearchScheduleState) -> None:
+        if schedule.num_full_searches <= self.args.mcts.num_parallel_searches:
+            raise ValueError('Full-search budget must exceed the parallel-search count.')
+        self.iteration = schedule.schedule_version
+        self.search_schedule_state = schedule
+        log_scalar(
+            'dataset/num_searches_per_turn',
+            schedule.num_full_searches,
+            schedule.schedule_version,
+        )
         mcts_args = copy.deepcopy(self.args.mcts)
-        mcts_args.num_searches_per_turn = num_searches_per_turn
-        self.mcts = MCTS(self.client, mcts_args)
+        mcts_args.num_searches_per_turn = schedule.num_full_searches
+        if self.mcts is None:
+            self.mcts = MCTS(self.client, mcts_args)
+        else:
+            self.mcts.args = mcts_args
+
+    def refresh_model(
+        self,
+        model_version: int,
+        model_path: str | PathLike[str],
+        *,
+        discard_roots: bool = False,
+    ) -> None:
+        if model_version < 0:
+            raise ValueError('Model version must be nonnegative.')
+        if self.model_version is not None and model_version <= self.model_version:
+            raise ValueError('Model version must increase on every refresh.')
+        if self.search_schedule_state is None:
+            raise RuntimeError('Search schedule must be initialized before loading a model.')
+        if discard_roots:
+            log('Python self-play does not retain MCTS roots between searches.')
+        self.client.refresh_model(model_version, model_path)
+        self.model_version = model_version
+        self.model_refresh_acknowledgements.append(model_version)
 
     def self_play(self) -> None:
         assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
+        if self.model_version is None:
+            raise RuntimeError('A model must be refreshed before self-play starts.')
+        for game in self.self_play_games:
+            game.acknowledge_model_version(self.model_version)
 
         mcts_results = self.mcts.search(
             [spg.board for spg in self.self_play_games],
@@ -252,6 +302,11 @@ class SelfPlayPy:
         # result: 1 if current player won, -1 if current player lost, 0 if draw
 
         self._log_game(spg, game_outcome)
+        if spg.oldest_model_version is None or spg.newest_model_version is None:
+            raise RuntimeError('Completed game has no acknowledged inference model.')
+        self.dataset.stats += SelfPlayDatasetStats(
+            game_model_version_ranges=[(spg.oldest_model_version, spg.newest_model_version)],
+        )
 
         self.dataset.add_generation_stats(
             game_length=len(spg.played_moves),

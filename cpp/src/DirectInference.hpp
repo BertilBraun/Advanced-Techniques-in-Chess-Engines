@@ -2,6 +2,7 @@
 
 #include "BoardEncoding.hpp"
 #include "InferenceClientTypes.hpp"
+#include "InferenceModel.hpp"
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>
@@ -22,6 +23,8 @@ public:
     [[nodiscard]] DirectInferenceOutput createOutputBuffer() const;
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
                      DirectInferenceOutput &output);
+    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
+    void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
 
     [[nodiscard]] size_t maximumBatchSize() const noexcept { return m_maximumBatchSize; }
     [[nodiscard]] bool usesCuda() const noexcept { return m_device.is_cuda(); }
@@ -30,7 +33,7 @@ private:
     const torch::Device m_device;
     const torch::Dtype m_torchDtype;
     const size_t m_maximumBatchSize;
-    torch::jit::script::Module m_model;
+    PreparedInferenceModel m_model;
     torch::Tensor m_deviceInput;
     std::vector<torch::jit::IValue> m_modelInputs{1};
 #ifdef USE_CUDA
@@ -59,6 +62,8 @@ public:
     [[nodiscard]] bool isCompleted(size_t slotIndex) const;
     [[nodiscard]] DirectInferenceOutput waitCompleted(size_t slotIndex);
     void release(size_t slotIndex);
+    [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
+    void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
     [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
         return m_inferenceNanoseconds.load(std::memory_order_relaxed);
     }

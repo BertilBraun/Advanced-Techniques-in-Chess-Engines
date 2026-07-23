@@ -176,9 +176,9 @@ void DirectSelfPlaySearch::completeWorker(std::vector<RootTask> &tasks,
             SearchTree &tree = task.root.tree();
             SearchNode &leaf = tree.node(pendingLeaf.node_index);
             const auto processingStartedAt = std::chrono::steady_clock::now();
-            const InferenceResult inferenceResult = processInferenceResult(
-                policyData + processed * ACTION_SIZE, outcomeData + processed * WDL_OUTPUT_SIZE,
-                leaf.board);
+            const InferenceResult inferenceResult =
+                processInferenceResult(policyData + processed * ACTION_SIZE,
+                                       outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)
@@ -429,4 +429,34 @@ InferenceStatistics DirectSelfPlaySearch::inferenceStatistics() const {
             : static_cast<float>(statistics.directInferenceNanoseconds) /
                   static_cast<float>(availableWorkerNanoseconds);
     return statistics;
+}
+
+void DirectSelfPlaySearch::refreshModel(const std::string &modelPath) {
+    for (const std::deque<PendingBatch> &pendingBatches : m_pending) {
+        if (!pendingBatches.empty()) {
+            throw std::logic_error("Direct self-play search must be idle during model refresh");
+        }
+    }
+
+    std::vector<PreparedInferenceModel> updatedModels;
+    updatedModels.reserve(m_workers.size());
+    for (const std::unique_ptr<DirectInferencePipeline> &worker : m_workers) {
+        updatedModels.push_back(worker->prepareModelRefresh(modelPath));
+    }
+    for (std::size_t workerIndex = 0; workerIndex < m_workers.size(); ++workerIndex) {
+        m_workers[workerIndex]->commitModelRefresh(std::move(updatedModels[workerIndex]));
+    }
+}
+
+void DirectSelfPlaySearch::updateSearchSchedule(const MCTSParams &searchParameters) {
+    m_searchParameters = searchParameters;
+}
+
+std::vector<std::uintptr_t> DirectSelfPlaySearch::workerIdentityTokens() const {
+    std::vector<std::uintptr_t> identities;
+    identities.reserve(m_workers.size());
+    for (const std::unique_ptr<DirectInferencePipeline> &worker : m_workers) {
+        identities.push_back(reinterpret_cast<std::uintptr_t>(worker.get()));
+    }
+    return identities;
 }

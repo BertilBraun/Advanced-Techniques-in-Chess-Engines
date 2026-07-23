@@ -29,7 +29,8 @@ DirectInferenceRunner::DirectInferenceRunner(const std::string &modelPath,
                                              const bool useDedicatedCudaStream)
     : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
       m_maximumBatchSize(maximumBatchSize),
-      m_model(loadInferenceModel(modelPath, m_device, m_torchDtype)) {
+      m_model(std::make_unique<torch::jit::script::Module>(
+          loadInferenceModel(modelPath, m_device, m_torchDtype))) {
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum direct inference batch size must be positive");
     }
@@ -92,7 +93,7 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
     deviceInput.copy_(source, usesCuda());
 
     m_modelInputs[0] = deviceInput;
-    const torch::jit::IValue modelOutput = m_model.forward(m_modelInputs);
+    const torch::jit::IValue modelOutput = m_model->forward(m_modelInputs);
     const auto outputTuple = modelOutput.toTuple();
     if (outputTuple->elements().size() != 2) {
         throw std::runtime_error("Inference model must return policy and WDL tensors");
@@ -106,6 +107,19 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
         at::cuda::getCurrentCUDAStream(m_device.index()).synchronize();
     }
 #endif
+}
+
+PreparedInferenceModel
+DirectInferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
+    const torch::Tensor validationInput =
+        torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
+                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    return prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype,
+                                       validationInput);
+}
+
+void DirectInferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
+    commitInferenceModelUpdate(m_model, std::move(updatedModel));
 }
 
 DirectInferencePipeline::DirectInferencePipeline(const std::string &modelPath,
@@ -225,6 +239,20 @@ void DirectInferencePipeline::release(const size_t slotIndex) {
     slot.state.store(SlotState::Empty, std::memory_order_release);
     slot.state.notify_one();
     m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
+}
+
+PreparedInferenceModel
+DirectInferencePipeline::prepareModelRefresh(const std::string &modelPath) const {
+    for (const std::unique_ptr<Slot> &slot : m_slots) {
+        if (slot->state.load(std::memory_order_acquire) != SlotState::Empty) {
+            throw std::logic_error("Direct inference pipeline must be idle during model refresh");
+        }
+    }
+    return m_runner.prepareModelRefresh(modelPath);
+}
+
+void DirectInferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
+    m_runner.commitModelRefresh(std::move(updatedModel));
 }
 
 void DirectInferencePipeline::inferenceLoop() {

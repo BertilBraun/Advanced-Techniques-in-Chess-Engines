@@ -15,6 +15,9 @@ public:
     [[nodiscard]] MCTSResults search(const std::vector<MCTSBoard> &boards, bool collectStatistics);
     [[nodiscard]] InferenceResult evaluate(const Board &board);
     [[nodiscard]] InferenceStatistics inferenceStatistics() const;
+    void refreshModel(const std::string &modelPath);
+    void updateSearchSchedule(const MCTSParams &searchParameters);
+    [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const;
 
 private:
     struct RootTask {

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gc
 from os import PathLike
 from random import random
 from time import sleep
@@ -25,37 +24,37 @@ class NonCachingInferenceClient:
         self.network_args = network_args
         self.save_path = save_path
         self.model: Network | None = None
+        self.model_version: int | None = None
         self.device = torch.device('cuda', device_id) if USE_GPU else torch.device('cpu')
         self.dtype = torch.bfloat16 if USE_GPU else torch.float32
         self.warning_shown = False
 
-    def load_model(self, model_path: str | PathLike[str]) -> None:
+    def _prepare_model(self, model_path: str | PathLike[str]) -> Network:
         for _ in range(5):
             try:
-                self.model = None
-                if USE_GPU:
-                    torch.cuda.empty_cache()
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-
                 model = load_model(model_path, self.network_args, self.device)
                 model.to(dtype=self.dtype, device=self.device, non_blocking=True)
                 model.disable_auto_grad()
                 model.eval()
                 model.fuse_model()
-                self.model = model
-                return
+                return model
             except RuntimeError as exception:
                 warn(f'Failed to load model: "{exception}" retrying...')
                 sleep(random() * 60)
         raise RuntimeError('Failed to load model after 5 retries')
 
-    def update_iteration(self, iteration: int) -> None:
-        self.load_model(model_save_path(iteration, self.save_path))
+    def load_model(self, model_path: str | PathLike[str]) -> None:
+        self.model = self._prepare_model(model_path)
+
+    def update_iteration(self, model_version: int) -> None:
+        self.refresh_model(model_version, model_save_path(model_version, self.save_path))
+
+    def refresh_model(self, model_version: int, model_path: str | PathLike[str]) -> None:
+        if self.model_version is not None and model_version <= self.model_version:
+            raise ValueError('Model version must increase on every refresh.')
+        updated_model = self._prepare_model(model_path)
+        self.model = updated_model
+        self.model_version = model_version
 
     def inference_batch(self, boards: list[CurrentBoard]) -> list[tuple[list[MoveScore], float]]:
         if not boards:

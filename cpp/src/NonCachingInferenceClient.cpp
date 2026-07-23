@@ -19,7 +19,8 @@ NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams
         m_device = torch::Device(torch::kCUDA, args.device_id);
         m_torchDtype = torch::kBFloat16;
     }
-    m_model = loadInferenceModel(args.currentModelPath, m_device, m_torchDtype);
+    m_model = std::make_unique<torch::jit::script::Module>(
+        loadInferenceModel(args.currentModelPath, m_device, m_torchDtype));
 
     m_prepareThread = std::thread(&NonCachingInferenceClient::prepareWorker, this);
     m_modelThread = std::thread(&NonCachingInferenceClient::modelWorker, this);
@@ -42,6 +43,7 @@ NonCachingInferenceClient::~NonCachingInferenceClient() {
 std::vector<InferenceResult>
 NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
     TIMEIT("NonCachingInferenceClient::inferenceBatch");
+    const std::shared_lock refreshLock(m_refreshMutex);
     if (boards.empty()) {
         return {};
     }
@@ -99,6 +101,7 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
 }
 
 InferenceStatistics NonCachingInferenceClient::getStatistics() {
+    const std::shared_lock refreshLock(m_refreshMutex);
     InferenceStatistics statistics;
     statistics.evaluations = m_totalEvals.load(std::memory_order_relaxed);
     {
@@ -115,13 +118,14 @@ InferenceStatistics NonCachingInferenceClient::getStatistics() {
     return statistics;
 }
 
-void NonCachingInferenceClient::updateModel(const std::string &modelPath) {
-    updateInferenceModel(m_model, modelPath, m_device, m_torchDtype);
-    m_totalEvals.store(0, std::memory_order_relaxed);
-    std::lock_guard<std::mutex> lock(m_modelStatisticsMutex);
-    m_totalModelInferenceCalls = 0;
-    m_totalModelInferencePositions = 0;
-    std::ranges::fill(m_modelBatchSizeHistogram, 0);
+void NonCachingInferenceClient::refreshModel(const std::string &modelPath) {
+    const std::unique_lock refreshLock(m_refreshMutex);
+    const torch::Tensor validationInput =
+        torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
+                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    PreparedInferenceModel updatedModel =
+        prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput);
+    commitInferenceModelUpdate(m_model, std::move(updatedModel));
 }
 
 void NonCachingInferenceClient::prepareWorker() {
@@ -239,7 +243,7 @@ NonCachingInferenceClient::modelInference(const torch::Tensor &inputTensor) {
         inputTensor.to(torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     std::vector<torch::jit::IValue> inputs;
     inputs.push_back(deviceInputTensor);
-    const torch::jit::IValue output = m_model.forward(inputs);
+    const torch::jit::IValue output = m_model->forward(inputs);
     const auto outputTuple = output.toTuple();
     torch::Tensor policies = outputTuple->elements()[0].toTensor();
     torch::Tensor values = outputTuple->elements()[1].toTensor();
