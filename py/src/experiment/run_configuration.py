@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -21,6 +22,7 @@ from src.self_play.resignation import ResignationParams
 from src.train.TrainingArgs import (
     ArtifactRetention,
     ClusterParams,
+    CreditTrainingParams,
     DirectSelfPlayParams,
     OptimizerType,
     RuntimeLimits,
@@ -225,18 +227,38 @@ class ResignationConfiguration(BaseModel):
         return ResignationParams(**self.model_dump())
 
 
+class CreditTrainingConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    replay_ratio: Decimal = Field(gt=0)
+    optimizer_steps_per_quantum: int = Field(gt=0)
+    maximum_optimizer_steps: int = Field(gt=0)
+    replay_capacity_unique_positions: int = Field(gt=0)
+    retained_checkpoint_interval_steps: int = Field(gt=0)
+    learning_rate: float = Field(gt=0)
+
+    def to_parameters(self) -> CreditTrainingParams:
+        return CreditTrainingParams(
+            replay_ratio=self.replay_ratio,
+            optimizer_steps_per_quantum=self.optimizer_steps_per_quantum,
+            maximum_optimizer_steps=self.maximum_optimizer_steps,
+            retained_checkpoint_interval_steps=self.retained_checkpoint_interval_steps,
+        )
+
+
 class WorkloadConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    iterations: int = Field(gt=0)
-    games_per_iteration: int = Field(gt=0)
+    iterations: int | None = Field(default=None, gt=0)
+    games_per_iteration: int | None = Field(default=None, gt=0)
     games_per_replay_file: int = Field(gt=0)
     training_global_batch_size: int = Field(gt=0)
     training_local_batch_size: int = Field(gt=0)
     training_sampling_window: int | None = Field(default=None, gt=0)
+    credit_training: CreditTrainingConfiguration | None = None
     self_play_searches_per_turn: int = Field(gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
-    learning_rate_schedule: tuple[LearningRateStage, ...]
+    learning_rate_schedule: tuple[LearningRateStage, ...] | None = None
     self_play_search_warmup_iterations: int = Field(ge=0)
     outcome_value_loss_weight: float = Field(default=0.85, ge=0.0, le=1.0)
     mcts_value_loss_weight: float = Field(default=0.15, ge=0.0, le=1.0)
@@ -255,15 +277,26 @@ class WorkloadConfiguration(BaseModel):
 
     @model_validator(mode='after')
     def validate_learning_rate_schedule(self) -> WorkloadConfiguration:
-        if not self.learning_rate_schedule:
-            raise ValueError('At least one learning-rate stage must be configured.')
-        start_iterations = tuple(stage.start_iteration for stage in self.learning_rate_schedule)
-        if start_iterations[0] != 0:
-            raise ValueError('The learning-rate schedule must start at iteration 0.')
-        if start_iterations != tuple(sorted(set(start_iterations))):
-            raise ValueError('Learning-rate stage iterations must be unique and strictly increasing.')
-        if start_iterations[-1] >= self.iterations:
-            raise ValueError('Learning-rate stages must start before the configured final iteration.')
+        if self.credit_training is not None:
+            if self.iterations is not None or self.games_per_iteration is not None:
+                raise ValueError('Credit-driven training does not accept iteration or games-per-iteration limits.')
+            if self.training_sampling_window is not None:
+                raise ValueError('Credit-driven training does not use an iteration sampling window.')
+            if self.learning_rate_schedule is not None:
+                raise ValueError('Credit-driven training uses its optimizer-step learning rate.')
+            self.credit_training.to_parameters()
+        else:
+            if self.iterations is None or self.games_per_iteration is None:
+                raise ValueError('Legacy iteration training requires iteration and per-iteration game limits.')
+            if not self.learning_rate_schedule:
+                raise ValueError('Legacy iteration training requires at least one learning-rate stage.')
+            start_iterations = tuple(stage.start_iteration for stage in self.learning_rate_schedule)
+            if start_iterations[0] != 0:
+                raise ValueError('The learning-rate schedule must start at iteration 0.')
+            if start_iterations != tuple(sorted(set(start_iterations))):
+                raise ValueError('Learning-rate stage iterations must be unique and strictly increasing.')
+            if start_iterations[-1] >= self.iterations:
+                raise ValueError('Learning-rate stages must start before the configured final iteration.')
         if self.self_play_fast_searches_per_turn >= self.self_play_searches_per_turn:
             raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
@@ -389,6 +422,12 @@ class RunConfiguration(BaseModel):
             iteration % milestone_interval != 0 for iteration in self.evaluation_protocol.historical_model_iterations
         ):
             raise ValueError('Historical model iterations must align with the retained inference-checkpoint interval.')
+        if self.workload.credit_training is not None:
+            if (
+                self.topology.self_play_processes_per_device_during_training
+                != self.topology.self_play_processes_per_device
+            ):
+                raise ValueError('Credit-driven training keeps every self-play process active during DDP quanta.')
         return self
 
 
@@ -459,6 +498,14 @@ class FixedSamplingWindow:
 
     def __call__(self, _: int) -> int:
         return self.window_size
+
+
+@dataclass(frozen=True)
+class ConstantLearningRate:
+    learning_rate: float
+
+    def __call__(self, _: int, __: OptimizerType) -> float:
+        return self.learning_rate
 
 
 def load_run_configuration(path: Path) -> RunConfiguration:
@@ -664,23 +711,34 @@ def apply_run_configuration(
     retention = configuration.retention
     if retention is None:
         raise ValueError('Artifact retention must be configured for training.')
-    maximum_sampling_window = (
-        workload.training_sampling_window
-        if workload.training_sampling_window is not None
-        else max(training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1))
-    )
-    if retention.replay_window_iterations < maximum_sampling_window:
-        raise ValueError(
-            f'Replay retention of {retention.replay_window_iterations} iterations is below '
-            f'the maximum training sampling window of {maximum_sampling_window}.'
+    if workload.credit_training is None:
+        assert workload.iterations is not None
+        maximum_sampling_window = (
+            workload.training_sampling_window
+            if workload.training_sampling_window is not None
+            else max(training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1))
         )
+        if retention.replay_window_iterations < maximum_sampling_window:
+            raise ValueError(
+                f'Replay retention of {retention.replay_window_iterations} iterations is below '
+                f'the maximum training sampling window of {maximum_sampling_window}.'
+            )
 
     training_args.save_path = str(_resolve_source_path(configuration.output_path))
-    training_args.num_iterations = workload.iterations
-    training_args.num_games_per_iteration = workload.games_per_iteration
+    if workload.iterations is not None:
+        training_args.num_iterations = workload.iterations
+    if workload.games_per_iteration is not None:
+        training_args.num_games_per_iteration = workload.games_per_iteration
     training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
     training_args.training.global_batch_size = workload.training_global_batch_size
     training_args.training.local_batch_size = workload.training_local_batch_size
+    training_args.training.credit_training = (
+        workload.credit_training.to_parameters() if workload.credit_training is not None else None
+    )
+    if workload.credit_training is not None:
+        if training_args.training.num_epochs != 1:
+            raise ValueError('Credit-driven training replaces epochs with exact optimizer-step quanta.')
+        training_args.training.max_buffer_samples = workload.credit_training.replay_capacity_unique_positions
     if workload.training_sampling_window is not None:
         training_args.training.sampling_window = _fixed_sampling_window(workload.training_sampling_window)
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
@@ -720,7 +778,11 @@ def apply_run_configuration(
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
     training_args.self_play.mcts.num_parallel_searches = topology.self_play_parallel_searches
     training_args.training.num_workers = topology.dataloader_workers
-    training_args.training.learning_rate = _piecewise_learning_rate(workload.learning_rate_schedule)
+    training_args.training.learning_rate = (
+        ConstantLearningRate(workload.credit_training.learning_rate)
+        if workload.credit_training is not None
+        else _piecewise_learning_rate(workload.learning_rate_schedule)
+    )
     training_args.cluster = ClusterParams(
         trainer_device_type=topology.trainer_device_type,
         trainer_process_group_backend=topology.trainer_process_group_backend,

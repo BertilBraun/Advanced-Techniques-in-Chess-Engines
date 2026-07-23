@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+from decimal import Decimal
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from src.experiment.cost_accounting import CostCurrency
 from src.experiment.run_configuration import (
     BudgetConfiguration,
+    CreditTrainingConfiguration,
     LearningRateStage,
     PiecewiseLearningRate,
     ApprovalRecord,
@@ -45,6 +47,38 @@ TUNING_CONFIGURATION_PATHS = tuple(Path(f'configs/chess-clean-tuning-{variant}.j
 MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
 V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
 V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
+
+
+def credit_training_configuration_candidate(
+    training_sampling_window: int | None = None,
+    pause_self_play: bool = False,
+) -> RunConfiguration:
+    configuration = load_run_configuration(CONFIGURATION_PATH)
+    workload = configuration.workload.model_copy(
+        update={
+            'iterations': None,
+            'games_per_iteration': None,
+            'training_sampling_window': training_sampling_window,
+            'learning_rate_schedule': None,
+            'credit_training': CreditTrainingConfiguration(
+                replay_ratio=Decimal(4),
+                optimizer_steps_per_quantum=50,
+                maximum_optimizer_steps=500_000,
+                replay_capacity_unique_positions=2_500_000,
+                retained_checkpoint_interval_steps=1_000,
+                learning_rate=0.002,
+            ),
+        }
+    )
+    training_process_counts = (
+        configuration.topology.self_play_processes_per_device_during_training
+        if pause_self_play
+        else configuration.topology.self_play_processes_per_device
+    )
+    topology = configuration.topology.model_copy(
+        update={'self_play_processes_per_device_during_training': training_process_counts}
+    )
+    return configuration.model_copy(update={'workload': workload, 'topology': topology})
 
 
 def sampling_window(_: int) -> int:
@@ -889,3 +923,41 @@ def test_changed_manifest_rejects_different_run_identity(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match='different run'):
         write_run_manifest(manifest_path, other_manifest)
+
+
+def test_credit_training_configuration_uses_step_quanta_without_pausing_self_play() -> None:
+    candidate = credit_training_configuration_candidate()
+    configuration = RunConfiguration.model_validate_json(candidate.model_dump_json())
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    assert credit_training is not None
+    assert credit_training.replay_ratio == Decimal(4)
+    assert credit_training.presentation_credits_per_quantum(arguments.training.global_batch_size) == 51_200
+    assert credit_training.unique_samples_per_quantum(arguments.training.global_batch_size) == 12_800
+    assert arguments.training.max_buffer_samples == 2_500_000
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
+
+
+@pytest.mark.parametrize(
+    ('training_sampling_window', 'pause_self_play', 'message'),
+    (
+        (15, False, 'does not use an iteration sampling window'),
+        (None, True, 'keeps every self-play process active'),
+    ),
+)
+def test_credit_training_rejects_legacy_iteration_or_pause_semantics(
+    training_sampling_window: int | None,
+    pause_self_play: bool,
+    message: str,
+) -> None:
+    candidate = credit_training_configuration_candidate(
+        training_sampling_window=training_sampling_window,
+        pause_self_play=pause_self_play,
+    )
+
+    with pytest.raises(ValidationError, match=message):
+        RunConfiguration.model_validate_json(candidate.model_dump_json())

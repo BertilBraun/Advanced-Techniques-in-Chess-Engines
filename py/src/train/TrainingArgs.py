@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
 from typing import Callable, Literal
 
@@ -191,6 +192,39 @@ class ArtifactRetention:
 OptimizerType = Literal['adamw', 'sgd']
 
 
+@dataclass(frozen=True)
+class CreditTrainingParams:
+    replay_ratio: Decimal
+    optimizer_steps_per_quantum: int
+    maximum_optimizer_steps: int
+    retained_checkpoint_interval_steps: int
+
+    def __post_init__(self) -> None:
+        if self.replay_ratio <= 0:
+            raise ValueError('Replay ratio must be positive.')
+        if self.optimizer_steps_per_quantum <= 0:
+            raise ValueError('Optimizer steps per quantum must be positive.')
+        if self.maximum_optimizer_steps <= 0:
+            raise ValueError('Maximum optimizer steps must be positive.')
+        if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
+            raise ValueError('Maximum optimizer steps must contain complete training quanta.')
+        if self.retained_checkpoint_interval_steps <= 0:
+            raise ValueError('Retained checkpoint interval must be positive.')
+        if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
+            raise ValueError('Retained checkpoint interval must align with training quanta.')
+
+    def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
+        if global_batch_size <= 0:
+            raise ValueError('Global batch size must be positive.')
+        return global_batch_size * self.optimizer_steps_per_quantum
+
+    def unique_samples_per_quantum(self, global_batch_size: int) -> int:
+        required_samples = Decimal(self.presentation_credits_per_quantum(global_batch_size)) / self.replay_ratio
+        if required_samples != required_samples.to_integral_value():
+            raise ValueError('Replay ratio must produce an integral unique-sample quantum.')
+        return int(required_samples)
+
+
 @dataclass
 class TrainingParams:
     num_epochs: int
@@ -251,11 +285,17 @@ class TrainingParams:
     num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
 
+    credit_training: CreditTrainingParams | None = None
+    """Persistent sample-credit schedule used by clean replay-driven training runs."""
+
     def __post_init__(self) -> None:
         if self.outcome_value_loss_weight < 0.0 or self.mcts_value_loss_weight < 0.0:
             raise ValueError('Value-objective component weights cannot be negative.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
+        if self.credit_training is not None:
+            self.credit_training.presentation_credits_per_quantum(self.global_batch_size)
+            self.credit_training.unique_samples_per_quantum(self.global_batch_size)
 
 
 @dataclass

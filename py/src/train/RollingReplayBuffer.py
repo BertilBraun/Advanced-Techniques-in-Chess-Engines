@@ -18,7 +18,7 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.Encoding import decode_board_states
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
@@ -36,7 +36,7 @@ DEFAULT_REPLAY_CAPACITY = 2_500_000
 COMPACTION_TARGET_POSITIONS = 100_000
 COMPACTION_COPY_CHUNK_ROWS = 4_096
 PRESENTATION_CREDITS_PER_UNIQUE_SAMPLE = 4
-ROLLING_REPLAY_INDEX_SCHEMA_VERSION = 2
+ROLLING_REPLAY_INDEX_SCHEMA_VERSION = 3
 COMPACTION_MANIFEST_SCHEMA_VERSION = 1
 
 REPLAY_DATASETS = (
@@ -158,6 +158,7 @@ class RollingReplayIndexState(BaseModel):
 
     schema_version: int
     sampler_seed: int
+    credited_unique_samples: int = Field(ge=0)
     live_segments: tuple[LogicalReplaySegment, ...]
     physical_payloads: tuple[PhysicalReplayPayload, ...]
     retired_payload_ids: tuple[str, ...]
@@ -413,6 +414,11 @@ class RollingReplayBuffer:
         return int(self._prefix[-1])
 
     @property
+    def credited_unique_sample_count(self) -> int:
+        """Return the durable number of positions that have ever earned replay credit."""
+        return self._state.credited_unique_samples
+
+    @property
     def shard_count(self) -> int:
         return len(self._state.live_segments)
 
@@ -494,6 +500,8 @@ class RollingReplayBuffer:
             )
             self._persist_state(
                 self._state_with(
+                    credited_unique_samples=self._state.credited_unique_samples
+                    + sum(manifest.unique_sample_count for manifest in discovered),
                     live_segments=live_segments,
                     physical_payloads=(*self._state.physical_payloads, *new_payloads),
                 )
@@ -783,6 +791,7 @@ class RollingReplayBuffer:
         state = RollingReplayIndexState(
             schema_version=ROLLING_REPLAY_INDEX_SCHEMA_VERSION,
             sampler_seed=sampler_seed,
+            credited_unique_samples=0,
             live_segments=(),
             physical_payloads=(),
             retired_payload_ids=(),
@@ -806,6 +815,7 @@ class RollingReplayBuffer:
 
     def _state_with(
         self,
+        credited_unique_samples: int | None = None,
         live_segments: tuple[LogicalReplaySegment, ...] | None = None,
         physical_payloads: tuple[PhysicalReplayPayload, ...] | None = None,
         retired_payload_ids: tuple[str, ...] | None = None,
@@ -816,6 +826,9 @@ class RollingReplayBuffer:
         return RollingReplayIndexState(
             schema_version=ROLLING_REPLAY_INDEX_SCHEMA_VERSION,
             sampler_seed=self._state.sampler_seed,
+            credited_unique_samples=(
+                self._state.credited_unique_samples if credited_unique_samples is None else credited_unique_samples
+            ),
             live_segments=self._state.live_segments if live_segments is None else live_segments,
             physical_payloads=(self._state.physical_payloads if physical_payloads is None else physical_payloads),
             retired_payload_ids=(

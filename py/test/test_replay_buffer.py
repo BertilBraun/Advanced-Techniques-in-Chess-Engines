@@ -150,6 +150,8 @@ def test_manifest_is_typed_hashed_and_issues_four_credits_once(tmp_path: Path) -
     assert second.unique_samples == 0
     assert second.presentation_credits == 0
     assert buffer.unique_sample_count == 7
+    assert buffer.credited_unique_sample_count == 7
+    assert RollingReplayBuffer(replay_inbox, tmp_path / 'index.json').credited_unique_sample_count == 7
 
 
 def test_default_capacity_is_two_and_a_half_million_disk_backed_positions(tmp_path: Path) -> None:
@@ -360,6 +362,7 @@ def test_recovery_finishes_recorded_eviction_and_preserves_live_sample_set(tmp_p
     interrupted_state = RollingReplayIndexState(
         schema_version=state.schema_version,
         sampler_seed=state.sampler_seed,
+        credited_unique_samples=state.credited_unique_samples,
         live_segments=(live_segment,),
         physical_payloads=state.physical_payloads,
         retired_payload_ids=('old',),
@@ -539,6 +542,7 @@ def test_interrupted_compaction_is_rolled_back_without_losing_sources(tmp_path: 
     interrupted_state = RollingReplayIndexState(
         schema_version=state.schema_version,
         sampler_seed=state.sampler_seed,
+        credited_unique_samples=state.credited_unique_samples,
         live_segments=state.live_segments,
         physical_payloads=state.physical_payloads,
         retired_payload_ids=state.retired_payload_ids,
