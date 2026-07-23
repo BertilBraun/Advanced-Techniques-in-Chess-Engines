@@ -599,6 +599,11 @@ be partially retired.
 Expose compaction as bounded idle work so the Stage 5 scheduler can stop starting new
 compaction as soon as a training quantum is credit-eligible.
 
+Rank 0 is the sole replay-index writer. Other DDP ranks open the replay read-only and
+refresh their index snapshot between quanta after rank 0 finishes ingestion, eviction,
+or compaction. Cross-process leases are deliberately not persisted, so the Stage 5
+scheduler must barrier all rank decodes before entering a replay mutation phase.
+
 ### Task 4E: fast random access
 
 The loader must:

@@ -41,6 +41,25 @@ class TrainingBatch:
     current_player_piece_counts: torch.Tensor
     opponent_piece_counts: torch.Tensor
 
+    def __len__(self) -> int:
+        return int(self.states.shape[0])
+
+    def row_view(self, start: int, stop: int) -> TrainingBatch:
+        if not 0 <= start < stop <= len(self):
+            raise ValueError(f'Batch row view [{start}, {stop}) is outside [0, {len(self)}).')
+        rows = slice(start, stop)
+        return TrainingBatch(
+            states=self.states[rows],
+            policy_targets=self.policy_targets[rows],
+            final_outcomes=self.final_outcomes[rows],
+            mcts_root_values=self.mcts_root_values[rows],
+            outcome_target_eligible=self.outcome_target_eligible[rows],
+            termination_reasons=self.termination_reasons[rows],
+            plies=self.plies[rows],
+            current_player_piece_counts=self.current_player_piece_counts[rows],
+            opponent_piece_counts=self.opponent_piece_counts[rows],
+        )
+
     def pin_memory(self) -> TrainingBatch:
         return TrainingBatch(
             states=self.states.pin_memory(),

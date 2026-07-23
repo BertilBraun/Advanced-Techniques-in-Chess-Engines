@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.train.RollingSelfPlayBuffer import maximum_action_probability
+from src.train.LegacyIterationReplayBuffer import maximum_action_probability
 
 
 def test_maximum_action_probability_uses_sparse_visit_counts() -> None:

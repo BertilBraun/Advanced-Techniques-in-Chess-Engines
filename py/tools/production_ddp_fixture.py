@@ -34,9 +34,16 @@ def encoded_state_templates(count: int, seed: int) -> tuple[bytes, ...]:
     return tuple(templates)
 
 
-def write_replay_fixture(path: Path, sample_count: int, seed: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=False)
-    templates = encoded_state_templates(min(sample_count, 4096), seed)
+def write_replay_fixture(
+    path: Path,
+    sample_count: int,
+    seed: int,
+    state_template_count: int = 4096,
+) -> None:
+    if state_template_count <= 0:
+        raise ValueError('State template count must be positive.')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    templates = encoded_state_templates(min(sample_count, state_template_count), seed)
     states = np.asarray([templates[index % len(templates)] for index in range(sample_count)])
     visit_counts = np.zeros((sample_count, 1, 2), dtype=np.int32)
     visit_counts[:, 0, 0] = np.arange(sample_count) % CurrentGame.action_size

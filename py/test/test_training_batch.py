@@ -15,7 +15,7 @@ from src.self_play.SelfPlayDataset import (
     preserve_prebatched_samples,
 )
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
+from src.train.LegacyIterationReplayBuffer import LegacyIterationReplayBuffer
 from src.train.Trainer import prefetch_training_batches
 
 
@@ -192,7 +192,7 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
     assert first_dataset.save_to_path(first_path)
     assert second_dataset.save_to_path(second_path)
 
-    rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=10)
+    rolling_buffer = LegacyIterationReplayBuffer(max_buffer_samples=10)
     rolling_buffer.update(iteration=0, window_iter=1, files=[first_path, second_path])
     shuffled_indices = [3, 0, 2, 1]
     individual = [rolling_buffer[index] for index in shuffled_indices]
@@ -217,7 +217,7 @@ def test_rolling_buffer_replay_updates_are_idempotent(tmp_path: Path) -> None:
     samples = dataset()
     memory_path = tmp_path / 'memory_0' / 'samples.hdf5'
     assert samples.save_to_path(memory_path)
-    rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=10)
+    rolling_buffer = LegacyIterationReplayBuffer(max_buffer_samples=10)
 
     rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
     rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])

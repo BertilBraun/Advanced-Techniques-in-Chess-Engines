@@ -22,7 +22,7 @@ from src.util.communication import (
 from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
-from src.train.ReplayBuffer import commit_replay_shard
+from src.train.RollingReplayBuffer import commit_replay_shard
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
 from src.util.save_paths import model_save_path

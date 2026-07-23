@@ -27,12 +27,8 @@ def maximum_action_probability(visit_counts: npt.NDArray[np.uint16]) -> float:
     return float(np.max(counts) / total_visits)
 
 
-class RollingSelfPlayBuffer(Dataset[TrainingSample]):
-    """
-    Keeps a sliding window of recent SelfPlayDataset objects in RAM.
-    • The window size in *iterations* comes from  args.training.sampling_window(i)
-    • The window size in *samples* is never allowed to exceed MAX_BUFFER_SAMPLES
-    """
+class LegacyIterationReplayBuffer(Dataset[TrainingSample]):
+    """Legacy in-memory replay window retained until the credit scheduler replaces it."""
 
     def __init__(self, max_buffer_samples: int) -> None:
         self._buf: deque[tuple[int, SelfPlayDataset]] = deque()  # (iteration, dataset)
@@ -75,7 +71,7 @@ class RollingSelfPlayBuffer(Dataset[TrainingSample]):
     def __getitem__(self, idx: int) -> TrainingSample:
         dataset_index = int(np.searchsorted(self._prefix, idx + 1) - 1)
         inner_index = idx - int(self._prefix[dataset_index])
-        return self._buf[dataset_index][1][inner_index]  # (state, π-target, v-target)
+        return self._buf[dataset_index][1][inner_index]
 
     def __getitems__(self, indices: list[int]) -> TrainingBatch:
         sample_indices = np.asarray(indices, dtype=np.int64)

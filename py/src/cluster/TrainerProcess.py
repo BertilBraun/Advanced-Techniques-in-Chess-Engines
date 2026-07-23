@@ -23,7 +23,7 @@ from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.DistributedTraining import DistributedTrainingBatchSampler, distributed_epoch_seed
-from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
+from src.train.LegacyIterationReplayBuffer import LegacyIterationReplayBuffer
 from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import ClusterParams, TrainingArgs, TrainingParams
 from src.train.TrainingStats import TrainingStats
@@ -477,7 +477,7 @@ def _wrap_distributed_model(
 
 def _load_replay(
     command: LoadReplayCommand,
-    rolling_buffer: RollingSelfPlayBuffer,
+    rolling_buffer: LegacyIterationReplayBuffer,
     rank: int,
     run_id: int,
 ) -> RankReplayLoaded:
@@ -499,7 +499,7 @@ def _load_replay(
 
 
 def as_distributed_dataloader(
-    dataset: RollingSelfPlayBuffer,
+    dataset: LegacyIterationReplayBuffer,
     args: TrainingArgs,
     rank: int,
     iteration: int,
@@ -526,7 +526,7 @@ def as_distributed_dataloader(
 
 
 def as_dataloader(
-    dataset: SelfPlayDataset | RollingSelfPlayBuffer,
+    dataset: SelfPlayDataset | LegacyIterationReplayBuffer,
     batch_size: int,
     num_workers: int,
     drop_last: bool = False,
@@ -553,7 +553,7 @@ def _train_iteration(
     model: Network,
     optimizer: torch.optim.Optimizer,
     training_model: DistributedDataParallel,
-    rolling_buffer: RollingSelfPlayBuffer,
+    rolling_buffer: LegacyIterationReplayBuffer,
 ) -> RankTrainingComplete:
     trainer = Trainer(model, optimizer, args.training, training_model=training_model, rank=rank)
     epoch_stats: list[TrainingStats] = []
@@ -622,7 +622,7 @@ def run_trainer_rank(
 ) -> None:
     configure_logging(enabled=is_rank_zero(rank))
     current_phase_id: int | None = None
-    rolling_buffer = RollingSelfPlayBuffer(max_buffer_samples=args.training.max_buffer_samples)
+    rolling_buffer = LegacyIterationReplayBuffer(max_buffer_samples=args.training.max_buffer_samples)
     usage_logger = start_cpu_usage_logger(run_id, 'trainer') if rank == 0 else None
     process_group_initialized = False
     normal_shutdown = False

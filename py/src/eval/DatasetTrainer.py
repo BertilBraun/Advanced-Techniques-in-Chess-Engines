@@ -9,7 +9,7 @@ from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_
 from src.Network import Network
 from src.eval.ModelEvaluationPy import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.train.RollingSelfPlayBuffer import RollingSelfPlayBuffer
+from src.train.LegacyIterationReplayBuffer import LegacyIterationReplayBuffer
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
@@ -78,7 +78,7 @@ def main(dataset_paths: list[str]):
             num_workers=1,
         )
 
-        train_dataset = RollingSelfPlayBuffer(max_buffer_samples=4_000_000)
+        train_dataset = LegacyIterationReplayBuffer(max_buffer_samples=4_000_000)
         train_dataset.update(0, 1, [Path(p) for p in dataset_paths])
         train_dataset.log_all_dataset_stats(run_id)
         train_stats = train_dataset.stats
