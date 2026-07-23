@@ -5,7 +5,7 @@ from enum import IntEnum
 from math import isfinite
 
 
-REPLAY_SCHEMA_VERSION = 2
+REPLAY_SCHEMA_VERSION = 3
 
 
 class FinalOutcome(IntEnum):

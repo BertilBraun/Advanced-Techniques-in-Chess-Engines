@@ -68,6 +68,15 @@ def write_replay_fixture(path: Path, sample_count: int, seed: int) -> None:
             'termination_reasons',
             data=np.full(sample_count, int(TerminationReason.NATURAL), dtype=np.uint8),
         )
+        file.create_dataset('plies', data=np.arange(sample_count, dtype=np.int32) % 512)
+        file.create_dataset(
+            'current_player_piece_counts',
+            data=np.full(sample_count, 8, dtype=np.uint8),
+        )
+        file.create_dataset(
+            'opponent_piece_counts',
+            data=np.full(sample_count, 8, dtype=np.uint8),
+        )
         file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
         file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
         file.attrs['stats'] = str(stats._asdict())

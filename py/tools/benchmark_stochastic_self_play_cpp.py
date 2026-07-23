@@ -312,10 +312,7 @@ def build_result(
     initial_completed_searches: int,
 ) -> BenchmarkResult:
     dataset = self_play.dataset
-    retained_sample_proportion = self_play.args.portion_of_samples_to_keep
-    retained_samples = int(retained_sample_proportion * len(dataset))
-    if retained_samples > 0:
-        dataset.sample(retained_samples)
+    retained_samples = len(dataset)
 
     evaluations = difference(final_statistics.evaluations, initial_statistics.evaluations)
     cache_hits = difference(final_statistics.cacheHits, initial_statistics.cacheHits)
@@ -372,7 +369,7 @@ def build_result(
         active_game_plies_at_end=sum(len(game.played_moves) for game in self_play.self_play_games),
         generated_samples=len(dataset),
         retained_samples=retained_samples,
-        retained_sample_proportion=retained_sample_proportion,
+        retained_sample_proportion=1.0,
         live_materialized_nodes=sum(root.live_nodes for root in active_roots),
         total_child_records=sum(root.total_child_records for root in active_roots),
         arena_capacity_per_game=self_play.mcts.arena_capacity,

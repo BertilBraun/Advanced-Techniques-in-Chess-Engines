@@ -74,6 +74,9 @@ def training_batch(
         mcts_root_values=torch.tensor(mcts_values),
         outcome_target_eligible=torch.tensor(eligibility),
         termination_reasons=torch.tensor(tuple(int(reason) for reason in reasons)),
+        plies=torch.arange(sample_count, dtype=torch.int32),
+        current_player_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
+        opponent_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
     )
 
 
@@ -124,8 +127,8 @@ def test_self_play_stores_hard_outcome_and_independent_root_values_without_disco
     game = SelfPlayGame()
     game.acknowledge_model_version(0)
     game.memory = [
-        SelfPlayGameMemory(game.board.copy(), [(0, 1)], 0.2),
-        SelfPlayGameMemory(game.board.copy(), [(0, 1)], -0.4),
+        SelfPlayGameMemory(game.board.copy(), [(0, 1)], 0.2, 0),
+        SelfPlayGameMemory(game.board.copy(), [(0, 1)], -0.4, 1),
     ]
 
     self_play._add_training_data(game, 1.0, TerminationReason.NATURAL)

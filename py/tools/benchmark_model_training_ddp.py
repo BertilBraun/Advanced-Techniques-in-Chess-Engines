@@ -171,6 +171,19 @@ def benchmark_rank(
                 dtype=torch.int64,
                 device=device,
             ),
+            plies=torch.zeros(arguments.local_batch_size, dtype=torch.int32, device=device),
+            current_player_piece_counts=torch.full(
+                (arguments.local_batch_size,),
+                8,
+                dtype=torch.int8,
+                device=device,
+            ),
+            opponent_piece_counts=torch.full(
+                (arguments.local_batch_size,),
+                8,
+                dtype=torch.int8,
+                device=device,
+            ),
         )
 
         for _ in range(arguments.warmup_batches):

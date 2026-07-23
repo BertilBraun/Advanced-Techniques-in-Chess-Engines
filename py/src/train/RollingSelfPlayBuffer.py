@@ -88,6 +88,7 @@ class RollingSelfPlayBuffer(Dataset[TrainingSample]):
             [sample[0] for sample in raw_samples],
             [sample[1] for sample in raw_samples],
             [sample[2] for sample in raw_samples],
+            [sample[3] for sample in raw_samples],
         )
 
     def log_all_dataset_stats(self, run: int) -> None:

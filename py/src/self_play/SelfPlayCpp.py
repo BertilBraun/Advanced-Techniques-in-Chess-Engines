@@ -37,7 +37,7 @@ from src.self_play.resignation import (
     best_child_value_from_root_perspective,
 )
 from src.util import lerp
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
 from src.self_play.value_target import (
     ReplayValueTarget,
     TerminationReason,
@@ -61,6 +61,7 @@ class SelfPlayGameMemory:
     board: CurrentBoard
     visit_counts: list[tuple[int, int]]
     result_score: float
+    ply: int
 
 
 @dataclass(frozen=True)
@@ -398,7 +399,14 @@ class SelfPlayCpp:
 
             was_full_searched = boards[i].should_run_full_search
             if was_full_searched:
-                spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
+                spg.memory.append(
+                    SelfPlayGameMemory(
+                        spg.board.copy(),
+                        mcts_result.visits,
+                        mcts_result.result,
+                        len(spg.played_moves),
+                    )
+                )
                 if self._record_resignation_observation(spg, mcts_result):
                     if spg.is_resignation_audit:
                         self.dataset.stats += SelfPlayDatasetStats(hypothetical_resignations=1)
@@ -730,16 +738,22 @@ class SelfPlayCpp:
                 sample_current_player=mem.board.current_player,
             )
 
-            for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
-                self.dataset.add_sample(
-                    board.astype(np.int8).copy(),
-                    self._preprocess_visit_counts(visit_counts),
-                    ReplayValueTarget.from_scores(
-                        final_score=turn_game_outcome,
-                        mcts_root_value=mem.result_score,
-                        termination_reason=termination_reason,
-                    ),
-                )
+            board = CurrentGame.get_canonical_board(mem.board).astype(np.int8).copy()
+            current_piece_count, opponent_piece_count = CurrentGame.replay_piece_counts(board)
+            self.dataset.add_sample(
+                board,
+                self._preprocess_visit_counts(mem.visit_counts),
+                ReplayValueTarget.from_scores(
+                    final_score=turn_game_outcome,
+                    mcts_root_value=mem.result_score,
+                    termination_reason=termination_reason,
+                ),
+                ReplaySampleMetadata(
+                    ply=mem.ply,
+                    current_player_piece_count=current_piece_count,
+                    opponent_piece_count=opponent_piece_count,
+                ),
+            )
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more

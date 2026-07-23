@@ -144,5 +144,9 @@ class CheckersGame(Game[CheckersMove]):
             flipped_visit_counts.append((flipped_move, count))
         return flipped_visit_counts
 
+    def replay_piece_counts(self, canonical_state: np.ndarray) -> tuple[int, int]:
+        del canonical_state
+        return 0, 0
+
     def get_initial_board(self) -> CheckersBoard:
         return CheckersBoard()

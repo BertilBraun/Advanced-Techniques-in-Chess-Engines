@@ -73,7 +73,6 @@ TRAINING_ARGS = TrainingArgs(
         num_moves_after_which_to_play_greedy=SIZE * 6,  # even number - no bias towards white
         starting_temperature=1.0,
         num_games_after_which_to_write=4,
-        portion_of_samples_to_keep=0.2,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,  # based on https://arxiv.org/pdf/1902.10565
             num_parallel_searches=4,

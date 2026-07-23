@@ -6,7 +6,7 @@ from collections import defaultdict
 
 
 from src.games.tictactoe.TicTacToeBoard import TicTacToeBoard
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
 from src.games.tictactoe.TicTacToeGame import TicTacToeGame
 
 
@@ -120,6 +120,7 @@ def generate_database(path: Path):
                     mcts_root_value=0.0,
                     termination_reason=TerminationReason.DIAGNOSTIC,
                 ),
+                ReplaySampleMetadata(ply=0, current_player_piece_count=0, opponent_piece_count=0),
             )
             dataset.add_generation_stats(1, 0.0, False)
             generated_states.add(key)

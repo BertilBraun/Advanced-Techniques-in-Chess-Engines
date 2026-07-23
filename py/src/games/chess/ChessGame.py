@@ -269,6 +269,14 @@ class ChessGame(Game[ChessMove]):
             ),
         ]
 
+    def replay_piece_counts(self, canonical_state: np.ndarray) -> tuple[int, int]:
+        if canonical_state.shape != self.representation_shape:
+            raise ValueError(f'Expected chess state shape {self.representation_shape}, got {canonical_state.shape}.')
+        return (
+            int(np.count_nonzero(canonical_state[:6])),
+            int(np.count_nonzero(canonical_state[6:12])),
+        )
+
     def get_initial_board(self) -> ChessBoard:
         return ChessBoard()
 

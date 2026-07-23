@@ -81,7 +81,6 @@ def objective(trial: optuna.Trial) -> float:
         use_inference_cache=True,
         mcts=mcts_params,
         num_moves_after_which_to_play_greedy=10,
-        portion_of_samples_to_keep=0.5,
     )
 
     training_params = TrainingParams(

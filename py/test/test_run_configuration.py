@@ -81,7 +81,6 @@ def training_args() -> TrainingArgs:
             inference_cache_capacity=1,
             use_inference_cache=True,
             num_moves_after_which_to_play_greedy=10,
-            portion_of_samples_to_keep=0.5,
         ),
         training=TrainingParams(
             num_epochs=1,

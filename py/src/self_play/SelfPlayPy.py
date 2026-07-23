@@ -15,7 +15,7 @@ from src.util import lerp
 from src.mcts.MCTS import MCTS, action_probabilities
 from src.mcts.MCTSNode import MCTSNode
 from src.cluster.InferenceClient import InferenceClient
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
 from src.self_play.value_target import (
     ReplayValueTarget,
     TerminationReason,
@@ -36,6 +36,7 @@ class SelfPlayGameMemory:
     board: CurrentBoard
     visit_counts: list[tuple[int, int]]
     result_score: float
+    ply: int
 
 
 class SelfPlayGame:
@@ -182,7 +183,12 @@ class SelfPlayPy:
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results)):
             if mcts_result.is_full_search:
                 spg.memory.append(
-                    SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
+                    SelfPlayGameMemory(
+                        spg.board.copy(),
+                        mcts_result.visit_counts,
+                        mcts_result.result_score,
+                        len(spg.played_moves),
+                    )
                 )
 
             if CURRENT_GAME == 'chess':
@@ -320,16 +326,22 @@ class SelfPlayPy:
                 sample_current_player=mem.board.current_player,
             )
 
-            for board, visit_counts in CurrentGame.symmetric_variations(mem.board, mem.visit_counts):
-                self.dataset.add_sample(
-                    board.astype(np.int8).copy(),
-                    self._preprocess_visit_counts(visit_counts),
-                    ReplayValueTarget.from_scores(
-                        final_score=turn_game_outcome,
-                        mcts_root_value=mem.result_score,
-                        termination_reason=termination_reason,
-                    ),
-                )
+            board = CurrentGame.get_canonical_board(mem.board).astype(np.int8).copy()
+            current_piece_count, opponent_piece_count = CurrentGame.replay_piece_counts(board)
+            self.dataset.add_sample(
+                board,
+                self._preprocess_visit_counts(mem.visit_counts),
+                ReplayValueTarget.from_scores(
+                    final_score=turn_game_outcome,
+                    mcts_root_value=mem.result_score,
+                    termination_reason=termination_reason,
+                ),
+                ReplaySampleMetadata(
+                    ply=mem.ply,
+                    current_player_piece_count=current_piece_count,
+                    opponent_piece_count=opponent_piece_count,
+                ),
+            )
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more

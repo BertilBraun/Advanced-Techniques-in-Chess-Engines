@@ -80,5 +80,9 @@ class TicTacToeGame(Game[TicTacToeMove]):
             updated_visit_counts.append((updated_move, count))
         return updated_visit_counts
 
+    def replay_piece_counts(self, canonical_state: np.ndarray) -> tuple[int, int]:
+        del canonical_state
+        return 0, 0
+
     def get_initial_board(self) -> TicTacToeBoard:
         return TicTacToeBoard()

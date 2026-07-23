@@ -6,7 +6,7 @@ import h5py
 import torch
 import numpy as np
 import numpy.typing as npt
-from os import PathLike
+from os import PathLike, replace
 from pathlib import Path
 from typing import Any
 from torch.utils.data import Dataset
@@ -37,6 +37,9 @@ class TrainingBatch:
     mcts_root_values: torch.Tensor
     outcome_target_eligible: torch.Tensor
     termination_reasons: torch.Tensor
+    plies: torch.Tensor
+    current_player_piece_counts: torch.Tensor
+    opponent_piece_counts: torch.Tensor
 
     def pin_memory(self) -> TrainingBatch:
         return TrainingBatch(
@@ -46,6 +49,9 @@ class TrainingBatch:
             mcts_root_values=self.mcts_root_values.pin_memory(),
             outcome_target_eligible=self.outcome_target_eligible.pin_memory(),
             termination_reasons=self.termination_reasons.pin_memory(),
+            plies=self.plies.pin_memory(),
+            current_player_piece_counts=self.current_player_piece_counts.pin_memory(),
+            opponent_piece_counts=self.opponent_piece_counts.pin_memory(),
         )
 
 
@@ -57,15 +63,44 @@ class TrainingSample:
     mcts_root_value: torch.Tensor
     outcome_target_eligible: torch.Tensor
     termination_reason: torch.Tensor
+    ply: torch.Tensor
+    current_player_piece_count: torch.Tensor
+    opponent_piece_count: torch.Tensor
+
+
+@dataclass(frozen=True)
+class ReplaySampleMetadata:
+    ply: int
+    current_player_piece_count: int
+    opponent_piece_count: int
+
+    def __post_init__(self) -> None:
+        if self.ply < 0:
+            raise ValueError('Sample ply must be nonnegative.')
+        if not 0 <= self.current_player_piece_count <= 16:
+            raise ValueError('Current-player piece count must be in [0, 16].')
+        if not 0 <= self.opponent_piece_count <= 16:
+            raise ValueError('Opponent piece count must be in [0, 16].')
+
+
+def chess_sample_metadata(state: npt.NDArray[np.int8], ply: int) -> ReplaySampleMetadata:
+    if state.shape != CurrentGame.representation_shape:
+        raise ValueError(f'Expected chess state shape {CurrentGame.representation_shape}, got {state.shape}.')
+    return ReplaySampleMetadata(
+        ply=ply,
+        current_player_piece_count=int(np.count_nonzero(state[:6])),
+        opponent_piece_count=int(np.count_nonzero(state[6:12])),
+    )
 
 
 def training_batch_from_raw_samples(
     encoded_states: Sequence[bytes],
     visit_counts: Sequence[npt.NDArray[np.uint16]],
     value_targets: Sequence[ReplayValueTarget],
+    sample_metadata: Sequence[ReplaySampleMetadata],
 ) -> TrainingBatch:
     batch_size = len(encoded_states)
-    if len(visit_counts) != batch_size or len(value_targets) != batch_size:
+    if len(visit_counts) != batch_size or len(value_targets) != batch_size or len(sample_metadata) != batch_size:
         raise ValueError('Training batch inputs must contain the same number of samples.')
 
     states = torch.from_numpy(decode_board_states(encoded_states)).to(dtype=torch.float32)
@@ -97,6 +132,13 @@ def training_batch_from_raw_samples(
         termination_reasons=torch.from_numpy(
             np.fromiter((int(target.termination_reason) for target in value_targets), dtype=np.int64)
         ),
+        plies=torch.from_numpy(np.fromiter((metadata.ply for metadata in sample_metadata), dtype=np.int32)),
+        current_player_piece_counts=torch.from_numpy(
+            np.fromiter((metadata.current_player_piece_count for metadata in sample_metadata), dtype=np.int8)
+        ),
+        opponent_piece_counts=torch.from_numpy(
+            np.fromiter((metadata.opponent_piece_count for metadata in sample_metadata), dtype=np.int8)
+        ),
     )
 
 
@@ -125,6 +167,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         self.encoded_states: list[bytes] = []
         self.visit_counts: list[npt.NDArray[np.uint16]] = []
         self.value_targets: list[ReplayValueTarget] = []
+        self.sample_metadata: list[ReplaySampleMetadata] = []
         self.stats = SelfPlayDatasetStats()
 
     def add_generation_stats(self, game_length: int, generation_time: float) -> None:
@@ -139,12 +182,14 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         state: npt.NDArray[np.int8],
         visit_counts: list[tuple[int, int]],
         value_target: ReplayValueTarget,
+        sample_metadata: ReplaySampleMetadata,
     ) -> None:
         assert len(visit_counts) > 0, 'Visit counts must not be empty'
 
         self.encoded_states.append(encode_board_state(state))
         self.visit_counts.append(np.array(visit_counts, dtype=np.uint16))
         self.value_targets.append(value_target)
+        self.sample_metadata.append(sample_metadata)
         self.stats += SelfPlayDatasetStats(num_samples=1)
 
     def __len__(self) -> int:
@@ -164,6 +209,12 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             mcts_root_value=torch.tensor(value_target.mcts_root_value, dtype=torch.float32),
             outcome_target_eligible=torch.tensor(value_target.outcome_target_eligible, dtype=torch.bool),
             termination_reason=torch.tensor(int(value_target.termination_reason), dtype=torch.int64),
+            ply=torch.tensor(self.sample_metadata[idx].ply, dtype=torch.int32),
+            current_player_piece_count=torch.tensor(
+                self.sample_metadata[idx].current_player_piece_count,
+                dtype=torch.int8,
+            ),
+            opponent_piece_count=torch.tensor(self.sample_metadata[idx].opponent_piece_count, dtype=torch.int8),
         )
 
     def __getitems__(self, indices: list[int]) -> TrainingBatch:
@@ -171,16 +222,26 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             [self.encoded_states[index] for index in indices],
             [self.visit_counts[index] for index in indices],
             [self.value_targets[index] for index in indices],
+            [self.sample_metadata[index] for index in indices],
         )
 
-    def raw_sample(self, idx: int) -> tuple[bytes, npt.NDArray[np.uint16], ReplayValueTarget]:
-        return self.encoded_states[idx], self.visit_counts[idx], self.value_targets[idx]
+    def raw_sample(
+        self,
+        idx: int,
+    ) -> tuple[bytes, npt.NDArray[np.uint16], ReplayValueTarget, ReplaySampleMetadata]:
+        return (
+            self.encoded_states[idx],
+            self.visit_counts[idx],
+            self.value_targets[idx],
+            self.sample_metadata[idx],
+        )
 
     def __add__(self, other: SelfPlayDataset) -> SelfPlayDataset:
         new_dataset = SelfPlayDataset()
         new_dataset.encoded_states = self.encoded_states + other.encoded_states
         new_dataset.visit_counts = self.visit_counts + other.visit_counts
         new_dataset.value_targets = self.value_targets + other.value_targets
+        new_dataset.sample_metadata = self.sample_metadata + other.sample_metadata
         new_dataset.stats = self.stats + other.stats
         return new_dataset
 
@@ -189,26 +250,37 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         """Merge only samples whose board and complete value-target provenance agree."""
         merged_samples: dict[
             tuple[bytes, ReplayValueTarget],
-            npt.NDArray[np.uint16],
+            tuple[npt.NDArray[np.uint16], ReplaySampleMetadata],
         ] = {}
 
-        for state, visit_counts, value_target in zip(self.encoded_states, self.visit_counts, self.value_targets):
+        for state, visit_counts, value_target, metadata in zip(
+            self.encoded_states,
+            self.visit_counts,
+            self.value_targets,
+            self.sample_metadata,
+        ):
             sample_key = (state, value_target)
             if sample_key in merged_samples:
-                visit_count_sum = merged_samples[sample_key]
+                visit_count_sum, existing_metadata = merged_samples[sample_key]
                 counts_by_move = {int(move): int(count) for move, count in visit_count_sum}
                 for move, count in visit_counts:
                     counts_by_move[int(move)] = counts_by_move.get(int(move), 0) + int(count)
-                merged_samples[sample_key] = np.asarray(tuple(counts_by_move.items()), dtype=np.uint16)
+                if metadata != existing_metadata:
+                    raise ValueError('Duplicate replay positions disagree on typed sample metadata.')
+                merged_samples[sample_key] = (
+                    np.asarray(tuple(counts_by_move.items()), dtype=np.uint16),
+                    existing_metadata,
+                )
             else:
-                merged_samples[sample_key] = visit_counts
+                merged_samples[sample_key] = (visit_counts, metadata)
 
         deduplicated_dataset = SelfPlayDataset()
 
-        for (state, value_target), visit_count_sum in merged_samples.items():
+        for (state, value_target), (visit_count_sum, metadata) in merged_samples.items():
             deduplicated_dataset.encoded_states.append(state)
             deduplicated_dataset.visit_counts.append(visit_count_sum)
             deduplicated_dataset.value_targets.append(value_target)
+            deduplicated_dataset.sample_metadata.append(metadata)
 
         deduplicated_dataset.stats = self.stats.overwrite(num_samples=len(merged_samples))
         return deduplicated_dataset
@@ -221,6 +293,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         shuffled_dataset.encoded_states = [self.encoded_states[i] for i in indices]
         shuffled_dataset.visit_counts = [self.visit_counts[i] for i in indices]
         shuffled_dataset.value_targets = [self.value_targets[i] for i in indices]
+        shuffled_dataset.sample_metadata = [self.sample_metadata[i] for i in indices]
         shuffled_dataset.stats = self.stats
         return shuffled_dataset
 
@@ -231,6 +304,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         sampled_dataset.encoded_states = [self.encoded_states[i] for i in indices]
         sampled_dataset.visit_counts = [self.visit_counts[i] for i in indices]
         sampled_dataset.value_targets = [self.value_targets[i] for i in indices]
+        sampled_dataset.sample_metadata = [self.sample_metadata[i] for i in indices]
         sampled_dataset.stats = self.stats.overwrite(num_samples=num_samples)
         return sampled_dataset
 
@@ -257,6 +331,15 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file['termination_reasons'][...],
                 dtype=np.uint8,
             )  # type: ignore
+            stored_plies = np.asarray(file['plies'][...], dtype=np.int32)  # type: ignore
+            stored_current_player_piece_counts = np.asarray(
+                file['current_player_piece_counts'][...],
+                dtype=np.uint8,
+            )  # type: ignore
+            stored_opponent_piece_counts = np.asarray(
+                file['opponent_piece_counts'][...],
+                dtype=np.uint8,
+            )  # type: ignore
             stored_lengths = {
                 len(stored_states),
                 len(stored_visit_counts),
@@ -264,6 +347,9 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 len(stored_mcts_root_values),
                 len(stored_outcome_eligibility),
                 len(stored_termination_reasons),
+                len(stored_plies),
+                len(stored_current_player_piece_counts),
+                len(stored_opponent_piece_counts),
             }
             if len(stored_lengths) != 1:
                 raise ValueError(f'Replay {file_path} has inconsistent sample-column lengths.')
@@ -284,6 +370,18 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     stored_mcts_root_values,
                     stored_termination_reasons,
                     stored_outcome_eligibility,
+                )
+            ]
+            dataset.sample_metadata = [
+                ReplaySampleMetadata(
+                    ply=int(ply),
+                    current_player_piece_count=int(current_count),
+                    opponent_piece_count=int(opponent_count),
+                )
+                for ply, current_count, opponent_count in zip(
+                    stored_plies,
+                    stored_current_player_piece_counts,
+                    stored_opponent_piece_counts,
                 )
             ]
         return dataset
@@ -347,14 +445,24 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         return old_save_format
 
     def save_to_path(self, file_path: Path) -> bool:
-        if len({len(self.encoded_states), len(self.visit_counts), len(self.value_targets)}) != 1:
+        if (
+            len(
+                {
+                    len(self.encoded_states),
+                    len(self.visit_counts),
+                    len(self.value_targets),
+                    len(self.sample_metadata),
+                }
+            )
+            != 1
+        ):
             raise ValueError('Replay sample columns must contain the same number of entries.')
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         tmp_folder = file_path.parent.parent / 'tmp'
         tmp_folder.mkdir(parents=True, exist_ok=True)
 
-        tmp_file_path = tmp_folder / file_path.name
+        tmp_file_path = tmp_folder / f'.{file_path.name}.{random_id()}.tmp'
 
         # write a h5py file with states, policy targets and value targets in it
         try:
@@ -395,6 +503,24 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                         dtype=np.uint8,
                     ),
                 )
+                file.create_dataset(
+                    'plies',
+                    data=np.fromiter((metadata.ply for metadata in self.sample_metadata), dtype=np.int32),
+                )
+                file.create_dataset(
+                    'current_player_piece_counts',
+                    data=np.fromiter(
+                        (metadata.current_player_piece_count for metadata in self.sample_metadata),
+                        dtype=np.uint8,
+                    ),
+                )
+                file.create_dataset(
+                    'opponent_piece_counts',
+                    data=np.fromiter(
+                        (metadata.opponent_piece_count for metadata in self.sample_metadata),
+                        dtype=np.uint8,
+                    ),
+                )
                 # write the metadata information about the current game, action size, representation shape, etc.
                 file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
                 file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
@@ -402,7 +528,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file.attrs['stats'] = str(self.stats._asdict())
 
             # move the tmp file to the final location
-            tmp_file_path.rename(file_path)
+            replace(tmp_file_path, file_path)
 
             # if we reach this point, we successfully saved the dataset
             return True
@@ -435,6 +561,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             chunk.encoded_states = self.encoded_states[i : i + chunk_size]
             chunk.visit_counts = self.visit_counts[i : i + chunk_size]
             chunk.value_targets = self.value_targets[i : i + chunk_size]
+            chunk.sample_metadata = self.sample_metadata[i : i + chunk_size]
             if chunk_index == 0:
                 chunk.stats = self.stats.overwrite(num_samples=len(chunk))
             else:

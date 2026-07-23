@@ -50,6 +50,11 @@ class Game(ABC, Generic[_Move]):
         return [self.decode_move(i, board) for i in moves]
 
     @abstractmethod
+    def replay_piece_counts(self, canonical_state: np.ndarray) -> tuple[int, int]:
+        """Return current-player and opponent material counts for replay slicing."""
+        pass
+
+    @abstractmethod
     def symmetric_variations(
         self, board: Board[_Move], visit_counts: list[tuple[int, int]]
     ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:

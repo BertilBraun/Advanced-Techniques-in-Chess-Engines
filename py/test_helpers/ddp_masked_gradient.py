@@ -80,6 +80,9 @@ def masked_value_gradient_rank(
             mcts_root_values=torch.zeros(2),
             outcome_target_eligible=torch.tensor(eligibility),
             termination_reasons=torch.tensor(tuple(int(reason) for reason in reasons)),
+            plies=torch.arange(2, dtype=torch.int32),
+            current_player_piece_counts=torch.full((2,), 8, dtype=torch.int8),
+            opponent_piece_counts=torch.full((2,), 8, dtype=torch.int8),
         )
 
         loss = trainer._calculate_loss_for_batch(batch)

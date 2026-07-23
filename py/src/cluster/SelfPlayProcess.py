@@ -1,5 +1,6 @@
 import random
 import time
+from pathlib import Path
 import numpy as np
 import torch
 
@@ -21,6 +22,7 @@ from src.util.communication import (
 from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
+from src.train.ReplayBuffer import commit_replay_shard
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
 from src.util.save_paths import model_save_path
@@ -181,7 +183,20 @@ class SelfPlayProcess:
         if not len(self.self_play.dataset):
             return
 
-        subsampled_size = int(self.args.self_play.portion_of_samples_to_keep * len(self.self_play.dataset))
-        subsampled_dataset = self.self_play.dataset.sample(subsampled_size)
-        subsampled_dataset.save(self.args.save_path, iteration)
+        model_version_ranges = self.self_play.dataset.stats.game_model_version_ranges
+        minimum_model_version = min(
+            (minimum for minimum, _ in model_version_ranges),
+            default=iteration,
+        )
+        maximum_model_version = max(
+            (maximum for _, maximum in model_version_ranges),
+            default=iteration,
+        )
+        commit_replay_shard(
+            dataset=self.self_play.dataset,
+            replay_inbox=Path(self.args.save_path) / 'replay_inbox',
+            producing_worker=self.node_id,
+            minimum_model_version=minimum_model_version,
+            maximum_model_version=maximum_model_version,
+        )
         self.self_play.dataset = SelfPlayDataset()

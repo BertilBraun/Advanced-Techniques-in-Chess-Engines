@@ -1,5 +1,4 @@
 import io
-import random
 import sys
 import chess.pgn
 import numpy as np
@@ -42,9 +41,8 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessGame import ChessGame
-    from src.self_play.SelfPlayDataset import SelfPlayDataset
+    from src.self_play.SelfPlayDataset import SelfPlayDataset, chess_sample_metadata
     from src.self_play.value_target import ReplayValueTarget, TerminationReason
-    from src.settings import TRAINING_ARGS
 
     chess_game = ChessGame()
     dataset = SelfPlayDataset()
@@ -57,21 +55,19 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
 
             board = ChessBoard()
             for move in game.mainline_moves():
-                if random.random() < TRAINING_ARGS.self_play.portion_of_samples_to_keep and (
-                    move.promotion in (None, chess.QUEEN)
-                ):
+                if move.promotion in (None, chess.QUEEN):
                     visit_counts = [(chess_game.encode_move(move, board), 1)]
-
-                    for board_variation, visits in chess_game.symmetric_variations(board, visit_counts):
-                        dataset.add_sample(
-                            board_variation.copy().astype(np.int8),
-                            visits,
-                            ReplayValueTarget.from_scores(
-                                final_score=winner * board.current_player,
-                                mcts_root_value=0.0,
-                                termination_reason=TerminationReason.DIAGNOSTIC,
-                            ),
-                        )
+                    board_state = chess_game.get_canonical_board(board).copy().astype(np.int8)
+                    dataset.add_sample(
+                        board_state,
+                        visit_counts,
+                        ReplayValueTarget.from_scores(
+                            final_score=winner * board.current_player,
+                            mcts_root_value=0.0,
+                            termination_reason=TerminationReason.DIAGNOSTIC,
+                        ),
+                        chess_sample_metadata(board_state, board.board.ply()),
+                    )
 
                 board.make_move(move)
 

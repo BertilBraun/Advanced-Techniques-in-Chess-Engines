@@ -96,9 +96,6 @@ class SelfPlayParams:
     num_moves_after_which_to_play_greedy: int
     """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
 
-    portion_of_samples_to_keep: float
-    """This is the portion of samples to keep in the self-play dataset. This is used to reduce the size of the dataset and to keep only some of the moves that were played in self-play. This reduces the risk of overfitting to given lines of play and keeps the dataset diverse. This comes at the cost of longer self-play times, as fewer samples are kept. Typically 0.1-0.3 for games like Hex, Connect4, Go, as their board positions are very static and slightly larger 0.4-0.7 for games like Chess, as their board positions are more dynamic and the dataset is larger. A value of 1.0 means that all samples are kept, which is not recommended as it leads to overfitting and a very large dataset."""
-
     maximum_game_plies: int | None = None
     """Maximum self-play game length while the iteration limit is active."""
 
@@ -236,7 +233,7 @@ class TrainingParams:
         return lerp(min_lr, base_lr, batch_percentage)
     """
 
-    max_buffer_samples: int = 4_000_000
+    max_buffer_samples: int = 2_500_000
     """This is the maximum size of the training buffer to use for the training. This is used to limit the size of the training buffer to prevent memory issues. The higher the value the more stable the training but the slower the training. Typically 1_000_000-10_000_000 for training"""
 
     max_grad_norm: float = 0.5

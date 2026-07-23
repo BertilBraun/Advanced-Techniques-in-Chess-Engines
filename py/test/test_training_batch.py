@@ -9,6 +9,7 @@ import torch
 from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
 from src.self_play.SelfPlayDataset import (
     ReplaySchemaVersionError,
+    ReplaySampleMetadata,
     SelfPlayDataset,
     TrainingBatch,
     preserve_prebatched_samples,
@@ -36,6 +37,12 @@ def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch
     torch.testing.assert_close(actual.mcts_root_values, expected.mcts_root_values)
     torch.testing.assert_close(actual.outcome_target_eligible, expected.outcome_target_eligible)
     torch.testing.assert_close(actual.termination_reasons, expected.termination_reasons)
+    torch.testing.assert_close(actual.plies, expected.plies)
+    torch.testing.assert_close(
+        actual.current_player_piece_counts,
+        expected.current_player_piece_counts,
+    )
+    torch.testing.assert_close(actual.opponent_piece_counts, expected.opponent_piece_counts)
 
 
 def encoded_state(seed: int) -> bytes:
@@ -66,6 +73,14 @@ def dataset() -> SelfPlayDataset:
         ReplayValueTarget.from_scores(1.0, 0.5, TerminationReason.PLY_CAP),
         ReplayValueTarget.from_scores(1.0, 1.0, TerminationReason.RESIGNATION),
     ]
+    result.sample_metadata = [
+        ReplaySampleMetadata(
+            ply=seed,
+            current_player_piece_count=16 - seed,
+            opponent_piece_count=15 - seed,
+        )
+        for seed in range(4)
+    ]
     return result
 
 
@@ -88,6 +103,9 @@ def test_prebatched_dataset_matches_individual_samples() -> None:
         mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
         outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
         termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
+        plies=torch.stack([sample.ply for sample in individual]),
+        current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
+        opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
     )
 
     batch = samples.__getitems__(list(range(len(samples))))
@@ -112,6 +130,9 @@ def test_prebatched_dataset_dataloader_preserves_components() -> None:
     assert batch.mcts_root_values.shape == (len(samples),)
     assert batch.outcome_target_eligible.shape == (len(samples),)
     assert batch.termination_reasons.shape == (len(samples),)
+    assert batch.plies.shape == (len(samples),)
+    assert batch.current_player_piece_counts.shape == (len(samples),)
+    assert batch.opponent_piece_counts.shape == (len(samples),)
 
 
 def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
@@ -164,6 +185,7 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
         target.encoded_states = [samples.encoded_states[index] for index in indices]
         target.visit_counts = [samples.visit_counts[index] for index in indices]
         target.value_targets = [samples.value_targets[index] for index in indices]
+        target.sample_metadata = [samples.sample_metadata[index] for index in indices]
 
     first_path = tmp_path / 'memory_0' / 'first.hdf5'
     second_path = tmp_path / 'memory_0' / 'second.hdf5'
@@ -181,6 +203,9 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
         mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
         outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
         termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
+        plies=torch.stack([sample.ply for sample in individual]),
+        current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
+        opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
     )
 
     batch = rolling_buffer.__getitems__(shuffled_indices)

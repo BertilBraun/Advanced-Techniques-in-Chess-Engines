@@ -60,5 +60,9 @@ class Connect4Game(Game[Connect4Move]):
     def _flip_action_probs(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         return [(COLUMN_COUNT - 1 - action, count) for action, count in visit_counts]
 
+    def replay_piece_counts(self, canonical_state: np.ndarray) -> tuple[int, int]:
+        del canonical_state
+        return 0, 0
+
     def get_initial_board(self) -> Connect4Board:
         return Connect4Board()

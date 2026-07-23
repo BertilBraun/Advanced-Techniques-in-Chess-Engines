@@ -119,7 +119,6 @@ TRAINING_ARGS = TrainingArgs(
         num_moves_after_which_to_play_greedy=50,  # even number - no bias towards white
         starting_temperature=1.3,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
         num_games_after_which_to_write=2,
-        portion_of_samples_to_keep=0.75,  # To not keep all symmetries
         only_store_sampled_moves=True,
         mcts=MCTSParams(
             num_searches_per_turn=NUM_SEARCHES_PER_TURN,
