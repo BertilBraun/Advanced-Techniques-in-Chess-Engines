@@ -1,0 +1,46 @@
+{
+  "source_revision": "3bcdeadb3cf8481dd1cba9206ad1adffac7b9596",
+  "live_training_source_revision": "1806a2df9de9683f5261c87b6c259f797fad0cce",
+  "model_iteration": 304,
+  "model_sha256": "e42ea058b40cd57dc5e2a44e6e25083e2c16eedcf173d25a511fae6ffb3457f2",
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "driver_version": "595.71.05",
+    "memory_mib": 12282,
+    "device_index": 3
+  },
+  "build": {
+    "configuration": "Release",
+    "optimization": "O3",
+    "timing_instrumentation": false,
+    "glibcxx_cxx11_abi": 1
+  },
+  "native_tests": {
+    "passed": 11,
+    "failed": 0
+  },
+  "python_tests": {
+    "passed": 93,
+    "failed": 0
+  },
+  "canary": {
+    "parallel_games": 1,
+    "self_play_steps": 12,
+    "full_searches": 64,
+    "fast_searches": 16,
+    "parallel_searches": 4,
+    "maximum_game_plies": 10,
+    "audit_probability": 1.0,
+    "test_only_audit_cutoff": -0.01,
+    "completed_games": 1,
+    "audit_games_started": 2,
+    "audit_games_completed": 1,
+    "persisted_audit_records": 1,
+    "persisted_observations": 4,
+    "hypothetical_resignations": 2,
+    "first_cutoff_ply": 5,
+    "termination_reason": "ply_cap",
+    "calibrated_threshold_safe": false,
+    "elapsed_seconds": 11.2
+  }
+}
