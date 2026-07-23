@@ -145,32 +145,40 @@ int main() {
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "failed direct refresh changed active weights");
 
-        std::atomic<bool> beginConcurrentInference = false;
-        std::vector<std::future<void>> concurrentInference;
-        for (int worker = 0; worker < 8; ++worker) {
-            concurrentInference.push_back(std::async(std::launch::async, [&] {
-                while (!beginConcurrentInference.load(std::memory_order_acquire)) {
-                    std::this_thread::yield();
-                }
-                for (int request = 0; request < 25; ++request) {
-                    const float value = inferenceValue(search);
-                    const bool usedInitialModel = std::abs(value) < 0.001F;
-                    const bool usedUpdatedModel = std::abs(value - 0.75F) < 0.001F;
-                    require(usedInitialModel || usedUpdatedModel,
-                            "concurrent inference observed mixed model parameters and buffers");
-                }
-            }));
+        std::vector<Board> concurrentBoards(200);
+        std::vector<const Board *> concurrentBoardPointers;
+        concurrentBoardPointers.reserve(concurrentBoards.size());
+        for (const Board &board : concurrentBoards) {
+            concurrentBoardPointers.push_back(&board);
         }
-        beginConcurrentInference.store(true, std::memory_order_release);
-        for (uint64 version = 9; version < 29; ++version) {
+        std::atomic<bool> concurrentBatchStarted = false;
+        std::future<std::vector<InferenceResult>> concurrentInference =
+            std::async(std::launch::async, [&] {
+                concurrentBatchStarted.store(true, std::memory_order_release);
+                return search.inferenceBatch(concurrentBoardPointers);
+            });
+        while (!concurrentBatchStarted.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        search.refreshModel(9, modelPath.string());
+        const std::vector<InferenceResult> concurrentResults = concurrentInference.get();
+        require(!concurrentResults.empty(), "concurrent inference returned no results");
+        const float concurrentValue = concurrentResults.front().value();
+        const bool usedInitialModel = std::abs(concurrentValue) < 0.001F;
+        const bool usedUpdatedModel = std::abs(concurrentValue - 0.75F) < 0.001F;
+        require(usedInitialModel || usedUpdatedModel,
+                "concurrent inference observed mixed model parameters and buffers");
+        for (const InferenceResult &result : concurrentResults) {
+            require(std::abs(result.value() - concurrentValue) < 0.001F,
+                    "one accepted batch crossed model generations");
+        }
+
+        for (uint64 version = 10; version < 29; ++version) {
             const std::filesystem::path &refreshPath =
                 version % 2 == 0 ? updatedModelPath : modelPath;
             search.refreshModel(version, refreshPath.string());
             require(search.directWorkerIdentityTokens() == workerIdentities,
                     "repeated direct refresh changed worker identity");
-        }
-        for (std::future<void> &inference : concurrentInference) {
-            inference.get();
         }
         require(search.modelVersion() == 28, "repeated direct refresh lost model version");
 
