@@ -61,7 +61,9 @@ class RefreshMeasurement:
     rss_after_mib: float
     gpu_used_before_mib: float
     gpu_used_after_mib: float
-    retained_root_searches: int
+    retained_root_visits: int
+    retained_live_nodes: int
+    retained_child_records: int
 
 
 @dataclass(frozen=True)
@@ -260,10 +262,16 @@ def populate_roots(search: MCTS, root_count: int) -> list[MCTSRoot]:
     return [result.root for result in results.results]
 
 
-def verify_retained_roots(search: MCTS, roots: list[MCTSRoot]) -> None:
-    results = search.search([MCTSBoard(root, False) for root in roots])
-    if results.searchesCompleted != 0:
-        raise RuntimeError('A pure model refresh invalidated retained search roots.')
+def retained_tree_state(roots: list[MCTSRoot]) -> tuple[tuple[int, int, int], ...]:
+    return tuple((root.visits, root.live_nodes, root.total_child_records) for root in roots)
+
+
+def verify_retained_roots(
+    state_before_refresh: tuple[tuple[int, int, int], ...],
+    roots: list[MCTSRoot],
+) -> None:
+    if retained_tree_state(roots) != state_before_refresh:
+        raise RuntimeError('A pure model refresh mutated retained search roots.')
 
 
 def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
@@ -274,8 +282,9 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
     next_version = 1
 
     for _ in range(arguments.warmup_refreshes):
+        state_before_refresh = retained_tree_state(roots)
         search.refresh_model(next_version, str(arguments.model_path))
-        verify_retained_roots(search, roots)
+        verify_retained_roots(state_before_refresh, roots)
         next_version += 1
 
     measurements: list[RefreshMeasurement] = []
@@ -284,13 +293,15 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
             synchronize(device)
             rss_before_mib = resident_memory_mib()
             gpu_before_mib = gpu_used_memory_mib(device)
+            state_before_refresh = retained_tree_state(roots)
             started_at = time.perf_counter()
             search.refresh_model(next_version, str(arguments.model_path))
             synchronize(device)
             refresh_seconds = time.perf_counter() - started_at
             rss_after_mib = resident_memory_mib()
             gpu_after_mib = gpu_used_memory_mib(device)
-            retained_results = search.search([MCTSBoard(root, False) for root in roots])
+            verify_retained_roots(state_before_refresh, roots)
+            root_visits, live_nodes, child_records = map(sum, zip(*state_before_refresh, strict=True))
             measurements.append(
                 RefreshMeasurement(
                     model_version=next_version,
@@ -299,14 +310,14 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
                     rss_after_mib=rss_after_mib,
                     gpu_used_before_mib=gpu_before_mib,
                     gpu_used_after_mib=gpu_after_mib,
-                    retained_root_searches=retained_results.searchesCompleted,
+                    retained_root_visits=root_visits,
+                    retained_live_nodes=live_nodes,
+                    retained_child_records=child_records,
                 )
             )
             next_version += 1
     resource_peak = resource_monitor.peak()
 
-    if any(measurement.retained_root_searches != 0 for measurement in measurements):
-        raise RuntimeError('A pure model refresh invalidated retained search roots.')
     latencies = tuple(measurement.refresh_seconds for measurement in measurements)
     rss_growth_mib = measurements[-1].rss_after_mib - measurements[0].rss_after_mib
     gpu_growth_mib = measurements[-1].gpu_used_after_mib - measurements[0].gpu_used_after_mib
