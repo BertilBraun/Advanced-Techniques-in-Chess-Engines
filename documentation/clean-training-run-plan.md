@@ -1,5 +1,10 @@
 # Clean self-play training plan
 
+> Implementation sequencing has moved to
+> [Trainer rework implementation roadmap](trainer-rework-roadmap.md). This document
+> remains the evidence and diagnostic background; when the two documents differ,
+> the roadmap contains the current decision.
+
 ## Purpose
 
 This document separates immediate diagnostics on the existing `complete-training-run-v5`
