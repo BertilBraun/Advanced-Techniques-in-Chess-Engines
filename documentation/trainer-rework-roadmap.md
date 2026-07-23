@@ -568,15 +568,50 @@ Eviction is FIFO by committed shard. A shard may be deleted only after:
 The buffer-capacity value remains an experiment parameter and is not derived from the
 50-step publication cadence.
 
-### Task 4D: fast random access
+### Task 4D: idle rolling-buffer compaction
+
+The rolling replay buffer owns ingestion, FIFO indexing, compaction, leases, sampling,
+and decode as one consistency boundary. Self-play workers continue publishing small,
+atomic producer shards so new positions become visible immediately.
+
+While the trainer is waiting for enough credits to start another quantum, compact
+chronologically adjacent producer shards into immutable HDF5 containers. The sole
+container target is 100,000 unique positions. Preserve whole producer shards and close
+a container when their cumulative sample count first reaches or exceeds the target;
+there is no game-count or byte-size limit.
+
+The compactor:
+
+1. streams source payloads into a temporary container without retaining them all in
+   memory;
+2. flushes, closes, hashes, and atomically renames the container;
+3. atomically publishes a typed manifest mapping each logical source shard to its
+   physical container range;
+4. atomically remaps the rolling index;
+5. waits for existing source leases to drain before deleting source files.
+
+Original producer-shard ingestion issues replay credits. Compaction never creates
+credits. FIFO eviction retires logical source ranges independently; a physical
+container is deleted only after all of its ranges are evicted and unleased. Because
+containers preserve chronological adjacency, at most the oldest live container should
+be partially retired.
+
+Expose compaction as bounded idle work so the Stage 5 scheduler can stop starting new
+compaction as soon as a training quantum is credit-eligible.
+
+### Task 4E: fast random access
 
 The loader must:
 
 - sample uniformly across live unique positions;
-- map sampled global indices to shards without scanning every file;
-- coalesce reads by shard;
+- map sampled global indices to logical segments and physical containers without
+  scanning every file;
+- group a rank quantum by physical container and read all requested container indices
+  together;
 - vectorize HDF5 decoding;
-- prefetch enough batches to keep DDP fed;
+- decode one complete 12,800-position rank quantum and expose fifty zero-copy
+  256-position optimizer-batch views;
+- prefetch the next rank quantum rather than individual HDF5 batches;
 - issue disjoint samples to DDP ranks;
 - reshuffle reproducibly after restart.
 
@@ -594,6 +629,10 @@ credit.
 - DDP rank partitions are disjoint.
 - FIFO eviction never deletes a referenced shard.
 - Index recovery after interruption yields the same live sample set.
+- Compaction preserves deterministic sampling and issues no replay credits.
+- Interrupted compaction leaves either source shards or the complete container usable.
+- Logical FIFO eviction inside a container does not delete a still-live range.
+- Rank-quantum decoding opens and coalesces by physical container.
 - Loader throughput exceeds trainer consumption with production HDF5 shards.
 
 ## Stage 5: persistent credit-driven DDP trainer
