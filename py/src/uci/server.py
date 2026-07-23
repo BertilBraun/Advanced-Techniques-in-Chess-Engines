@@ -8,15 +8,17 @@ from typing import Protocol, TextIO
 
 import chess
 
-ENGINE_NAME = "AlphaZeroCpp"
-ENGINE_AUTHOR = "AlphaZeroCpp contributors"
+from src.eval.LegalMoveSelection import select_legal_analysis_move
+
+ENGINE_NAME = 'AlphaZeroCpp'
+ENGINE_AUTHOR = 'AlphaZeroCpp contributors'
 MINIMUM_MOVE_TIME_MILLISECONDS = 1_000
 MAXIMUM_MOVE_TIME_MILLISECONDS = 30_000
 
 
 class SearchMode(str, Enum):
-    POLICY = "policy"
-    MCTS = "mcts"
+    POLICY = 'policy'
+    MCTS = 'mcts'
 
 
 @dataclass(frozen=True)
@@ -32,8 +34,13 @@ class SearchRequest:
     stop_event: Event
 
 
+class CandidateAnalysis(Protocol):
+    move_uci: str
+
+
 class AnalysisResult(Protocol):
     chosen_move_uci: str
+    candidates: tuple[CandidateAnalysis, ...]
 
 
 class InteractiveGame(Protocol):
@@ -43,32 +50,30 @@ class InteractiveGame(Protocol):
 
 
 class InteractiveEngine(Protocol):
-    def new_game(
-        self, starting_fen: str, moves_uci: tuple[str, ...]
-    ) -> InteractiveGame: ...
+    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame: ...
 
 
 def parse_position(command: str) -> PositionCommand:
     words = command.split()
-    if len(words) < 2 or words[0] != "position":
-        raise ValueError("Expected a position command.")
+    if len(words) < 2 or words[0] != 'position':
+        raise ValueError('Expected a position command.')
 
-    if words[1] == "startpos":
+    if words[1] == 'startpos':
         starting_fen = chess.STARTING_FEN
         moves_index = 2
-    elif words[1] == "fen":
+    elif words[1] == 'fen':
         if len(words) < 8:
-            raise ValueError("A UCI FEN position requires all six FEN fields.")
-        starting_fen = " ".join(words[2:8])
+            raise ValueError('A UCI FEN position requires all six FEN fields.')
+        starting_fen = ' '.join(words[2:8])
         moves_index = 8
     else:
-        raise ValueError("Position must use startpos or fen.")
+        raise ValueError('Position must use startpos or fen.')
 
     if moves_index == len(words):
         moves_uci: tuple[str, ...] = ()
     else:
-        if words[moves_index] != "moves":
-            raise ValueError("Unexpected text after the position.")
+        if words[moves_index] != 'moves':
+            raise ValueError('Unexpected text after the position.')
         moves_uci = tuple(words[moves_index + 1 :])
 
     board = chess.Board(starting_fen)
@@ -76,38 +81,32 @@ def parse_position(command: str) -> PositionCommand:
         try:
             move = board.parse_uci(move_uci)
         except ValueError as error:
-            raise ValueError(f"Invalid UCI move {move_uci}.") from error
+            raise ValueError(f'Invalid UCI move {move_uci}.') from error
         board.push(move)
     return PositionCommand(starting_fen=starting_fen, moves_uci=moves_uci)
 
 
 def parse_move_time_seconds(command: str) -> int:
     words = command.split()
-    if len(words) != 3 or words[:2] != ["go", "movetime"]:
-        raise ValueError("Only go movetime <milliseconds> is supported.")
+    if len(words) != 3 or words[:2] != ['go', 'movetime']:
+        raise ValueError('Only go movetime <milliseconds> is supported.')
     try:
         move_time_milliseconds = int(words[2])
     except ValueError as error:
-        raise ValueError(
-            "Move time must be an integer number of milliseconds."
-        ) from error
-    if not (
-        MINIMUM_MOVE_TIME_MILLISECONDS
-        <= move_time_milliseconds
-        <= MAXIMUM_MOVE_TIME_MILLISECONDS
-    ):
-        raise ValueError("Move time must be between 1000 and 30000 milliseconds.")
+        raise ValueError('Move time must be an integer number of milliseconds.') from error
+    if not (MINIMUM_MOVE_TIME_MILLISECONDS <= move_time_milliseconds <= MAXIMUM_MOVE_TIME_MILLISECONDS):
+        raise ValueError('Move time must be between 1000 and 30000 milliseconds.')
     return move_time_milliseconds // 1_000
 
 
 def parse_search_mode(command: str) -> SearchMode:
-    prefix = "setoption name SearchMode value "
+    prefix = 'setoption name SearchMode value '
     if not command.startswith(prefix):
-        raise ValueError("Only the SearchMode option is supported.")
+        raise ValueError('Only the SearchMode option is supported.')
     try:
         return SearchMode(command[len(prefix) :].strip().lower())
     except ValueError as error:
-        raise ValueError("SearchMode must be policy or mcts.") from error
+        raise ValueError('SearchMode must be policy or mcts.') from error
 
 
 class UciServer:
@@ -147,33 +146,31 @@ class UciServer:
             return True
 
     def _process_valid_command(self, command: str) -> bool:
-        if command == "uci":
-            self._write(f"id name {ENGINE_NAME}")
-            self._write(f"id author {ENGINE_AUTHOR}")
-            self._write(
-                "option name SearchMode type combo default mcts var mcts var policy"
-            )
-            self._write("uciok")
-        elif command == "isready":
-            self._write("readyok")
-        elif command == "ucinewgame":
+        if command == 'uci':
+            self._write(f'id name {ENGINE_NAME}')
+            self._write(f'id author {ENGINE_AUTHOR}')
+            self._write('option name SearchMode type combo default mcts var mcts var policy')
+            self._write('uciok')
+        elif command == 'isready':
+            self._write('readyok')
+        elif command == 'ucinewgame':
             self._stop_search(wait=True)
             self._position = PositionCommand(chess.STARTING_FEN, ())
             self._board = chess.Board()
             self._game = None
-        elif command.startswith("setoption "):
+        elif command.startswith('setoption '):
             self._search_mode = parse_search_mode(command)
-        elif command.startswith("position "):
+        elif command.startswith('position '):
             self._stop_search(wait=True)
             self._set_position(parse_position(command))
-        elif command.startswith("go "):
+        elif command.startswith('go '):
             self._start_search(parse_move_time_seconds(command))
-        elif command == "stop":
+        elif command == 'stop':
             self._stop_search(wait=False)
-        elif command == "quit":
+        elif command == 'quit':
             return False
         else:
-            raise ValueError(f"Unsupported UCI command: {command}")
+            raise ValueError(f'Unsupported UCI command: {command}')
         return True
 
     def _set_position(self, position: PositionCommand) -> None:
@@ -185,8 +182,7 @@ class UciServer:
         can_advance = (
             self._game is not None
             and position.starting_fen == self._game_position.starting_fen
-            and position.moves_uci[: len(self._game_position.moves_uci)]
-            == self._game_position.moves_uci
+            and position.moves_uci[: len(self._game_position.moves_uci)] == self._game_position.moves_uci
         )
         if not can_advance:
             self._game = None
@@ -198,13 +194,11 @@ class UciServer:
 
     def _start_search(self, time_limit_seconds: int) -> None:
         self._stop_search(wait=True)
-        if self._board.is_game_over(claim_draw=True):
-            self._write("bestmove 0000")
+        if self._board.legal_moves.count() == 0:
+            self._write('bestmove 0000')
             return
         if self._game is None:
-            self._game = self._engine.new_game(
-                self._position.starting_fen, self._position.moves_uci
-            )
+            self._game = self._engine.new_game(self._position.starting_fen, self._position.moves_uci)
             self._game_position = self._position
 
         stop_event = Event()
@@ -215,40 +209,27 @@ class UciServer:
         self._search_thread = Thread(
             target=self._search,
             args=(game, board, request),
-            name="uci-search",
+            name='uci-search',
             daemon=True,
         )
         self._search_thread.start()
 
-    def _search(
-        self, game: InteractiveGame, board: chess.Board, request: SearchRequest
-    ) -> None:
+    def _search(self, game: InteractiveGame, board: chess.Board, request: SearchRequest) -> None:
         try:
             result = game.analyze(request)
-            try:
-                move = chess.Move.from_uci(result.chosen_move_uci)
-            except ValueError:
-                move = chess.Move.null()
-            if move not in board.legal_moves:
-                legal_moves = sorted(
-                    board.legal_moves, key=lambda legal_move: legal_move.uci()
-                )
-                if not legal_moves:
-                    self._write("bestmove 0000")
-                    return
-                move = legal_moves[0]
-                self._diagnostic(
-                    "Engine returned an illegal move; using a deterministic legal fallback."
-                )
-            self._write(f"bestmove {move.uci()}")
+            ordered_candidates_uci = tuple(candidate.move_uci for candidate in result.candidates)
+            selection = select_legal_analysis_move(
+                board,
+                result.chosen_move_uci,
+                ordered_candidates_uci,
+            )
+            if selection.candidate_rank != 0:
+                self._diagnostic('Engine chose an illegal move; using the highest-ranked legal candidate.')
+            self._write(f'bestmove {selection.move.uci()}')
         except Exception as error:
-            legal_moves = sorted(
-                board.legal_moves, key=lambda legal_move: legal_move.uci()
-            )
-            self._diagnostic(f"Analysis failed: {error}")
-            self._write(
-                f"bestmove {legal_moves[0].uci()}" if legal_moves else "bestmove 0000"
-            )
+            legal_moves = sorted(board.legal_moves, key=lambda legal_move: legal_move.uci())
+            self._diagnostic(f'Analysis failed: {error}')
+            self._write(f'bestmove {legal_moves[0].uci()}' if legal_moves else 'bestmove 0000')
 
     def _stop_search(self, wait: bool) -> None:
         if self._stop_event is not None:

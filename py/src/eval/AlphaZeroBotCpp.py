@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import chess
-
 from src.eval.Bot import Bot
 from src.eval.InteractiveEngine import AnalysisMode, InteractiveEngine, InteractiveGame
+from src.eval.LegalMoveSelection import select_legal_analysis_move
 from src.settings import CurrentBoard, CurrentGameMove, PLAY_C_PARAM
 from src.util.log import log
 
@@ -55,14 +54,16 @@ class AlphaZeroBot(Bot):
         mode = AnalysisMode.POLICY if self.network_eval_only else AnalysisMode.MCTS
         time_limit_seconds = None if self.network_eval_only else self.time_limit_seconds
         result = game.analyze(mode=mode, time_limit_seconds=time_limit_seconds)
-        move = chess.Move.from_uci(result.chosen_move_uci)
-        if move not in board.get_valid_moves():
-            raise ValueError(f'Engine returned illegal move {move.uci()} in FEN {board.board.fen()}')
-
-        game.apply_move(result.chosen_move_uci)
+        ordered_candidates_uci = tuple(candidate.move_uci for candidate in result.candidates)
+        selection = select_legal_analysis_move(
+            board.board,
+            result.chosen_move_uci,
+            ordered_candidates_uci,
+        )
+        game.apply_move(selection.move.uci())
         log('---------------------- Alpha Zero Best Move ----------------------')
         log('Mode:', mode.value)
-        log('Best move:', result.chosen_move_uci)
+        log('Best move:', selection.move.uci())
         log('Root value:', result.value)
         log('Completed searches:', result.searches)
         log('Maximum depth:', result.maximum_depth)
@@ -70,4 +71,4 @@ class AlphaZeroBot(Bot):
         log('Principal variation:', result.principal_variation)
         log('Candidates:', result.candidates)
         log('------------------------------------------------------------------')
-        return move
+        return selection.move
