@@ -42,7 +42,7 @@ def test_iteration_49_caps_game_at_200_plies_with_material_result(monkeypatch: p
     replacement = SelfPlayGame()
     handled_outcomes: list[float] = []
 
-    def handle_end_of_game(handled_game: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
+    def handle_end_of_game(handled_game: SelfPlayGame, game_outcome: float, _reason: object) -> SelfPlayGame:
         assert handled_game is game
         handled_outcomes.append(game_outcome)
         return replacement
@@ -64,7 +64,7 @@ def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         client,
         '_handle_end_of_game',
-        lambda _, __: replacement,
+        lambda _, __, ___: replacement,
     )
 
     assert client._finish_game_after_move(game, native_game_over=False) is replacement
@@ -89,7 +89,7 @@ def test_empty_terminal_search_result_finishes_game(monkeypatch: pytest.MonkeyPa
     game = SelfPlayGame()
     replacement = SelfPlayGame()
 
-    monkeypatch.setattr(client, '_handle_end_of_game', lambda _, __: replacement)
+    monkeypatch.setattr(client, '_handle_end_of_game', lambda _, __, ___: replacement)
 
     assert client._finish_terminal_search_root(game, SimpleNamespace(is_terminal=True)) is replacement
 

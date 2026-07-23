@@ -21,6 +21,23 @@ class SelfPlayDatasetStats(NamedTuple):
     num_resignations_evaluated_to_end: int = 0
     num_winnable_resignations: int = 0
     num_moves_after_resignation: int = 0
+    resignation_audit_games_started: int = 0
+    resignation_audit_games_completed: int = 0
+    hypothetical_resignations: int = 0
+    actual_resignations: int = 0
+    resignation_audit_natural_triggers: int = 0
+    resignation_audit_capped_triggers: int = 0
+    resignation_audit_recovered_wins: int = 0
+    resignation_audit_recovered_draws: int = 0
+    resignation_audit_recovered_losses: int = 0
+    resignation_audit_white_triggers: int = 0
+    resignation_audit_black_triggers: int = 0
+    resignation_audit_white_false_non_losses: int = 0
+    resignation_audit_black_false_non_losses: int = 0
+    resignation_audit_root_value_abs_sum: float = 0.0
+    resignation_audit_root_value_count: int = 0
+    resignation_audit_continuation_plies: int = 0
+    resignation_audit_estimated_searches_saved: int = 0
 
     def overwrite(
         self,
@@ -38,6 +55,23 @@ class SelfPlayDatasetStats(NamedTuple):
         num_resignations_evaluated_to_end: int | None = None,
         num_winnable_resignations: int | None = None,
         num_moves_after_resignation: int | None = None,
+        resignation_audit_games_started: int | None = None,
+        resignation_audit_games_completed: int | None = None,
+        hypothetical_resignations: int | None = None,
+        actual_resignations: int | None = None,
+        resignation_audit_natural_triggers: int | None = None,
+        resignation_audit_capped_triggers: int | None = None,
+        resignation_audit_recovered_wins: int | None = None,
+        resignation_audit_recovered_draws: int | None = None,
+        resignation_audit_recovered_losses: int | None = None,
+        resignation_audit_white_triggers: int | None = None,
+        resignation_audit_black_triggers: int | None = None,
+        resignation_audit_white_false_non_losses: int | None = None,
+        resignation_audit_black_false_non_losses: int | None = None,
+        resignation_audit_root_value_abs_sum: float | None = None,
+        resignation_audit_root_value_count: int | None = None,
+        resignation_audit_continuation_plies: int | None = None,
+        resignation_audit_estimated_searches_saved: int | None = None,
     ) -> SelfPlayDatasetStats:
         return SelfPlayDatasetStats(
             num_samples=num_samples if num_samples is not None else self.num_samples,
@@ -80,6 +114,85 @@ class SelfPlayDatasetStats(NamedTuple):
             num_moves_after_resignation=num_moves_after_resignation
             if num_moves_after_resignation is not None
             else self.num_moves_after_resignation,
+            resignation_audit_games_started=(
+                resignation_audit_games_started
+                if resignation_audit_games_started is not None
+                else self.resignation_audit_games_started
+            ),
+            resignation_audit_games_completed=(
+                resignation_audit_games_completed
+                if resignation_audit_games_completed is not None
+                else self.resignation_audit_games_completed
+            ),
+            hypothetical_resignations=(
+                hypothetical_resignations if hypothetical_resignations is not None else self.hypothetical_resignations
+            ),
+            actual_resignations=actual_resignations if actual_resignations is not None else self.actual_resignations,
+            resignation_audit_natural_triggers=(
+                resignation_audit_natural_triggers
+                if resignation_audit_natural_triggers is not None
+                else self.resignation_audit_natural_triggers
+            ),
+            resignation_audit_capped_triggers=(
+                resignation_audit_capped_triggers
+                if resignation_audit_capped_triggers is not None
+                else self.resignation_audit_capped_triggers
+            ),
+            resignation_audit_recovered_wins=(
+                resignation_audit_recovered_wins
+                if resignation_audit_recovered_wins is not None
+                else self.resignation_audit_recovered_wins
+            ),
+            resignation_audit_recovered_draws=(
+                resignation_audit_recovered_draws
+                if resignation_audit_recovered_draws is not None
+                else self.resignation_audit_recovered_draws
+            ),
+            resignation_audit_recovered_losses=(
+                resignation_audit_recovered_losses
+                if resignation_audit_recovered_losses is not None
+                else self.resignation_audit_recovered_losses
+            ),
+            resignation_audit_white_triggers=(
+                resignation_audit_white_triggers
+                if resignation_audit_white_triggers is not None
+                else self.resignation_audit_white_triggers
+            ),
+            resignation_audit_black_triggers=(
+                resignation_audit_black_triggers
+                if resignation_audit_black_triggers is not None
+                else self.resignation_audit_black_triggers
+            ),
+            resignation_audit_white_false_non_losses=(
+                resignation_audit_white_false_non_losses
+                if resignation_audit_white_false_non_losses is not None
+                else self.resignation_audit_white_false_non_losses
+            ),
+            resignation_audit_black_false_non_losses=(
+                resignation_audit_black_false_non_losses
+                if resignation_audit_black_false_non_losses is not None
+                else self.resignation_audit_black_false_non_losses
+            ),
+            resignation_audit_root_value_abs_sum=(
+                resignation_audit_root_value_abs_sum
+                if resignation_audit_root_value_abs_sum is not None
+                else self.resignation_audit_root_value_abs_sum
+            ),
+            resignation_audit_root_value_count=(
+                resignation_audit_root_value_count
+                if resignation_audit_root_value_count is not None
+                else self.resignation_audit_root_value_count
+            ),
+            resignation_audit_continuation_plies=(
+                resignation_audit_continuation_plies
+                if resignation_audit_continuation_plies is not None
+                else self.resignation_audit_continuation_plies
+            ),
+            resignation_audit_estimated_searches_saved=(
+                resignation_audit_estimated_searches_saved
+                if resignation_audit_estimated_searches_saved is not None
+                else self.resignation_audit_estimated_searches_saved
+            ),
         )
 
     def __repr__(self) -> str:
@@ -118,4 +231,51 @@ Average moves after resignation: {self.num_moves_after_resignation / self.num_re
             + other.num_resignations_evaluated_to_end,
             num_winnable_resignations=self.num_winnable_resignations + other.num_winnable_resignations,
             num_moves_after_resignation=self.num_moves_after_resignation + other.num_moves_after_resignation,
+            resignation_audit_games_started=(
+                self.resignation_audit_games_started + other.resignation_audit_games_started
+            ),
+            resignation_audit_games_completed=(
+                self.resignation_audit_games_completed + other.resignation_audit_games_completed
+            ),
+            hypothetical_resignations=self.hypothetical_resignations + other.hypothetical_resignations,
+            actual_resignations=self.actual_resignations + other.actual_resignations,
+            resignation_audit_natural_triggers=(
+                self.resignation_audit_natural_triggers + other.resignation_audit_natural_triggers
+            ),
+            resignation_audit_capped_triggers=(
+                self.resignation_audit_capped_triggers + other.resignation_audit_capped_triggers
+            ),
+            resignation_audit_recovered_wins=(
+                self.resignation_audit_recovered_wins + other.resignation_audit_recovered_wins
+            ),
+            resignation_audit_recovered_draws=(
+                self.resignation_audit_recovered_draws + other.resignation_audit_recovered_draws
+            ),
+            resignation_audit_recovered_losses=(
+                self.resignation_audit_recovered_losses + other.resignation_audit_recovered_losses
+            ),
+            resignation_audit_white_triggers=(
+                self.resignation_audit_white_triggers + other.resignation_audit_white_triggers
+            ),
+            resignation_audit_black_triggers=(
+                self.resignation_audit_black_triggers + other.resignation_audit_black_triggers
+            ),
+            resignation_audit_white_false_non_losses=(
+                self.resignation_audit_white_false_non_losses + other.resignation_audit_white_false_non_losses
+            ),
+            resignation_audit_black_false_non_losses=(
+                self.resignation_audit_black_false_non_losses + other.resignation_audit_black_false_non_losses
+            ),
+            resignation_audit_root_value_abs_sum=(
+                self.resignation_audit_root_value_abs_sum + other.resignation_audit_root_value_abs_sum
+            ),
+            resignation_audit_root_value_count=(
+                self.resignation_audit_root_value_count + other.resignation_audit_root_value_count
+            ),
+            resignation_audit_continuation_plies=(
+                self.resignation_audit_continuation_plies + other.resignation_audit_continuation_plies
+            ),
+            resignation_audit_estimated_searches_saved=(
+                self.resignation_audit_estimated_searches_saved + other.resignation_audit_estimated_searches_saved
+            ),
         )

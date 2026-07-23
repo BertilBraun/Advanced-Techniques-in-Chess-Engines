@@ -93,6 +93,11 @@ void testSelectionVirtualLossAndBackupStatistics() {
                 "backup left selected edge virtual loss");
     requireNear(tree.child(rootIndex, selectedChild).result_sum, 0.5F,
                 "backup missed selected edge value");
+    const Child &selectedEdge = tree.child(rootIndex, selectedChild);
+    const float selectedChildValueFromRootPerspective =
+        -selectedEdge.result_sum / static_cast<float>(selectedEdge.number_of_visits);
+    requireNear(selectedChildValueFromRootPerspective, -0.5F,
+                "resignation child value was not converted to the root perspective");
 }
 
 void testVirtualLossCanBeCancelled() {

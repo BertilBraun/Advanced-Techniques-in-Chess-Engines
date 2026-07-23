@@ -2,11 +2,12 @@ from __future__ import annotations
 import gc
 import random
 import time
+import uuid
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTS, MCTSBoard, MCTSResults, MCTSRoot
+    from AlphaZeroCpp import MCTS, MCTSBoard, MCTSResult, MCTSResults, MCTSRoot
 
 
 import chess
@@ -16,6 +17,14 @@ from dataclasses import dataclass
 from src.games.Board import Player
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.self_play.resignation import (
+    CompletedResignationAudit,
+    ResignationCalibrationState,
+    ResignationManager,
+    ResignationObservation,
+    ResignationTerminationReason,
+    best_child_value_from_root_perspective,
+)
 from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
@@ -39,18 +48,27 @@ class SelfPlayGameMemory:
 
 
 class SelfPlayGame:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        game_id: str | None = None,
+        is_resignation_audit: bool = False,
+        production_resignation_enabled: bool = False,
+        resignation_threshold: float | None = None,
+    ) -> None:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.encoded_moves: list[int] = []
-        self.already_expanded_node: Optional[MCTSRoot] = None
+        self.already_expanded_node: MCTSRoot | None = None
         self.start_generation_time = time.time()
 
-        # The move at which the player resigned, if any. None if the game is still ongoing.
-        self.resigned_at_move: Optional[int] = None
-        # The player who resigned, if any. None if the game is still ongoing.
-        self.resignee: Optional[Player] = None
+        self.game_id = game_id if game_id is not None else uuid.uuid4().hex
+        self.is_resignation_audit = is_resignation_audit
+        self.production_resignation_enabled = production_resignation_enabled
+        self.resignation_threshold = resignation_threshold
+        self.resignation_observations: list[ResignationObservation] = []
+        self.resignation_trigger_ply: int | None = None
+        self.resignee: Player | None = None
         self.low_material_termination_evaluated = False
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
@@ -61,14 +79,20 @@ class SelfPlayGame:
         return new_game
 
     def copy(self) -> SelfPlayGame:
-        game = SelfPlayGame()
+        game = SelfPlayGame(
+            game_id=self.game_id,
+            is_resignation_audit=self.is_resignation_audit,
+            production_resignation_enabled=self.production_resignation_enabled,
+            resignation_threshold=self.resignation_threshold,
+        )
         game.board = self.board.copy()
         game.memory = self.memory.copy()
         game.played_moves = self.played_moves.copy()
         game.encoded_moves = self.encoded_moves.copy()
         game.already_expanded_node = self.already_expanded_node
         game.start_generation_time = self.start_generation_time
-        game.resigned_at_move = self.resigned_at_move
+        game.resignation_observations = self.resignation_observations.copy()
+        game.resignation_trigger_ply = self.resignation_trigger_ply
         game.resignee = self.resignee
         game.low_material_termination_evaluated = self.low_material_termination_evaluated
         return game
@@ -102,11 +126,11 @@ class SelfPlayCpp:
         self.device_id = device_id
         self.args = args.self_play
         self.save_path = args.save_path
-
-        self.self_play_games: list[SelfPlayGame] = [new_game() for _ in range(self.args.num_parallel_games)]
-        self.dataset = SelfPlayDataset()
+        self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
 
         self.iteration = 0
+        self.dataset = SelfPlayDataset()
+        self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.args.num_parallel_games)]
 
         self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
         self.num_searches_per_turn = 0
@@ -239,10 +263,9 @@ class SelfPlayCpp:
         boards: list[MCTSBoard] = []
         for spg in self.self_play_games:
             force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
-            should_run_full_search = (
-                not force_fast_endgame_playout
-                and spg.resigned_at_move is None
-                and random.random() < self.args.mcts.playout_cap_randomization
+            should_run_full_search = self._should_run_full_search(
+                spg,
+                force_fast_endgame_playout,
             )
 
             self._prepare_search_root(spg)
@@ -269,24 +292,19 @@ class SelfPlayCpp:
 
             if not has_positive_visit_counts(mcts_result.visits):
                 log(f'Discarding self-play game after zero-visit MCTS root: {spg.board.board.fen()}')
-                self.self_play_games[i] = new_game()
+                self.self_play_games[i] = self._new_game()
                 continue
 
             was_full_searched = boards[i].should_run_full_search
             if was_full_searched:
                 spg.memory.append(SelfPlayGameMemory(spg.board.copy(), mcts_result.visits, mcts_result.result))
-
-            if mcts_result.result < self.args.resignation_threshold and spg.resigned_at_move is None:
-                # Resignation if most of the mcts searches result in a loss
-                self.dataset.stats += SelfPlayDatasetStats(resignations=1)
-
-                if random.random() < 0.1:
-                    # With 10% chance, play out the game to the end to see if it was winnable
-                    spg.resigned_at_move = len(spg.played_moves)
-                    spg.resignee = spg.board.current_player
-                else:
-                    self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result)
-                    continue
+                if self._record_resignation_observation(spg, mcts_result):
+                    if spg.is_resignation_audit:
+                        self.dataset.stats += SelfPlayDatasetStats(hypothetical_resignations=1)
+                    else:
+                        self.dataset.stats += SelfPlayDatasetStats(actual_resignations=1)
+                        self.self_play_games[i] = self._handle_resignation(spg)
+                        continue
 
             if self._should_terminate_low_material_game(spg):
                 approximate_result = spg.board.get_approximate_result_score() * spg.board.current_player
@@ -295,7 +313,11 @@ class SelfPlayCpp:
                     low_material_terminations=1,
                     low_material_termination_material_scores=[approximate_result],
                 )
-                self.self_play_games[i] = self._handle_end_of_game(spg, approximate_result)
+                self.self_play_games[i] = self._handle_end_of_game(
+                    spg,
+                    approximate_result,
+                    ResignationTerminationReason.LOW_MATERIAL,
+                )
                 continue
 
             self.self_play_games[i] = self._sample_self_play_game(
@@ -322,6 +344,76 @@ class SelfPlayCpp:
             history.moves_uci,
         )
 
+    def _record_resignation_observation(self, game: SelfPlayGame, result: MCTSResult) -> bool:
+        if (
+            not game.is_resignation_audit
+            and not game.production_resignation_enabled
+            or len(game.played_moves) < self.args.resignation.minimum_eligible_ply
+            or game.resignation_trigger_ply is not None
+        ):
+            return False
+
+        best_child_value = best_child_value_from_root_perspective(result.root.children)
+        if best_child_value is None:
+            return False
+        observation = ResignationObservation(
+            model_version=self.iteration,
+            ply=len(game.played_moves),
+            side_to_move=game.board.current_player,
+            root_value=result.result,
+            best_child_value=best_child_value,
+        )
+        game.resignation_observations.append(observation)
+        threshold = game.resignation_threshold
+        if threshold is None or observation.root_value >= threshold or observation.best_child_value >= threshold:
+            return False
+
+        game.resignation_trigger_ply = observation.ply
+        game.resignee = game.board.current_player
+        return True
+
+    def _new_game(self) -> SelfPlayGame:
+        assignment = self.resignation_manager.assignment(self.iteration)
+        game = new_game(
+            is_resignation_audit=assignment.is_audit_game,
+            production_resignation_enabled=assignment.production_resignation_enabled,
+            resignation_threshold=assignment.governing_threshold,
+        )
+        if game.is_resignation_audit:
+            self.dataset.stats += SelfPlayDatasetStats(resignation_audit_games_started=1)
+        return game
+
+    def _handle_resignation(self, game: SelfPlayGame) -> SelfPlayGame:
+        return self._handle_end_of_game(
+            game,
+            -1.0,
+            ResignationTerminationReason.RESIGNATION,
+        )
+
+    def _log_resignation_state(self, state: ResignationCalibrationState) -> None:
+        log_scalar(
+            'resignation/calibrated_threshold',
+            state.selected_threshold if state.selected_threshold is not None else -1.0,
+        )
+        log_scalar(
+            'resignation/calibration_safe',
+            float(state.selected_threshold_is_safe),
+        )
+        for statistics in state.threshold_statistics:
+            threshold_name = f'{abs(statistics.threshold):.2f}'
+            log_scalar(
+                f'resignation/candidates/{threshold_name}/completed_triggers',
+                statistics.completed_triggers,
+            )
+            log_scalar(
+                f'resignation/candidates/{threshold_name}/false_non_loss_rate',
+                statistics.false_non_loss_rate,
+            )
+            log_scalar(
+                f'resignation/candidates/{threshold_name}/upper_confidence',
+                statistics.false_non_loss_upper_confidence,
+            )
+
     def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
         if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
             return False
@@ -330,6 +422,17 @@ class SelfPlayCpp:
         if len(game.board.board.piece_map()) > ENDGAME_PIECE_THRESHOLD:
             return False
         return random.random() < self.endgame_shortcut_strength
+
+    def _should_run_full_search(
+        self,
+        game: SelfPlayGame,
+        force_fast_endgame_playout: bool,
+    ) -> bool:
+        return (
+            not force_fast_endgame_playout
+            and game.resignation_trigger_ply is None
+            and random.random() < self.args.mcts.playout_cap_randomization
+        )
 
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
         if CURRENT_GAME != 'chess' or game.low_material_termination_evaluated:
@@ -403,7 +506,7 @@ class SelfPlayCpp:
             if result is None:
                 assert native_game_over, 'Python reported a terminal game without a result.'
                 result = 0.0
-            return self._handle_end_of_game(game, result)
+            return self._handle_end_of_game(game, result, ResignationTerminationReason.NATURAL)
 
         maximum_game_plies = self._maximum_game_plies()
         if maximum_game_plies is not None and len(game.played_moves) >= maximum_game_plies:
@@ -412,7 +515,11 @@ class SelfPlayCpp:
                 num_too_long_games=1,
                 capped_game_material_scores=[capped_game_outcome],
             )
-            return self._handle_end_of_game(game, capped_game_outcome)
+            return self._handle_end_of_game(
+                game,
+                capped_game_outcome,
+                ResignationTerminationReason.PLY_CAP,
+            )
         return None
 
     def _maximum_game_plies(self) -> int | None:
@@ -428,19 +535,71 @@ class SelfPlayCpp:
         increase = final_maximum - initial_maximum
         return initial_maximum + increase * self.iteration // schedule_end
 
-    def _handle_end_of_game(self, spg: SelfPlayGame, game_outcome: float) -> SelfPlayGame:
+    def _handle_end_of_game(
+        self,
+        spg: SelfPlayGame,
+        game_outcome: float,
+        termination_reason: ResignationTerminationReason = ResignationTerminationReason.NATURAL,
+    ) -> SelfPlayGame:
         # assert self.mcts is not None, 'MCTS must be set via update_iteration before self_play can be called.'
         # self.mcts.get_inference_statistics()
         self._add_training_data(spg, game_outcome)
 
-        if spg.resigned_at_move is not None:
+        if spg.is_resignation_audit:
+            audit = CompletedResignationAudit(
+                game_id=spg.game_id,
+                observations=tuple(spg.resignation_observations),
+                audit_cutoff_threshold=spg.resignation_threshold,
+                audit_cutoff_ply=spg.resignation_trigger_ply,
+                final_current_player=spg.board.current_player,
+                game_outcome=game_outcome,
+                termination_reason=termination_reason,
+            )
+            state = self.resignation_manager.record_completed_audit(audit)
+            self._log_resignation_state(state)
+            audit_trigger = next(
+                (
+                    observation
+                    for observation in spg.resignation_observations
+                    if spg.resignation_threshold is not None
+                    and observation.root_value < spg.resignation_threshold
+                    and observation.best_child_value < spg.resignation_threshold
+                ),
+                None,
+            )
+            recovered_outcome = (
+                game_outcome
+                if audit_trigger is not None and audit_trigger.side_to_move == spg.board.current_player
+                else -game_outcome
+            )
+            is_natural_trigger = (
+                audit_trigger is not None and termination_reason is ResignationTerminationReason.NATURAL
+            )
+            is_false_non_loss = is_natural_trigger and recovered_outcome >= 0.0
+            continuation_plies = len(spg.played_moves) - audit_trigger.ply if audit_trigger is not None else 0
+            fast_searches = int(self.num_searches_per_turn * self.args.mcts.fast_searches_proportion_of_full_searches)
             self.dataset.stats += SelfPlayDatasetStats(
-                num_resignations_evaluated_to_end=1,
-                num_winnable_resignations=1 if game_outcome > 0.5 and spg.resignee == spg.board.current_player else 0,
-                num_moves_after_resignation=len(spg.played_moves) - spg.resigned_at_move,
+                resignation_audit_games_completed=1,
+                resignation_audit_natural_triggers=int(is_natural_trigger),
+                resignation_audit_capped_triggers=int(
+                    audit_trigger is not None and termination_reason is not ResignationTerminationReason.NATURAL
+                ),
+                resignation_audit_recovered_wins=int(is_natural_trigger and recovered_outcome == 1.0),
+                resignation_audit_recovered_draws=int(is_natural_trigger and recovered_outcome == 0.0),
+                resignation_audit_recovered_losses=int(is_natural_trigger and recovered_outcome == -1.0),
+                resignation_audit_white_triggers=int(is_natural_trigger and audit_trigger.side_to_move == 1),
+                resignation_audit_black_triggers=int(is_natural_trigger and audit_trigger.side_to_move == -1),
+                resignation_audit_white_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == 1),
+                resignation_audit_black_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == -1),
+                resignation_audit_root_value_abs_sum=sum(
+                    abs(observation.root_value) for observation in spg.resignation_observations
+                ),
+                resignation_audit_root_value_count=len(spg.resignation_observations),
+                resignation_audit_continuation_plies=continuation_plies,
+                resignation_audit_estimated_searches_saved=continuation_plies * fast_searches,
             )
 
-        return new_game()
+        return self._new_game()
 
     @timeit
     def _add_training_data(self, spg: SelfPlayGame, game_outcome: float) -> None:
@@ -512,9 +671,17 @@ def _sample_from_probabilities(action_probabilities: np.ndarray, temperature: fl
     return action_index
 
 
-def new_game() -> SelfPlayGame:
+def new_game(
+    is_resignation_audit: bool = False,
+    production_resignation_enabled: bool = False,
+    resignation_threshold: float | None = None,
+) -> SelfPlayGame:
     # Create a new game instance
-    game = SelfPlayGame()
+    game = SelfPlayGame(
+        is_resignation_audit=is_resignation_audit,
+        production_resignation_enabled=production_resignation_enabled,
+        resignation_threshold=resignation_threshold,
+    )
 
     # Play a random moves to start the game in different states
     random_moves_to_play = 2 + int(random.random() * 2)  # Play 2-4 random moves to start the game
@@ -522,6 +689,10 @@ def new_game() -> SelfPlayGame:
         game = game.expand(random.choice(game.board.get_valid_moves()))
         if game.board.is_game_over():
             # If the game is over, start a new game
-            return new_game()
+            return new_game(
+                is_resignation_audit=is_resignation_audit,
+                production_resignation_enabled=production_resignation_enabled,
+                resignation_threshold=resignation_threshold,
+            )
 
     return game

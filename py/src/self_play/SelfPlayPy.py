@@ -66,6 +66,8 @@ class SelfPlayPy:
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.client = InferenceClient(device_id=device_id, network_args=args.network, save_path=args.save_path)
         self.args = args.self_play
+        if self.args.resignation.audit_enabled or self.args.resignation.production_enabled:
+            raise ValueError('Calibrated resignation is supported only by the C++ self-play implementation.')
 
         self.self_play_games: list[SelfPlayGame] = [SelfPlayGame() for _ in range(self.args.num_parallel_games)]
         self.dataset = SelfPlayDataset()
@@ -128,18 +130,6 @@ class SelfPlayPy:
                 spg.memory.append(
                     SelfPlayGameMemory(spg.board.copy(), mcts_result.visit_counts, mcts_result.result_score)
                 )
-
-            if mcts_result.result_score < self.args.resignation_threshold and spg.resigned_at_move is None:
-                # Resignation if most of the mcts searches result in a loss
-                self.dataset.stats += SelfPlayDatasetStats(resignations=1)
-
-                if random.random() < 0.1:
-                    # With 10% chance, play out the game to the end to see if it was winnable
-                    spg.resigned_at_move = len(spg.played_moves)
-                    spg.resignee = spg.board.current_player
-                else:
-                    self.self_play_games[i] = self._handle_end_of_game(spg, mcts_result.result_score)
-                    continue
 
             if CURRENT_GAME == 'chess':
                 if len(spg.played_moves) >= 250:

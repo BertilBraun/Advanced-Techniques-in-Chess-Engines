@@ -17,6 +17,7 @@ import torch
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
+from src.self_play.resignation import ResignationParams
 from src.train.TrainingArgs import (
     ArtifactRetention,
     ClusterParams,
@@ -193,6 +194,37 @@ class LearningRateStage(BaseModel):
     learning_rate: float = Field(gt=0)
 
 
+class ResignationConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    audit_enabled: bool = False
+    production_enabled: bool = False
+    audit_game_probability: float = Field(default=0.10, ge=0.0, le=1.0)
+    audit_cutoff_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
+    minimum_eligible_ply: int = Field(default=0, ge=0)
+    minimum_published_model_version: int = Field(default=30, ge=0)
+    minimum_completed_audit_triggers: int = Field(default=100, gt=0)
+    false_non_loss_upper_bound: float = Field(default=0.03, gt=0.0, lt=1.0)
+    confidence_level: float = Field(default=0.95, gt=0.0, lt=1.0)
+    calibration_window_size: int = Field(default=2_000, gt=0)
+    calibration_interval: int = Field(default=100, gt=0)
+    threshold_candidate_minimum: float = Field(default=-0.99, ge=-1.0, lt=0.0)
+    threshold_candidate_maximum: float = Field(default=-0.80, gt=-1.0, lt=0.0)
+    threshold_candidate_resolution: float = Field(default=0.01, gt=0.0)
+    maximum_threshold_change_per_calibration: float = Field(default=0.01, gt=0.0)
+    production_resignation_enable_fraction: float = Field(default=1.0, ge=0.0, le=1.0)
+    production_resignation_fade_versions: int = Field(default=30, ge=0)
+    require_external_safety_approval: bool = True
+
+    @model_validator(mode='after')
+    def validate_parameters(self) -> ResignationConfiguration:
+        self.to_parameters()
+        return self
+
+    def to_parameters(self) -> ResignationParams:
+        return ResignationParams(**self.model_dump())
+
+
 class WorkloadConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
@@ -215,6 +247,7 @@ class WorkloadConfiguration(BaseModel):
     self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
     self_play_low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
     self_play_low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
+    resignation: ResignationConfiguration = ResignationConfiguration()
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
@@ -669,6 +702,7 @@ def apply_run_configuration(
     training_args.self_play.low_material_termination_probability = (
         workload.self_play_low_material_termination_probability
     )
+    training_args.self_play.resignation = workload.resignation.to_parameters()
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process
     training_args.self_play.use_inference_cache = topology.use_inference_cache
     training_args.self_play.inference_cache_capacity = topology.inference_cache_capacity_per_process

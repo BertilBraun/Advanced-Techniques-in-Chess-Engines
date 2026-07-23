@@ -200,12 +200,39 @@ class RollingSelfPlayBuffer(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tens
                     if accumulated_stats.num_resignations_evaluated_to_end > 0
                     else 0,
                 )
-                # average moves after resignation
                 log_scalar(
                     'resignation/average_moves_after_resignation',
                     accumulated_stats.num_moves_after_resignation / accumulated_stats.num_resignations_evaluated_to_end
                     if accumulated_stats.num_resignations_evaluated_to_end > 0
                     else 0,
+                )
+
+            if accumulated_stats.resignation_audit_games_started > 0 or accumulated_stats.actual_resignations > 0:
+                log_scalars(
+                    'resignation/audit',
+                    {
+                        'games_started': accumulated_stats.resignation_audit_games_started,
+                        'games_completed': accumulated_stats.resignation_audit_games_completed,
+                        'hypothetical_resignations': accumulated_stats.hypothetical_resignations,
+                        'actual_resignations': accumulated_stats.actual_resignations,
+                        'natural_triggers': accumulated_stats.resignation_audit_natural_triggers,
+                        'capped_triggers': accumulated_stats.resignation_audit_capped_triggers,
+                        'recovered_wins': accumulated_stats.resignation_audit_recovered_wins,
+                        'recovered_draws': accumulated_stats.resignation_audit_recovered_draws,
+                        'recovered_losses': accumulated_stats.resignation_audit_recovered_losses,
+                        'white_triggers': accumulated_stats.resignation_audit_white_triggers,
+                        'black_triggers': accumulated_stats.resignation_audit_black_triggers,
+                        'white_false_non_losses': (accumulated_stats.resignation_audit_white_false_non_losses),
+                        'black_false_non_losses': (accumulated_stats.resignation_audit_black_false_non_losses),
+                        'mean_abs_root_value': (
+                            accumulated_stats.resignation_audit_root_value_abs_sum
+                            / accumulated_stats.resignation_audit_root_value_count
+                            if accumulated_stats.resignation_audit_root_value_count
+                            else 0.0
+                        ),
+                        'continuation_plies': accumulated_stats.resignation_audit_continuation_plies,
+                        'estimated_searches_saved': (accumulated_stats.resignation_audit_estimated_searches_saved),
+                    },
                 )
 
     # ---------- helpers --------------------------------------------------- #

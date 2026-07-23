@@ -167,13 +167,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             deduplicated_dataset.visit_counts.append(visit_count_sum)
             deduplicated_dataset.value_targets.append(value_target_sum / count)
 
-        deduplicated_dataset.stats = SelfPlayDatasetStats(
-            num_samples=len(mp),
-            num_games=self.stats.num_games,
-            game_lengths=self.stats.game_lengths,
-            total_generation_time=self.stats.total_generation_time,
-            resignations=self.stats.resignations,
-        )
+        deduplicated_dataset.stats = self.stats.overwrite(num_samples=len(mp))
         return deduplicated_dataset
 
     def shuffle(self) -> SelfPlayDataset:
@@ -194,13 +188,7 @@ class SelfPlayDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         sampled_dataset.encoded_states = [self.encoded_states[i] for i in indices]
         sampled_dataset.visit_counts = [self.visit_counts[i] for i in indices]
         sampled_dataset.value_targets = [self.value_targets[i] for i in indices]
-        sampled_dataset.stats = SelfPlayDatasetStats(
-            num_samples=num_samples,
-            num_games=self.stats.num_games,
-            game_lengths=self.stats.game_lengths,
-            total_generation_time=self.stats.total_generation_time,
-            resignations=self.stats.resignations,
-        )
+        sampled_dataset.stats = self.stats.overwrite(num_samples=num_samples)
         return sampled_dataset
 
     @timeit

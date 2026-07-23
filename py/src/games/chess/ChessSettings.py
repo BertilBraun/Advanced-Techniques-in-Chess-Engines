@@ -118,7 +118,6 @@ TRAINING_ARGS = TrainingArgs(
         use_inference_cache=True,
         num_moves_after_which_to_play_greedy=50,  # even number - no bias towards white
         result_score_weight=0.1,
-        resignation_threshold=-5.0,  # TODO -0.9 or so
         starting_temperature=1.3,  # Decays to 0.1 up to num_moves_after_which_to_play_greedy
         num_games_after_which_to_write=2,
         portion_of_samples_to_keep=0.75,  # To not keep all symmetries
