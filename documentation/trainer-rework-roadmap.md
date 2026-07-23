@@ -27,11 +27,11 @@ The initial clean-run design is:
 
 | Control | Initial value |
 | --- | ---: |
-| Global batch size | 2,048 |
+| Global batch size | 1,024 |
 | Replay ratio | 4.0 |
 | Optimizer steps per training quantum | 64 |
-| Position presentations per quantum | 131,072 |
-| Unique new samples required per quantum | 32,768 |
+| Position presentations per quantum | 65,536 |
+| Unique new samples required per quantum | 16,384 |
 | Model publication cadence | Every completed 64-step quantum |
 | Stored augmentation copies | None |
 | Training-time symmetry | Random valid symmetry per sampled position |
@@ -41,16 +41,17 @@ The initial clean-run design is:
 | Resignation audit fraction | 0.10 |
 | Production resignation during initial warm-up | Disabled |
 
-The batch size is 2,048, not 2,024.
-
 Each unique retained full-search position earns four position-presentation credits.
-A global batch consumes 2,048 credits. The trainer does not wake for a partial
+A global batch consumes 1,024 credits. The trainer does not wake for a partial
 quantum:
 
 ```text
-credits_per_new_sample = 4
-credits_per_quantum = 64 * 2,048 = 131,072
-new_samples_per_quantum = 131,072 / 4 = 32,768
+presentation_credits_per_new_sample = replay_ratio
+presentation_credits_per_quantum = global_batch_size * optimizer_steps_per_quantum
+new_samples_per_quantum = presentation_credits_per_quantum / replay_ratio
+
+presentation_credits_per_quantum = 1,024 * 64 = 65,536
+new_samples_per_quantum = 65,536 / 4 = 16,384
 ```
 
 Unused credits carry across process restarts. If multiple complete quanta accumulate,
@@ -582,14 +583,15 @@ is discovered.
 
 ### Task 5B: quantum scheduler
 
-Start a 64-step training quantum only when at least 131,072 credits are available.
+Derive the quantum size from configuration. With the initial values, start a 64-step
+training quantum only when at least 65,536 presentation credits are available.
 Run exactly 64 complete global batches. On success:
 
 1. save model and optimizer;
 2. save the credit and sampler state;
 3. create the immutable model-version manifest;
 4. atomically mark the quantum committed;
-5. subtract 131,072 available credits;
+5. subtract the calculated 65,536 presentation credits;
 6. publish the model version.
 
 On failure, resume from the last committed quantum. Never repeat a committed quantum
@@ -609,7 +611,8 @@ generate-train-refresh cycle time, not training throughput alone.
 
 ### Stage 5 tests
 
-- Exactly 32,768 unique new samples enable one quantum at replay ratio 4.
+- Exactly 16,384 unique new samples enable one quantum at batch 1,024 and replay
+  ratio 4.
 - One fewer sample does not.
 - Fractional or surplus credit carries forward.
 - Duplicate shard discovery creates no credit.
@@ -757,7 +760,7 @@ The following are intentionally deferred:
 
 1. Replay-buffer capacity in unique positions.
 2. Two-rank versus four-rank DDP for the clean run.
-3. Learning rate for global batch 2,048 under replay ratio 4.
+3. Learning rate for global batch 1,024 under replay ratio 4.
 4. Whether hard resignation graduates beyond the current-model canary.
 5. Whether soft resignation is preferable in chess.
 6. Treatment of 250-ply capped games in value training.
