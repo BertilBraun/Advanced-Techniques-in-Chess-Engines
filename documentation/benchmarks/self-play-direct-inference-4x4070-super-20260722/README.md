@@ -128,11 +128,33 @@ local batch 512. The production DDP path previously measured 22,599 samples/s in
 15,026 samples/s while the old half-self-play workload was active. The selected self-play layout
 leaves substantially more CPU and host memory available during overlap than that old workload.
 
-The previous two-GPU training layout had an effective global batch of 1,024. Following linear
-batch-size scaling, the complete learning-rate schedule is doubled together with the global batch:
-`0.005 -> 0.010` from iteration 0, `0.0035 -> 0.007` from iteration 50, and `0.002 -> 0.004` from
-iteration 100 onward. A restart from checkpoint 190 therefore resumes with an effective learning
-rate of **0.004**. Optimizer state is restored normally; only the configured per-step rate changes.
+The initial four-GPU restart doubled the learning-rate schedule together with the global batch.
+Observed optimization behavior showed that linear scaling was too aggressive for this run, so the
+schedule is restored to `0.005` from iteration 0, `0.0035` from iteration 50, and `0.002` from
+iteration 100 onward. The checkpoint-216 restart therefore resumes at **0.002**. Optimizer state is
+restored normally; only the configured per-step rate changes.
+
+## Overnight evaluation stability
+
+Monitoring through checkpoint 216 exposed a native/Python terminal-rule mismatch. The native
+board classified king and two knights versus king as insufficient material, while python-chess
+correctly kept the position playable. Direct MCTS consequently returned a valid terminal result
+with no child visits, and the Python evaluator attempted to normalize a zero-mass policy. The
+native rule now treats only zero or one knight without other material as insufficient. Native
+tests cover both K+N versus K (terminal) and K+NN versus K (non-terminal), and policy conversion
+rejects zero visit mass instead of producing NaNs.
+
+Paired evaluation represents a native terminal search as an explicit terminal decision and
+adjudicates it as a draw, rather than encoding terminal state as a fake move policy. Move policies
+are validated for finite positive mass before move selection.
+
+The same evaluation window revealed a poisoned low-skill Stockfish UCI session returning an
+illegal stale best move. Skill-level matches now force a `ucinewgame` boundary when switching
+boards, disable pondering explicitly, close and recreate the engine after an `EngineError`, and
+retry the affected position once. Fixed-node monitoring also uses explicit game boundaries.
+Finally, every paired monitoring game is capped at 400 plies. This prevents one pathological
+low-skill ending from occupying the single evaluation slot indefinitely; a capped game is recorded
+as a draw.
 
 ## Restart and pause behavior
 

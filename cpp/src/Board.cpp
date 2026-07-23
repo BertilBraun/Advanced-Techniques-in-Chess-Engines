@@ -194,8 +194,7 @@ bool Board::drawByInsufficientMaterial() const {
     const int knightCount = m_pos.count<KNIGHT>();
     const int bishopCount = m_pos.count<BISHOP>();
     if (bishopCount == 0) {
-        return knightCount == 0 || (knightCount <= 2 && (m_pos.count<KNIGHT>(WHITE) == 0 ||
-                                                         m_pos.count<KNIGHT>(BLACK) == 0));
+        return knightCount <= 1;
     }
     if (knightCount > 0) {
         return false;

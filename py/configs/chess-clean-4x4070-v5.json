@@ -66,15 +66,15 @@
     "learning_rate_schedule": [
       {
         "start_iteration": 0,
-        "learning_rate": 0.01
+        "learning_rate": 0.005
       },
       {
         "start_iteration": 50,
-        "learning_rate": 0.007
+        "learning_rate": 0.0035
       },
       {
         "start_iteration": 100,
-        "learning_rate": 0.004
+        "learning_rate": 0.002
       }
     ],
     "self_play_search_warmup_iterations": 15,
@@ -107,7 +107,7 @@
     "opening_suite_path": "py/reference/main-monitoring-openings-50.tsv",
     "reference_model_path": null,
     "raw_results_subdirectory": "evaluations",
-    "maximum_game_plies": null,
+    "maximum_game_plies": 400,
     "bootstrap_seed": 20260717,
     "bootstrap_samples": 10000,
     "mcts_threads": 4,

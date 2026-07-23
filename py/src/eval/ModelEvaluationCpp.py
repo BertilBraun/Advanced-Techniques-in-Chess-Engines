@@ -9,7 +9,7 @@ import chess
 import chess.engine
 
 if TYPE_CHECKING:
-    from AlphaZeroCpp import MCTS, MCTSParams, MCTSRoot
+    from AlphaZeroCpp import MCTS, MCTSParams, MCTSResult, MCTSRoot
 
 import numpy as np
 
@@ -22,7 +22,10 @@ from src.eval.ModelEvaluationPy import (
     _play_two_models_search,
     policy_evaluator,
     Results,
-    EvaluationModel,
+    EvaluationMove,
+    EvaluationTerminal,
+    PairedEvaluationDecision,
+    PairedEvaluationModel,
 )
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import TrainingArgs
@@ -171,9 +174,10 @@ class ModelEvaluation:
     def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
 
-        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            def get_random_policy(board: CurrentBoard) -> np.ndarray:
-                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+        def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+            def get_random_policy(board: CurrentBoard) -> EvaluationMove:
+                policy = CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+                return EvaluationMove(policy)
 
             return [get_random_policy(board) for board in boards]
 
@@ -197,10 +201,10 @@ class ModelEvaluation:
 
         opponent = self._create_mcts(opponent_inference_path)
 
-        def opponent_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+        def opponent_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search([MCTSBoard(history_aware_root(board, opponent), False) for board in boards])
-            return [action_probabilities(result.visits) for result in results.results]
+            return self._search_decisions(results.results)
 
         res = self.play_vs_evaluation_model_paired(
             opponent_evaluator,
@@ -237,38 +241,28 @@ class ModelEvaluation:
         return results
 
     def play_vs_stockfish(self, level: int) -> Results:
-        import chess.engine
-
         evaluation = self.args.evaluation
         if evaluation is None or evaluation.stockfish_binary_path is None:
             raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
-        engine = chess.engine.SimpleEngine.popen_uci(evaluation.stockfish_binary_path)
-        engine.configure({'Skill Level': level})
-        engine.configure({'Threads': 1})  # Limit to one thread for consistency
-        engine.configure({'Hash': evaluation.stockfish_hash_mib})
+        engine = self._open_skill_level_stockfish(level)
 
-        def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            def get_stockfish_policy(board: CurrentBoard) -> np.ndarray:
-                # Use Stockfish to get the best move
-                result = engine.play(board.board, chess.engine.Limit(time=0.01, depth=level * 2))
-                move = result.move
+        def stockfish_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+            nonlocal engine
+            decisions: list[PairedEvaluationDecision] = []
+            for board in boards:
+                try:
+                    move = self._play_skill_level_stockfish(engine, board, level)
+                except chess.engine.EngineError:
+                    engine.close()
+                    engine = self._open_skill_level_stockfish(level)
+                    move = self._play_skill_level_stockfish(engine, board, level)
+                decisions.append(EvaluationMove(CurrentGame.encode_moves([move], board)))
+            return decisions
 
-                if not move:
-                    raise ValueError('Stockfish did not return a move.')
-
-                if move.promotion is not None:
-                    # Handle promotion moves
-                    move = chess.Move(move.from_square, move.to_square, promotion=chess.QUEEN)
-
-                return CurrentGame.encode_moves([move], board)
-
-            return [get_stockfish_policy(board) for board in boards]
-
-        results = self.play_vs_evaluation_model(stockfish_evaluator, f'stockfish_level_{level}')
-
-        engine.quit()  # Clean up the Stockfish engine
-
-        return results
+        try:
+            return self.play_vs_evaluation_model(stockfish_evaluator, f'stockfish_level_{level}')
+        finally:
+            engine.quit()
 
     def play_vs_stockfish_fixed_nodes(
         self,
@@ -298,19 +292,20 @@ class ModelEvaluation:
                 }
             )
 
-            def stockfish_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-                policies: list[np.ndarray] = []
+            def stockfish_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+                decisions: list[PairedEvaluationDecision] = []
                 for board in boards:
                     result = engine.play(
                         board.board,
                         chess.engine.Limit(nodes=nodes_per_move),
+                        game=board,
                         ponder=False,
                     )
                     if result.move is None:
                         raise ValueError('Stockfish did not return a move.')
                     move = normalize_move_for_action_space(result.move, board)
-                    policies.append(CurrentGame.encode_moves([move], board))
-                return policies
+                    decisions.append(EvaluationMove(CurrentGame.encode_moves([move], board)))
+                return decisions
 
             results, records = self.play_vs_evaluation_model_paired(
                 stockfish_evaluator,
@@ -320,13 +315,13 @@ class ModelEvaluation:
         finally:
             engine.quit()
 
-    def play_vs_evaluation_model(self, eval_model: EvaluationModel, name: str) -> Results:
+    def play_vs_evaluation_model(self, eval_model: PairedEvaluationModel, name: str) -> Results:
         results, _ = self.play_vs_evaluation_model_paired(eval_model, name)
         return results
 
     def play_vs_evaluation_model_paired(
         self,
-        eval_model: EvaluationModel,
+        eval_model: PairedEvaluationModel,
         name: str,
     ) -> tuple[Results, tuple[GameRecord, ...]]:
         from AlphaZeroCpp import MCTSBoard
@@ -339,10 +334,10 @@ class ModelEvaluation:
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
         current = self._create_mcts(current_inference_path)
 
-        def current_model(boards: list[CurrentBoard]) -> list[np.ndarray]:
+        def current_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
             assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search([MCTSBoard(history_aware_root(board, current), False) for board in boards])
-            return [action_probabilities(result.visits) for result in results.results]
+            return self._search_decisions(results.results)
 
         results, records = _play_paired_models_search(
             iteration=self.iteration,
@@ -354,6 +349,48 @@ class ModelEvaluation:
         )
 
         return results, records
+
+    def _open_skill_level_stockfish(self, level: int) -> chess.engine.SimpleEngine:
+        evaluation = self.args.evaluation
+        if evaluation is None or evaluation.stockfish_binary_path is None:
+            raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
+        engine = chess.engine.SimpleEngine.popen_uci(evaluation.stockfish_binary_path)
+        engine.configure(
+            {
+                'Skill Level': level,
+                'Threads': 1,
+                'Hash': evaluation.stockfish_hash_mib,
+            }
+        )
+        return engine
+
+    @staticmethod
+    def _play_skill_level_stockfish(
+        engine: chess.engine.SimpleEngine,
+        board: CurrentBoard,
+        level: int,
+    ) -> chess.Move:
+        result = engine.play(
+            board.board,
+            chess.engine.Limit(time=0.01, depth=max(1, level * 2)),
+            game=board,
+            ponder=False,
+        )
+        if result.move is None:
+            raise ValueError('Stockfish did not return a move.')
+        return normalize_move_for_action_space(result.move, board)
+
+    @staticmethod
+    def _search_decisions(results: list[MCTSResult]) -> list[PairedEvaluationDecision]:
+        decisions: list[PairedEvaluationDecision] = []
+        for result in results:
+            if not result.visits:
+                if not result.root.is_terminal:
+                    raise RuntimeError('Evaluation MCTS returned no visits for a non-terminal root.')
+                decisions.append(EvaluationTerminal())
+                continue
+            decisions.append(EvaluationMove(action_probabilities(result.visits)))
+        return decisions
 
 
 if __name__ == '__main__':

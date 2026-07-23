@@ -68,6 +68,20 @@ class Results:
 
 EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
 
+
+@dataclass(frozen=True)
+class EvaluationMove:
+    policy: np.ndarray
+
+
+@dataclass(frozen=True)
+class EvaluationTerminal:
+    pass
+
+
+PairedEvaluationDecision = EvaluationMove | EvaluationTerminal
+PairedEvaluationModel = Callable[[list[CurrentBoard]], list[PairedEvaluationDecision]]
+
 # The device to use for evaluation. Since Training is done on device 0, we can use device 1 for evaluation
 EVAL_DEVICE = 0
 
@@ -278,8 +292,8 @@ def _game_outcome(winner: Player | None, candidate_player: Player) -> GameOutcom
 
 def _play_paired_models_search(
     iteration: int,
-    candidate_model: EvaluationModel,
-    opponent_model: EvaluationModel,
+    candidate_model: PairedEvaluationModel,
+    opponent_model: PairedEvaluationModel,
     schedule: tuple[ScheduledGame, ...],
     maximum_game_plies: int | None,
     name: str,
@@ -314,21 +328,42 @@ def _play_paired_models_search(
             if active_game.board.current_player != active_game.candidate_player
         ]
 
-        policies_by_game_index: dict[int, np.ndarray] = {}
+        decisions_by_game_index: dict[int, PairedEvaluationDecision] = {}
         if candidate_game_indices:
-            candidate_policies = candidate_model(
+            candidate_decisions = candidate_model(
                 [active_games[game_index].board for game_index in candidate_game_indices]
             )
-            assert len(candidate_policies) == len(candidate_game_indices)
-            policies_by_game_index.update(zip(candidate_game_indices, candidate_policies))
+            assert len(candidate_decisions) == len(candidate_game_indices)
+            decisions_by_game_index.update(zip(candidate_game_indices, candidate_decisions))
         if opponent_game_indices:
-            opponent_policies = opponent_model([active_games[game_index].board for game_index in opponent_game_indices])
-            assert len(opponent_policies) == len(opponent_game_indices)
-            policies_by_game_index.update(zip(opponent_game_indices, opponent_policies))
+            opponent_decisions = opponent_model(
+                [active_games[game_index].board for game_index in opponent_game_indices]
+            )
+            assert len(opponent_decisions) == len(opponent_game_indices)
+            decisions_by_game_index.update(zip(opponent_game_indices, opponent_decisions))
 
         remaining_games: list[_ActivePairedGame] = []
         for game_index, active_game in enumerate(active_games):
-            policy = policies_by_game_index[game_index]
+            decision = decisions_by_game_index[game_index]
+            match decision:
+                case EvaluationTerminal():
+                    completed_records[active_game.schedule_index] = GameRecord(
+                        schedule_index=active_game.schedule_index,
+                        opening_id=active_game.opening_id,
+                        starting_fen=active_game.starting_fen,
+                        candidate_color=active_game.candidate_color,
+                        outcome=GameOutcome.DRAW,
+                        moves_uci=tuple(active_game.moves_uci),
+                    )
+                    log_text(
+                        f'evaluation_moves/{iteration}/{name}',
+                        f'{GameOutcome.DRAW.value}:{",".join(active_game.moves_uci)}',
+                    )
+                    continue
+                case EvaluationMove(policy):
+                    pass
+            if not np.all(np.isfinite(policy)) or float(np.sum(policy)) <= 0:
+                raise ValueError('Evaluation move policy must be finite and have positive mass.')
             encoded_move = int(np.argmax(policy).item())
             move = CurrentGame.decode_move(encoded_move, active_game.board)
             active_game.board.make_move(move)

@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import cast
 
 import pytest
@@ -17,8 +17,10 @@ from src.cluster.EvaluationProcess import (
     _terminate_evaluation_tasks,
 )
 from src.eval.ModelEvaluationCpp import ModelEvaluation
-from src.eval.ModelEvaluationPy import EvaluationModel, Results
+from src.eval.ModelEvaluationPy import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
+from src.mcts.MCTS import action_probabilities
+from src.settings import CurrentBoard
 from src.train.TrainingArgs import DirectSelfPlayParams, TrainingArgs
 
 
@@ -32,6 +34,12 @@ class _EvaluationSettings:
     maximum_game_plies: int | None = 200
     stockfish_binary_path: str | None = None
     stockfish_hash_mib: int = 128
+
+
+@pytest.mark.parametrize('visit_counts', ([], [(1, 0), (2, 0)]))
+def test_action_probabilities_reject_zero_visit_mass(visit_counts: list[tuple[int, int]]) -> None:
+    with pytest.raises(ValueError, match='at least one positive visit'):
+        action_probabilities(visit_counts)
 
 
 @dataclass(frozen=True)
@@ -345,3 +353,68 @@ def test_skill_level_stockfish_uses_configured_hash(
         ('Hash', 64),
     ]
     assert stockfish.was_quit
+
+
+def test_skill_level_stockfish_restarts_after_engine_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RecoveringStockfish(_FakeStockfish):
+        def __init__(self, fail: bool) -> None:
+            super().__init__()
+            self.fail = fail
+            self.was_closed = False
+
+        def play(
+            self,
+            board: object,
+            limit: object,
+            *,
+            game: object,
+            ponder: bool,
+        ) -> SimpleNamespace:
+            assert board is game.board
+            assert limit is not None
+            assert game is current_board
+            assert not ponder
+            if self.fail:
+                raise evaluation_module.chess.engine.EngineError('poisoned session')
+            return SimpleNamespace(move=current_board.get_valid_moves()[0])
+
+        def close(self) -> None:
+            self.was_closed = True
+
+    first_engine = RecoveringStockfish(fail=True)
+    second_engine = RecoveringStockfish(fail=False)
+    engines = iter((first_engine, second_engine))
+    current_board = CurrentBoard()
+
+    monkeypatch.setattr(
+        evaluation_module.chess.engine.SimpleEngine,
+        'popen_uci',
+        lambda _: next(engines),
+    )
+
+    model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
+    model_evaluation.args = cast(
+        TrainingArgs,
+        _EvaluationTrainingArguments(
+            save_path='unused',
+            evaluation=_EvaluationSettings(
+                inference_cache_capacity=0,
+                stockfish_binary_path='/stockfish',
+                stockfish_hash_mib=64,
+            ),
+        ),
+    )
+
+    def evaluate_once(evaluator: PairedEvaluationModel, _: str) -> Results:
+        decisions = evaluator([current_board])
+        assert len(decisions) == 1
+        assert isinstance(decisions[0], EvaluationMove)
+        return Results(1, 0, 0)
+
+    monkeypatch.setattr(model_evaluation, 'play_vs_evaluation_model', evaluate_once)
+
+    assert model_evaluation.play_vs_stockfish(level=3) == Results(1, 0, 0)
+    assert first_engine.was_closed
+    assert second_engine.was_quit

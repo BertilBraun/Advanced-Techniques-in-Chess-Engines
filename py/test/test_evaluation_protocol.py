@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from src.experiment.evaluation_protocol import (
@@ -11,7 +10,7 @@ from src.experiment.evaluation_protocol import (
     load_opening_suite,
     summarize_match,
 )
-from src.eval.ModelEvaluationPy import _play_paired_models_search
+from src.eval.ModelEvaluationPy import EvaluationMove, EvaluationTerminal, Results, _play_paired_models_search
 from src.settings import CurrentBoard, CurrentGame
 
 
@@ -98,8 +97,8 @@ def test_match_summary_rejects_unpaired_opening() -> None:
         summarize_match(records, bootstrap_seed=7, bootstrap_samples=100)
 
 
-def first_legal_move(boards: list[CurrentBoard]) -> list[np.ndarray]:
-    return [CurrentGame.encode_moves([board.get_valid_moves()[0]], board) for board in boards]
+def first_legal_move(boards: list[CurrentBoard]) -> list[EvaluationMove]:
+    return [EvaluationMove(CurrentGame.encode_moves([board.get_valid_moves()[0]], board)) for board in boards]
 
 
 def test_paired_match_reuses_opening_with_colors_swapped() -> None:
@@ -122,3 +121,23 @@ def test_paired_match_reuses_opening_with_colors_swapped() -> None:
     assert records[0].candidate_color == PlayerColor.WHITE
     assert records[1].candidate_color == PlayerColor.BLACK
     assert records[0].moves_uci == records[1].moves_uci
+
+
+def test_paired_match_adjudicates_native_terminal_decision_as_draw() -> None:
+    opening = load_opening_suite(OPENING_SUITE_PATH)[0]
+    schedule = build_paired_schedule((opening,))
+
+    def terminal_decision(boards: list[CurrentBoard]) -> list[EvaluationTerminal]:
+        return [EvaluationTerminal() for _ in boards]
+
+    results, records = _play_paired_models_search(
+        iteration=1,
+        candidate_model=terminal_decision,
+        opponent_model=terminal_decision,
+        schedule=schedule,
+        maximum_game_plies=400,
+        name='native-terminal',
+    )
+
+    assert results == Results(wins=0, losses=0, draws=2)
+    assert all(record.moves_uci == () for record in records)

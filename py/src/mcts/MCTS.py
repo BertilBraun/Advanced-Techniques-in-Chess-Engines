@@ -24,7 +24,10 @@ def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
     action_probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
     for move, visit_count in visit_counts:
         action_probabilities[move] = visit_count
-    action_probabilities /= np.sum(action_probabilities)
+    total_visits = float(np.sum(action_probabilities))
+    if total_visits <= 0:
+        raise ValueError('Visit counts must contain at least one positive visit.')
+    action_probabilities /= total_visits
     return action_probabilities
 
 

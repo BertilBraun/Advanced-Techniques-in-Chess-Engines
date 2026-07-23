@@ -79,6 +79,14 @@ void testCopiesStartWithoutCache() {
     require(!assigned.m_validMoves.has_value(), "copy assignment retained legal-move cache");
     require(assigned.validMoves() == sourceMoves, "assigned board generated different moves");
 }
+
+void testKnightOnlyInsufficientMaterial() {
+    const Board knightVersusKing("8/8/8/4kn2/8/8/6K1/8 w - - 2 78");
+    require(knightVersusKing.isGameOver(), "king and knight versus king was not terminal");
+
+    const Board twoKnightsVersusKing("8/8/8/4knn1/8/8/6K1/8 w - - 2 78");
+    require(!twoKnightsVersusKing.isGameOver(), "king and two knights versus king was terminal");
+}
 } // namespace
 
 int main() {
@@ -86,6 +94,7 @@ int main() {
     testRepeatedAccessReusesCache();
     testMutationInvalidatesCache();
     testCopiesStartWithoutCache();
+    testKnightOnlyInsufficientMaterial();
     std::cout << "Board legal-move cache tests passed\n";
     return 0;
 }

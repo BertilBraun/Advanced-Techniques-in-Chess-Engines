@@ -623,9 +623,9 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['max_concurrent_evaluation_tasks'] = 4
     expected['workload']['training_sampling_window'] = 15
     expected['workload']['learning_rate_schedule'] = (
-        {'start_iteration': 0, 'learning_rate': 0.01},
-        {'start_iteration': 50, 'learning_rate': 0.007},
-        {'start_iteration': 100, 'learning_rate': 0.004},
+        {'start_iteration': 0, 'learning_rate': 0.005},
+        {'start_iteration': 50, 'learning_rate': 0.0035},
+        {'start_iteration': 100, 'learning_rate': 0.002},
     )
     expected['workload']['self_play_fast_searches_per_turn'] = 150
     expected['workload']['self_play_endgame_shortcut_fade_iterations'] = 0
@@ -639,6 +639,7 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
         'historical_model_iterations'
     ]
     expected['evaluation_protocol']['historical_model_rotation_period'] = 2
+    expected['evaluation_protocol']['maximum_game_plies'] = 400
 
     assert v5_configuration.model_dump() == expected
 
@@ -653,9 +654,10 @@ def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training(
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
     assert arguments.training.global_batch_size == 2048
     assert arguments.training.local_batch_size == 512
-    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.01)
-    assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.007)
-    assert arguments.training.learning_rate(190, 'adamw') == pytest.approx(0.004)
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(50, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(100, 'adamw') == pytest.approx(0.002)
+    assert arguments.training.learning_rate(190, 'adamw') == pytest.approx(0.002)
     assert arguments.cluster.self_play_device_ids == (0, 0, 1, 1, 2, 2, 3, 3)
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (1, 3, 5, 7)
     assert arguments.self_play.mcts.num_threads == 1
