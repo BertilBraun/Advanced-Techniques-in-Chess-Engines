@@ -1,0 +1,138 @@
+{
+  "replay_capacity_unique_positions": 2500000,
+  "actual_unique_positions": 2500000,
+  "producer_shards_before_compaction": 5000,
+  "compacted_containers": 25,
+  "logical_segments_after_compaction": 5000,
+  "metadata_memory_bytes_before_compaction": 4160904,
+  "metadata_memory_bytes_after_compaction": 3049579,
+  "assumed_games_per_producer_shard": 10,
+  "measured_positions_per_game": 42.53,
+  "compaction_seconds": 34.28629289986566,
+  "compaction_preserved_sample_count": true,
+  "global_batch_size": 1024,
+  "world_size": 4,
+  "optimizer_steps": 50,
+  "quantum_count": 2,
+  "rank_positions_per_quantum": 12800,
+  "trainer_global_consumption_samples_per_second": 22599.1267,
+  "uncompacted": {
+    "wall_seconds": 25.97318636532873,
+    "global_samples_per_second": 3942.527441942681,
+    "decoded_samples": 102400,
+    "maximum_rank_quantum_bytes": 191628800,
+    "payload_opens": 36988,
+    "selected_rows": 102400,
+    "rows_read": 7228808,
+    "row_read_amplification": 70.593828125,
+    "selected_bytes": 20889600,
+    "bytes_read": 1474676832,
+    "byte_read_amplification": 70.593828125,
+    "process_results": [
+      {
+        "rank": 0,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 25.006489143241197,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 9265,
+        "selected_rows": 25600,
+        "rows_read": 1815879,
+        "selected_bytes": 5222400,
+        "bytes_read": 370439316
+      },
+      {
+        "rank": 1,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 25.19048046413809,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 9242,
+        "selected_rows": 25600,
+        "rows_read": 1785320,
+        "selected_bytes": 5222400,
+        "bytes_read": 364205280
+      },
+      {
+        "rank": 2,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 25.331508688628674,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 9267,
+        "selected_rows": 25600,
+        "rows_read": 1808357,
+        "selected_bytes": 5222400,
+        "bytes_read": 368904828
+      },
+      {
+        "rank": 3,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 25.971944914665073,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 9214,
+        "selected_rows": 25600,
+        "rows_read": 1819252,
+        "selected_bytes": 5222400,
+        "bytes_read": 371127408
+      }
+    ]
+  },
+  "compacted": {
+    "wall_seconds": 3.1431478671729565,
+    "global_samples_per_second": 32578.804538426535,
+    "decoded_samples": 102400,
+    "maximum_rank_quantum_bytes": 191628800,
+    "payload_opens": 200,
+    "selected_rows": 102400,
+    "rows_read": 19931103,
+    "row_read_amplification": 194.639677734375,
+    "selected_bytes": 20889600,
+    "bytes_read": 4065945012,
+    "byte_read_amplification": 194.639677734375,
+    "process_results": [
+      {
+        "rank": 0,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 3.1420222190208733,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 50,
+        "selected_rows": 25600,
+        "rows_read": 4982444,
+        "selected_bytes": 5222400,
+        "bytes_read": 1016418576
+      },
+      {
+        "rank": 1,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 2.892278430983424,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 50,
+        "selected_rows": 25600,
+        "rows_read": 4983473,
+        "selected_bytes": 5222400,
+        "bytes_read": 1016628492
+      },
+      {
+        "rank": 2,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 2.8518330547958612,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 50,
+        "selected_rows": 25600,
+        "rows_read": 4983638,
+        "selected_bytes": 5222400,
+        "bytes_read": 1016662152
+      },
+      {
+        "rank": 3,
+        "decoded_samples": 25600,
+        "elapsed_seconds": 3.0375003810040653,
+        "maximum_resident_quantum_bytes": 191628800,
+        "payload_opens": 50,
+        "selected_rows": 25600,
+        "rows_read": 4981548,
+        "selected_bytes": 5222400,
+        "bytes_read": 1016235792
+      }
+    ]
+  },
+  "compacted_throughput_exceeds_consumption": true
+}
