@@ -321,8 +321,6 @@ class SelfPlayCpp:
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
         if CURRENT_GAME != 'chess' or game.low_material_termination_evaluated:
             return False
-        if self.iteration < self.args.low_material_termination_start_iteration:
-            return False
         if len(game.played_moves) < self.args.low_material_termination_minimum_plies:
             return False
         if self.args.low_material_termination_probability <= 0.0:

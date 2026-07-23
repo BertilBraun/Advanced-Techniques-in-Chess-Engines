@@ -213,7 +213,6 @@ class WorkloadConfiguration(BaseModel):
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
     self_play_final_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
-    self_play_low_material_termination_start_iteration: int = Field(default=0, ge=0)
     self_play_low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
     self_play_low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
     random_seed: int = Field(ge=0)
@@ -663,9 +662,6 @@ def apply_run_configuration(
     training_args.self_play.final_maximum_game_plies = workload.self_play_final_maximum_game_plies
     training_args.self_play.low_material_termination_minimum_plies = (
         workload.self_play_low_material_termination_minimum_plies
-    )
-    training_args.self_play.low_material_termination_start_iteration = (
-        workload.self_play_low_material_termination_start_iteration
     )
     training_args.self_play.low_material_termination_piece_threshold_per_player = (
         workload.self_play_low_material_termination_piece_threshold_per_player

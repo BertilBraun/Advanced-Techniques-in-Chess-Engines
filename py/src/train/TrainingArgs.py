@@ -110,9 +110,6 @@ class SelfPlayParams:
     low_material_termination_minimum_plies: int = 0
     """Earliest ply at which the one-shot low-material termination rule may be evaluated."""
 
-    low_material_termination_start_iteration: int = 0
-    """Earliest training iteration at which the one-shot low-material termination rule may be evaluated."""
-
     low_material_termination_piece_threshold_per_player: int = 0
     """Terminate eligibility requires either player to have fewer pieces than this threshold."""
 

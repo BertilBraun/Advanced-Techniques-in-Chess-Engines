@@ -14,8 +14,7 @@ def self_play_client(shortcut_strength: float) -> SelfPlayCpp:
     client = object.__new__(SelfPlayCpp)
     client.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=50,
-        low_material_termination_minimum_plies=50,
-        low_material_termination_start_iteration=0,
+        low_material_termination_minimum_plies=120,
         low_material_termination_piece_threshold_per_player=4,
         low_material_termination_probability=0.7,
     )
@@ -25,7 +24,7 @@ def self_play_client(shortcut_strength: float) -> SelfPlayCpp:
     return client
 
 
-def game_from_fen(fen: str, played_move_count: int = 50) -> SelfPlayGame:
+def game_from_fen(fen: str, played_move_count: int = 120) -> SelfPlayGame:
     game = SelfPlayGame()
     game.board = ChessBoard.from_fen(fen)
     game.played_moves = [chess.Move.null()] * played_move_count
@@ -106,17 +105,16 @@ def test_low_material_termination_requires_one_side_below_four_pieces(
     assert not client._should_terminate_low_material_game(game)
 
 
-def test_low_material_termination_waits_for_its_configured_start_iteration(
+def test_low_material_termination_waits_for_its_configured_minimum_ply(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = self_play_client(0.0)
-    client.args.low_material_termination_start_iteration = 120
-    game = game_from_fen('8/8/8/8/8/4K3/7P/4k3 w - - 0 1')
+    game = game_from_fen('8/8/8/8/8/4K3/7P/4k3 w - - 0 1', played_move_count=119)
     monkeypatch.setattr('src.self_play.SelfPlayCpp.random.random', lambda: 0.0)
 
     assert not client._should_terminate_low_material_game(game)
     assert not game.low_material_termination_evaluated
 
-    client.iteration = 120
+    game.played_moves.append(chess.Move.null())
 
     assert client._should_terminate_low_material_game(game)
