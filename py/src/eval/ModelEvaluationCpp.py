@@ -298,7 +298,6 @@ class ModelEvaluation:
                     result = engine.play(
                         board.board,
                         chess.engine.Limit(nodes=nodes_per_move),
-                        game=board,
                         ponder=False,
                     )
                     if result.move is None:
@@ -373,7 +372,6 @@ class ModelEvaluation:
         result = engine.play(
             board.board,
             chess.engine.Limit(time=0.01, depth=max(1, level * 2)),
-            game=board,
             ponder=False,
         )
         if result.move is None:

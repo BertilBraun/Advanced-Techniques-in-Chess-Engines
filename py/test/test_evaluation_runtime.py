@@ -369,12 +369,10 @@ def test_skill_level_stockfish_restarts_after_engine_error(
             board: object,
             limit: object,
             *,
-            game: object,
             ponder: bool,
         ) -> SimpleNamespace:
-            assert board is game.board
+            assert board is current_board.board
             assert limit is not None
-            assert game is current_board
             assert not ponder
             if self.fail:
                 raise evaluation_module.chess.engine.EngineError('poisoned session')
