@@ -623,6 +623,7 @@ def test_v5_configuration_is_a_fresh_identity_with_v4_parameters() -> None:
     expected['topology']['max_concurrent_evaluation_tasks'] = 16
     expected['workload']['training_sampling_window'] = 15
     expected['workload']['games_per_iteration'] = 5000
+    expected['workload']['evaluation_every_iterations'] = 3
     expected['workload']['learning_rate_schedule'] = (
         {'start_iteration': 0, 'learning_rate': 0.005},
         {'start_iteration': 50, 'learning_rate': 0.0035},
@@ -670,6 +671,7 @@ def test_v5_configuration_uses_direct_width_one_self_play_and_four_gpu_training(
     assert arguments.self_play.direct_inference.inference_batch_size == 64
     assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
     assert arguments.evaluation is not None
+    assert arguments.evaluation.every_n_iterations == 3
     assert arguments.evaluation.parallel_searches == 1
     assert arguments.evaluation.max_concurrent_tasks == 16
     assert arguments.evaluation.direct_inference is not None

@@ -90,7 +90,7 @@
     "random_seed": 20260717,
     "evaluation_games": 100,
     "evaluation_searches_per_turn": 64,
-    "evaluation_every_iterations": 2
+    "evaluation_every_iterations": 3
   },
   "safety": {
     "maximum_open_file_count": 32768,
