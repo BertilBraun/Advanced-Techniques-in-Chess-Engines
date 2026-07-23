@@ -19,7 +19,7 @@ This roadmap deliberately does not include:
 - a low-material termination heuristic;
 - a change to full or fast self-play search counts;
 - a change to playout-cap randomization;
-- a learning-rate choice before the new trainer is benchmarked.
+- a network-learning-rate retuning experiment.
 
 ## Decisions
 
@@ -29,10 +29,20 @@ The initial clean-run design is:
 | --- | ---: |
 | Global batch size | 1,024 |
 | Replay ratio | 4.0 |
-| Optimizer steps per training quantum | 64 |
-| Position presentations per quantum | 65,536 |
-| Unique new samples required per quantum | 16,384 |
-| Model publication cadence | Every completed 64-step quantum |
+| Optimizer steps per training quantum | 50 |
+| Position presentations per quantum | 51,200 |
+| Unique new samples required per quantum | 12,800 |
+| Model publication cadence | Every completed 50-step quantum |
+| Retained checkpoint cadence | Every 1,000 optimizer steps |
+| Evaluation cadence | Every 1,000 optimizer steps |
+| Maximum optimizer steps | 500,000 |
+| Replay capacity | 2,500,000 unique positions, disk-backed |
+| DDP ranks | 4 |
+| Self-play pause during training | None |
+| Initial learning rate | 0.002 |
+| Self-play maximum game length | 250 plies |
+| Self-play processes | 4 per GPU |
+| Search concurrency per process | 2 search threads and 2 inference queues |
 | Stored augmentation copies | None |
 | Training-time symmetry | Random valid symmetry per sampled position |
 | Post-augmentation discard | Removed |
@@ -50,13 +60,18 @@ presentation_credits_per_new_sample = replay_ratio
 presentation_credits_per_quantum = global_batch_size * optimizer_steps_per_quantum
 new_samples_per_quantum = presentation_credits_per_quantum / replay_ratio
 
-presentation_credits_per_quantum = 1,024 * 64 = 65,536
-new_samples_per_quantum = 65,536 / 4 = 16,384
+presentation_credits_per_quantum = 1,024 * 50 = 51,200
+new_samples_per_quantum = 51,200 / 4 = 12,800
 ```
 
 Unused credits carry across process restarts. If multiple complete quanta accumulate,
 the trainer executes them in order and publishes after each quantum so self-play does
 not remain unnecessarily stale.
+
+Every quantum atomically replaces a crash-recovery model and optimizer state. Every
+twentieth quantum, at 1,000-step boundaries, additionally creates a retained immutable
+historical checkpoint and schedules evaluation. Thus checkpoint retention remains
+coarse without risking replay-credit duplication after a crash.
 
 ## Architectural invariants
 
@@ -315,6 +330,18 @@ Automatically disable real resignation if:
 
 Rollback is a configuration-only disable. The audit records remain useful.
 
+### Stage 1 canary result
+
+The compute-node canary at `3bcdeadb3cf8481dd1cba9206ad1adffac7b9596`
+validated the audit persistence and exclusion semantics against a trained checkpoint.
+Its deliberately aggressive test threshold produced one hypothetical trigger at ply 5,
+but that game ended by the diagnostic ply cap and was correctly excluded from safety
+evidence. The run did not collect the required 100 naturally completed triggers, so it
+provides no statistical basis for enabling hard resignation. Production resignation
+therefore remains disabled for the initial clean run while audit collection continues.
+The artifact is recorded under
+`documentation/benchmarks/resignation-audit-canary-20260723/`.
+
 ## Stage 2: value-target contract
 
 This stage changes the replay schema and is used only for the clean run.
@@ -394,7 +421,7 @@ formats are intentionally not mixed.
 
 ## Stage 3: cheap model refresh
 
-This stage makes 64-step publication practical and can be developed independently of
+This stage makes 50-step publication practical and can be developed independently of
 the replay scheduler.
 
 ### Current behavior
@@ -470,12 +497,12 @@ Benchmark on the compute node:
 - export and file-publication time;
 - per-process refresh latency;
 - total acknowledgement latency;
-- self-play pause time;
+- refresh acknowledgement pause time;
 - transient and steady GPU memory;
-- games/hour with refresh every 16, 32, 64, and 256 steps;
+- games/hour with refresh every 25, 50, 100, and 250 steps;
 - tree-retained versus tree-reset strength and throughput.
 
-Acceptance for the initial design is refresh every 64 steps with no statistically
+Acceptance for the initial design is refresh every 50 steps with no statistically
 meaningful throughput regression and no memory growth.
 
 ## Stage 4: replay shards, FIFO index, and augmentation
@@ -527,15 +554,19 @@ and position within the global batch so restarts reproduce the same batch.
 Maintain a persistent index of live shards and sample ranges. Capacity is measured in
 unique stored positions, not iterations or augmented rows.
 
+The initial capacity is 2,500,000 unique positions. Position tensors and targets remain
+in HDF5 shards on disk. Memory may contain compact shard manifests, prefix ranges,
+leases, sampler state, and aggregate statistics, but never the full replay payload.
+Metadata memory must scale with shard count rather than stored position count.
+
 Eviction is FIFO by committed shard. A shard may be deleted only after:
 
 - it is outside the configured position capacity;
 - no active batch references it;
 - its eviction is recorded atomically.
 
-The buffer-capacity value remains an experiment parameter. Choose it from measured
-position diversity and storage/memory behavior; do not derive it from the 64-step
-publication cadence.
+The buffer-capacity value remains an experiment parameter and is not derived from the
+50-step publication cadence.
 
 ### Task 4D: fast random access
 
@@ -549,7 +580,7 @@ The loader must:
 - issue disjoint samples to DDP ranks;
 - reshuffle reproducibly after restart.
 
-Within a 64-step quantum, sample without replacement when the live buffer is large
+Within a 50-step quantum, sample without replacement when the live buffer is large
 enough. Across quanta, repeated sampling is expected and is controlled by replay
 credit.
 
@@ -591,42 +622,44 @@ is discovered.
 
 ### Task 5B: quantum scheduler
 
-Derive the quantum size from configuration. With the initial values, start a 64-step
-training quantum only when at least 65,536 presentation credits are available.
-Run exactly 64 complete global batches. On success:
+Derive the quantum size from configuration. With the initial values, start a 50-step
+training quantum only when at least 51,200 presentation credits are available.
+Run exactly 50 complete global batches. On success:
 
 1. save model and optimizer;
 2. save the credit and sampler state;
 3. create the immutable model-version manifest;
 4. atomically mark the quantum committed;
-5. subtract the calculated 65,536 presentation credits;
+5. subtract the calculated 51,200 presentation credits;
 6. publish the model version.
 
 On failure, resume from the last committed quantum. Never repeat a committed quantum
 or consume its credits twice.
 
 The DDP processes remain alive while waiting for credits. Avoid repeated NCCL
-initialization.
+initialization. Use four DDP ranks for the clean run. Stop automatically after 500,000
+committed optimizer steps unless the run is cancelled earlier.
 
 ### Task 5C: contention control
 
-Retain the production policy of pausing half of the self-play workers on trainer GPUs
-while DDP is actively executing a quantum, then resume all workers immediately after
-the quantum. Waiting for credits does not count as active training.
+Do not pause self-play while DDP executes a quantum. The initial production layout is
+four self-play processes per GPU, each with two search threads and two inference queues,
+co-resident with one DDP rank per GPU. Benchmark this exact layout for generation
+throughput, DDP duration, GPU memory headroom, and GPU duty cycle before launch.
 
-The number of DDP ranks remains configurable. Select two versus four ranks using total
-generate-train-refresh cycle time, not training throughput alone.
+The layout remains configurable for diagnosis, but the launch configuration does not
+include a two-rank DDP comparison.
 
 ### Stage 5 tests
 
-- Exactly 16,384 unique new samples enable one quantum at batch 1,024 and replay
+- Exactly 12,800 unique new samples enable one quantum at batch 1,024 and replay
   ratio 4.
 - One fewer sample does not.
 - Fractional or surplus credit carries forward.
 - Duplicate shard discovery creates no credit.
 - Restart before and after commit yields the correct optimizer step and credit count.
-- DDP ranks execute 64 equal, disjoint global batches.
-- Self-play pause and resume occurs only around active training.
+- Four DDP ranks execute 50 equal, disjoint global batches.
+- Self-play remains enabled before, during, and after a training quantum.
 - A failed publication does not consume credits.
 
 ## Stage 6: publication, evaluation, and observability
@@ -650,14 +683,20 @@ Self-play workers acknowledge the exact immutable version. Do not use a mutable
 Scheduling uses trained position presentations rather than legacy iterations:
 
 - cheap value/holdout metrics may run every publication;
-- a lightweight paired evaluation runs every 512 or 1,024 optimizer steps;
-- the full Stockfish and historical-checkpoint suite initially runs every 2,048
-  optimizer steps;
-- only one full suite for a given model version is active;
-- evaluation failure is terminal and visible, but never blocks self-play or training.
+- the current complete evaluation suite starts every 1,000 optimizer steps;
+- only one evaluation suite is active at once;
+- when a cadence boundary arrives while evaluation is still active, coalesce pending
+  work to the newest eligible immutable checkpoint instead of starting an overlap;
+- evaluation runs out-of-band and never gates replay ingestion, self-play, model
+  training, checkpointing, or later model publication;
+- process crashes, timeouts, CUDA failures, and repeated evaluation failures are
+  persisted and visible but never terminate or stall the training loop;
+- failed evaluations use bounded retry with backoff, and a permanently failing task is
+  marked failed so the next cadence boundary can still run.
 
-The exact evaluation cadence is a runtime configuration and may be adjusted after
-measuring completion time. Evaluation always records the immutable model version.
+The 1,000-step cadence is provisional. Lower it toward 500 only if production timing
+shows the entire suite reliably completes before the next boundary. Evaluation always
+records the immutable model version and checkpoint hash.
 
 ### Task 6C: TensorBoard axes
 
@@ -684,6 +723,8 @@ Legacy iteration is not synthesized.
 - Metrics preserve monotonic axes across restart.
 - Evaluation results attach to the correct immutable model.
 - Failed or slow evaluation cannot deadlock the trainer.
+- Repeatedly crashing evaluation workers do not reduce self-play or training progress.
+- A cadence boundary during an active evaluation coalesces to the newest checkpoint.
 - A worker cannot acknowledge a model hash it did not load.
 - Consolidated TensorBoard logs retain model-version provenance.
 
@@ -702,7 +743,7 @@ Run a CPU/small-model integration loop that covers:
 
 - shard generation;
 - credit issuance;
-- a 64-step quantum;
+- a 50-step quantum;
 - DDP sampling;
 - model publication;
 - in-place self-play refresh;
@@ -767,14 +808,11 @@ the trainer scheduler until its memory and concurrency tests pass independently.
 
 The following are intentionally deferred:
 
-1. Replay-buffer capacity in unique positions.
-2. Two-rank versus four-rank DDP for the clean run.
-3. Learning rate for global batch 1,024 under replay ratio 4.
-4. Whether hard resignation graduates beyond the current-model canary.
-5. Whether soft resignation is preferable in chess.
-6. Treatment of 250-ply capped games in value training.
-7. Lightweight and full evaluation cadence after measured runtime.
-8. Whether retained mixed-version MCTS trees measurably help or hurt.
-9. Whether a later batch-1,024 pilot improves learning per generated sample.
+1. Whether hard resignation graduates after at least 100 valid audit triggers.
+2. Whether soft resignation is preferable if hard resignation fails its safety gate.
+3. Whether the 1,000-step evaluation cadence can safely be lowered toward 500.
+4. Whether retained mixed-version MCTS trees measurably help or hurt.
+5. Whether the four-process, two-thread, two-queue self-play layout is optimal after
+   production-path utilization measurement.
 
 These are experiment controls, not reasons to keep the architecture iteration-bound.
