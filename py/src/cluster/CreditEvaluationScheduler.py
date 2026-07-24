@@ -250,6 +250,10 @@ class CreditEvaluationScheduler:
                 )
                 self._state = self._state.model_copy(update={'active': None, 'results': (*self._state.results, result)})
                 self._persist()
+                log(
+                    f'Finished evaluation at model {active.source.model_version} '
+                    f'in {now - active.started_at_seconds:.2f} seconds.'
+                )
                 return
             self._record_failure(active, exit_code, f'Evaluation process exited with code {exit_code}.')
             return
