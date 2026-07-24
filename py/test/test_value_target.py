@@ -37,14 +37,16 @@ class FixedValueNetwork(Network):
 
 
 class FixedBatchLoader:
-    def __init__(self, batch: TrainingBatch) -> None:
+    def __init__(self, batch: TrainingBatch, repetitions: int = 1) -> None:
         self.batch = batch
+        self.repetitions = repetitions
 
     def __iter__(self) -> Iterator[TrainingBatch]:
-        yield self.batch
+        for _ in range(self.repetitions):
+            yield self.batch
 
     def __len__(self) -> int:
-        return 1
+        return self.repetitions
 
 
 def training_parameters() -> TrainingParams:
@@ -251,3 +253,18 @@ def test_value_metrics_are_sliced_by_ply_and_total_material() -> None:
 
     assert tuple(metrics.outcome_target_count for metrics in stats.ply_value_metrics) == (1, 1, 1, 1, 1)
     assert tuple(metrics.outcome_target_count for metrics in stats.material_value_metrics) == (1, 1, 1, 2)
+
+
+def test_sliced_value_metrics_sample_every_tenth_batch() -> None:
+    batch = training_batch(
+        (FinalOutcome.WIN,),
+        (0.0,),
+        (True,),
+        (TerminationReason.NATURAL,),
+    )
+
+    stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch, repetitions=11))
+
+    assert stats.value_metrics.outcome_target_count == 11
+    assert stats.ply_value_metrics[0].outcome_target_count == 2
+    assert stats.material_value_metrics[1].outcome_target_count == 2

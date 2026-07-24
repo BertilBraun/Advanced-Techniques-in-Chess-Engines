@@ -31,6 +31,7 @@ from src.value import wdl_to_scalar
 
 VALUE_METRIC_WIDTH = 18 + EXPECTED_SCORE_CALIBRATION_BINS * 3
 BASE_REDUCTION_WIDTH = 7
+SLICED_VALUE_METRIC_BATCH_INTERVAL = 10
 
 
 @dataclass(frozen=True)
@@ -184,12 +185,13 @@ class Trainer:
         reduction_values = torch.zeros(reduction_width, device=self.model.device, dtype=torch.float64)
         scaler = GradScaler(self.model.device.type, enabled=self.model.device.type == 'cuda')
 
-        for batch in tqdm(
+        batches = tqdm(
             prefetch_training_batches(dataloader),
             total=len(dataloader),
             desc='Train batches',
             disable=self.rank != 0,
-        ):
+        )
+        for batch_index, batch in enumerate(batches):
             self.optimizer.zero_grad()
             sample_count = batch.states.shape[0]
 
@@ -227,28 +229,29 @@ class Trainer:
                     metric_inputs,
                     metric_inputs.termination_reasons.eq(int(reason)),
                 )
-            plies = batch.plies.to(device=self.model.device)
-            for bin_index, sample_mask in enumerate(_fixed_bin_masks(plies, PLY_VALUE_BIN_UPPER_BOUNDS)):
-                self._accumulate_value_metrics(
-                    reduction_values,
-                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (ply_offset + bin_index),
-                    loss_result,
-                    metric_inputs,
-                    sample_mask,
-                )
-            material_counts = batch.current_player_piece_counts.to(
-                device=self.model.device
-            ) + batch.opponent_piece_counts.to(device=self.model.device)
-            for bin_index, sample_mask in enumerate(
-                _fixed_bin_masks(material_counts, MATERIAL_VALUE_BIN_UPPER_BOUNDS, inclusive=True)
-            ):
-                self._accumulate_value_metrics(
-                    reduction_values,
-                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (material_offset + bin_index),
-                    loss_result,
-                    metric_inputs,
-                    sample_mask,
-                )
+            if batch_index % SLICED_VALUE_METRIC_BATCH_INTERVAL == 0:
+                plies = batch.plies.to(device=self.model.device)
+                for bin_index, sample_mask in enumerate(_fixed_bin_masks(plies, PLY_VALUE_BIN_UPPER_BOUNDS)):
+                    self._accumulate_value_metrics(
+                        reduction_values,
+                        BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (ply_offset + bin_index),
+                        loss_result,
+                        metric_inputs,
+                        sample_mask,
+                    )
+                material_counts = batch.current_player_piece_counts.to(
+                    device=self.model.device
+                ) + batch.opponent_piece_counts.to(device=self.model.device)
+                for bin_index, sample_mask in enumerate(
+                    _fixed_bin_masks(material_counts, MATERIAL_VALUE_BIN_UPPER_BOUNDS, inclusive=True)
+                ):
+                    self._accumulate_value_metrics(
+                        reduction_values,
+                        BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (material_offset + bin_index),
+                        loss_result,
+                        metric_inputs,
+                        sample_mask,
+                    )
 
         if distributed.is_initialized():
             distributed.all_reduce(reduction_values, op=distributed.ReduceOp.SUM)
