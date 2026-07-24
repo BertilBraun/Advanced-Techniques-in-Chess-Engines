@@ -85,7 +85,7 @@ class ValueMetrics:
     def combined_value_loss(self, outcome_weight: float, mcts_weight: float) -> float:
         return outcome_weight * self.outcome_cross_entropy + mcts_weight * self.mcts_huber
 
-    def log_to_tensorboard(self, prefix: str, step: int) -> None:
+    def log_summary_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/wdl_cross_entropy', self.outcome_cross_entropy, step)
         log_scalar(f'{prefix}/wdl_brier', self.brier_score, step)
         log_scalar(f'{prefix}/expected_score_mse', self.expected_score_mse, step)
@@ -97,6 +97,8 @@ class ValueMetrics:
             step,
         )
         log_scalar(f'{prefix}/mcts_huber', self.mcts_huber, step)
+
+    def log_diagnostics_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/outcome_target_count', self.outcome_target_count, step)
         log_scalar(f'{prefix}/mcts_target_count', self.mcts_target_count, step)
         for outcome in FinalOutcome:
@@ -238,6 +240,7 @@ class TrainingStats:
         return self.sample_count - self.value_metrics.outcome_target_count
 
     def log_to_tensorboard(self, iteration: int, prefix: str) -> None:
+        diagnostics_prefix = f'{prefix}_diagnostics'
         log_scalar(f'{prefix}/policy_loss', self.policy_loss, iteration)
         log_scalar(f'{prefix}/value_loss', self.value_loss, iteration)
         log_scalar(f'{prefix}/total_loss', self.total_loss, iteration)
@@ -248,20 +251,27 @@ class TrainingStats:
             self.excluded_outcome_target_count,
             iteration,
         )
-        self.value_metrics.log_to_tensorboard(f'{prefix}/value', iteration)
+        self.value_metrics.log_summary_to_tensorboard(f'{prefix}/value', iteration)
+        self.value_metrics.log_diagnostics_to_tensorboard(f'{diagnostics_prefix}/value', iteration)
         for reason in TerminationReason:
             metrics = self.termination_value_metrics[int(reason)]
             if metrics.outcome_target_count or metrics.mcts_target_count:
-                metrics.log_to_tensorboard(
-                    f'{prefix}/value_by_termination/{reason.name.lower()}',
+                metrics.log_summary_to_tensorboard(
+                    f'{diagnostics_prefix}/value_by_termination/{reason.name.lower()}',
+                    iteration,
+                )
+                metrics.log_diagnostics_to_tensorboard(
+                    f'{diagnostics_prefix}/value_by_termination/{reason.name.lower()}',
                     iteration,
                 )
         for label, metrics in zip(PLY_VALUE_BIN_LABELS, self.ply_value_metrics):
             if metrics.outcome_target_count or metrics.mcts_target_count:
-                metrics.log_to_tensorboard(f'{prefix}/value_by_ply/{label}', iteration)
+                metrics.log_summary_to_tensorboard(f'{diagnostics_prefix}/value_by_ply/{label}', iteration)
+                metrics.log_diagnostics_to_tensorboard(f'{diagnostics_prefix}/value_by_ply/{label}', iteration)
         for label, metrics in zip(MATERIAL_VALUE_BIN_LABELS, self.material_value_metrics):
             if metrics.outcome_target_count or metrics.mcts_target_count:
-                metrics.log_to_tensorboard(f'{prefix}/value_by_material/{label}', iteration)
+                metrics.log_summary_to_tensorboard(f'{diagnostics_prefix}/value_by_material/{label}', iteration)
+                metrics.log_diagnostics_to_tensorboard(f'{diagnostics_prefix}/value_by_material/{label}', iteration)
         if self.gradient_norm > 0:
             log_scalar(f'{prefix}/gradient_norm', self.gradient_norm, iteration)
 

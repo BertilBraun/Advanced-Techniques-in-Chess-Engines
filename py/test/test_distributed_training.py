@@ -156,6 +156,45 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
     assert combined.num_batches == 2
 
 
+def test_training_tensorboard_keeps_detailed_value_slices_out_of_train_category(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    natural_metrics = ValueMetrics(
+        outcome_cross_entropy_sum=1,
+        outcome_target_count=1,
+        mcts_huber_sum=0.5,
+        mcts_target_count=1,
+    )
+    stats = TrainingStats(
+        policy_loss_sum=1,
+        sample_count=1,
+        value_metrics=natural_metrics,
+        termination_value_metrics=(natural_metrics,) + tuple(ValueMetrics() for _ in range(len(TerminationReason) - 1)),
+        value_sum=0,
+        value_square_sum=0,
+        gradient_norm_sum=1,
+        gradient_norm_count=1,
+        num_batches=1,
+        outcome_value_loss_weight=0.85,
+        mcts_value_loss_weight=0.15,
+        policy_loss_weight=1,
+        value_loss_weight=0.5,
+    )
+    tags: list[str] = []
+    monkeypatch.setattr(
+        'src.train.TrainingStats.log_scalar',
+        lambda tag, value, step: tags.append(tag),
+    )
+
+    stats.log_to_tensorboard(iteration=1, prefix='train')
+
+    assert 'train/policy_loss' in tags
+    assert 'train/value/wdl_cross_entropy' in tags
+    assert 'train_diagnostics/value/outcome_target_count' in tags
+    assert 'train_diagnostics/value_by_termination/natural/wdl_cross_entropy' in tags
+    assert not any(tag.startswith('train/value_by_') for tag in tags)
+
+
 def test_ddp_outcome_gradient_uses_global_eligible_sample_mean() -> None:
     context = multiprocessing.get_context('spawn')
     initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
