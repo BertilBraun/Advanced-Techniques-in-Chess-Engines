@@ -972,6 +972,9 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.self_play.low_material_termination_probability == 0
     assert arguments.self_play.resignation.audit_enabled
     assert not arguments.self_play.resignation.production_enabled
+    assert arguments.evaluation is not None
+    assert arguments.evaluation.dataset_path is not None
+    assert arguments.evaluation.dataset_path.endswith('chess-elite-2024-10-50-schema3.hdf5')
 
 
 @pytest.mark.parametrize(

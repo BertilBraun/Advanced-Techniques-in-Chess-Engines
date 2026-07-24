@@ -64,7 +64,7 @@ def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]
                         ReplayValueTarget.from_scores(
                             final_score=winner * board.current_player,
                             mcts_root_value=0.0,
-                            termination_reason=TerminationReason.DIAGNOSTIC,
+                            termination_reason=TerminationReason.NATURAL,
                         ),
                         chess_sample_metadata(board_state, board.board.ply()),
                     )

@@ -128,7 +128,7 @@
     "bootstrap_samples": 10000,
     "mcts_threads": 4,
     "evaluate_dataset": true,
-    "evaluation_dataset_path": "py/reference/memory_0_chess_database.hdf5",
+    "evaluation_dataset_path": "py/reference/chess-elite-2024-10-50-schema3.hdf5",
     "evaluate_initial_checkpoint": true,
     "previous_model_offsets": [5, 10],
     "historical_model_iterations": [

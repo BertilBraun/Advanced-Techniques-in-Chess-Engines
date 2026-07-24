@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 import torch
@@ -33,6 +34,21 @@ from src.experiment.run_configuration import RunManifest
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 EVALUATION_PROCESS_POLL_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class EvaluationRunProvenance:
+    source_revision: str
+    stockfish_binary_sha256: str | None
+
+
+def load_evaluation_run_provenance(save_path: str) -> EvaluationRunProvenance:
+    run_manifest_path = Path(save_path) / 'run_manifest.json'
+    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    return EvaluationRunProvenance(
+        source_revision=run_manifest.source_revision,
+        stockfish_binary_sha256=run_manifest.stockfish_binary_sha256,
+    )
 
 
 def _activate_evaluation_device(model_evaluation: ModelEvaluation) -> None:
@@ -233,6 +249,7 @@ def _eval_vs_reference(
     iteration: int,
     args: TrainingArgs,
     metrics_step: int,
+    provenance: EvaluationRunProvenance,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
@@ -245,9 +262,6 @@ def _eval_vs_reference(
     candidate_model_path = model_save_path(iteration, args.save_path)
     reference_inference_path = inference_model_path(reference_model_path)
     candidate_inference_path = inference_model_path(candidate_model_path)
-    run_manifest_path = Path(args.save_path) / 'run_manifest.json'
-    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
-
     results, records = model_evaluation.play_two_models_paired(reference_model_path)
     summary = summarize_match(
         records,
@@ -275,7 +289,7 @@ def _eval_vs_reference(
     )
     report = MatchReport(
         conditions=MatchConditions(
-            source_revision=run_manifest.source_revision,
+            source_revision=provenance.source_revision,
             evaluation_source_revision=_evaluation_source_revision(),
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
@@ -302,6 +316,7 @@ def _eval_vs_stockfish_fixed(
     iteration: int,
     args: TrainingArgs,
     metrics_step: int,
+    provenance: EvaluationRunProvenance,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
@@ -313,9 +328,7 @@ def _eval_vs_stockfish_fixed(
     stockfish_binary_path = Path(evaluation.stockfish_binary_path)
     candidate_model_path = model_save_path(iteration, args.save_path)
     candidate_inference_path = inference_model_path(candidate_model_path)
-    run_manifest_path = Path(args.save_path) / 'run_manifest.json'
-    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
-    if run_manifest.stockfish_binary_sha256 is None:
+    if provenance.stockfish_binary_sha256 is None:
         raise ValueError('Run manifest does not identify the Stockfish binary.')
 
     results, records, engine_name = model_evaluation.play_vs_stockfish_fixed_nodes(
@@ -344,7 +357,7 @@ def _eval_vs_stockfish_fixed(
     opening_suite_path = Path(evaluation.opening_suite_path)
     report = MatchReport(
         conditions=MatchConditions(
-            source_revision=run_manifest.source_revision,
+            source_revision=provenance.source_revision,
             evaluation_source_revision=_evaluation_source_revision(),
             opening_suite_path=str(opening_suite_path),
             opening_suite_sha256=file_sha256(opening_suite_path),
@@ -354,7 +367,7 @@ def _eval_vs_stockfish_fixed(
                 f'candidate-model-{iteration}',
             ),
             opponent=EngineCondition(
-                artifact_sha256=run_manifest.stockfish_binary_sha256,
+                artifact_sha256=provenance.stockfish_binary_sha256,
                 identifier=engine_name,
                 search_limit_name='nodes_per_move',
                 search_limit_value=evaluation.stockfish_nodes_per_move,
@@ -439,7 +452,13 @@ class EvaluationProcess:
         self.args = args
         self.eval_args = args.evaluation
 
-    def run(self, run: int, iteration: int, metrics_step: int | None = None) -> None:
+    def run(
+        self,
+        run: int,
+        iteration: int,
+        metrics_step: int | None = None,
+        provenance: EvaluationRunProvenance | None = None,
+    ) -> None:
         """Play two most recent models against each other."""
         if not self.eval_args:
             return
@@ -448,6 +467,11 @@ class EvaluationProcess:
         resolved_metrics_step = iteration if metrics_step is None else metrics_step
         max_concurrent_tasks = self.eval_args.max_concurrent_tasks
         evaluation_task_index = 0
+        resolved_provenance = provenance
+        if (
+            self.eval_args.reference_model_path is not None or self.eval_args.stockfish_binary_path is not None
+        ) and resolved_provenance is None:
+            resolved_provenance = load_evaluation_run_provenance(self.args.save_path)
 
         def create_model_evaluation() -> tuple[ModelEvaluation, int]:
             nonlocal evaluation_task_index
@@ -500,18 +524,34 @@ class EvaluationProcess:
                 start_process(p, physical_device_id)
 
             if self.eval_args.reference_model_path is not None:
+                assert resolved_provenance is not None
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_reference,
-                    args=(run, model_evaluation, iteration, self.args, resolved_metrics_step),
+                    args=(
+                        run,
+                        model_evaluation,
+                        iteration,
+                        self.args,
+                        resolved_metrics_step,
+                        resolved_provenance,
+                    ),
                 )
                 start_process(p, physical_device_id)
 
             if self.eval_args.stockfish_binary_path is not None:
+                assert resolved_provenance is not None
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish_fixed,
-                    args=(run, model_evaluation, iteration, self.args, resolved_metrics_step),
+                    args=(
+                        run,
+                        model_evaluation,
+                        iteration,
+                        self.args,
+                        resolved_metrics_step,
+                        resolved_provenance,
+                    ),
                 )
                 start_process(p, physical_device_id)
 
