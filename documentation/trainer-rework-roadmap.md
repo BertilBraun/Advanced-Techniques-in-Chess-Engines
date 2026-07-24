@@ -791,6 +791,29 @@ Legacy iteration is not synthesized.
 - A worker cannot acknowledge a model hash it did not load.
 - Consolidated TensorBoard logs retain model-version provenance.
 
+### Stage 6 implementation status
+
+Stage 6 is implemented on `master` as of `23b8561`:
+
+- immutable publications bind optimizer progress, credit counters, source and
+  configuration revisions, and model/optimizer/JIT hashes;
+- self-play refreshes through one atomic publication pointer and acknowledges
+  the exact JIT hash it loaded;
+- evaluation is a persistent, timeout-bounded, retry-bounded, coalescing
+  scheduler that never gates credit training;
+- telemetry uses trained position presentations as its primary axis and records
+  replay age/staleness, replay I/O amplification, DDP and credited-position
+  throughput, publication/acknowledgement latency, and evaluation provenance;
+- total and termination value metrics remain exact, while ply/material slices
+  deterministically sample one batch in ten to bound diagnostic overhead.
+
+Local validation passed 342 standard tests with 5 skipped. Compute-node focused
+validation passed 61 tests. The final four-rank, 50-step diagnostic smoke
+reached 9,651.90 optimizer samples/s and 10,414.3 MiB peak host RSS, versus
+10,140.71 samples/s and 10,371.4 MiB before Stage 6. Exact outputs and the
+short-run limitation are recorded under
+`documentation/benchmarks/credit-runtime-stage6-20260724/`.
+
 ## Stage 7: end-to-end migration and clean-run canary
 
 ### Task 7A: compatibility boundary
