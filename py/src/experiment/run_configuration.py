@@ -196,6 +196,13 @@ class LearningRateStage(BaseModel):
     learning_rate: float = Field(gt=0)
 
 
+class OptimizerStepLearningRateStage(BaseModel):
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
+    start_optimizer_step: int = Field(ge=0)
+    learning_rate: float = Field(gt=0)
+
+
 class ResignationConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
@@ -238,11 +245,20 @@ class CreditTrainingConfiguration(BaseModel):
     initial_replay_capacity_unique_positions: int = Field(gt=0)
     replay_capacity_ramp_model_versions: int = Field(gt=0)
     retained_checkpoint_interval_steps: int = Field(gt=0)
-    learning_rate: float = Field(gt=0)
+    learning_rate_schedule: tuple[OptimizerStepLearningRateStage, ...] = Field(min_length=1)
     evaluation_interval_optimizer_steps: int = Field(default=1_000, gt=0)
     evaluation_timeout_seconds: float = Field(default=2 * 60 * 60, gt=0)
     evaluation_maximum_attempts: int = Field(default=3, gt=0)
     evaluation_retry_backoff_seconds: float = Field(default=60, ge=0)
+
+    @model_validator(mode='after')
+    def validate_learning_rate_schedule(self) -> CreditTrainingConfiguration:
+        optimizer_steps = tuple(stage.start_optimizer_step for stage in self.learning_rate_schedule)
+        if optimizer_steps[0] != 0:
+            raise ValueError('Credit learning-rate schedule must start at optimizer step zero.')
+        if tuple(sorted(set(optimizer_steps))) != optimizer_steps:
+            raise ValueError('Credit learning-rate stages must have unique, increasing optimizer steps.')
+        return self
 
     def to_parameters(self) -> CreditTrainingParams:
         return CreditTrainingParams(
@@ -516,11 +532,16 @@ class FixedSamplingWindow:
 
 
 @dataclass(frozen=True)
-class ConstantLearningRate:
-    learning_rate: float
+class PiecewiseOptimizerStepLearningRate:
+    stages: tuple[OptimizerStepLearningRateStage, ...]
 
-    def __call__(self, _: int, __: OptimizerType) -> float:
-        return self.learning_rate
+    def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
+        selected_stage = self.stages[0]
+        for stage in self.stages[1:]:
+            if stage.start_optimizer_step > optimizer_step:
+                break
+            selected_stage = stage
+        return selected_stage.learning_rate
 
 
 def load_run_configuration(path: Path) -> RunConfiguration:
@@ -794,7 +815,7 @@ def apply_run_configuration(
     training_args.self_play.mcts.num_parallel_searches = topology.self_play_parallel_searches
     training_args.training.num_workers = topology.dataloader_workers
     training_args.training.learning_rate = (
-        ConstantLearningRate(workload.credit_training.learning_rate)
+        PiecewiseOptimizerStepLearningRate(workload.credit_training.learning_rate_schedule)
         if workload.credit_training is not None
         else _piecewise_learning_rate(workload.learning_rate_schedule)
     )

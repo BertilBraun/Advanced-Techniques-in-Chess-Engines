@@ -13,6 +13,7 @@ from src.experiment.run_configuration import (
     BudgetConfiguration,
     CreditTrainingConfiguration,
     LearningRateStage,
+    OptimizerStepLearningRateStage,
     PiecewiseLearningRate,
     ApprovalRecord,
     ResolvedHardware,
@@ -69,7 +70,7 @@ def credit_training_configuration_candidate(
                 initial_replay_capacity_unique_positions=100_000,
                 replay_capacity_ramp_model_versions=1_000,
                 retained_checkpoint_interval_steps=1_000,
-                learning_rate=0.002,
+                learning_rate_schedule=(OptimizerStepLearningRateStage(start_optimizer_step=0, learning_rate=0.002),),
             ),
         }
     )
@@ -367,6 +368,36 @@ def test_piecewise_learning_rate_uses_latest_started_stage() -> None:
     assert schedule(59, 'adamw') == pytest.approx(0.005)
     assert schedule(60, 'adamw') == pytest.approx(0.002)
     assert pickle.dumps(schedule)
+
+
+@pytest.mark.parametrize(
+    'optimizer_steps',
+    (
+        (100,),
+        (0, 100, 100),
+        (0, 200, 100),
+    ),
+)
+def test_credit_learning_rate_schedule_requires_zero_based_increasing_steps(
+    optimizer_steps: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValidationError, match='learning-rate'):
+        CreditTrainingConfiguration(
+            replay_ratio=Decimal(4),
+            optimizer_steps_per_quantum=100,
+            maximum_optimizer_steps=500_000,
+            replay_capacity_unique_positions=2_500_000,
+            initial_replay_capacity_unique_positions=100_000,
+            replay_capacity_ramp_model_versions=1_000,
+            retained_checkpoint_interval_steps=1_000,
+            learning_rate_schedule=tuple(
+                OptimizerStepLearningRateStage(
+                    start_optimizer_step=optimizer_step,
+                    learning_rate=0.002,
+                )
+                for optimizer_step in optimizer_steps
+            ),
+        )
 
 
 def test_run_configuration_applies_explicit_topology_and_workload() -> None:
@@ -965,7 +996,9 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert credit_training.replay_capacity_for_model_version(1_000) == 2_500_000
     assert credit_training.evaluation_interval_optimizer_steps == 500
     assert arguments.training.max_buffer_samples == 2_500_000
-    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(19_999, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(20_000, 'adamw') == pytest.approx(0.002)
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
     assert arguments.cluster.self_play_device_ids == (0,) * 4 + (1,) * 4 + (2,) * 4 + (3,) * 4
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == (2, 3, 6, 7, 10, 11, 14, 15)
