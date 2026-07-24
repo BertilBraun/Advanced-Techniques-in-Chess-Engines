@@ -973,7 +973,10 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.self_play.resignation.audit_enabled
     assert arguments.self_play.resignation.production_enabled
     assert arguments.self_play.resignation.audit_cutoff_threshold == pytest.approx(-0.95)
-    assert arguments.self_play.resignation.audit_cutoff_increase_per_model == pytest.approx(0.01)
+    assert arguments.self_play.resignation.audit_cutoff_increase_per_model == pytest.approx(0.005)
+    assert arguments.self_play.resignation.minimum_published_model_version == 100
+    assert arguments.self_play.resignation.threshold_candidate_resolution == pytest.approx(0.005)
+    assert arguments.self_play.resignation.maximum_threshold_change_per_calibration == pytest.approx(0.005)
     assert not arguments.self_play.resignation.require_external_safety_approval
     assert arguments.evaluation is not None
     assert arguments.evaluation.dataset_path is not None

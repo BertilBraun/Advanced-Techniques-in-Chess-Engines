@@ -299,8 +299,16 @@ class ResignationManager:
                 audit.termination_reason is ResignationTerminationReason.NATURAL
                 and _first_trigger(audit, self.parameters.threshold_candidate_maximum) is not None
             )
+            bootstrap_false_non_loss = (
+                not state.bootstrap_aggressiveness_complete
+                and audit.audit_cutoff_threshold is not None
+                and audit.termination_reason is ResignationTerminationReason.NATURAL
+                and (trigger := _first_trigger(audit, audit.audit_cutoff_threshold)) is not None
+                and _outcome_for_triggering_player(audit, trigger) >= 0.0
+            )
             should_calibrate = (
-                total_trigger_count - state.completed_trigger_count_at_last_calibration
+                bootstrap_false_non_loss
+                or total_trigger_count - state.completed_trigger_count_at_last_calibration
                 >= self.parameters.calibration_interval
                 or total_audit_count - state.completed_audit_count_at_last_calibration
                 >= self.parameters.calibration_interval
@@ -358,8 +366,8 @@ class ResignationManager:
             )
             bootstrap_is_unsafe = (
                 observed_statistics is not None
-                and observed_statistics.completed_triggers >= self.parameters.minimum_completed_audit_triggers
-                and observed_statistics.false_non_loss_upper_confidence > self.parameters.false_non_loss_upper_bound
+                and observed_statistics.completed_triggers > 0
+                and observed_statistics.false_non_loss_rate > self.parameters.false_non_loss_upper_bound
             )
             if not bootstrap_is_unsafe:
                 return ResignationCalibrationState(
