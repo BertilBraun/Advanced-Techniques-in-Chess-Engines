@@ -91,12 +91,18 @@ if (CCACHE_FOUND)
     endif ()
 endif ()
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 # --- Dynamically set CMAKE_PREFIX_PATH using Python and torch ---
 execute_process(
-        COMMAND python3 -c "import torch; print(torch.utils.cmake_prefix_path)"
+        COMMAND ${Python3_EXECUTABLE} -c "import torch; print(torch.utils.cmake_prefix_path)"
         OUTPUT_VARIABLE TORCH_CMAKE_PREFIX_PATH
+        RESULT_VARIABLE TORCH_CMAKE_PREFIX_RESULT
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+if (NOT TORCH_CMAKE_PREFIX_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to discover the Torch CMake prefix with ${Python3_EXECUTABLE}")
+endif ()
 message(STATUS "Setting CMAKE_PREFIX_PATH to: ${TORCH_CMAKE_PREFIX_PATH}")
 set(CMAKE_PREFIX_PATH "${TORCH_CMAKE_PREFIX_PATH}")
 
@@ -104,10 +110,14 @@ find_package(Torch REQUIRED)
 
 # --- Dynamically set the GLIBCXX flag using Python and torch ---
 execute_process(
-        COMMAND python3 -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
+        COMMAND ${Python3_EXECUTABLE} -c "import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"
         OUTPUT_VARIABLE TORCH_GLIBCXX_FLAG
+        RESULT_VARIABLE TORCH_GLIBCXX_RESULT
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+if (NOT TORCH_GLIBCXX_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to discover the Torch C++ ABI with ${Python3_EXECUTABLE}")
+endif ()
 message(STATUS "Torch reports _GLIBCXX_USE_CXX11_ABI as: ${TORCH_GLIBCXX_FLAG}")
 if (TORCH_GLIBCXX_FLAG STREQUAL "True")
     set(GLIBCXX_ABI_VAL 1)
