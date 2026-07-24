@@ -49,6 +49,7 @@ MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
 V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
 V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
 CREDIT_V6_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v6.json')
+CREDIT_V7_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v7.json')
 
 
 def credit_training_configuration_candidate(
@@ -1020,6 +1021,26 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.evaluation is not None
     assert arguments.evaluation.dataset_path is not None
     assert arguments.evaluation.dataset_path.endswith('chess-elite-2024-10-50-schema3.hdf5')
+
+
+def test_credit_v7_configuration_disables_resignation_and_scales_mcts_value_loss() -> None:
+    configuration = load_run_configuration(CREDIT_V7_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    assert credit_training is not None
+    assert configuration.run_name == 'complete-training-run-v7'
+    assert configuration.resume.mode.value == 'random_initialization'
+    assert credit_training.evaluation_interval_optimizer_steps == 2_000
+    assert arguments.training.mcts_value_loss_scale == pytest.approx(25.0)
+    assert not arguments.self_play.resignation.audit_enabled
+    assert not arguments.self_play.resignation.production_enabled
+    assert arguments.self_play.resignation.audit_cutoff_threshold is None
+    assert arguments.self_play.resignation.production_resignation_enable_fraction == 0.0
+    assert arguments.evaluation is not None
+    assert arguments.evaluation.evaluate_initial_checkpoint
 
 
 @pytest.mark.parametrize(

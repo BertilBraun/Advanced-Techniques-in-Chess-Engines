@@ -154,7 +154,8 @@ class Trainer:
         else:
             mcts_auxiliary_loss = value_logits.sum() * 0.0
         combined_value_loss = (
-            self.args.outcome_value_loss_weight * outcome_loss + self.args.mcts_value_loss_weight * mcts_auxiliary_loss
+            self.args.outcome_value_loss_weight * outcome_loss
+            + self.args.mcts_value_loss_weight * self.args.mcts_value_loss_scale * mcts_auxiliary_loss
         )
         total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * combined_value_loss
 
@@ -267,6 +268,7 @@ class Trainer:
             num_batches=int(reduction_values[6].item()),
             outcome_value_loss_weight=self.args.outcome_value_loss_weight,
             mcts_value_loss_weight=self.args.mcts_value_loss_weight,
+            mcts_value_loss_scale=self.args.mcts_value_loss_scale,
             policy_loss_weight=self.args.policy_loss_weight,
             value_loss_weight=self.args.value_loss_weight,
             ply_value_metrics=tuple(

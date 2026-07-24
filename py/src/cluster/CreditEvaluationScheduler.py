@@ -173,8 +173,6 @@ class CreditEvaluationScheduler:
         return CreditEvaluationTelemetryStatus.IDLE
 
     def offer(self, publication: CreditPublicationManifest) -> None:
-        if publication.completed_optimizer_steps == 0:
-            return
         if publication.completed_optimizer_steps % self.evaluation_interval_optimizer_steps:
             return
         source = self._source(publication)

@@ -82,8 +82,8 @@ class ValueMetrics:
         )
         return absolute_error_sum / self.outcome_target_count
 
-    def combined_value_loss(self, outcome_weight: float, mcts_weight: float) -> float:
-        return outcome_weight * self.outcome_cross_entropy + mcts_weight * self.mcts_huber
+    def combined_value_loss(self, outcome_weight: float, mcts_weight: float, mcts_scale: float) -> float:
+        return outcome_weight * self.outcome_cross_entropy + mcts_weight * mcts_scale * self.mcts_huber
 
     def log_summary_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/wdl_cross_entropy', self.outcome_cross_entropy, step)
@@ -188,6 +188,7 @@ class TrainingStats:
     num_batches: int
     outcome_value_loss_weight: float
     mcts_value_loss_weight: float
+    mcts_value_loss_scale: float
     policy_loss_weight: float
     value_loss_weight: float
     ply_value_metrics: tuple[ValueMetrics, ...] = field(
@@ -214,6 +215,7 @@ class TrainingStats:
         return self.value_metrics.combined_value_loss(
             self.outcome_value_loss_weight,
             self.mcts_value_loss_weight,
+            self.mcts_value_loss_scale,
         )
 
     @property
@@ -244,6 +246,16 @@ class TrainingStats:
         log_scalar(f'{prefix}/policy_loss', self.policy_loss, iteration)
         log_scalar(f'{prefix}/value_loss', self.value_loss, iteration)
         log_scalar(f'{prefix}/total_loss', self.total_loss, iteration)
+        log_scalar(
+            f'{prefix}/value/outcome_contribution',
+            self.outcome_value_loss_weight * self.value_metrics.outcome_cross_entropy,
+            iteration,
+        )
+        log_scalar(
+            f'{prefix}/value/mcts_auxiliary_contribution',
+            self.mcts_value_loss_weight * self.mcts_value_loss_scale * self.value_metrics.mcts_huber,
+            iteration,
+        )
         log_scalar(f'{prefix}/value_mean', self.value_mean, iteration)
         log_scalar(f'{prefix}/value_std', self.value_std, iteration)
         log_scalar(
@@ -291,11 +303,13 @@ class TrainingStats:
             raise ValueError('At least one training-statistics value is required.')
         outcome_weight = stats_list[0].outcome_value_loss_weight
         mcts_weight = stats_list[0].mcts_value_loss_weight
+        mcts_scale = stats_list[0].mcts_value_loss_scale
         policy_weight = stats_list[0].policy_loss_weight
         value_weight = stats_list[0].value_loss_weight
         if any(
             stats.outcome_value_loss_weight != outcome_weight
             or stats.mcts_value_loss_weight != mcts_weight
+            or stats.mcts_value_loss_scale != mcts_scale
             or stats.policy_loss_weight != policy_weight
             or stats.value_loss_weight != value_weight
             for stats in stats_list
@@ -322,6 +336,7 @@ class TrainingStats:
             num_batches=sum(stats.num_batches for stats in stats_list),
             outcome_value_loss_weight=outcome_weight,
             mcts_value_loss_weight=mcts_weight,
+            mcts_value_loss_scale=mcts_scale,
             policy_loss_weight=policy_weight,
             value_loss_weight=value_weight,
             ply_value_metrics=tuple(

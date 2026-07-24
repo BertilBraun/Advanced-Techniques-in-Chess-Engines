@@ -186,6 +186,17 @@ def test_slow_evaluation_is_out_of_band_and_coalesces_newest_boundary(tmp_path: 
     assert scheduler.pinned_model_versions == frozenset({40})
 
 
+def test_initial_publication_starts_model_zero_evaluation(tmp_path: Path) -> None:
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path))
+
+    scheduler.offer(_publication(tmp_path, 0))
+    scheduler.poll()
+
+    assert scheduler.state.active is not None
+    assert scheduler.state.active.source.model_version == 0
+    assert scheduler.state.active.source.completed_optimizer_steps == 0
+
+
 def test_crash_retry_is_bounded_and_later_boundary_still_runs(tmp_path: Path) -> None:
     scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2))
     scheduler.offer(_publication(tmp_path, 1_000))

@@ -49,7 +49,7 @@ class FixedBatchLoader:
         return self.repetitions
 
 
-def training_parameters() -> TrainingParams:
+def training_parameters(mcts_value_loss_scale: float = 1.0) -> TrainingParams:
     return TrainingParams(
         num_epochs=1,
         global_batch_size=4,
@@ -60,6 +60,7 @@ def training_parameters() -> TrainingParams:
         learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
+        mcts_value_loss_scale=mcts_value_loss_scale,
     )
 
 
@@ -176,6 +177,24 @@ def test_value_objective_uses_configured_component_weights() -> None:
 
     assert result.combined_value_loss.item() == pytest.approx(
         0.85 * result.outcome_loss.item() + 0.15 * result.mcts_auxiliary_loss.item()
+    )
+
+
+def test_value_objective_scales_mcts_auxiliary_before_weighting() -> None:
+    batch = training_batch(
+        (FinalOutcome.WIN, FinalOutcome.DRAW),
+        (0.2, -0.4),
+        (True, True),
+        (TerminationReason.NATURAL, TerminationReason.RESIGNATION),
+    )
+    model = FixedValueNetwork((0.3, -0.2, 0.1))
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    scaled_trainer = Trainer(model, optimizer, training_parameters(mcts_value_loss_scale=25.0))
+
+    result = scaled_trainer._calculate_loss_for_batch(batch)
+
+    assert result.combined_value_loss.item() == pytest.approx(
+        0.85 * result.outcome_loss.item() + 0.15 * 25.0 * result.mcts_auxiliary_loss.item()
     )
 
 

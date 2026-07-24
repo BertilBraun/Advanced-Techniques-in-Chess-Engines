@@ -119,6 +119,7 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
         num_batches=1,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
+        mcts_value_loss_scale=25.0,
         policy_loss_weight=1.0,
         value_loss_weight=0.5,
     )
@@ -139,6 +140,7 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
         num_batches=1,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
+        mcts_value_loss_scale=25.0,
         policy_loss_weight=1.0,
         value_loss_weight=0.5,
     )
@@ -148,7 +150,7 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
     assert combined.policy_loss == pytest.approx(14 / 8)
     assert combined.value_metrics.outcome_cross_entropy == pytest.approx(22 / 8)
     assert combined.value_metrics.mcts_huber == pytest.approx(4 / 8)
-    assert combined.value_loss == pytest.approx(0.85 * 22 / 8 + 0.15 * 4 / 8)
+    assert combined.value_loss == pytest.approx(0.85 * 22 / 8 + 0.15 * 25 * 4 / 8)
     assert combined.total_loss == pytest.approx(combined.policy_loss + 0.5 * combined.value_loss)
     assert combined.value_mean == pytest.approx(2 / 8)
     assert combined.value_std == pytest.approx(((8 - 4 / 8) / 7) ** 0.5)
@@ -177,6 +179,7 @@ def test_training_tensorboard_keeps_detailed_value_slices_out_of_train_category(
         num_batches=1,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
+        mcts_value_loss_scale=25.0,
         policy_loss_weight=1,
         value_loss_weight=0.5,
     )
