@@ -49,6 +49,17 @@ class _LossResult:
     mcts_huber_losses: torch.Tensor
 
 
+@dataclass(frozen=True)
+class _ValueMetricInputs:
+    outcome_target_eligible: torch.Tensor
+    mcts_target_eligible: torch.Tensor
+    termination_reasons: torch.Tensor
+    final_outcomes: torch.Tensor
+    predicted_classes: torch.Tensor
+    target_expected_scores: torch.Tensor
+    calibration_bin_indices: torch.Tensor
+
+
 class TrainingBatchLoader(Protocol):
     def __iter__(self) -> Iterator[TrainingBatch]: ...
 
@@ -200,21 +211,21 @@ class Trainer:
                 reduction_values[5] += 1
                 reduction_values[6] += 1
 
+            metric_inputs = self._value_metric_inputs(loss_result, batch)
             self._accumulate_value_metrics(
                 reduction_values,
                 BASE_REDUCTION_WIDTH,
                 loss_result,
-                batch,
+                metric_inputs,
                 torch.ones(sample_count, dtype=torch.bool, device=self.model.device),
             )
-            termination_reasons = batch.termination_reasons.to(device=self.model.device)
             for reason in TerminationReason:
                 self._accumulate_value_metrics(
                     reduction_values,
                     BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (1 + int(reason)),
                     loss_result,
-                    batch,
-                    termination_reasons.eq(int(reason)),
+                    metric_inputs,
+                    metric_inputs.termination_reasons.eq(int(reason)),
                 )
             plies = batch.plies.to(device=self.model.device)
             for bin_index, sample_mask in enumerate(_fixed_bin_masks(plies, PLY_VALUE_BIN_UPPER_BOUNDS)):
@@ -222,7 +233,7 @@ class Trainer:
                     reduction_values,
                     BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (ply_offset + bin_index),
                     loss_result,
-                    batch,
+                    metric_inputs,
                     sample_mask,
                 )
             material_counts = batch.current_player_piece_counts.to(
@@ -235,7 +246,7 @@ class Trainer:
                     reduction_values,
                     BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (material_offset + bin_index),
                     loss_result,
-                    batch,
+                    metric_inputs,
                     sample_mask,
                 )
 
@@ -278,81 +289,86 @@ class Trainer:
             ),
         )
 
+    def _value_metric_inputs(
+        self,
+        loss_result: _LossResult,
+        batch: TrainingBatch,
+    ) -> _ValueMetricInputs:
+        final_outcomes = batch.final_outcomes.to(device=self.model.device)
+        termination_reasons = batch.termination_reasons.to(device=self.model.device)
+        expected_scores = loss_result.expected_scores
+        return _ValueMetricInputs(
+            outcome_target_eligible=batch.outcome_target_eligible.to(device=self.model.device),
+            mcts_target_eligible=termination_reasons.ne(int(TerminationReason.DIAGNOSTIC)),
+            termination_reasons=termination_reasons,
+            final_outcomes=final_outcomes,
+            predicted_classes=loss_result.value_probabilities.argmax(dim=1),
+            target_expected_scores=final_outcomes.eq(int(FinalOutcome.WIN)).to(dtype=torch.float64)
+            - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=torch.float64),
+            calibration_bin_indices=torch.clamp(
+                ((expected_scores + 1.0) * (EXPECTED_SCORE_CALIBRATION_BINS / 2.0)).to(dtype=torch.int64),
+                min=0,
+                max=EXPECTED_SCORE_CALIBRATION_BINS - 1,
+            ),
+        )
+
     def _accumulate_value_metrics(
         self,
         reduction_values: torch.Tensor,
         offset: int,
         loss_result: _LossResult,
-        batch: TrainingBatch,
+        metric_inputs: _ValueMetricInputs,
         sample_mask: torch.Tensor,
     ) -> None:
-        outcome_target_eligible = batch.outcome_target_eligible.to(device=self.model.device)
-        final_outcomes = batch.final_outcomes.to(device=self.model.device)
-        termination_reasons = batch.termination_reasons.to(device=self.model.device)
-        outcome_mask = sample_mask & outcome_target_eligible
-        mcts_mask = sample_mask & termination_reasons.ne(int(TerminationReason.DIAGNOSTIC))
-        mcts_count = int(mcts_mask.sum().item())
-        outcome_count = int(outcome_mask.sum().item())
+        outcome_mask = sample_mask & metric_inputs.outcome_target_eligible
+        mcts_mask = sample_mask & metric_inputs.mcts_target_eligible
 
-        if outcome_count:
-            predicted_classes = loss_result.value_probabilities.argmax(dim=1)
-            target_expected_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(
-                dtype=torch.float64
-            ) - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=torch.float64)
-            reduction_values[offset] += loss_result.outcome_losses[outcome_mask].detach().double().sum()
-            reduction_values[offset + 1] += loss_result.brier_scores[outcome_mask].detach().double().sum()
-            reduction_values[offset + 2] += (
-                loss_result.expected_score_squared_errors[outcome_mask].detach().double().sum()
+        reduction_values[offset] += loss_result.outcome_losses[outcome_mask].detach().double().sum()
+        reduction_values[offset + 1] += loss_result.brier_scores[outcome_mask].detach().double().sum()
+        reduction_values[offset + 2] += loss_result.expected_score_squared_errors[outcome_mask].detach().double().sum()
+        reduction_values[offset + 3] += loss_result.expected_score_absolute_errors[outcome_mask].detach().double().sum()
+        reduction_values[offset + 4] += loss_result.expected_scores[outcome_mask].detach().double().sum()
+        reduction_values[offset + 5] += metric_inputs.target_expected_scores[outcome_mask].sum()
+        reduction_values[offset + 6] += outcome_mask.sum()
+        for outcome in FinalOutcome:
+            class_index = int(outcome)
+            class_mask = outcome_mask & metric_inputs.final_outcomes.eq(class_index)
+            reduction_values[offset + 9 + class_index] += (
+                loss_result.value_probabilities[class_mask, class_index].detach().double().sum()
             )
-            reduction_values[offset + 3] += (
-                loss_result.expected_score_absolute_errors[outcome_mask].detach().double().sum()
+            reduction_values[offset + 12 + class_index] += (
+                metric_inputs.predicted_classes[class_mask].eq(class_index).sum()
             )
-            reduction_values[offset + 4] += loss_result.expected_scores[outcome_mask].detach().double().sum()
-            reduction_values[offset + 5] += target_expected_scores[outcome_mask].sum()
-            reduction_values[offset + 6] += outcome_count
-            for outcome in FinalOutcome:
-                class_mask = outcome_mask & final_outcomes.eq(int(outcome))
-                class_index = int(outcome)
-                reduction_values[offset + 9 + class_index] += (
-                    loss_result.value_probabilities[class_mask, class_index].detach().double().sum()
-                )
-                reduction_values[offset + 12 + class_index] += predicted_classes[class_mask].eq(class_index).sum()
-                reduction_values[offset + 15 + class_index] += class_mask.sum()
-            calibration_bin_indices = torch.clamp(
-                ((loss_result.expected_scores + 1.0) * (EXPECTED_SCORE_CALIBRATION_BINS / 2.0)).to(dtype=torch.int64),
-                min=0,
-                max=EXPECTED_SCORE_CALIBRATION_BINS - 1,
-            )
-            eligible_bin_indices = calibration_bin_indices[outcome_mask]
-            bin_prediction_sums = torch.zeros(
-                EXPECTED_SCORE_CALIBRATION_BINS,
-                dtype=torch.float64,
-                device=self.model.device,
-            ).scatter_add_(
-                0,
-                eligible_bin_indices,
-                loss_result.expected_scores[outcome_mask].detach().double(),
-            )
-            bin_target_sums = torch.zeros_like(bin_prediction_sums).scatter_add_(
-                0,
-                eligible_bin_indices,
-                target_expected_scores[outcome_mask],
-            )
-            bin_counts = torch.bincount(
-                eligible_bin_indices,
-                minlength=EXPECTED_SCORE_CALIBRATION_BINS,
-            )
-            reduction_values[offset + 18 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS] += bin_prediction_sums
-            reduction_values[
-                offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2
-            ] += bin_target_sums
-            reduction_values[
-                offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 3
-            ] += bin_counts
+            reduction_values[offset + 15 + class_index] += class_mask.sum()
+        eligible_bin_indices = metric_inputs.calibration_bin_indices[outcome_mask]
+        bin_prediction_sums = torch.zeros(
+            EXPECTED_SCORE_CALIBRATION_BINS,
+            dtype=torch.float64,
+            device=self.model.device,
+        ).scatter_add_(
+            0,
+            eligible_bin_indices,
+            loss_result.expected_scores[outcome_mask].detach().double(),
+        )
+        bin_target_sums = torch.zeros_like(bin_prediction_sums).scatter_add_(
+            0,
+            eligible_bin_indices,
+            metric_inputs.target_expected_scores[outcome_mask],
+        )
+        bin_counts = torch.bincount(
+            eligible_bin_indices,
+            minlength=EXPECTED_SCORE_CALIBRATION_BINS,
+        )
+        reduction_values[offset + 18 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS] += bin_prediction_sums
+        reduction_values[
+            offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2
+        ] += bin_target_sums
+        reduction_values[
+            offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 3
+        ] += bin_counts
 
-        if mcts_count:
-            reduction_values[offset + 7] += loss_result.mcts_huber_losses[mcts_mask].detach().double().sum()
-            reduction_values[offset + 8] += mcts_count
+        reduction_values[offset + 7] += loss_result.mcts_huber_losses[mcts_mask].detach().double().sum()
+        reduction_values[offset + 8] += mcts_mask.sum()
 
     @timeit
     def train(
