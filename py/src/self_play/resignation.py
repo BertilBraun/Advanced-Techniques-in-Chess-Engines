@@ -117,6 +117,7 @@ class ResignationCalibrationState(BaseModel):
 
     schema_version: int = 1
     configuration_fingerprint: str
+    bootstrap_aggressiveness_complete: bool = False
     selected_threshold: float | None = None
     selected_threshold_is_safe: bool = False
     total_completed_trigger_count: int = 0
@@ -243,7 +244,11 @@ class ResignationManager:
             return ResignationAssignment(True, False, self._audit_threshold(model_version))
 
         production_fraction = self._production_fraction(model_version)
-        bootstrap_enabled = self.parameters.production_enabled and not self._state.threshold_statistics
+        bootstrap_enabled = (
+            self.parameters.production_enabled
+            and self.parameters.audit_cutoff_threshold is not None
+            and not self._state.bootstrap_aggressiveness_complete
+        )
         calibrated_enabled = (
             self.parameters.production_enabled
             and self._state.selected_threshold_is_safe
@@ -338,8 +343,43 @@ class ResignationManager:
             and candidate.false_non_loss_upper_confidence <= self.parameters.false_non_loss_upper_bound
         ]
         selected_target = max((candidate.threshold for candidate in safe_candidates), default=None)
+        if self.parameters.audit_cutoff_threshold is not None and not previous_state.bootstrap_aggressiveness_complete:
+            observed_thresholds = [
+                audit.audit_cutoff_threshold for audit in completed_audits if audit.audit_cutoff_threshold is not None
+            ]
+            most_aggressive_observed_threshold = max(observed_thresholds, default=None)
+            observed_statistics = (
+                min(
+                    statistics,
+                    key=lambda candidate: abs(candidate.threshold - most_aggressive_observed_threshold),
+                )
+                if most_aggressive_observed_threshold is not None
+                else None
+            )
+            bootstrap_is_unsafe = (
+                observed_statistics is not None
+                and observed_statistics.completed_triggers >= self.parameters.minimum_completed_audit_triggers
+                and observed_statistics.false_non_loss_upper_confidence > self.parameters.false_non_loss_upper_bound
+            )
+            if not bootstrap_is_unsafe:
+                return ResignationCalibrationState(
+                    configuration_fingerprint=self._configuration_fingerprint,
+                    bootstrap_aggressiveness_complete=False,
+                    selected_threshold=None,
+                    selected_threshold_is_safe=False,
+                    total_completed_trigger_count=trigger_count,
+                    completed_trigger_count_at_last_calibration=trigger_count,
+                    total_completed_audit_count=audit_count,
+                    completed_audit_count_at_last_calibration=audit_count,
+                    audit_record_count=audit_count,
+                    threshold_statistics=statistics,
+                )
+
+            previous_threshold = most_aggressive_observed_threshold
+        else:
+            previous_threshold = previous_state.selected_threshold
         selected_threshold = _rate_limited_threshold(
-            previous_state.selected_threshold,
+            previous_threshold,
             selected_target,
             self.parameters,
         )
@@ -354,6 +394,7 @@ class ResignationManager:
         )
         return ResignationCalibrationState(
             configuration_fingerprint=self._configuration_fingerprint,
+            bootstrap_aggressiveness_complete=True,
             selected_threshold=selected_threshold,
             selected_threshold_is_safe=selected_is_safe,
             total_completed_trigger_count=trigger_count,

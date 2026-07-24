@@ -39,11 +39,12 @@ def completed_audit(
     game_outcome: float = -1.0,
     final_current_player: int = 1,
     termination_reason: ResignationTerminationReason = ResignationTerminationReason.NATURAL,
+    audit_cutoff_threshold: float | None = None,
 ) -> CompletedResignationAudit:
     return CompletedResignationAudit(
         game_id=game_id,
         observations=(observation(),),
-        audit_cutoff_threshold=None,
+        audit_cutoff_threshold=audit_cutoff_threshold,
         audit_cutoff_ply=None,
         final_current_player=final_current_player,
         game_outcome=game_outcome,
@@ -211,14 +212,44 @@ def test_production_resignation_uses_bootstrap_cutoff_until_calibration(
     assert manager.assignment(model_version=45).governing_threshold == pytest.approx(-0.80)
 
     for index in range(99):
-        manager.record_completed_audit(completed_audit(str(index)))
+        manager.record_completed_audit(completed_audit(str(index), audit_cutoff_threshold=-0.80))
     unsafe_state = manager.record_completed_audit(
-        completed_audit('recovered-draw', game_outcome=0.0),
+        completed_audit('recovered-draw', game_outcome=0.0, audit_cutoff_threshold=-0.80),
     )
 
     assert unsafe_state.threshold_statistics
+    assert unsafe_state.bootstrap_aggressiveness_complete is True
     assert unsafe_state.selected_threshold_is_safe is False
     assert manager.assignment(model_version=46).production_resignation_enabled is False
+
+
+def test_safe_bootstrap_evidence_keeps_increasing_aggressiveness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parameters = calibration_parameters(
+        audit_game_probability=0.0,
+        production_enabled=True,
+        audit_cutoff_threshold=-0.95,
+        audit_cutoff_increase_per_model=0.01,
+        minimum_published_model_version=30,
+        threshold_candidate_maximum=-0.80,
+        threshold_candidate_resolution=0.01,
+        production_resignation_fade_versions=0,
+        require_external_safety_approval=False,
+    )
+    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    manager = ResignationManager(str(tmp_path), parameters)
+
+    for index in range(100):
+        state = manager.record_completed_audit(
+            completed_audit(str(index), audit_cutoff_threshold=-0.95),
+        )
+
+    assert state.bootstrap_aggressiveness_complete is False
+    assignment = manager.assignment(model_version=31)
+    assert assignment.production_resignation_enabled is True
+    assert assignment.governing_threshold == pytest.approx(-0.94)
 
 
 def test_real_resignation_is_a_hard_loss(monkeypatch: pytest.MonkeyPatch) -> None:
