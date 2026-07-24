@@ -22,12 +22,14 @@ from src.train.RollingReplayBuffer import (
     ROLLING_REPLAY_INDEX_SCHEMA_VERSION,
     LogicalReplaySegment,
     PhysicalReplayPayload,
+    ReplayLiveStatistics,
     ReplayPayloadKind,
     ReplayShardManifest,
     RollingReplayBuffer,
     RollingReplayIndexState,
     TerminationCounts,
     file_sha256,
+    replay_live_statistics,
 )
 from src.self_play.value_target import REPLAY_SCHEMA_VERSION
 from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
@@ -36,6 +38,7 @@ from src.train.CreditTrainingLedger import (
     CreditTrainingProgress,
     PreparedTrainingQuantum,
 )
+from src.util.communication import Communication, self_play_model_refreshed_message
 from test_helpers.credit_trainer_protocol import run_gloo_decode_rank, run_gloo_protocol_rank
 from tools.production_ddp_fixture import write_replay_fixture
 
@@ -56,6 +59,16 @@ class _ReplayMaintenanceProbe:
     def compact_one_idle_container(self) -> NoReturn:
         self.compaction_calls += 1
         raise AssertionError('Compaction must not start after replay becomes credit-eligible.')
+
+    def live_statistics(self, measured_at_seconds: float) -> ReplayLiveStatistics:
+        assert measured_at_seconds > 0
+        return ReplayLiveStatistics(
+            oldest_source_model_version=2,
+            newest_source_model_version=8,
+            weighted_mean_source_model_version_midpoint=5.5,
+            oldest_position_age_seconds=10,
+            weighted_mean_position_age_seconds=4,
+        )
 
 
 def _credit_training_arguments() -> TrainingArgs:
@@ -292,9 +305,86 @@ def test_replay_maintenance_skips_compaction_when_ingest_reaches_credit_threshol
     assert response.credited_unique_samples == 12_800
     assert not response.compacted_container
     assert probe.compaction_calls == 0
+    assert response.oldest_source_model_version == 2
+    assert response.newest_source_model_version == 8
+    assert response.weighted_mean_source_model_version_midpoint == 5.5
+    assert response.oldest_position_age_seconds == 10
+    assert response.weighted_mean_position_age_seconds == 4
 
 
-def test_credit_progress_axis_is_optimizer_steps_not_quantum_index() -> None:
+def test_replay_live_statistics_weight_manifest_provenance_by_live_rows() -> None:
+    termination_counts = TerminationCounts(
+        natural=400,
+        resignation=0,
+        ply_cap=0,
+        material_adjudication=0,
+        diagnostic=0,
+    )
+    older_manifest = ReplayShardManifest(
+        schema_version=REPLAY_SCHEMA_VERSION,
+        shard_id='older',
+        game_count=1,
+        unique_sample_count=100,
+        producing_worker=0,
+        minimum_model_version=2,
+        maximum_model_version=4,
+        termination_counts=termination_counts,
+        content_sha256='0' * 64,
+        creation_timestamp_seconds=90,
+        hdf5_file_name='older.hdf5',
+    )
+    newer_manifest = ReplayShardManifest(
+        schema_version=REPLAY_SCHEMA_VERSION,
+        shard_id='newer',
+        game_count=1,
+        unique_sample_count=300,
+        producing_worker=1,
+        minimum_model_version=8,
+        maximum_model_version=10,
+        termination_counts=termination_counts,
+        content_sha256='1' * 64,
+        creation_timestamp_seconds=98,
+        hdf5_file_name='newer.hdf5',
+    )
+    live_segments = (
+        LogicalReplaySegment(
+            segment_id='older',
+            source_manifest=older_manifest,
+            physical_payload_id='older',
+            physical_offset=0,
+            unique_sample_count=100,
+        ),
+        LogicalReplaySegment(
+            segment_id='newer',
+            source_manifest=newer_manifest,
+            physical_payload_id='newer',
+            physical_offset=0,
+            unique_sample_count=300,
+        ),
+    )
+
+    statistics = replay_live_statistics(live_segments, measured_at_seconds=100)
+
+    assert statistics.oldest_source_model_version == 2
+    assert statistics.newest_source_model_version == 10
+    assert statistics.weighted_mean_source_model_version_midpoint == 7.5
+    assert statistics.oldest_position_age_seconds == 10
+    assert statistics.weighted_mean_position_age_seconds == 4
+
+
+def test_empty_replay_live_statistics_are_absent() -> None:
+    statistics = replay_live_statistics((), measured_at_seconds=100)
+
+    assert statistics == ReplayLiveStatistics(
+        oldest_source_model_version=None,
+        newest_source_model_version=None,
+        weighted_mean_source_model_version_midpoint=None,
+        oldest_position_age_seconds=None,
+        weighted_mean_position_age_seconds=None,
+    )
+
+
+def test_credit_progress_axis_is_trained_position_presentations() -> None:
     progress = CreditTrainingProgress.initial().model_copy(
         update={
             'completed_optimizer_steps': 50,
@@ -304,7 +394,22 @@ def test_credit_progress_axis_is_optimizer_steps_not_quantum_index() -> None:
         }
     )
 
-    assert credit_training_progress_axis(progress) == 50
+    assert credit_training_progress_axis(progress, 1_024) == 51_200
+
+
+def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) -> None:
+    commander = object.__new__(CommanderProcess)
+    commander.communication = Communication(str(tmp_path / 'communication'))
+    acknowledgement = self_play_model_refreshed_message(1)
+    commander.communication.send_value_to_id(acknowledgement, 0, 'b' * 64)
+
+    with pytest.raises(ValueError, match='expected'):
+        commander._wait_for_model_acknowledgements(
+            model_version=1,
+            jit_sha256='a' * 64,
+            node_ids=(0,),
+            timeout_seconds=1,
+        )
 
 
 def _prepared_ledger(run_path: Path) -> CreditTrainingLedger:

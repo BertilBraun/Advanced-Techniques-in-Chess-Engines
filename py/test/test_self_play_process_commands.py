@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -15,6 +16,12 @@ from src.util.communication import (
     LATEST_SELF_PLAY_MODEL_VERSION,
     refresh_self_play_model_message,
     self_play_model_refreshed_message,
+)
+from src.train.CreditPublication import (
+    CreditPublicationManifest,
+    CreditPublicationPointer,
+    PublicationValidationScope,
+    PublishedArtifact,
 )
 
 
@@ -66,6 +73,42 @@ class _FakeTrainingArguments:
     num_iterations: int
     save_path: str
     training: _FakeTraining = _FakeTraining(None)
+
+
+def _credit_publication(model_version: int) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
+    optimizer_steps = model_version * 50
+    presentations = optimizer_steps * 1_024
+    digest = f'{model_version:064x}'
+    manifest = CreditPublicationManifest(
+        model_version=model_version,
+        completed_optimizer_steps=optimizer_steps,
+        trained_position_presentations=presentations,
+        global_batch_size=1_024,
+        credited_unique_positions=presentations // 4,
+        earned_position_credits=Decimal(presentations),
+        consumed_position_credits=Decimal(presentations),
+        available_position_credits=Decimal(0),
+        model=PublishedArtifact(path=f'model_{model_version}.pt', sha256=digest),
+        optimizer=PublishedArtifact(path=f'optimizer_{model_version}.pt', sha256=digest),
+        jit_model=PublishedArtifact(path=f'model_{model_version}.jit.pt', sha256=digest),
+        checkpoint_manifest_path=f'checkpoint_{model_version}.json',
+        checkpoint_manifest_sha256=digest,
+        source_revision='a' * 40,
+        run_configuration_sha256='b' * 64,
+    )
+    return (
+        CreditPublicationPointer(
+            model_version=model_version,
+            manifest_path=f'credit-publications/model-version-{model_version:010d}.json',
+            manifest_sha256=digest,
+        ),
+        manifest,
+    )
+
+
+def _initialize_credit_refresh_state(process: SelfPlayProcess) -> None:
+    process.loaded_credit_jit_sha256 = None
+    process.loaded_credit_publication_pointer = None
 
 
 def test_pure_refresh_command_preserves_replay_roots_schedule_and_statistics(
@@ -122,6 +165,7 @@ def test_credit_mode_continuous_command_has_no_iteration_game_cap(
 
 
 def test_credit_mode_model_refresh_initializes_matching_schedule_first(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     process = object.__new__(SelfPlayProcess)
@@ -138,8 +182,21 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
     process.node_id = 1
     process.communication = Communication(str(tmp_path / 'communication'))
     process.self_play = _FakeSelfPlay()
+    _initialize_credit_refresh_state(process)
     process.self_play.search_schedule_state = None
-    process.communication.publish_persistent_value(LATEST_SELF_PLAY_MODEL_VERSION, '9999')
+    process.communication.publish_persistent_value(LATEST_SELF_PLAY_MODEL_VERSION, 'pointer-9999')
+
+    def load_publication(
+        _run_path: Path,
+        _serialized: str,
+        _scope: PublicationValidationScope,
+    ) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
+        return _credit_publication(9_999)
+
+    monkeypatch.setattr(
+        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        load_publication,
+    )
 
     process._update_search_schedule_if_requested()
     assert process.self_play.search_schedule_state is None
@@ -148,6 +205,13 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
     assert updated_version == 9_999
     assert process.self_play.search_schedule_state.schedule_version == 9_999
     assert process.self_play.refreshes == [(9_999, tmp_path / 'model_9999.jit.pt')]
+    assert (
+        process.communication.try_receive_value_from_id(
+            self_play_model_refreshed_message(9_999),
+            process.node_id,
+        )
+        == f'{9_999:064x}'
+    )
 
 
 def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
@@ -168,7 +232,22 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
     process.node_id = 2
     process.communication = Communication(str(tmp_path / 'communication'))
     process.self_play = _FakeSelfPlay()
-    process.communication.publish_persistent_value(LATEST_SELF_PLAY_MODEL_VERSION, '8765')
+    _initialize_credit_refresh_state(process)
+    process.communication.publish_persistent_value(LATEST_SELF_PLAY_MODEL_VERSION, 'pointer-8765')
+    load_calls: list[str] = []
+
+    def load_publication(
+        _run_path: Path,
+        serialized: str,
+        _scope: PublicationValidationScope,
+    ) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
+        load_calls.append(serialized)
+        return _credit_publication(8_765)
+
+    monkeypatch.setattr(
+        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        load_publication,
+    )
 
     def fail_on_scan(_: str) -> bool:
         raise AssertionError('Credit-mode refresh must not scan version message files.')
@@ -178,6 +257,8 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
     assert process._refresh_model_if_requested(8_764) == 8_765
     assert process.self_play.refreshes == [(8_765, tmp_path / 'model_8765.jit.pt')]
     assert process.self_play.search_schedule_state.schedule_version == 8_765
+    assert process._refresh_model_if_requested(8_765) == 8_765
+    assert load_calls == ['pointer-8765']
 
 
 def test_persistent_version_publication_atomically_replaces_complete_value(
@@ -193,6 +274,7 @@ def test_persistent_version_publication_atomically_replaces_complete_value(
 
 
 def test_credit_mode_rejects_invalid_published_model_version(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     process = object.__new__(SelfPlayProcess)
@@ -207,7 +289,21 @@ def test_credit_mode_rejects_invalid_published_model_version(
         ),
     )
     process.communication = Communication(str(tmp_path / 'communication'))
+    process.loaded_credit_jit_sha256 = None
+    process.loaded_credit_publication_pointer = None
     process.communication.publish_persistent_value(LATEST_SELF_PLAY_MODEL_VERSION, '8partial')
 
-    with pytest.raises(ValueError, match='must be an integer'):
+    def reject_pointer(
+        _run_path: Path,
+        _serialized: str,
+        _scope: PublicationValidationScope,
+    ) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
+        raise ValueError('Published credit pointer is invalid.')
+
+    monkeypatch.setattr(
+        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        reject_pointer,
+    )
+
+    with pytest.raises(ValueError, match='pointer is invalid'):
         process._refresh_model_if_requested(7)

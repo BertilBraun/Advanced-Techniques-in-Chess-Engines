@@ -24,6 +24,7 @@ from src.util.communication import (
 from src.util.log import log
 from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
+from src.train.CreditPublication import PublicationValidationScope, load_credit_publication_pointer
 from src.train.RollingReplayBuffer import commit_replay_shard
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
@@ -72,6 +73,8 @@ class SelfPlayProcess:
         self.communication = Communication(communication_folder)
         self.node_id = node_id
         self.run_id = run_id
+        self.loaded_credit_jit_sha256: str | None = None
+        self.loaded_credit_publication_pointer: str | None = None
 
     def run(self) -> None:
         current_iteration = -1
@@ -165,27 +168,36 @@ class SelfPlayProcess:
 
     def _refresh_model_if_requested(self, current_model_version: int) -> int:
         if self.args.training.credit_training is not None:
-            published_version = self.communication.try_read(LATEST_SELF_PLAY_MODEL_VERSION)
-            if published_version is None:
+            serialized_pointer = self.communication.try_read(LATEST_SELF_PLAY_MODEL_VERSION)
+            if serialized_pointer is None:
                 return current_model_version
-            try:
-                model_version = int(published_version)
-            except ValueError as error:
-                raise ValueError('Published model version must be an integer.') from error
-            if model_version < 0:
-                raise ValueError('Published model version must be nonnegative.')
+            if serialized_pointer == self.loaded_credit_publication_pointer:
+                return current_model_version
+            _, publication = load_credit_publication_pointer(
+                Path(self.args.save_path),
+                serialized_pointer,
+                PublicationValidationScope.JIT_ONLY,
+            )
+            model_version = publication.model_version
             if model_version > self._maximum_model_version():
                 raise ValueError(f'Published model version exceeds the configured maximum: {model_version}')
-            if model_version <= current_model_version:
+            if model_version < current_model_version:
+                raise ValueError('Published model version cannot move backwards.')
+            if model_version == current_model_version:
+                if self.loaded_credit_jit_sha256 != publication.jit_model.sha256:
+                    raise ValueError('Published model version changed immutable JIT identity.')
                 return current_model_version
             self.self_play.update_search_schedule(self.self_play.search_schedule(model_version))
             self.self_play.refresh_model(
                 model_version,
-                model_save_path(model_version, self.args.save_path).with_suffix('.jit.pt'),
+                Path(self.args.save_path) / publication.jit_model.path,
             )
-            self.communication.send_to_id(
+            self.loaded_credit_jit_sha256 = publication.jit_model.sha256
+            self.loaded_credit_publication_pointer = serialized_pointer
+            self.communication.send_value_to_id(
                 self_play_model_refreshed_message(model_version),
                 self.node_id,
+                publication.jit_model.sha256,
             )
             return model_version
 

@@ -1,5 +1,6 @@
 from typing import Generator
 import time
+from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal
 import torch
 import psutil
@@ -9,6 +10,7 @@ from time import monotonic
 
 from src.cluster.GatingProcess import GatingProcess
 from src.cluster.CreditTrainerProcess import CreditTrainerProcess
+from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
@@ -37,15 +39,38 @@ from src.train.CreditTrainingLedger import (
     CreditTrainingProgress,
     PreparedTrainingQuantum,
 )
+from src.train.CreditPublication import (
+    CreditPublicationManifest,
+    CreditPublicationPointer,
+    create_credit_publication_manifest,
+    write_credit_publication_manifest,
+)
+from src.experiment.credit_telemetry import (
+    append_credit_training_telemetry,
+    build_credit_training_telemetry,
+)
+from src.util.tensorboard import TensorboardWriter
 from src.util.timing import reset_times
 from src.experiment.resource_telemetry import process_tree_open_file_counts
 from src.experiment.progress_telemetry import IterationTelemetry, append_iteration_telemetry
 from src.experiment.cost_accounting import estimated_cost
 
 
-def credit_training_progress_axis(progress: CreditTrainingProgress) -> int:
-    """Return the authoritative optimizer-step axis for credit-driven results."""
-    return progress.completed_optimizer_steps
+def credit_training_progress_axis(
+    progress: CreditTrainingProgress,
+    global_batch_size: int,
+) -> int:
+    """Return trained position presentations, the primary credit-training axis."""
+    if global_batch_size <= 0:
+        raise ValueError('Global batch size must be positive.')
+    return progress.completed_optimizer_steps * global_batch_size
+
+
+@dataclass(frozen=True)
+class CreditPublicationResult:
+    manifest: CreditPublicationManifest
+    publication_seconds: float
+    acknowledgement_seconds: float
 
 
 class CommanderProcess:
@@ -131,64 +156,137 @@ class CommanderProcess:
         )
         self.latest_completed_iteration = ledger.progress.model_version
         trainer: CreditTrainerProcess | None = None
+        evaluation_scheduler: CreditEvaluationScheduler | None = None
         try:
-            self._setup_connections()
-            self.communication.send_to_id('START USAGE LOGGER', node_id=0)
-            self.communication.publish_persistent_value(
-                LATEST_SELF_PLAY_MODEL_VERSION,
-                str(ledger.progress.model_version),
-            )
-            self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
-            prepared = ledger.prepared_quantum
-            if prepared is not None:
-                self._finish_prepared_publication(ledger, prepared)
-
-            trainer = CreditTrainerProcess(
-                self.args,
-                self.run_id,
-                ledger.progress.model_version,
-            )
-            while ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
-                stop_reason = self._stop_reason()
-                if stop_reason is not None:
-                    self.final_stop_reason = stop_reason
-                    warn(f'Stopping credit-driven training: {stop_reason}')
-                    break
-                self._ensure_processes_are_running()
-
-                replay_state = trainer.maintain_replay(compact_below_credited_unique_samples=None)
-                progress = ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
-                required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
-                if not progress.can_train(required_credits):
-                    minimum_credited_unique_samples = int(
-                        (
-                            (progress.consumed_position_credits + Decimal(required_credits)) / parameters.replay_ratio
-                        ).to_integral_value(rounding=ROUND_CEILING)
-                    )
-                    trainer.maintain_replay(compact_below_credited_unique_samples=minimum_credited_unique_samples)
-                    time.sleep(1)
-                    continue
-
-                result = trainer.train_quantum(
-                    global_step=progress.sampler_global_step,
-                    model_version=progress.model_version + 1,
+            with TensorboardWriter(self.run_id, 'credit_training', postfix_pid=False):
+                self._setup_connections()
+                self.communication.send_to_id('START USAGE LOGGER', node_id=0)
+                initial_manifest = create_credit_publication_manifest(
+                    Path(self.args.save_path),
+                    ledger.progress,
+                    self.args.training.global_batch_size,
                 )
-                prepared = ledger.prepare_quantum(result.checkpoint_manifest)
-                self._publish_prepared_quantum(prepared)
-                committed = ledger.commit_prepared_quantum()
-                self._prune_nonretained_credit_checkpoint(committed.model_version - 1)
-                self.latest_completed_iteration = committed.model_version
-                yield credit_training_progress_axis(committed), result.training_stats
+                initial_pointer = write_credit_publication_manifest(
+                    Path(self.args.save_path),
+                    initial_manifest,
+                )
+                self._publish_credit_manifest(initial_manifest, initial_pointer)
+                self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
+                prepared = ledger.prepared_quantum
+                if prepared is not None:
+                    self._finish_prepared_publication(ledger, prepared)
+
+                evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args)
+                current_publication = create_credit_publication_manifest(
+                    Path(self.args.save_path),
+                    ledger.progress,
+                    self.args.training.global_batch_size,
+                )
+                evaluation_scheduler.offer(current_publication)
+                evaluation_scheduler.poll()
+                trainer = CreditTrainerProcess(
+                    self.args,
+                    self.run_id,
+                    ledger.progress.model_version,
+                )
+                credit_wait_started_at = monotonic()
+                credit_observation_started_at = credit_wait_started_at
+                previous_quantum_progress = ledger.progress
+                while ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
+                    evaluation_scheduler.poll()
+                    stop_reason = self._stop_reason()
+                    if stop_reason is not None:
+                        self.final_stop_reason = stop_reason
+                        warn(f'Stopping credit-driven training: {stop_reason}')
+                        break
+                    self._ensure_processes_are_running()
+
+                    replay_state = trainer.maintain_replay(compact_below_credited_unique_samples=None)
+                    progress = ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
+                    required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
+                    if not progress.can_train(required_credits):
+                        minimum_credited_unique_samples = int(
+                            (
+                                (progress.consumed_position_credits + Decimal(required_credits))
+                                / parameters.replay_ratio
+                            ).to_integral_value(rounding=ROUND_CEILING)
+                        )
+                        replay_state = trainer.maintain_replay(
+                            compact_below_credited_unique_samples=minimum_credited_unique_samples
+                        )
+                        time.sleep(1)
+                        continue
+
+                    credit_observation_completed_at = monotonic()
+                    loader_wait_seconds = credit_observation_completed_at - credit_wait_started_at
+                    credit_observation_seconds = credit_observation_completed_at - credit_observation_started_at
+                    result = trainer.train_quantum(
+                        global_step=progress.sampler_global_step,
+                        model_version=progress.model_version + 1,
+                    )
+                    prepared = ledger.prepare_quantum(result.checkpoint_manifest)
+                    publication = self._publish_prepared_quantum(prepared)
+                    committed = ledger.commit_prepared_quantum()
+                    evaluation_scheduler.offer(publication.manifest)
+                    evaluation_scheduler.poll()
+                    self._prune_nonretained_credit_checkpoint(
+                        committed.model_version - 1,
+                        evaluation_scheduler.pinned_model_versions,
+                    )
+                    telemetry = build_credit_training_telemetry(
+                        previous_progress=previous_quantum_progress,
+                        progress=committed,
+                        live_replay_positions=replay_state.live_unique_samples,
+                        optimizer_seconds=result.optimizer_seconds,
+                        decode_seconds=result.decode_seconds,
+                        loader_wait_seconds=loader_wait_seconds,
+                        credit_observation_seconds=credit_observation_seconds,
+                        replay_payload_open_count=result.payload_open_count,
+                        replay_selected_rows=result.selected_rows,
+                        replay_rows_read=result.rows_read,
+                        replay_selected_bytes=result.selected_bytes,
+                        replay_bytes_read=result.bytes_read,
+                        replay_oldest_source_model_version=replay_state.oldest_source_model_version,
+                        replay_newest_source_model_version=replay_state.newest_source_model_version,
+                        replay_weighted_mean_source_model_version_midpoint=(
+                            replay_state.weighted_mean_source_model_version_midpoint
+                        ),
+                        replay_oldest_position_age_seconds=replay_state.oldest_position_age_seconds,
+                        replay_weighted_mean_position_age_seconds=(replay_state.weighted_mean_position_age_seconds),
+                        publication_seconds=publication.publication_seconds,
+                        acknowledgement_seconds=publication.acknowledgement_seconds,
+                        global_batch_size=self.args.training.global_batch_size,
+                        evaluation_source_model_version=evaluation_scheduler.current_source_version,
+                        evaluation_status=evaluation_scheduler.current_status,
+                    )
+                    append_credit_training_telemetry(
+                        Path(self.args.save_path) / 'credit-training-telemetry.jsonl',
+                        telemetry,
+                    )
+                    telemetry.log_to_tensorboard(result.training_stats)
+                    self.latest_completed_iteration = committed.model_version
+                    previous_quantum_progress = committed
+                    credit_wait_started_at = monotonic()
+                    credit_observation_started_at = credit_observation_completed_at
+                    yield (
+                        credit_training_progress_axis(
+                            committed,
+                            self.args.training.global_batch_size,
+                        ),
+                        result.training_stats,
+                    )
         finally:
             if trainer is not None:
                 trainer.close()
+            if evaluation_scheduler is not None:
+                evaluation_scheduler.close()
             self._shutdown()
 
     def _finish_prepared_publication(
         self,
         ledger: CreditTrainingLedger,
         prepared: PreparedTrainingQuantum,
-    ) -> None:
+    ) -> CreditPublicationResult:
         self._validate_credit_recovery_checkpoint(
             prepared.prepared_progress.model_version,
             ledger.run_path,
@@ -197,10 +295,11 @@ class CommanderProcess:
             f'Retrying publication of prepared model version '
             f'{prepared.prepared_progress.model_version} without retraining.'
         )
-        self._publish_prepared_quantum(prepared)
+        publication = self._publish_prepared_quantum(prepared)
         committed = ledger.commit_prepared_quantum()
         self._prune_nonretained_credit_checkpoint(committed.model_version - 1)
         self.latest_completed_iteration = committed.model_version
+        return publication
 
     def _validate_credit_recovery_checkpoint(
         self,
@@ -211,25 +310,52 @@ class CommanderProcess:
         if manifest.iteration != model_version:
             raise ValueError(f'Credit recovery checkpoint version {manifest.iteration} does not match {model_version}.')
 
-    def _publish_prepared_quantum(self, prepared: PreparedTrainingQuantum) -> None:
-        model_version = prepared.prepared_progress.model_version
+    def _publish_prepared_quantum(
+        self,
+        prepared: PreparedTrainingQuantum,
+    ) -> CreditPublicationResult:
+        started_at = monotonic()
+        manifest = create_credit_publication_manifest(
+            Path(self.args.save_path),
+            prepared.prepared_progress,
+            self.args.training.global_batch_size,
+        )
+        pointer = write_credit_publication_manifest(Path(self.args.save_path), manifest)
+        publication_seconds = monotonic() - started_at
+        acknowledgement_seconds = self._publish_credit_manifest(manifest, pointer)
+        return CreditPublicationResult(
+            manifest=manifest,
+            publication_seconds=publication_seconds,
+            acknowledgement_seconds=acknowledgement_seconds,
+        )
+
+    def _publish_credit_manifest(
+        self,
+        manifest: CreditPublicationManifest,
+        pointer: CreditPublicationPointer,
+    ) -> float:
+        model_version = manifest.model_version
         acknowledgement = self_play_model_refreshed_message(model_version)
         node_ids = tuple(range(len(self.self_play_processes)))
         for node_id in node_ids:
-            self.communication.try_receive_from_id(acknowledgement, node_id)
+            self.communication.try_receive_value_from_id(acknowledgement, node_id)
+        acknowledgement_started_at = monotonic()
         self.communication.publish_persistent_value(
             LATEST_SELF_PLAY_MODEL_VERSION,
-            str(model_version),
+            pointer.model_dump_json(),
         )
         self._wait_for_model_acknowledgements(
             model_version=model_version,
+            jit_sha256=manifest.jit_model.sha256,
             node_ids=node_ids,
             timeout_seconds=120,
         )
+        return monotonic() - acknowledgement_started_at
 
     def _wait_for_model_acknowledgements(
         self,
         model_version: int,
+        jit_sha256: str,
         node_ids: tuple[int, ...],
         timeout_seconds: float,
     ) -> None:
@@ -237,11 +363,19 @@ class CommanderProcess:
         pending_node_ids = set(node_ids)
         deadline = monotonic() + timeout_seconds
         while pending_node_ids:
-            pending_node_ids = {
-                node_id
-                for node_id in pending_node_ids
-                if not self.communication.try_receive_from_id(acknowledgement, node_id)
-            }
+            for node_id in tuple(pending_node_ids):
+                acknowledged_hash = self.communication.try_receive_value_from_id(
+                    acknowledgement,
+                    node_id,
+                )
+                if acknowledged_hash is None:
+                    continue
+                if acknowledged_hash != jit_sha256:
+                    raise ValueError(
+                        f'Self-play worker {node_id} acknowledged model version {model_version} '
+                        f'with JIT hash {acknowledged_hash}, expected {jit_sha256}.'
+                    )
+                pending_node_ids.remove(node_id)
             if not pending_node_ids:
                 return
             self._ensure_processes_are_running()
@@ -251,8 +385,14 @@ class CommanderProcess:
                 )
             time.sleep(0.05)
 
-    def _prune_nonretained_credit_checkpoint(self, model_version: int) -> None:
+    def _prune_nonretained_credit_checkpoint(
+        self,
+        model_version: int,
+        pinned_model_versions: frozenset[int] = frozenset(),
+    ) -> None:
         if model_version <= 0:
+            return
+        if model_version in pinned_model_versions:
             return
         parameters = self.args.training.credit_training
         assert parameters is not None

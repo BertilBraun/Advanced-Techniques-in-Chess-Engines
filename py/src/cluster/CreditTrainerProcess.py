@@ -76,6 +76,11 @@ class RankCreditReplayMaintained:
     credited_unique_samples: int
     live_unique_samples: int
     compacted_container: bool
+    oldest_source_model_version: int | None
+    newest_source_model_version: int | None
+    weighted_mean_source_model_version_midpoint: float | None
+    oldest_position_age_seconds: float | None
+    weighted_mean_position_age_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -86,6 +91,12 @@ class RankCreditQuantumComplete:
     model_version: int
     training_stats: TrainingStats | None
     optimizer_seconds: float | None
+    decode_seconds: float | None
+    payload_open_count: int | None
+    selected_rows: int | None
+    rows_read: int | None
+    selected_bytes: int | None
+    bytes_read: int | None
     checkpoint_manifest: str | None
 
 
@@ -99,6 +110,11 @@ class CreditReplayState:
     credited_unique_samples: int
     live_unique_samples: int
     compacted_container: bool
+    oldest_source_model_version: int | None
+    newest_source_model_version: int | None
+    weighted_mean_source_model_version_midpoint: float | None
+    oldest_position_age_seconds: float | None
+    weighted_mean_position_age_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -107,6 +123,12 @@ class CreditQuantumResult:
     model_version: int
     training_stats: TrainingStats
     optimizer_seconds: float
+    decode_seconds: float
+    payload_open_count: int
+    selected_rows: int
+    rows_read: int
+    selected_bytes: int
+    bytes_read: int
     checkpoint_manifest: Path
 
 
@@ -209,6 +231,11 @@ class CreditTrainerProcess:
             credited_unique_samples=credited_counts.pop(),
             live_unique_samples=live_counts.pop(),
             compacted_container=rank_zero.compacted_container,
+            oldest_source_model_version=rank_zero.oldest_source_model_version,
+            newest_source_model_version=rank_zero.newest_source_model_version,
+            weighted_mean_source_model_version_midpoint=rank_zero.weighted_mean_source_model_version_midpoint,
+            oldest_position_age_seconds=rank_zero.oldest_position_age_seconds,
+            weighted_mean_position_age_seconds=rank_zero.weighted_mean_position_age_seconds,
         )
 
     def train_quantum(self, global_step: int, model_version: int) -> CreditQuantumResult:
@@ -227,6 +254,17 @@ class CreditTrainerProcess:
             raise RuntimeError('Rank zero did not return credit-quantum training statistics.')
         if rank_zero.optimizer_seconds is None:
             raise RuntimeError('Rank zero did not return credit-quantum optimizer timing.')
+        if rank_zero.decode_seconds is None:
+            raise RuntimeError('Rank zero did not return credit-quantum replay timing.')
+        replay_statistics = (
+            rank_zero.payload_open_count,
+            rank_zero.selected_rows,
+            rank_zero.rows_read,
+            rank_zero.selected_bytes,
+            rank_zero.bytes_read,
+        )
+        if any(value is None for value in replay_statistics):
+            raise RuntimeError('Rank zero did not return credit-quantum replay statistics.')
         if rank_zero.checkpoint_manifest is None:
             raise RuntimeError('Rank zero did not return the prepared checkpoint manifest.')
         expected_global_step = global_step + self.args.training.credit_training.optimizer_steps_per_quantum
@@ -242,6 +280,12 @@ class CreditTrainerProcess:
             model_version=rank_zero.model_version,
             training_stats=rank_zero.training_stats,
             optimizer_seconds=rank_zero.optimizer_seconds,
+            decode_seconds=rank_zero.decode_seconds,
+            payload_open_count=int(rank_zero.payload_open_count),
+            selected_rows=int(rank_zero.selected_rows),
+            rows_read=int(rank_zero.rows_read),
+            selected_bytes=int(rank_zero.selected_bytes),
+            bytes_read=int(rank_zero.bytes_read),
             checkpoint_manifest=Path(rank_zero.checkpoint_manifest),
         )
 
@@ -400,12 +444,18 @@ def _maintain_replay(
         device=device,
     )
     distributed.broadcast(counters, src=0)
+    live_statistics = replay_buffer.live_statistics(time.time())
     return RankCreditReplayMaintained(
         rank=rank,
         phase_id=command.phase_id,
         credited_unique_samples=int(counters[0].item()),
         live_unique_samples=int(counters[1].item()),
         compacted_container=compacted_container,
+        oldest_source_model_version=live_statistics.oldest_source_model_version,
+        newest_source_model_version=live_statistics.newest_source_model_version,
+        weighted_mean_source_model_version_midpoint=(live_statistics.weighted_mean_source_model_version_midpoint),
+        oldest_position_age_seconds=live_statistics.oldest_position_age_seconds,
+        weighted_mean_position_age_seconds=live_statistics.weighted_mean_position_age_seconds,
     )
 
 
@@ -421,7 +471,26 @@ def _train_credit_quantum(
     parameters = args.training.credit_training
     assert parameters is not None
     request = credit_quantum_request(args, rank, command.global_step)
+    decode_started_at = time.perf_counter()
     quantum = decode_rank_quantum(replay_buffer, request)
+    decode_seconds = torch.tensor(
+        time.perf_counter() - decode_started_at,
+        device=model.device,
+        dtype=torch.float64,
+    )
+    distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
+    replay_statistics = torch.tensor(
+        [
+            quantum.decode_statistics.payload_open_count,
+            quantum.decode_statistics.selected_rows,
+            quantum.decode_statistics.rows_read,
+            quantum.decode_statistics.selected_bytes,
+            quantum.decode_statistics.bytes_read,
+        ],
+        device=model.device,
+        dtype=torch.int64,
+    )
+    distributed.all_reduce(replay_statistics, op=distributed.ReduceOp.SUM)
     if quantum.optimizer_steps != parameters.optimizer_steps_per_quantum:
         raise RuntimeError('Decoded replay quantum has the wrong optimizer-step count.')
     distributed.barrier()
@@ -470,6 +539,12 @@ def _train_credit_quantum(
         model_version=command.model_version,
         training_stats=training_stats if is_rank_zero(rank) else None,
         optimizer_seconds=float(elapsed_seconds.item()) if is_rank_zero(rank) else None,
+        decode_seconds=float(decode_seconds.item()) if is_rank_zero(rank) else None,
+        payload_open_count=int(replay_statistics[0].item()) if is_rank_zero(rank) else None,
+        selected_rows=int(replay_statistics[1].item()) if is_rank_zero(rank) else None,
+        rows_read=int(replay_statistics[2].item()) if is_rank_zero(rank) else None,
+        selected_bytes=int(replay_statistics[3].item()) if is_rank_zero(rank) else None,
+        bytes_read=int(replay_statistics[4].item()) if is_rank_zero(rank) else None,
         checkpoint_manifest=str(manifest.resolve()) if manifest is not None else None,
     )
 

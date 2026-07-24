@@ -17,6 +17,10 @@ from src.settings import log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import (
     EXPECTED_SCORE_CALIBRATION_BINS,
+    MATERIAL_VALUE_BIN_LABELS,
+    MATERIAL_VALUE_BIN_UPPER_BOUNDS,
+    PLY_VALUE_BIN_LABELS,
+    PLY_VALUE_BIN_UPPER_BOUNDS,
     TrainingStats,
     ValueMetrics,
 )
@@ -161,7 +165,11 @@ class Trainer:
     def _train_epoch(self, dataloader: TrainingBatchLoader) -> TrainingStats:
         self.model.train()
         self.training_model.train()
-        reduction_width = BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (1 + len(TerminationReason))
+        termination_offset = 1
+        ply_offset = termination_offset + len(TerminationReason)
+        material_offset = ply_offset + len(PLY_VALUE_BIN_LABELS)
+        value_metric_group_count = material_offset + len(MATERIAL_VALUE_BIN_LABELS)
+        reduction_width = BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * value_metric_group_count
         reduction_values = torch.zeros(reduction_width, device=self.model.device, dtype=torch.float64)
         scaler = GradScaler(self.model.device.type, enabled=self.model.device.type == 'cuda')
 
@@ -208,6 +216,28 @@ class Trainer:
                     batch,
                     termination_reasons.eq(int(reason)),
                 )
+            plies = batch.plies.to(device=self.model.device)
+            for bin_index, sample_mask in enumerate(_fixed_bin_masks(plies, PLY_VALUE_BIN_UPPER_BOUNDS)):
+                self._accumulate_value_metrics(
+                    reduction_values,
+                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (ply_offset + bin_index),
+                    loss_result,
+                    batch,
+                    sample_mask,
+                )
+            material_counts = batch.current_player_piece_counts.to(
+                device=self.model.device
+            ) + batch.opponent_piece_counts.to(device=self.model.device)
+            for bin_index, sample_mask in enumerate(
+                _fixed_bin_masks(material_counts, MATERIAL_VALUE_BIN_UPPER_BOUNDS, inclusive=True)
+            ):
+                self._accumulate_value_metrics(
+                    reduction_values,
+                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (material_offset + bin_index),
+                    loss_result,
+                    batch,
+                    sample_mask,
+                )
 
         if distributed.is_initialized():
             distributed.all_reduce(reduction_values, op=distributed.ReduceOp.SUM)
@@ -232,6 +262,20 @@ class Trainer:
             mcts_value_loss_weight=self.args.mcts_value_loss_weight,
             policy_loss_weight=self.args.policy_loss_weight,
             value_loss_weight=self.args.value_loss_weight,
+            ply_value_metrics=tuple(
+                _value_metrics_from_reduction(
+                    reduction_values,
+                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (ply_offset + bin_index),
+                )
+                for bin_index in range(len(PLY_VALUE_BIN_LABELS))
+            ),
+            material_value_metrics=tuple(
+                _value_metrics_from_reduction(
+                    reduction_values,
+                    BASE_REDUCTION_WIDTH + VALUE_METRIC_WIDTH * (material_offset + bin_index),
+                )
+                for bin_index in range(len(MATERIAL_VALUE_BIN_LABELS))
+            ),
         )
 
     def _accumulate_value_metrics(
@@ -326,6 +370,26 @@ class Trainer:
             param_group['lr'] = base_lr
 
         return self._train_epoch(dataloader)
+
+
+def _fixed_bin_masks(
+    values: torch.Tensor,
+    upper_bounds: tuple[int, ...],
+    inclusive: bool = False,
+) -> tuple[torch.Tensor, ...]:
+    masks: list[torch.Tensor] = []
+    lower_bound: int | None = None
+    for upper_bound in upper_bounds:
+        upper_mask = values.le(upper_bound) if inclusive else values.lt(upper_bound)
+        if lower_bound is not None:
+            lower_mask = values.gt(lower_bound) if inclusive else values.ge(lower_bound)
+            upper_mask &= lower_mask
+        masks.append(upper_mask)
+        lower_bound = upper_bound
+    if lower_bound is None:
+        return (torch.ones_like(values, dtype=torch.bool),)
+    masks.append(values.gt(lower_bound) if inclusive else values.ge(lower_bound))
+    return tuple(masks)
 
 
 def _value_metrics_from_reduction(values: torch.Tensor, offset: int) -> ValueMetrics:

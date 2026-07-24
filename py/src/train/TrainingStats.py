@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import sqrt
 
 from src.self_play.value_target import FinalOutcome, TerminationReason
@@ -8,6 +8,10 @@ from src.util.tensorboard import log_scalar
 
 
 EXPECTED_SCORE_CALIBRATION_BINS = 10
+PLY_VALUE_BIN_UPPER_BOUNDS = (40, 80, 120, 180)
+PLY_VALUE_BIN_LABELS = ('000_039', '040_079', '080_119', '120_179', '180_plus')
+MATERIAL_VALUE_BIN_UPPER_BOUNDS = (8, 16, 24)
+MATERIAL_VALUE_BIN_LABELS = ('00_08', '09_16', '17_24', '25_32')
 
 
 @dataclass(frozen=True)
@@ -184,10 +188,20 @@ class TrainingStats:
     mcts_value_loss_weight: float
     policy_loss_weight: float
     value_loss_weight: float
+    ply_value_metrics: tuple[ValueMetrics, ...] = field(
+        default_factory=lambda: tuple(ValueMetrics() for _ in PLY_VALUE_BIN_LABELS)
+    )
+    material_value_metrics: tuple[ValueMetrics, ...] = field(
+        default_factory=lambda: tuple(ValueMetrics() for _ in MATERIAL_VALUE_BIN_LABELS)
+    )
 
     def __post_init__(self) -> None:
         if len(self.termination_value_metrics) != len(TerminationReason):
             raise ValueError('Training statistics require one value-metric split per termination reason.')
+        if len(self.ply_value_metrics) != len(PLY_VALUE_BIN_LABELS):
+            raise ValueError('Training statistics require one value-metric split per ply bin.')
+        if len(self.material_value_metrics) != len(MATERIAL_VALUE_BIN_LABELS):
+            raise ValueError('Training statistics require one value-metric split per material bin.')
 
     @property
     def policy_loss(self) -> float:
@@ -242,6 +256,12 @@ class TrainingStats:
                     f'{prefix}/value_by_termination/{reason.name.lower()}',
                     iteration,
                 )
+        for label, metrics in zip(PLY_VALUE_BIN_LABELS, self.ply_value_metrics):
+            if metrics.outcome_target_count or metrics.mcts_target_count:
+                metrics.log_to_tensorboard(f'{prefix}/value_by_ply/{label}', iteration)
+        for label, metrics in zip(MATERIAL_VALUE_BIN_LABELS, self.material_value_metrics):
+            if metrics.outcome_target_count or metrics.mcts_target_count:
+                metrics.log_to_tensorboard(f'{prefix}/value_by_material/{label}', iteration)
         if self.gradient_norm > 0:
             log_scalar(f'{prefix}/gradient_norm', self.gradient_norm, iteration)
 
@@ -294,4 +314,18 @@ class TrainingStats:
             mcts_value_loss_weight=mcts_weight,
             policy_loss_weight=policy_weight,
             value_loss_weight=value_weight,
+            ply_value_metrics=tuple(
+                sum(
+                    (stats.ply_value_metrics[index] for stats in stats_list),
+                    start=ValueMetrics(),
+                )
+                for index in range(len(PLY_VALUE_BIN_LABELS))
+            ),
+            material_value_metrics=tuple(
+                sum(
+                    (stats.material_value_metrics[index] for stats in stats_list),
+                    start=ValueMetrics(),
+                )
+                for index in range(len(MATERIAL_VALUE_BIN_LABELS))
+            ),
         )

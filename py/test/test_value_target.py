@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -230,3 +231,23 @@ def test_expected_score_calibration_compares_binned_predictions_to_outcomes() ->
     stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch))
 
     assert stats.value_metrics.expected_score_calibration_error == pytest.approx(1.0)
+
+
+def test_value_metrics_are_sliced_by_ply_and_total_material() -> None:
+    batch = training_batch(
+        (FinalOutcome.WIN,) * 5,
+        (0.0,) * 5,
+        (True,) * 5,
+        (TerminationReason.NATURAL,) * 5,
+    )
+    batch = replace(
+        batch,
+        plies=torch.tensor((0, 50, 100, 150, 200), dtype=torch.int32),
+        current_player_piece_counts=torch.tensor((1, 6, 10, 14, 16), dtype=torch.int8),
+        opponent_piece_counts=torch.tensor((1, 6, 10, 14, 16), dtype=torch.int8),
+    )
+
+    stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch))
+
+    assert tuple(metrics.outcome_target_count for metrics in stats.ply_value_metrics) == (1, 1, 1, 1, 1)
+    assert tuple(metrics.outcome_target_count for metrics in stats.material_value_metrics) == (1, 1, 1, 2)

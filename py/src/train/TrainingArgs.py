@@ -198,6 +198,10 @@ class CreditTrainingParams:
     optimizer_steps_per_quantum: int
     maximum_optimizer_steps: int
     retained_checkpoint_interval_steps: int
+    evaluation_interval_optimizer_steps: int = 1_000
+    evaluation_timeout_seconds: float = 2 * 60 * 60
+    evaluation_maximum_attempts: int = 3
+    evaluation_retry_backoff_seconds: float = 60
 
     def __post_init__(self) -> None:
         if self.replay_ratio <= 0:
@@ -212,6 +216,18 @@ class CreditTrainingParams:
             raise ValueError('Retained checkpoint interval must be positive.')
         if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Retained checkpoint interval must align with training quanta.')
+        if self.evaluation_interval_optimizer_steps <= 0:
+            raise ValueError('Evaluation interval must be positive.')
+        if self.evaluation_interval_optimizer_steps % self.optimizer_steps_per_quantum:
+            raise ValueError('Evaluation interval must align with training quanta.')
+        if self.evaluation_interval_optimizer_steps % self.retained_checkpoint_interval_steps:
+            raise ValueError('Evaluation checkpoints must be retained checkpoints.')
+        if self.evaluation_timeout_seconds <= 0:
+            raise ValueError('Evaluation timeout must be positive.')
+        if self.evaluation_maximum_attempts <= 0:
+            raise ValueError('Evaluation maximum attempts must be positive.')
+        if self.evaluation_retry_backoff_seconds < 0:
+            raise ValueError('Evaluation retry backoff cannot be negative.')
 
     def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
         if global_batch_size <= 0:

@@ -252,6 +252,51 @@ class ReplayDecodeStatistics:
         return self.bytes_read / self.selected_bytes
 
 
+@dataclass(frozen=True)
+class ReplayLiveStatistics:
+    oldest_source_model_version: int | None
+    newest_source_model_version: int | None
+    weighted_mean_source_model_version_midpoint: float | None
+    oldest_position_age_seconds: float | None
+    weighted_mean_position_age_seconds: float | None
+
+
+def replay_live_statistics(
+    live_segments: Sequence[LogicalReplaySegment],
+    measured_at_seconds: float,
+) -> ReplayLiveStatistics:
+    """Weight manifest model-version midpoints and ages by live unique rows."""
+    if measured_at_seconds < 0:
+        raise ValueError('Replay statistics timestamp cannot be negative.')
+    if not live_segments:
+        return ReplayLiveStatistics(
+            oldest_source_model_version=None,
+            newest_source_model_version=None,
+            weighted_mean_source_model_version_midpoint=None,
+            oldest_position_age_seconds=None,
+            weighted_mean_position_age_seconds=None,
+        )
+    live_unique_samples = sum(segment.unique_sample_count for segment in live_segments)
+    assert live_unique_samples > 0
+    weighted_model_version_sum = 0.0
+    weighted_age_sum = 0.0
+    ages: list[float] = []
+    for segment in live_segments:
+        manifest = segment.source_manifest
+        model_version_midpoint = (manifest.minimum_model_version + manifest.maximum_model_version) / 2
+        age_seconds = max(0.0, measured_at_seconds - manifest.creation_timestamp_seconds)
+        weighted_model_version_sum += model_version_midpoint * segment.unique_sample_count
+        weighted_age_sum += age_seconds * segment.unique_sample_count
+        ages.append(age_seconds)
+    return ReplayLiveStatistics(
+        oldest_source_model_version=min(segment.source_manifest.minimum_model_version for segment in live_segments),
+        newest_source_model_version=max(segment.source_manifest.maximum_model_version for segment in live_segments),
+        weighted_mean_source_model_version_midpoint=weighted_model_version_sum / live_unique_samples,
+        oldest_position_age_seconds=max(ages),
+        weighted_mean_position_age_seconds=weighted_age_sum / live_unique_samples,
+    )
+
+
 class CompactionStepStatus(str, Enum):
     WAITING_FOR_MORE_SHARDS = 'waiting_for_more_shards'
     COMMITTED_CONTAINER = 'committed_container'
@@ -441,6 +486,10 @@ class RollingReplayBuffer:
     @property
     def metadata_memory_bytes(self) -> int:
         return len(self._state.model_dump_json().encode('utf-8')) + self._prefix.nbytes
+
+    def live_statistics(self, measured_at_seconds: float) -> ReplayLiveStatistics:
+        """Summarize live logical segments, weighting manifest bounds and age by unique rows."""
+        return replay_live_statistics(self._state.live_segments, measured_at_seconds)
 
     def refresh_index_for_read(self) -> None:
         """Refresh an idle read rank after the writer completes a mutation phase."""

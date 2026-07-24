@@ -236,6 +236,10 @@ class CreditTrainingConfiguration(BaseModel):
     replay_capacity_unique_positions: int = Field(gt=0)
     retained_checkpoint_interval_steps: int = Field(gt=0)
     learning_rate: float = Field(gt=0)
+    evaluation_interval_optimizer_steps: int = Field(default=1_000, gt=0)
+    evaluation_timeout_seconds: float = Field(default=2 * 60 * 60, gt=0)
+    evaluation_maximum_attempts: int = Field(default=3, gt=0)
+    evaluation_retry_backoff_seconds: float = Field(default=60, ge=0)
 
     def to_parameters(self) -> CreditTrainingParams:
         return CreditTrainingParams(
@@ -243,6 +247,10 @@ class CreditTrainingConfiguration(BaseModel):
             optimizer_steps_per_quantum=self.optimizer_steps_per_quantum,
             maximum_optimizer_steps=self.maximum_optimizer_steps,
             retained_checkpoint_interval_steps=self.retained_checkpoint_interval_steps,
+            evaluation_interval_optimizer_steps=self.evaluation_interval_optimizer_steps,
+            evaluation_timeout_seconds=self.evaluation_timeout_seconds,
+            evaluation_maximum_attempts=self.evaluation_maximum_attempts,
+            evaluation_retry_backoff_seconds=self.evaluation_retry_backoff_seconds,
         )
 
 

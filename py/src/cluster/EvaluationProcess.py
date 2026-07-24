@@ -133,10 +133,15 @@ def _evaluation_source_revision() -> str:
     return completed.stdout.strip()
 
 
-def run_evaluation_process(run: int, args: TrainingArgs, iteration: int) -> None:
+def run_evaluation_process(
+    run: int,
+    args: TrainingArgs,
+    iteration: int,
+    metrics_step: int | None = None,
+) -> None:
     evaluation_process = EvaluationProcess(args)
     with log_exceptions('Evaluation process'):
-        evaluation_process.run(run, iteration)
+        evaluation_process.run(run, iteration, metrics_step)
 
 
 def _eval_vs_dataset(
@@ -144,6 +149,7 @@ def _eval_vs_dataset(
     model_evaluation: ModelEvaluation,
     iteration: int,
     dataset_path: str,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_dataset', postfix_pid=False):
@@ -168,9 +174,9 @@ def _eval_vs_dataset(
                 '5': policy_accuracy_at_5,
                 '10': policy_accuracy_at_10,
             },
-            iteration,
+            metrics_step,
         )
-        log_scalar('evaluation/value_mse_loss', avg_value_loss, iteration)
+        log_scalar('evaluation/value_mse_loss', avg_value_loss, metrics_step)
 
 
 def _eval_vs_previous(
@@ -179,6 +185,7 @@ def _eval_vs_previous(
     iteration: int,
     save_path: str,
     how_many_previous: int,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     previous_model_path = model_save_path(iteration - how_many_previous, save_path)
@@ -192,12 +199,17 @@ def _eval_vs_previous(
         log_scalars(
             f'evaluation/vs_{how_many_previous}_previous_model',
             _result_metrics(results),
-            iteration,
+            metrics_step,
         )
 
 
 def _eval_vs_iteration(
-    run: int, model_evaluation: ModelEvaluation, iteration: int, save_path: str, current_iteration: int
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    save_path: str,
+    current_iteration: int,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     model_path = model_save_path(iteration, save_path)
@@ -211,7 +223,7 @@ def _eval_vs_iteration(
         log_scalars(
             f'evaluation/vs_{iteration}_model',
             _result_metrics(results),
-            current_iteration,
+            metrics_step,
         )
 
 
@@ -220,6 +232,7 @@ def _eval_vs_reference(
     model_evaluation: ModelEvaluation,
     iteration: int,
     args: TrainingArgs,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
@@ -251,7 +264,7 @@ def _eval_vs_reference(
                 'score_confidence_low': summary.score_confidence_low,
                 'score_confidence_high': summary.score_confidence_high,
             },
-            iteration,
+            metrics_step,
         )
 
     opening_suite_path = Path(evaluation.opening_suite_path)
@@ -288,6 +301,7 @@ def _eval_vs_stockfish_fixed(
     model_evaluation: ModelEvaluation,
     iteration: int,
     args: TrainingArgs,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     evaluation = args.evaluation
@@ -324,7 +338,7 @@ def _eval_vs_stockfish_fixed(
                 'score_confidence_low': summary.score_confidence_low,
                 'score_confidence_high': summary.score_confidence_high,
             },
-            iteration,
+            metrics_step,
         )
 
     opening_suite_path = Path(evaluation.opening_suite_path)
@@ -361,7 +375,13 @@ def _eval_vs_stockfish_fixed(
     write_match_report(report_path, report)
 
 
-def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int, _: str) -> None:
+def _eval_vs_random(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    _: str,
+    metrics_step: int,
+) -> None:
     _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_vs_random', postfix_pid=False):
         results = model_evaluation.play_vs_random()
@@ -370,7 +390,7 @@ def _eval_vs_random(run: int, model_evaluation: ModelEvaluation, iteration: int,
         log_scalars(
             'evaluation/vs_random',
             _result_metrics(results),
-            iteration,
+            metrics_step,
         )
 
 
@@ -379,6 +399,7 @@ def _eval_policy_vs_random(
     model_evaluation: ModelEvaluation,
     iteration: int,
     save_path: str,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_policy_vs_random', postfix_pid=False):
@@ -388,7 +409,7 @@ def _eval_policy_vs_random(
         log_scalars(
             'evaluation/policy_vs_random',
             _result_metrics(results),
-            iteration,
+            metrics_step,
         )
 
 
@@ -397,6 +418,7 @@ def _eval_vs_stockfish(
     model_evaluation: ModelEvaluation,
     level: int,
     iteration: int,
+    metrics_step: int,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, f'evaluation_vs_stockfish_level_{level}', postfix_pid=False):
@@ -406,7 +428,7 @@ def _eval_vs_stockfish(
         log_scalars(
             f'evaluation/vs_stockfish_level_{level}',
             _result_metrics(results),
-            iteration,
+            metrics_step,
         )
 
 
@@ -417,12 +439,13 @@ class EvaluationProcess:
         self.args = args
         self.eval_args = args.evaluation
 
-    def run(self, run: int, iteration: int) -> None:
+    def run(self, run: int, iteration: int, metrics_step: int | None = None) -> None:
         """Play two most recent models against each other."""
         if not self.eval_args:
             return
 
         processes: list[mp.Process] = []
+        resolved_metrics_step = iteration if metrics_step is None else metrics_step
         max_concurrent_tasks = self.eval_args.max_concurrent_tasks
         evaluation_task_index = 0
 
@@ -457,7 +480,7 @@ class EvaluationProcess:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_dataset,
-                    args=(run, model_evaluation, iteration, self.eval_args.dataset_path),
+                    args=(run, model_evaluation, iteration, self.eval_args.dataset_path, resolved_metrics_step),
                 )
                 start_process(p, physical_device_id)
 
@@ -465,7 +488,14 @@ class EvaluationProcess:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_previous,
-                    args=(run, model_evaluation, iteration, self.args.save_path, how_many_previous),
+                    args=(
+                        run,
+                        model_evaluation,
+                        iteration,
+                        self.args.save_path,
+                        how_many_previous,
+                        resolved_metrics_step,
+                    ),
                 )
                 start_process(p, physical_device_id)
 
@@ -473,7 +503,7 @@ class EvaluationProcess:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_reference,
-                    args=(run, model_evaluation, iteration, self.args),
+                    args=(run, model_evaluation, iteration, self.args, resolved_metrics_step),
                 )
                 start_process(p, physical_device_id)
 
@@ -481,7 +511,7 @@ class EvaluationProcess:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish_fixed,
-                    args=(run, model_evaluation, iteration, self.args),
+                    args=(run, model_evaluation, iteration, self.args, resolved_metrics_step),
                 )
                 start_process(p, physical_device_id)
 
@@ -490,7 +520,13 @@ class EvaluationProcess:
                     model_evaluation, physical_device_id = create_model_evaluation()
                     p = mp.Process(
                         target=evaluation_function,
-                        args=(run, model_evaluation, iteration, self.args.save_path),
+                        args=(
+                            run,
+                            model_evaluation,
+                            iteration,
+                            self.args.save_path,
+                            resolved_metrics_step,
+                        ),
                     )
                     start_process(p, physical_device_id)
 
@@ -511,6 +547,7 @@ class EvaluationProcess:
                         historical_iteration,
                         self.args.save_path,
                         iteration,
+                        resolved_metrics_step,
                     ),
                 )
                 start_process(p, physical_device_id)
@@ -519,7 +556,7 @@ class EvaluationProcess:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish,
-                    args=(run, model_evaluation, level, iteration),
+                    args=(run, model_evaluation, level, iteration, resolved_metrics_step),
                 )
                 start_process(p, physical_device_id)
 

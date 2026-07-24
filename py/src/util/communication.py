@@ -27,7 +27,7 @@ def refresh_self_play_model_message(model_version: int) -> str:
 def self_play_model_refreshed_message(model_version: int) -> str:
     if model_version < 0:
         raise ValueError('Model version must be nonnegative.')
-    return f'SELF PLAY MODEL REFRESHED: {model_version}'
+    return f'SELF_PLAY_MODEL_REFRESHED_{model_version}'
 
 
 def update_self_play_search_schedule_message(schedule_version: int) -> str:
@@ -88,6 +88,16 @@ class Communication:
         with open(file_path, 'w') as f:
             f.write('')
 
+    def send_value_to_id(self, identifier: str, node_id: int, value: str) -> None:
+        """Atomically send a value to one node-specific mailbox."""
+        file_path = self.folder / f'{identifier}_node_{node_id}.txt'
+        temporary_path = file_path.with_name(f'.{file_path.name}.{uuid.uuid4().hex}.tmp')
+        with temporary_path.open('x', encoding='utf-8') as file:
+            file.write(value)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, file_path)
+
     def try_receive_from_id(self, identifier: str, node_id: int) -> bool:
         """Tries to receive a message from a specific node by checking for the existence of the file."""
         file_path = self.folder / f'{identifier}_node_{node_id}.txt'
@@ -96,6 +106,15 @@ class Communication:
 
         file_path.unlink()
         return True
+
+    def try_receive_value_from_id(self, identifier: str, node_id: int) -> str | None:
+        """Atomically consume a node-specific value if it is available."""
+        file_path = self.folder / f'{identifier}_node_{node_id}.txt'
+        if not file_path.exists():
+            return None
+        value = file_path.read_text(encoding='utf-8')
+        file_path.unlink()
+        return value
 
     def clear_all(self) -> None:
         """Clears all messages by removing all files in the folder."""
