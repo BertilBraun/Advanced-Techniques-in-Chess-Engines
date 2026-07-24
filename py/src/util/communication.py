@@ -123,7 +123,7 @@ class Communication:
 
     def send_heartbeat(self, identifier: str) -> None:
         """Sends a heartbeat message by creating a file with the identifier."""
-        self.boardcast(f'HEARTBEAT_{identifier}', str(time.time()))
+        self.publish_persistent_value(f'HEARTBEAT_{identifier}', str(time.time()))
 
     def is_alive(self, identifier: str, timeout: float) -> bool:
         """Checks if a heartbeat message has been received for the given identifier."""
