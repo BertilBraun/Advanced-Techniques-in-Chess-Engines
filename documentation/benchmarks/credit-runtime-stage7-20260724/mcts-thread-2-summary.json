@@ -1,0 +1,392 @@
+{
+  "manifest": {
+    "run_timestamp_utc": "20260724T062956Z",
+    "source": {
+      "revision": "e7716378421a8a4309d4b80370e79fc9eeb01a86",
+      "worktree_clean": true,
+      "alpha_zero_cpp_sha256": "7eedd482ae91973b0fb2541cca0b6e64430c28742c5a736919d3a6b8dd871948"
+    },
+    "build": {
+      "type": "Release",
+      "optimization": "-O3",
+      "timing_instrumentation": "OFF"
+    },
+    "runtime": {
+      "torch_version": "2.12.0+cu130",
+      "cuda_version": "13.0"
+    },
+    "hardware": {
+      "gpu_count": 4,
+      "visible_gpu_count": 4,
+      "logical_cpu_count": 64,
+      "gpu_inventory": [
+        "0, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+        "1, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+        "2, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05",
+        "3, NVIDIA GeForce RTX 4070 SUPER, 12282, 595.71.05"
+      ]
+    },
+    "topology": {
+      "processes_per_gpu": 4,
+      "total_processes": 16,
+      "mcts_threads_per_process": 2,
+      "total_mcts_threads": 32,
+      "parallel_games_per_process": 1024,
+      "total_parallel_games": 16384,
+      "affinity": {
+        "mode": "disabled",
+        "pin_workers_to_cpus": false,
+        "worker_assignments": []
+      }
+    },
+    "workload": {
+      "model_path": "/workspace/chess/source/py/training_data/complete-training-run-v5/model_319.jit.pt",
+      "model_sha256": "226a48bf2c38a29bc6014680f2a07efcebee3bd2f9d1feb3edc4ed9d495c49fd",
+      "warmup_steps": 1,
+      "measurement_duration_seconds": 60,
+      "target_searches_per_ply": 600,
+      "target_fast_searches_per_ply_override": 150,
+      "parallel_searches": 1,
+      "maximum_batch_size": 256,
+      "inference_timeout_microseconds": 500,
+      "cache_capacity_per_process": 1,
+      "use_inference_cache": false,
+      "direct_inference_workers": 2,
+      "direct_inference_batch_size": 64,
+      "direct_outstanding_batches_per_worker": 2,
+      "seed_base": 20260724
+    },
+    "safety": {
+      "maximum_host_ram_percent": 95
+    }
+  },
+  "measurement": {
+    "started_at_utc": "2026-07-24T06:30:40Z",
+    "finished_at_utc": "2026-07-24T06:32:00Z",
+    "makespan_seconds": 76.86444918392226,
+    "completed_games": 34,
+    "completed_games_per_second": 0.4423371319378658,
+    "generated_samples": 29,
+    "generated_samples_per_second": 0.377287553711709,
+    "retained_samples": 29,
+    "retained_samples_per_second": 0.377287553711709,
+    "self_play_steps": 64,
+    "self_play_steps_per_second": 0.8326346012948062,
+    "game_updates": 65536,
+    "game_updates_per_second": 852.6178317258815,
+    "milliseconds_per_game_update": 1.17285841650272,
+    "completed_game_plies": 224,
+    "completed_game_plies_per_second": 2.9142211045318214,
+    "searches_completed": 13483241,
+    "searches_per_second": 175415.82803432475
+  },
+  "inference": {
+    "evaluations": 13463644,
+    "cache_hits": 0,
+    "cache_hit_rate_percent": 0,
+    "model_calls": 224290,
+    "model_positions": 13463644,
+    "average_batch_size": 60.02783895849124,
+    "batch_size_distribution": [
+      {
+        "batch_size": 1,
+        "calls": 10
+      },
+      {
+        "batch_size": 2,
+        "calls": 10
+      },
+      {
+        "batch_size": 3,
+        "calls": 10
+      },
+      {
+        "batch_size": 4,
+        "calls": 14
+      },
+      {
+        "batch_size": 5,
+        "calls": 13
+      },
+      {
+        "batch_size": 6,
+        "calls": 32
+      },
+      {
+        "batch_size": 7,
+        "calls": 45
+      },
+      {
+        "batch_size": 8,
+        "calls": 66
+      },
+      {
+        "batch_size": 9,
+        "calls": 67
+      },
+      {
+        "batch_size": 10,
+        "calls": 100
+      },
+      {
+        "batch_size": 11,
+        "calls": 119
+      },
+      {
+        "batch_size": 12,
+        "calls": 136
+      },
+      {
+        "batch_size": 13,
+        "calls": 144
+      },
+      {
+        "batch_size": 14,
+        "calls": 148
+      },
+      {
+        "batch_size": 15,
+        "calls": 165
+      },
+      {
+        "batch_size": 16,
+        "calls": 201
+      },
+      {
+        "batch_size": 17,
+        "calls": 211
+      },
+      {
+        "batch_size": 18,
+        "calls": 251
+      },
+      {
+        "batch_size": 19,
+        "calls": 238
+      },
+      {
+        "batch_size": 20,
+        "calls": 268
+      },
+      {
+        "batch_size": 21,
+        "calls": 274
+      },
+      {
+        "batch_size": 22,
+        "calls": 294
+      },
+      {
+        "batch_size": 23,
+        "calls": 316
+      },
+      {
+        "batch_size": 24,
+        "calls": 319
+      },
+      {
+        "batch_size": 25,
+        "calls": 324
+      },
+      {
+        "batch_size": 26,
+        "calls": 365
+      },
+      {
+        "batch_size": 27,
+        "calls": 405
+      },
+      {
+        "batch_size": 28,
+        "calls": 456
+      },
+      {
+        "batch_size": 29,
+        "calls": 401
+      },
+      {
+        "batch_size": 30,
+        "calls": 488
+      },
+      {
+        "batch_size": 31,
+        "calls": 519
+      },
+      {
+        "batch_size": 32,
+        "calls": 570
+      },
+      {
+        "batch_size": 33,
+        "calls": 515
+      },
+      {
+        "batch_size": 34,
+        "calls": 719
+      },
+      {
+        "batch_size": 35,
+        "calls": 652
+      },
+      {
+        "batch_size": 36,
+        "calls": 617
+      },
+      {
+        "batch_size": 37,
+        "calls": 749
+      },
+      {
+        "batch_size": 38,
+        "calls": 705
+      },
+      {
+        "batch_size": 39,
+        "calls": 830
+      },
+      {
+        "batch_size": 40,
+        "calls": 668
+      },
+      {
+        "batch_size": 41,
+        "calls": 737
+      },
+      {
+        "batch_size": 42,
+        "calls": 872
+      },
+      {
+        "batch_size": 43,
+        "calls": 747
+      },
+      {
+        "batch_size": 44,
+        "calls": 873
+      },
+      {
+        "batch_size": 45,
+        "calls": 1065
+      },
+      {
+        "batch_size": 46,
+        "calls": 837
+      },
+      {
+        "batch_size": 47,
+        "calls": 965
+      },
+      {
+        "batch_size": 48,
+        "calls": 1118
+      },
+      {
+        "batch_size": 49,
+        "calls": 1008
+      },
+      {
+        "batch_size": 50,
+        "calls": 871
+      },
+      {
+        "batch_size": 51,
+        "calls": 1311
+      },
+      {
+        "batch_size": 52,
+        "calls": 1792
+      },
+      {
+        "batch_size": 53,
+        "calls": 1870
+      },
+      {
+        "batch_size": 54,
+        "calls": 2164
+      },
+      {
+        "batch_size": 55,
+        "calls": 3232
+      },
+      {
+        "batch_size": 56,
+        "calls": 3004
+      },
+      {
+        "batch_size": 57,
+        "calls": 4568
+      },
+      {
+        "batch_size": 58,
+        "calls": 4329
+      },
+      {
+        "batch_size": 59,
+        "calls": 5860
+      },
+      {
+        "batch_size": 60,
+        "calls": 6236
+      },
+      {
+        "batch_size": 61,
+        "calls": 7041
+      },
+      {
+        "batch_size": 62,
+        "calls": 8128
+      },
+      {
+        "batch_size": 63,
+        "calls": 7985
+      },
+      {
+        "batch_size": 64,
+        "calls": 145243
+      }
+    ],
+    "unique_positions": 0,
+    "cache_size_mib_at_end": 0,
+    "cache_evictions": 0,
+    "fingerprint_collisions": 0
+  },
+  "resources": {
+    "samples_per_gpu": 38,
+    "peak_host_ram_percent": 27.122,
+    "gpus": [
+      {
+        "index": 0,
+        "mean_utilization_percent": 94.02631578947368,
+        "peak_memory_used_mib": 1413
+      },
+      {
+        "index": 1,
+        "mean_utilization_percent": 93.92105263157895,
+        "peak_memory_used_mib": 1413
+      },
+      {
+        "index": 2,
+        "mean_utilization_percent": 94.21052631578948,
+        "peak_memory_used_mib": 1411
+      },
+      {
+        "index": 3,
+        "mean_utilization_percent": 85.36842105263158,
+        "peak_memory_used_mib": 1413
+      }
+    ],
+    "aggregate_process_cpu_percent": 3400.703321850127,
+    "estimated_host_cpu_capacity_percent": 53.13598940390823,
+    "summed_worker_peak_rss_mib": 33757.66015625
+  },
+  "search_trees": {
+    "live_materialized_nodes_at_end": 1604744,
+    "total_child_records_at_end": 52099691,
+    "arena_capacity_per_game": 602
+  },
+  "workers": {
+    "count": 16,
+    "minimum_elapsed_seconds": 72.74274757597595,
+    "maximum_elapsed_seconds": 76.86444918392226
+  }
+}

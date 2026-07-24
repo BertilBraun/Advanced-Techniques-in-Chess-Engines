@@ -1,0 +1,14 @@
+{
+  "source_revision": "e7716378421a8a4309d4b80370e79fc9eeb01a86",
+  "evaluated_model_source_revision": "1806a2df9de9683f5261c87b6c259f797fad0cce",
+  "stockfish_binary_sha256": "537bddf159022977870543865eb5fa30d40a211790bc54e71b9d12726ea9d12a",
+  "run_configuration_path": "/workspace/chess/source/py/configs/chess-clean-credit-4x4070-v6.json",
+  "model_version": 319,
+  "tensorboard_run_id": 970008,
+  "games_per_match": 100,
+  "searches_per_turn": 64,
+  "maximum_concurrent_tasks": 16,
+  "elapsed_seconds": 293.6843526107259,
+  "raw_results_directory": "/workspace/chess/artifacts/credit-canary-e771637-evaluations",
+  "model_directory": "/workspace/chess/source/py/training_data/complete-training-run-v5"
+}

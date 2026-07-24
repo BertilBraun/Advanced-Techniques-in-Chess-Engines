@@ -1,0 +1,9 @@
+{
+  "dataset_path": "py/reference/chess-elite-2024-10-50-schema3.hdf5",
+  "dataset_sha256": "3d4ac41f5baed318e014cffecebe7d00971425541c2a57be255a711ab980b4b0",
+  "source_url": "https://database.nikonoel.fr/lichess_elite_2024-10.zip",
+  "source_year": 2024,
+  "source_month": 10,
+  "source_game_count": 50,
+  "random_seed": 20260724
+}

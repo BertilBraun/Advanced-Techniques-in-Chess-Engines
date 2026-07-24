@@ -42,14 +42,14 @@ The initial clean-run design is:
 | Initial learning rate | 0.002 |
 | Self-play maximum game length | 250 plies |
 | Self-play processes | 4 per GPU |
-| Search concurrency per process | 2 search threads and 2 inference queues |
+| Search concurrency per process | 1 search thread and 2 inference queues |
 | Stored augmentation copies | None |
 | Training-time symmetry | Random valid symmetry per sampled position |
 | Post-augmentation discard | Removed |
 | Outcome discount by distance to termination | Removed |
 | MCTS value auxiliary weight | 0.15 |
 | Resignation audit fraction | 0.10 |
-| Production resignation during initial warm-up | Disabled |
+| Production resignation during initial warm-up | Disabled through publication 29 |
 
 Each unique retained full-search position earns four position-presentation credits.
 A global batch consumes 1,024 credits. The trainer does not wake for a partial
@@ -171,16 +171,18 @@ Weighting”](https://github.com/lightvector/KataGo/blob/master/docs/KataGoMetho
 ### Decision
 
 Resignation is viable, but it starts as an audit-only feature on the current trained
-model. Hard resignation is admitted to production only after the audit data
-demonstrates a safe threshold. Soft resignation remains the fallback if hard
-resignation produces target or game-distribution bias.
+model. In the clean run, non-audit games begin a conservative hard-resignation
+bootstrap at publication 30 while 10% of games remain permanent playthrough audits.
+Soft resignation remains the fallback if hard resignation produces target or
+game-distribution bias.
 
 The initial safety target is stricter than AlphaGo Zero:
 
 - a recovered win or draw is a false resignation in chess;
 - the upper 95% confidence bound on the false-non-loss rate must be at most 3%;
-- actual resignation remains disabled until at least 100 completed audit triggers are
-  available;
+- actual resignation remains disabled through publication 29;
+- the bootstrap threshold and enable fraction become progressively more aggressive
+  while playthrough audits collect counterfactual outcomes;
 - threshold updates use only completed audit games, never real resignations whose
   counterfactual result is unknown.
 
@@ -222,7 +224,14 @@ Add explicit configuration for:
 
 For the current iteration-based canary, real resignation remains disabled. For the
 clean run, publication version 30 is an absolute activation floor, after which the
-enable fraction fades in. The statistical audit gate can delay activation further.
+enable fraction fades in.
+
+Before calibration selects a threshold, audit games use a deterministic aggressiveness
+ramp: `-0.95` at publication 30, then `+0.01` per publication up to `-0.80`.
+Audit games still play through and expose the false-positive boundary. Non-audit
+games use the same bootstrap cutoff for real resignation. Once calibration runs, a
+safe calibrated value supersedes the ramp; if no candidate satisfies the 3% upper
+confidence bound, production resignation pauses automatically.
 
 Iteration 30 is not treated as equivalent to 30 publications in historical runs. It is
 only a conservative minimum for the new model-version sequence.
@@ -338,7 +347,10 @@ Its deliberately aggressive test threshold produced one hypothetical trigger at 
 but that game ended by the diagnostic ply cap and was correctly excluded from safety
 evidence. The run did not collect the required 100 naturally completed triggers, so it
 provides no statistical basis for enabling hard resignation. Production resignation
-therefore remains disabled for the initial clean run while audit collection continues.
+was therefore disabled in the canary configuration. The later clean-run decision
+supersedes that setting: bootstrap resignation starts at publication 30 with the
+audited ramp above, and automatically pauses if calibration cannot identify a safe
+candidate.
 The artifact is recorded under
 `documentation/benchmarks/resignation-audit-canary-20260723/`.
 
@@ -687,7 +699,7 @@ committed optimizer steps unless the run is cancelled earlier.
 ### Task 5C: contention control
 
 Do not pause self-play while DDP executes a quantum. The initial production layout is
-four self-play processes per GPU, each with two search threads and two inference queues,
+four self-play processes per GPU, each with one search thread and two inference queues,
 co-resident with one DDP rank per GPU. Benchmark this exact layout for generation
 throughput, DDP duration, GPU memory headroom, and GPU duty cycle before launch.
 
@@ -871,6 +883,39 @@ Do not start the clean run until:
 - a complete canary survives forced process interruption;
 - every run parameter and source hash is recorded.
 
+### Stage 7 implementation status
+
+The deterministic end-to-end integration test is implemented on `master` as of
+`6eb731c`. It exercises atomic shard creation, duplicate-safe credit issuance,
+exact four-rank sampling and a 50-step quantum, immutable publication, in-place
+JIT refresh with hash acknowledgement, FIFO eviction, restart on both sides of
+the commit boundary, and evaluation failure/retry/interruption persistence.
+
+The compute-node canaries completed on July 24, 2026:
+
+- 16 simultaneous self-play processes sustained 172,221.80 searches/s while a
+  four-rank DDP quantum ran concurrently;
+- all GPUs averaged 93.53%–96.86% utilization with at least 9,897 MiB measured
+  OOM margin;
+- ten populated-tree model refreshes had 195.28 ms mean latency, 0.145 MiB RSS
+  growth, zero GPU-memory growth, and unchanged root/tree statistics;
+- the complete evaluation workload finished successfully in 293.68 seconds with
+  no failed or orphaned CUDA processes;
+- the fixed evaluation dataset was regenerated as schema 3 because the prior
+  legacy scalar file was correctly rejected by the clean replay boundary.
+
+The initial mixed canary also found that the standalone benchmark had not
+performed the explicit first model refresh required by the new inference
+contract; `c4b400f` fixed that test path. The first evaluation attempt then found
+the legacy holdout and historical V5 manifest incompatibility; `e771637` fixed
+the production holdout path and made evaluation provenance an explicit value
+passed to child processes.
+
+Exact artifacts and limitations are under
+`documentation/benchmarks/credit-runtime-stage7-20260724/`. The clean V6 run has
+not been initialized and training remains stopped pending final validation and
+explicit approval.
+
 ## Assignment boundaries
 
 The intended task split is:
@@ -894,7 +939,7 @@ the trainer scheduler until its memory and concurrency tests pass independently.
 
 The following are intentionally deferred:
 
-1. Whether hard resignation graduates after at least 100 valid audit triggers.
+1. Whether bootstrap hard resignation remains inside the 3% false-non-loss bound.
 2. Whether soft resignation is preferable if hard resignation fails its safety gate.
 3. Whether the 1,000-step evaluation cadence can safely be lowered toward 500.
 4. Whether retained mixed-version MCTS trees measurably help or hurt.

@@ -1,0 +1,133 @@
+{
+  "source_revision": "c4b400f4db70ed3bf38140ae59a2c61724370bdc",
+  "model_path": "/workspace/chess/source/py/training_data/complete-training-run-v5/model_319.jit.pt",
+  "model_sha256": "226a48bf2c38a29bc6014680f2a07efcebee3bd2f9d1feb3edc4ed9d495c49fd",
+  "device_name": "NVIDIA GeForce RTX 4070 SUPER",
+  "inference_mode": "direct",
+  "measured_refreshes": 10,
+  "warmup_refreshes": 2,
+  "roots": 1024,
+  "searches": 64,
+  "direct_workers": 2,
+  "direct_batch_size": 64,
+  "direct_outstanding_batches": 2,
+  "latency_mean_seconds": 0.1952798069920391,
+  "latency_p50_seconds": 0.19054512912407517,
+  "latency_p95_seconds": 0.21213567573577163,
+  "rss_growth_mib": 0.14453125,
+  "gpu_growth_mib": 0.0,
+  "peak_rss_mib": 1317.9453125,
+  "peak_gpu_used_mib": 379.0,
+  "measurements": [
+    {
+      "model_version": 3,
+      "refresh_seconds": 0.21147288521751761,
+      "rss_before_mib": 1315.9296875,
+      "rss_after_mib": 1317.80078125,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 4,
+      "refresh_seconds": 0.19225898291915655,
+      "rss_before_mib": 1317.828125,
+      "rss_after_mib": 1317.84375,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 5,
+      "refresh_seconds": 0.2081334269605577,
+      "rss_before_mib": 1317.85546875,
+      "rss_after_mib": 1317.87109375,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 6,
+      "refresh_seconds": 0.21267795888707042,
+      "rss_before_mib": 1317.87890625,
+      "rss_after_mib": 1317.87890625,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 7,
+      "refresh_seconds": 0.19487375719472766,
+      "rss_before_mib": 1317.8828125,
+      "rss_after_mib": 1317.8984375,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 8,
+      "refresh_seconds": 0.18815989512950182,
+      "rss_before_mib": 1317.8984375,
+      "rss_after_mib": 1317.90625,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 9,
+      "refresh_seconds": 0.18605779111385345,
+      "rss_before_mib": 1317.90625,
+      "rss_after_mib": 1317.9140625,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 10,
+      "refresh_seconds": 0.1888312753289938,
+      "rss_before_mib": 1317.9296875,
+      "rss_after_mib": 1317.9296875,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 11,
+      "refresh_seconds": 0.1852684891782701,
+      "rss_before_mib": 1317.93359375,
+      "rss_after_mib": 1317.93359375,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    },
+    {
+      "model_version": 12,
+      "refresh_seconds": 0.18506360799074173,
+      "rss_before_mib": 1317.9453125,
+      "rss_after_mib": 1317.9453125,
+      "gpu_used_before_mib": 379.0,
+      "gpu_used_after_mib": 379.0,
+      "retained_root_visits": 65536,
+      "retained_live_nodes": 66560,
+      "retained_child_records": 1836928
+    }
+  ]
+}

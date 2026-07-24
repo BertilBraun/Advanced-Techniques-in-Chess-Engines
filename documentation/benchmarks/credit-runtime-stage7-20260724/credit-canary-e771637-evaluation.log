@@ -1,0 +1,35 @@
+[05.20.32] [INFO] Results after playing the current policy only vs random at iteration 319: W/D/L: 100/0/0
+[05.20.34] [INFO] Evaluation results at iteration 319:
+[05.20.34] [INFO]     Policy accuracy @1: 44.71%
+[05.20.34] [INFO]     Policy accuracy @5: 83.58%
+[05.20.34] [INFO]     Policy accuracy @10: 93.20%
+[05.20.34] [INFO]     Avg value loss: 1.3079945701950129
+[05.20.44] [WARNING] Warning: No tensorboard writer active
+[05.22.28] [INFO] Results after playing vs stockfish level 0 at iteration 319: W/D/L: 91/9/0
+[05.22.36] [INFO] Results after playing vs random at iteration 319: W/D/L: 98/2/0
+[05.22.38] [INFO] Results after playing vs stockfish level 1 at iteration 319: W/D/L: 88/7/5
+[05.22.52] [INFO] Results after playing the current model vs Stockfish 18: W/D/L: 5/14/81
+[05.23.34] [INFO] Results after playing vs stockfish level 2 at iteration 319: W/D/L: 79/17/4
+[05.23.48] [INFO] Results after playing vs stockfish level 3 at iteration 319: W/D/L: 66/26/8
+[05.24.41] [INFO] Results after playing vs model 20 at iteration 319: W/D/L: 83/16/1
+[05.24.50] [INFO] Results after playing vs model 180 at iteration 319: W/D/L: 29/54/17
+[05.24.55] [INFO] Results after playing vs model 60 at iteration 319: W/D/L: 50/47/3
+[05.25.02] [INFO] Results after playing vs model 260 at iteration 319: W/D/L: 22/59/19
+[05.25.04] [INFO] Results after playing vs model 220 at iteration 319: W/D/L: 25/58/17
+[05.25.07] [INFO] Results after playing vs model 140 at iteration 319: W/D/L: 31/59/10
+[05.25.14] [INFO] Results after playing vs model 300 at iteration 319: W/D/L: 17/61/22
+[05.25.14] [INFO] Results after playing vs model 100 at iteration 319: W/D/L: 41/49/10
+{
+  "source_revision": "e7716378421a8a4309d4b80370e79fc9eeb01a86",
+  "evaluated_model_source_revision": "1806a2df9de9683f5261c87b6c259f797fad0cce",
+  "stockfish_binary_sha256": "537bddf159022977870543865eb5fa30d40a211790bc54e71b9d12726ea9d12a",
+  "run_configuration_path": "/workspace/chess/source/py/configs/chess-clean-credit-4x4070-v6.json",
+  "model_version": 319,
+  "tensorboard_run_id": 970008,
+  "games_per_match": 100,
+  "searches_per_turn": 64,
+  "maximum_concurrent_tasks": 16,
+  "elapsed_seconds": 293.6843526107259,
+  "raw_results_directory": "/workspace/chess/artifacts/credit-canary-e771637-evaluations",
+  "model_directory": "/workspace/chess/source/py/training_data/complete-training-run-v5"
+}
