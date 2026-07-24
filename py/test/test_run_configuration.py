@@ -47,6 +47,7 @@ TUNING_CONFIGURATION_PATHS = tuple(Path(f'configs/chess-clean-tuning-{variant}.j
 MAIN_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-main.json')
 V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
 V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
+CREDIT_V6_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v6.json')
 
 
 def credit_training_configuration_candidate(
@@ -940,6 +941,37 @@ def test_credit_training_configuration_uses_step_quanta_without_pausing_self_pla
     assert arguments.training.max_buffer_samples == 2_500_000
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
+
+
+def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
+    configuration = load_run_configuration(CREDIT_V6_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    assert credit_training is not None
+    assert arguments.training.global_batch_size == 1_024
+    assert arguments.training.local_batch_size == 256
+    assert credit_training.replay_ratio == Decimal(4)
+    assert credit_training.optimizer_steps_per_quantum == 50
+    assert credit_training.maximum_optimizer_steps == 500_000
+    assert credit_training.presentation_credits_per_quantum(1_024) == 51_200
+    assert credit_training.unique_samples_per_quantum(1_024) == 12_800
+    assert arguments.training.max_buffer_samples == 2_500_000
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
+    assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
+    assert arguments.cluster.self_play_device_ids == (0,) * 4 + (1,) * 4 + (2,) * 4 + (3,) * 4
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
+    assert arguments.self_play.mcts.num_threads == 2
+    assert arguments.self_play.direct_inference is not None
+    assert arguments.self_play.direct_inference.inference_workers == 2
+    assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
+    assert arguments.self_play.maximum_game_plies == 250
+    assert arguments.self_play.final_maximum_game_plies == 250
+    assert arguments.self_play.low_material_termination_probability == 0
+    assert arguments.self_play.resignation.audit_enabled
+    assert not arguments.self_play.resignation.production_enabled
 
 
 @pytest.mark.parametrize(
