@@ -7,6 +7,7 @@ import subprocess
 import time
 
 from pydantic import BaseModel, ConfigDict, Field
+import torch.multiprocessing as multiprocessing
 
 from src.cluster.EvaluationProcess import EvaluationProcess
 from src.experiment.run_configuration import (
@@ -42,6 +43,7 @@ def _source_revision(source_root: Path) -> str:
 
 
 def main() -> None:
+    multiprocessing.set_start_method('spawn', force=True)
     parser = argparse.ArgumentParser(description='Benchmark one complete configured evaluation suite.')
     parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--model-version', required=True, type=int)
