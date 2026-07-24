@@ -62,6 +62,19 @@ class CreditTrainingTelemetry(BaseModel):
     evaluation_source_model_version: int | None = Field(default=None, ge=0)
     evaluation_status: CreditEvaluationTelemetryStatus
 
+    def console_summary(self) -> str:
+        return (
+            f'Training update: model={self.model_version} '
+            f'optimizer_steps={self.optimizer_step} '
+            f'trained_samples={self.trained_position_presentations} '
+            f'replay_positions={self.live_replay_positions} '
+            f'available_credits={self.available_position_credits} '
+            f'consumed_credits={self.consumed_position_credits} '
+            f'last_training_seconds={self.optimizer_seconds:.2f} '
+            f'since_previous_training_seconds={self.loader_wait_seconds:.2f} '
+            f'generated_positions_per_second={self.newly_credited_unique_positions_per_second:.2f}'
+        )
+
     @model_validator(mode='after')
     def validate_axes(self) -> CreditTrainingTelemetry:
         if self.training_quantum != self.model_version:

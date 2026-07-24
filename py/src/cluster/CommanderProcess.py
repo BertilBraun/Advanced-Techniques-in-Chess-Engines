@@ -263,6 +263,7 @@ class CommanderProcess:
                         Path(self.args.save_path) / 'credit-training-telemetry.jsonl',
                         telemetry,
                     )
+                    log(telemetry.console_summary())
                     telemetry.log_to_tensorboard(result.training_stats)
                     self.latest_completed_iteration = committed.model_version
                     previous_quantum_progress = committed

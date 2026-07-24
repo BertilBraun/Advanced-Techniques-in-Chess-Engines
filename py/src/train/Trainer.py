@@ -8,7 +8,6 @@ import torch.distributed as distributed
 import torch.nn.functional as F
 from torch import nn
 from torch.amp import GradScaler, autocast
-from tqdm import tqdm
 
 from src.Network import Network
 from src.self_play.SelfPlayDataset import TrainingBatch
@@ -185,13 +184,7 @@ class Trainer:
         reduction_values = torch.zeros(reduction_width, device=self.model.device, dtype=torch.float64)
         scaler = GradScaler(self.model.device.type, enabled=self.model.device.type == 'cuda')
 
-        batches = tqdm(
-            prefetch_training_batches(dataloader),
-            total=len(dataloader),
-            desc='Train batches',
-            disable=self.rank != 0,
-        )
-        for batch_index, batch in enumerate(batches):
+        for batch_index, batch in enumerate(prefetch_training_batches(dataloader)):
             self.optimizer.zero_grad()
             sample_count = batch.states.shape[0]
 

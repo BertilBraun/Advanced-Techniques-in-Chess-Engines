@@ -99,6 +99,12 @@ def test_credit_telemetry_axes_replay_ratios_and_io_statistics_are_exact() -> No
     assert telemetry.replay_weighted_mean_source_model_staleness == 0.5
     assert telemetry.replay_oldest_position_age_seconds == 100
     assert telemetry.replay_weighted_mean_position_age_seconds == 50
+    assert telemetry.console_summary() == (
+        'Training update: model=1 optimizer_steps=50 trained_samples=51200 '
+        'replay_positions=12800 available_credits=0 consumed_credits=51200 '
+        'last_training_seconds=2.00 since_previous_training_seconds=3.00 '
+        'generated_positions_per_second=3200.00'
+    )
 
 
 def test_credit_telemetry_rejects_replay_from_a_future_model_version() -> None:

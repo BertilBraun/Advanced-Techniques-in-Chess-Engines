@@ -302,8 +302,8 @@ class CreditEvaluationScheduler:
         )
         self._persist()
         log(
-            f'Started credit evaluation for model version {pending.source.model_version} '
-            f'at optimizer step {pending.source.completed_optimizer_steps}.'
+            f'Starting evaluation at model {pending.source.model_version} '
+            f'(optimizer step {pending.source.completed_optimizer_steps}).'
         )
 
     def _validate_source(self, source: CreditEvaluationSource) -> None:
