@@ -958,7 +958,7 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert credit_training.maximum_optimizer_steps == 500_000
     assert credit_training.presentation_credits_per_quantum(1_024) == 51_200
     assert credit_training.unique_samples_per_quantum(1_024) == 12_800
-    assert credit_training.evaluation_interval_optimizer_steps == 1_000
+    assert credit_training.evaluation_interval_optimizer_steps == 500
     assert arguments.training.max_buffer_samples == 2_500_000
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)

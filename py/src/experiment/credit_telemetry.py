@@ -32,6 +32,7 @@ class CreditTrainingTelemetry(BaseModel):
     model_version: int = Field(ge=0)
     generated_unique_positions: int = Field(ge=0)
     credited_unique_positions: int = Field(ge=0)
+    credited_completed_searches: int = Field(ge=0)
     earned_position_credits: Decimal = Field(ge=0)
     consumed_position_credits: Decimal = Field(ge=0)
     available_position_credits: Decimal = Field(ge=0)
@@ -41,6 +42,7 @@ class CreditTrainingTelemetry(BaseModel):
     optimizer_seconds: float = Field(ge=0)
     optimizer_samples_per_second: float = Field(ge=0)
     newly_credited_unique_positions_per_second: float = Field(ge=0)
+    newly_credited_completed_searches_per_second: float = Field(ge=0)
     credit_observation_seconds: float = Field(ge=0)
     decode_seconds: float = Field(ge=0)
     loader_wait_seconds: float = Field(ge=0)
@@ -72,7 +74,8 @@ class CreditTrainingTelemetry(BaseModel):
             f'consumed_credits={self.consumed_position_credits} '
             f'last_training_seconds={self.optimizer_seconds:.2f} '
             f'since_previous_training_seconds={self.loader_wait_seconds:.2f} '
-            f'generated_positions_per_second={self.newly_credited_unique_positions_per_second:.2f}'
+            f'generated_positions_per_second={self.newly_credited_unique_positions_per_second:.2f} '
+            f'searches_per_second={self.newly_credited_completed_searches_per_second:.2f}'
         )
 
     @model_validator(mode='after')
@@ -102,6 +105,7 @@ class CreditTrainingTelemetry(BaseModel):
             ('credit/model_version', self.model_version),
             ('credit/generated_unique_positions', self.generated_unique_positions),
             ('credit/credited_unique_positions', self.credited_unique_positions),
+            ('self_play/credited_completed_searches', self.credited_completed_searches),
             ('credit/earned_position_credits', float(self.earned_position_credits)),
             ('credit/consumed_position_credits', float(self.consumed_position_credits)),
             ('credit/available_position_credits', float(self.available_position_credits)),
@@ -113,6 +117,10 @@ class CreditTrainingTelemetry(BaseModel):
             (
                 'credit/newly_credited_unique_positions_per_second',
                 self.newly_credited_unique_positions_per_second,
+            ),
+            (
+                'self_play/completed_searches_per_second',
+                self.newly_credited_completed_searches_per_second,
             ),
             ('credit/credit_observation_seconds', self.credit_observation_seconds),
             ('credit/decode_seconds', self.decode_seconds),
@@ -171,6 +179,8 @@ class CreditTrainingTelemetry(BaseModel):
 def build_credit_training_telemetry(
     previous_progress: CreditTrainingProgress,
     progress: CreditTrainingProgress,
+    previous_credited_completed_searches: int,
+    credited_completed_searches: int,
     live_replay_positions: int,
     optimizer_seconds: float,
     decode_seconds: float,
@@ -192,6 +202,10 @@ def build_credit_training_telemetry(
     evaluation_source_model_version: int | None,
     evaluation_status: CreditEvaluationTelemetryStatus,
 ) -> CreditTrainingTelemetry:
+    if previous_credited_completed_searches < 0:
+        raise ValueError('Previous credited completed searches must be nonnegative.')
+    if credited_completed_searches < previous_credited_completed_searches:
+        raise ValueError('Credited completed searches cannot decrease.')
     replay_source_model_versions = (
         replay_oldest_source_model_version,
         replay_newest_source_model_version,
@@ -204,6 +218,7 @@ def build_credit_training_telemetry(
         raise ValueError('Replay source model version cannot be newer than the trained model version.')
     presentations = progress.completed_optimizer_steps * global_batch_size
     newly_credited = progress.credited_unique_samples - previous_progress.credited_unique_samples
+    newly_credited_completed_searches = credited_completed_searches - previous_credited_completed_searches
     newly_consumed = progress.consumed_position_credits - previous_progress.consumed_position_credits
     instantaneous_replay_ratio = float(newly_consumed / newly_credited) if newly_credited else 0.0
     cumulative_replay_ratio = (
@@ -218,6 +233,7 @@ def build_credit_training_telemetry(
         model_version=progress.model_version,
         generated_unique_positions=progress.credited_unique_samples,
         credited_unique_positions=progress.credited_unique_samples,
+        credited_completed_searches=credited_completed_searches,
         earned_position_credits=progress.earned_position_credits,
         consumed_position_credits=progress.consumed_position_credits,
         available_position_credits=progress.available_position_credits,
@@ -228,6 +244,9 @@ def build_credit_training_telemetry(
         optimizer_samples_per_second=float(newly_consumed) / optimizer_seconds if optimizer_seconds else 0.0,
         newly_credited_unique_positions_per_second=(
             newly_credited / credit_observation_seconds if credit_observation_seconds else 0.0
+        ),
+        newly_credited_completed_searches_per_second=(
+            newly_credited_completed_searches / credit_observation_seconds if credit_observation_seconds else 0.0
         ),
         credit_observation_seconds=credit_observation_seconds,
         decode_seconds=decode_seconds,
@@ -281,6 +300,8 @@ def append_credit_training_telemetry(
             raise ValueError('Model-version telemetry axis must increase across restart.')
         if telemetry.credited_unique_positions < previous.credited_unique_positions:
             raise ValueError('Credited unique positions cannot decrease across restart.')
+        if telemetry.credited_completed_searches < previous.credited_completed_searches:
+            raise ValueError('Credited completed searches cannot decrease across restart.')
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a', encoding='utf-8') as output:
         output.write(telemetry.model_dump_json() + '\n')

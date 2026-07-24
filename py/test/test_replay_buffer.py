@@ -56,7 +56,11 @@ def replay_dataset(sample_count: int, game_count: int = 20) -> SelfPlayDataset:
                 opponent_piece_count=1,
             ),
         )
-    dataset.stats = SelfPlayDatasetStats(num_samples=sample_count, num_games=game_count)
+    dataset.stats = SelfPlayDatasetStats(
+        num_samples=sample_count,
+        num_games=game_count,
+        completed_searches=sample_count * 100,
+    )
     return dataset
 
 
@@ -151,7 +155,10 @@ def test_manifest_is_typed_hashed_and_issues_four_credits_once(tmp_path: Path) -
     assert second.presentation_credits == 0
     assert buffer.unique_sample_count == 7
     assert buffer.credited_unique_sample_count == 7
-    assert RollingReplayBuffer(replay_inbox, tmp_path / 'index.json').credited_unique_sample_count == 7
+    assert buffer.credited_completed_search_count == 700
+    restarted = RollingReplayBuffer(replay_inbox, tmp_path / 'index.json')
+    assert restarted.credited_unique_sample_count == 7
+    assert restarted.credited_completed_search_count == 700
 
 
 def test_default_capacity_is_two_and_a_half_million_disk_backed_positions(tmp_path: Path) -> None:

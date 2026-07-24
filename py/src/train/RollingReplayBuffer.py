@@ -80,6 +80,7 @@ class ReplayShardManifest(BaseModel):
     shard_id: str
     game_count: int
     unique_sample_count: int
+    completed_searches: int = Field(default=0, ge=0)
     producing_worker: int
     minimum_model_version: int
     maximum_model_version: int
@@ -159,6 +160,7 @@ class RollingReplayIndexState(BaseModel):
     schema_version: int
     sampler_seed: int
     credited_unique_samples: int = Field(ge=0)
+    credited_completed_searches: int = Field(default=0, ge=0)
     live_segments: tuple[LogicalReplaySegment, ...]
     physical_payloads: tuple[PhysicalReplayPayload, ...]
     retired_payload_ids: tuple[str, ...]
@@ -373,6 +375,7 @@ def commit_replay_shard(
         shard_id=resolved_shard_id,
         game_count=dataset.stats.num_games,
         unique_sample_count=unique_sample_count,
+        completed_searches=dataset.stats.completed_searches,
         producing_worker=producing_worker,
         minimum_model_version=minimum_model_version,
         maximum_model_version=maximum_model_version,
@@ -464,6 +467,11 @@ class RollingReplayBuffer:
         return self._state.credited_unique_samples
 
     @property
+    def credited_completed_search_count(self) -> int:
+        """Return the durable number of completed MCTS simulations in ingested shards."""
+        return self._state.credited_completed_searches
+
+    @property
     def shard_count(self) -> int:
         return len(self._state.live_segments)
 
@@ -551,6 +559,8 @@ class RollingReplayBuffer:
                 self._state_with(
                     credited_unique_samples=self._state.credited_unique_samples
                     + sum(manifest.unique_sample_count for manifest in discovered),
+                    credited_completed_searches=self._state.credited_completed_searches
+                    + sum(manifest.completed_searches for manifest in discovered),
                     live_segments=live_segments,
                     physical_payloads=(*self._state.physical_payloads, *new_payloads),
                 )
@@ -841,6 +851,7 @@ class RollingReplayBuffer:
             schema_version=ROLLING_REPLAY_INDEX_SCHEMA_VERSION,
             sampler_seed=sampler_seed,
             credited_unique_samples=0,
+            credited_completed_searches=0,
             live_segments=(),
             physical_payloads=(),
             retired_payload_ids=(),
@@ -865,6 +876,7 @@ class RollingReplayBuffer:
     def _state_with(
         self,
         credited_unique_samples: int | None = None,
+        credited_completed_searches: int | None = None,
         live_segments: tuple[LogicalReplaySegment, ...] | None = None,
         physical_payloads: tuple[PhysicalReplayPayload, ...] | None = None,
         retired_payload_ids: tuple[str, ...] | None = None,
@@ -877,6 +889,11 @@ class RollingReplayBuffer:
             sampler_seed=self._state.sampler_seed,
             credited_unique_samples=(
                 self._state.credited_unique_samples if credited_unique_samples is None else credited_unique_samples
+            ),
+            credited_completed_searches=(
+                self._state.credited_completed_searches
+                if credited_completed_searches is None
+                else credited_completed_searches
             ),
             live_segments=self._state.live_segments if live_segments is None else live_segments,
             physical_payloads=(self._state.physical_payloads if physical_payloads is None else physical_payloads),

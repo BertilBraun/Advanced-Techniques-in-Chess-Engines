@@ -75,6 +75,7 @@ class SelfPlayProcess:
         self.run_id = run_id
         self.loaded_credit_jit_sha256: str | None = None
         self.loaded_credit_publication_pointer: str | None = None
+        self.last_flushed_completed_searches = 0
 
     def run(self) -> None:
         current_iteration = -1
@@ -247,6 +248,13 @@ class SelfPlayProcess:
         if not len(self.self_play.dataset):
             return
 
+        completed_searches = self.self_play.completed_searches
+        shard_completed_searches = completed_searches - self.last_flushed_completed_searches
+        if shard_completed_searches < 0:
+            raise RuntimeError('Self-play completed-search count cannot move backwards.')
+        self.self_play.dataset.stats = self.self_play.dataset.stats.overwrite(
+            completed_searches=shard_completed_searches
+        )
         model_version_ranges = self.self_play.dataset.stats.game_model_version_ranges
         minimum_model_version = min(
             (minimum for minimum, _ in model_version_ranges),
@@ -263,4 +271,5 @@ class SelfPlayProcess:
             minimum_model_version=minimum_model_version,
             maximum_model_version=maximum_model_version,
         )
+        self.last_flushed_completed_searches = completed_searches
         self.self_play.dataset = SelfPlayDataset()

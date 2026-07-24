@@ -25,6 +25,7 @@ from src.util.communication import (
 from src.util.exceptions import log_exceptions
 from src.util.log import log, warn
 from src.util.save_paths import (
+    CheckpointManifest,
     checkpoint_manifest_path,
     get_latest_model_iteration,
     load_checkpoint_manifest,
@@ -48,6 +49,7 @@ from src.train.CreditPublication import (
 from src.experiment.credit_telemetry import (
     append_credit_training_telemetry,
     build_credit_training_telemetry,
+    load_last_credit_training_telemetry,
 )
 from src.util.tensorboard import TensorboardWriter
 from src.util.timing import reset_times
@@ -192,6 +194,12 @@ class CommanderProcess:
                 credit_wait_started_at = monotonic()
                 credit_observation_started_at = credit_wait_started_at
                 previous_quantum_progress = ledger.progress
+                previous_telemetry = load_last_credit_training_telemetry(
+                    Path(self.args.save_path) / 'credit-training-telemetry.jsonl'
+                )
+                previous_credited_completed_searches = (
+                    previous_telemetry.credited_completed_searches if previous_telemetry is not None else 0
+                )
                 while ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
                     evaluation_scheduler.poll()
                     stop_reason = self._stop_reason()
@@ -229,6 +237,8 @@ class CommanderProcess:
                     committed = ledger.commit_prepared_quantum()
                     evaluation_scheduler.offer(publication.manifest)
                     evaluation_scheduler.poll()
+                    for completed_evaluation_version in evaluation_scheduler.completed_unpinned_model_versions:
+                        self._prune_nonretained_credit_checkpoint(completed_evaluation_version)
                     self._prune_nonretained_credit_checkpoint(
                         committed.model_version - 1,
                         evaluation_scheduler.pinned_model_versions,
@@ -236,6 +246,8 @@ class CommanderProcess:
                     telemetry = build_credit_training_telemetry(
                         previous_progress=previous_quantum_progress,
                         progress=committed,
+                        previous_credited_completed_searches=previous_credited_completed_searches,
+                        credited_completed_searches=replay_state.credited_completed_searches,
                         live_replay_positions=replay_state.live_unique_samples,
                         optimizer_seconds=result.optimizer_seconds,
                         decode_seconds=result.decode_seconds,
@@ -267,6 +279,7 @@ class CommanderProcess:
                     telemetry.log_to_tensorboard(result.training_stats)
                     self.latest_completed_iteration = committed.model_version
                     previous_quantum_progress = committed
+                    previous_credited_completed_searches = replay_state.credited_completed_searches
                     credit_wait_started_at = monotonic()
                     credit_observation_started_at = credit_observation_completed_at
                     yield (
@@ -400,13 +413,16 @@ class CommanderProcess:
         optimizer_step = model_version * parameters.optimizer_steps_per_quantum
         if optimizer_step % parameters.retained_checkpoint_interval_steps == 0:
             return
-        checkpoint = load_checkpoint_manifest(model_version, self.args.save_path)
         root = Path(self.args.save_path)
-        for file_name in (
-            checkpoint.model_path,
-            checkpoint.optimizer_path,
-            checkpoint.jit_model_path,
-        ):
+        manifest_path = checkpoint_manifest_path(model_version, root)
+        if not manifest_path.exists():
+            return
+        checkpoint = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
+        transient_evaluation_checkpoint = optimizer_step % parameters.evaluation_interval_optimizer_steps == 0
+        file_names = [checkpoint.model_path, checkpoint.optimizer_path]
+        if not transient_evaluation_checkpoint:
+            file_names.append(checkpoint.jit_model_path)
+        for file_name in file_names:
             path = root / file_name
             if path.exists():
                 path.unlink()

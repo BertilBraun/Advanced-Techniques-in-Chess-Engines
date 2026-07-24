@@ -138,6 +138,11 @@ class CreditEvaluationScheduler:
         return frozenset(versions)
 
     @property
+    def completed_unpinned_model_versions(self) -> frozenset[int]:
+        completed = {result.source.model_version for result in self._state.results}
+        return frozenset(completed - self.pinned_model_versions)
+
+    @property
     def current_source_version(self) -> int | None:
         if self._state.active is not None:
             return self._state.active.source.model_version

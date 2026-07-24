@@ -11,6 +11,7 @@ class SelfPlayDatasetStats(NamedTuple):
     game_lengths: list[int] = []
     game_model_version_ranges: list[tuple[int, int]] = []
     total_generation_time: float = 0.0
+    completed_searches: int = 0
     num_too_long_games: int = 0
     capped_game_material_scores: list[float] = []
     low_material_termination_evaluations: int = 0
@@ -47,6 +48,7 @@ class SelfPlayDatasetStats(NamedTuple):
         game_lengths: list[int] | None = None,
         game_model_version_ranges: list[tuple[int, int]] | None = None,
         total_generation_time: float | None = None,
+        completed_searches: int | None = None,
         num_too_long_games: int | None = None,
         capped_game_material_scores: list[float] | None = None,
         low_material_termination_evaluations: int | None = None,
@@ -85,6 +87,7 @@ class SelfPlayDatasetStats(NamedTuple):
             total_generation_time=total_generation_time
             if total_generation_time is not None
             else self.total_generation_time,
+            completed_searches=completed_searches if completed_searches is not None else self.completed_searches,
             num_too_long_games=num_too_long_games if num_too_long_games is not None else self.num_too_long_games,
             capped_game_material_scores=(
                 capped_game_material_scores
@@ -204,6 +207,7 @@ class SelfPlayDatasetStats(NamedTuple):
         return f"""Num samples: {self.num_samples}
 Num games: {self.num_games}
 Total generation time: {self.total_generation_time:.2f}s
+Completed searches: {self.completed_searches}
 Average game length: {np.mean(self.game_lengths):.2f}
 Average generation time: {self.total_generation_time / self.num_games:.2f}s/game
 Too long games: {self.num_too_long_games}
@@ -220,6 +224,7 @@ Average moves after resignation: {self.num_moves_after_resignation / self.num_re
             game_lengths=self.game_lengths + other.game_lengths,
             game_model_version_ranges=(self.game_model_version_ranges + other.game_model_version_ranges),
             total_generation_time=self.total_generation_time + other.total_generation_time,
+            completed_searches=self.completed_searches + other.completed_searches,
             num_too_long_games=self.num_too_long_games + other.num_too_long_games,
             capped_game_material_scores=self.capped_game_material_scores + other.capped_game_material_scores,
             low_material_termination_evaluations=(

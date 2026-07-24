@@ -9,6 +9,8 @@ import pytest
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
 from src.cluster.SelfPlayProcess import SelfPlayProcess
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -138,6 +140,37 @@ def test_pure_refresh_command_preserves_replay_roots_schedule_and_statistics(
         self_play_model_refreshed_message(8),
         process.node_id,
     )
+
+
+def test_replay_flush_records_only_new_completed_searches(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    dataset = SelfPlayDataset()
+    dataset.encoded_states = [b'sample']
+    dataset.stats = SelfPlayDatasetStats(
+        num_samples=1,
+        num_games=1,
+        game_model_version_ranges=[(3, 4)],
+    )
+    process = object.__new__(SelfPlayProcess)
+    process.args = _FakeTrainingArguments(num_iterations=12, save_path=str(tmp_path))
+    process.node_id = 2
+    process.self_play = _FakeSelfPlay(dataset=dataset, completed_searches=37)
+    process.last_flushed_completed_searches = 10
+    captured_searches: list[int] = []
+
+    def capture_shard(**arguments: object) -> None:
+        shard_dataset = arguments['dataset']
+        assert isinstance(shard_dataset, SelfPlayDataset)
+        captured_searches.append(shard_dataset.stats.completed_searches)
+
+    monkeypatch.setattr('src.cluster.SelfPlayProcess.commit_replay_shard', capture_shard)
+
+    process.flush_replay_shard(iteration=4)
+
+    assert captured_searches == [27]
+    assert process.last_flushed_completed_searches == 37
 
 
 def test_credit_mode_continuous_command_has_no_iteration_game_cap(

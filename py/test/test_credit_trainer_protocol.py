@@ -39,6 +39,7 @@ from src.train.CreditTrainingLedger import (
     PreparedTrainingQuantum,
 )
 from src.util.communication import Communication, self_play_model_refreshed_message
+from src.util.save_paths import CheckpointManifest
 from test_helpers.credit_trainer_protocol import run_gloo_decode_rank, run_gloo_protocol_rank
 from tools.production_ddp_fixture import write_replay_fixture
 
@@ -49,11 +50,13 @@ WORLD_SIZE = 4
 class _ReplayMaintenanceProbe:
     def __init__(self, credited_unique_samples: int) -> None:
         self.credited_unique_sample_count = credited_unique_samples
+        self.credited_completed_search_count = credited_unique_samples * 100
         self.unique_sample_count = credited_unique_samples
         self.compaction_calls = 0
 
     def discover_committed_shards(self) -> None:
         self.credited_unique_sample_count = 12_800
+        self.credited_completed_search_count = 1_280_000
         self.unique_sample_count = 12_800
 
     def compact_one_idle_container(self) -> NoReturn:
@@ -410,6 +413,45 @@ def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) 
             node_ids=(0,),
             timeout_seconds=1,
         )
+
+
+def test_transient_evaluation_checkpoint_keeps_only_jit_artifact(tmp_path: Path) -> None:
+    arguments = _credit_training_arguments()
+    parameters = arguments.training.credit_training
+    assert parameters is not None
+    arguments = replace(
+        arguments,
+        save_path=str(tmp_path),
+        training=replace(
+            arguments.training,
+            credit_training=replace(
+                parameters,
+                evaluation_interval_optimizer_steps=500,
+            ),
+        ),
+    )
+    manifest = CheckpointManifest(
+        iteration=10,
+        model_path='model_10.pt',
+        model_sha256='a' * 64,
+        optimizer_path='optimizer_10.pt',
+        optimizer_sha256='b' * 64,
+        jit_model_path='model_10.jit.pt',
+        jit_model_sha256='c' * 64,
+        replay_files=(),
+    )
+    (tmp_path / 'checkpoint_10.json').write_text(manifest.model_dump_json(), encoding='utf-8')
+    for artifact in (manifest.model_path, manifest.optimizer_path, manifest.jit_model_path):
+        (tmp_path / artifact).write_text('artifact', encoding='utf-8')
+    commander = object.__new__(CommanderProcess)
+    commander.args = arguments
+
+    commander._prune_nonretained_credit_checkpoint(10)
+    commander._prune_nonretained_credit_checkpoint(10)
+
+    assert not (tmp_path / manifest.model_path).exists()
+    assert not (tmp_path / manifest.optimizer_path).exists()
+    assert (tmp_path / manifest.jit_model_path).exists()
 
 
 def _prepared_ledger(run_path: Path) -> CreditTrainingLedger:

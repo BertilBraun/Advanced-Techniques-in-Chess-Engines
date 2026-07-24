@@ -65,7 +65,7 @@
       "replay_capacity_unique_positions": 2500000,
       "retained_checkpoint_interval_steps": 1000,
       "learning_rate": 0.002,
-      "evaluation_interval_optimizer_steps": 1000,
+      "evaluation_interval_optimizer_steps": 500,
       "evaluation_timeout_seconds": 7200,
       "evaluation_maximum_attempts": 3,
       "evaluation_retry_backoff_seconds": 60

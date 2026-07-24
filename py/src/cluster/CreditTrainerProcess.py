@@ -74,6 +74,7 @@ class RankCreditReplayMaintained:
     rank: int
     phase_id: int
     credited_unique_samples: int
+    credited_completed_searches: int
     live_unique_samples: int
     compacted_container: bool
     oldest_source_model_version: int | None
@@ -108,6 +109,7 @@ CreditTrainerResponse: TypeAlias = (
 @dataclass(frozen=True)
 class CreditReplayState:
     credited_unique_samples: int
+    credited_completed_searches: int
     live_unique_samples: int
     compacted_container: bool
     oldest_source_model_version: int | None
@@ -223,12 +225,18 @@ class CreditTrainerProcess:
         live_counts = {
             response.live_unique_samples for response in responses if isinstance(response, RankCreditReplayMaintained)
         }
-        if len(credited_counts) != 1 or len(live_counts) != 1:
+        completed_search_counts = {
+            response.credited_completed_searches
+            for response in responses
+            if isinstance(response, RankCreditReplayMaintained)
+        }
+        if len(credited_counts) != 1 or len(completed_search_counts) != 1 or len(live_counts) != 1:
             raise RuntimeError('DDP ranks did not refresh to the same rolling replay index.')
         rank_zero = responses[0]
         assert isinstance(rank_zero, RankCreditReplayMaintained)
         return CreditReplayState(
             credited_unique_samples=credited_counts.pop(),
+            credited_completed_searches=completed_search_counts.pop(),
             live_unique_samples=live_counts.pop(),
             compacted_container=rank_zero.compacted_container,
             oldest_source_model_version=rank_zero.oldest_source_model_version,
@@ -438,6 +446,7 @@ def _maintain_replay(
     counters = torch.tensor(
         [
             replay_buffer.credited_unique_sample_count,
+            replay_buffer.credited_completed_search_count,
             replay_buffer.unique_sample_count,
         ],
         dtype=torch.int64,
@@ -449,7 +458,8 @@ def _maintain_replay(
         rank=rank,
         phase_id=command.phase_id,
         credited_unique_samples=int(counters[0].item()),
-        live_unique_samples=int(counters[1].item()),
+        credited_completed_searches=int(counters[1].item()),
+        live_unique_samples=int(counters[2].item()),
         compacted_container=compacted_container,
         oldest_source_model_version=live_statistics.oldest_source_model_version,
         newest_source_model_version=live_statistics.newest_source_model_version,

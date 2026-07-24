@@ -220,8 +220,6 @@ class CreditTrainingParams:
             raise ValueError('Evaluation interval must be positive.')
         if self.evaluation_interval_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Evaluation interval must align with training quanta.')
-        if self.evaluation_interval_optimizer_steps % self.retained_checkpoint_interval_steps:
-            raise ValueError('Evaluation checkpoints must be retained checkpoints.')
         if self.evaluation_timeout_seconds <= 0:
             raise ValueError('Evaluation timeout must be positive.')
         if self.evaluation_maximum_attempts <= 0:
