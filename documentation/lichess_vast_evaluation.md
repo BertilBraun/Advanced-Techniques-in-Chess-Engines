@@ -124,10 +124,14 @@ python tools/run_cutechess_gauntlet.py \
   --stockfish /path/to/pinned/stockfish \
   --model /path/to/model.jit.pt \
   --openings /path/to/openings.epd \
-  --output-directory /data/local-gauntlet
+  --output-directory /data/local-gauntlet \
+  --stockfish-threads 1 \
+  --stockfish-hash-mib 16
 ```
 
 It uses Cute Chess `st=10`, `-repeat`, sequential round-based openings, color swaps, one concurrent game, crash recovery, and finished-game PGNs. These behaviors are defined in the [official Cute Chess CLI manual](https://github.com/cutechess/cutechess/blob/master/docs/cutechess-cli.6). Preserve all stdout, PGNs, engine stderr, opening file/hash, executable hashes, CPU/GPU identity, and command line.
+
+Set `--stockfish-threads` and `--stockfish-hash-mib` explicitly when measuring a provisioned Stockfish resource profile rather than the reproducible single-thread, 16 MiB baseline.
 
 Report each opponent separately and the bracketing result (“scores above 50% at setting X and below at Y”). If interpolating, fit a logistic model using all game outcomes with pair-clustered/bootstrap uncertainty. Do not pool raw games across different Stockfish settings into one unweighted score. The local gauntlet supports controlled comparative claims; the Lichess campaign supports an ecological public-platform claim. Reporting both, distinctly labeled, is more defensible than a single “engine Elo.”
 
