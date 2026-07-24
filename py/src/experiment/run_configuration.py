@@ -203,6 +203,7 @@ class ResignationConfiguration(BaseModel):
     production_enabled: bool = False
     audit_game_probability: float = Field(default=0.10, ge=0.0, le=1.0)
     audit_cutoff_threshold: float | None = Field(default=None, ge=-1.0, lt=0.0)
+    audit_cutoff_increase_per_model: float = Field(default=0.0, ge=0.0)
     minimum_eligible_ply: int = Field(default=0, ge=0)
     minimum_published_model_version: int = Field(default=30, ge=0)
     minimum_completed_audit_triggers: int = Field(default=100, gt=0)

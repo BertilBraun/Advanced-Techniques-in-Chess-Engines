@@ -963,7 +963,7 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
     assert arguments.cluster.self_play_device_ids == (0,) * 4 + (1,) * 4 + (2,) * 4 + (3,) * 4
     assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
-    assert arguments.self_play.mcts.num_threads == 2
+    assert arguments.self_play.mcts.num_threads == 1
     assert arguments.self_play.direct_inference is not None
     assert arguments.self_play.direct_inference.inference_workers == 2
     assert arguments.self_play.direct_inference.outstanding_batches_per_worker == 2
@@ -971,7 +971,10 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.self_play.final_maximum_game_plies == 250
     assert arguments.self_play.low_material_termination_probability == 0
     assert arguments.self_play.resignation.audit_enabled
-    assert not arguments.self_play.resignation.production_enabled
+    assert arguments.self_play.resignation.production_enabled
+    assert arguments.self_play.resignation.audit_cutoff_threshold == pytest.approx(-0.95)
+    assert arguments.self_play.resignation.audit_cutoff_increase_per_model == pytest.approx(0.01)
+    assert not arguments.self_play.resignation.require_external_safety_approval
     assert arguments.evaluation is not None
     assert arguments.evaluation.dataset_path is not None
     assert arguments.evaluation.dataset_path.endswith('chess-elite-2024-10-50-schema3.hdf5')

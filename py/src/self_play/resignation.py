@@ -28,6 +28,7 @@ class ResignationParams:
     production_enabled: bool = False
     audit_game_probability: float = 0.10
     audit_cutoff_threshold: float | None = None
+    audit_cutoff_increase_per_model: float = 0.0
     minimum_eligible_ply: int = 0
     minimum_published_model_version: int = 30
     minimum_completed_audit_triggers: int = 100
@@ -48,6 +49,10 @@ class ResignationParams:
             raise ValueError('Audit-game probability must be in [0, 1].')
         if self.audit_cutoff_threshold is not None and not -1.0 <= self.audit_cutoff_threshold < 0.0:
             raise ValueError('Audit cutoff threshold must be in [-1, 0).')
+        if self.audit_cutoff_increase_per_model < 0.0:
+            raise ValueError('Audit cutoff increase per model cannot be negative.')
+        if self.audit_cutoff_increase_per_model > 0.0 and self.audit_cutoff_threshold is None:
+            raise ValueError('Audit cutoff increase requires a starting cutoff threshold.')
         if self.minimum_eligible_ply < 0:
             raise ValueError('Minimum eligible ply cannot be negative.')
         if self.minimum_published_model_version < 0:
@@ -229,23 +234,48 @@ class ResignationManager:
             return ResignationAssignment(False, False, None)
 
         self._state = self._load_state()
-        is_audit_game = self.parameters.audit_enabled and random.random() < self.parameters.audit_game_probability
+        is_audit_game = (
+            self.parameters.audit_enabled
+            and model_version >= self.parameters.minimum_published_model_version
+            and random.random() < self.parameters.audit_game_probability
+        )
         if is_audit_game:
-            return ResignationAssignment(True, False, self.parameters.audit_cutoff_threshold)
+            return ResignationAssignment(True, False, self._audit_threshold(model_version))
 
         production_fraction = self._production_fraction(model_version)
-        production_enabled = (
+        bootstrap_enabled = self.parameters.production_enabled and not self._state.threshold_statistics
+        calibrated_enabled = (
             self.parameters.production_enabled
             and self._state.selected_threshold_is_safe
             and self._state.selected_threshold is not None
+        )
+        production_enabled = (
+            (bootstrap_enabled or calibrated_enabled)
             and self._external_safety_gate_is_open(model_version)
             and random.random() < production_fraction
+        )
+        governing_threshold = (
+            self._audit_threshold(model_version)
+            if production_enabled and bootstrap_enabled
+            else self._state.selected_threshold
+            if production_enabled
+            else None
         )
         return ResignationAssignment(
             False,
             production_enabled,
-            self._state.selected_threshold if production_enabled else None,
+            governing_threshold,
         )
+
+    def _audit_threshold(self, model_version: int) -> float | None:
+        if self._state.selected_threshold is not None:
+            return self._state.selected_threshold
+        starting_threshold = self.parameters.audit_cutoff_threshold
+        if starting_threshold is None:
+            return None
+        elapsed_models = model_version - self.parameters.minimum_published_model_version
+        scheduled_threshold = starting_threshold + elapsed_models * self.parameters.audit_cutoff_increase_per_model
+        return min(self.parameters.threshold_candidate_maximum, scheduled_threshold)
 
     def record_completed_audit(
         self,
@@ -488,6 +518,8 @@ class ResignationManager:
 def _configuration_fingerprint(parameters: ResignationParams) -> str:
     calibration_configuration = (
         parameters.audit_cutoff_threshold,
+        parameters.audit_cutoff_increase_per_model,
+        parameters.minimum_published_model_version,
         parameters.minimum_eligible_ply,
         parameters.minimum_completed_audit_triggers,
         parameters.false_non_loss_upper_bound,

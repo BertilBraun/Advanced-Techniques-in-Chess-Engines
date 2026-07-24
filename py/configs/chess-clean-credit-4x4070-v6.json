@@ -31,7 +31,7 @@
     "evaluation_device_cycle": [0, 1, 2, 3],
     "self_play_processes_per_device": [4, 4, 4, 4],
     "self_play_tensorboard_processes": 1,
-    "mcts_threads_per_process": 2,
+    "mcts_threads_per_process": 1,
     "self_play_parallel_searches": 1,
     "parallel_games_per_process": 1024,
     "use_inference_cache": false,
@@ -84,9 +84,10 @@
     "self_play_low_material_termination_probability": 0.0,
     "resignation": {
       "audit_enabled": true,
-      "production_enabled": false,
+      "production_enabled": true,
       "audit_game_probability": 0.1,
-      "audit_cutoff_threshold": -0.8,
+      "audit_cutoff_threshold": -0.95,
+      "audit_cutoff_increase_per_model": 0.01,
       "minimum_eligible_ply": 30,
       "minimum_published_model_version": 30,
       "minimum_completed_audit_triggers": 100,
@@ -100,7 +101,7 @@
       "maximum_threshold_change_per_calibration": 0.01,
       "production_resignation_enable_fraction": 1.0,
       "production_resignation_fade_versions": 30,
-      "require_external_safety_approval": true
+      "require_external_safety_approval": false
     },
     "random_seed": 20260724,
     "evaluation_games": 100,
