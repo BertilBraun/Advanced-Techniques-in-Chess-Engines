@@ -229,9 +229,7 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
     configuration.self_play.mcts.num_threads = arguments.threads
 
     self_play = SelfPlayCpp(arguments.device, configuration)
-    self_play.iteration = arguments.iteration
-    self_play.num_searches_per_turn = arguments.searches
-    self_play.endgame_shortcut_strength = 0.0
+    self_play.update_search_schedule(self_play.search_schedule(arguments.iteration))
 
     fast_searches = (
         arguments.fast_searches
@@ -270,7 +268,9 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
             if arguments.direct_inference_workers > 0
             else None
         ),
+        initial_model_version=arguments.iteration,
     )
+    self_play.model_version = arguments.iteration
     return self_play
 
 
