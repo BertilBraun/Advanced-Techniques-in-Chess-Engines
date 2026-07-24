@@ -53,6 +53,10 @@ class _ReplayMaintenanceProbe:
         self.credited_completed_search_count = credited_unique_samples * 100
         self.unique_sample_count = credited_unique_samples
         self.compaction_calls = 0
+        self.capacity = 0
+
+    def set_capacity(self, capacity: int) -> None:
+        self.capacity = capacity
 
     def discover_committed_shards(self) -> None:
         self.credited_unique_sample_count = 12_800
@@ -79,6 +83,9 @@ def _credit_training_arguments() -> TrainingArgs:
         replay_ratio=Decimal(4),
         optimizer_steps_per_quantum=50,
         maximum_optimizer_steps=500_000,
+        initial_replay_capacity_unique_positions=100_000,
+        maximum_replay_capacity_unique_positions=2_500_000,
+        replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
     training = replace(
@@ -298,6 +305,7 @@ def test_replay_maintenance_skips_compaction_when_ingest_reaches_credit_threshol
     response = _maintain_replay(
         MaintainCreditReplayCommand(
             phase_id=7,
+            replay_capacity_unique_positions=100_000,
             compact_below_credited_unique_samples=12_800,
         ),
         probe,
@@ -306,6 +314,7 @@ def test_replay_maintenance_skips_compaction_when_ingest_reaches_credit_threshol
     )
 
     assert response.credited_unique_samples == 12_800
+    assert probe.capacity == 100_000
     assert not response.compacted_container
     assert probe.compaction_calls == 0
     assert response.oldest_source_model_version == 2
@@ -461,6 +470,9 @@ def _prepared_ledger(run_path: Path) -> CreditTrainingLedger:
             replay_ratio=Decimal(4),
             optimizer_steps_per_quantum=1,
             maximum_optimizer_steps=10,
+            initial_replay_capacity_unique_positions=1,
+            maximum_replay_capacity_unique_positions=10,
+            replay_capacity_ramp_model_versions=10,
             retained_checkpoint_interval_steps=1,
         ),
         global_batch_size=1,

@@ -12,6 +12,9 @@ def _parameters(replay_ratio: str = '4') -> CreditTrainingParams:
         replay_ratio=Decimal(replay_ratio),
         optimizer_steps_per_quantum=50,
         maximum_optimizer_steps=500_000,
+        initial_replay_capacity_unique_positions=100_000,
+        maximum_replay_capacity_unique_positions=2_500_000,
+        replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
 

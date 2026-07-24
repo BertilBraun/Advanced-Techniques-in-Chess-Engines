@@ -8,6 +8,7 @@ pytest.importorskip('GPUtil')
 
 import src.cluster.CommanderProcess as commander_module
 from src.cluster.CommanderProcess import CommanderProcess
+from src.cluster.CreditTrainerProcess import CreditQuantumResult, CreditTrainerProcess
 from src.cluster.TrainerProcess import TrainerProcess
 from src.train.TrainingArgs import TrainingArgs
 from src.train.TrainingStats import TrainingStats
@@ -29,6 +30,18 @@ class _Trainer:
 
     def train(self, iteration: int) -> TrainingStats:
         assert iteration == 3
+        if isinstance(self.result, BaseException):
+            raise self.result
+        return self.result
+
+
+class _CreditTrainer:
+    def __init__(self, result: CreditQuantumResult | BaseException) -> None:
+        self.result = result
+
+    def train_quantum(self, global_step: int, model_version: int) -> CreditQuantumResult:
+        assert global_step == 1_000
+        assert model_version == 11
         if isinstance(self.result, BaseException):
             raise self.result
         return self.result
@@ -116,4 +129,44 @@ def test_commander_attempts_resume_when_pause_acknowledgement_fails(
         )
 
     assert raised.value is pause_error
+    assert calls == ['pause', 'resume']
+
+
+@pytest.mark.parametrize('fails', (False, True))
+def test_credit_training_quantum_resumes_paused_workers(
+    monkeypatch: pytest.MonkeyPatch,
+    fails: bool,
+) -> None:
+    calls: list[str] = []
+    expected_result = cast(CreditQuantumResult, object())
+    training_error = RuntimeError('credit rank failed')
+
+    def pause(*_: object, **__: object) -> None:
+        calls.append('pause')
+
+    def resume(*_: object, **__: object) -> None:
+        calls.append('resume')
+
+    monkeypatch.setattr(commander_module, 'pause_self_play_workers', pause)
+    monkeypatch.setattr(commander_module, 'resume_self_play_workers', resume)
+    trainer = cast(
+        CreditTrainerProcess,
+        _CreditTrainer(training_error if fails else expected_result),
+    )
+
+    if fails:
+        with pytest.raises(RuntimeError, match='credit rank failed'):
+            commander()._train_credit_quantum_with_self_play_cleanup(
+                trainer,
+                global_step=1_000,
+                model_version=11,
+            )
+    else:
+        result = commander()._train_credit_quantum_with_self_play_cleanup(
+            trainer,
+            global_step=1_000,
+            model_version=11,
+        )
+        assert result is expected_result
+
     assert calls == ['pause', 'resume']

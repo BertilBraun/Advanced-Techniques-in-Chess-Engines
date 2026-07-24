@@ -499,6 +499,14 @@ class RollingReplayBuffer:
         """Summarize live logical segments, weighting manifest bounds and age by unique rows."""
         return replay_live_statistics(self._state.live_segments, measured_at_seconds)
 
+    def set_capacity(self, capacity: int) -> None:
+        if capacity <= 0:
+            raise ValueError('Replay capacity must be positive.')
+        with self._lock:
+            self.capacity = capacity
+            if not self.read_only:
+                self._evict_outside_capacity()
+
     def refresh_index_for_read(self) -> None:
         """Refresh an idle read rank after the writer completes a mutation phase."""
         with self._lock:

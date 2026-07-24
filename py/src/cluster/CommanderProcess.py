@@ -9,7 +9,7 @@ from pathlib import Path
 from time import monotonic
 
 from src.cluster.GatingProcess import GatingProcess
-from src.cluster.CreditTrainerProcess import CreditTrainerProcess
+from src.cluster.CreditTrainerProcess import CreditQuantumResult, CreditTrainerProcess
 from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.train.TrainingArgs import TrainingArgs
@@ -209,7 +209,11 @@ class CommanderProcess:
                         break
                     self._ensure_processes_are_running()
 
-                    replay_state = trainer.maintain_replay(compact_below_credited_unique_samples=None)
+                    replay_capacity = parameters.replay_capacity_for_model_version(ledger.progress.model_version)
+                    replay_state = trainer.maintain_replay(
+                        replay_capacity_unique_positions=replay_capacity,
+                        compact_below_credited_unique_samples=None,
+                    )
                     progress = ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
                     required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
                     if not progress.can_train(required_credits):
@@ -220,7 +224,8 @@ class CommanderProcess:
                             ).to_integral_value(rounding=ROUND_CEILING)
                         )
                         replay_state = trainer.maintain_replay(
-                            compact_below_credited_unique_samples=minimum_credited_unique_samples
+                            replay_capacity_unique_positions=replay_capacity,
+                            compact_below_credited_unique_samples=minimum_credited_unique_samples,
                         )
                         time.sleep(1)
                         continue
@@ -228,7 +233,8 @@ class CommanderProcess:
                     credit_observation_completed_at = monotonic()
                     loader_wait_seconds = credit_observation_completed_at - credit_wait_started_at
                     credit_observation_seconds = credit_observation_completed_at - credit_observation_started_at
-                    result = trainer.train_quantum(
+                    result = self._train_credit_quantum_with_self_play_cleanup(
+                        trainer,
                         global_step=progress.sampler_global_step,
                         model_version=progress.model_version + 1,
                     )
@@ -249,6 +255,7 @@ class CommanderProcess:
                         previous_credited_completed_searches=previous_credited_completed_searches,
                         credited_completed_searches=replay_state.credited_completed_searches,
                         live_replay_positions=replay_state.live_unique_samples,
+                        replay_capacity_unique_positions=replay_capacity,
                         optimizer_seconds=result.optimizer_seconds,
                         decode_seconds=result.decode_seconds,
                         loader_wait_seconds=loader_wait_seconds,
@@ -539,6 +546,40 @@ class CommanderProcess:
                         timeout_seconds=120,
                     )
                     log('Resumed self-play workers after training:', node_ids)
+                except BaseException as resume_error:
+                    if primary_error is None:
+                        raise
+                    warn(f'Failed to resume self-play while handling {type(primary_error).__name__}: {resume_error}')
+
+    def _train_credit_quantum_with_self_play_cleanup(
+        self,
+        trainer: CreditTrainerProcess,
+        global_step: int,
+        model_version: int,
+    ) -> CreditQuantumResult:
+        node_ids = self.args.cluster.self_play_node_ids_to_pause_during_training
+        primary_error: BaseException | None = None
+        try:
+            if node_ids:
+                pause_self_play_workers(
+                    self.communication,
+                    node_ids,
+                    timeout_seconds=120,
+                )
+                log('Paused self-play workers before credit training:', node_ids)
+            return trainer.train_quantum(global_step=global_step, model_version=model_version)
+        except BaseException as error:
+            primary_error = error
+            raise
+        finally:
+            if node_ids:
+                try:
+                    resume_self_play_workers(
+                        self.communication,
+                        node_ids,
+                        timeout_seconds=120,
+                    )
+                    log('Resumed self-play workers after credit training:', node_ids)
                 except BaseException as resume_error:
                     if primary_error is None:
                         raise

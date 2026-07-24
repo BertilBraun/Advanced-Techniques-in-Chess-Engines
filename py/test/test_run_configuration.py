@@ -66,6 +66,8 @@ def credit_training_configuration_candidate(
                 optimizer_steps_per_quantum=50,
                 maximum_optimizer_steps=500_000,
                 replay_capacity_unique_positions=2_500_000,
+                initial_replay_capacity_unique_positions=100_000,
+                replay_capacity_ramp_model_versions=1_000,
                 retained_checkpoint_interval_steps=1_000,
                 learning_rate=0.002,
             ),
@@ -954,16 +956,19 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
     assert arguments.training.global_batch_size == 1_024
     assert arguments.training.local_batch_size == 256
     assert credit_training.replay_ratio == Decimal(4)
-    assert credit_training.optimizer_steps_per_quantum == 50
+    assert credit_training.optimizer_steps_per_quantum == 100
     assert credit_training.maximum_optimizer_steps == 500_000
-    assert credit_training.presentation_credits_per_quantum(1_024) == 51_200
-    assert credit_training.unique_samples_per_quantum(1_024) == 12_800
+    assert credit_training.presentation_credits_per_quantum(1_024) == 102_400
+    assert credit_training.unique_samples_per_quantum(1_024) == 25_600
+    assert credit_training.replay_capacity_for_model_version(0) == 100_000
+    assert credit_training.replay_capacity_for_model_version(500) == 1_300_000
+    assert credit_training.replay_capacity_for_model_version(1_000) == 2_500_000
     assert credit_training.evaluation_interval_optimizer_steps == 500
     assert arguments.training.max_buffer_samples == 2_500_000
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.002)
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
     assert arguments.cluster.self_play_device_ids == (0,) * 4 + (1,) * 4 + (2,) * 4 + (3,) * 4
-    assert arguments.cluster.self_play_node_ids_to_pause_during_training == ()
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (2, 3, 6, 7, 10, 11, 14, 15)
     assert arguments.self_play.mcts.num_threads == 1
     assert arguments.self_play.direct_inference is not None
     assert arguments.self_play.direct_inference.inference_workers == 2
@@ -985,21 +990,26 @@ def test_credit_v6_configuration_matches_the_locked_clean_run() -> None:
 
 
 @pytest.mark.parametrize(
-    ('training_sampling_window', 'pause_self_play', 'message'),
-    (
-        (15, False, 'does not use an iteration sampling window'),
-        (None, True, 'keeps every self-play process active'),
-    ),
+    ('training_sampling_window', 'message'),
+    ((15, 'does not use an iteration sampling window'),),
 )
-def test_credit_training_rejects_legacy_iteration_or_pause_semantics(
+def test_credit_training_rejects_legacy_iteration_semantics(
     training_sampling_window: int | None,
-    pause_self_play: bool,
     message: str,
 ) -> None:
     candidate = credit_training_configuration_candidate(
         training_sampling_window=training_sampling_window,
-        pause_self_play=pause_self_play,
     )
 
     with pytest.raises(ValidationError, match=message):
         RunConfiguration.model_validate_json(candidate.model_dump_json())
+
+
+def test_credit_training_allows_pausing_a_subset_of_self_play_workers() -> None:
+    candidate = credit_training_configuration_candidate(pause_self_play=True)
+
+    configuration = RunConfiguration.model_validate_json(candidate.model_dump_json())
+    arguments = training_args()
+    apply_run_configuration(arguments, configuration)
+
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training

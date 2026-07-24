@@ -47,9 +47,12 @@ from src.util.save_paths import checkpoint_manifest_path, save_model_and_optimiz
 @dataclass(frozen=True)
 class MaintainCreditReplayCommand:
     phase_id: int
+    replay_capacity_unique_positions: int
     compact_below_credited_unique_samples: int | None
 
     def __post_init__(self) -> None:
+        if self.replay_capacity_unique_positions <= 0:
+            raise ValueError('Replay capacity must be positive.')
         if self.compact_below_credited_unique_samples is not None and self.compact_below_credited_unique_samples <= 0:
             raise ValueError('Replay compaction credit threshold must be positive.')
 
@@ -166,8 +169,8 @@ class CreditTrainerProcess:
             raise ValueError('Credit-driven production training requires exactly four DDP ranks.')
         if args.training.global_batch_size != 1_024 or args.training.local_batch_size != 256:
             raise ValueError('Credit-driven production training requires global/local batches of 1,024/256.')
-        if parameters.optimizer_steps_per_quantum != 50:
-            raise ValueError('Credit-driven production training requires 50 optimizer steps per quantum.')
+        if parameters.optimizer_steps_per_quantum != 100:
+            raise ValueError('Credit-driven production training requires 100 optimizer steps per quantum.')
         if parameters.maximum_optimizer_steps != 500_000:
             raise ValueError('Credit-driven production training requires a 500,000 optimizer-step limit.')
         if parameters.retained_checkpoint_interval_steps != 1_000:
@@ -178,7 +181,7 @@ class CreditTrainerProcess:
         RollingReplayBuffer(
             replay_inbox=replay_inbox,
             index_path=replay_index,
-            capacity=args.training.max_buffer_samples,
+            capacity=parameters.replay_capacity_for_model_version(starting_model_version),
             sampler_seed=args.random_seed,
         )
 
@@ -207,11 +210,13 @@ class CreditTrainerProcess:
 
     def maintain_replay(
         self,
+        replay_capacity_unique_positions: int,
         compact_below_credited_unique_samples: int | None,
     ) -> CreditReplayState:
         self._phase_id += 1
         command = MaintainCreditReplayCommand(
             self._phase_id,
+            replay_capacity_unique_positions,
             compact_below_credited_unique_samples,
         )
         for connection in self._connections:
@@ -430,6 +435,7 @@ def _maintain_replay(
 ) -> RankCreditReplayMaintained:
     distributed.barrier()
     compacted_container = False
+    replay_buffer.set_capacity(command.replay_capacity_unique_positions)
     if is_rank_zero(rank):
         replay_buffer.discover_committed_shards()
         should_compact = (
@@ -570,10 +576,12 @@ def run_credit_trainer_rank(
     configure_logging(enabled=is_rank_zero(rank))
     current_phase_id: int | None = None
     replay_root = Path(args.save_path)
+    parameters = args.training.credit_training
+    assert parameters is not None
     replay_buffer = RollingReplayBuffer(
         replay_inbox=replay_root / 'replay_inbox',
         index_path=replay_root / 'rolling-replay-index.json',
-        capacity=args.training.max_buffer_samples,
+        capacity=parameters.replay_capacity_for_model_version(starting_model_version),
         sampler_seed=args.random_seed,
         read_only=not is_rank_zero(rank),
     )

@@ -197,6 +197,9 @@ class CreditTrainingParams:
     replay_ratio: Decimal
     optimizer_steps_per_quantum: int
     maximum_optimizer_steps: int
+    initial_replay_capacity_unique_positions: int
+    maximum_replay_capacity_unique_positions: int
+    replay_capacity_ramp_model_versions: int
     retained_checkpoint_interval_steps: int
     evaluation_interval_optimizer_steps: int = 1_000
     evaluation_timeout_seconds: float = 2 * 60 * 60
@@ -212,6 +215,12 @@ class CreditTrainingParams:
             raise ValueError('Maximum optimizer steps must be positive.')
         if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Maximum optimizer steps must contain complete training quanta.')
+        if self.initial_replay_capacity_unique_positions <= 0:
+            raise ValueError('Initial replay capacity must be positive.')
+        if self.maximum_replay_capacity_unique_positions < self.initial_replay_capacity_unique_positions:
+            raise ValueError('Maximum replay capacity must not be smaller than its initial capacity.')
+        if self.replay_capacity_ramp_model_versions <= 0:
+            raise ValueError('Replay capacity ramp model versions must be positive.')
         if self.retained_checkpoint_interval_steps <= 0:
             raise ValueError('Retained checkpoint interval must be positive.')
         if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
@@ -231,6 +240,15 @@ class CreditTrainingParams:
         if global_batch_size <= 0:
             raise ValueError('Global batch size must be positive.')
         return global_batch_size * self.optimizer_steps_per_quantum
+
+    def replay_capacity_for_model_version(self, model_version: int) -> int:
+        if model_version < 0:
+            raise ValueError('Model version must be nonnegative.')
+        completed_ramp_versions = min(model_version, self.replay_capacity_ramp_model_versions)
+        capacity_range = self.maximum_replay_capacity_unique_positions - self.initial_replay_capacity_unique_positions
+        return self.initial_replay_capacity_unique_positions + (
+            capacity_range * completed_ramp_versions // self.replay_capacity_ramp_model_versions
+        )
 
     def unique_samples_per_quantum(self, global_batch_size: int) -> int:
         required_samples = Decimal(self.presentation_credits_per_quantum(global_batch_size)) / self.replay_ratio

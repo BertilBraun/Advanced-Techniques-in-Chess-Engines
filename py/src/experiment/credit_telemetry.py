@@ -39,6 +39,7 @@ class CreditTrainingTelemetry(BaseModel):
     instantaneous_replay_ratio: float = Field(ge=0)
     cumulative_replay_ratio: float = Field(ge=0)
     live_replay_positions: int = Field(ge=0)
+    replay_capacity_unique_positions: int = Field(gt=0)
     optimizer_seconds: float = Field(ge=0)
     optimizer_samples_per_second: float = Field(ge=0)
     newly_credited_unique_positions_per_second: float = Field(ge=0)
@@ -70,6 +71,7 @@ class CreditTrainingTelemetry(BaseModel):
             f'optimizer_steps={self.optimizer_step} '
             f'trained_samples={self.trained_position_presentations} '
             f'replay_positions={self.live_replay_positions} '
+            f'replay_capacity={self.replay_capacity_unique_positions} '
             f'available_credits={self.available_position_credits} '
             f'consumed_credits={self.consumed_position_credits} '
             f'last_training_seconds={self.optimizer_seconds:.2f} '
@@ -112,6 +114,7 @@ class CreditTrainingTelemetry(BaseModel):
             ('credit/instantaneous_replay_ratio', self.instantaneous_replay_ratio),
             ('credit/cumulative_replay_ratio', self.cumulative_replay_ratio),
             ('credit/live_replay_positions', self.live_replay_positions),
+            ('credit/replay_capacity_unique_positions', self.replay_capacity_unique_positions),
             ('credit/optimizer_seconds', self.optimizer_seconds),
             ('credit/optimizer_samples_per_second', self.optimizer_samples_per_second),
             (
@@ -182,6 +185,7 @@ def build_credit_training_telemetry(
     previous_credited_completed_searches: int,
     credited_completed_searches: int,
     live_replay_positions: int,
+    replay_capacity_unique_positions: int,
     optimizer_seconds: float,
     decode_seconds: float,
     loader_wait_seconds: float,
@@ -240,6 +244,7 @@ def build_credit_training_telemetry(
         instantaneous_replay_ratio=instantaneous_replay_ratio,
         cumulative_replay_ratio=cumulative_replay_ratio,
         live_replay_positions=live_replay_positions,
+        replay_capacity_unique_positions=replay_capacity_unique_positions,
         optimizer_seconds=optimizer_seconds,
         optimizer_samples_per_second=float(newly_consumed) / optimizer_seconds if optimizer_seconds else 0.0,
         newly_credited_unique_positions_per_second=(

@@ -235,6 +235,8 @@ class CreditTrainingConfiguration(BaseModel):
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
     replay_capacity_unique_positions: int = Field(gt=0)
+    initial_replay_capacity_unique_positions: int = Field(gt=0)
+    replay_capacity_ramp_model_versions: int = Field(gt=0)
     retained_checkpoint_interval_steps: int = Field(gt=0)
     learning_rate: float = Field(gt=0)
     evaluation_interval_optimizer_steps: int = Field(default=1_000, gt=0)
@@ -247,6 +249,9 @@ class CreditTrainingConfiguration(BaseModel):
             replay_ratio=self.replay_ratio,
             optimizer_steps_per_quantum=self.optimizer_steps_per_quantum,
             maximum_optimizer_steps=self.maximum_optimizer_steps,
+            initial_replay_capacity_unique_positions=self.initial_replay_capacity_unique_positions,
+            maximum_replay_capacity_unique_positions=self.replay_capacity_unique_positions,
+            replay_capacity_ramp_model_versions=self.replay_capacity_ramp_model_versions,
             retained_checkpoint_interval_steps=self.retained_checkpoint_interval_steps,
             evaluation_interval_optimizer_steps=self.evaluation_interval_optimizer_steps,
             evaluation_timeout_seconds=self.evaluation_timeout_seconds,
@@ -432,11 +437,12 @@ class RunConfiguration(BaseModel):
         ):
             raise ValueError('Historical model iterations must align with the retained inference-checkpoint interval.')
         if self.workload.credit_training is not None:
+            credit_training = self.workload.credit_training
             if (
-                self.topology.self_play_processes_per_device_during_training
-                != self.topology.self_play_processes_per_device
+                credit_training.initial_replay_capacity_unique_positions
+                > credit_training.replay_capacity_unique_positions
             ):
-                raise ValueError('Credit-driven training keeps every self-play process active during DDP quanta.')
+                raise ValueError('Initial replay capacity must not exceed maximum replay capacity.')
         return self
 
 

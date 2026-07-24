@@ -531,6 +531,23 @@ def test_compaction_keeps_old_lease_payloads_and_fifo_retires_logical_ranges(
     assert not container_path.exists()
 
 
+def test_runtime_capacity_change_evicts_fifo_without_retracting_credits(
+    tmp_path: Path,
+) -> None:
+    replay_inbox = tmp_path / 'inbox'
+    commit_large_shard(replay_inbox, 'source-a', 40_000, 1.0)
+    commit_large_shard(replay_inbox, 'source-b', 40_000, 2.0)
+    commit_large_shard(replay_inbox, 'source-c', 25_000, 3.0)
+    buffer = RollingReplayBuffer(replay_inbox, tmp_path / 'index.json')
+    buffer.discover_committed_shards()
+
+    buffer.set_capacity(65_000)
+
+    assert buffer.unique_sample_count == 65_000
+    assert buffer.credited_unique_sample_count == 105_000
+    assert tuple(segment.segment_id for segment in buffer._state.live_segments) == ('source-b', 'source-c')
+
+
 def test_interrupted_compaction_is_rolled_back_without_losing_sources(tmp_path: Path) -> None:
     replay_inbox = tmp_path / 'inbox'
     commit_large_shard(replay_inbox, 'source-a', COMPACTION_TARGET_POSITIONS, 1.0)

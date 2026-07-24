@@ -46,6 +46,7 @@ def _telemetry(
         previous_credited_completed_searches=100_000,
         credited_completed_searches=900_000,
         live_replay_positions=current.credited_unique_samples,
+        replay_capacity_unique_positions=100_000,
         optimizer_seconds=2,
         decode_seconds=1,
         loader_wait_seconds=3,
@@ -88,6 +89,7 @@ def test_credit_telemetry_axes_replay_ratios_and_io_statistics_are_exact() -> No
     assert telemetry.optimizer_step == 50
     assert telemetry.instantaneous_replay_ratio == 4
     assert telemetry.cumulative_replay_ratio == 4
+    assert telemetry.replay_capacity_unique_positions == 100_000
     assert telemetry.optimizer_samples_per_second == 25_600
     assert telemetry.newly_credited_unique_positions_per_second == pytest.approx(12_800 / 4)
     assert telemetry.credited_completed_searches == 900_000
@@ -105,7 +107,7 @@ def test_credit_telemetry_axes_replay_ratios_and_io_statistics_are_exact() -> No
     assert telemetry.replay_weighted_mean_position_age_seconds == 50
     assert telemetry.console_summary() == (
         'Training update: model=1 optimizer_steps=50 trained_samples=51200 '
-        'replay_positions=12800 available_credits=0 consumed_credits=51200 '
+        'replay_positions=12800 replay_capacity=100000 available_credits=0 consumed_credits=51200 '
         'last_training_seconds=2.00 since_previous_training_seconds=3.00 '
         'generated_positions_per_second=3200.00 searches_per_second=200000.00'
     )

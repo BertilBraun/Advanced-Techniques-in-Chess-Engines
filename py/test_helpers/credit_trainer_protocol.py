@@ -35,6 +35,7 @@ def run_gloo_protocol_rank(
         commands = (
             MaintainCreditReplayCommand(
                 phase_id=1,
+                replay_capacity_unique_positions=100_000,
                 compact_below_credited_unique_samples=None,
             ),
             TrainCreditQuantumCommand(phase_id=2, global_step=1_250, model_version=26),
