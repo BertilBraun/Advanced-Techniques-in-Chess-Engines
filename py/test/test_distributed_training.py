@@ -198,7 +198,7 @@ def test_training_tensorboard_keeps_detailed_value_slices_out_of_train_category(
     assert not any(tag.startswith('train/value_by_') for tag in tags)
 
 
-def test_ddp_outcome_gradient_uses_global_eligible_sample_mean() -> None:
+def test_ddp_outcome_gradient_excludes_ineligible_samples_without_extra_collective() -> None:
     context = multiprocessing.get_context('spawn')
     initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
     processes: list[multiprocessing.Process] = []
@@ -228,6 +228,6 @@ def test_ddp_outcome_gradient_uses_global_eligible_sample_mean() -> None:
                 process.terminate()
                 process.join(timeout=10)
 
-    expected_gradient = (0.0, 0.85 / 3.0, -0.85 / 3.0)
+    expected_gradient = (0.0, 0.85 / 4.0, -0.85 / 4.0)
     assert gradients[0] == pytest.approx(expected_gradient, abs=1e-7)
     assert gradients[1] == pytest.approx(expected_gradient, abs=1e-7)

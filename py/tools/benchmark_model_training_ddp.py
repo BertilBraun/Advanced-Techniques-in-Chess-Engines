@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
 import json
 import socket
 import time
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 import torch
 import torch.distributed as distributed
@@ -18,8 +20,14 @@ from src.Network import Network
 from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import CurrentGame
-from src.train.TrainingArgs import NetworkParams, SEPlacement
+from src.train.Trainer import Trainer
+from src.train.TrainingArgs import NetworkParams, SEPlacement, TrainingParams
 from src.value import wdl_to_scalar
+
+
+class TrainingPath(StrEnum):
+    MINIMAL = 'minimal'
+    PRODUCTION = 'production'
 
 
 @dataclass(frozen=True)
@@ -31,6 +39,7 @@ class Arguments:
     se_placement: SEPlacement
     batches: int
     warmup_batches: int
+    training_path: TrainingPath
 
 
 @dataclass(frozen=True)
@@ -42,6 +51,20 @@ class Result:
     seconds_per_batch: float
     samples_per_second: float
     peak_gpu_memory_mib: tuple[float, ...]
+    training_path: TrainingPath
+
+
+@dataclass(frozen=True)
+class FixedBatchLoader:
+    batch: TrainingBatch
+    repetitions: int
+
+    def __iter__(self) -> Iterator[TrainingBatch]:
+        for _ in range(self.repetitions):
+            yield self.batch
+
+    def __len__(self) -> int:
+        return self.repetitions
 
 
 class LogitNetwork(nn.Module):
@@ -67,6 +90,12 @@ def parse_arguments() -> Arguments:
     )
     parser.add_argument('--batches', default=20, type=int)
     parser.add_argument('--warmup-batches', default=5, type=int)
+    parser.add_argument(
+        '--training-path',
+        choices=tuple(TrainingPath),
+        default=TrainingPath.MINIMAL,
+        type=TrainingPath,
+    )
     namespace = parser.parse_args()
     return Arguments(
         device_ids=tuple(namespace.device_ids),
@@ -76,6 +105,7 @@ def parse_arguments() -> Arguments:
         se_placement=namespace.se_placement,
         batches=namespace.batches,
         warmup_batches=namespace.warmup_batches,
+        training_path=namespace.training_path,
     )
 
 
@@ -105,6 +135,21 @@ def train_batch(
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
     scaler.step(optimizer)
     scaler.update()
+
+
+def production_training_parameters(global_batch_size: int, local_batch_size: int) -> TrainingParams:
+    return TrainingParams(
+        num_epochs=1,
+        global_batch_size=global_batch_size,
+        local_batch_size=local_batch_size,
+        optimizer='adamw',
+        sampling_window=lambda _: 1,
+        learning_rate=lambda _iteration, _optimizer: 0.0035,
+        learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+        outcome_value_loss_weight=0.85,
+        mcts_value_loss_weight=0.15,
+        mcts_value_loss_scale=25.0,
+    )
 
 
 def benchmark_rank(
@@ -186,15 +231,37 @@ def benchmark_rank(
             ),
         )
 
-        for _ in range(arguments.warmup_batches):
-            train_batch(model, optimizer, scaler, batch)
+        global_batch_size = arguments.local_batch_size * world_size
+        production_trainer = Trainer(
+            network,
+            optimizer,
+            production_training_parameters(global_batch_size, arguments.local_batch_size),
+            training_model=model,
+            rank=rank,
+        )
+        match arguments.training_path:
+            case TrainingPath.MINIMAL:
+                for _ in range(arguments.warmup_batches):
+                    train_batch(model, optimizer, scaler, batch)
+            case TrainingPath.PRODUCTION:
+                production_trainer.train(
+                    FixedBatchLoader(batch, arguments.warmup_batches),
+                    iteration=0,
+                )
         torch.cuda.synchronize(device)
         distributed.barrier()
         torch.cuda.reset_peak_memory_stats(device)
 
         started_at = time.perf_counter()
-        for _ in range(arguments.batches):
-            train_batch(model, optimizer, scaler, batch)
+        match arguments.training_path:
+            case TrainingPath.MINIMAL:
+                for _ in range(arguments.batches):
+                    train_batch(model, optimizer, scaler, batch)
+            case TrainingPath.PRODUCTION:
+                production_trainer.train(
+                    FixedBatchLoader(batch, arguments.batches),
+                    iteration=0,
+                )
         torch.cuda.synchronize(device)
         elapsed_seconds = time.perf_counter() - started_at
 
@@ -208,7 +275,6 @@ def benchmark_rank(
         distributed.all_gather(gathered_peak_memory, peak_memory)
 
         if rank == 0:
-            global_batch_size = arguments.local_batch_size * world_size
             synchronized_elapsed_seconds = float(elapsed.item())
             result = Result(
                 parameters=sum(parameter.numel() for parameter in network.parameters()),
@@ -218,6 +284,7 @@ def benchmark_rank(
                 seconds_per_batch=synchronized_elapsed_seconds / arguments.batches,
                 samples_per_second=global_batch_size * arguments.batches / synchronized_elapsed_seconds,
                 peak_gpu_memory_mib=tuple(float(memory.item()) for memory in gathered_peak_memory),
+                training_path=arguments.training_path,
             )
             print(json.dumps(asdict(result), indent=2), flush=True)
     finally:

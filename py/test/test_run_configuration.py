@@ -51,6 +51,7 @@ V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
 CREDIT_V6_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v6.json')
 CREDIT_V7_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v7.json')
 CREDIT_V8_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v8.json')
+CREDIT_V9_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v9.json')
 
 
 def credit_training_configuration_candidate(
@@ -1064,6 +1065,34 @@ def test_credit_v8_configuration_applies_replay_training_and_endgame_changes() -
     assert arguments.self_play.endgame_continuation_start_plies == 250
     assert arguments.self_play.maximum_game_plies == 400
     assert arguments.self_play.final_maximum_game_plies == 400
+
+
+def test_credit_v9_configuration_applies_learning_rate_and_worker_topology() -> None:
+    configuration = load_run_configuration(CREDIT_V9_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    assert configuration.run_name == 'complete-training-run-v9'
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(19_999, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(20_000, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(49_999, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(50_000, 'adamw') == pytest.approx(0.002)
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == (
+        1,
+        2,
+        3,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+    )
 
 
 @pytest.mark.parametrize(
