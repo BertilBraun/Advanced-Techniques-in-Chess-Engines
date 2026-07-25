@@ -43,7 +43,11 @@ class TerminationReason(IntEnum):
 
     @property
     def permits_outcome_target(self) -> bool:
-        return self in (TerminationReason.NATURAL, TerminationReason.RESIGNATION)
+        return self in (
+            TerminationReason.NATURAL,
+            TerminationReason.RESIGNATION,
+            TerminationReason.MATERIAL_ADJUDICATION,
+        )
 
     @property
     def permits_mcts_target(self) -> bool:

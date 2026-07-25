@@ -524,6 +524,9 @@ class SelfPlayCpp:
             )
 
     def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
+        continuation_start = self.args.endgame_continuation_start_plies
+        if CURRENT_GAME == 'chess' and continuation_start is not None and len(game.played_moves) >= continuation_start:
+            return True
         if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
             return False
         if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
@@ -620,6 +623,11 @@ class SelfPlayCpp:
         maximum_game_plies = self._maximum_game_plies()
         if maximum_game_plies is not None and len(game.played_moves) >= maximum_game_plies:
             capped_game_outcome = game.board.get_approximate_result_score() * game.board.current_player
+            termination_reason = (
+                ResignationTerminationReason.MATERIAL_ADJUDICATION
+                if self.args.endgame_continuation_start_plies is not None
+                else ResignationTerminationReason.PLY_CAP
+            )
             self.dataset.stats += SelfPlayDatasetStats(
                 num_too_long_games=1,
                 capped_game_material_scores=[capped_game_outcome],
@@ -627,7 +635,7 @@ class SelfPlayCpp:
             return self._handle_end_of_game(
                 game,
                 capped_game_outcome,
-                ResignationTerminationReason.PLY_CAP,
+                termination_reason,
             )
         return None
 
@@ -800,6 +808,8 @@ def _replay_termination_reason(reason: ResignationTerminationReason) -> Terminat
         case ResignationTerminationReason.PLY_CAP:
             return TerminationReason.PLY_CAP
         case ResignationTerminationReason.LOW_MATERIAL:
+            return TerminationReason.MATERIAL_ADJUDICATION
+        case ResignationTerminationReason.MATERIAL_ADJUDICATION:
             return TerminationReason.MATERIAL_ADJUDICATION
 
 

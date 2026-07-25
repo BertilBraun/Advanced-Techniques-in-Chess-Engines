@@ -15,6 +15,7 @@ def self_play_client(iteration: int, final_maximum_game_plies: int | None = None
         maximum_game_plies=200,
         maximum_game_plies_until_iteration=50,
         final_maximum_game_plies=final_maximum_game_plies,
+        endgame_continuation_start_plies=None,
         low_material_termination_minimum_plies=0,
         low_material_termination_piece_threshold_per_player=0,
         low_material_termination_probability=0.0,
@@ -57,19 +58,23 @@ def test_iteration_49_caps_game_at_200_plies_with_material_result(monkeypatch: p
 
 def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
     client = self_play_client(iteration=50, final_maximum_game_plies=300)
+    client.args.endgame_continuation_start_plies = 200
     game = game_at_300_plies()
     replacement = SelfPlayGame()
 
     monkeypatch.setattr(game.board, 'get_approximate_result_score', lambda: 0.5)
-    monkeypatch.setattr(
-        client,
-        '_handle_end_of_game',
-        lambda _, __, ___: replacement,
-    )
+    handled_reasons: list[object] = []
+
+    def handle_end_of_game(_: SelfPlayGame, __: float, reason: object) -> SelfPlayGame:
+        handled_reasons.append(reason)
+        return replacement
+
+    monkeypatch.setattr(client, '_handle_end_of_game', handle_end_of_game)
 
     assert client._finish_game_after_move(game, native_game_over=False) is replacement
     assert client.dataset.stats.num_too_long_games == 1
     assert client.dataset.stats.capped_game_material_scores == [0.5]
+    assert [reason.value for reason in handled_reasons] == ['material_adjudication']
 
 
 def test_iteration_50_does_not_cap_game_at_200_plies(monkeypatch: pytest.MonkeyPatch) -> None:

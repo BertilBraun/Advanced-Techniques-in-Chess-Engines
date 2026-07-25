@@ -106,6 +106,9 @@ class SelfPlayParams:
     final_maximum_game_plies: int | None = None
     """Maximum self-play game length after the scheduled interpolation, or None to disable the cap."""
 
+    endgame_continuation_start_plies: int | None = None
+    """Ply at which self-play switches to fast searches until the maximum game length."""
+
     low_material_termination_minimum_plies: int = 0
     """Earliest ply at which the one-shot low-material termination rule may be evaluated."""
 

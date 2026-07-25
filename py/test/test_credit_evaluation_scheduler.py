@@ -167,7 +167,7 @@ def test_slow_evaluation_is_out_of_band_and_coalesces_newest_boundary(tmp_path: 
     assert scheduler.state.active is not None
     assert scheduler.state.active.source.model_version == 20
     assert _FakeProcess.created[0].args[2] == 20
-    assert _FakeProcess.created[0].args[3] == 1_024_000
+    assert _FakeProcess.created[0].args[3] == 20
     scheduler.offer(second)
     scheduler.poll()
     assert scheduler.state.pending is not None

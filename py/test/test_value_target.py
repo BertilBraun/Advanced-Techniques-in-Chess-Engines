@@ -117,6 +117,13 @@ def test_real_resignation_is_an_eligible_hard_loss() -> None:
     assert target.outcome_target_eligible
 
 
+def test_material_adjudication_is_an_eligible_heuristic_outcome() -> None:
+    target = ReplayValueTarget.from_scores(0.2, -0.1, TerminationReason.MATERIAL_ADJUDICATION)
+
+    assert target.final_outcome is FinalOutcome.WIN
+    assert target.outcome_target_eligible
+
+
 def test_outcome_perspective_alternates_without_distance_discount() -> None:
     assert outcome_from_sample_perspective(1.0, final_current_player=1, sample_current_player=1) == 1.0
     assert outcome_from_sample_perspective(1.0, final_current_player=1, sample_current_player=-1) == -1.0
@@ -149,12 +156,12 @@ def test_equal_expected_scalar_can_represent_different_wdl_distributions() -> No
     assert not torch.equal(first, second)
 
 
-def test_all_ineligible_outcomes_have_finite_zero_ce_and_valid_mcts_loss() -> None:
+def test_ply_cap_outcomes_have_finite_zero_ce_and_valid_mcts_loss() -> None:
     batch = training_batch(
-        (FinalOutcome.WIN, FinalOutcome.LOSS),
-        (1.0, -1.0),
-        (False, False),
-        (TerminationReason.PLY_CAP, TerminationReason.MATERIAL_ADJUDICATION),
+        (FinalOutcome.WIN,),
+        (1.0,),
+        (False,),
+        (TerminationReason.PLY_CAP,),
     )
 
     result = trainer((0.0, 0.0, 0.0))._calculate_loss_for_batch(batch)

@@ -20,6 +20,7 @@ class ResignationTerminationReason(str, Enum):
     RESIGNATION = 'resignation'
     PLY_CAP = 'ply_cap'
     LOW_MATERIAL = 'low_material'
+    MATERIAL_ADJUDICATION = 'material_adjudication'
 
 
 @dataclass(frozen=True)

@@ -278,7 +278,7 @@ class CreditEvaluationScheduler:
                 self.run_id,
                 evaluation_args,
                 pending.source.model_version,
-                pending.source.trained_position_presentations,
+                pending.source.model_version,
             ),
             name=f'credit-evaluation-model-{pending.source.model_version}-attempt-{pending.next_attempt}',
         )

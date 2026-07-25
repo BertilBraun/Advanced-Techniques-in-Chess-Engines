@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+import src.experiment.credit_telemetry as telemetry_module
 from src.experiment.credit_telemetry import (
     CreditEvaluationTelemetryStatus,
     CreditTrainingTelemetry,
@@ -13,6 +15,7 @@ from src.experiment.credit_telemetry import (
     load_last_credit_training_telemetry,
 )
 from src.train.CreditTrainingLedger import CreditTrainingProgress
+from src.train.TrainingStats import TrainingStats
 
 
 def _progress(
@@ -111,6 +114,34 @@ def test_credit_telemetry_axes_replay_ratios_and_io_statistics_are_exact() -> No
         'last_training_seconds=2.00 since_previous_training_seconds=3.00 '
         'generated_positions_per_second=3200.00 searches_per_second=200000.00'
     )
+
+
+def test_credit_tensorboard_uses_model_version_as_its_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    previous = CreditTrainingProgress.initial()
+    current = _progress(
+        optimizer_steps=50,
+        quanta=1,
+        credited_unique_samples=12_800,
+        consumed_credits=51_200,
+    )
+    telemetry = _telemetry(previous, current)
+    scalar_steps: list[int | None] = []
+    training_steps: list[int] = []
+
+    class RecordingTrainingStats:
+        def log_to_tensorboard(self, step: int, prefix: str) -> None:
+            assert prefix == 'train'
+            training_steps.append(step)
+
+    def record_scalar(_name: str, _value: float, step: int | None = None) -> None:
+        scalar_steps.append(step)
+
+    monkeypatch.setattr(telemetry_module, 'log_scalar', record_scalar)
+
+    telemetry.log_to_tensorboard(cast(TrainingStats, RecordingTrainingStats()))
+
+    assert training_steps == [1]
+    assert set(scalar_steps) == {1}
 
 
 def test_credit_telemetry_rejects_replay_from_a_future_model_version() -> None:

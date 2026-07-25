@@ -99,7 +99,7 @@ class CreditTrainingTelemetry(BaseModel):
         return self
 
     def log_to_tensorboard(self, training_stats: TrainingStats) -> None:
-        step = self.trained_position_presentations
+        step = self.model_version
         training_stats.log_to_tensorboard(step, 'train')
         scalar_values = (
             ('credit/optimizer_step', self.optimizer_step),

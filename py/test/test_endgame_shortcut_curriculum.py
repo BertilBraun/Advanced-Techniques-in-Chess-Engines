@@ -14,6 +14,7 @@ def self_play_client(shortcut_strength: float) -> SelfPlayCpp:
     client = object.__new__(SelfPlayCpp)
     client.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=50,
+        endgame_continuation_start_plies=None,
         low_material_termination_minimum_plies=120,
         low_material_termination_piece_threshold_per_player=4,
         low_material_termination_probability=0.7,
@@ -61,6 +62,21 @@ def test_fast_endgame_playout_keeps_normal_search_before_greedy_phase(
     monkeypatch.setattr('src.self_play.SelfPlayCpp.random.random', lambda: 0.0)
 
     assert not client._should_force_fast_endgame_playout(game)
+
+
+@pytest.mark.parametrize(
+    ('played_move_count', 'expected'),
+    ((249, False), (250, True), (399, True)),
+)
+def test_configured_endgame_continuation_forces_fast_searches(
+    played_move_count: int,
+    expected: bool,
+) -> None:
+    client = self_play_client(0.0)
+    client.args.endgame_continuation_start_plies = 250
+    game = game_from_fen(chess.STARTING_FEN, played_move_count=played_move_count)
+
+    assert client._should_force_fast_endgame_playout(game) is expected
 
 
 @pytest.mark.parametrize(

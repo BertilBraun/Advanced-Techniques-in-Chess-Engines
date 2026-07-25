@@ -372,9 +372,10 @@ target_eligible: boolean
 Store the root value from the sample player's perspective. Do not convert it into a
 synthetic WDL distribution in the dataset.
 
-Natural and real-resignation outcomes are ordinary hard WDL targets. A capped material
-adjudication remains provenance-tagged and is excluded from the primary outcome loss
-until an explicit adjudication experiment decides otherwise.
+Natural and real-resignation outcomes are ordinary hard WDL targets. The v8 adjudication
+experiment continues games with fast searches from ply 250 through ply 400, then labels
+the remaining position from its normalized material balance. These labels retain
+`material_adjudication` provenance and participate in the primary outcome loss.
 
 ### Task 2B: loss definition
 
@@ -775,7 +776,7 @@ records the immutable model version and checkpoint hash.
 
 ### Task 6C: TensorBoard axes
 
-Use `trained_position_presentations` as the primary training x-axis. Also log:
+Use published model version as the primary TensorBoard x-axis. Also log:
 
 - optimizer step;
 - training quantum;

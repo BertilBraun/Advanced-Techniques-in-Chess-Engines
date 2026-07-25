@@ -50,6 +50,7 @@ V4_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v4.json')
 V5_CONFIGURATION_PATH = Path('configs/chess-clean-4x4070-v5.json')
 CREDIT_V6_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v6.json')
 CREDIT_V7_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v7.json')
+CREDIT_V8_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v8.json')
 
 
 def credit_training_configuration_candidate(
@@ -1041,6 +1042,28 @@ def test_credit_v7_configuration_disables_resignation_and_scales_mcts_value_loss
     assert arguments.self_play.resignation.production_resignation_enable_fraction == 0.0
     assert arguments.evaluation is not None
     assert arguments.evaluation.evaluate_initial_checkpoint
+
+
+def test_credit_v8_configuration_applies_replay_training_and_endgame_changes() -> None:
+    configuration = load_run_configuration(CREDIT_V8_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    assert credit_training is not None
+    assert configuration.run_name == 'complete-training-run-v8'
+    assert credit_training.replay_capacity_for_model_version(0) == 500_000
+    assert credit_training.replay_capacity_for_model_version(125) == 1_500_000
+    assert credit_training.replay_capacity_for_model_version(250) == 2_500_000
+    assert arguments.training.learning_rate(49_999, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(50_000, 'adamw') == pytest.approx(0.002)
+    assert arguments.cluster.self_play_node_ids_to_pause_during_training == tuple(range(1, 16))
+    assert arguments.self_play.mcts.fast_searches_proportion_of_full_searches == pytest.approx(1 / 6)
+    assert arguments.training.mcts_value_loss_scale == pytest.approx(25.0)
+    assert arguments.self_play.endgame_continuation_start_plies == 250
+    assert arguments.self_play.maximum_game_plies == 400
+    assert arguments.self_play.final_maximum_game_plies == 400
 
 
 @pytest.mark.parametrize(
