@@ -184,6 +184,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<MCTSChild>(m, "MCTSChild")
         .def_readonly("move", &MCTSChild::move)
         .def_readonly("encoded_move", &MCTSChild::encoded_move)
+        .def_readonly("raw_policy", &MCTSChild::raw_policy)
         .def_readonly("policy", &MCTSChild::policy)
         .def_readonly("visits", &MCTSChild::visits)
         .def_readonly("result_sum", &MCTSChild::result_sum)

@@ -205,9 +205,7 @@ class CreditEvaluationScheduler:
                 deferred = offered
         elif source.completed_optimizer_steps > deferred.source.completed_optimizer_steps:
             deferred = offered
-        self._state = self._state.model_copy(
-            update={'pending': pending, 'deferred': deferred}
-        )
+        self._state = self._state.model_copy(update={'pending': pending, 'deferred': deferred})
         self._persist()
 
     def poll(self) -> None:

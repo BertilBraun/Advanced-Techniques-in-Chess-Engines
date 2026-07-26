@@ -47,6 +47,7 @@ from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
+from src.train.ReplayReanalysis import ReanalysisPosition, ReanalysisTarget
 from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
@@ -70,6 +71,20 @@ class SelfPlayStatisticsSnapshot:
     inference: InferenceStatistics
     timing: TimeInfo
     completed_searches: int
+
+
+def policy_search_disagreement(root: MCTSRoot) -> float:
+    children = root.children
+    total_visits = sum(child.visits for child in children)
+    if total_visits <= 0:
+        return 0.0
+    return float(
+        sum(
+            (child.visits / total_visits) * np.log2((child.visits / total_visits) / max(child.raw_policy, 1e-12))
+            for child in children
+            if child.visits > 0
+        )
+    )
 
 
 class SelfPlayGame:
@@ -165,6 +180,8 @@ class SelfPlayCpp:
         self.args = args.self_play
         self.save_path = args.save_path
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
+        self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}
+        self.disagreement_prefix_games_started = 0
 
         self.iteration = 0
         self.model_version: int | None = None
@@ -187,11 +204,46 @@ class SelfPlayCpp:
             model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
         )
 
+    def reanalyse_positions(
+        self,
+        positions: tuple[ReanalysisPosition, ...],
+    ) -> tuple[ReanalysisTarget, ...]:
+        if self.mcts is None:
+            raise RuntimeError('Reanalysis requires initialized MCTS.')
+        from AlphaZeroCpp import MCTSBoard
+
+        boards = [
+            MCTSBoard(
+                self.mcts.new_root_with_history(position.starting_fen, list(position.moves_uci)),
+                True,
+            )
+            for position in positions
+        ]
+        results = self.mcts.search(boards).results
+        return tuple(
+            ReanalysisTarget(
+                row_index=position.row_index,
+                visit_counts=np.asarray(result.visits, dtype=np.uint16),
+                mcts_root_value=float(result.result),
+            )
+            for position, result in zip(positions, results)
+        )
+
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
         if self.mcts is None:
             return None
         inference_stats, time_info = self.mcts.get_inference_statistics()
         log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, tensorboard_step)
+        log_scalar(
+            'self_play/disagreement_prefix_archive_size',
+            len(self.disagreement_prefix_archive),
+            tensorboard_step,
+        )
+        log_scalar(
+            'self_play/disagreement_prefix_games_started',
+            self.disagreement_prefix_games_started,
+            tensorboard_step,
+        )
         log_scalar('inference/unique_positions', inference_stats.uniquePositions, tensorboard_step)
         log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, tensorboard_step)
         log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, tensorboard_step)
@@ -405,6 +457,7 @@ class SelfPlayCpp:
 
             was_full_searched = boards[i].should_run_full_search
             if was_full_searched:
+                self._archive_disagreement_prefix(spg, mcts_result.root)
                 spg.memory.append(
                     SelfPlayGameMemory(
                         spg.board.copy(),
@@ -489,14 +542,53 @@ class SelfPlayCpp:
 
     def _new_game(self) -> SelfPlayGame:
         assignment = self.resignation_manager.assignment(self.iteration)
-        game = new_game(
-            is_resignation_audit=assignment.is_audit_game,
-            production_resignation_enabled=assignment.production_resignation_enabled,
-            resignation_threshold=assignment.governing_threshold,
-        )
+        if self.disagreement_prefix_archive and random.random() < self.args.disagreement_prefix_start_probability:
+            prefixes = tuple(self.disagreement_prefix_archive)
+            weights = np.asarray(
+                tuple(
+                    min(
+                        self.args.disagreement_prefix_weight_cap,
+                        self.args.disagreement_prefix_weight_smoothing + self.disagreement_prefix_archive[prefix],
+                    )
+                    for prefix in prefixes
+                ),
+                dtype=np.float64,
+            )
+            selected_prefix = prefixes[int(np.random.choice(len(prefixes), p=weights / weights.sum()))]
+            game = new_game_from_encoded_prefix(
+                selected_prefix,
+                is_resignation_audit=assignment.is_audit_game,
+                production_resignation_enabled=assignment.production_resignation_enabled,
+                resignation_threshold=assignment.governing_threshold,
+            )
+            self.disagreement_prefix_games_started += 1
+        else:
+            game = new_game(
+                is_resignation_audit=assignment.is_audit_game,
+                production_resignation_enabled=assignment.production_resignation_enabled,
+                resignation_threshold=assignment.governing_threshold,
+            )
         if game.is_resignation_audit:
             self.dataset.stats += SelfPlayDatasetStats(resignation_audit_games_started=1)
         return game
+
+    def _archive_disagreement_prefix(self, game: SelfPlayGame, root: MCTSRoot) -> None:
+        ply = len(game.encoded_moves)
+        if not 1 <= ply <= self.args.disagreement_prefix_maximum_ply:
+            return
+        prefix = tuple(game.encoded_moves)
+        disagreement = policy_search_disagreement(root)
+        previous = self.disagreement_prefix_archive.get(prefix)
+        self.disagreement_prefix_archive[prefix] = (
+            disagreement if previous is None else 0.8 * previous + 0.2 * disagreement
+        )
+        capacity = self.args.disagreement_prefix_archive_capacity
+        if len(self.disagreement_prefix_archive) > capacity:
+            lowest_prefix = min(
+                self.disagreement_prefix_archive,
+                key=self.disagreement_prefix_archive.__getitem__,
+            )
+            del self.disagreement_prefix_archive[lowest_prefix]
 
     def _handle_resignation(self, game: SelfPlayGame) -> SelfPlayGame:
         return self._handle_end_of_game(
@@ -766,6 +858,8 @@ class SelfPlayCpp:
                     ply=mem.ply,
                     current_player_piece_count=current_piece_count,
                     opponent_piece_count=opponent_piece_count,
+                    starting_fen=mem.board.board.root().fen(),
+                    moves_uci=tuple(move.uci() for move in mem.board.board.move_stack),
                 ),
             )
 
@@ -843,4 +937,21 @@ def new_game(
                 resignation_threshold=resignation_threshold,
             )
 
+    return game
+
+
+def new_game_from_encoded_prefix(
+    encoded_moves: tuple[int, ...],
+    is_resignation_audit: bool = False,
+    production_resignation_enabled: bool = False,
+    resignation_threshold: float | None = None,
+) -> SelfPlayGame:
+    game = SelfPlayGame(
+        is_resignation_audit=is_resignation_audit,
+        production_resignation_enabled=production_resignation_enabled,
+        resignation_threshold=resignation_threshold,
+    )
+    for encoded_move in encoded_moves:
+        move = CurrentGame.decode_move(encoded_move, game.board)
+        game = game.expand(move)
     return game

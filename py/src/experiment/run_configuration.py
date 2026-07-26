@@ -304,6 +304,13 @@ class WorkloadConfiguration(BaseModel):
     self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
     self_play_low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
     self_play_low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
+    disagreement_prefix_start_probability: float = Field(default=0.15, ge=0.0, le=1.0)
+    disagreement_prefix_maximum_ply: int = Field(default=10, ge=1, le=10)
+    disagreement_prefix_archive_capacity: int = Field(default=2_000, gt=0)
+    disagreement_prefix_weight_smoothing: float = Field(default=0.05, gt=0.0)
+    disagreement_prefix_weight_cap: float = Field(default=4.0, ge=1.0)
+    replay_reanalysis_fraction: float = Field(default=0.15, ge=0.0, le=1.0)
+    replay_reanalysis_maximum_positions_per_refresh: int = Field(default=32, gt=0)
     resignation: ResignationConfiguration = ResignationConfiguration()
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
@@ -815,6 +822,15 @@ def apply_run_configuration(
     )
     training_args.self_play.low_material_termination_probability = (
         workload.self_play_low_material_termination_probability
+    )
+    training_args.self_play.disagreement_prefix_start_probability = workload.disagreement_prefix_start_probability
+    training_args.self_play.disagreement_prefix_maximum_ply = workload.disagreement_prefix_maximum_ply
+    training_args.self_play.disagreement_prefix_archive_capacity = workload.disagreement_prefix_archive_capacity
+    training_args.self_play.disagreement_prefix_weight_smoothing = workload.disagreement_prefix_weight_smoothing
+    training_args.self_play.disagreement_prefix_weight_cap = workload.disagreement_prefix_weight_cap
+    training_args.self_play.replay_reanalysis_fraction = workload.replay_reanalysis_fraction
+    training_args.self_play.replay_reanalysis_maximum_positions_per_refresh = (
+        workload.replay_reanalysis_maximum_positions_per_refresh
     )
     training_args.self_play.resignation = workload.resignation.to_parameters()
     training_args.self_play.num_parallel_games = topology.parallel_games_per_process

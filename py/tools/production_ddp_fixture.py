@@ -87,6 +87,17 @@ def write_replay_fixture(
             data=np.full(sample_count, 8, dtype=np.uint8),
         )
         file.create_dataset('occurrence_counts', data=np.ones(sample_count, dtype=np.int32))
+        string_dtype = h5py.string_dtype(encoding='utf-8')
+        file.create_dataset(
+            'position_starting_fens',
+            data=np.asarray(('',) * sample_count, dtype=object),
+            dtype=string_dtype,
+        )
+        file.create_dataset(
+            'position_moves_uci',
+            data=np.asarray(('[]',) * sample_count, dtype=object),
+            dtype=string_dtype,
+        )
         file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
         file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
         file.attrs['stats'] = str(stats._asdict())

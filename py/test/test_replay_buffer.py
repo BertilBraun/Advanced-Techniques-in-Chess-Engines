@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import chess
+import h5py
 import numpy as np
 import pytest
 import torch
@@ -32,6 +33,7 @@ from src.train.RollingReplayBuffer import (
     file_sha256,
     prefetch_rank_quanta,
 )
+from src.train.ReplayReanalysis import ReanalysisTarget, write_reanalysis_sidecar
 from tools.benchmark_replay_loader import Arguments, benchmark_coordinated_processes
 from tools.production_ddp_fixture import write_replay_fixture
 
@@ -43,9 +45,7 @@ def replay_dataset(sample_count: int, game_count: int = 20) -> SelfPlayDataset:
         state[0, sample_index % H, sample_index % W] = 1
         state[6, (sample_index + 1) % H, (sample_index + 2) % W] = 1
         for bit_index in range(31):
-            state[1 + bit_index // (H * W), (bit_index // W) % H, bit_index % W] = (
-                sample_index >> bit_index
-            ) & 1
+            state[1 + bit_index // (H * W), (bit_index // W) % H, bit_index % W] = (sample_index >> bit_index) & 1
         dataset.add_sample(
             state=state,
             visit_counts=[(sample_index % 100, 2), ((sample_index + 1) % 100, 1)],
@@ -443,6 +443,17 @@ def test_compaction_uses_whole_chronological_shards_and_preserves_sampling(
     index_path = tmp_path / 'index.json'
     buffer = RollingReplayBuffer(replay_inbox, index_path, sampler_seed=117)
     initial_ingest = buffer.discover_committed_shards()
+    write_reanalysis_sidecar(
+        replay_inbox / 'source-a.hdf5',
+        20,
+        (
+            ReanalysisTarget(
+                row_index=0,
+                visit_counts=np.asarray(((17, 600),), dtype=np.uint16),
+                mcts_root_value=0.75,
+            ),
+        ),
+    )
 
     assert initial_ingest.presentation_credits == 80_000 * 4
     assert buffer.compact_one_idle_container().status is CompactionStepStatus.WAITING_FOR_MORE_SHARDS
@@ -460,6 +471,12 @@ def test_compaction_uses_whole_chronological_shards_and_preserves_sampling(
     assert compaction.container_id is not None
     assert signature_after == signature_before
     state = RollingReplayIndexState.model_validate_json(index_path.read_text(encoding='utf-8'))
+    container_path = replay_inbox / next(
+        payload.hdf5_file_name for payload in state.physical_payloads if payload.payload_id == compaction.container_id
+    )
+    with h5py.File(container_path, 'r') as container:
+        assert float(container['mcts_root_values'][0]) == pytest.approx(0.75)
+        assert int(container['visit_counts'][0, 0, 0]) == 17
     compacted_segments = state.live_segments[:3]
     assert tuple(segment.physical_offset for segment in compacted_segments) == (0, 40_000, 80_000)
     assert {segment.physical_payload_id for segment in compacted_segments} == {compaction.container_id}

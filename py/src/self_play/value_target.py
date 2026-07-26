@@ -5,7 +5,7 @@ from enum import IntEnum
 from math import isfinite
 
 
-REPLAY_SCHEMA_VERSION = 5
+REPLAY_SCHEMA_VERSION = 6
 
 
 class FinalOutcome(IntEnum):
@@ -71,9 +71,7 @@ class ReplayValueTarget:
                 f'termination reason {self.termination_reason.name}.'
             )
         if not isfinite(self.material_result_score) or not -1.0 <= self.material_result_score <= 1.0:
-            raise ValueError(
-                f'Material result score must be finite and in [-1, 1], got {self.material_result_score}.'
-            )
+            raise ValueError(f'Material result score must be finite and in [-1, 1], got {self.material_result_score}.')
         expected_material_eligibility = self.termination_reason is TerminationReason.MATERIAL_ADJUDICATION
         if self.material_target_eligible != expected_material_eligibility:
             raise ValueError(

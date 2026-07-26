@@ -403,7 +403,7 @@ std::vector<MCTSChild> SearchTree::rootChildren() const {
     snapshots.reserve(root.children.size());
     for (const Child &rootChild : root.children) {
         snapshots.push_back({toString(rootChild.move), encodeMove(rootChild.move, &root.board),
-                             rootChild.policy, rootChild.number_of_visits, rootChild.result_sum,
+                             rootChild.raw_policy, rootChild.policy, rootChild.number_of_visits, rootChild.result_sum,
                              rootChild.virtual_loss, rootChild.node_index != INVALID_NODE_INDEX});
     }
     return snapshots;

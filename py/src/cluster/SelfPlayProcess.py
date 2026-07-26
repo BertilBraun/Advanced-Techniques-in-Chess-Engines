@@ -1,6 +1,9 @@
 import random
 import time
+import json
+from math import ceil
 from pathlib import Path
+import h5py
 import numpy as np
 import torch
 
@@ -26,6 +29,7 @@ from src.util.exceptions import log_exceptions
 from src.train.TrainingArgs import TrainingArgs
 from src.train.CreditPublication import PublicationValidationScope, load_credit_publication_pointer
 from src.train.RollingReplayBuffer import commit_replay_shard
+from src.train.ReplayReanalysis import ReanalysisPosition, write_reanalysis_sidecar
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
 from src.util.save_paths import model_save_path
@@ -194,6 +198,8 @@ class SelfPlayProcess:
                 Path(self.args.save_path) / publication.jit_model.path,
                 discard_roots=True,
             )
+            if self.node_id == 0:
+                self._reanalyse_recent_replay(model_version)
             self.loaded_credit_jit_sha256 = publication.jit_model.sha256
             self.loaded_credit_publication_pointer = serialized_pointer
             self.communication.send_value_to_id(
@@ -217,6 +223,58 @@ class SelfPlayProcess:
             )
             return model_version
         return current_model_version
+
+    def _reanalyse_recent_replay(self, model_version: int) -> None:
+        fraction = self.args.self_play.replay_reanalysis_fraction
+        if fraction <= 0.0:
+            return
+        replay_inbox = Path(self.args.save_path) / 'replay_inbox'
+        payloads = sorted(
+            (path for path in replay_inbox.glob('*.hdf5') if '.reanalysis-' not in path.name),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+        for payload_path in payloads:
+            sidecar = payload_path.with_name(f'{payload_path.stem}.reanalysis-{model_version:010d}.hdf5')
+            if sidecar.exists():
+                continue
+            with h5py.File(payload_path, 'r') as file:
+                starting_fens = np.asarray(file['position_starting_fens'].asstr()[...])
+                moves_json = np.asarray(file['position_moves_uci'].asstr()[...])
+            eligible_indices = np.flatnonzero(starting_fens != '')
+            if not len(eligible_indices):
+                continue
+            requested_count = min(
+                self.args.self_play.replay_reanalysis_maximum_positions_per_refresh,
+                max(1, ceil(len(eligible_indices) * fraction)),
+            )
+            generator = np.random.default_rng((model_version << 16) + self.node_id)
+            selected_indices = generator.choice(
+                eligible_indices,
+                size=requested_count,
+                replace=False,
+            )
+            positions = tuple(
+                ReanalysisPosition(
+                    row_index=int(row_index),
+                    starting_fen=str(starting_fens[row_index]),
+                    moves_uci=tuple(json.loads(str(moves_json[row_index]))),
+                )
+                for row_index in selected_indices
+            )
+            started = time.perf_counter()
+            targets = self.self_play.reanalyse_positions(positions)
+            write_reanalysis_sidecar(payload_path, model_version, targets)
+            duration = time.perf_counter() - started
+            log_scalar('reanalysis/positions_refreshed', len(targets), model_version)
+            log_scalar('reanalysis/duration_seconds', duration, model_version)
+            log_scalar(
+                'reanalysis/positions_per_second',
+                len(targets) / duration if duration else 0.0,
+                model_version,
+            )
+            log_scalar('reanalysis/source_rows', len(starting_fens), model_version)
+            return
 
     def _maximum_model_version(self) -> int:
         credit_training = self.args.training.credit_training

@@ -41,6 +41,7 @@ struct RootStatistics {
 struct MCTSChild {
     std::string move;
     int encoded_move;
+    float raw_policy;
     float policy;
     uint32 visits;
     float result_sum;

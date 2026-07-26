@@ -515,17 +515,15 @@ class EvaluationProcess:
             if game_limit is not None and game_limit % 2:
                 raise ValueError('Teacher-budget evaluation games must contain complete color-swapped pairs.')
             model_evaluation = ModelEvaluation(
-                    iteration,
-                    self.args,
-                    device_id=0,
-                    num_games=self.eval_args.num_games if game_limit is None else game_limit,
-                    num_searches_per_turn=(
-                        self.eval_args.num_searches_per_turn
-                        if searches_per_turn is None
-                        else searches_per_turn
-                    ),
-                    paired_opening_count=None if game_limit is None else game_limit // 2,
-                )
+                iteration,
+                self.args,
+                device_id=0,
+                num_games=self.eval_args.num_games if game_limit is None else game_limit,
+                num_searches_per_turn=(
+                    self.eval_args.num_searches_per_turn if searches_per_turn is None else searches_per_turn
+                ),
+                paired_opening_count=None if game_limit is None else game_limit // 2,
+            )
             return (
                 model_evaluation,
                 physical_device_id,
@@ -633,12 +631,16 @@ class EvaluationProcess:
                     )
                     start_process(p, physical_device_id)
 
-            historical_model_iterations = () if tier is EvaluationTier.INSPECTION else select_historical_model_iterations(
-                iteration,
-                self.eval_args.historical_model_iterations,
-                self.args.artifact_retention.milestone_inference_interval,
-                self.eval_args.historical_model_rotation_period,
-                self.eval_args.every_n_iterations,
+            historical_model_iterations = (
+                ()
+                if tier is EvaluationTier.INSPECTION
+                else select_historical_model_iterations(
+                    iteration,
+                    self.eval_args.historical_model_iterations,
+                    self.args.artifact_retention.milestone_inference_interval,
+                    self.eval_args.historical_model_rotation_period,
+                    self.eval_args.every_n_iterations,
+                )
             )
             for historical_iteration in historical_model_iterations:
                 model_evaluation, physical_device_id = create_model_evaluation()
@@ -655,7 +657,7 @@ class EvaluationProcess:
                 )
                 start_process(p, physical_device_id)
 
-            for level in (() if tier is EvaluationTier.INSPECTION else self.eval_args.stockfish_skill_levels):
+            for level in () if tier is EvaluationTier.INSPECTION else self.eval_args.stockfish_skill_levels:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish,

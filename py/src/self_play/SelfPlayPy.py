@@ -340,6 +340,8 @@ class SelfPlayPy:
                     ply=mem.ply,
                     current_player_piece_count=current_piece_count,
                     opponent_piece_count=opponent_piece_count,
+                    starting_fen=mem.board.board.root().fen(),
+                    moves_uci=tuple(move.uci() for move in mem.board.board.move_stack),
                 ),
             )
 

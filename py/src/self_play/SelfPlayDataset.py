@@ -1,6 +1,7 @@
 from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
+import json
 from math import sqrt
 
 import h5py
@@ -106,6 +107,8 @@ class ReplaySampleMetadata:
     current_player_piece_count: int
     opponent_piece_count: int
     occurrence_count: int = 1
+    starting_fen: str | None = None
+    moves_uci: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.ply < 0:
@@ -116,6 +119,8 @@ class ReplaySampleMetadata:
             raise ValueError('Opponent piece count must be in [0, 16].')
         if self.occurrence_count <= 0:
             raise ValueError('Replay occurrence count must be positive.')
+        if self.moves_uci and self.starting_fen is None:
+            raise ValueError('UCI move history requires a starting FEN.')
 
 
 @dataclass(frozen=True)
@@ -355,15 +360,14 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     combined_occurrences,
                     ReplaySampleMetadata(
                         ply=round(
-                            (
-                                existing_metadata.ply * occurrence_count
-                                + metadata.ply * added_occurrences
-                            )
+                            (existing_metadata.ply * occurrence_count + metadata.ply * added_occurrences)
                             / combined_occurrences
                         ),
                         current_player_piece_count=existing_metadata.current_player_piece_count,
                         opponent_piece_count=existing_metadata.opponent_piece_count,
                         occurrence_count=combined_occurrences,
+                        starting_fen=existing_metadata.starting_fen,
+                        moves_uci=existing_metadata.moves_uci,
                     ),
                 )
             else:
@@ -394,10 +398,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             maximum_count = max(counts_by_move.values())
             scale = min(1.0, np.iinfo(np.uint16).max / maximum_count)
             visit_count_sum = np.asarray(
-                tuple(
-                    (move, max(1, round(count * scale)))
-                    for move, count in sorted(counts_by_move.items())
-                ),
+                tuple((move, max(1, round(count * scale))) for move, count in sorted(counts_by_move.items())),
                 dtype=np.uint16,
             )
             deduplicated_dataset.encoded_states.append(state)
@@ -489,6 +490,8 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 dtype=np.uint8,
             )  # type: ignore
             stored_occurrence_counts = np.asarray(file['occurrence_counts'][...], dtype=np.int32)  # type: ignore
+            stored_starting_fens = np.asarray(file['position_starting_fens'].asstr()[...])
+            stored_moves_uci = np.asarray(file['position_moves_uci'].asstr()[...])
             stored_lengths = {
                 len(stored_states),
                 len(stored_visit_counts),
@@ -502,6 +505,8 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 len(stored_current_player_piece_counts),
                 len(stored_opponent_piece_counts),
                 len(stored_occurrence_counts),
+                len(stored_starting_fens),
+                len(stored_moves_uci),
             }
             if len(stored_lengths) != 1:
                 raise ValueError(f'Replay {file_path} has inconsistent sample-column lengths.')
@@ -541,12 +546,16 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     current_player_piece_count=int(current_count),
                     opponent_piece_count=int(opponent_count),
                     occurrence_count=int(occurrence_count),
+                    starting_fen=str(starting_fen) or None,
+                    moves_uci=tuple(json.loads(str(moves_json))),
                 )
-                for ply, current_count, opponent_count, occurrence_count in zip(
+                for ply, current_count, opponent_count, occurrence_count, starting_fen, moves_json in zip(
                     stored_plies,
                     stored_current_player_piece_counts,
                     stored_opponent_piece_counts,
                     stored_occurrence_counts,
+                    stored_starting_fens,
+                    stored_moves_uci,
                 )
             ]
         return dataset
@@ -706,6 +715,23 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                         (metadata.occurrence_count for metadata in self.sample_metadata),
                         dtype=np.int32,
                     ),
+                )
+                string_dtype = h5py.string_dtype(encoding='utf-8')
+                file.create_dataset(
+                    'position_starting_fens',
+                    data=np.asarray(
+                        tuple(metadata.starting_fen or '' for metadata in self.sample_metadata),
+                        dtype=object,
+                    ),
+                    dtype=string_dtype,
+                )
+                file.create_dataset(
+                    'position_moves_uci',
+                    data=np.asarray(
+                        tuple(json.dumps(metadata.moves_uci) for metadata in self.sample_metadata),
+                        dtype=object,
+                    ),
+                    dtype=string_dtype,
                 )
                 # write the metadata information about the current game, action size, representation shape, etc.
                 file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION

@@ -162,9 +162,7 @@ class Trainer:
             reduction='none',
         )
         material_auxiliary_loss = (
-            material_huber_losses
-            * material_target_eligible.to(dtype=material_huber_losses.dtype)
-            * sample_weights
+            material_huber_losses * material_target_eligible.to(dtype=material_huber_losses.dtype) * sample_weights
         ).sum() / material_huber_losses.shape[0]
         combined_value_loss = (
             self.args.outcome_value_loss_weight * (outcome_loss + material_auxiliary_loss)

@@ -11,7 +11,6 @@ import chess.engine
 if TYPE_CHECKING:
     from AlphaZeroCpp import MCTS, MCTSParams, MCTSResult, MCTSRoot
 
-import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -19,7 +18,6 @@ from torch.utils.data import DataLoader
 from src.Network import Network
 from src.eval.ModelEvaluationPy import (
     _play_paired_models_search,
-    _play_two_models_search,
     policy_evaluator,
     Results,
     EvaluationMove,

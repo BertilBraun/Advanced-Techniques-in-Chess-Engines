@@ -89,9 +89,10 @@ class ValueMetrics:
         return absolute_error_sum / self.outcome_target_count
 
     def combined_value_loss(self, outcome_weight: float, mcts_weight: float, mcts_scale: float) -> float:
-        return outcome_weight * (
-            self.outcome_cross_entropy + self.material_huber
-        ) + mcts_weight * mcts_scale * self.mcts_huber
+        return (
+            outcome_weight * (self.outcome_cross_entropy + self.material_huber)
+            + mcts_weight * mcts_scale * self.mcts_huber
+        )
 
     def log_summary_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/wdl_cross_entropy', self.outcome_cross_entropy, step)

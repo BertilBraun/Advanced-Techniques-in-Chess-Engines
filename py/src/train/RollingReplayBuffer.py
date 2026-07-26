@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import threading
 import time
@@ -30,6 +31,7 @@ from src.self_play.value_target import (
     TerminationReason,
 )
 from src.settings import CurrentGame
+from src.train.ReplayReanalysis import latest_reanalysis_overrides
 
 
 DEFAULT_REPLAY_CAPACITY = 2_500_000
@@ -52,6 +54,8 @@ REPLAY_DATASETS = (
     'current_player_piece_counts',
     'opponent_piece_counts',
     'occurrence_counts',
+    'position_starting_fens',
+    'position_moves_uci',
 )
 
 
@@ -724,7 +728,7 @@ class RollingReplayBuffer:
         rows_read = 0
         selected_bytes = 0
         bytes_read = 0
-        for (_, hdf5_file_name), output_references in grouped.items():
+        for (physical_payload_id, hdf5_file_name), output_references in grouped.items():
             sorted_references = sorted(
                 output_references,
                 key=lambda item: item[1].physical_sample_index,
@@ -740,6 +744,10 @@ class RollingReplayBuffer:
             payload_path = self.replay_inbox / hdf5_file_name
             if not payload_path.exists():
                 raise RuntimeError(f'Stale replay reference points to deleted payload {hdf5_file_name}.')
+            reanalysis_overrides = latest_reanalysis_overrides(
+                payload_path,
+                self._payloads_by_id[physical_payload_id].content_sha256,
+            )
             with h5py.File(payload_path, 'r') as file:
                 if stop_index > int(file['states'].shape[0]):
                     raise RuntimeError(f'Stale replay reference exceeds payload {hdf5_file_name}.')
@@ -786,6 +794,8 @@ class RollingReplayBuffer:
                     file['occurrence_counts'][first_index:stop_index],
                     dtype=np.int32,
                 )
+                read_starting_fens = np.asarray(file['position_starting_fens'].asstr()[first_index:stop_index])
+                read_moves_uci = np.asarray(file['position_moves_uci'].asstr()[first_index:stop_index])
 
             read_arrays = (
                 read_states,
@@ -800,6 +810,8 @@ class RollingReplayBuffer:
                 read_current_counts,
                 read_opponent_counts,
                 read_occurrence_counts,
+                read_starting_fens,
+                read_moves_uci,
             )
             bytes_read += _arrays_payload_bytes(read_arrays)
             states = read_states[selection]
@@ -814,6 +826,8 @@ class RollingReplayBuffer:
             current_counts = read_current_counts[selection]
             opponent_counts = read_opponent_counts[selection]
             occurrence_counts = read_occurrence_counts[selection]
+            starting_fens = read_starting_fens[selection]
+            moves_uci = read_moves_uci[selection]
             selected_bytes += _arrays_payload_bytes(
                 (
                     states,
@@ -828,6 +842,8 @@ class RollingReplayBuffer:
                     current_counts,
                     opponent_counts,
                     occurrence_counts,
+                    starting_fens,
+                    moves_uci,
                 )
             )
 
@@ -837,12 +853,15 @@ class RollingReplayBuffer:
             for output_position, reference in sorted_references:
                 source_position = source_positions[reference.physical_sample_index]
                 encoded_states[output_position] = bytes(states[source_position])
-                visit_counts[output_position] = visits[source_position][visits[source_position, :, 1] > 0].astype(
-                    np.uint16, copy=False
+                override = reanalysis_overrides.get(reference.physical_sample_index)
+                visit_counts[output_position] = (
+                    override[0]
+                    if override is not None
+                    else visits[source_position][visits[source_position, :, 1] > 0].astype(np.uint16, copy=False)
                 )
                 value_targets[output_position] = ReplayValueTarget(
                     final_outcome=FinalOutcome(int(outcomes[source_position])),
-                    mcts_root_value=float(root_values[source_position]),
+                    mcts_root_value=(override[1] if override is not None else float(root_values[source_position])),
                     termination_reason=TerminationReason(int(reasons[source_position])),
                     outcome_target_eligible=bool(eligibility[source_position]),
                     material_result_score=float(material_scores[source_position]),
@@ -853,6 +872,8 @@ class RollingReplayBuffer:
                     current_player_piece_count=int(current_counts[source_position]),
                     opponent_piece_count=int(opponent_counts[source_position]),
                     occurrence_count=int(occurrence_counts[source_position]),
+                    starting_fen=str(starting_fens[source_position]) or None,
+                    moves_uci=tuple(json.loads(str(moves_uci[source_position]))),
                 )
 
         self._last_decode_statistics = ReplayDecodeStatistics(
@@ -1037,6 +1058,13 @@ class RollingReplayBuffer:
             raise RuntimeError(f'Compaction artifacts for {plan.container_id} already exist.')
 
         source_payloads = tuple(self._payloads_by_id[segment.physical_payload_id] for segment in source_segments)
+        reanalysis_by_payload = {
+            payload.payload_id: latest_reanalysis_overrides(
+                self.replay_inbox / payload.hdf5_file_name,
+                payload.content_sha256,
+            )
+            for payload in source_payloads
+        }
         max_visit_width = 0
         first_source_path = self.replay_inbox / source_payloads[0].hdf5_file_name
         with h5py.File(first_source_path, 'r') as first_source:
@@ -1044,6 +1072,12 @@ class RollingReplayBuffer:
         for payload in source_payloads:
             with h5py.File(self.replay_inbox / payload.hdf5_file_name, 'r') as source:
                 max_visit_width = max(max_visit_width, int(source['visit_counts'].shape[1]))
+            overrides = reanalysis_by_payload[payload.payload_id]
+            if overrides:
+                max_visit_width = max(
+                    max_visit_width,
+                    max(len(visit_counts) for visit_counts, _ in overrides.values()),
+                )
 
         with h5py.File(temporary_path, 'w') as destination:
             destination.create_dataset(
@@ -1097,6 +1131,18 @@ class RollingReplayBuffer:
                         ] = source_visits
                         for dataset_name in REPLAY_DATASETS[2:]:
                             destination[dataset_name][destination_rows] = source[dataset_name][source_rows]
+                        overrides = reanalysis_by_payload[payload.payload_id]
+                        for physical_row, (override_visits, override_root_value) in overrides.items():
+                            if not source_rows.start <= physical_row < source_rows.stop:
+                                continue
+                            destination_row = destination_rows.start + physical_row - source_rows.start
+                            destination['visit_counts'][destination_row] = 0
+                            destination['visit_counts'][
+                                destination_row,
+                                : len(override_visits),
+                                :,
+                            ] = override_visits
+                            destination['mcts_root_values'][destination_row] = override_root_value
                 destination_offset += segment.unique_sample_count
 
             destination.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
@@ -1269,7 +1315,10 @@ class RollingReplayBuffer:
             return
         for payload_id in deletable_ids:
             payload = self._payloads_by_id[payload_id]
-            (self.replay_inbox / payload.hdf5_file_name).unlink(missing_ok=True)
+            payload_path = self.replay_inbox / payload.hdf5_file_name
+            for sidecar in payload_path.parent.glob(f'{payload_path.stem}.reanalysis-*.hdf5'):
+                sidecar.unlink(missing_ok=True)
+            payload_path.unlink(missing_ok=True)
             (self.replay_inbox / payload.sidecar_file_name).unlink(missing_ok=True)
         self._persist_state(
             self._state_with(

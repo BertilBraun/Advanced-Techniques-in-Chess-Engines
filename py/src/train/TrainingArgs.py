@@ -135,6 +135,13 @@ class SelfPlayParams:
 
     direct_inference: DirectSelfPlayParams | None = None
     """Direct reusable inference pipeline configuration, or None for the general cached client."""
+    disagreement_prefix_start_probability: float = 0.15
+    disagreement_prefix_maximum_ply: int = 10
+    disagreement_prefix_archive_capacity: int = 2_000
+    disagreement_prefix_weight_smoothing: float = 0.05
+    disagreement_prefix_weight_cap: float = 4.0
+    replay_reanalysis_fraction: float = 0.15
+    replay_reanalysis_maximum_positions_per_refresh: int = 32
 
 
 @dataclass
