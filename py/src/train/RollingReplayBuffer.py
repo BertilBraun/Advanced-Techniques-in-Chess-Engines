@@ -23,7 +23,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.Encoding import decode_board_states
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
-from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset, TrainingBatch
+from src.self_play.SelfPlayDataset import (
+    ReplaySampleMetadata,
+    SelfPlayDataset,
+    TrainingBatch,
+    replay_aggregation_key,
+)
+from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.value_target import (
     REPLAY_SCHEMA_VERSION,
     FinalOutcome,
@@ -36,27 +42,9 @@ from src.train.ReplayReanalysis import latest_reanalysis_overrides
 
 DEFAULT_REPLAY_CAPACITY = 2_500_000
 COMPACTION_TARGET_POSITIONS = 100_000
-COMPACTION_COPY_CHUNK_ROWS = 4_096
 PRESENTATION_CREDITS_PER_UNIQUE_SAMPLE = 4
 ROLLING_REPLAY_INDEX_SCHEMA_VERSION = 3
 COMPACTION_MANIFEST_SCHEMA_VERSION = 1
-
-REPLAY_DATASETS = (
-    'states',
-    'visit_counts',
-    'final_outcomes',
-    'mcts_root_values',
-    'outcome_target_eligible',
-    'material_result_scores',
-    'material_target_eligible',
-    'termination_reasons',
-    'plies',
-    'current_player_piece_counts',
-    'opponent_piece_counts',
-    'occurrence_counts',
-    'position_starting_fens',
-    'position_moves_uci',
-)
 
 
 class TerminationCounts(BaseModel):
@@ -147,7 +135,12 @@ class ReplayCompactionManifest(BaseModel):
     schema_version: int
     container_id: str
     target_unique_positions: int
+    input_unique_sample_count: int
     unique_sample_count: int
+    raw_sample_count: int
+    duplicate_factor: float
+    conflicting_target_groups: int
+    effective_multiplicity_weight: float
     source_ranges: tuple[CompactionSourceRange, ...]
     content_sha256: str
     creation_timestamp_seconds: float
@@ -628,7 +621,7 @@ class RollingReplayBuffer:
             return CompactionStepResult(
                 status=CompactionStepStatus.COMMITTED_CONTAINER,
                 compacted_source_shards=len(source_segments),
-                compacted_unique_positions=plan.total_rows,
+                compacted_unique_positions=manifest.unique_sample_count,
                 container_id=plan.container_id,
             )
         except Exception:
@@ -1065,89 +1058,20 @@ class RollingReplayBuffer:
             )
             for payload in source_payloads
         }
-        max_visit_width = 0
-        first_source_path = self.replay_inbox / source_payloads[0].hdf5_file_name
-        with h5py.File(first_source_path, 'r') as first_source:
-            dataset_dtypes = {dataset_name: first_source[dataset_name].dtype for dataset_name in REPLAY_DATASETS}
-        for payload in source_payloads:
-            with h5py.File(self.replay_inbox / payload.hdf5_file_name, 'r') as source:
-                max_visit_width = max(max_visit_width, int(source['visit_counts'].shape[1]))
-            overrides = reanalysis_by_payload[payload.payload_id]
-            if overrides:
-                max_visit_width = max(
-                    max_visit_width,
-                    max(len(visit_counts) for visit_counts, _ in overrides.values()),
-                )
-
-        with h5py.File(temporary_path, 'w') as destination:
-            destination.create_dataset(
-                'states',
-                shape=(plan.total_rows,),
-                dtype=dataset_dtypes['states'],
-                chunks=True,
-            )
-            destination.create_dataset(
-                'visit_counts',
-                shape=(plan.total_rows, max_visit_width, 2),
-                dtype=dataset_dtypes['visit_counts'],
-                chunks=True,
-                fillvalue=0,
-            )
-            for dataset_name in REPLAY_DATASETS[2:]:
-                destination.create_dataset(
-                    dataset_name,
-                    shape=(plan.total_rows,),
-                    dtype=dataset_dtypes[dataset_name],
-                    chunks=True,
-                )
-
-            destination_offset = 0
-            for segment, payload in zip(source_segments, source_payloads):
-                source_path = self.replay_inbox / payload.hdf5_file_name
-                with h5py.File(source_path, 'r') as source:
-                    for source_offset in range(
-                        0,
-                        segment.unique_sample_count,
-                        COMPACTION_COPY_CHUNK_ROWS,
-                    ):
-                        row_count = min(
-                            COMPACTION_COPY_CHUNK_ROWS,
-                            segment.unique_sample_count - source_offset,
-                        )
-                        source_rows = slice(
-                            segment.physical_offset + source_offset,
-                            segment.physical_offset + source_offset + row_count,
-                        )
-                        destination_rows = slice(
-                            destination_offset + source_offset,
-                            destination_offset + source_offset + row_count,
-                        )
-                        destination['states'][destination_rows] = source['states'][source_rows]
-                        source_visits = source['visit_counts'][source_rows]
-                        destination['visit_counts'][
-                            destination_rows,
-                            : source_visits.shape[1],
-                            :,
-                        ] = source_visits
-                        for dataset_name in REPLAY_DATASETS[2:]:
-                            destination[dataset_name][destination_rows] = source[dataset_name][source_rows]
-                        overrides = reanalysis_by_payload[payload.payload_id]
-                        for physical_row, (override_visits, override_root_value) in overrides.items():
-                            if not source_rows.start <= physical_row < source_rows.stop:
-                                continue
-                            destination_row = destination_rows.start + physical_row - source_rows.start
-                            destination['visit_counts'][destination_row] = 0
-                            destination['visit_counts'][
-                                destination_row,
-                                : len(override_visits),
-                                :,
-                            ] = override_visits
-                            destination['mcts_root_values'][destination_row] = override_root_value
-                destination_offset += segment.unique_sample_count
-
-            destination.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
-            destination.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
-            destination.flush()
+        source_dataset, source_owners = self._load_compaction_source_dataset(
+            source_segments,
+            source_payloads,
+            reanalysis_by_payload,
+        )
+        compacted_dataset, aggregation = source_dataset.aggregate_duplicates()
+        ordered_dataset, compacted_counts = self._order_compacted_dataset_by_latest_source(
+            compacted_dataset,
+            source_dataset,
+            source_owners,
+            len(source_segments),
+        )
+        if not ordered_dataset.save_to_path(temporary_path):
+            raise RuntimeError(f'Failed to write compacted replay container {plan.container_id}.')
 
         with temporary_path.open('r+b') as file:
             os.fsync(file.fileno())
@@ -1155,22 +1079,28 @@ class RollingReplayBuffer:
         os.replace(temporary_path, final_path)
         source_ranges: list[CompactionSourceRange] = []
         offset = 0
-        for segment in source_segments:
+        for segment, compacted_count in zip(source_segments, compacted_counts):
             source_ranges.append(
                 CompactionSourceRange(
                     segment_id=segment.segment_id,
                     source_shard_id=segment.source_manifest.shard_id,
                     container_offset=offset,
-                    unique_sample_count=segment.unique_sample_count,
+                    unique_sample_count=compacted_count,
                     source_content_sha256=segment.source_manifest.content_sha256,
                 )
             )
-            offset += segment.unique_sample_count
+            offset += compacted_count
+        assert offset == len(ordered_dataset)
         manifest = ReplayCompactionManifest(
             schema_version=COMPACTION_MANIFEST_SCHEMA_VERSION,
             container_id=plan.container_id,
             target_unique_positions=COMPACTION_TARGET_POSITIONS,
-            unique_sample_count=plan.total_rows,
+            input_unique_sample_count=plan.total_rows,
+            unique_sample_count=len(ordered_dataset),
+            raw_sample_count=aggregation.raw_sample_count,
+            duplicate_factor=aggregation.duplicate_factor,
+            conflicting_target_groups=aggregation.conflicting_target_groups,
+            effective_multiplicity_weight=aggregation.effective_multiplicity_weight,
             source_ranges=tuple(source_ranges),
             content_sha256=content_hash,
             creation_timestamp_seconds=time.time(),
@@ -1178,6 +1108,129 @@ class RollingReplayBuffer:
         )
         _atomic_write_json(manifest_path, manifest.model_dump_json(indent=2))
         return manifest
+
+    def _load_compaction_source_dataset(
+        self,
+        source_segments: tuple[LogicalReplaySegment, ...],
+        source_payloads: tuple[PhysicalReplayPayload, ...],
+        reanalysis_by_payload: dict[
+            str,
+            dict[int, tuple[npt.NDArray[np.uint16], float]],
+        ],
+    ) -> tuple[SelfPlayDataset, tuple[int, ...]]:
+        dataset = SelfPlayDataset()
+        source_owners: list[int] = []
+        for source_owner, (segment, payload) in enumerate(zip(source_segments, source_payloads)):
+            source_path = self.replay_inbox / payload.hdf5_file_name
+            source_start = segment.physical_offset
+            source_stop = source_start + segment.unique_sample_count
+            with h5py.File(source_path, 'r') as source:
+                states = np.asarray(source['states'][source_start:source_stop])
+                visits = np.asarray(source['visit_counts'][source_start:source_stop])
+                outcomes = np.asarray(source['final_outcomes'][source_start:source_stop], dtype=np.uint8)
+                root_values = np.asarray(source['mcts_root_values'][source_start:source_stop], dtype=np.float32)
+                outcome_eligibility = np.asarray(
+                    source['outcome_target_eligible'][source_start:source_stop],
+                    dtype=np.bool_,
+                )
+                material_scores = np.asarray(
+                    source['material_result_scores'][source_start:source_stop],
+                    dtype=np.float32,
+                )
+                material_eligibility = np.asarray(
+                    source['material_target_eligible'][source_start:source_stop],
+                    dtype=np.bool_,
+                )
+                termination_reasons = np.asarray(
+                    source['termination_reasons'][source_start:source_stop],
+                    dtype=np.uint8,
+                )
+                plies = np.asarray(source['plies'][source_start:source_stop], dtype=np.int32)
+                current_counts = np.asarray(
+                    source['current_player_piece_counts'][source_start:source_stop],
+                    dtype=np.uint8,
+                )
+                opponent_counts = np.asarray(
+                    source['opponent_piece_counts'][source_start:source_stop],
+                    dtype=np.uint8,
+                )
+                occurrence_counts = np.asarray(
+                    source['occurrence_counts'][source_start:source_stop],
+                    dtype=np.int32,
+                )
+                starting_fens = np.asarray(source['position_starting_fens'].asstr()[source_start:source_stop])
+                moves_uci = np.asarray(source['position_moves_uci'].asstr()[source_start:source_stop])
+
+            overrides = reanalysis_by_payload[payload.payload_id]
+            for local_row, physical_row in enumerate(range(source_start, source_stop)):
+                override = overrides.get(physical_row)
+                dataset.encoded_states.append(bytes(states[local_row]))
+                dataset.visit_counts.append(
+                    override[0]
+                    if override is not None
+                    else visits[local_row][visits[local_row, :, 1] > 0].astype(np.uint16, copy=False)
+                )
+                dataset.value_targets.append(
+                    ReplayValueTarget(
+                        final_outcome=FinalOutcome(int(outcomes[local_row])),
+                        mcts_root_value=override[1] if override is not None else float(root_values[local_row]),
+                        termination_reason=TerminationReason(int(termination_reasons[local_row])),
+                        outcome_target_eligible=bool(outcome_eligibility[local_row]),
+                        material_result_score=float(material_scores[local_row]),
+                        material_target_eligible=bool(material_eligibility[local_row]),
+                    )
+                )
+                dataset.sample_metadata.append(
+                    ReplaySampleMetadata(
+                        ply=int(plies[local_row]),
+                        current_player_piece_count=int(current_counts[local_row]),
+                        opponent_piece_count=int(opponent_counts[local_row]),
+                        occurrence_count=int(occurrence_counts[local_row]),
+                        starting_fen=str(starting_fens[local_row]) or None,
+                        moves_uci=tuple(json.loads(str(moves_uci[local_row]))),
+                    )
+                )
+                source_owners.append(source_owner)
+
+        dataset.stats = SelfPlayDatasetStats(
+            num_samples=len(dataset),
+            num_games=sum(segment.source_manifest.game_count for segment in source_segments),
+            completed_searches=sum(segment.source_manifest.completed_searches for segment in source_segments),
+        )
+        return dataset, tuple(source_owners)
+
+    @staticmethod
+    def _order_compacted_dataset_by_latest_source(
+        compacted_dataset: SelfPlayDataset,
+        source_dataset: SelfPlayDataset,
+        source_owners: tuple[int, ...],
+        source_count: int,
+    ) -> tuple[SelfPlayDataset, tuple[int, ...]]:
+        latest_owner_by_key = {
+            replay_aggregation_key(state, target): source_owner
+            for state, target, source_owner in zip(
+                source_dataset.encoded_states,
+                source_dataset.value_targets,
+                source_owners,
+            )
+        }
+        indices_by_owner: list[list[int]] = [[] for _ in range(source_count)]
+        for compacted_index, (state, target) in enumerate(
+            zip(compacted_dataset.encoded_states, compacted_dataset.value_targets)
+        ):
+            owner = latest_owner_by_key[replay_aggregation_key(state, target)]
+            indices_by_owner[owner].append(compacted_index)
+
+        ordered_dataset = SelfPlayDataset()
+        for owner_indices in indices_by_owner:
+            for compacted_index in owner_indices:
+                state, visits, target, metadata = compacted_dataset.raw_sample(compacted_index)
+                ordered_dataset.encoded_states.append(state)
+                ordered_dataset.visit_counts.append(visits)
+                ordered_dataset.value_targets.append(target)
+                ordered_dataset.sample_metadata.append(metadata)
+        ordered_dataset.stats = compacted_dataset.stats
+        return ordered_dataset, tuple(len(indices) for indices in indices_by_owner)
 
     def _commit_compaction(
         self,
@@ -1191,20 +1244,22 @@ class RollingReplayBuffer:
         if tuple(segment.segment_id for segment in source_segments) != plan.source_segment_ids:
             raise RuntimeError('Replay compaction source order changed before commit.')
 
-        offsets = {source_range.segment_id: source_range.container_offset for source_range in manifest.source_ranges}
+        ranges_by_segment = {source_range.segment_id: source_range for source_range in manifest.source_ranges}
         remapped_segments = tuple(
-            (
+            segment
+            for segment in (
                 LogicalReplaySegment(
                     segment_id=segment.segment_id,
                     source_manifest=segment.source_manifest,
                     physical_payload_id=manifest.container_id,
-                    physical_offset=offsets[segment.segment_id],
-                    unique_sample_count=segment.unique_sample_count,
+                    physical_offset=ranges_by_segment[segment.segment_id].container_offset,
+                    unique_sample_count=ranges_by_segment[segment.segment_id].unique_sample_count,
                 )
                 if segment.segment_id in source_ids
                 else segment
+                for segment in self._state.live_segments
             )
-            for segment in self._state.live_segments
+            if segment.unique_sample_count > 0
         )
         source_payload_ids = {segment.physical_payload_id for segment in source_segments}
         container_payload = PhysicalReplayPayload(

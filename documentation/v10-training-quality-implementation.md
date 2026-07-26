@@ -14,6 +14,10 @@ Implemented behavior:
 - Producer shards aggregate compatible canonical encoded rows before credits are issued. Policies and scalar
   targets are averaged, occurrence multiplicity is retained, and training uses normalized capped
   square-root multiplicity weights. Conflicting hard WDL targets remain separate and are counted in telemetry.
+- Compaction repeats the same compatible-target aggregation across all producer shards selected for each
+  roughly 100,000-position container after materializing reanalysis overrides. A merged position belongs to
+  its newest contributing shard for FIFO retention, while already-issued presentation credits remain
+  cumulative and the live replay population shrinks to the compacted unique count.
 - Material adjudications no longer become hard WDL labels. Their continuous perspective-correct score is
   stored separately and trained with Huber loss.
 - Schema 6 stores a lossless starting FEN and complete UCI history for generated chess samples. After each
@@ -28,10 +32,9 @@ Implemented behavior:
 
 Known limits:
 
-- Duplicate aggregation is currently producer-shard local, not replay-window global. Cross-shard aggregation
-  needs a persistent row-level canonical index with representative promotion during FIFO eviction. Adding only
-  a credit side-index would desynchronize the credited population from the samples actually trained and was
-  intentionally not done.
+- Duplicate aggregation spans producer shards within each compacted container, but not separate containers or
+  the uncompacted tail of the replay window. Truly window-global aggregation still needs a persistent
+  row-level canonical index with representative promotion during FIFO eviction.
 - Reanalysis is deliberately bounded and synchronous inside one designated self-play worker at model refresh.
   It does not consume trainer GPU time or pause credit accounting, but that worker acknowledges the publication
   only after its bounded pass. Sidecars survive disjoint periodic passes and the newest target wins when a row

@@ -14,7 +14,7 @@ from src.Encoding import C, H, W
 from src.games.chess.ChessGame import ChessGame
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
-from src.self_play.value_target import REPLAY_SCHEMA_VERSION, ReplayValueTarget, TerminationReason
+from src.self_play.value_target import REPLAY_SCHEMA_VERSION, FinalOutcome, ReplayValueTarget, TerminationReason
 from src.train.RollingReplayBuffer import (
     ActiveCompactionPlan,
     CHESS_MIRROR_ACTION_MAP,
@@ -96,7 +96,20 @@ def commit_large_shard(
     creation_timestamp_seconds: float,
 ) -> ReplayShardManifest:
     hdf5_path = replay_inbox / f'{shard_id}.hdf5'
-    write_replay_fixture(hdf5_path, sample_count=sample_count, seed=sample_count)
+    shard_seed = sample_count + sum(ord(character) for character in shard_id)
+    write_replay_fixture(
+        hdf5_path,
+        sample_count=sample_count,
+        seed=shard_seed,
+        state_template_count=1,
+    )
+    with h5py.File(hdf5_path, 'r+') as file:
+        state_dtype = file['states'].dtype
+        state_prefix = bytes(file['states'][0])[:-8]
+        file['states'][...] = np.asarray(
+            tuple(state_prefix + f'{sample_index:08x}'.encode() for sample_index in range(sample_count)),
+            dtype=state_dtype,
+        )
     manifest = ReplayShardManifest(
         schema_version=REPLAY_SCHEMA_VERSION,
         shard_id=shard_id,
@@ -121,6 +134,13 @@ def commit_large_shard(
         encoding='utf-8',
     )
     return manifest
+
+
+def refresh_shard_content_hash(replay_inbox: Path, shard_id: str) -> None:
+    manifest_path = replay_inbox / f'{shard_id}.manifest.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    manifest['content_sha256'] = file_sha256(replay_inbox / manifest['hdf5_file_name'])
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
 
 
 def partition_signature(
@@ -506,6 +526,62 @@ def test_compaction_uses_whole_chronological_shards_and_preserves_sampling(
     assert buffer.compacted_container_count == 2
     assert first_container_path.exists()
     assert buffer.discover_committed_shards().presentation_credits == 0
+
+
+def test_compaction_deduplicates_across_shards_without_retracting_credits(
+    tmp_path: Path,
+) -> None:
+    replay_inbox = tmp_path / 'inbox'
+    commit_large_shard(replay_inbox, 'source-a', 40_000, 1.0)
+    commit_large_shard(replay_inbox, 'source-b', 40_000, 2.0)
+    commit_large_shard(replay_inbox, 'source-c', 25_000, 3.0)
+    source_a_path = replay_inbox / 'source-a.hdf5'
+    source_b_path = replay_inbox / 'source-b.hdf5'
+    with h5py.File(source_a_path, 'r+') as source_a, h5py.File(source_b_path, 'r+') as source_b:
+        source_b['states'][0] = source_a['states'][0]
+        source_a['mcts_root_values'][0] = -0.75
+        source_b['mcts_root_values'][0] = -0.25
+        source_a['visit_counts'][0, 0] = (17, 400)
+        source_b['visit_counts'][0, 0] = (17, 200)
+        source_b['occurrence_counts'][0] = 2
+
+        source_b['states'][1] = source_a['states'][1]
+        source_b['final_outcomes'][1] = int(FinalOutcome.WIN)
+    refresh_shard_content_hash(replay_inbox, 'source-a')
+    refresh_shard_content_hash(replay_inbox, 'source-b')
+
+    index_path = tmp_path / 'index.json'
+    buffer = RollingReplayBuffer(replay_inbox, index_path, sampler_seed=131)
+    ingest = buffer.discover_committed_shards()
+
+    compaction = buffer.compact_one_idle_container()
+
+    assert ingest.unique_samples == 105_000
+    assert ingest.presentation_credits == 105_000 * 4
+    assert buffer.credited_unique_sample_count == 105_000
+    assert buffer.unique_sample_count == 104_999
+    assert compaction.compacted_unique_positions == 104_999
+    assert compaction.container_id is not None
+    state = RollingReplayIndexState.model_validate_json(index_path.read_text(encoding='utf-8'))
+    compacted_segments = state.live_segments[:3]
+    assert tuple(segment.unique_sample_count for segment in compacted_segments) == (39_999, 40_000, 25_000)
+    assert tuple(segment.physical_offset for segment in compacted_segments) == (0, 39_999, 79_999)
+
+    container_payload = next(
+        payload for payload in state.physical_payloads if payload.payload_id == compaction.container_id
+    )
+    container_path = replay_inbox / container_payload.hdf5_file_name
+    merged_row = compacted_segments[1].physical_offset
+    with h5py.File(container_path, 'r') as container:
+        assert int(container['occurrence_counts'][merged_row]) == 3
+        assert float(container['mcts_root_values'][merged_row]) == pytest.approx(-5 / 12)
+        assert tuple(container['visit_counts'][merged_row, 0]) == (17, 600)
+
+    compaction_manifest = json.loads((replay_inbox / container_payload.sidecar_file_name).read_text(encoding='utf-8'))
+    assert compaction_manifest['input_unique_sample_count'] == 105_000
+    assert compaction_manifest['unique_sample_count'] == 104_999
+    assert compaction_manifest['raw_sample_count'] == 105_001
+    assert compaction_manifest['conflicting_target_groups'] >= 1
 
 
 def test_compaction_keeps_old_lease_payloads_and_fifo_retires_logical_ranges(

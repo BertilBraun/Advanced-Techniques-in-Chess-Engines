@@ -138,6 +138,22 @@ class DuplicateAggregationDiagnostics:
         return self.raw_sample_count / self.unique_sample_count if self.unique_sample_count else 0.0
 
 
+ReplayAggregationKey = tuple[bytes, FinalOutcome, TerminationReason, bool, bool]
+
+
+def replay_aggregation_key(
+    state: bytes,
+    value_target: ReplayValueTarget,
+) -> ReplayAggregationKey:
+    return (
+        state,
+        value_target.final_outcome,
+        value_target.termination_reason,
+        value_target.outcome_target_eligible,
+        value_target.material_target_eligible,
+    )
+
+
 def chess_sample_metadata(state: npt.NDArray[np.int8], ply: int) -> ReplaySampleMetadata:
     if state.shape != CurrentGame.representation_shape:
         raise ValueError(f'Expected chess state shape {CurrentGame.representation_shape}, got {state.shape}.')
@@ -320,7 +336,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
     def aggregate_duplicates(self) -> tuple[SelfPlayDataset, DuplicateAggregationDiagnostics]:
         """Aggregate compatible duplicate targets and retain conflicting hard outcomes."""
         merged_samples: dict[
-            tuple[bytes, FinalOutcome, TerminationReason, bool, bool],
+            ReplayAggregationKey,
             tuple[dict[int, int], float, float, int, ReplaySampleMetadata],
         ] = {}
         outcomes_by_state: dict[bytes, set[FinalOutcome]] = {}
@@ -331,13 +347,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             self.value_targets,
             self.sample_metadata,
         ):
-            sample_key = (
-                state,
-                value_target.final_outcome,
-                value_target.termination_reason,
-                value_target.outcome_target_eligible,
-                value_target.material_target_eligible,
-            )
+            sample_key = replay_aggregation_key(state, value_target)
             outcomes_by_state.setdefault(state, set()).add(value_target.final_outcome)
             if sample_key in merged_samples:
                 (
