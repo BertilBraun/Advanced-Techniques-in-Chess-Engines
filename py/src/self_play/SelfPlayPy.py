@@ -107,7 +107,7 @@ class SelfPlayPy:
     def search_schedule(self, schedule_version: int) -> SearchScheduleState:
         num_full_searches = int(
             lerp(
-                self.args.mcts.num_searches_per_turn / 5,
+                self.args.initial_num_searches_per_turn or self.args.mcts.num_searches_per_turn / 5,
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
                     schedule_version,

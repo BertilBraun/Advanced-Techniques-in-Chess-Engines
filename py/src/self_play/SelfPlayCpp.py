@@ -285,7 +285,7 @@ class SelfPlayCpp:
             raise ValueError('Search schedule version must be nonnegative.')
         num_full_searches = int(
             lerp(
-                self.args.mcts.num_searches_per_turn / 2,
+                self.args.initial_num_searches_per_turn or self.args.mcts.num_searches_per_turn / 2,
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
                     schedule_version,
@@ -390,7 +390,8 @@ class SelfPlayCpp:
         log_scalar('inference/acknowledged_model_version', model_version)
         if discard_roots:
             for game in self.self_play_games:
-                game.already_expanded_node = None
+                if game.already_expanded_node is not None:
+                    game.already_expanded_node.reset()
 
     def _set_mcts(self, iteration: int) -> None:
         self.update_search_schedule(self.search_schedule(iteration))

@@ -272,6 +272,29 @@ void testTerminalAndUnmaterializedReroot() {
             "unmaterialized reroot constructed the wrong Board");
     require(tree.rootStatistics().number_of_visits == 0, "unvisited reroot edge gained a visit");
 }
+
+void testResetInvalidatesNodesAndRetainsArena() {
+    SearchTree tree(Board{}, 8);
+    const NodeIndex oldRootIndex = tree.rootIndex();
+    tree.expand(oldRootIndex, legalMoveScores(tree.node(oldRootIndex).board, 3));
+    const NodeIndex childIndex = tree.materializeChild(oldRootIndex, 0);
+    tree.expand(childIndex, legalMoveScores(tree.node(childIndex).board, 2));
+
+    const NodeIndex resetRootIndex = tree.reset(Board{});
+    require(tree.capacity() == 8, "reset changed arena capacity");
+    require(tree.liveNodeCount() == 1, "reset retained live search nodes");
+    require(tree.totalChildCount() == 0, "reset retained logical child records");
+    require(tree.rootStatistics().number_of_visits == 0, "reset retained root visits");
+    require(resetRootIndex != oldRootIndex, "reset did not advance root generation");
+
+    bool oldRootWasStale = false;
+    try {
+        static_cast<void>(tree.node(oldRootIndex));
+    } catch (const std::logic_error &) {
+        oldRootWasStale = true;
+    }
+    require(oldRootWasStale, "reset did not invalidate the old root index");
+}
 } // namespace
 
 int main() {
@@ -284,6 +307,7 @@ int main() {
     testDiscountPrunesToTightCapacityInvariant();
     testSearchPreparationReservesRemainingBudgetAndRerootSlot();
     testTerminalAndUnmaterializedReroot();
+    testResetInvalidatesNodesAndRetainsArena();
     std::cout << "SearchTree arena tests passed\n";
     return 0;
 }

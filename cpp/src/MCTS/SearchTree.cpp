@@ -44,6 +44,8 @@ NodeIndex SearchTree::allocateNode(Board board, const NodeIndex parentIndex,
         throw std::logic_error("SearchTree free list references a live node");
     }
     slot.value.emplace(std::move(board), parentIndex, parentChildIndex);
+    slot.value->children = std::move(slot.recycledChildren);
+    slot.value->children.clear();
     ++m_liveNodeCount;
     return makeIndex(freeSlot, slot.generation);
 }
@@ -89,6 +91,8 @@ void SearchTree::releaseNode(const NodeIndex index) {
 
     const uint32 releasedSlot = slotIndex(index);
     NodeSlot &slot = m_slots[releasedSlot];
+    slot.recycledChildren = std::move(slot.value->children);
+    slot.recycledChildren.clear();
     slot.value.reset();
     if (slot.generation == std::numeric_limits<uint32>::max()) {
         throw std::overflow_error("SearchTree node generation exhausted");
@@ -275,6 +279,28 @@ NodeIndex SearchTree::reroot(const uint32 childIndex) {
     m_rootMove = retainedEdge.move;
     releaseNode(oldRootIndex);
     return retainedIndex;
+}
+
+NodeIndex SearchTree::reset(Board rootBoard) {
+    m_freeSlots.clear();
+    for (uint32 slotIndex = capacity(); slotIndex > 0; --slotIndex) {
+        NodeSlot &slot = m_slots[slotIndex - 1];
+        if (slot.value.has_value()) {
+            slot.recycledChildren = std::move(slot.value->children);
+            slot.recycledChildren.clear();
+            slot.value.reset();
+            if (slot.generation == std::numeric_limits<uint32>::max()) {
+                throw std::overflow_error("SearchTree node generation exhausted");
+            }
+            ++slot.generation;
+        }
+        m_freeSlots.push_back(slotIndex - 1);
+    }
+    m_liveNodeCount = 0;
+    m_rootStatistics = {};
+    m_rootMove = Move::null();
+    m_rootIndex = allocateNode(std::move(rootBoard), INVALID_NODE_INDEX, INVALID_CHILD_POSITION);
+    return m_rootIndex;
 }
 
 void SearchTree::discountStatistics(uint32 &numberOfVisits, float &resultSum,
@@ -482,6 +508,11 @@ std::string MCTSRoot::repr() const { return tree().rootRepr(); }
 MCTSRoot MCTSRoot::makeNewRoot(const uint32 childIndex) {
     m_rootIndex = tree().reroot(childIndex);
     return MCTSRoot(m_tree, m_rootIndex);
+}
+
+void MCTSRoot::reset() {
+    Board rootBoard = board();
+    m_rootIndex = tree().reset(std::move(rootBoard));
 }
 
 void MCTSRoot::discount(const float percentageOfNodeVisitsToKeep) {

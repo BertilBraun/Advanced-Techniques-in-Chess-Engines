@@ -211,6 +211,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             Prune the old tree and return a new root node.
             `child_index` is the index of the child to make the new root.
             )pbdoc")
+        .def("reset", &MCTSRoot::reset,
+             R"pbdoc(Discard logical search state while retaining reusable arena allocations.)pbdoc")
         .def("discount", &MCTSRoot::discount, py::arg("percentage_of_node_visits_to_keep"),
              R"pbdoc(
             Discount the node's score and visits by a percentage.

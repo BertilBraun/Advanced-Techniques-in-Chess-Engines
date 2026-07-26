@@ -142,6 +142,7 @@ class SelfPlayParams:
     disagreement_prefix_weight_cap: float = 4.0
     replay_reanalysis_fraction: float = 0.15
     replay_reanalysis_maximum_positions_per_refresh: int = 32
+    initial_num_searches_per_turn: int | None = None
 
 
 @dataclass
@@ -322,15 +323,17 @@ class TrainingParams:
     """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
 
     value_loss_weight: float = 0.5
-    """Overall weight applied to the combined WDL and MCTS auxiliary value objective."""
+    """Overall weight applied to the unified soft-WDL value objective."""
     outcome_value_loss_weight: float = 0.85
-    """Weight of eligible hard-outcome WDL cross entropy within the value objective."""
+    """Final-result share of the blended scalar value target."""
     mcts_value_loss_weight: float = 0.15
-    """Weight of expected-score Huber loss against the stored MCTS root value."""
+    """Maximum MCTS-root share of the blended scalar value target."""
     mcts_value_loss_scale: float = 1.0
-    """Scale applied to MCTS Huber loss before its objective weight."""
-    duplicate_multiplicity_weight_cap: float = 4.0
-    """Maximum sqrt-multiplicity weight applied to aggregated replay samples."""
+    """Legacy diagnostic field retained for reading historical run configurations."""
+    mcts_value_target_warmup_optimizer_steps: int = 0
+    """Optimizer steps over which the MCTS share increases from zero to its maximum."""
+    duplicate_multiplicity_weight_cap: float | None = 4.0
+    """Optional cap on square-root multiplicity weights, or None for no cap."""
     policy_loss_weight: float = 1.0
     """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
 
@@ -346,8 +349,10 @@ class TrainingParams:
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
         if self.mcts_value_loss_scale <= 0.0:
-            raise ValueError('MCTS value-loss scale must be positive.')
-        if self.duplicate_multiplicity_weight_cap < 1.0:
+            raise ValueError('Legacy MCTS value-loss scale must be positive.')
+        if self.mcts_value_target_warmup_optimizer_steps < 0:
+            raise ValueError('MCTS value-target warmup steps cannot be negative.')
+        if self.duplicate_multiplicity_weight_cap is not None and self.duplicate_multiplicity_weight_cap < 1.0:
             raise ValueError('Duplicate multiplicity weight cap must be at least one.')
         if self.credit_training is not None:
             self.credit_training.presentation_credits_per_quantum(self.global_batch_size)

@@ -53,6 +53,7 @@ CREDIT_V7_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v7.json')
 CREDIT_V8_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v8.json')
 CREDIT_V9_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v9.json')
 CREDIT_V10_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v10.json')
+CREDIT_V11_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v11.json')
 
 
 def credit_training_configuration_candidate(
@@ -1121,6 +1122,39 @@ def test_credit_v10_configuration_enables_training_quality_changes() -> None:
     assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
     assert arguments.training.learning_rate(20_000, 'adamw') == pytest.approx(0.0035)
     assert arguments.training.learning_rate(50_000, 'adamw') == pytest.approx(0.002)
+    assert arguments.network == initial_network
+
+
+def test_credit_v11_configuration_restores_early_search_and_single_value_curriculum() -> None:
+    configuration = load_run_configuration(CREDIT_V11_CONFIGURATION_PATH)
+    arguments = training_args()
+    initial_network = arguments.network
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    evaluation = arguments.evaluation
+    assert credit_training is not None
+    assert evaluation is not None
+    assert configuration.run_name == 'complete-training-run-v11'
+    assert credit_training.optimizer_steps_per_quantum == 500
+    assert credit_training.evaluation_interval_optimizer_steps == 1_500
+    assert credit_training.full_evaluation_interval_optimizer_steps == 3_000
+    assert credit_training.replay_capacity_for_model_version(0) == 500_000
+    assert credit_training.replay_capacity_for_model_version(125) == 1_500_000
+    assert credit_training.replay_capacity_for_model_version(250) == 2_500_000
+    assert arguments.self_play.initial_num_searches_per_turn == 100
+    assert arguments.self_play.mcts.num_searches_per_turn == 600
+    assert arguments.self_play_search_warmup_iterations == 100
+    assert arguments.training.mcts_value_loss_weight == pytest.approx(0.15)
+    assert arguments.training.mcts_value_target_warmup_optimizer_steps == 50_000
+    assert arguments.training.duplicate_multiplicity_weight_cap is None
+    assert arguments.training.global_batch_size == 1_024
+    assert arguments.training.learning_rate(0, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(99_999, 'adamw') == pytest.approx(0.005)
+    assert arguments.training.learning_rate(100_000, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(249_999, 'adamw') == pytest.approx(0.0035)
+    assert arguments.training.learning_rate(250_000, 'adamw') == pytest.approx(0.002)
     assert arguments.network == initial_network
 
 

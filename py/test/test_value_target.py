@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset, TrainingBatch
@@ -19,6 +20,7 @@ from src.self_play.value_target import (
 )
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
+from src.value import scalar_to_wdl
 
 
 class FixedValueNetwork(Network):
@@ -49,7 +51,10 @@ class FixedBatchLoader:
         return self.repetitions
 
 
-def training_parameters(mcts_value_loss_scale: float = 1.0) -> TrainingParams:
+def training_parameters(
+    mcts_value_target_warmup_optimizer_steps: int = 0,
+    duplicate_multiplicity_weight_cap: float | None = 4.0,
+) -> TrainingParams:
     return TrainingParams(
         num_epochs=1,
         global_batch_size=4,
@@ -60,7 +65,9 @@ def training_parameters(mcts_value_loss_scale: float = 1.0) -> TrainingParams:
         learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=mcts_value_loss_scale,
+        mcts_value_loss_scale=1.0,
+        mcts_value_target_warmup_optimizer_steps=mcts_value_target_warmup_optimizer_steps,
+        duplicate_multiplicity_weight_cap=duplicate_multiplicity_weight_cap,
     )
 
 
@@ -165,7 +172,24 @@ def test_equal_expected_scalar_can_represent_different_wdl_distributions() -> No
     assert not torch.equal(first, second)
 
 
-def test_ply_cap_outcomes_have_finite_zero_ce_and_valid_mcts_loss() -> None:
+def test_scalar_to_wdl_places_positive_and_negative_mass_on_decisive_result() -> None:
+    targets = scalar_to_wdl(torch.tensor((-1.0, -0.25, 0.0, 0.4, 1.0)))
+
+    torch.testing.assert_close(
+        targets,
+        torch.tensor(
+            (
+                (0.0, 0.0, 1.0),
+                (0.0, 0.75, 0.25),
+                (0.0, 1.0, 0.0),
+                (0.4, 0.6, 0.0),
+                (1.0, 0.0, 0.0),
+            )
+        ),
+    )
+
+
+def test_unlabelled_ply_cap_has_no_value_objective_but_keeps_mcts_diagnostic() -> None:
     batch = training_batch(
         (FinalOutcome.WIN,),
         (1.0,),
@@ -178,10 +202,10 @@ def test_ply_cap_outcomes_have_finite_zero_ce_and_valid_mcts_loss() -> None:
     assert torch.isfinite(result.total_loss)
     assert result.outcome_loss.item() == pytest.approx(0.0)
     assert result.mcts_auxiliary_loss.item() > 0.0
-    assert result.combined_value_loss.item() == pytest.approx(0.15 * result.mcts_auxiliary_loss.item())
+    assert result.value_loss.item() == pytest.approx(0.0)
 
 
-def test_value_objective_uses_configured_component_weights() -> None:
+def test_value_objective_blends_base_scalar_with_mcts_before_soft_wdl_conversion() -> None:
     batch = training_batch(
         (FinalOutcome.WIN, FinalOutcome.DRAW),
         (0.2, -0.4),
@@ -189,14 +213,20 @@ def test_value_objective_uses_configured_component_weights() -> None:
         (TerminationReason.NATURAL, TerminationReason.RESIGNATION),
     )
 
-    result = trainer((0.3, -0.2, 0.1))._calculate_loss_for_batch(batch)
+    value_logits = (0.3, -0.2, 0.1)
+    result = trainer(value_logits)._calculate_loss_for_batch(batch, mcts_value_target_weight=0.15)
 
-    assert result.combined_value_loss.item() == pytest.approx(
-        0.85 * result.outcome_loss.item() + 0.15 * result.mcts_auxiliary_loss.item()
+    expected_scores = torch.tensor((0.88, -0.06))
+    expected_targets = scalar_to_wdl(expected_scores)
+    expected_loss = F.cross_entropy(
+        torch.tensor((value_logits, value_logits)),
+        expected_targets,
     )
+    torch.testing.assert_close(result.target_expected_scores, expected_scores)
+    assert result.value_loss.item() == pytest.approx(expected_loss.item())
 
 
-def test_material_adjudication_replaces_hard_wdl_with_continuous_huber() -> None:
+def test_material_adjudication_uses_material_score_as_soft_wdl_target() -> None:
     batch = training_batch(
         (FinalOutcome.DRAW,),
         (0.1,),
@@ -210,27 +240,57 @@ def test_material_adjudication_replaces_hard_wdl_with_continuous_huber() -> None
 
     assert result.outcome_loss.item() == pytest.approx(0.0)
     assert result.material_auxiliary_loss.item() == pytest.approx(0.5 * 0.4**2)
-    assert result.combined_value_loss.item() == pytest.approx(
-        0.85 * result.material_auxiliary_loss.item() + 0.15 * result.mcts_auxiliary_loss.item()
-    )
+    torch.testing.assert_close(result.target_expected_scores, torch.tensor((0.4,)))
+    assert result.value_loss.item() == pytest.approx(torch.log(torch.tensor(3.0)).item())
 
 
-def test_value_objective_scales_mcts_auxiliary_before_weighting() -> None:
+def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
     batch = training_batch(
         (FinalOutcome.WIN, FinalOutcome.DRAW),
         (0.2, -0.4),
         (True, True),
         (TerminationReason.NATURAL, TerminationReason.RESIGNATION),
     )
-    model = FixedValueNetwork((0.3, -0.2, 0.1))
+    model = FixedValueNetwork((0.0, 0.0, 0.0))
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
-    scaled_trainer = Trainer(model, optimizer, training_parameters(mcts_value_loss_scale=25.0))
-
-    result = scaled_trainer._calculate_loss_for_batch(batch)
-
-    assert result.combined_value_loss.item() == pytest.approx(
-        0.85 * result.outcome_loss.item() + 0.15 * 25.0 * result.mcts_auxiliary_loss.item()
+    warmup_trainer = Trainer(
+        model,
+        optimizer,
+        training_parameters(mcts_value_target_warmup_optimizer_steps=100),
     )
+
+    stats = warmup_trainer.train(FixedBatchLoader(batch), iteration=50)
+
+    assert stats.mcts_value_target_weight == pytest.approx(0.075)
+
+
+def test_occurrence_count_weight_uses_uncapped_square_root() -> None:
+    batch = training_batch(
+        (FinalOutcome.WIN, FinalOutcome.LOSS),
+        (0.0, 0.0),
+        (True, True),
+        (TerminationReason.NATURAL, TerminationReason.NATURAL),
+    )
+    batch = replace(batch, occurrence_counts=torch.tensor((1, 100), dtype=torch.int32))
+    value_logits = (2.0, 0.0, -1.0)
+    model = FixedValueNetwork(value_logits)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    uncapped_trainer = Trainer(
+        model,
+        optimizer,
+        training_parameters(duplicate_multiplicity_weight_cap=None),
+    )
+
+    result = uncapped_trainer._calculate_loss_for_batch(batch)
+
+    per_sample_losses = F.cross_entropy(
+        torch.tensor((value_logits, value_logits)),
+        torch.tensor((int(FinalOutcome.WIN), int(FinalOutcome.LOSS))),
+        reduction='none',
+    )
+    normalized_weights = torch.tensor((1.0, 10.0)) / 5.5
+    expected_loss = (per_sample_losses * normalized_weights).mean()
+    assert result.value_loss.item() == pytest.approx(expected_loss.item())
 
 
 def test_training_metrics_use_outcome_and_mcts_denominators_independently() -> None:

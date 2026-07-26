@@ -104,6 +104,7 @@ def test_rank_partitions_are_deterministic_and_change_with_epoch_seed() -> None:
 def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> None:
     first = TrainingStats(
         policy_loss_sum=2.0,
+        value_loss_sum=4.0,
         sample_count=2,
         value_metrics=ValueMetrics(
             outcome_cross_entropy_sum=4.0,
@@ -117,14 +118,13 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
         gradient_norm_sum=0.5,
         gradient_norm_count=1,
         num_batches=1,
-        outcome_value_loss_weight=0.85,
-        mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=25.0,
+        mcts_value_target_weight=0.15,
         policy_loss_weight=1.0,
         value_loss_weight=0.5,
     )
     second = TrainingStats(
         policy_loss_sum=12.0,
+        value_loss_sum=18.0,
         sample_count=6,
         value_metrics=ValueMetrics(
             outcome_cross_entropy_sum=18.0,
@@ -138,9 +138,7 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
         gradient_norm_sum=1.5,
         gradient_norm_count=1,
         num_batches=1,
-        outcome_value_loss_weight=0.85,
-        mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=25.0,
+        mcts_value_target_weight=0.15,
         policy_loss_weight=1.0,
         value_loss_weight=0.5,
     )
@@ -150,7 +148,7 @@ def test_training_stats_are_sample_weighted_with_unbiased_value_deviation() -> N
     assert combined.policy_loss == pytest.approx(14 / 8)
     assert combined.value_metrics.outcome_cross_entropy == pytest.approx(22 / 8)
     assert combined.value_metrics.mcts_huber == pytest.approx(4 / 8)
-    assert combined.value_loss == pytest.approx(0.85 * 22 / 8 + 0.15 * 25 * 4 / 8)
+    assert combined.value_loss == pytest.approx(22 / 8)
     assert combined.total_loss == pytest.approx(combined.policy_loss + 0.5 * combined.value_loss)
     assert combined.value_mean == pytest.approx(2 / 8)
     assert combined.value_std == pytest.approx(((8 - 4 / 8) / 7) ** 0.5)
@@ -169,6 +167,7 @@ def test_training_tensorboard_keeps_detailed_value_slices_out_of_train_category(
     )
     stats = TrainingStats(
         policy_loss_sum=1,
+        value_loss_sum=1,
         sample_count=1,
         value_metrics=natural_metrics,
         termination_value_metrics=(natural_metrics,) + tuple(ValueMetrics() for _ in range(len(TerminationReason) - 1)),
@@ -177,9 +176,7 @@ def test_training_tensorboard_keeps_detailed_value_slices_out_of_train_category(
         gradient_norm_sum=1,
         gradient_norm_count=1,
         num_batches=1,
-        outcome_value_loss_weight=0.85,
-        mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=25.0,
+        mcts_value_target_weight=0.15,
         policy_loss_weight=1,
         value_loss_weight=0.5,
     )
@@ -228,6 +225,6 @@ def test_ddp_outcome_gradient_excludes_ineligible_samples_without_extra_collecti
                 process.terminate()
                 process.join(timeout=10)
 
-    expected_gradient = (0.0, 0.85 / 4.0, -0.85 / 4.0)
+    expected_gradient = (0.0, 1.0 / 4.0, -1.0 / 4.0)
     assert gradients[0] == pytest.approx(expected_gradient, abs=1e-7)
     assert gradients[1] == pytest.approx(expected_gradient, abs=1e-7)

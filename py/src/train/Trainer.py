@@ -25,24 +25,26 @@ from src.train.TrainingStats import (
 )
 from src.util.log import log
 from src.util.timing import timeit
-from src.value import wdl_to_scalar
+from src.value import scalar_to_wdl, wdl_to_scalar
 
 
 VALUE_METRIC_WIDTH = 20 + EXPECTED_SCORE_CALIBRATION_BINS * 3
-BASE_REDUCTION_WIDTH = 7
+BASE_REDUCTION_WIDTH = 8
 SLICED_VALUE_METRIC_BATCH_INTERVAL = 10
 
 
 @dataclass(frozen=True)
 class _LossResult:
     policy_loss: torch.Tensor
+    value_loss: torch.Tensor
     outcome_loss: torch.Tensor
     mcts_auxiliary_loss: torch.Tensor
     material_auxiliary_loss: torch.Tensor
-    combined_value_loss: torch.Tensor
     total_loss: torch.Tensor
     value_probabilities: torch.Tensor
     expected_scores: torch.Tensor
+    target_expected_scores: torch.Tensor
+    value_loss_contributions: torch.Tensor
     outcome_losses: torch.Tensor
     mcts_huber_losses: torch.Tensor
     material_huber_losses: torch.Tensor
@@ -52,6 +54,8 @@ class _LossResult:
 class _DetachedMetricBatch:
     value_probabilities: torch.Tensor
     expected_scores: torch.Tensor
+    target_expected_scores: torch.Tensor
+    value_loss_contributions: torch.Tensor
     outcome_losses: torch.Tensor
     mcts_huber_losses: torch.Tensor
     material_huber_losses: torch.Tensor
@@ -122,7 +126,11 @@ class Trainer:
         self.training_model = _LogitForward(model) if training_model is None else training_model
         self.rank = rank
 
-    def _calculate_loss_for_batch(self, batch: TrainingBatch) -> _LossResult:
+    def _calculate_loss_for_batch(
+        self,
+        batch: TrainingBatch,
+        mcts_value_target_weight: float = 0.0,
+    ) -> _LossResult:
         states = batch.states.to(device=self.model.device)
         policy_targets = batch.policy_targets.to(device=self.model.device)
         final_outcomes = batch.final_outcomes.to(device=self.model.device)
@@ -131,9 +139,9 @@ class Trainer:
         material_result_scores = batch.material_result_scores.to(device=self.model.device)
         material_target_eligible = batch.material_target_eligible.to(device=self.model.device)
         occurrence_counts = batch.occurrence_counts.to(device=self.model.device)
-        sample_weights = torch.sqrt(occurrence_counts.to(dtype=torch.float32)).clamp(
-            max=self.args.duplicate_multiplicity_weight_cap
-        )
+        sample_weights = torch.sqrt(occurrence_counts.to(dtype=torch.float32))
+        if self.args.duplicate_multiplicity_weight_cap is not None:
+            sample_weights.clamp_(max=self.args.duplicate_multiplicity_weight_cap)
         sample_weights /= sample_weights.mean()
         termination_reasons = batch.termination_reasons.to(device=self.model.device)
         mcts_target_eligible = termination_reasons.ne(int(TerminationReason.DIAGNOSTIC))
@@ -144,6 +152,24 @@ class Trainer:
 
         policy_losses = F.cross_entropy(policy_logits, policy_targets, reduction='none')
         policy_loss = (policy_losses * sample_weights).mean()
+        outcome_expected_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(
+            dtype=expected_scores.dtype
+        ) - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=expected_scores.dtype)
+        base_target_eligible = torch.logical_or(outcome_target_eligible, material_target_eligible)
+        base_expected_scores = torch.where(
+            outcome_target_eligible,
+            outcome_expected_scores,
+            material_result_scores,
+        )
+        target_expected_scores = torch.lerp(
+            base_expected_scores,
+            mcts_root_values,
+            mcts_value_target_weight,
+        )
+        value_targets = scalar_to_wdl(target_expected_scores)
+        value_losses = F.cross_entropy(value_logits, value_targets, reduction='none')
+        value_loss_contributions = value_losses * base_target_eligible.to(dtype=value_losses.dtype) * sample_weights
+        value_loss = value_loss_contributions.sum() / value_losses.shape[0]
         outcome_losses = F.cross_entropy(value_logits, final_outcomes, reduction='none')
         outcome_loss = (
             outcome_losses * outcome_target_eligible.to(dtype=outcome_losses.dtype) * sample_weights
@@ -164,27 +190,29 @@ class Trainer:
         material_auxiliary_loss = (
             material_huber_losses * material_target_eligible.to(dtype=material_huber_losses.dtype) * sample_weights
         ).sum() / material_huber_losses.shape[0]
-        combined_value_loss = (
-            self.args.outcome_value_loss_weight * (outcome_loss + material_auxiliary_loss)
-            + self.args.mcts_value_loss_weight * self.args.mcts_value_loss_scale * mcts_auxiliary_loss
-        )
-        total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * combined_value_loss
+        total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * value_loss
 
         return _LossResult(
             policy_loss=policy_loss,
+            value_loss=value_loss,
             outcome_loss=outcome_loss,
             mcts_auxiliary_loss=mcts_auxiliary_loss,
             material_auxiliary_loss=material_auxiliary_loss,
-            combined_value_loss=combined_value_loss,
             total_loss=total_loss,
             value_probabilities=value_probabilities,
             expected_scores=expected_scores,
+            target_expected_scores=target_expected_scores,
+            value_loss_contributions=value_loss_contributions,
             outcome_losses=outcome_losses,
             mcts_huber_losses=mcts_huber_losses,
             material_huber_losses=material_huber_losses,
         )
 
-    def _train_epoch(self, dataloader: TrainingBatchLoader) -> TrainingStats:
+    def _train_epoch(
+        self,
+        dataloader: TrainingBatchLoader,
+        mcts_value_target_weight: float = 0.0,
+    ) -> TrainingStats:
         self.model.train()
         self.training_model.train()
         termination_offset = 1
@@ -204,7 +232,7 @@ class Trainer:
             sample_count = batch.states.shape[0]
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
-                loss_result = self._calculate_loss_for_batch(batch)
+                loss_result = self._calculate_loss_for_batch(batch, mcts_value_target_weight)
 
             scaler.scale(loss_result.total_loss).backward()
             scaler.unscale_(self.optimizer)
@@ -235,6 +263,7 @@ class Trainer:
             reduction_values[4] = torch.stack(gradient_norms).double().sum()
             reduction_values[5] = len(gradient_norms)
             reduction_values[6] = len(policy_losses)
+        reduction_values[7] = metrics.value_loss_contributions.double().sum()
 
         metric_inputs = self._value_metric_inputs(metrics)
         self._accumulate_value_metrics(
@@ -279,6 +308,7 @@ class Trainer:
 
         return TrainingStats(
             policy_loss_sum=float(reduction_values[0].item()),
+            value_loss_sum=float(reduction_values[7].item()),
             sample_count=int(reduction_values[1].item()),
             value_metrics=_value_metrics_from_reduction(reduction_values, BASE_REDUCTION_WIDTH),
             termination_value_metrics=tuple(
@@ -293,9 +323,7 @@ class Trainer:
             gradient_norm_sum=float(reduction_values[4].item()),
             gradient_norm_count=int(reduction_values[5].item()),
             num_batches=int(reduction_values[6].item()),
-            outcome_value_loss_weight=self.args.outcome_value_loss_weight,
-            mcts_value_loss_weight=self.args.mcts_value_loss_weight,
-            mcts_value_loss_scale=self.args.mcts_value_loss_scale,
+            mcts_value_target_weight=mcts_value_target_weight,
             policy_loss_weight=self.args.policy_loss_weight,
             value_loss_weight=self.args.value_loss_weight,
             ply_value_metrics=tuple(
@@ -322,6 +350,8 @@ class Trainer:
         return _DetachedMetricBatch(
             value_probabilities=loss_result.value_probabilities.detach(),
             expected_scores=loss_result.expected_scores.detach(),
+            target_expected_scores=loss_result.target_expected_scores.detach(),
+            value_loss_contributions=loss_result.value_loss_contributions.detach(),
             outcome_losses=loss_result.outcome_losses.detach(),
             mcts_huber_losses=loss_result.mcts_huber_losses.detach(),
             material_huber_losses=loss_result.material_huber_losses.detach(),
@@ -342,6 +372,8 @@ class Trainer:
         return _DetachedMetricBatch(
             value_probabilities=torch.cat(tuple(batch.value_probabilities for batch in batches)),
             expected_scores=torch.cat(tuple(batch.expected_scores for batch in batches)),
+            target_expected_scores=torch.cat(tuple(batch.target_expected_scores for batch in batches)),
+            value_loss_contributions=torch.cat(tuple(batch.value_loss_contributions for batch in batches)),
             outcome_losses=torch.cat(tuple(batch.outcome_losses for batch in batches)),
             mcts_huber_losses=torch.cat(tuple(batch.mcts_huber_losses for batch in batches)),
             material_huber_losses=torch.cat(tuple(batch.material_huber_losses for batch in batches)),
@@ -359,10 +391,7 @@ class Trainer:
         self,
         metrics: _DetachedMetricBatch,
     ) -> _ValueMetricInputs:
-        target_expected_scores = metrics.final_outcomes.eq(int(FinalOutcome.WIN)).to(
-            dtype=torch.float64
-        ) - metrics.final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=torch.float64)
-        expected_score_errors = metrics.expected_scores - target_expected_scores
+        expected_score_errors = metrics.expected_scores - metrics.target_expected_scores
         final_outcome_probabilities = F.one_hot(
             metrics.final_outcomes,
             num_classes=len(FinalOutcome),
@@ -373,7 +402,7 @@ class Trainer:
             termination_reasons=metrics.termination_reasons,
             final_outcomes=metrics.final_outcomes,
             predicted_classes=metrics.value_probabilities.argmax(dim=1),
-            target_expected_scores=target_expected_scores,
+            target_expected_scores=metrics.target_expected_scores.to(dtype=torch.float64),
             calibration_bin_indices=torch.clamp(
                 ((metrics.expected_scores + 1.0) * (EXPECTED_SCORE_CALIBRATION_BINS / 2.0)).to(dtype=torch.int64),
                 min=0,
@@ -451,7 +480,7 @@ class Trainer:
         dataloader: TrainingBatchLoader,
         iteration: int,
     ) -> TrainingStats:
-        """Train the model with policy, hard WDL outcome, and MCTS auxiliary targets."""
+        """Train policy and the blended soft-WDL value target."""
         base_lr: float = self.args.learning_rate(iteration, self.args.optimizer)
         if self.rank == 0:
             log_scalar('training/learning_rate', base_lr, iteration)
@@ -460,7 +489,10 @@ class Trainer:
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = base_lr
 
-        return self._train_epoch(dataloader)
+        warmup_steps = self.args.mcts_value_target_warmup_optimizer_steps
+        warmup_progress = 1.0 if warmup_steps == 0 else min(1.0, iteration / warmup_steps)
+        mcts_value_target_weight = self.args.mcts_value_loss_weight * warmup_progress
+        return self._train_epoch(dataloader, mcts_value_target_weight)
 
 
 def _fixed_bin_masks(

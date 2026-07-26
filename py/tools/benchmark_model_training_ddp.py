@@ -22,7 +22,7 @@ from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import CurrentGame
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import NetworkParams, SEPlacement, TrainingParams
-from src.value import wdl_to_scalar
+from src.value import scalar_to_wdl
 
 
 class TrainingPath(StrEnum):
@@ -125,11 +125,11 @@ def train_batch(
     with autocast('cuda', dtype=torch.bfloat16):
         policy_logits, value_logits = model(batch.states)
         policy_loss = functional.cross_entropy(policy_logits, batch.policy_targets)
-        outcome_loss = functional.cross_entropy(value_logits, batch.final_outcomes)
-        expected_scores = wdl_to_scalar(torch.softmax(value_logits, dim=1))
-        mcts_auxiliary_loss = functional.huber_loss(expected_scores, batch.mcts_root_values)
-        combined_value_loss = 0.85 * outcome_loss + 0.15 * mcts_auxiliary_loss
-        total_loss = policy_loss + 0.5 * combined_value_loss
+        target_expected_scores = batch.final_outcomes.eq(int(FinalOutcome.WIN)).to(
+            dtype=value_logits.dtype
+        ) - batch.final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=value_logits.dtype)
+        value_loss = functional.cross_entropy(value_logits, scalar_to_wdl(target_expected_scores))
+        total_loss = policy_loss + 0.5 * value_loss
     scaler.scale(total_loss).backward()
     scaler.unscale_(optimizer)
     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -148,7 +148,8 @@ def production_training_parameters(global_batch_size: int, local_batch_size: int
         learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=25.0,
+        mcts_value_loss_scale=1.0,
+        mcts_value_target_warmup_optimizer_steps=50_000,
     )
 
 

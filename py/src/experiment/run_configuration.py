@@ -289,13 +289,15 @@ class WorkloadConfiguration(BaseModel):
     training_sampling_window: int | None = Field(default=None, gt=0)
     credit_training: CreditTrainingConfiguration | None = None
     self_play_searches_per_turn: int = Field(gt=0)
+    self_play_initial_searches_per_turn: int | None = Field(default=None, gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
     learning_rate_schedule: tuple[LearningRateStage, ...] | None = None
     self_play_search_warmup_iterations: int = Field(ge=0)
     outcome_value_loss_weight: float = Field(default=0.85, ge=0.0, le=1.0)
     mcts_value_loss_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     mcts_value_loss_scale: float = Field(default=1.0, gt=0.0)
-    duplicate_multiplicity_weight_cap: float = Field(default=4.0, ge=1.0)
+    mcts_value_target_warmup_optimizer_steps: int = Field(default=0, ge=0)
+    duplicate_multiplicity_weight_cap: float | None = Field(default=4.0, ge=1.0)
     self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
@@ -343,6 +345,11 @@ class WorkloadConfiguration(BaseModel):
                 raise ValueError('Learning-rate stages must start before the configured final iteration.')
         if self.self_play_fast_searches_per_turn >= self.self_play_searches_per_turn:
             raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
+        if (
+            self.self_play_initial_searches_per_turn is not None
+            and self.self_play_initial_searches_per_turn > self.self_play_searches_per_turn
+        ):
+            raise ValueError('Initial self-play searches cannot exceed final self-play searches.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
         if self.teacher_evaluation_games % 2 or self.teacher_evaluation_games > self.evaluation_games:
@@ -800,6 +807,7 @@ def apply_run_configuration(
     if workload.training_sampling_window is not None:
         training_args.training.sampling_window = _fixed_sampling_window(workload.training_sampling_window)
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
+    training_args.self_play.initial_num_searches_per_turn = workload.self_play_initial_searches_per_turn
     training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
         workload.self_play_fast_searches_per_turn / workload.self_play_searches_per_turn
     )
@@ -808,6 +816,7 @@ def apply_run_configuration(
     training_args.training.outcome_value_loss_weight = workload.outcome_value_loss_weight
     training_args.training.mcts_value_loss_weight = workload.mcts_value_loss_weight
     training_args.training.mcts_value_loss_scale = workload.mcts_value_loss_scale
+    training_args.training.mcts_value_target_warmup_optimizer_steps = workload.mcts_value_target_warmup_optimizer_steps
     training_args.training.duplicate_multiplicity_weight_cap = workload.duplicate_multiplicity_weight_cap
     training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies

@@ -79,6 +79,7 @@ public:
     void backPropagateAndRemoveVirtualLoss(NodeIndex leafIndex, float result);
 
     [[nodiscard]] NodeIndex reroot(uint32 childIndex);
+    [[nodiscard]] NodeIndex reset(Board rootBoard);
     void discount(float percentageOfNodeVisitsToKeep);
     void prepareForSearch(uint32 visitLimit, uint32 parallelSearches);
 
@@ -91,6 +92,7 @@ private:
     struct NodeSlot {
         uint32 generation = 0;
         std::optional<SearchNode> value;
+        std::vector<Child> recycledChildren;
     };
 
     std::vector<NodeSlot> m_slots;
@@ -136,6 +138,7 @@ public:
     [[nodiscard]] std::string repr() const;
 
     [[nodiscard]] MCTSRoot makeNewRoot(uint32 childIndex);
+    void reset();
     void discount(float percentageOfNodeVisitsToKeep);
 
     [[nodiscard]] SearchTree &tree();

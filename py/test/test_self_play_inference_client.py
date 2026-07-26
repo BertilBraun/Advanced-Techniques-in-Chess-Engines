@@ -120,6 +120,9 @@ class _LifecycleRoot:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
+    def reset(self) -> None:
+        self.events.append('reset_root')
+
     def __del__(self) -> None:
         self.events.append('release_root')
 
@@ -220,16 +223,19 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_diagnostic_refresh_can_discard_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
     self_play = object.__new__(SelfPlayCpp)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
     self_play.iteration = 0
     self_play.model_version = 0
     self_play.model_refresh_acknowledgements = [0]
     self_play.search_schedule_state = self_play.search_schedule(0)
-    self_play.self_play_games = [SimpleNamespace(already_expanded_node=object())]
+    root = _LifecycleRoot(events)
+    self_play.self_play_games = [SimpleNamespace(already_expanded_node=root)]
     self_play.mcts = _LifecycleMcts([], self_play.search_schedule_state.arena_capacity)
     monkeypatch.setattr('src.self_play.SelfPlayCpp.log_scalar', lambda *_args: None)
 
     self_play.refresh_model(1, 'updated.jit.pt', discard_roots=True)
 
-    assert self_play.self_play_games[0].already_expanded_node is None
+    assert self_play.self_play_games[0].already_expanded_node is root
+    assert events == ['reset_root']
