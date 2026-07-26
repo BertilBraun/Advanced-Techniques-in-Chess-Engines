@@ -45,6 +45,7 @@ def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch
         expected.current_player_piece_counts,
     )
     torch.testing.assert_close(actual.opponent_piece_counts, expected.opponent_piece_counts)
+    torch.testing.assert_close(actual.occurrence_counts, expected.occurrence_counts)
 
 
 def encoded_state(seed: int) -> bytes:
@@ -110,6 +111,7 @@ def test_prebatched_dataset_matches_individual_samples() -> None:
         plies=torch.stack([sample.ply for sample in individual]),
         current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
         opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
+        occurrence_counts=torch.stack([sample.occurrence_count for sample in individual]),
     )
 
     batch = samples.__getitems__(list(range(len(samples))))
@@ -212,6 +214,7 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
         plies=torch.stack([sample.ply for sample in individual]),
         current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
         opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
+        occurrence_counts=torch.stack([sample.occurrence_count for sample in individual]),
     )
 
     batch = rolling_buffer.__getitems__(shuffled_indices)
@@ -251,3 +254,30 @@ def test_deduplicate_preserves_conflicting_hard_targets_and_provenance() -> None
 
     assert len(deduplicated) == len(samples)
     assert deduplicated.value_targets[0] != deduplicated.value_targets[1]
+    assert all(metadata.occurrence_count == 1 for metadata in deduplicated.sample_metadata)
+
+
+def test_duplicate_aggregation_averages_compatible_targets_and_tracks_multiplicity() -> None:
+    samples = dataset()
+    samples.encoded_states[1] = samples.encoded_states[0]
+    samples.visit_counts[1] = np.asarray(((1, 1), (2, 3)), dtype=np.uint16)
+    samples.value_targets[1] = ReplayValueTarget.from_scores(
+        -1.0,
+        0.4,
+        TerminationReason.NATURAL,
+    )
+    samples.sample_metadata[1] = ReplaySampleMetadata(
+        ply=20,
+        current_player_piece_count=samples.sample_metadata[0].current_player_piece_count,
+        opponent_piece_count=samples.sample_metadata[0].opponent_piece_count,
+    )
+
+    aggregated, diagnostics = samples.aggregate_duplicates()
+
+    assert len(aggregated) == len(samples) - 1
+    assert aggregated.sample_metadata[0].occurrence_count == 2
+    assert aggregated.sample_metadata[0].ply == 10
+    assert aggregated.value_targets[0].mcts_root_value == pytest.approx(-0.2)
+    assert diagnostics.raw_sample_count == len(samples)
+    assert diagnostics.unique_sample_count == len(samples) - 1
+    assert diagnostics.duplicate_factor == pytest.approx(len(samples) / (len(samples) - 1))

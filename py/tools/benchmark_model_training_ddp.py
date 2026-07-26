@@ -235,6 +235,7 @@ def benchmark_rank(
                 dtype=torch.int8,
                 device=device,
             ),
+            occurrence_counts=torch.ones(arguments.local_batch_size, dtype=torch.int32, device=device),
         )
 
         global_batch_size = arguments.local_batch_size * world_size

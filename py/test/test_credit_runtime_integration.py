@@ -160,6 +160,10 @@ def _replay_dataset(sample_count: int) -> SelfPlayDataset:
     for sample_index in range(sample_count):
         state = np.zeros((C, H, W), dtype=np.int8)
         state[0, sample_index % H, sample_index % W] = 1
+        for bit_index in range(31):
+            state[1 + bit_index // (H * W), (bit_index // W) % H, bit_index % W] = (
+                sample_index >> bit_index
+            ) & 1
         dataset.add_sample(
             state=state,
             visit_counts=[(sample_index % 64, 3), ((sample_index + 1) % 64, 1)],

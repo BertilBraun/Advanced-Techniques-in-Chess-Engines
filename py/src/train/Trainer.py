@@ -130,6 +130,11 @@ class Trainer:
         outcome_target_eligible = batch.outcome_target_eligible.to(device=self.model.device)
         material_result_scores = batch.material_result_scores.to(device=self.model.device)
         material_target_eligible = batch.material_target_eligible.to(device=self.model.device)
+        occurrence_counts = batch.occurrence_counts.to(device=self.model.device)
+        sample_weights = torch.sqrt(occurrence_counts.to(dtype=torch.float32)).clamp(
+            max=self.args.duplicate_multiplicity_weight_cap
+        )
+        sample_weights /= sample_weights.mean()
         termination_reasons = batch.termination_reasons.to(device=self.model.device)
         mcts_target_eligible = termination_reasons.ne(int(TerminationReason.DIAGNOSTIC))
 
@@ -137,10 +142,11 @@ class Trainer:
         value_probabilities = torch.softmax(value_logits, dim=1)
         expected_scores = wdl_to_scalar(value_probabilities)
 
-        policy_loss = F.cross_entropy(policy_logits, policy_targets)
+        policy_losses = F.cross_entropy(policy_logits, policy_targets, reduction='none')
+        policy_loss = (policy_losses * sample_weights).mean()
         outcome_losses = F.cross_entropy(value_logits, final_outcomes, reduction='none')
         outcome_loss = (
-            outcome_losses * outcome_target_eligible.to(dtype=outcome_losses.dtype)
+            outcome_losses * outcome_target_eligible.to(dtype=outcome_losses.dtype) * sample_weights
         ).sum() / outcome_losses.shape[0]
         mcts_huber_losses = F.huber_loss(
             expected_scores,
@@ -148,7 +154,7 @@ class Trainer:
             reduction='none',
         )
         mcts_auxiliary_loss = (
-            mcts_huber_losses * mcts_target_eligible.to(dtype=mcts_huber_losses.dtype)
+            mcts_huber_losses * mcts_target_eligible.to(dtype=mcts_huber_losses.dtype) * sample_weights
         ).sum() / mcts_huber_losses.shape[0]
         material_huber_losses = F.huber_loss(
             expected_scores,
@@ -156,7 +162,9 @@ class Trainer:
             reduction='none',
         )
         material_auxiliary_loss = (
-            material_huber_losses * material_target_eligible.to(dtype=material_huber_losses.dtype)
+            material_huber_losses
+            * material_target_eligible.to(dtype=material_huber_losses.dtype)
+            * sample_weights
         ).sum() / material_huber_losses.shape[0]
         combined_value_loss = (
             self.args.outcome_value_loss_weight * (outcome_loss + material_auxiliary_loss)

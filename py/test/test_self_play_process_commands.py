@@ -25,6 +25,7 @@ from src.train.CreditPublication import (
     PublicationValidationScope,
     PublishedArtifact,
 )
+from src.train.RollingReplayBuffer import ReplayShardManifest, TerminationCounts
 
 
 @dataclass
@@ -163,10 +164,31 @@ def test_replay_flush_records_only_new_completed_searches(
     process.last_flushed_completed_searches = 10
     captured_searches: list[int] = []
 
-    def capture_shard(**arguments: object) -> None:
+    def capture_shard(**arguments: object) -> ReplayShardManifest:
         shard_dataset = arguments['dataset']
         assert isinstance(shard_dataset, SelfPlayDataset)
         captured_searches.append(shard_dataset.stats.completed_searches)
+        return ReplayShardManifest(
+            schema_version=5,
+            shard_id='test',
+            game_count=1,
+            unique_sample_count=1,
+            raw_sample_count=1,
+            completed_searches=shard_dataset.stats.completed_searches,
+            producing_worker=2,
+            minimum_model_version=3,
+            maximum_model_version=4,
+            termination_counts=TerminationCounts(
+                natural=1,
+                resignation=0,
+                ply_cap=0,
+                material_adjudication=0,
+                diagnostic=0,
+            ),
+            content_sha256='a' * 64,
+            creation_timestamp_seconds=0.0,
+            hdf5_file_name='test.hdf5',
+        )
 
     monkeypatch.setattr('src.cluster.SelfPlayProcess.commit_replay_shard', capture_shard)
 

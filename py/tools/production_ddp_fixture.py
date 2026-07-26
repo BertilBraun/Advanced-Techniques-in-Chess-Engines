@@ -86,6 +86,7 @@ def write_replay_fixture(
             'opponent_piece_counts',
             data=np.full(sample_count, 8, dtype=np.uint8),
         )
+        file.create_dataset('occurrence_counts', data=np.ones(sample_count, dtype=np.int32))
         file.attrs['replay_schema_version'] = REPLAY_SCHEMA_VERSION
         file.attrs['metadata'] = str(SelfPlayDataset._get_current_metadata())
         file.attrs['stats'] = str(stats._asdict())

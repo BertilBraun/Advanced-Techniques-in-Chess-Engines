@@ -6,7 +6,7 @@ import torch
 
 from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS
+from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS, log_scalar
 from src.util.communication import (
     Communication,
     FLUSH_REPLAY_SHARD,
@@ -266,12 +266,25 @@ class SelfPlayProcess:
             (maximum for _, maximum in model_version_ranges),
             default=iteration,
         )
-        commit_replay_shard(
+        manifest = commit_replay_shard(
             dataset=self.self_play.dataset,
             replay_inbox=Path(self.args.save_path) / 'replay_inbox',
             producing_worker=self.node_id,
             minimum_model_version=minimum_model_version,
             maximum_model_version=maximum_model_version,
+        )
+        log_scalar('replay/raw_rows_per_shard', manifest.raw_sample_count, iteration)
+        log_scalar('replay/unique_groups_per_shard', manifest.unique_sample_count, iteration)
+        log_scalar('replay/duplicate_factor_per_shard', manifest.duplicate_factor, iteration)
+        log_scalar(
+            'replay/effective_multiplicity_weight_per_shard',
+            manifest.effective_multiplicity_weight,
+            iteration,
+        )
+        log_scalar(
+            'replay/conflicting_target_groups_per_shard',
+            manifest.conflicting_target_groups,
+            iteration,
         )
         self.last_flushed_completed_searches = completed_searches
         self.self_play.dataset = SelfPlayDataset()

@@ -51,6 +51,7 @@ REPLAY_DATASETS = (
     'plies',
     'current_player_piece_counts',
     'opponent_piece_counts',
+    'occurrence_counts',
 )
 
 
@@ -82,6 +83,10 @@ class ReplayShardManifest(BaseModel):
     shard_id: str
     game_count: int
     unique_sample_count: int
+    raw_sample_count: int = Field(default=0, ge=0)
+    duplicate_factor: float = Field(default=1.0, ge=1.0)
+    conflicting_target_groups: int = Field(default=0, ge=0)
+    effective_multiplicity_weight: float = Field(default=0.0, ge=0.0)
     completed_searches: int = Field(default=0, ge=0)
     producing_worker: int
     minimum_model_version: int
@@ -361,27 +366,32 @@ def commit_replay_shard(
     if final_hdf5_path.exists() or manifest_path.exists():
         raise ValueError(f'Replay shard {resolved_shard_id} already exists.')
 
+    aggregated_dataset, aggregation = dataset.aggregate_duplicates()
     replay_inbox.mkdir(parents=True, exist_ok=True)
-    if not dataset.save_to_path(final_hdf5_path):
+    if not aggregated_dataset.save_to_path(final_hdf5_path):
         raise RuntimeError(f'Failed to write replay shard {resolved_shard_id}.')
 
     with h5py.File(final_hdf5_path, 'r') as file:
         SelfPlayDataset._require_current_schema(file, final_hdf5_path)
         unique_sample_count = int(file['states'].shape[0])
-    if unique_sample_count != len(dataset):
+    if unique_sample_count != len(aggregated_dataset):
         final_hdf5_path.unlink()
         raise RuntimeError('Committed replay shard sample count does not match its source dataset.')
 
     manifest = ReplayShardManifest(
         schema_version=REPLAY_SCHEMA_VERSION,
         shard_id=resolved_shard_id,
-        game_count=dataset.stats.num_games,
+        game_count=aggregated_dataset.stats.num_games,
         unique_sample_count=unique_sample_count,
-        completed_searches=dataset.stats.completed_searches,
+        raw_sample_count=aggregation.raw_sample_count,
+        duplicate_factor=aggregation.duplicate_factor,
+        conflicting_target_groups=aggregation.conflicting_target_groups,
+        effective_multiplicity_weight=aggregation.effective_multiplicity_weight,
+        completed_searches=aggregated_dataset.stats.completed_searches,
         producing_worker=producing_worker,
         minimum_model_version=minimum_model_version,
         maximum_model_version=maximum_model_version,
-        termination_counts=TerminationCounts.from_targets(dataset.value_targets),
+        termination_counts=TerminationCounts.from_targets(aggregated_dataset.value_targets),
         content_sha256=file_sha256(final_hdf5_path),
         creation_timestamp_seconds=time.time(),
         hdf5_file_name=final_hdf5_path.name,
@@ -772,6 +782,10 @@ class RollingReplayBuffer:
                     file['opponent_piece_counts'][first_index:stop_index],
                     dtype=np.uint8,
                 )
+                read_occurrence_counts = np.asarray(
+                    file['occurrence_counts'][first_index:stop_index],
+                    dtype=np.int32,
+                )
 
             read_arrays = (
                 read_states,
@@ -785,6 +799,7 @@ class RollingReplayBuffer:
                 read_plies,
                 read_current_counts,
                 read_opponent_counts,
+                read_occurrence_counts,
             )
             bytes_read += _arrays_payload_bytes(read_arrays)
             states = read_states[selection]
@@ -798,6 +813,7 @@ class RollingReplayBuffer:
             plies = read_plies[selection]
             current_counts = read_current_counts[selection]
             opponent_counts = read_opponent_counts[selection]
+            occurrence_counts = read_occurrence_counts[selection]
             selected_bytes += _arrays_payload_bytes(
                 (
                     states,
@@ -811,6 +827,7 @@ class RollingReplayBuffer:
                     plies,
                     current_counts,
                     opponent_counts,
+                    occurrence_counts,
                 )
             )
 
@@ -835,6 +852,7 @@ class RollingReplayBuffer:
                     ply=int(plies[source_position]),
                     current_player_piece_count=int(current_counts[source_position]),
                     opponent_piece_count=int(opponent_counts[source_position]),
+                    occurrence_count=int(occurrence_counts[source_position]),
                 )
 
         self._last_decode_statistics = ReplayDecodeStatistics(
@@ -1373,6 +1391,12 @@ def _decode_with_deterministic_symmetry(
             np.fromiter(
                 (metadata.opponent_piece_count for metadata in sample_metadata),
                 dtype=np.int8,
+            )
+        ),
+        occurrence_counts=torch.from_numpy(
+            np.fromiter(
+                (metadata.occurrence_count for metadata in sample_metadata),
+                dtype=np.int32,
             )
         ),
     )

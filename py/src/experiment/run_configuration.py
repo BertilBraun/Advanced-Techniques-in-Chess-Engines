@@ -293,6 +293,7 @@ class WorkloadConfiguration(BaseModel):
     outcome_value_loss_weight: float = Field(default=0.85, ge=0.0, le=1.0)
     mcts_value_loss_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     mcts_value_loss_scale: float = Field(default=1.0, gt=0.0)
+    duplicate_multiplicity_weight_cap: float = Field(default=4.0, ge=1.0)
     self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
@@ -794,6 +795,7 @@ def apply_run_configuration(
     training_args.training.outcome_value_loss_weight = workload.outcome_value_loss_weight
     training_args.training.mcts_value_loss_weight = workload.mcts_value_loss_weight
     training_args.training.mcts_value_loss_scale = workload.mcts_value_loss_scale
+    training_args.training.duplicate_multiplicity_weight_cap = workload.duplicate_multiplicity_weight_cap
     training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies
     training_args.self_play.maximum_game_plies_until_iteration = workload.self_play_maximum_game_plies_until_iteration

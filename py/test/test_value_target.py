@@ -87,6 +87,7 @@ def training_batch(
         plies=torch.arange(sample_count, dtype=torch.int32),
         current_player_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
         opponent_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
+        occurrence_counts=torch.ones(sample_count, dtype=torch.int32),
     )
 
 

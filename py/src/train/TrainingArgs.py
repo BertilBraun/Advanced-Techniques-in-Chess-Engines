@@ -316,6 +316,8 @@ class TrainingParams:
     """Weight of expected-score Huber loss against the stored MCTS root value."""
     mcts_value_loss_scale: float = 1.0
     """Scale applied to MCTS Huber loss before its objective weight."""
+    duplicate_multiplicity_weight_cap: float = 4.0
+    """Maximum sqrt-multiplicity weight applied to aggregated replay samples."""
     policy_loss_weight: float = 1.0
     """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
 
@@ -332,6 +334,8 @@ class TrainingParams:
             raise ValueError('Value-objective component weights must sum to 1.')
         if self.mcts_value_loss_scale <= 0.0:
             raise ValueError('MCTS value-loss scale must be positive.')
+        if self.duplicate_multiplicity_weight_cap < 1.0:
+            raise ValueError('Duplicate multiplicity weight cap must be at least one.')
         if self.credit_training is not None:
             self.credit_training.presentation_credits_per_quantum(self.global_batch_size)
             self.credit_training.unique_samples_per_quantum(self.global_batch_size)

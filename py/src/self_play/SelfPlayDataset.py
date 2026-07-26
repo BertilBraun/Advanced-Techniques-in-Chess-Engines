@@ -1,6 +1,7 @@
 from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
+from math import sqrt
 
 import h5py
 import torch
@@ -42,6 +43,7 @@ class TrainingBatch:
     plies: torch.Tensor
     current_player_piece_counts: torch.Tensor
     opponent_piece_counts: torch.Tensor
+    occurrence_counts: torch.Tensor
 
     def __len__(self) -> int:
         return int(self.states.shape[0])
@@ -62,6 +64,7 @@ class TrainingBatch:
             plies=self.plies[rows],
             current_player_piece_counts=self.current_player_piece_counts[rows],
             opponent_piece_counts=self.opponent_piece_counts[rows],
+            occurrence_counts=self.occurrence_counts[rows],
         )
 
     def pin_memory(self) -> TrainingBatch:
@@ -77,6 +80,7 @@ class TrainingBatch:
             plies=self.plies.pin_memory(),
             current_player_piece_counts=self.current_player_piece_counts.pin_memory(),
             opponent_piece_counts=self.opponent_piece_counts.pin_memory(),
+            occurrence_counts=self.occurrence_counts.pin_memory(),
         )
 
 
@@ -93,6 +97,7 @@ class TrainingSample:
     ply: torch.Tensor
     current_player_piece_count: torch.Tensor
     opponent_piece_count: torch.Tensor
+    occurrence_count: torch.Tensor
 
 
 @dataclass(frozen=True)
@@ -100,6 +105,7 @@ class ReplaySampleMetadata:
     ply: int
     current_player_piece_count: int
     opponent_piece_count: int
+    occurrence_count: int = 1
 
     def __post_init__(self) -> None:
         if self.ply < 0:
@@ -108,6 +114,20 @@ class ReplaySampleMetadata:
             raise ValueError('Current-player piece count must be in [0, 16].')
         if not 0 <= self.opponent_piece_count <= 16:
             raise ValueError('Opponent piece count must be in [0, 16].')
+        if self.occurrence_count <= 0:
+            raise ValueError('Replay occurrence count must be positive.')
+
+
+@dataclass(frozen=True)
+class DuplicateAggregationDiagnostics:
+    raw_sample_count: int
+    unique_sample_count: int
+    conflicting_target_groups: int
+    effective_multiplicity_weight: float
+
+    @property
+    def duplicate_factor(self) -> float:
+        return self.raw_sample_count / self.unique_sample_count if self.unique_sample_count else 0.0
 
 
 def chess_sample_metadata(state: npt.NDArray[np.int8], ply: int) -> ReplaySampleMetadata:
@@ -171,6 +191,9 @@ def training_batch_from_raw_samples(
         ),
         opponent_piece_counts=torch.from_numpy(
             np.fromiter((metadata.opponent_piece_count for metadata in sample_metadata), dtype=np.int8)
+        ),
+        occurrence_counts=torch.from_numpy(
+            np.fromiter((metadata.occurrence_count for metadata in sample_metadata), dtype=np.int32)
         ),
     )
 
@@ -250,6 +273,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 dtype=torch.int8,
             ),
             opponent_piece_count=torch.tensor(self.sample_metadata[idx].opponent_piece_count, dtype=torch.int8),
+            occurrence_count=torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.int32),
         )
 
     def __getitems__(self, indices: list[int]) -> TrainingBatch:
@@ -282,11 +306,16 @@ class SelfPlayDataset(Dataset[TrainingSample]):
 
     @timeit
     def deduplicate(self) -> SelfPlayDataset:
-        """Merge only samples whose board and complete value-target provenance agree."""
+        dataset, _ = self.aggregate_duplicates()
+        return dataset
+
+    def aggregate_duplicates(self) -> tuple[SelfPlayDataset, DuplicateAggregationDiagnostics]:
+        """Aggregate compatible duplicate targets and retain conflicting hard outcomes."""
         merged_samples: dict[
-            tuple[bytes, ReplayValueTarget],
-            tuple[npt.NDArray[np.uint16], ReplaySampleMetadata],
+            tuple[bytes, FinalOutcome, TerminationReason, bool, bool],
+            tuple[dict[int, int], float, float, int, ReplaySampleMetadata],
         ] = {}
+        outcomes_by_state: dict[bytes, set[FinalOutcome]] = {}
 
         for state, visit_counts, value_target, metadata in zip(
             self.encoded_states,
@@ -294,31 +323,107 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             self.value_targets,
             self.sample_metadata,
         ):
-            sample_key = (state, value_target)
+            sample_key = (
+                state,
+                value_target.final_outcome,
+                value_target.termination_reason,
+                value_target.outcome_target_eligible,
+                value_target.material_target_eligible,
+            )
+            outcomes_by_state.setdefault(state, set()).add(value_target.final_outcome)
             if sample_key in merged_samples:
-                visit_count_sum, existing_metadata = merged_samples[sample_key]
-                counts_by_move = {int(move): int(count) for move, count in visit_count_sum}
+                (
+                    counts_by_move,
+                    root_value_sum,
+                    material_score_sum,
+                    occurrence_count,
+                    existing_metadata,
+                ) = merged_samples[sample_key]
                 for move, count in visit_counts:
                     counts_by_move[int(move)] = counts_by_move.get(int(move), 0) + int(count)
-                if metadata != existing_metadata:
-                    raise ValueError('Duplicate replay positions disagree on typed sample metadata.')
+                if (
+                    metadata.current_player_piece_count != existing_metadata.current_player_piece_count
+                    or metadata.opponent_piece_count != existing_metadata.opponent_piece_count
+                ):
+                    raise ValueError('Duplicate replay positions disagree on piece-count metadata.')
+                added_occurrences = metadata.occurrence_count
+                combined_occurrences = occurrence_count + added_occurrences
                 merged_samples[sample_key] = (
-                    np.asarray(tuple(counts_by_move.items()), dtype=np.uint16),
-                    existing_metadata,
+                    counts_by_move,
+                    root_value_sum + value_target.mcts_root_value * added_occurrences,
+                    material_score_sum + value_target.material_result_score * added_occurrences,
+                    combined_occurrences,
+                    ReplaySampleMetadata(
+                        ply=round(
+                            (
+                                existing_metadata.ply * occurrence_count
+                                + metadata.ply * added_occurrences
+                            )
+                            / combined_occurrences
+                        ),
+                        current_player_piece_count=existing_metadata.current_player_piece_count,
+                        opponent_piece_count=existing_metadata.opponent_piece_count,
+                        occurrence_count=combined_occurrences,
+                    ),
                 )
             else:
-                merged_samples[sample_key] = (visit_counts, metadata)
+                occurrence_count = metadata.occurrence_count
+                merged_samples[sample_key] = (
+                    {int(move): int(count) for move, count in visit_counts},
+                    value_target.mcts_root_value * occurrence_count,
+                    value_target.material_result_score * occurrence_count,
+                    occurrence_count,
+                    metadata,
+                )
 
         deduplicated_dataset = SelfPlayDataset()
 
-        for (state, value_target), (visit_count_sum, metadata) in merged_samples.items():
+        for (
+            state,
+            final_outcome,
+            termination_reason,
+            outcome_target_eligible,
+            material_target_eligible,
+        ), (
+            counts_by_move,
+            root_value_sum,
+            material_score_sum,
+            occurrence_count,
+            metadata,
+        ) in merged_samples.items():
+            maximum_count = max(counts_by_move.values())
+            scale = min(1.0, np.iinfo(np.uint16).max / maximum_count)
+            visit_count_sum = np.asarray(
+                tuple(
+                    (move, max(1, round(count * scale)))
+                    for move, count in sorted(counts_by_move.items())
+                ),
+                dtype=np.uint16,
+            )
             deduplicated_dataset.encoded_states.append(state)
             deduplicated_dataset.visit_counts.append(visit_count_sum)
-            deduplicated_dataset.value_targets.append(value_target)
+            deduplicated_dataset.value_targets.append(
+                ReplayValueTarget(
+                    final_outcome=final_outcome,
+                    mcts_root_value=root_value_sum / occurrence_count,
+                    termination_reason=termination_reason,
+                    outcome_target_eligible=outcome_target_eligible,
+                    material_result_score=material_score_sum / occurrence_count,
+                    material_target_eligible=material_target_eligible,
+                )
+            )
             deduplicated_dataset.sample_metadata.append(metadata)
 
         deduplicated_dataset.stats = self.stats.overwrite(num_samples=len(merged_samples))
-        return deduplicated_dataset
+        diagnostics = DuplicateAggregationDiagnostics(
+            raw_sample_count=sum(metadata.occurrence_count for metadata in self.sample_metadata),
+            unique_sample_count=len(merged_samples),
+            conflicting_target_groups=sum(len(outcomes) > 1 for outcomes in outcomes_by_state.values()),
+            effective_multiplicity_weight=sum(
+                sqrt(metadata.occurrence_count) for metadata in deduplicated_dataset.sample_metadata
+            ),
+        )
+        return deduplicated_dataset, diagnostics
 
     def shuffle(self) -> SelfPlayDataset:
         indices = np.arange(len(self))
@@ -383,6 +488,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file['opponent_piece_counts'][...],
                 dtype=np.uint8,
             )  # type: ignore
+            stored_occurrence_counts = np.asarray(file['occurrence_counts'][...], dtype=np.int32)  # type: ignore
             stored_lengths = {
                 len(stored_states),
                 len(stored_visit_counts),
@@ -395,6 +501,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 len(stored_plies),
                 len(stored_current_player_piece_counts),
                 len(stored_opponent_piece_counts),
+                len(stored_occurrence_counts),
             }
             if len(stored_lengths) != 1:
                 raise ValueError(f'Replay {file_path} has inconsistent sample-column lengths.')
@@ -433,11 +540,13 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     ply=int(ply),
                     current_player_piece_count=int(current_count),
                     opponent_piece_count=int(opponent_count),
+                    occurrence_count=int(occurrence_count),
                 )
-                for ply, current_count, opponent_count in zip(
+                for ply, current_count, opponent_count, occurrence_count in zip(
                     stored_plies,
                     stored_current_player_piece_counts,
                     stored_opponent_piece_counts,
+                    stored_occurrence_counts,
                 )
             ]
         return dataset
@@ -589,6 +698,13 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     data=np.fromiter(
                         (metadata.opponent_piece_count for metadata in self.sample_metadata),
                         dtype=np.uint8,
+                    ),
+                )
+                file.create_dataset(
+                    'occurrence_counts',
+                    data=np.fromiter(
+                        (metadata.occurrence_count for metadata in self.sample_metadata),
+                        dtype=np.int32,
                     ),
                 )
                 # write the metadata information about the current game, action size, representation shape, etc.
