@@ -31,6 +31,9 @@ class ReplaySchemaVersionError(ValueError):
     pass
 
 
+EVALUATION_DATASET_SCHEMA_VERSION = 3
+
+
 @dataclass(frozen=True)
 class TrainingBatch:
     states: torch.Tensor
@@ -456,10 +459,24 @@ class SelfPlayDataset(Dataset[TrainingSample]):
 
     @staticmethod
     def load_strict(file_path: str | PathLike) -> SelfPlayDataset:
+        return SelfPlayDataset._load_with_schema_versions(file_path, (REPLAY_SCHEMA_VERSION,))
+
+    @staticmethod
+    def load_evaluation(file_path: str | PathLike) -> SelfPlayDataset:
+        return SelfPlayDataset._load_with_schema_versions(
+            file_path,
+            (EVALUATION_DATASET_SCHEMA_VERSION, REPLAY_SCHEMA_VERSION),
+        )
+
+    @staticmethod
+    def _load_with_schema_versions(
+        file_path: str | PathLike,
+        accepted_schema_versions: tuple[int, ...],
+    ) -> SelfPlayDataset:
         dataset = SelfPlayDataset()
         with h5py.File(file_path, 'r') as file:
-            SelfPlayDataset._require_current_schema(file, file_path)
-            dataset.stats = SelfPlayDataset._load_stats_from_open_file(file)
+            schema_version = SelfPlayDataset._require_schema(file, file_path, accepted_schema_versions)
+            dataset.stats = SelfPlayDataset._load_stats_from_open_file(file, accepted_schema_versions)
             stored_states = np.asarray(file['states'][...])  # type: ignore
             stored_visit_counts = np.asarray(file['visit_counts'][...])  # type: ignore
             stored_final_outcomes = np.asarray(file['final_outcomes'][...], dtype=np.uint8)  # type: ignore
@@ -472,14 +489,6 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file['termination_reasons'][...],
                 dtype=np.uint8,
             )  # type: ignore
-            stored_material_result_scores = np.asarray(
-                file['material_result_scores'][...],
-                dtype=np.float32,
-            )  # type: ignore
-            stored_material_eligibility = np.asarray(
-                file['material_target_eligible'][...],
-                dtype=np.bool_,
-            )  # type: ignore
             stored_plies = np.asarray(file['plies'][...], dtype=np.int32)  # type: ignore
             stored_current_player_piece_counts = np.asarray(
                 file['current_player_piece_counts'][...],
@@ -489,9 +498,25 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file['opponent_piece_counts'][...],
                 dtype=np.uint8,
             )  # type: ignore
-            stored_occurrence_counts = np.asarray(file['occurrence_counts'][...], dtype=np.int32)  # type: ignore
-            stored_starting_fens = np.asarray(file['position_starting_fens'].asstr()[...])
-            stored_moves_uci = np.asarray(file['position_moves_uci'].asstr()[...])
+            if schema_version == REPLAY_SCHEMA_VERSION:
+                stored_material_result_scores = np.asarray(
+                    file['material_result_scores'][...],
+                    dtype=np.float32,
+                )  # type: ignore
+                stored_material_eligibility = np.asarray(
+                    file['material_target_eligible'][...],
+                    dtype=np.bool_,
+                )  # type: ignore
+                stored_occurrence_counts = np.asarray(file['occurrence_counts'][...], dtype=np.int32)  # type: ignore
+                stored_starting_fens = np.asarray(file['position_starting_fens'].asstr()[...])
+                stored_moves_uci = np.asarray(file['position_moves_uci'].asstr()[...])
+            else:
+                sample_count = len(stored_states)
+                stored_material_result_scores = np.zeros(sample_count, dtype=np.float32)
+                stored_material_eligibility = np.zeros(sample_count, dtype=np.bool_)
+                stored_occurrence_counts = np.ones(sample_count, dtype=np.int32)
+                stored_starting_fens = np.full(sample_count, '', dtype=np.str_)
+                stored_moves_uci = np.asarray(['[]'] * sample_count, dtype=np.str_)
             stored_lengths = {
                 len(stored_states),
                 len(stored_visit_counts),
@@ -574,8 +599,11 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             return SelfPlayDatasetStats()
 
     @staticmethod
-    def _load_stats_from_open_file(file: h5py.File) -> SelfPlayDatasetStats:
-        SelfPlayDataset._require_current_schema(file, file.filename)
+    def _load_stats_from_open_file(
+        file: h5py.File,
+        accepted_schema_versions: tuple[int, ...] = (REPLAY_SCHEMA_VERSION,),
+    ) -> SelfPlayDatasetStats:
+        SelfPlayDataset._require_schema(file, file.filename, accepted_schema_versions)
         metadata: dict[str, Any] = eval(file.attrs['metadata'])  # type: ignore
         message = f'Invalid metadata. Expected {SelfPlayDataset._get_current_metadata()}, got {metadata}'
         assert metadata == SelfPlayDataset._get_current_metadata(), message
@@ -585,16 +613,26 @@ class SelfPlayDataset(Dataset[TrainingSample]):
 
     @staticmethod
     def _require_current_schema(file: h5py.File, file_path: str | PathLike) -> None:
+        SelfPlayDataset._require_schema(file, file_path, (REPLAY_SCHEMA_VERSION,))
+
+    @staticmethod
+    def _require_schema(
+        file: h5py.File,
+        file_path: str | PathLike,
+        accepted_schema_versions: tuple[int, ...],
+    ) -> int:
         schema_version = file.attrs.get('replay_schema_version')
         if schema_version is None:
             raise ReplaySchemaVersionError(
                 f'Replay {file_path} has no schema version and is legacy replay; '
                 f'expected schema {REPLAY_SCHEMA_VERSION}. Legacy mixed scalar targets cannot be converted.'
             )
-        if int(schema_version) != REPLAY_SCHEMA_VERSION:
+        parsed_schema_version = int(schema_version)
+        if parsed_schema_version not in accepted_schema_versions:
             raise ReplaySchemaVersionError(
                 f'Replay {file_path} uses schema {schema_version}; expected {REPLAY_SCHEMA_VERSION}.'
             )
+        return parsed_schema_version
 
     @staticmethod
     def load_iteration(folder_path: str | PathLike, iteration: int) -> SelfPlayDataset:

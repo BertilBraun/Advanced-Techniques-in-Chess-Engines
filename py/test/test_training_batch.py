@@ -245,6 +245,34 @@ def test_legacy_mixed_scalar_replay_is_rejected(tmp_path: Path) -> None:
         SelfPlayDataset.load_strict(legacy_path)
 
 
+def test_schema_three_evaluation_dataset_loads_without_relaxing_replay_loading(tmp_path: Path) -> None:
+    samples = dataset()
+    evaluation_path = tmp_path / 'evaluation-schema-3.hdf5'
+    assert samples.save_to_path(evaluation_path)
+    with h5py.File(evaluation_path, 'r+') as file:
+        file.attrs['replay_schema_version'] = 3
+        for column in (
+            'material_result_scores',
+            'material_target_eligible',
+            'occurrence_counts',
+            'position_starting_fens',
+            'position_moves_uci',
+        ):
+            del file[column]
+
+    with pytest.raises(ReplaySchemaVersionError, match='uses schema 3; expected 6'):
+        SelfPlayDataset.load_strict(evaluation_path)
+
+    loaded = SelfPlayDataset.load_evaluation(evaluation_path)
+
+    assert len(loaded) == len(samples)
+    assert all(not target.material_target_eligible for target in loaded.value_targets)
+    assert all(target.material_result_score == 0.0 for target in loaded.value_targets)
+    assert all(metadata.occurrence_count == 1 for metadata in loaded.sample_metadata)
+    assert all(metadata.starting_fen is None for metadata in loaded.sample_metadata)
+    assert all(not metadata.moves_uci for metadata in loaded.sample_metadata)
+
+
 def test_deduplicate_preserves_conflicting_hard_targets_and_provenance() -> None:
     samples = dataset()
     samples.encoded_states[1] = samples.encoded_states[0]

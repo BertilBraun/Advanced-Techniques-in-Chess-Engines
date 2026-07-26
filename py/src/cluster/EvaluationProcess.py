@@ -176,7 +176,7 @@ def _eval_vs_dataset(
 ) -> None:
     _activate_evaluation_device(model_evaluation)
     with TensorboardWriter(run, 'evaluation_dataset', postfix_pid=False):
-        dataset = SelfPlayDataset.load(dataset_path)
+        dataset = SelfPlayDataset.load_evaluation(dataset_path)
         (
             policy_accuracy_at_1,
             policy_accuracy_at_5,
