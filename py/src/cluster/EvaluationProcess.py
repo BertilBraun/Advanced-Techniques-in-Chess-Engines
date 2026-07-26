@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 import subprocess
 import torch
@@ -34,6 +35,11 @@ from src.experiment.run_configuration import RunManifest
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 EVALUATION_PROCESS_POLL_SECONDS = 1.0
+
+
+class EvaluationTier(str, Enum):
+    INSPECTION = 'inspection'
+    FULL = 'full'
 
 
 @dataclass(frozen=True)
@@ -154,10 +160,11 @@ def run_evaluation_process(
     args: TrainingArgs,
     iteration: int,
     metrics_step: int | None = None,
+    tier: EvaluationTier = EvaluationTier.FULL,
 ) -> None:
     evaluation_process = EvaluationProcess(args)
     with log_exceptions('Evaluation process'):
-        evaluation_process.run(run, iteration, metrics_step)
+        evaluation_process.run(run, iteration, metrics_step, tier=tier)
 
 
 def _eval_vs_dataset(
@@ -405,6 +412,29 @@ def _eval_vs_random(
             _result_metrics(results),
             metrics_step,
         )
+        log_scalars(
+            f'evaluation/mcts_{model_evaluation.num_searches_per_turn}_vs_random',
+            _result_metrics(results),
+            metrics_step,
+        )
+
+
+def _eval_teacher_vs_random(
+    run: int,
+    model_evaluation: ModelEvaluation,
+    iteration: int,
+    _: str,
+    metrics_step: int,
+) -> None:
+    _activate_evaluation_device(model_evaluation)
+    with TensorboardWriter(run, 'evaluation_teacher_search_vs_random', postfix_pid=False):
+        results = model_evaluation.play_vs_random()
+        log(f'Results after teacher-budget search vs random at iteration {iteration}:', results)
+        log_scalars(
+            f'evaluation/mcts_teacher_{model_evaluation.num_searches_per_turn}_vs_random',
+            _result_metrics(results),
+            metrics_step,
+        )
 
 
 def _eval_policy_vs_random(
@@ -458,6 +488,7 @@ class EvaluationProcess:
         iteration: int,
         metrics_step: int | None = None,
         provenance: EvaluationRunProvenance | None = None,
+        tier: EvaluationTier = EvaluationTier.FULL,
     ) -> None:
         """Play two most recent models against each other."""
         if not self.eval_args:
@@ -473,19 +504,30 @@ class EvaluationProcess:
         ) and resolved_provenance is None:
             resolved_provenance = load_evaluation_run_provenance(self.args.save_path)
 
-        def create_model_evaluation() -> tuple[ModelEvaluation, int]:
+        def create_model_evaluation(
+            searches_per_turn: int | None = None,
+            game_limit: int | None = None,
+        ) -> tuple[ModelEvaluation, int]:
             nonlocal evaluation_task_index
             device_cycle = self.args.cluster.evaluation_device_cycle
             physical_device_id = evaluation_device_for_task(device_cycle, evaluation_task_index) if USE_GPU else 0
             evaluation_task_index += 1
-            return (
-                ModelEvaluation(
+            if game_limit is not None and game_limit % 2:
+                raise ValueError('Teacher-budget evaluation games must contain complete color-swapped pairs.')
+            model_evaluation = ModelEvaluation(
                     iteration,
                     self.args,
                     device_id=0,
-                    num_games=self.eval_args.num_games,
-                    num_searches_per_turn=self.eval_args.num_searches_per_turn,
-                ),
+                    num_games=self.eval_args.num_games if game_limit is None else game_limit,
+                    num_searches_per_turn=(
+                        self.eval_args.num_searches_per_turn
+                        if searches_per_turn is None
+                        else searches_per_turn
+                    ),
+                    paired_opening_count=None if game_limit is None else game_limit // 2,
+                )
+            return (
+                model_evaluation,
                 physical_device_id,
             )
 
@@ -508,7 +550,12 @@ class EvaluationProcess:
                 )
                 start_process(p, physical_device_id)
 
-            for how_many_previous in self.eval_args.previous_model_offsets:
+            previous_offsets = (
+                self.eval_args.previous_model_offsets
+                if tier is EvaluationTier.FULL
+                else self.eval_args.previous_model_offsets[:1]
+            )
+            for how_many_previous in previous_offsets:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_previous,
@@ -523,7 +570,7 @@ class EvaluationProcess:
                 )
                 start_process(p, physical_device_id)
 
-            if self.eval_args.reference_model_path is not None:
+            if tier is EvaluationTier.FULL and self.eval_args.reference_model_path is not None:
                 assert resolved_provenance is not None
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
@@ -539,7 +586,7 @@ class EvaluationProcess:
                 )
                 start_process(p, physical_device_id)
 
-            if self.eval_args.stockfish_binary_path is not None:
+            if tier is EvaluationTier.FULL and self.eval_args.stockfish_binary_path is not None:
                 assert resolved_provenance is not None
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
@@ -569,8 +616,24 @@ class EvaluationProcess:
                         ),
                     )
                     start_process(p, physical_device_id)
+                if tier is EvaluationTier.INSPECTION:
+                    model_evaluation, physical_device_id = create_model_evaluation(
+                        searches_per_turn=self.eval_args.teacher_searches_per_turn,
+                        game_limit=self.eval_args.teacher_evaluation_games,
+                    )
+                    p = mp.Process(
+                        target=_eval_teacher_vs_random,
+                        args=(
+                            run,
+                            model_evaluation,
+                            iteration,
+                            self.args.save_path,
+                            resolved_metrics_step,
+                        ),
+                    )
+                    start_process(p, physical_device_id)
 
-            historical_model_iterations = select_historical_model_iterations(
+            historical_model_iterations = () if tier is EvaluationTier.INSPECTION else select_historical_model_iterations(
                 iteration,
                 self.eval_args.historical_model_iterations,
                 self.args.artifact_retention.milestone_inference_interval,
@@ -592,7 +655,7 @@ class EvaluationProcess:
                 )
                 start_process(p, physical_device_id)
 
-            for level in self.eval_args.stockfish_skill_levels:
+            for level in (() if tier is EvaluationTier.INSPECTION else self.eval_args.stockfish_skill_levels):
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_stockfish,

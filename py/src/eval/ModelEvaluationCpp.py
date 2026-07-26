@@ -52,7 +52,13 @@ class ModelEvaluation:
     """This class provides functionallity to evaluate only the models performance without any search, to be used in the training loop to evaluate the model against itself"""
 
     def __init__(
-        self, iteration: int, args: TrainingArgs, device_id: int, num_games: int = 64, num_searches_per_turn: int = 20
+        self,
+        iteration: int,
+        args: TrainingArgs,
+        device_id: int,
+        num_games: int = 64,
+        num_searches_per_turn: int = 20,
+        paired_opening_count: int | None = None,
     ) -> None:
         self.iteration = iteration
         self.num_games = num_games
@@ -63,6 +69,10 @@ class ModelEvaluation:
             self.paired_schedule = None
         else:
             openings = load_opening_suite(Path(args.evaluation.opening_suite_path))
+            if paired_opening_count is not None:
+                if paired_opening_count <= 0 or paired_opening_count > len(openings):
+                    raise ValueError('Paired opening count must select a nonempty subset of the opening suite.')
+                openings = openings[:paired_opening_count]
             self.paired_schedule = build_paired_schedule(openings)
             if len(self.paired_schedule) != num_games:
                 raise ValueError(

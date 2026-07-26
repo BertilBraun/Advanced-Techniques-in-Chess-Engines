@@ -247,6 +247,7 @@ class CreditTrainingConfiguration(BaseModel):
     retained_checkpoint_interval_steps: int = Field(gt=0)
     learning_rate_schedule: tuple[OptimizerStepLearningRateStage, ...] = Field(min_length=1)
     evaluation_interval_optimizer_steps: int = Field(default=1_000, gt=0)
+    full_evaluation_interval_optimizer_steps: int = Field(default=2_000, gt=0)
     evaluation_timeout_seconds: float = Field(default=2 * 60 * 60, gt=0)
     evaluation_maximum_attempts: int = Field(default=3, gt=0)
     evaluation_retry_backoff_seconds: float = Field(default=60, ge=0)
@@ -270,6 +271,7 @@ class CreditTrainingConfiguration(BaseModel):
             replay_capacity_ramp_model_versions=self.replay_capacity_ramp_model_versions,
             retained_checkpoint_interval_steps=self.retained_checkpoint_interval_steps,
             evaluation_interval_optimizer_steps=self.evaluation_interval_optimizer_steps,
+            full_evaluation_interval_optimizer_steps=self.full_evaluation_interval_optimizer_steps,
             evaluation_timeout_seconds=self.evaluation_timeout_seconds,
             evaluation_maximum_attempts=self.evaluation_maximum_attempts,
             evaluation_retry_backoff_seconds=self.evaluation_retry_backoff_seconds,
@@ -306,6 +308,8 @@ class WorkloadConfiguration(BaseModel):
     random_seed: int = Field(ge=0)
     evaluation_games: int = Field(gt=0)
     evaluation_searches_per_turn: int = Field(gt=0)
+    teacher_evaluation_searches_per_turn: int = Field(default=600, gt=0)
+    teacher_evaluation_games: int = Field(default=16, gt=0)
     evaluation_every_iterations: int = Field(gt=0)
 
     @model_validator(mode='after')
@@ -334,6 +338,8 @@ class WorkloadConfiguration(BaseModel):
             raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
+        if self.teacher_evaluation_games % 2 or self.teacher_evaluation_games > self.evaluation_games:
+            raise ValueError('Teacher evaluation games must be an even subset of the paired evaluation games.')
         if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_iteration == 0):
             raise ValueError('Self-play maximum game plies and its iteration limit must be configured together.')
         if self.self_play_final_maximum_game_plies is not None:
@@ -867,6 +873,8 @@ def apply_run_configuration(
         evaluation_protocol = configuration.evaluation_protocol
         training_args.evaluation.num_games = workload.evaluation_games
         training_args.evaluation.num_searches_per_turn = workload.evaluation_searches_per_turn
+        training_args.evaluation.teacher_searches_per_turn = workload.teacher_evaluation_searches_per_turn
+        training_args.evaluation.teacher_evaluation_games = workload.teacher_evaluation_games
         training_args.evaluation.every_n_iterations = workload.evaluation_every_iterations
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
         training_args.evaluation.parallel_searches = topology.evaluation_parallel_searches

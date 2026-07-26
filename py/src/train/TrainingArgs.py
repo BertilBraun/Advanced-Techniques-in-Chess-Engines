@@ -205,6 +205,7 @@ class CreditTrainingParams:
     replay_capacity_ramp_model_versions: int
     retained_checkpoint_interval_steps: int
     evaluation_interval_optimizer_steps: int = 1_000
+    full_evaluation_interval_optimizer_steps: int = 2_000
     evaluation_timeout_seconds: float = 2 * 60 * 60
     evaluation_maximum_attempts: int = 3
     evaluation_retry_backoff_seconds: float = 60
@@ -232,6 +233,11 @@ class CreditTrainingParams:
             raise ValueError('Evaluation interval must be positive.')
         if self.evaluation_interval_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Evaluation interval must align with training quanta.')
+        if (
+            self.full_evaluation_interval_optimizer_steps < self.evaluation_interval_optimizer_steps
+            or self.full_evaluation_interval_optimizer_steps % self.evaluation_interval_optimizer_steps
+        ):
+            raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
         if self.evaluation_timeout_seconds <= 0:
             raise ValueError('Evaluation timeout must be positive.')
         if self.evaluation_maximum_attempts <= 0:
@@ -386,6 +392,8 @@ class EvaluationParams:
     parallel_searches: int = 1
     direct_inference: DirectSelfPlayParams | None = None
     """Direct reusable inference pipeline configuration, or None for the general evaluation client."""
+    teacher_searches_per_turn: int = 600
+    teacher_evaluation_games: int = 16
 
 
 @dataclass

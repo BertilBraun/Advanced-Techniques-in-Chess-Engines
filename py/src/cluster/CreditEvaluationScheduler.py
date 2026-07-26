@@ -12,7 +12,7 @@ from typing import Protocol
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from torch.multiprocessing import Process
 
-from src.cluster.EvaluationProcess import run_evaluation_process
+from src.cluster.EvaluationProcess import EvaluationTier, run_evaluation_process
 from src.experiment.credit_telemetry import CreditEvaluationTelemetryStatus
 from src.train.CreditPublication import (
     CreditPublicationManifest,
@@ -24,7 +24,7 @@ from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log, warn
 
 
-CREDIT_EVALUATION_SCHEMA_VERSION = 1
+CREDIT_EVALUATION_SCHEMA_VERSION = 2
 
 
 class EvaluationProcessHandle(Protocol):
@@ -91,6 +91,7 @@ class CreditEvaluationSchedulerState(BaseModel):
 
     schema_version: int = CREDIT_EVALUATION_SCHEMA_VERSION
     pending: PendingCreditEvaluation | None = None
+    deferred: PendingCreditEvaluation | None = None
     active: ActiveCreditEvaluation | None = None
     results: tuple[CreditEvaluationResult, ...] = ()
 
@@ -119,6 +120,7 @@ class CreditEvaluationScheduler:
         self.maximum_attempts = parameters.evaluation_maximum_attempts
         self.retry_backoff_seconds = parameters.evaluation_retry_backoff_seconds
         self.evaluation_interval_optimizer_steps = parameters.evaluation_interval_optimizer_steps
+        self.full_evaluation_interval_optimizer_steps = parameters.full_evaluation_interval_optimizer_steps
         self.state_path = Path(args.save_path) / 'credit-evaluation-state.json'
         self._process: EvaluationProcessHandle | None = None
         self._state = self._load_state()
@@ -133,6 +135,8 @@ class CreditEvaluationScheduler:
         versions: set[int] = set()
         if self._state.pending is not None:
             versions.add(self._state.pending.source.model_version)
+        if self._state.deferred is not None:
+            versions.add(self._state.deferred.source.model_version)
         if self._state.active is not None:
             versions.add(self._state.active.source.model_version)
         return frozenset(versions)
@@ -148,6 +152,8 @@ class CreditEvaluationScheduler:
             return self._state.active.source.model_version
         if self._state.pending is not None:
             return self._state.pending.source.model_version
+        if self._state.deferred is not None:
+            return self._state.deferred.source.model_version
         if self._state.results:
             return self._state.results[-1].source.model_version
         return None
@@ -178,17 +184,29 @@ class CreditEvaluationScheduler:
         source = self._source(publication)
         active_version = self._state.active.source.model_version if self._state.active is not None else -1
         pending_version = self._state.pending.source.model_version if self._state.pending is not None else -1
+        deferred_version = self._state.deferred.source.model_version if self._state.deferred is not None else -1
         completed_versions = {result.source.model_version for result in self._state.results}
-        if source.model_version in completed_versions or source.model_version <= max(active_version, pending_version):
+        if source.model_version in completed_versions or source.model_version <= active_version:
             return
+        offered = PendingCreditEvaluation(source=source, next_attempt=1, not_before_seconds=0)
+        if source.model_version in {pending_version, deferred_version}:
+            return
+        pending = self._state.pending
+        deferred = self._state.deferred
+        if pending is None:
+            pending = offered
+        elif self._tier(pending.source) is self._tier(source):
+            if source.completed_optimizer_steps > pending.source.completed_optimizer_steps:
+                pending = offered
+        elif deferred is None:
+            deferred = offered
+        elif self._tier(deferred.source) is self._tier(source):
+            if source.completed_optimizer_steps > deferred.source.completed_optimizer_steps:
+                deferred = offered
+        elif source.completed_optimizer_steps > deferred.source.completed_optimizer_steps:
+            deferred = offered
         self._state = self._state.model_copy(
-            update={
-                'pending': PendingCreditEvaluation(
-                    source=source,
-                    next_attempt=1,
-                    not_before_seconds=0,
-                )
-            }
+            update={'pending': pending, 'deferred': deferred}
         )
         self._persist()
 
@@ -272,6 +290,7 @@ class CreditEvaluationScheduler:
             self.args,
             pending.source.completed_optimizer_steps,
         )
+        tier = self._tier(pending.source)
         process = Process(
             target=run_evaluation_process,
             args=(
@@ -279,6 +298,7 @@ class CreditEvaluationScheduler:
                 evaluation_args,
                 pending.source.model_version,
                 pending.source.model_version,
+                tier,
             ),
             name=f'credit-evaluation-model-{pending.source.model_version}-attempt-{pending.next_attempt}',
         )
@@ -298,7 +318,8 @@ class CreditEvaluationScheduler:
         self._process = process
         self._state = self._state.model_copy(
             update={
-                'pending': None,
+                'pending': self._state.deferred,
+                'deferred': None,
                 'active': ActiveCreditEvaluation(
                     source=pending.source,
                     attempt=pending.next_attempt,
@@ -309,7 +330,7 @@ class CreditEvaluationScheduler:
         )
         self._persist()
         log(
-            f'Starting evaluation at model {pending.source.model_version} '
+            f'Starting {tier.value} evaluation at model {pending.source.model_version} '
             f'(optimizer step {pending.source.completed_optimizer_steps}).'
         )
 
@@ -438,6 +459,11 @@ class CreditEvaluationScheduler:
             publication_manifest_sha256=file_sha256(path),
             jit_model_sha256=publication.jit_model.sha256,
         )
+
+    def _tier(self, source: CreditEvaluationSource) -> EvaluationTier:
+        if source.completed_optimizer_steps % self.full_evaluation_interval_optimizer_steps == 0:
+            return EvaluationTier.FULL
+        return EvaluationTier.INSPECTION
 
     def _load_state(self) -> CreditEvaluationSchedulerState:
         if not self.state_path.exists():
