@@ -51,6 +51,9 @@ struct MCTSStatistics {
     float averageDepth = 0.0f;
     float averageEntropy = 0.0f;
     float averageKLDivergence = 0.0f;
+    float averagePolicySearchKLDivergence = 0.0f;
+    float topMoveDisagreement = 0.0f;
+    float selectedMovePriorRank = 0.0f;
 };
 
 struct MCTSResults {

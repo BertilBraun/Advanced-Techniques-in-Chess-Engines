@@ -109,7 +109,7 @@ class _RefreshProbe:
     dataset: list[int] = field(default_factory=lambda: [1, 2, 3])
     roots: list[int] = field(default_factory=lambda: [10, 11])
     search_schedule_state: SearchScheduleState | None = None
-    refreshes: list[tuple[int, Path]] = field(default_factory=list)
+    refreshes: list[tuple[int, Path, bool]] = field(default_factory=list)
 
     def search_schedule(self, schedule_version: int) -> SearchScheduleState:
         return SearchScheduleState(
@@ -123,8 +123,10 @@ class _RefreshProbe:
     def update_search_schedule(self, schedule: SearchScheduleState) -> None:
         self.search_schedule_state = schedule
 
-    def refresh_model(self, model_version: int, model_path: Path) -> None:
-        self.refreshes.append((model_version, model_path))
+    def refresh_model(self, model_version: int, model_path: Path, discard_roots: bool = False) -> None:
+        self.refreshes.append((model_version, model_path, discard_roots))
+        if discard_roots:
+            self.roots = []
 
 
 def _credit_parameters() -> CreditTrainingParams:
@@ -313,13 +315,15 @@ def _refresh_self_play(
 
     assert process._refresh_model_if_requested(0) == publication.model_version
     assert process.self_play.dataset is previous_dataset
-    assert process.self_play.roots is previous_roots
+    assert previous_roots == [10, 11]
+    assert process.self_play.roots == []
     assert process.self_play.search_schedule_state is not None
     assert process.self_play.search_schedule_state.schedule_version == publication.model_version
     assert process.self_play.refreshes == [
         (
             publication.model_version,
             run_path / publication.jit_model.path,
+            True,
         )
     ]
     return process.self_play

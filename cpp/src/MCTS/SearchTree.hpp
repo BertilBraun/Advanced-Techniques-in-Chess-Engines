@@ -8,13 +8,14 @@ inline constexpr NodeIndex INVALID_NODE_INDEX = std::numeric_limits<NodeIndex>::
 
 struct Child {
     Move move;
+    float raw_policy;
     float policy;
     uint32 number_of_visits = 0;
     float result_sum = 0.0f;
     float virtual_loss = 0.0f;
     NodeIndex node_index = INVALID_NODE_INDEX;
 
-    Child(Move move, float policy) : move(move), policy(policy) {}
+    Child(Move move, float policy) : move(move), raw_policy(policy), policy(policy) {}
 };
 
 struct SearchNode {

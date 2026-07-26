@@ -386,6 +386,12 @@ class SelfPlayCpp:
         log_scalar('mcts/average_search_depth', stats.averageDepth)
         log_scalar('mcts/average_search_entropy', mcts_results.mctsStats.averageEntropy)
         log_scalar('mcts/average_search_kl_divergence', stats.averageKLDivergence)
+        log_scalar(
+            'mcts/average_policy_search_kl_divergence',
+            stats.averagePolicySearchKLDivergence,
+        )
+        log_scalar('mcts/top_move_disagreement', stats.topMoveDisagreement)
+        log_scalar('mcts/search_selected_move_prior_rank', stats.selectedMovePriorRank)
 
         for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
             if not mcts_result.visits:

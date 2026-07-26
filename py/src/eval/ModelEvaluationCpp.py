@@ -233,21 +233,24 @@ class ModelEvaluation:
 
         policy_model = policy_evaluator(current_model)
 
-        def random_evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-            def get_random_policy(board: CurrentBoard) -> np.ndarray:
-                return CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+        def paired_policy_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+            return [EvaluationMove(policy) for policy in policy_model(boards)]
+
+        def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+            def get_random_policy(board: CurrentBoard) -> EvaluationMove:
+                policy = CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
+                return EvaluationMove(policy)
 
             return [get_random_policy(board) for board in boards]
 
-        results = Results(0, 0, 0)
-
-        results += _play_two_models_search(
-            self.iteration, policy_model, random_evaluator, self.num_games // 2, 'policy_vs_random'
+        results, _ = _play_paired_models_search(
+            iteration=self.iteration,
+            candidate_model=paired_policy_model,
+            opponent_model=random_evaluator,
+            schedule=self.paired_schedule,
+            maximum_game_plies=evaluation.maximum_game_plies,
+            name='policy_vs_random_paired',
         )
-        results -= _play_two_models_search(
-            self.iteration, random_evaluator, policy_model, self.num_games // 2, 'random_vs_policy'
-        )
-
         return results
 
     def play_vs_stockfish(self, level: int) -> Results:

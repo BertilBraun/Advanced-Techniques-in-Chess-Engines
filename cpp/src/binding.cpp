@@ -359,7 +359,11 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     py::class_<MCTSStatistics>(m, "MCTSStatistics")
         .def_readonly("averageDepth", &MCTSStatistics::averageDepth)
         .def_readonly("averageEntropy", &MCTSStatistics::averageEntropy)
-        .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence);
+        .def_readonly("averageKLDivergence", &MCTSStatistics::averageKLDivergence)
+        .def_readonly("averagePolicySearchKLDivergence",
+                      &MCTSStatistics::averagePolicySearchKLDivergence)
+        .def_readonly("topMoveDisagreement", &MCTSStatistics::topMoveDisagreement)
+        .def_readonly("selectedMovePriorRank", &MCTSStatistics::selectedMovePriorRank);
 
     // --- (2.6) MCTSResults ---
     py::class_<MCTSResults>(m, "MCTSResults")

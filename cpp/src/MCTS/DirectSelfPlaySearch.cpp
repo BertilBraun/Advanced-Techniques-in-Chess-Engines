@@ -43,13 +43,33 @@ MCTSStatistics directStatistics(const MCTSRoot &root) {
     }
     const float totalVisits = static_cast<float>(root.visits());
     const float uniformProbability = 1.0F / static_cast<float>(rootNode.children.size());
+    const Child *mostVisitedChild = nullptr;
+    const Child *highestPriorChild = nullptr;
     for (const Child &child : rootNode.children) {
+        if (mostVisitedChild == nullptr ||
+            child.number_of_visits > mostVisitedChild->number_of_visits) {
+            mostVisitedChild = &child;
+        }
+        if (highestPriorChild == nullptr || child.raw_policy > highestPriorChild->raw_policy) {
+            highestPriorChild = &child;
+        }
         if (child.number_of_visits == 0) {
             continue;
         }
         const float probability = static_cast<float>(child.number_of_visits) / totalVisits;
         statistics.averageEntropy -= probability * std::log2(probability);
         statistics.averageKLDivergence += probability * std::log2(probability / uniformProbability);
+        statistics.averagePolicySearchKLDivergence +=
+            probability * std::log2(probability / std::max(child.raw_policy, 1e-12F));
+    }
+    if (mostVisitedChild != nullptr) {
+        statistics.topMoveDisagreement =
+            mostVisitedChild->move == highestPriorChild->move ? 0.0F : 1.0F;
+        statistics.selectedMovePriorRank =
+            1.0F + static_cast<float>(std::ranges::count_if(
+                       rootNode.children, [mostVisitedChild](const Child &candidate) {
+                           return candidate.raw_policy > mostVisitedChild->raw_policy;
+                       }));
     }
     return statistics;
 }

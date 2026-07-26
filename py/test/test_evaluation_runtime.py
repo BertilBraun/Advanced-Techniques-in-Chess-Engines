@@ -265,28 +265,31 @@ def test_policy_evaluation_uses_non_cached_inference_client(
 
     def finish_without_games(
         iteration: int,
-        candidate_model: EvaluationModel,
-        opponent_model: EvaluationModel,
-        num_games: int,
+        candidate_model: PairedEvaluationModel,
+        opponent_model: PairedEvaluationModel,
+        schedule: tuple[ScheduledGame, ...],
+        maximum_game_plies: int | None,
         name: str,
-    ) -> Results:
+    ) -> tuple[Results, tuple[GameRecord, ...]]:
         assert iteration == 7
         assert callable(candidate_model)
         assert callable(opponent_model)
-        assert num_games == 0
-        assert name in {'policy_vs_random', 'random_vs_policy'}
-        return Results(0, 0, 0)
+        assert schedule == ()
+        assert maximum_game_plies == 200
+        assert name == 'policy_vs_random_paired'
+        return Results(0, 0, 0), ()
 
     monkeypatch.setattr(
         evaluation_module,
         'NonCachingInferenceClient',
         FakeNonCachingInferenceClient,
     )
-    monkeypatch.setattr(evaluation_module, '_play_two_models_search', finish_without_games)
+    monkeypatch.setattr(evaluation_module, '_play_paired_models_search', finish_without_games)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
     model_evaluation.iteration = 7
     model_evaluation.num_games = 0
+    model_evaluation.paired_schedule = ()
     model_evaluation.device_id = 2
     model_evaluation.args = cast(
         TrainingArgs,

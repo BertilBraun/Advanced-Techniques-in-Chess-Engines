@@ -192,6 +192,7 @@ class SelfPlayProcess:
             self.self_play.refresh_model(
                 model_version,
                 Path(self.args.save_path) / publication.jit_model.path,
+                discard_roots=True,
             )
             self.loaded_credit_jit_sha256 = publication.jit_model.sha256
             self.loaded_credit_publication_pointer = serialized_pointer
@@ -208,6 +209,7 @@ class SelfPlayProcess:
             self.self_play.refresh_model(
                 model_version,
                 model_save_path(model_version, self.args.save_path).with_suffix('.jit.pt'),
+                discard_roots=True,
             )
             self.communication.send_to_id(
                 self_play_model_refreshed_message(model_version),

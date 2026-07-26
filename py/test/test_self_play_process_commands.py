@@ -39,11 +39,13 @@ class _FakeSelfPlay:
         num_fast_searches=16,
         endgame_shortcut_strength=0.0,
     )
-    refreshes: list[tuple[int, Path]] = field(default_factory=list)
+    refreshes: list[tuple[int, Path, bool]] = field(default_factory=list)
     schedule_updates: list[SearchScheduleState] = field(default_factory=list)
 
-    def refresh_model(self, model_version: int, model_path: Path) -> None:
-        self.refreshes.append((model_version, model_path))
+    def refresh_model(self, model_version: int, model_path: Path, discard_roots: bool = False) -> None:
+        self.refreshes.append((model_version, model_path, discard_roots))
+        if discard_roots:
+            self.roots = []
 
     def search_schedule(self, schedule_version: int) -> SearchScheduleState:
         return SearchScheduleState(
@@ -113,7 +115,7 @@ def _initialize_credit_refresh_state(process: SelfPlayProcess) -> None:
     process.loaded_credit_publication_pointer = None
 
 
-def test_pure_refresh_command_preserves_replay_roots_schedule_and_statistics(
+def test_pure_refresh_command_preserves_replay_and_discards_stale_roots(
     tmp_path: Path,
 ) -> None:
     process = object.__new__(SelfPlayProcess)
@@ -130,10 +132,11 @@ def test_pure_refresh_command_preserves_replay_roots_schedule_and_statistics(
 
     assert updated_version == 8
     assert process.self_play.refreshes == [
-        (8, tmp_path / 'model_8.jit.pt'),
+        (8, tmp_path / 'model_8.jit.pt', True),
     ]
     assert process.self_play.dataset is previous_dataset
-    assert process.self_play.roots is previous_roots
+    assert previous_roots == [10, 11]
+    assert process.self_play.roots == []
     assert process.self_play.completed_searches == 37
     assert process.self_play.search_schedule_state is previous_schedule
     assert process.communication.try_receive_from_id(
@@ -237,7 +240,7 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
 
     assert updated_version == 9_999
     assert process.self_play.search_schedule_state.schedule_version == 9_999
-    assert process.self_play.refreshes == [(9_999, tmp_path / 'model_9999.jit.pt')]
+    assert process.self_play.refreshes == [(9_999, tmp_path / 'model_9999.jit.pt', True)]
     assert (
         process.communication.try_receive_value_from_id(
             self_play_model_refreshed_message(9_999),
@@ -288,7 +291,7 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
     monkeypatch.setattr(process.communication, 'is_received', fail_on_scan)
 
     assert process._refresh_model_if_requested(8_764) == 8_765
-    assert process.self_play.refreshes == [(8_765, tmp_path / 'model_8765.jit.pt')]
+    assert process.self_play.refreshes == [(8_765, tmp_path / 'model_8765.jit.pt', True)]
     assert process.self_play.search_schedule_state.schedule_version == 8_765
     assert process._refresh_model_if_requested(8_765) == 8_765
     assert load_calls == ['pointer-8765']
