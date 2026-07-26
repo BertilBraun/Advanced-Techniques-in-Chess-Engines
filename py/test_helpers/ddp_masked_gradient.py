@@ -79,6 +79,8 @@ def masked_value_gradient_rank(
             final_outcomes=torch.tensor(tuple(int(outcome) for outcome in outcomes)),
             mcts_root_values=torch.zeros(2),
             outcome_target_eligible=torch.tensor(eligibility),
+            material_result_scores=torch.zeros(2),
+            material_target_eligible=torch.zeros(2, dtype=torch.bool),
             termination_reasons=torch.tensor(tuple(int(reason) for reason in reasons)),
             plies=torch.arange(2, dtype=torch.int32),
             current_player_piece_counts=torch.full((2,), 8, dtype=torch.int8),

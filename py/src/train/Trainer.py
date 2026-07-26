@@ -28,7 +28,7 @@ from src.util.timing import timeit
 from src.value import wdl_to_scalar
 
 
-VALUE_METRIC_WIDTH = 18 + EXPECTED_SCORE_CALIBRATION_BINS * 3
+VALUE_METRIC_WIDTH = 20 + EXPECTED_SCORE_CALIBRATION_BINS * 3
 BASE_REDUCTION_WIDTH = 7
 SLICED_VALUE_METRIC_BATCH_INTERVAL = 10
 
@@ -38,12 +38,14 @@ class _LossResult:
     policy_loss: torch.Tensor
     outcome_loss: torch.Tensor
     mcts_auxiliary_loss: torch.Tensor
+    material_auxiliary_loss: torch.Tensor
     combined_value_loss: torch.Tensor
     total_loss: torch.Tensor
     value_probabilities: torch.Tensor
     expected_scores: torch.Tensor
     outcome_losses: torch.Tensor
     mcts_huber_losses: torch.Tensor
+    material_huber_losses: torch.Tensor
 
 
 @dataclass(frozen=True)
@@ -52,9 +54,12 @@ class _DetachedMetricBatch:
     expected_scores: torch.Tensor
     outcome_losses: torch.Tensor
     mcts_huber_losses: torch.Tensor
+    material_huber_losses: torch.Tensor
     outcome_target_eligible: torch.Tensor
+    material_target_eligible: torch.Tensor
     termination_reasons: torch.Tensor
     final_outcomes: torch.Tensor
+    material_result_scores: torch.Tensor
     plies: torch.Tensor
     current_player_piece_counts: torch.Tensor
     opponent_piece_counts: torch.Tensor
@@ -123,6 +128,8 @@ class Trainer:
         final_outcomes = batch.final_outcomes.to(device=self.model.device)
         mcts_root_values = batch.mcts_root_values.to(device=self.model.device)
         outcome_target_eligible = batch.outcome_target_eligible.to(device=self.model.device)
+        material_result_scores = batch.material_result_scores.to(device=self.model.device)
+        material_target_eligible = batch.material_target_eligible.to(device=self.model.device)
         termination_reasons = batch.termination_reasons.to(device=self.model.device)
         mcts_target_eligible = termination_reasons.ne(int(TerminationReason.DIAGNOSTIC))
 
@@ -143,8 +150,16 @@ class Trainer:
         mcts_auxiliary_loss = (
             mcts_huber_losses * mcts_target_eligible.to(dtype=mcts_huber_losses.dtype)
         ).sum() / mcts_huber_losses.shape[0]
+        material_huber_losses = F.huber_loss(
+            expected_scores,
+            material_result_scores,
+            reduction='none',
+        )
+        material_auxiliary_loss = (
+            material_huber_losses * material_target_eligible.to(dtype=material_huber_losses.dtype)
+        ).sum() / material_huber_losses.shape[0]
         combined_value_loss = (
-            self.args.outcome_value_loss_weight * outcome_loss
+            self.args.outcome_value_loss_weight * (outcome_loss + material_auxiliary_loss)
             + self.args.mcts_value_loss_weight * self.args.mcts_value_loss_scale * mcts_auxiliary_loss
         )
         total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * combined_value_loss
@@ -153,12 +168,14 @@ class Trainer:
             policy_loss=policy_loss,
             outcome_loss=outcome_loss,
             mcts_auxiliary_loss=mcts_auxiliary_loss,
+            material_auxiliary_loss=material_auxiliary_loss,
             combined_value_loss=combined_value_loss,
             total_loss=total_loss,
             value_probabilities=value_probabilities,
             expected_scores=expected_scores,
             outcome_losses=outcome_losses,
             mcts_huber_losses=mcts_huber_losses,
+            material_huber_losses=material_huber_losses,
         )
 
     def _train_epoch(self, dataloader: TrainingBatchLoader) -> TrainingStats:
@@ -301,9 +318,12 @@ class Trainer:
             expected_scores=loss_result.expected_scores.detach(),
             outcome_losses=loss_result.outcome_losses.detach(),
             mcts_huber_losses=loss_result.mcts_huber_losses.detach(),
+            material_huber_losses=loss_result.material_huber_losses.detach(),
             outcome_target_eligible=batch.outcome_target_eligible.to(device=self.model.device),
+            material_target_eligible=batch.material_target_eligible.to(device=self.model.device),
             termination_reasons=batch.termination_reasons.to(device=self.model.device),
             final_outcomes=batch.final_outcomes.to(device=self.model.device),
+            material_result_scores=batch.material_result_scores.to(device=self.model.device),
             plies=batch.plies.to(device=self.model.device),
             current_player_piece_counts=batch.current_player_piece_counts.to(device=self.model.device),
             opponent_piece_counts=batch.opponent_piece_counts.to(device=self.model.device),
@@ -318,9 +338,12 @@ class Trainer:
             expected_scores=torch.cat(tuple(batch.expected_scores for batch in batches)),
             outcome_losses=torch.cat(tuple(batch.outcome_losses for batch in batches)),
             mcts_huber_losses=torch.cat(tuple(batch.mcts_huber_losses for batch in batches)),
+            material_huber_losses=torch.cat(tuple(batch.material_huber_losses for batch in batches)),
             outcome_target_eligible=torch.cat(tuple(batch.outcome_target_eligible for batch in batches)),
+            material_target_eligible=torch.cat(tuple(batch.material_target_eligible for batch in batches)),
             termination_reasons=torch.cat(tuple(batch.termination_reasons for batch in batches)),
             final_outcomes=torch.cat(tuple(batch.final_outcomes for batch in batches)),
+            material_result_scores=torch.cat(tuple(batch.material_result_scores for batch in batches)),
             plies=torch.cat(tuple(batch.plies for batch in batches)),
             current_player_piece_counts=torch.cat(tuple(batch.current_player_piece_counts for batch in batches)),
             opponent_piece_counts=torch.cat(tuple(batch.opponent_piece_counts for batch in batches)),
@@ -365,6 +388,7 @@ class Trainer:
     ) -> None:
         outcome_mask = sample_mask & metric_inputs.outcome_target_eligible
         mcts_mask = sample_mask & metric_inputs.mcts_target_eligible
+        material_mask = sample_mask & metrics.material_target_eligible
 
         reduction_values[offset] += metrics.outcome_losses[outcome_mask].double().sum()
         reduction_values[offset + 1] += metric_inputs.brier_scores[outcome_mask].double().sum()
@@ -376,13 +400,13 @@ class Trainer:
         for outcome in FinalOutcome:
             class_index = int(outcome)
             class_mask = outcome_mask & metric_inputs.final_outcomes.eq(class_index)
-            reduction_values[offset + 9 + class_index] += (
+            reduction_values[offset + 11 + class_index] += (
                 metrics.value_probabilities[class_mask, class_index].double().sum()
             )
-            reduction_values[offset + 12 + class_index] += (
+            reduction_values[offset + 14 + class_index] += (
                 metric_inputs.predicted_classes[class_mask].eq(class_index).sum()
             )
-            reduction_values[offset + 15 + class_index] += class_mask.sum()
+            reduction_values[offset + 17 + class_index] += class_mask.sum()
         eligible_bin_indices = metric_inputs.calibration_bin_indices[outcome_mask]
         bin_prediction_sums = torch.zeros(
             EXPECTED_SCORE_CALIBRATION_BINS,
@@ -402,16 +426,18 @@ class Trainer:
             eligible_bin_indices,
             minlength=EXPECTED_SCORE_CALIBRATION_BINS,
         )
-        reduction_values[offset + 18 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS] += bin_prediction_sums
+        reduction_values[offset + 20 : offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS] += bin_prediction_sums
         reduction_values[
-            offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2
+            offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS : offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS * 2
         ] += bin_target_sums
         reduction_values[
-            offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2 : offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 3
+            offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS * 2 : offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS * 3
         ] += bin_counts
 
         reduction_values[offset + 7] += metrics.mcts_huber_losses[mcts_mask].double().sum()
         reduction_values[offset + 8] += mcts_mask.sum()
+        reduction_values[offset + 9] += metrics.material_huber_losses[material_mask].double().sum()
+        reduction_values[offset + 10] += material_mask.sum()
 
     @timeit
     def train(
@@ -462,18 +488,20 @@ def _value_metrics_from_reduction(values: torch.Tensor, offset: int) -> ValueMet
         outcome_target_count=int(values[offset + 6].item()),
         mcts_huber_sum=float(values[offset + 7].item()),
         mcts_target_count=int(values[offset + 8].item()),
-        class_probability_sums=tuple(float(values[offset + 9 + index].item()) for index in range(3)),
-        class_correct_counts=tuple(int(values[offset + 12 + index].item()) for index in range(3)),
-        class_target_counts=tuple(int(values[offset + 15 + index].item()) for index in range(3)),
+        material_huber_sum=float(values[offset + 9].item()),
+        material_target_count=int(values[offset + 10].item()),
+        class_probability_sums=tuple(float(values[offset + 11 + index].item()) for index in range(3)),
+        class_correct_counts=tuple(int(values[offset + 14 + index].item()) for index in range(3)),
+        class_target_counts=tuple(int(values[offset + 17 + index].item()) for index in range(3)),
         expected_score_bin_prediction_sums=tuple(
-            float(values[offset + 18 + index].item()) for index in range(EXPECTED_SCORE_CALIBRATION_BINS)
+            float(values[offset + 20 + index].item()) for index in range(EXPECTED_SCORE_CALIBRATION_BINS)
         ),
         expected_score_bin_target_sums=tuple(
-            float(values[offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS + index].item())
+            float(values[offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS + index].item())
             for index in range(EXPECTED_SCORE_CALIBRATION_BINS)
         ),
         expected_score_bin_counts=tuple(
-            int(values[offset + 18 + EXPECTED_SCORE_CALIBRATION_BINS * 2 + index].item())
+            int(values[offset + 20 + EXPECTED_SCORE_CALIBRATION_BINS * 2 + index].item())
             for index in range(EXPECTED_SCORE_CALIBRATION_BINS)
         ),
     )

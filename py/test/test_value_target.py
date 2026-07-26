@@ -69,14 +69,20 @@ def training_batch(
     mcts_values: tuple[float, ...],
     eligibility: tuple[bool, ...],
     reasons: tuple[TerminationReason, ...],
+    material_scores: tuple[float, ...] | None = None,
+    material_eligibility: tuple[bool, ...] | None = None,
 ) -> TrainingBatch:
     sample_count = len(outcomes)
+    resolved_material_scores = material_scores or (0.0,) * sample_count
+    resolved_material_eligibility = material_eligibility or (False,) * sample_count
     return TrainingBatch(
         states=torch.zeros((sample_count, 1)),
         policy_targets=torch.full((sample_count, 2), 0.5),
         final_outcomes=torch.tensor(tuple(int(outcome) for outcome in outcomes)),
         mcts_root_values=torch.tensor(mcts_values),
         outcome_target_eligible=torch.tensor(eligibility),
+        material_result_scores=torch.tensor(resolved_material_scores),
+        material_target_eligible=torch.tensor(resolved_material_eligibility),
         termination_reasons=torch.tensor(tuple(int(reason) for reason in reasons)),
         plies=torch.arange(sample_count, dtype=torch.int32),
         current_player_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
@@ -117,11 +123,13 @@ def test_real_resignation_is_an_eligible_hard_loss() -> None:
     assert target.outcome_target_eligible
 
 
-def test_material_adjudication_is_an_eligible_heuristic_outcome() -> None:
+def test_material_adjudication_uses_continuous_score_without_hard_wdl() -> None:
     target = ReplayValueTarget.from_scores(0.2, -0.1, TerminationReason.MATERIAL_ADJUDICATION)
 
-    assert target.final_outcome is FinalOutcome.WIN
-    assert target.outcome_target_eligible
+    assert target.final_outcome is FinalOutcome.DRAW
+    assert not target.outcome_target_eligible
+    assert target.material_result_score == pytest.approx(0.2)
+    assert target.material_target_eligible
 
 
 def test_outcome_perspective_alternates_without_distance_discount() -> None:
@@ -184,6 +192,25 @@ def test_value_objective_uses_configured_component_weights() -> None:
 
     assert result.combined_value_loss.item() == pytest.approx(
         0.85 * result.outcome_loss.item() + 0.15 * result.mcts_auxiliary_loss.item()
+    )
+
+
+def test_material_adjudication_replaces_hard_wdl_with_continuous_huber() -> None:
+    batch = training_batch(
+        (FinalOutcome.DRAW,),
+        (0.1,),
+        (False,),
+        (TerminationReason.MATERIAL_ADJUDICATION,),
+        material_scores=(0.4,),
+        material_eligibility=(True,),
+    )
+
+    result = trainer((0.0, 0.0, 0.0))._calculate_loss_for_batch(batch)
+
+    assert result.outcome_loss.item() == pytest.approx(0.0)
+    assert result.material_auxiliary_loss.item() == pytest.approx(0.5 * 0.4**2)
+    assert result.combined_value_loss.item() == pytest.approx(
+        0.85 * result.material_auxiliary_loss.item() + 0.15 * result.mcts_auxiliary_loss.item()
     )
 
 

@@ -36,6 +36,8 @@ def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch
     torch.testing.assert_close(actual.final_outcomes, expected.final_outcomes)
     torch.testing.assert_close(actual.mcts_root_values, expected.mcts_root_values)
     torch.testing.assert_close(actual.outcome_target_eligible, expected.outcome_target_eligible)
+    torch.testing.assert_close(actual.material_result_scores, expected.material_result_scores)
+    torch.testing.assert_close(actual.material_target_eligible, expected.material_target_eligible)
     torch.testing.assert_close(actual.termination_reasons, expected.termination_reasons)
     torch.testing.assert_close(actual.plies, expected.plies)
     torch.testing.assert_close(
@@ -102,6 +104,8 @@ def test_prebatched_dataset_matches_individual_samples() -> None:
         final_outcomes=torch.stack([sample.final_outcome for sample in individual]),
         mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
         outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
+        material_result_scores=torch.stack([sample.material_result_score for sample in individual]),
+        material_target_eligible=torch.stack([sample.material_target_eligible for sample in individual]),
         termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
         plies=torch.stack([sample.ply for sample in individual]),
         current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
@@ -202,6 +206,8 @@ def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path)
         final_outcomes=torch.stack([sample.final_outcome for sample in individual]),
         mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
         outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
+        material_result_scores=torch.stack([sample.material_result_score for sample in individual]),
+        material_target_eligible=torch.stack([sample.material_target_eligible for sample in individual]),
         termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
         plies=torch.stack([sample.ply for sample in individual]),
         current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),

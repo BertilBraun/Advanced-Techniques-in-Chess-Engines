@@ -210,6 +210,12 @@ def benchmark_rank(
                 dtype=torch.bool,
                 device=device,
             ),
+            material_result_scores=torch.zeros(arguments.local_batch_size, device=device),
+            material_target_eligible=torch.zeros(
+                arguments.local_batch_size,
+                dtype=torch.bool,
+                device=device,
+            ),
             termination_reasons=torch.full(
                 (arguments.local_batch_size,),
                 int(TerminationReason.NATURAL),

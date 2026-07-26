@@ -25,6 +25,8 @@ class ValueMetrics:
     outcome_target_count: int = 0
     mcts_huber_sum: float = 0.0
     mcts_target_count: int = 0
+    material_huber_sum: float = 0.0
+    material_target_count: int = 0
     class_probability_sums: tuple[float, float, float] = (0.0, 0.0, 0.0)
     class_correct_counts: tuple[int, int, int] = (0, 0, 0)
     class_target_counts: tuple[int, int, int] = (0, 0, 0)
@@ -68,6 +70,10 @@ class ValueMetrics:
         return self.mcts_huber_sum / self.mcts_target_count if self.mcts_target_count else 0.0
 
     @property
+    def material_huber(self) -> float:
+        return self.material_huber_sum / self.material_target_count if self.material_target_count else 0.0
+
+    @property
     def expected_score_calibration_error(self) -> float:
         if not self.outcome_target_count:
             return 0.0
@@ -83,7 +89,9 @@ class ValueMetrics:
         return absolute_error_sum / self.outcome_target_count
 
     def combined_value_loss(self, outcome_weight: float, mcts_weight: float, mcts_scale: float) -> float:
-        return outcome_weight * self.outcome_cross_entropy + mcts_weight * mcts_scale * self.mcts_huber
+        return outcome_weight * (
+            self.outcome_cross_entropy + self.material_huber
+        ) + mcts_weight * mcts_scale * self.mcts_huber
 
     def log_summary_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/wdl_cross_entropy', self.outcome_cross_entropy, step)
@@ -97,10 +105,12 @@ class ValueMetrics:
             step,
         )
         log_scalar(f'{prefix}/mcts_huber', self.mcts_huber, step)
+        log_scalar(f'{prefix}/material_result_huber', self.material_huber, step)
 
     def log_diagnostics_to_tensorboard(self, prefix: str, step: int) -> None:
         log_scalar(f'{prefix}/outcome_target_count', self.outcome_target_count, step)
         log_scalar(f'{prefix}/mcts_target_count', self.mcts_target_count, step)
+        log_scalar(f'{prefix}/material_target_count', self.material_target_count, step)
         for outcome in FinalOutcome:
             class_index = int(outcome)
             class_count = self.class_target_counts[class_index]
@@ -142,6 +152,8 @@ class ValueMetrics:
             outcome_target_count=self.outcome_target_count + other.outcome_target_count,
             mcts_huber_sum=self.mcts_huber_sum + other.mcts_huber_sum,
             mcts_target_count=self.mcts_target_count + other.mcts_target_count,
+            material_huber_sum=self.material_huber_sum + other.material_huber_sum,
+            material_target_count=self.material_target_count + other.material_target_count,
             class_probability_sums=tuple(
                 first + second for first, second in zip(self.class_probability_sums, other.class_probability_sums)
             ),
@@ -249,6 +261,11 @@ class TrainingStats:
         log_scalar(
             f'{prefix}/value/outcome_contribution',
             self.outcome_value_loss_weight * self.value_metrics.outcome_cross_entropy,
+            iteration,
+        )
+        log_scalar(
+            f'{prefix}/value/material_result_contribution',
+            self.outcome_value_loss_weight * self.value_metrics.material_huber,
             iteration,
         )
         log_scalar(

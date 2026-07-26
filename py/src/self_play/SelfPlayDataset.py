@@ -36,6 +36,8 @@ class TrainingBatch:
     final_outcomes: torch.Tensor
     mcts_root_values: torch.Tensor
     outcome_target_eligible: torch.Tensor
+    material_result_scores: torch.Tensor
+    material_target_eligible: torch.Tensor
     termination_reasons: torch.Tensor
     plies: torch.Tensor
     current_player_piece_counts: torch.Tensor
@@ -54,6 +56,8 @@ class TrainingBatch:
             final_outcomes=self.final_outcomes[rows],
             mcts_root_values=self.mcts_root_values[rows],
             outcome_target_eligible=self.outcome_target_eligible[rows],
+            material_result_scores=self.material_result_scores[rows],
+            material_target_eligible=self.material_target_eligible[rows],
             termination_reasons=self.termination_reasons[rows],
             plies=self.plies[rows],
             current_player_piece_counts=self.current_player_piece_counts[rows],
@@ -67,6 +71,8 @@ class TrainingBatch:
             final_outcomes=self.final_outcomes.pin_memory(),
             mcts_root_values=self.mcts_root_values.pin_memory(),
             outcome_target_eligible=self.outcome_target_eligible.pin_memory(),
+            material_result_scores=self.material_result_scores.pin_memory(),
+            material_target_eligible=self.material_target_eligible.pin_memory(),
             termination_reasons=self.termination_reasons.pin_memory(),
             plies=self.plies.pin_memory(),
             current_player_piece_counts=self.current_player_piece_counts.pin_memory(),
@@ -81,6 +87,8 @@ class TrainingSample:
     final_outcome: torch.Tensor
     mcts_root_value: torch.Tensor
     outcome_target_eligible: torch.Tensor
+    material_result_score: torch.Tensor
+    material_target_eligible: torch.Tensor
     termination_reason: torch.Tensor
     ply: torch.Tensor
     current_player_piece_count: torch.Tensor
@@ -147,6 +155,12 @@ def training_batch_from_raw_samples(
         ),
         outcome_target_eligible=torch.from_numpy(
             np.fromiter((target.outcome_target_eligible for target in value_targets), dtype=np.bool_)
+        ),
+        material_result_scores=torch.from_numpy(
+            np.fromiter((target.material_result_score for target in value_targets), dtype=np.float32)
+        ),
+        material_target_eligible=torch.from_numpy(
+            np.fromiter((target.material_target_eligible for target in value_targets), dtype=np.bool_)
         ),
         termination_reasons=torch.from_numpy(
             np.fromiter((int(target.termination_reason) for target in value_targets), dtype=np.int64)
@@ -227,6 +241,8 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             final_outcome=torch.tensor(int(value_target.final_outcome), dtype=torch.int64),
             mcts_root_value=torch.tensor(value_target.mcts_root_value, dtype=torch.float32),
             outcome_target_eligible=torch.tensor(value_target.outcome_target_eligible, dtype=torch.bool),
+            material_result_score=torch.tensor(value_target.material_result_score, dtype=torch.float32),
+            material_target_eligible=torch.tensor(value_target.material_target_eligible, dtype=torch.bool),
             termination_reason=torch.tensor(int(value_target.termination_reason), dtype=torch.int64),
             ply=torch.tensor(self.sample_metadata[idx].ply, dtype=torch.int32),
             current_player_piece_count=torch.tensor(
@@ -350,6 +366,14 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 file['termination_reasons'][...],
                 dtype=np.uint8,
             )  # type: ignore
+            stored_material_result_scores = np.asarray(
+                file['material_result_scores'][...],
+                dtype=np.float32,
+            )  # type: ignore
+            stored_material_eligibility = np.asarray(
+                file['material_target_eligible'][...],
+                dtype=np.bool_,
+            )  # type: ignore
             stored_plies = np.asarray(file['plies'][...], dtype=np.int32)  # type: ignore
             stored_current_player_piece_counts = np.asarray(
                 file['current_player_piece_counts'][...],
@@ -366,6 +390,8 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                 len(stored_mcts_root_values),
                 len(stored_outcome_eligibility),
                 len(stored_termination_reasons),
+                len(stored_material_result_scores),
+                len(stored_material_eligibility),
                 len(stored_plies),
                 len(stored_current_player_piece_counts),
                 len(stored_opponent_piece_counts),
@@ -383,12 +409,23 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     mcts_root_value=float(mcts_root_value),
                     termination_reason=TerminationReason(int(termination_reason)),
                     outcome_target_eligible=bool(outcome_target_eligible),
+                    material_result_score=float(material_result_score),
+                    material_target_eligible=bool(material_target_eligible),
                 )
-                for final_outcome, mcts_root_value, termination_reason, outcome_target_eligible in zip(
+                for (
+                    final_outcome,
+                    mcts_root_value,
+                    termination_reason,
+                    outcome_target_eligible,
+                    material_result_score,
+                    material_target_eligible,
+                ) in zip(
                     stored_final_outcomes,
                     stored_mcts_root_values,
                     stored_termination_reasons,
                     stored_outcome_eligibility,
+                    stored_material_result_scores,
+                    stored_material_eligibility,
                 )
             ]
             dataset.sample_metadata = [
@@ -520,6 +557,20 @@ class SelfPlayDataset(Dataset[TrainingSample]):
                     data=np.fromiter(
                         (int(target.termination_reason) for target in self.value_targets),
                         dtype=np.uint8,
+                    ),
+                )
+                file.create_dataset(
+                    'material_result_scores',
+                    data=np.fromiter(
+                        (target.material_result_score for target in self.value_targets),
+                        dtype=np.float32,
+                    ),
+                )
+                file.create_dataset(
+                    'material_target_eligible',
+                    data=np.fromiter(
+                        (target.material_target_eligible for target in self.value_targets),
+                        dtype=np.bool_,
                     ),
                 )
                 file.create_dataset(

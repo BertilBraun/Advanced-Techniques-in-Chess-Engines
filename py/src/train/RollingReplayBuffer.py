@@ -45,6 +45,8 @@ REPLAY_DATASETS = (
     'final_outcomes',
     'mcts_root_values',
     'outcome_target_eligible',
+    'material_result_scores',
+    'material_target_eligible',
     'termination_reasons',
     'plies',
     'current_player_piece_counts',
@@ -750,6 +752,14 @@ class RollingReplayBuffer:
                     file['termination_reasons'][first_index:stop_index],
                     dtype=np.uint8,
                 )
+                read_material_scores = np.asarray(
+                    file['material_result_scores'][first_index:stop_index],
+                    dtype=np.float32,
+                )
+                read_material_eligibility = np.asarray(
+                    file['material_target_eligible'][first_index:stop_index],
+                    dtype=np.bool_,
+                )
                 read_plies = np.asarray(
                     file['plies'][first_index:stop_index],
                     dtype=np.int32,
@@ -770,6 +780,8 @@ class RollingReplayBuffer:
                 read_root_values,
                 read_eligibility,
                 read_reasons,
+                read_material_scores,
+                read_material_eligibility,
                 read_plies,
                 read_current_counts,
                 read_opponent_counts,
@@ -781,6 +793,8 @@ class RollingReplayBuffer:
             root_values = read_root_values[selection]
             eligibility = read_eligibility[selection]
             reasons = read_reasons[selection]
+            material_scores = read_material_scores[selection]
+            material_eligibility = read_material_eligibility[selection]
             plies = read_plies[selection]
             current_counts = read_current_counts[selection]
             opponent_counts = read_opponent_counts[selection]
@@ -792,6 +806,8 @@ class RollingReplayBuffer:
                     root_values,
                     eligibility,
                     reasons,
+                    material_scores,
+                    material_eligibility,
                     plies,
                     current_counts,
                     opponent_counts,
@@ -812,6 +828,8 @@ class RollingReplayBuffer:
                     mcts_root_value=float(root_values[source_position]),
                     termination_reason=TerminationReason(int(reasons[source_position])),
                     outcome_target_eligible=bool(eligibility[source_position]),
+                    material_result_score=float(material_scores[source_position]),
+                    material_target_eligible=bool(material_eligibility[source_position]),
                 )
                 sample_metadata[output_position] = ReplaySampleMetadata(
                     ply=int(plies[source_position]),
@@ -1323,6 +1341,18 @@ def _decode_with_deterministic_symmetry(
         outcome_target_eligible=torch.from_numpy(
             np.fromiter(
                 (target.outcome_target_eligible for target in value_targets),
+                dtype=np.bool_,
+            )
+        ),
+        material_result_scores=torch.from_numpy(
+            np.fromiter(
+                (target.material_result_score for target in value_targets),
+                dtype=np.float32,
+            )
+        ),
+        material_target_eligible=torch.from_numpy(
+            np.fromiter(
+                (target.material_target_eligible for target in value_targets),
                 dtype=np.bool_,
             )
         ),

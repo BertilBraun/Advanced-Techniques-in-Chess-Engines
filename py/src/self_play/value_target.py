@@ -5,7 +5,7 @@ from enum import IntEnum
 from math import isfinite
 
 
-REPLAY_SCHEMA_VERSION = 3
+REPLAY_SCHEMA_VERSION = 4
 
 
 class FinalOutcome(IntEnum):
@@ -46,7 +46,6 @@ class TerminationReason(IntEnum):
         return self in (
             TerminationReason.NATURAL,
             TerminationReason.RESIGNATION,
-            TerminationReason.MATERIAL_ADJUDICATION,
         )
 
     @property
@@ -60,6 +59,8 @@ class ReplayValueTarget:
     mcts_root_value: float
     termination_reason: TerminationReason
     outcome_target_eligible: bool
+    material_result_score: float
+    material_target_eligible: bool
 
     def __post_init__(self) -> None:
         if not isfinite(self.mcts_root_value) or not -1.0 <= self.mcts_root_value <= 1.0:
@@ -67,6 +68,16 @@ class ReplayValueTarget:
         if self.outcome_target_eligible != self.termination_reason.permits_outcome_target:
             raise ValueError(
                 f'Outcome eligibility {self.outcome_target_eligible} conflicts with '
+                f'termination reason {self.termination_reason.name}.'
+            )
+        if not isfinite(self.material_result_score) or not -1.0 <= self.material_result_score <= 1.0:
+            raise ValueError(
+                f'Material result score must be finite and in [-1, 1], got {self.material_result_score}.'
+            )
+        expected_material_eligibility = self.termination_reason is TerminationReason.MATERIAL_ADJUDICATION
+        if self.material_target_eligible != expected_material_eligibility:
+            raise ValueError(
+                f'Material eligibility {self.material_target_eligible} conflicts with '
                 f'termination reason {self.termination_reason.name}.'
             )
 
@@ -77,11 +88,14 @@ class ReplayValueTarget:
         mcts_root_value: float,
         termination_reason: TerminationReason,
     ) -> ReplayValueTarget:
+        material_target_eligible = termination_reason is TerminationReason.MATERIAL_ADJUDICATION
         return cls(
-            final_outcome=FinalOutcome.from_score(final_score),
+            final_outcome=FinalOutcome.DRAW if material_target_eligible else FinalOutcome.from_score(final_score),
             mcts_root_value=mcts_root_value,
             termination_reason=termination_reason,
             outcome_target_eligible=termination_reason.permits_outcome_target,
+            material_result_score=final_score if material_target_eligible else 0.0,
+            material_target_eligible=material_target_eligible,
         )
 
 

@@ -71,6 +71,8 @@ def write_replay_fixture(
         file.create_dataset('final_outcomes', data=final_outcomes)
         file.create_dataset('mcts_root_values', data=mcts_root_values)
         file.create_dataset('outcome_target_eligible', data=np.ones(sample_count, dtype=np.bool_))
+        file.create_dataset('material_result_scores', data=np.zeros(sample_count, dtype=np.float32))
+        file.create_dataset('material_target_eligible', data=np.zeros(sample_count, dtype=np.bool_))
         file.create_dataset(
             'termination_reasons',
             data=np.full(sample_count, int(TerminationReason.NATURAL), dtype=np.uint8),
