@@ -167,8 +167,6 @@ class CreditTrainerProcess:
         )
         if len(args.cluster.trainer_ddp_device_ids) != 4:
             raise ValueError('Credit-driven production training requires exactly four DDP ranks.')
-        if args.training.global_batch_size != 1_024 or args.training.local_batch_size != 256:
-            raise ValueError('Credit-driven production training requires global/local batches of 1,024/256.')
         if parameters.maximum_optimizer_steps != 500_000:
             raise ValueError('Credit-driven production training requires a 500,000 optimizer-step limit.')
         if parameters.retained_checkpoint_interval_steps != 1_000:
