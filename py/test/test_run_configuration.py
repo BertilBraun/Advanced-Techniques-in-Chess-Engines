@@ -54,6 +54,7 @@ CREDIT_V8_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v8.json')
 CREDIT_V9_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v9.json')
 CREDIT_V10_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v10.json')
 CREDIT_V11_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v11.json')
+CREDIT_V12_CONFIGURATION_PATH = Path('configs/chess-clean-credit-4x4070-v12.json')
 
 
 def credit_training_configuration_candidate(
@@ -1156,6 +1157,25 @@ def test_credit_v11_configuration_restores_early_search_and_single_value_curricu
     assert arguments.training.learning_rate(249_999, 'adamw') == pytest.approx(0.0035)
     assert arguments.training.learning_rate(250_000, 'adamw') == pytest.approx(0.002)
     assert arguments.network == initial_network
+
+
+def test_credit_v12_configuration_doubles_replay_without_changing_batch_or_publication_cadence() -> None:
+    configuration = load_run_configuration(CREDIT_V12_CONFIGURATION_PATH)
+    arguments = training_args()
+
+    apply_run_configuration(arguments, configuration)
+
+    credit_training = arguments.training.credit_training
+    assert credit_training is not None
+    assert configuration.run_name == 'complete-training-run-v12'
+    assert credit_training.replay_ratio == Decimal(8)
+    assert credit_training.optimizer_steps_per_quantum == 500
+    assert credit_training.presentation_credits_per_quantum(arguments.training.global_batch_size) == 512_000
+    assert credit_training.unique_samples_per_quantum(arguments.training.global_batch_size) == 64_000
+    assert credit_training.replay_capacity_for_model_version(0) == 500_000
+    assert credit_training.replay_capacity_for_model_version(250) == 2_500_000
+    assert arguments.training.global_batch_size == 1_024
+    assert arguments.training.local_batch_size == 256
 
 
 @pytest.mark.parametrize(
