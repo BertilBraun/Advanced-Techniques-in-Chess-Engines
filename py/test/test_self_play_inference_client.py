@@ -138,12 +138,18 @@ def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.Monk
     training_args = copy.deepcopy(TRAINING_ARGS)
     training_args.self_play.use_inference_cache = False
     training_args.self_play.inference_cache_capacity = 0
+    training_args.self_play.initial_num_searches_per_turn = 100
+    training_args.self_play.mcts.num_searches_per_turn = 600
+    training_args.self_play_search_warmup_iterations = 100
     self_play = SelfPlayCpp(device_id=0, args=training_args)
 
     self_play._set_mcts(iteration=50)
 
     assert _FakeMcts.use_inference_cache is False
     assert _FakeMcts.direct_inference_params is None
+    assert self_play.search_schedule(0).num_full_searches == 100
+    assert self_play.search_schedule(1).num_full_searches == 105
+    assert self_play.search_schedule(100).num_full_searches == 600
 
 
 def test_self_play_constructs_direct_inference_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,6 +181,8 @@ def test_model_refresh_retains_self_play_state(
     events: list[str] = []
     self_play = object.__new__(SelfPlayCpp)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
+    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
+    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations
     self_play.dataset = [object()]
     self_play.iteration = 0
     self_play.model_version = 0
@@ -203,6 +211,8 @@ def test_model_refresh_retains_self_play_state(
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
     self_play = object.__new__(SelfPlayCpp)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
+    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
+    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations
     self_play.iteration = 0
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]
@@ -226,6 +236,8 @@ def test_diagnostic_refresh_can_discard_roots(monkeypatch: pytest.MonkeyPatch) -
     events: list[str] = []
     self_play = object.__new__(SelfPlayCpp)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
+    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
+    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations
     self_play.iteration = 0
     self_play.model_version = 0
     self_play.model_refresh_acknowledgements = [0]

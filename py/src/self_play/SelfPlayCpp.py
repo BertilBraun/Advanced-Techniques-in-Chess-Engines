@@ -44,7 +44,7 @@ from src.self_play.value_target import (
     outcome_from_sample_perspective,
 )
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
-from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.train.ReplayReanalysis import ReanalysisPosition, ReanalysisTarget
@@ -178,6 +178,8 @@ class SelfPlayCpp:
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.device_id = device_id
         self.args = args.self_play
+        self.search_warmup_iterations = args.self_play_search_warmup_iterations
+        self.endgame_shortcut_fade_iterations = args.self_play_endgame_shortcut_fade_iterations
         self.save_path = args.save_path
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
         self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}
@@ -289,7 +291,7 @@ class SelfPlayCpp:
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
                     schedule_version,
-                    TRAINING_ARGS.self_play_search_warmup_iterations,
+                    self.search_warmup_iterations,
                 ),
             )
         )
@@ -300,7 +302,7 @@ class SelfPlayCpp:
             num_fast_searches=int(num_full_searches * self.args.mcts.fast_searches_proportion_of_full_searches),
             endgame_shortcut_strength=curriculum_fade(
                 schedule_version,
-                TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
+                self.endgame_shortcut_fade_iterations,
             ),
         )
 

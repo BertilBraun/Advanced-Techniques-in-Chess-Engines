@@ -22,7 +22,7 @@ from src.self_play.value_target import (
     outcome_from_sample_perspective,
 )
 from src.self_play.curriculum import curriculum_progress
-from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text, TRAINING_ARGS
+from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
@@ -84,6 +84,7 @@ class SelfPlayPy:
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.client = InferenceClient(device_id=device_id, network_args=args.network, save_path=args.save_path)
         self.args = args.self_play
+        self.search_warmup_iterations = args.self_play_search_warmup_iterations
         if self.args.resignation.audit_enabled or self.args.resignation.production_enabled:
             raise ValueError('Calibrated resignation is supported only by the C++ self-play implementation.')
 
@@ -111,7 +112,7 @@ class SelfPlayPy:
                 self.args.mcts.num_searches_per_turn,
                 curriculum_progress(
                     schedule_version,
-                    TRAINING_ARGS.self_play_search_warmup_iterations,
+                    self.search_warmup_iterations,
                 ),
             )
         )
