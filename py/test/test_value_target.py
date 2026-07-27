@@ -197,12 +197,14 @@ def test_unlabelled_ply_cap_has_no_value_objective_but_keeps_mcts_diagnostic() -
         (TerminationReason.PLY_CAP,),
     )
 
-    result = trainer((0.0, 0.0, 0.0))._calculate_loss_for_batch(batch)
+    training_trainer = trainer((0.0, 0.0, 0.0))
+    result = training_trainer._calculate_loss_for_batch(batch)
+    stats = training_trainer._train_epoch(FixedBatchLoader(batch))
 
     assert torch.isfinite(result.total_loss)
-    assert result.outcome_loss.item() == pytest.approx(0.0)
-    assert result.mcts_auxiliary_loss.item() > 0.0
     assert result.value_loss.item() == pytest.approx(0.0)
+    assert stats.value_metrics.outcome_target_count == 0
+    assert stats.value_metrics.mcts_huber > 0.0
 
 
 def test_value_objective_blends_base_scalar_with_mcts_before_soft_wdl_conversion() -> None:
@@ -236,12 +238,33 @@ def test_material_adjudication_uses_material_score_as_soft_wdl_target() -> None:
         material_eligibility=(True,),
     )
 
-    result = trainer((0.0, 0.0, 0.0))._calculate_loss_for_batch(batch)
+    training_trainer = trainer((0.0, 0.0, 0.0))
+    result = training_trainer._calculate_loss_for_batch(batch)
+    stats = training_trainer._train_epoch(FixedBatchLoader(batch))
 
-    assert result.outcome_loss.item() == pytest.approx(0.0)
-    assert result.material_auxiliary_loss.item() == pytest.approx(0.5 * 0.4**2)
     torch.testing.assert_close(result.target_expected_scores, torch.tensor((0.4,)))
     assert result.value_loss.item() == pytest.approx(torch.log(torch.tensor(3.0)).item())
+    assert stats.value_metrics.outcome_target_count == 0
+    assert stats.value_metrics.material_huber == pytest.approx(0.5 * 0.4**2)
+
+
+def test_mcts_huber_diagnostic_does_not_change_backward_gradient() -> None:
+    first_batch = training_batch(
+        (FinalOutcome.WIN,),
+        (-1.0,),
+        (True,),
+        (TerminationReason.NATURAL,),
+    )
+    second_batch = replace(first_batch, mcts_root_values=torch.tensor((1.0,)))
+
+    gradients: list[torch.Tensor] = []
+    for batch in (first_batch, second_batch):
+        training_trainer = trainer((0.3, -0.2, 0.1))
+        result = training_trainer._calculate_loss_for_batch(batch, mcts_value_target_weight=0.0)
+        result.total_loss.backward()
+        gradients.append(training_trainer.model.value_logits.grad.detach().clone())
+
+    torch.testing.assert_close(gradients[0], gradients[1])
 
 
 def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
@@ -330,8 +353,7 @@ def test_diagnostic_rows_are_excluded_from_both_value_objectives() -> None:
     loss = training_trainer._calculate_loss_for_batch(batch)
     stats = training_trainer._train_epoch(FixedBatchLoader(batch))
 
-    assert loss.outcome_loss.item() == 0.0
-    assert loss.mcts_auxiliary_loss.item() == 0.0
+    assert loss.value_loss.item() == 0.0
     assert stats.value_metrics.outcome_target_count == 0
     assert stats.value_metrics.mcts_target_count == 0
 

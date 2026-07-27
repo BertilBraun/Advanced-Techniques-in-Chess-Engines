@@ -37,21 +37,35 @@ SLICED_VALUE_METRIC_BATCH_INTERVAL = 10
 class _LossResult:
     policy_loss: torch.Tensor
     value_loss: torch.Tensor
-    outcome_loss: torch.Tensor
-    mcts_auxiliary_loss: torch.Tensor
-    material_auxiliary_loss: torch.Tensor
     total_loss: torch.Tensor
-    value_probabilities: torch.Tensor
-    expected_scores: torch.Tensor
+    value_logits: torch.Tensor
     target_expected_scores: torch.Tensor
     value_loss_contributions: torch.Tensor
-    outcome_losses: torch.Tensor
-    mcts_huber_losses: torch.Tensor
-    material_huber_losses: torch.Tensor
+    final_outcomes: torch.Tensor
+    mcts_root_values: torch.Tensor
+    outcome_target_eligible: torch.Tensor
+    material_result_scores: torch.Tensor
+    material_target_eligible: torch.Tensor
 
 
 @dataclass(frozen=True)
 class _DetachedMetricBatch:
+    value_logits: torch.Tensor
+    target_expected_scores: torch.Tensor
+    value_loss_contributions: torch.Tensor
+    outcome_target_eligible: torch.Tensor
+    material_target_eligible: torch.Tensor
+    termination_reasons: torch.Tensor
+    final_outcomes: torch.Tensor
+    mcts_root_values: torch.Tensor
+    material_result_scores: torch.Tensor
+    plies: torch.Tensor
+    current_player_piece_counts: torch.Tensor
+    opponent_piece_counts: torch.Tensor
+
+
+@dataclass(frozen=True)
+class _ValueMetricTensors:
     value_probabilities: torch.Tensor
     expected_scores: torch.Tensor
     target_expected_scores: torch.Tensor
@@ -143,18 +157,13 @@ class Trainer:
         if self.args.duplicate_multiplicity_weight_cap is not None:
             sample_weights.clamp_(max=self.args.duplicate_multiplicity_weight_cap)
         sample_weights /= sample_weights.mean()
-        termination_reasons = batch.termination_reasons.to(device=self.model.device)
-        mcts_target_eligible = termination_reasons.ne(int(TerminationReason.DIAGNOSTIC))
-
         policy_logits, value_logits = self.training_model(states)
-        value_probabilities = torch.softmax(value_logits, dim=1)
-        expected_scores = wdl_to_scalar(value_probabilities)
 
         policy_losses = F.cross_entropy(policy_logits, policy_targets, reduction='none')
         policy_loss = (policy_losses * sample_weights).mean()
         outcome_expected_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(
-            dtype=expected_scores.dtype
-        ) - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=expected_scores.dtype)
+            dtype=value_logits.dtype
+        ) - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=value_logits.dtype)
         base_target_eligible = torch.logical_or(outcome_target_eligible, material_target_eligible)
         base_expected_scores = torch.where(
             outcome_target_eligible,
@@ -170,42 +179,20 @@ class Trainer:
         value_losses = F.cross_entropy(value_logits, value_targets, reduction='none')
         value_loss_contributions = value_losses * base_target_eligible.to(dtype=value_losses.dtype) * sample_weights
         value_loss = value_loss_contributions.sum() / value_losses.shape[0]
-        outcome_losses = F.cross_entropy(value_logits, final_outcomes, reduction='none')
-        outcome_loss = (
-            outcome_losses * outcome_target_eligible.to(dtype=outcome_losses.dtype) * sample_weights
-        ).sum() / outcome_losses.shape[0]
-        mcts_huber_losses = F.huber_loss(
-            expected_scores,
-            mcts_root_values,
-            reduction='none',
-        )
-        mcts_auxiliary_loss = (
-            mcts_huber_losses * mcts_target_eligible.to(dtype=mcts_huber_losses.dtype) * sample_weights
-        ).sum() / mcts_huber_losses.shape[0]
-        material_huber_losses = F.huber_loss(
-            expected_scores,
-            material_result_scores,
-            reduction='none',
-        )
-        material_auxiliary_loss = (
-            material_huber_losses * material_target_eligible.to(dtype=material_huber_losses.dtype) * sample_weights
-        ).sum() / material_huber_losses.shape[0]
         total_loss = self.args.policy_loss_weight * policy_loss + self.args.value_loss_weight * value_loss
 
         return _LossResult(
             policy_loss=policy_loss,
             value_loss=value_loss,
-            outcome_loss=outcome_loss,
-            mcts_auxiliary_loss=mcts_auxiliary_loss,
-            material_auxiliary_loss=material_auxiliary_loss,
             total_loss=total_loss,
-            value_probabilities=value_probabilities,
-            expected_scores=expected_scores,
+            value_logits=value_logits,
             target_expected_scores=target_expected_scores,
             value_loss_contributions=value_loss_contributions,
-            outcome_losses=outcome_losses,
-            mcts_huber_losses=mcts_huber_losses,
-            material_huber_losses=material_huber_losses,
+            final_outcomes=final_outcomes,
+            mcts_root_values=mcts_root_values,
+            outcome_target_eligible=outcome_target_eligible,
+            material_result_scores=material_result_scores,
+            material_target_eligible=material_target_eligible,
         )
 
     def _train_epoch(
@@ -248,7 +235,8 @@ class Trainer:
 
         if not metric_batches:
             raise ValueError('Training requires at least one batch.')
-        metrics = self._concatenate_metric_batches(metric_batches)
+        metric_batch = self._concatenate_metric_batches(metric_batches)
+        metrics = self._calculate_value_metric_tensors(metric_batch)
         sample_count = sum(policy_loss_sample_counts)
         policy_loss_counts = torch.tensor(
             policy_loss_sample_counts,
@@ -281,7 +269,8 @@ class Trainer:
                 metric_inputs,
                 metric_inputs.termination_reasons.eq(int(reason)),
             )
-        sampled_metrics = self._concatenate_metric_batches(metric_batches[::SLICED_VALUE_METRIC_BATCH_INTERVAL])
+        sampled_metric_batch = self._concatenate_metric_batches(metric_batches[::SLICED_VALUE_METRIC_BATCH_INTERVAL])
+        sampled_metrics = self._calculate_value_metric_tensors(sampled_metric_batch)
         sampled_metric_inputs = self._value_metric_inputs(sampled_metrics)
         for bin_index, sample_mask in enumerate(_fixed_bin_masks(sampled_metrics.plies, PLY_VALUE_BIN_UPPER_BOUNDS)):
             self._accumulate_value_metrics(
@@ -348,18 +337,15 @@ class Trainer:
         batch: TrainingBatch,
     ) -> _DetachedMetricBatch:
         return _DetachedMetricBatch(
-            value_probabilities=loss_result.value_probabilities.detach(),
-            expected_scores=loss_result.expected_scores.detach(),
+            value_logits=loss_result.value_logits.detach(),
             target_expected_scores=loss_result.target_expected_scores.detach(),
             value_loss_contributions=loss_result.value_loss_contributions.detach(),
-            outcome_losses=loss_result.outcome_losses.detach(),
-            mcts_huber_losses=loss_result.mcts_huber_losses.detach(),
-            material_huber_losses=loss_result.material_huber_losses.detach(),
-            outcome_target_eligible=batch.outcome_target_eligible.to(device=self.model.device),
-            material_target_eligible=batch.material_target_eligible.to(device=self.model.device),
+            outcome_target_eligible=loss_result.outcome_target_eligible,
+            material_target_eligible=loss_result.material_target_eligible,
             termination_reasons=batch.termination_reasons.to(device=self.model.device),
-            final_outcomes=batch.final_outcomes.to(device=self.model.device),
-            material_result_scores=batch.material_result_scores.to(device=self.model.device),
+            final_outcomes=loss_result.final_outcomes,
+            mcts_root_values=loss_result.mcts_root_values,
+            material_result_scores=loss_result.material_result_scores,
             plies=batch.plies.to(device=self.model.device),
             current_player_piece_counts=batch.current_player_piece_counts.to(device=self.model.device),
             opponent_piece_counts=batch.opponent_piece_counts.to(device=self.model.device),
@@ -370,26 +356,55 @@ class Trainer:
         batches: list[_DetachedMetricBatch],
     ) -> _DetachedMetricBatch:
         return _DetachedMetricBatch(
-            value_probabilities=torch.cat(tuple(batch.value_probabilities for batch in batches)),
-            expected_scores=torch.cat(tuple(batch.expected_scores for batch in batches)),
+            value_logits=torch.cat(tuple(batch.value_logits for batch in batches)),
             target_expected_scores=torch.cat(tuple(batch.target_expected_scores for batch in batches)),
             value_loss_contributions=torch.cat(tuple(batch.value_loss_contributions for batch in batches)),
-            outcome_losses=torch.cat(tuple(batch.outcome_losses for batch in batches)),
-            mcts_huber_losses=torch.cat(tuple(batch.mcts_huber_losses for batch in batches)),
-            material_huber_losses=torch.cat(tuple(batch.material_huber_losses for batch in batches)),
             outcome_target_eligible=torch.cat(tuple(batch.outcome_target_eligible for batch in batches)),
             material_target_eligible=torch.cat(tuple(batch.material_target_eligible for batch in batches)),
             termination_reasons=torch.cat(tuple(batch.termination_reasons for batch in batches)),
             final_outcomes=torch.cat(tuple(batch.final_outcomes for batch in batches)),
+            mcts_root_values=torch.cat(tuple(batch.mcts_root_values for batch in batches)),
             material_result_scores=torch.cat(tuple(batch.material_result_scores for batch in batches)),
             plies=torch.cat(tuple(batch.plies for batch in batches)),
             current_player_piece_counts=torch.cat(tuple(batch.current_player_piece_counts for batch in batches)),
             opponent_piece_counts=torch.cat(tuple(batch.opponent_piece_counts for batch in batches)),
         )
 
-    def _value_metric_inputs(
+    def _calculate_value_metric_tensors(
         self,
         metrics: _DetachedMetricBatch,
+    ) -> _ValueMetricTensors:
+        value_probabilities = torch.softmax(metrics.value_logits, dim=1)
+        expected_scores = wdl_to_scalar(value_probabilities)
+        return _ValueMetricTensors(
+            value_probabilities=value_probabilities,
+            expected_scores=expected_scores,
+            target_expected_scores=metrics.target_expected_scores,
+            value_loss_contributions=metrics.value_loss_contributions,
+            outcome_losses=F.cross_entropy(metrics.value_logits, metrics.final_outcomes, reduction='none'),
+            mcts_huber_losses=F.huber_loss(
+                expected_scores,
+                metrics.mcts_root_values,
+                reduction='none',
+            ),
+            material_huber_losses=F.huber_loss(
+                expected_scores,
+                metrics.material_result_scores,
+                reduction='none',
+            ),
+            outcome_target_eligible=metrics.outcome_target_eligible,
+            material_target_eligible=metrics.material_target_eligible,
+            termination_reasons=metrics.termination_reasons,
+            final_outcomes=metrics.final_outcomes,
+            material_result_scores=metrics.material_result_scores,
+            plies=metrics.plies,
+            current_player_piece_counts=metrics.current_player_piece_counts,
+            opponent_piece_counts=metrics.opponent_piece_counts,
+        )
+
+    def _value_metric_inputs(
+        self,
+        metrics: _ValueMetricTensors,
     ) -> _ValueMetricInputs:
         expected_score_errors = metrics.expected_scores - metrics.target_expected_scores
         final_outcome_probabilities = F.one_hot(
@@ -417,7 +432,7 @@ class Trainer:
         self,
         reduction_values: torch.Tensor,
         offset: int,
-        metrics: _DetachedMetricBatch,
+        metrics: _ValueMetricTensors,
         metric_inputs: _ValueMetricInputs,
         sample_mask: torch.Tensor,
     ) -> None:
