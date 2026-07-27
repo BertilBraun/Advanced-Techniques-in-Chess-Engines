@@ -744,6 +744,8 @@ class SelfPlayCpp:
         initial_maximum = self.args.maximum_game_plies
         if initial_maximum is None:
             return None
+        if self.iteration < self.args.maximum_game_plies_hold_until_iteration:
+            return initial_maximum
         schedule_end = self.args.maximum_game_plies_until_iteration
         final_maximum = self.args.final_maximum_game_plies
         if self.iteration >= schedule_end:

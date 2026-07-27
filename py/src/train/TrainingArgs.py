@@ -103,6 +103,9 @@ class SelfPlayParams:
     maximum_game_plies_until_iteration: int = 0
     """Iteration at which the game-length schedule reaches its final value."""
 
+    maximum_game_plies_hold_until_iteration: int = 0
+    """Iteration before which the initial game-length cap remains fixed."""
+
     final_maximum_game_plies: int | None = None
     """Maximum self-play game length after the scheduled interpolation, or None to disable the cap."""
 

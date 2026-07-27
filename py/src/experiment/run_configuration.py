@@ -301,6 +301,7 @@ class WorkloadConfiguration(BaseModel):
     self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
+    self_play_maximum_game_plies_hold_until_iteration: int = Field(default=0, ge=0)
     self_play_final_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_endgame_continuation_start_plies: int | None = Field(default=None, gt=0)
     self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
@@ -821,6 +822,9 @@ def apply_run_configuration(
     training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies
     training_args.self_play.maximum_game_plies_until_iteration = workload.self_play_maximum_game_plies_until_iteration
+    training_args.self_play.maximum_game_plies_hold_until_iteration = (
+        workload.self_play_maximum_game_plies_hold_until_iteration
+    )
     training_args.self_play.final_maximum_game_plies = workload.self_play_final_maximum_game_plies
     training_args.self_play.endgame_continuation_start_plies = workload.self_play_endgame_continuation_start_plies
     training_args.self_play.low_material_termination_minimum_plies = (
