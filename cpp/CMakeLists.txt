@@ -3,6 +3,12 @@ project(AlphaZeroSelfPlay LANGUAGES CXX)
 
 include(CTest)
 
+option(AZ_V2_GO_ONLY "Build only the dependency-free v2 Go correctness core" OFF)
+if (AZ_V2_GO_ONLY)
+    add_subdirectory(src/v2)
+    return()
+endif ()
+
 # --- Export compile commands for Clang-Tidy ---
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -180,6 +186,7 @@ file(GLOB_RECURSE ALL_SOURCES
         "${stockfish_SOURCE_DIR}/src/*.cpp"
         "${stockfish_SOURCE_DIR}/src/*.h"
 )
+list(FILTER ALL_SOURCES EXCLUDE REGEX "/v2/")
 
 # Build the Python module from the binding entry point and shared sources
 pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})

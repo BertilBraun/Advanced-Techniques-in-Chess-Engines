@@ -7,6 +7,10 @@ from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from src.az.config.base import FrozenModel
 
+NATIVE_INT32_MIN = -(2**31)
+NATIVE_INT32_MAX = 2**31 - 1
+MAXIMUM_HISTORY_LENGTH = 1024
+
 
 class DisabledResignation(FrozenModel):
     kind: Literal['disabled']
@@ -29,14 +33,18 @@ ResignationConfiguration = Annotated[
 class GoGameConfiguration(FrozenModel):
     kind: Literal['go']
     board_size: Literal[7, 9]
-    komi_half_points: int = Field(strict=True)
+    komi_half_points: int = Field(
+        strict=True,
+        ge=NATIVE_INT32_MIN,
+        le=NATIVE_INT32_MAX,
+    )
     scoring_rule: Literal['area']
     ko_rule: Literal['positional_superko']
     suicide_rule: Literal['illegal']
     pass_exempt_from_superko: Literal[True]
     score_comparison: Literal['doubled_integer_points']
-    safety_ply_cap: PositiveInt
-    history_length: PositiveInt
+    safety_ply_cap: int = Field(strict=True, ge=1, le=NATIVE_INT32_MAX)
+    history_length: int = Field(strict=True, ge=1, le=MAXIMUM_HISTORY_LENGTH)
     history_planes_per_position: Literal[2]
     include_color_plane: Literal[True]
     pass_action: Literal['last']
@@ -93,4 +101,8 @@ class GoEvaluationSuite(FrozenModel):
     kind: Literal['go_paired']
     opponent: GoOpponentConfiguration
     alternate_colors: Literal[True]
-    komi_half_points: int = Field(strict=True)
+    komi_half_points: int = Field(
+        strict=True,
+        ge=NATIVE_INT32_MIN,
+        le=NATIVE_INT32_MAX,
+    )

@@ -185,6 +185,55 @@ def test_komi_is_serialized_as_integer_half_points() -> None:
         AuthoringRunConfiguration.model_validate_json(json.dumps(candidate))
 
 
+@pytest.mark.parametrize(
+    ('field_name', 'value'),
+    (
+        ('komi_half_points', -(2**31) - 1),
+        ('komi_half_points', 2**31),
+        ('safety_ply_cap', 2**31),
+        ('history_length', 1_025),
+    ),
+)
+def test_go_native_integer_boundaries_are_enforced(
+    field_name: str,
+    value: int,
+) -> None:
+    candidate = fixed_authoring().model_dump(mode='json')
+    candidate['game'][field_name] = value
+
+    with pytest.raises(ValidationError, match=field_name):
+        AuthoringRunConfiguration.model_validate_json(json.dumps(candidate))
+
+
+@pytest.mark.parametrize('komi_half_points', (-(2**31), 2**31 - 1))
+def test_go_native_komi_boundaries_are_accepted(komi_half_points: int) -> None:
+    candidate = fixed_authoring().model_dump(mode='json')
+    candidate['game']['komi_half_points'] = komi_half_points
+
+    configuration = AuthoringRunConfiguration.model_validate_json(json.dumps(candidate))
+
+    assert configuration.game.komi_half_points == komi_half_points
+
+
+def test_go_native_positive_maxima_are_accepted() -> None:
+    candidate = fixed_authoring().model_dump(mode='json')
+    candidate['game']['safety_ply_cap'] = 2**31 - 1
+    candidate['game']['history_length'] = 1_024
+
+    configuration = AuthoringRunConfiguration.model_validate_json(json.dumps(candidate))
+
+    assert configuration.game.safety_ply_cap == 2**31 - 1
+    assert configuration.game.history_length == 1_024
+
+
+def test_go_evaluation_komi_uses_native_integer_boundaries() -> None:
+    candidate = resolve_configuration(fixed_authoring()).model_dump(mode='json')
+    candidate['evaluation']['suite']['komi_half_points'] = 2**31
+
+    with pytest.raises(ValidationError, match='komi_half_points'):
+        ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+
 def test_progressive_stages_require_zero_and_strict_order() -> None:
     candidate = load_authoring_configuration(CONFIGURATION_DIRECTORY / 'go-7x7-progressive.authoring.json').model_dump(
         mode='json'
