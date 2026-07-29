@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "experiment": {
+    "name": "go-7x7-search-compute",
+    "arm_id": "progressive",
+    "hypothesis": "Increasing search compute over elapsed time improves strength per GPU-hour.",
+    "root_seed": 2026073001,
+    "output_directory": "runs/go-7x7-progressive"
+  },
+  "search": {
+    "budget": {
+      "kind": "progressive",
+      "stages": [
+        {"start_elapsed_seconds": 0, "simulations": 16},
+        {"start_elapsed_seconds": 5400, "simulations": 32},
+        {"start_elapsed_seconds": 10800, "simulations": 64},
+        {"start_elapsed_seconds": 16200, "simulations": 128}
+      ]
+    },
+    "stopping": {
+      "kind": "full_budget"
+    }
+  }
+}

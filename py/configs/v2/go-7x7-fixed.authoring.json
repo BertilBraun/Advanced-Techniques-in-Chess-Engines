@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "experiment": {
+    "name": "go-7x7-search-compute",
+    "arm_id": "fixed",
+    "hypothesis": "A fixed search cap provides the reference compute strategy.",
+    "root_seed": 2026073001,
+    "output_directory": "runs/go-7x7-fixed"
+  },
+  "search": {
+    "budget": {
+      "kind": "fixed",
+      "simulations": 64
+    },
+    "stopping": {
+      "kind": "full_budget"
+    }
+  }
+}

@@ -76,6 +76,11 @@ The extension point is a small typed game module/factory interface. It is not a
 common base class for samples or models and must not use raw dictionaries,
 dynamic attribute access, or `Any`.
 
+Shared configuration may import an explicit game variant to compose its typed
+union, but this does not select a runtime game. Runtime game resolution always
+uses an explicit configuration identifier through the lazy registry; no
+environment variable or module-global current-game setting participates.
+
 ### 3.2 Shared Python code
 
 Shared code owns operations whose semantics do not depend on the rules of Go:
@@ -221,7 +226,8 @@ values must not be inherited from module globals or mutable dataclasses.
 The root contains these categories:
 
 - `experiment`: name, hypothesis/arm identifier, seed, duration, checkpoint
-  times, output location, source revision, and manifest policy;
+  times, output location, and manifest policy. The manifest records the actual
+  source revision; it is not duplicated as an unverifiable configuration value;
 - `hardware`: provider/offer identity, expected GPU model/count, CPU/RAM/disk
   minima, and hourly cost;
 - `topology`: trainer ranks/devices, self-play workers/devices, native threads,

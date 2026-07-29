@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "experiment": {
+    "name": "go-7x7-search-compute",
+    "arm_id": "adaptive",
+    "hypothesis": "Calibrated early stopping saves simulations without materially changing full-search choices.",
+    "root_seed": 2026073001,
+    "output_directory": "runs/go-7x7-adaptive"
+  },
+  "search": {
+    "budget": {
+      "kind": "fixed",
+      "simulations": 128
+    },
+    "stopping": {
+      "kind": "visit_margin",
+      "minimum_simulations": 16,
+      "check_interval_simulations": 8,
+      "required_top_visit_fraction": 0.8,
+      "required_top_two_margin": 0.5,
+      "calibration_id": "placeholder-pre-experiment-calibration"
+    }
+  }
+}

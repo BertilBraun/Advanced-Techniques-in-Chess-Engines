@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "experiment": {
+    "name": "go-7x7-search-compute",
+    "arm_id": "mixed",
+    "hypothesis": "Mostly cheap searches generate positions faster while full searches preserve policy quality.",
+    "root_seed": 2026073001,
+    "output_directory": "runs/go-7x7-mixed"
+  },
+  "search": {
+    "budget": {
+      "kind": "mixed",
+      "cheap_simulations": 16,
+      "full_simulations": 128,
+      "full_search_probability": 0.25,
+      "cheap_policy_target_weight": 0.0,
+      "full_policy_target_weight": 1.0
+    },
+    "stopping": {
+      "kind": "full_budget"
+    }
+  }
+}
