@@ -605,9 +605,9 @@ def test_evaluation_model_claim_retains_historical_checkpoint_after_advancement(
 
 
 def test_explicit_ablation_arms_change_only_declared_search_compute_factors() -> None:
-    fixed = load_resolved_configuration(Path('configs/v2/go-7x7-fixed.resolved.json'))
-    progressive = load_resolved_configuration(Path('configs/v2/go-7x7-progressive.resolved.json'))
-    mixed = load_resolved_configuration(Path('configs/v2/go-7x7-mixed.resolved.json'))
+    fixed = load_resolved_configuration(Path('configs/go/go-7x7-fixed.resolved.json'))
+    progressive = load_resolved_configuration(Path('configs/go/go-7x7-progressive.resolved.json'))
+    mixed = load_resolved_configuration(Path('configs/go/go-7x7-mixed.resolved.json'))
     definitions = tuple(
         SearchComputeArmDefinition(
             arm_id=configuration.experiment.arm_id,

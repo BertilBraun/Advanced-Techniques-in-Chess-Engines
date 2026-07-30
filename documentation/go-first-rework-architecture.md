@@ -183,7 +183,7 @@ py/
     system/
 
 cpp/
-  src/v2/
+  src/
     games/
       game_concepts.hpp
       go/
@@ -209,12 +209,15 @@ cpp/
     bindings/
       module.cpp
       go_bindings.cpp
-  test/v2/
+  test/
 ```
 
-New code lives alongside legacy code until its end-to-end replacement is
-validated. Legacy roots are then removed in a dedicated cleanup stage; they
-must not be wrapped indefinitely.
+During implementation stages 2 through 9, the new native code lived under the
+staging paths `cpp/src/v2` and `cpp/test/v2` alongside the legacy code. Stage 10
+removed the legacy roots and promoted those staging paths to the authoritative
+`cpp/src` and `cpp/test` paths shown above. Active Go configurations were
+similarly promoted from the staging directory `py/configs/v2` to
+`py/configs/go`.
 
 ## 5. Typed configuration contract
 
@@ -358,7 +361,7 @@ Search returns the selected action, root targets, value information, terminal
 information where applicable, and a `SearchTelemetry` record. Python bindings
 must expose typed result objects rather than positional tuples or dictionaries.
 No Stockfish type, FEN/UCI representation, chess action constant, or board-size
-constant may appear in `cpp/src/v2/search` or `cpp/src/v2/inference`.
+constant may appear in `cpp/src/search` or `cpp/src/inference`.
 
 The current pybind adapter uses `PythonGoEvaluator`: native C++ owns tree
 traversal, selection, expansion, and backup, but releases and reacquires the GIL
@@ -367,7 +370,7 @@ The broker combines requests from many concurrently running native searches into
 model batches. This differs from the legacy `DirectInferencePipeline`, which
 owned the queue, batching thread, and Torch model invocation in C++. The current
 boundary keeps search and model implementations independently configurable and
-avoids a LibTorch dependency in the v2 core, at the cost of a pybind/GIL
+avoids a LibTorch dependency in the native core, at the cost of a pybind/GIL
 round-trip per evaluated leaf and Python-side batching overhead. Runtime
 telemetry must determine whether that cost is material. If it is, the preferred
 optimization is a typed native batch-queue adapter behind the existing inference
@@ -621,11 +624,11 @@ balanced; reports include games/positions, actual simulations, budget class,
 policy eligibility, utilization, optimizer/replay totals, stop frequency, and
 prefix/full disagreement; evaluation cost is accounted separately.
 
-### Stage 10: legacy removal and repository cleanup
+### Stage 10: legacy removal and repository cleanup (completed)
 
-Delete the superseded implementation and rename/move v2 into the final paths.
-Keep historical documents and benchmark artifacts as evidence, clearly labeled
-legacy.
+The superseded implementation was deleted and the staged native implementation
+was promoted into the final paths. Historical documents and benchmark artifacts
+remain as evidence and are explicitly labeled legacy.
 
 Acceptance: imports/build files contain no legacy game selector, Python MCTS,
 `TrainingArgs`, chess/Stockfish dependency, UCI/web deployment, or old replay
@@ -650,7 +653,7 @@ The disposition below applies after replacements pass their acceptance stages.
 
 | Current path | Disposition | Replacement or reason |
 | --- | --- | --- |
-| `py/src/mcts/` | Delete | Native `cpp/src/v2/search`; no Python MCTS. |
+| `py/src/mcts/` | Delete | Native `cpp/src/search`; no Python MCTS. |
 | `py/src/self_play/SelfPlayPy.py` | Delete | `az/self_play/native_worker.py`. |
 | `py/src/eval/AlphaZeroBotPy.py`, `ModelEvaluationPy.py` | Delete | Native Go evaluation through `az/evaluation`. |
 | `py/src/settings.py`, `settings_common.py` | Delete | Fully resolved `az/config`; no import-time game. |
@@ -682,9 +685,10 @@ The disposition below applies after replacements pass their acceptance stages.
 
 | Current path | Disposition | Replacement or reason |
 | --- | --- | --- |
-| `cpp/src/Board.*`, `BoardEncoding.*`, `MoveEncoding.*`, `GameHistory.*`, `common.hpp` | Delete after Go replacement | Chess/Stockfish-specific state becomes `v2/games/go`; shared constants become typed configuration. |
-| `cpp/src/MCTS/` | Retain algorithms as reference, rewrite | `v2/search` with explicit budget/stopping/FPU/discount/RNG and no game constants. |
-| `cpp/src/DirectInference.*`, `InferenceModel.hpp`, `InferenceResultProcessing.*` | Adapt | Focused `v2/inference` with typed game-independent shapes supplied at construction. |
+| `cpp/src/Board.*`, `BoardEncoding.*`, `MoveEncoding.*`, `GameHistory.*` | Delete after Go replacement | Chess/Stockfish-specific state is replaced by `cpp/src/games/go`; shared constants are typed configuration. |
+| `cpp/src/common.hpp` | Retain and simplify | Authoritative PCH and project integer aliases; remove legacy chess, Stockfish, and LibTorch content. |
+| `cpp/src/MCTS/` | Retain algorithms as reference, rewrite | `cpp/src/search` with explicit budget/stopping/FPU/discount/RNG and no game constants. |
+| `cpp/src/DirectInference.*`, `InferenceModel.hpp`, `InferenceResultProcessing.*` | Adapt | Focused `cpp/src/inference` with typed game-independent shapes supplied at construction. |
 | `cpp/src/InferenceClient.*`, `NonCachingInferenceClient.*`, related types | Replace/simplify | One explicit batching interface and optional cache strategy, without parallel semantic paths. |
 | `cpp/src/InteractiveEngine.*`, `InteractiveSearch.*` | Delete | Chess interactive/UCI deployment is out of scope. |
 | `cpp/src/binding.cpp` | Replace | Small bindings split by native domain and typed result objects. |
@@ -697,7 +701,7 @@ The disposition below applies after replacements pass their acceptance stages.
 
 | Current path | Disposition | Replacement or reason |
 | --- | --- | --- |
-| `py/train.py` | Replace | One v2 experiment CLI: validate, resolve, run, resume, and report. |
+| `py/train.py` | Replace | One experiment CLI: validate, resolve, run, resume, and report. |
 | `py/eval.py`, `opt.py`, shell entry points | Delete or defer | Evaluation is scheduled from the experiment CLI; population optimization is later. |
 | `py/configs/chess-*.json` | Archive as legacy documentation, remove from active configs | New resolved Go configurations and matrix authoring inputs. |
 | `py/AlphaZeroCpp.pyi`, built `.so` | Regenerate | Bindings/types for the new native module; build artifacts are not source. |
@@ -713,18 +717,18 @@ The disposition below applies after replacements pass their acceptance stages.
 
 | Essential capability today | Authoritative replacement |
 | --- | --- |
-| Run configuration, approval, source/config hashes | `az/config/models.py`, `resolution.py`, `manifest.py` |
+| Run configuration, approval, source/config hashes | `az/config/root.py`, `resolution.py`, `manifest.py` |
 | Hardware and process topology validation | `az/runtime/topology.py` |
-| Wall-clock/cost enforcement and shutdown | `az/experiment/runner.py`, `az/runtime/shutdown.py` |
-| Native high-throughput self-play/inference | `v2/self_play`, `v2/search`, `v2/inference`, `az/self_play` |
+| Wall-clock enforcement and shutdown | `az/runtime/orchestrator.py` |
+| Native self-play search/inference | `cpp/src/search`, `cpp/src/inference`, `az/self_play`, `az/inference` |
 | Credit-based replay ratio and exact reuse | `az/replay/credits.py`, `sampling.py`, `storage.py` |
 | Distributed training | `az/training/distributed.py`, `trainer.py` |
 | Atomic model/optimizer publication and resume | `az/training/checkpoints.py` |
 | Artifact retention | `az/experiment/artifact_retention.py` |
-| Model refresh during self-play | focused subscriber in `az/self_play/native_worker.py` |
-| Fixed elapsed-time checkpoint/evaluation schedule | `az/experiment/evaluation_schedule.py` |
+| Model refresh during self-play | `az/self_play/model_refresh.py`, `worker.py` |
+| Fixed elapsed-time checkpoint/evaluation schedule | `az/evaluation/scheduling.py` |
 | Paired evaluation and bootstrap intervals | `az/evaluation/protocol.py`, `statistics.py` |
-| Resource, progress, and search diagnostics | `az/runtime/resource_telemetry.py`, native `SearchTelemetry`, reporting |
+| Resource, progress, and search diagnostics | `az/runtime/telemetry.py`, native `SearchTelemetry`, `az/reporting` |
 | Old game settings, model, dataset, and losses | `az/games/go/*` for Go; future games supply their own package |
 
 ## 12. Review rules for implementation

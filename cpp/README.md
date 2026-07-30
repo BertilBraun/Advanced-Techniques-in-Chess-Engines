@@ -1,138 +1,41 @@
-# C++ Self-Play Engine for AlphaZero-Like Chess Bot
+# Native Go rules and search
 
-## v2 Go development build
+The C++20 library is the only production implementation of Go state mutation
+and MCTS. It supports arbitrary square board sizes from 3 upward, subject only
+to the signed 32-bit action-space representation.
 
-Configure the native Go core, tests, and Python bindings with GCC for runtime
-validation:
+`src/common.hpp` is the project precompiled header. Native code uses its
+`uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, and `int64`
+aliases.
 
-```bash
-cmake -S cpp -B cpp/build-v2-python \
-  -DAZ_V2_GO_ONLY=ON \
-  -DAZ_BUILD_V2_PYTHON=ON \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build cpp/build-v2-python
+## Build tests and Python bindings
+
+From the repository root:
+
+```powershell
+cmake -S .\cpp -B .\cpp\build -DAZ_BUILD_PYTHON=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build .\cpp\build --parallel
+ctest --test-dir .\cpp\build --output-on-failure
 ```
 
-Configure the Clang tooling build separately so clang-tidy consumes a
-Clang-compatible PCH:
+The Python module is `az_go_native`. Native search owns traversal, selection,
+expansion, and backup. Its `PythonGoEvaluator` callback submits typed leaf
+requests to Python's per-device inference broker, which batches PyTorch model
+execution. There is no LibTorch model owner or batching thread in C++.
 
-```bash
-cmake -S cpp -B cpp/build-v2-clang-tidy \
-  -DAZ_V2_GO_ONLY=ON \
-  -DAZ_BUILD_V2_PYTHON=ON \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-18
-cmake --build cpp/build-v2-clang-tidy
-cp cpp/build-v2-clang-tidy/compile_commands.json cpp/compile_commands.json
+## Clang tooling and IDE database
+
+Use a separate Clang build so clang-tidy reads a compatible PCH:
+
+```powershell
+cmake -S .\cpp -B .\cpp\build-clang `
+    -DAZ_BUILD_PYTHON=ON `
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+    -DCMAKE_CXX_COMPILER=clang++
+cmake --build .\cpp\build-clang --parallel
+Copy-Item .\cpp\build-clang\compile_commands.json .\cpp\compile_commands.json
 ```
 
-The ignored `cpp/compile_commands.json` copy is the IDE- and tooling-discoverable
-database. Regenerate it from the Clang build whenever targets or compile options
-change; do not use the GCC database for clang-tidy because GCC and Clang
-precompiled-header formats are incompatible.
-
-This project is a high-performance C++ backend for an AlphaZero-style chess engine, focused specifically on the computationally intensive MCTS components.  
-It supplements the Python-based system by providing a faster, parallelized multithreaded MCTS engine that can be directly called from Python via PyBind bindings.
-
-While originally intended to replace the Python version entirely, some higher-level logic remains simpler and more flexible in Python. Therefore, the C++ component now permanently acts as a powerful backend for the Python project.
-
-![AlphaZero Chess Engine Architecture](../documentation/images/C++%20Overview.png)
-
-## Documentation
-
-Detailed documentation for each project component can be found in:
-
-- **[Chess Encoding for Neural Networks](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/5.1-chess-implementation)**: How chess board states are encoded as inputs to the neural network.
-- **[Chess Framework](https://github.com/BertilBraun/Stockfish)**: Details about the the chess framework and logic adapted from the Stockfish chess engine.
-- **[MCTS Parallelization](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.1-c++-mcts-engine)**: Strategies used for efficient parallel MCTS.
-- **[Inference Client](https://deepwiki.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/4.2-c++-inference-client)**: Architecture of the C++ inference client.
-
-## Technologies
-
-- **Programming Language**: C++20
-- **Machine Learning Frameworks**: LibTorch (PyTorch C++ API)
-- **Chess Library**: Stockfish adapted chess engine for board logic [see here](https://github.com/BertilBraun/Stockfish)
-- **Python Integration**: PyBind11 for binding C++ modules into Python
-- **Model Sharing**: Neural network models are defined in Python, JIT-compiled with PyTorch, and loaded into C++ at runtime
-
-## Architecture Overview
-
-- **MCTS Engine**: Written in C++, highly parallelized.
-- **Bindings**: C++ exports functionality (e.g., starting MCTS searches, inspecting search tree nodes, etc.) to Python via PyBind11.
-- **Data Interface**: Data exchange between Python and C++ happens through pybind bindings of the C++ STL data structures, allowing efficient transfer of game states and MCTS results.
-- **Model Loading**: Python-side model definitions are JIT-exported to `.jit.pt` files, which the C++ engine loads directly with LibTorch.
-
-All orchestration (job submission, training loop, etc.) happens in Python — the C++ part provides the raw MCTS data.
-
-## Getting Started
-
-### Step 1: Build the Project
-
-Ensure you have PyTorch installed via pip as well as a compatible C++ compiler (e.g., GCC, Clang, MSVC) and CMake.
-You can use the provided `py/setup.sh` scripts to automate downloading dependencies and generating build files.
-
-```bash
-compile
-or
-compileDebug
-```
-
-which expands to:
-
-```bash
-cd ../cpp && mkdir -p build && cd build && \
-cmake .. -DCMAKE_BUILD_TYPE=Release -DPYTHON_EXECUTABLE=$(which python3.10) && \
-make -j && cd ../../py
-```
-
-The build process generates a shared object file:
-
-- `py/AlphaZeroCpp.so` (Linux/Mac)
-- `py/AlphaZeroCpp.pyd` (Windows)
-
-As well as type stubs for Python:
-
-- `py/AlphaZeroCpp.pyi`
-
-This shared object can be imported as a Python module.
-
-### Step 2: Using from Python
-
-Once built, the module can be imported in your Python code:
-
-```python
-import AlphaZeroCpp
-
-mcts = AlphaZeroCpp.MCTS(...) # initialize with parameters
-# search with fens
-res = mcts.search(["rkbq...BKR w KQkq - 0 1", "rkbq...BKR b KQkq - 0 1"]) # search multiple positions in parallel
-print(res)  # prints the results of the MCTS search
-```
-
-**Note**: The neural network model must be exported from Python using PyTorch’s JIT export (`torch.jit.save`) to ensure compatibility.
-
-### Step 3: Model Export (Python Side)
-
-Before starting self-play, you must save your model in a format the C++ engine can load:
-
-```python
-import torch
-
-model = YourModel()
-# After loading or training
-traced_model = torch.jit.trace(model, example_inputs)
-torch.jit.save(traced_model, "path/to/model.jit.pt")
-```
-
-## Performance Considerations
-
-Preliminary testing notes, that the C++ implementation of the pure MCTS search is 90-100x faster than the Python implemenation
-    Python: 100 iterations took 232.29s
-    C++: 100 Iterations took 2.359s
-
-## Summary
-
-- The C++ engine handles **parallel MCTS**.
-- **Python** handles **training**, **evaluation**, and **cluster orchestration**.
-- Communication happens via **PyBind bindings**.
-- Models are shared via **PyTorch JIT** export/import.
+`compile_commands.json` is ignored but should be regenerated after target or
+compiler-option changes. Format with the repository `.clang-format` and run
+clang-tidy with `.clang-tidy`.

@@ -168,7 +168,7 @@ def test_storage_rejects_corrupt_and_truncated_shards(tmp_path: Path) -> None:
 def test_storage_rejects_identity_schema_and_capacity_errors(tmp_path: Path) -> None:
     replay = storage(tmp_path)
     wrong_identity = record(1)
-    values = wrong_identity.envelope.model_copy(update={'game_identifier': 'chess'})
+    values = wrong_identity.envelope.model_copy(update={'game_identifier': 'unsupported-game'})
 
     with pytest.raises(ValueError, match='game identity'):
         replay.publish(1, (ReplayRecord(values, b'x'),))

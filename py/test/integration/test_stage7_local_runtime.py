@@ -42,7 +42,7 @@ CONFIGURATION_SHA256 = 'c' * 64
 
 
 def _runtime_configuration() -> ResolvedRunConfiguration:
-    configuration = resolve_configuration(load_authoring_configuration(Path('configs/v2/go-7x7-fixed.authoring.json')))
+    configuration = resolve_configuration(load_authoring_configuration(Path('configs/go/go-7x7-fixed.authoring.json')))
     game = game_configuration().model_copy(update={'safety_ply_cap': 49})
     architecture = model_configuration().model_copy(
         update={'channels': 4, 'residual_blocks': 1, 'value_hidden_size': 8}

@@ -4,8 +4,9 @@ from collections.abc import Callable
 from pathlib import PurePosixPath
 from uuid import UUID
 
-import az_go_native as native
 import pytest
+
+native = pytest.importorskip('az_go_native', reason='focused native Go extension has not been built')
 
 from src.az.config.artifacts import CalibrationArtifactReference
 from src.az.config.search import (

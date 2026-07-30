@@ -18,7 +18,7 @@ from src.az.runtime.factory import RuntimeBuildEnvironment, build_runtime_plan
 
 
 def _configuration() -> ResolvedRunConfiguration:
-    return resolve_configuration(load_authoring_configuration(Path('configs/v2/go-7x7-fixed.authoring.json')))
+    return resolve_configuration(load_authoring_configuration(Path('configs/go/go-7x7-fixed.authoring.json')))
 
 
 def _environment(tmp_path: Path) -> RuntimeBuildEnvironment:

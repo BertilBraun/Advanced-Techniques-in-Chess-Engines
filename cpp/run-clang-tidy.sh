@@ -1,20 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-SRC_DIR=src
-BUILD_DIR=build
+build_directory="${1:-build-clang}"
 
-# Process .hpp files first
-find $SRC_DIR -name "*.hpp" | while read file; do
-    echo "Running clang-tidy on $file"
-    clang-tidy "$file" -p "$BUILD_DIR" --fix --format-style=file
-done
-
-# Then process .cpp files
-find $SRC_DIR -name "*.cpp" | while read file; do
-    # Exclude binding.cpp
-    if [[ "$file" == *"src/binding.cpp"* ]]; then
-        continue
-    fi
-    echo "Running clang-tidy on $file"
-    clang-tidy "$file" -p "$BUILD_DIR" --fix --format-style=file
-done
+find src test -type f -name '*.cpp' -print0 |
+    xargs -0 clang-tidy -p "${build_directory}"
