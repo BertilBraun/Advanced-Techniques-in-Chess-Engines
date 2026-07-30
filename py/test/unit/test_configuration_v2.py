@@ -27,8 +27,10 @@ from src.az.config.models import (
     FixedSearchBudget,
     MixedSearchBudget,
     ProgressiveSearchBudget,
+    ReplayConfiguration,
     ResolvedRunConfiguration,
     SearchConfiguration,
+    TrainingConfiguration,
     VisitMarginAdaptiveRule,
 )
 from src.az.config.search import (
@@ -60,6 +62,28 @@ def fixed_authoring() -> AuthoringRunConfiguration:
     return load_authoring_configuration(CONFIGURATION_DIRECTORY / 'go-7x7-fixed.authoring.json')
 
 
+def rebuild_configuration(
+    configuration: ResolvedRunConfiguration,
+    replay: ReplayConfiguration,
+    training: TrainingConfiguration,
+) -> ResolvedRunConfiguration:
+    return ResolvedRunConfiguration(
+        schema_version=configuration.schema_version,
+        experiment=configuration.experiment,
+        hardware=configuration.hardware,
+        topology=configuration.topology,
+        game=configuration.game,
+        model=configuration.model,
+        search=configuration.search,
+        self_play=configuration.self_play,
+        replay=replay,
+        training=training,
+        evaluation=configuration.evaluation,
+        telemetry=configuration.telemetry,
+        retention=configuration.retention,
+    )
+
+
 @pytest.mark.parametrize('path', AUTHORING_PATHS)
 def test_representative_authoring_and_resolved_configurations_match(path: Path) -> None:
     resolved = resolve_file(path)
@@ -88,6 +112,24 @@ def test_resolution_materializes_every_root_category() -> None:
     assert serialized['search']['backup_discount'] == 1.0
     assert serialized['training']['objective']['kind'] == 'go_policy_value'
     assert serialized['telemetry']['required_metrics']
+
+
+@pytest.mark.parametrize('payload_schema_version', [2, 2**31])
+def test_go_configuration_rejects_unknown_payload_schema(payload_schema_version: int) -> None:
+    configuration = resolve_configuration(fixed_authoring())
+    replay = configuration.replay.model_copy(update={'payload_schema_version': payload_schema_version})
+
+    with pytest.raises(ValidationError, match='payload schema'):
+        rebuild_configuration(configuration, replay, configuration.training)
+
+
+def test_go_objective_l2_and_optimizer_decay_are_separate_experimental_choices() -> None:
+    configuration = resolve_configuration(fixed_authoring())
+    objective = configuration.training.objective.model_copy(update={'l2_regularization_weight': 0.001})
+    training = configuration.training.model_copy(update={'objective': objective})
+
+    with pytest.raises(ValidationError, match='mutually exclusive experimental choices'):
+        rebuild_configuration(configuration, configuration.replay, training)
 
 
 def test_fixed_baseline_maps_only_implemented_native_search_choices() -> None:

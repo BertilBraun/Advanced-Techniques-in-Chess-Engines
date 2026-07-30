@@ -158,7 +158,8 @@ class FixedPuctConfiguration:
         backup_discount: float,
         no_visited_child_value: float,
         action_temperature: float,
-        seed: int,
+        root_noise_seed: int,
+        action_sampling_seed: int,
         root_noise: RootNoiseConfiguration,
         tree_reuse: bool,
     ) -> None: ...
@@ -173,7 +174,9 @@ class FixedPuctConfiguration:
     @property
     def action_temperature(self) -> float: ...
     @property
-    def seed(self) -> int: ...
+    def root_noise_seed(self) -> int: ...
+    @property
+    def action_sampling_seed(self) -> int: ...
     @property
     def root_noise(self) -> RootNoiseConfiguration: ...
     @property

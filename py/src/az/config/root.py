@@ -12,6 +12,7 @@ from src.az.config.model import ModelConfiguration, ProgressiveModelSchedule
 from src.az.config.runtime import RetentionConfiguration, TelemetryConfiguration, TopologyConfiguration
 from src.az.config.search import ProgressiveSearchBudget, SearchConfiguration
 from src.az.config.training import ReplayConfiguration, SelfPlayConfiguration, TrainingConfiguration
+from src.az.games.go.configuration import validate_go_experiment_compatibility
 
 
 class ResolvedRunConfiguration(FrozenModel):
@@ -57,4 +58,9 @@ class ResolvedRunConfiguration(FrozenModel):
             raise ValueError('Evaluation and experiment checkpoint schedules must match.')
         if self.evaluation.suite.komi_half_points != self.game.komi_half_points:
             raise ValueError('Evaluation and training komi must match.')
+        validate_go_experiment_compatibility(
+            self.training.objective,
+            self.training.optimizer.weight_decay,
+            self.replay.payload_schema_version,
+        )
         return self

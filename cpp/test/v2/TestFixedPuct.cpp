@@ -113,14 +113,15 @@ static_assert(az::v2::inference::SynchronousEvaluator<FixtureEvaluator, std::int
 az::v2::search::FixedPuctConfiguration configuration(std::int32_t simulations = 1,
                                                      double discount = 1.0,
                                                      double temperature = 0.0,
-                                                     std::uint64_t seed = 17) {
+                                                     std::uint64_t action_sampling_seed = 17) {
     return {
         .simulation_cap = simulations,
         .exploration_constant = 1.5,
         .backup_discount = discount,
         .no_visited_child_value = -0.25,
         .action_temperature = temperature,
-        .seed = seed,
+        .root_noise_seed = 23,
+        .action_sampling_seed = action_sampling_seed,
         .root_noise =
             {
                 .enabled = false,
@@ -306,10 +307,33 @@ void test_root_noise_is_seeded() {
     assert(first.root_visits == second.root_visits);
 
     FixtureEvaluator different_evaluator;
-    noisy.seed += 1;
+    noisy.root_noise_seed += 1;
     const auto different = az::v2::search::FixedPuctSearch<FixtureState>::run(
         FixtureState{}, different_evaluator, terminal_value, noisy);
     assert(first.root_children[0].prior != different.root_children[0].prior);
+}
+
+void test_random_purposes_use_independent_streams() {
+    auto baseline_configuration = configuration(16, 1.0, 1.0, 1);
+    baseline_configuration.root_noise.enabled = true;
+    baseline_configuration.root_noise.fraction = 0.5;
+    FixtureEvaluator baseline_evaluator;
+    const auto baseline = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, baseline_evaluator, terminal_value, baseline_configuration);
+
+    bool observed_different_sample = false;
+    for (std::uint64_t action_seed = 2; action_seed < 64; ++action_seed) {
+        auto changed_configuration = baseline_configuration;
+        changed_configuration.action_sampling_seed = action_seed;
+        FixtureEvaluator evaluator;
+        const auto changed = az::v2::search::FixedPuctSearch<FixtureState>::run(
+            FixtureState{}, evaluator, terminal_value, changed_configuration);
+        assert(changed.root_visits == baseline.root_visits);
+        assert(changed.root_children[0].prior == baseline.root_children[0].prior);
+        observed_different_sample =
+            observed_different_sample || changed.selected_action != baseline.selected_action;
+    }
+    assert(observed_different_sample);
 }
 
 template <typename Operation> void expect_invalid_batch(Operation operation) {
@@ -453,6 +477,7 @@ int main() {
     test_temperature_and_repeatability();
     test_invalid_inference_outputs();
     test_root_noise_is_seeded();
+    test_random_purposes_use_independent_streams();
     test_invalid_configuration_and_batch_contract();
     test_batch_validation_and_ordered_association();
 }

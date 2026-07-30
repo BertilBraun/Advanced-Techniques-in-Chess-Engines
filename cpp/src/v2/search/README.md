@@ -50,6 +50,7 @@ temperature. Temperature zero selects the greatest visit count with stable
 legal-order tie-breaking. Positive temperature samples from the normalized
 `visits^(1 / temperature)` distribution, calculated relative to the maximum
 log-visit count to avoid overflow even for very small positive temperatures,
-using only the explicitly seeded search stream.
-Optional root Dirichlet noise uses that same owned stream. No implicit or global
-random source is used.
+using only its explicitly seeded action-sampling stream. Optional root
+Dirichlet noise uses a separate explicitly seeded root-noise stream, so enabling
+or changing one stochastic purpose cannot consume draws owned by the other. No
+implicit or global random source is used.

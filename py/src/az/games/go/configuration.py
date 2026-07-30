@@ -10,6 +10,7 @@ from src.az.config.base import FrozenModel
 NATIVE_INT32_MIN = -(2**31)
 NATIVE_INT32_MAX = 2**31 - 1
 MAXIMUM_HISTORY_LENGTH = 1024
+GO_PAYLOAD_SCHEMA_VERSION = 1
 
 
 class DisabledResignation(FrozenModel):
@@ -106,3 +107,16 @@ class GoEvaluationSuite(FrozenModel):
         ge=NATIVE_INT32_MIN,
         le=NATIVE_INT32_MAX,
     )
+
+
+def validate_go_experiment_compatibility(
+    objective: GoObjectiveConfiguration,
+    optimizer_weight_decay: float,
+    replay_payload_schema_version: int,
+) -> None:
+    if objective.l2_regularization_weight > 0 and optimizer_weight_decay > 0:
+        raise ValueError(
+            'Objective L2 and optimizer weight decay are intentionally mutually exclusive experimental choices.'
+        )
+    if replay_payload_schema_version != GO_PAYLOAD_SCHEMA_VERSION:
+        raise ValueError(f'Go replay payload schema must be {GO_PAYLOAD_SCHEMA_VERSION}.')

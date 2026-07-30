@@ -154,7 +154,7 @@
     "shard_directory": "runs/go-7x7-mixed/replay",
     "maximum_positions_per_shard": 16384,
     "payload_schema_version": 1,
-    "compression": "zstd",
+    "compression": "none",
     "sampling": "uniform",
     "credits": {
       "target_reuse": 4.0,

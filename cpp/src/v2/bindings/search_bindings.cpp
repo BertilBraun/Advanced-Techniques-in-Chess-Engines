@@ -83,17 +83,19 @@ void bind_search(pybind11::module_ &module) {
         .def_readonly("alpha", &RootNoiseConfiguration::alpha)
         .def_readonly("fraction", &RootNoiseConfiguration::fraction);
     py::class_<FixedPuctConfiguration>(module, "FixedPuctConfiguration")
-        .def(py::init<std::int32_t, double, double, double, double, std::uint64_t,
+        .def(py::init<std::int32_t, double, double, double, double, std::uint64_t, std::uint64_t,
                       RootNoiseConfiguration, bool>(),
              py::arg("simulation_cap"), py::arg("exploration_constant"), py::arg("backup_discount"),
-             py::arg("no_visited_child_value"), py::arg("action_temperature"), py::arg("seed"),
-             py::arg("root_noise"), py::arg("tree_reuse"))
+             py::arg("no_visited_child_value"), py::arg("action_temperature"),
+             py::arg("root_noise_seed"), py::arg("action_sampling_seed"), py::arg("root_noise"),
+             py::arg("tree_reuse"))
         .def_readonly("simulation_cap", &FixedPuctConfiguration::simulation_cap)
         .def_readonly("exploration_constant", &FixedPuctConfiguration::exploration_constant)
         .def_readonly("backup_discount", &FixedPuctConfiguration::backup_discount)
         .def_readonly("no_visited_child_value", &FixedPuctConfiguration::no_visited_child_value)
         .def_readonly("action_temperature", &FixedPuctConfiguration::action_temperature)
-        .def_readonly("seed", &FixedPuctConfiguration::seed)
+        .def_readonly("root_noise_seed", &FixedPuctConfiguration::root_noise_seed)
+        .def_readonly("action_sampling_seed", &FixedPuctConfiguration::action_sampling_seed)
         .def_readonly("root_noise", &FixedPuctConfiguration::root_noise)
         .def_readonly("tree_reuse", &FixedPuctConfiguration::tree_reuse);
     py::class_<RootChildStatistics<std::int32_t>>(module, "RootChildStatistics")

@@ -21,7 +21,8 @@ struct FixedPuctConfiguration {
     double backup_discount;
     double no_visited_child_value;
     double action_temperature;
-    std::uint64_t seed;
+    std::uint64_t root_noise_seed;
+    std::uint64_t action_sampling_seed;
     RootNoiseConfiguration root_noise;
     bool tree_reuse;
 

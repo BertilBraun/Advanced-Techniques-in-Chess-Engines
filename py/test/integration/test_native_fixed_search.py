@@ -36,7 +36,8 @@ def fixed_configuration(
         backup_discount=1.0,
         no_visited_child_value=0.0,
         action_temperature=0.0,
-        seed=seed,
+        root_noise_seed=seed,
+        action_sampling_seed=seed + 1,
         root_noise=native.RootNoiseConfiguration(
             enabled=False,
             alpha=0.3,

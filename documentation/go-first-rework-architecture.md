@@ -365,6 +365,9 @@ constant may appear in `cpp/src/v2/search` or `cpp/src/v2/inference`.
 - Native code receives seeds from Python. Production randomness must not use
   `std::random_device`, wall-clock time, process ID, unordered container iteration,
   or an implicit global generator.
+- Each stochastic purpose owns its native random stream. In particular, root
+  Dirichlet noise and action-temperature sampling receive distinct derived seeds
+  and cannot change one another by consuming a different number of draws.
 - Random draws belong to stable logical entities such as `(run, worker, game,
   ply, purpose)`, so process timing does not silently change seed assignment.
 - The resolved configuration hash, source commit, dirty-tree patch hash, build

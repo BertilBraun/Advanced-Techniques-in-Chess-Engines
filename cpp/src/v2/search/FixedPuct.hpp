@@ -74,7 +74,8 @@ private:
         SearchContext(Evaluator &evaluator, TerminalValue terminal_value,
                       const FixedPuctConfiguration &configuration)
             : evaluator_(evaluator), terminal_value_(std::move(terminal_value)),
-              configuration_(configuration), random_(configuration.seed) {}
+              configuration_(configuration), root_noise_random_(configuration.root_noise_seed),
+              action_sampling_random_(configuration.action_sampling_seed) {}
 
         [[nodiscard]] SearchResult<action_type> run(const State &initial_state) {
             if (initial_state.is_terminal()) {
@@ -124,8 +125,8 @@ private:
                 std::fill(legal_priors.begin(), legal_priors.end(), uniform);
             }
             if (is_root && configuration_.root_noise.enabled) {
-                const auto noise =
-                    random_.dirichlet(legal_priors.size(), configuration_.root_noise.alpha);
+                const auto noise = root_noise_random_.dirichlet(legal_priors.size(),
+                                                                configuration_.root_noise.alpha);
                 for (std::size_t index = 0; index < legal_priors.size(); ++index) {
                     legal_priors[index] =
                         (1.0 - configuration_.root_noise.fraction) * legal_priors[index] +
@@ -300,7 +301,7 @@ private:
             const std::size_t selected_index =
                 configuration_.action_temperature == 0.0
                     ? maximum_visit_index(root.children)
-                    : random_.sample_discrete(temperature_weights(root.children));
+                    : action_sampling_random_.sample_discrete(temperature_weights(root.children));
             return SearchResult<action_type>{
                 .selected_action = root.children[selected_index].action,
                 .root_policy = std::move(policy),
@@ -411,7 +412,8 @@ private:
         Evaluator &evaluator_;
         TerminalValue terminal_value_;
         const FixedPuctConfiguration &configuration_;
-        SeededRandom random_;
+        SeededRandom root_noise_random_;
+        SeededRandom action_sampling_random_;
         std::uint64_t next_request_id_ = 0;
         std::int64_t root_inference_requests_ = 0;
         std::int64_t leaf_inference_requests_ = 0;

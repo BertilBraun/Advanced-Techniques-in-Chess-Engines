@@ -91,7 +91,7 @@ def default_replay() -> AuthoringReplayConfiguration:
         shard_directory=None,
         maximum_positions_per_shard=16_384,
         payload_schema_version=1,
-        compression='zstd',
+        compression='none',
         sampling='uniform',
         credits=default_replay_credits(),
     )
