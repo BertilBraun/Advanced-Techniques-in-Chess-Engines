@@ -7,10 +7,20 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid5
+from uuid import UUID, uuid5
 
 import torch
 import az_go_native as native
+from src.az.calibration.models import (
+    CheckpointTraceModelIdentity,
+    InitialTraceModelIdentity,
+    SearchTraceCollectionPayload,
+    SearchTraceObservation,
+    SearchTraceSampleLineage,
+    SearchTraceSnapshot,
+    TraceModelIdentity,
+    publish_trace_collection_artifact,
+)
 from src.az.config.search import (
     ConstantTemperature,
     DirichletRootExploration,
@@ -28,6 +38,8 @@ from src.az.config.search import (
     VisitMarginAdaptiveRule,
     VisitedChildMeanFpu,
 )
+from src.az.config.seeds import SearchTraceSampleSeedCoordinates, SeedPurpose, derive_seed
+from src.az.config.serialization import model_sha256
 from src.az.games.api import GameIdentifier
 from src.az.games.go.configuration import (
     GO_PAYLOAD_SCHEMA_VERSION,
@@ -61,7 +73,7 @@ from src.az.runtime.messages import (
 )
 from src.az.runtime.telemetry import sample_process_resources
 from src.az.runtime.ipc import ByteQueue, RuntimeControlSignal, StopSignal
-from src.az.self_play.go_adapter import GoInferenceBatchBroker
+from src.az.inference.go_batching import GoInferenceBatchBroker
 from src.az.self_play.configuration import GoWorkerSpecification, NativeSearchSpecification
 from src.az.self_play.model_refresh import load_newer_model_checkpoint
 from src.az.self_play.scheduling import LogicalWorkerGameScheduler
@@ -83,6 +95,7 @@ class _PendingPosition:
     stop_reason: SearchStopReason
     policy_target_weight: float
     search_calibration: SearchCalibrationEvidence
+    search_trace: SearchTraceCollectionPayload | None
 
 
 @dataclass(frozen=True)
@@ -131,7 +144,7 @@ def run_go_worker(
             specification.run_id,
             specification.resolved_configuration_sha256,
         )
-        model, model_version, checkpoint_id = _load_initial_model(
+        model, model_version, checkpoint_id, trace_model_source = _load_initial_model(
             specification,
             repository,
             device,
@@ -171,6 +184,7 @@ def run_go_worker(
                             specification,
                             scheduler,
                             checkpoint_id,
+                            trace_model_source,
                             broker,
                             stop_event,
                             experiment_start_monotonic_ns,
@@ -246,6 +260,7 @@ def run_go_worker(
                                 specification,
                                 scheduler,
                                 checkpoint_id,
+                                trace_model_source,
                                 broker,
                                 stop_event,
                                 experiment_start_monotonic_ns,
@@ -257,11 +272,12 @@ def run_go_worker(
                 model_version,
             )
             if refreshed is not None:
-                refreshed_model, refreshed_version, refreshed_id = refreshed
+                refreshed_model, refreshed_version, refreshed_id, refreshed_trace_model = refreshed
                 previous_model_version = model_version
                 model = refreshed_model
                 model_version = refreshed_version
                 checkpoint_id = refreshed_id
+                trace_model_source = refreshed_trace_model
                 _send(
                     message_queue,
                     WorkerModelRefreshed(
@@ -301,6 +317,7 @@ def _submit_game(
     specification: GoWorkerSpecification,
     scheduler: LogicalWorkerGameScheduler,
     checkpoint_id: str,
+    trace_model_source: TraceModelIdentity,
     broker: GoInferenceBatchBroker,
     stop_event: StopSignal,
     experiment_start_monotonic_ns: int,
@@ -312,6 +329,7 @@ def _submit_game(
         scheduled.logical_worker_index,
         scheduled.game_index,
         checkpoint_id,
+        trace_model_source,
         broker,
         stop_event,
         experiment_start_monotonic_ns,
@@ -336,16 +354,30 @@ def _load_initial_model(
     specification: GoWorkerSpecification,
     repository: CheckpointRepository,
     device: torch.device,
-) -> tuple[ResidualGoModel, int, str]:
+) -> tuple[ResidualGoModel, int, str, TraceModelIdentity]:
     model = _new_model(specification, device)
     if repository.current_model_version() is None:
-        return model, 0, 'initial-model'
+        return (
+            model,
+            0,
+            'initial-model',
+            InitialTraceModelIdentity(
+                kind='initial_model',
+                model_initialization_seed=specification.model_initialization_seed,
+                model_configuration_sha256=model_sha256(specification.model_configuration),
+            ),
+        )
     checkpoint = repository.load_current_model()
     model.load_state_dict(torch.load(io.BytesIO(checkpoint.model_artifact), map_location=device, weights_only=True))
     return (
         model,
         checkpoint.manifest.model_version,
         checkpoint.manifest.checkpoint_id.hex,
+        CheckpointTraceModelIdentity(
+            kind='checkpoint',
+            checkpoint_id=checkpoint.manifest.checkpoint_id,
+            model_artifact_sha256=checkpoint.manifest.model.sha256,
+        ),
     )
 
 
@@ -354,7 +386,7 @@ def _refresh_model(
     repository: CheckpointRepository,
     device: torch.device,
     current_version: int,
-) -> tuple[ResidualGoModel, int, str] | None:
+) -> tuple[ResidualGoModel, int, str, TraceModelIdentity] | None:
     checkpoint = load_newer_model_checkpoint(repository, current_version)
     if checkpoint is None:
         return None
@@ -366,7 +398,16 @@ def _refresh_model(
             weights_only=True,
         )
     )
-    return model, checkpoint.manifest.model_version, checkpoint.manifest.checkpoint_id.hex
+    return (
+        model,
+        checkpoint.manifest.model_version,
+        checkpoint.manifest.checkpoint_id.hex,
+        CheckpointTraceModelIdentity(
+            kind='checkpoint',
+            checkpoint_id=checkpoint.manifest.checkpoint_id,
+            model_artifact_sha256=checkpoint.manifest.model.sha256,
+        ),
+    )
 
 
 def _play_game(
@@ -374,6 +415,7 @@ def _play_game(
     logical_worker_index: int,
     game_index: int,
     checkpoint_id: str,
+    trace_model_source: TraceModelIdentity,
     broker: GoInferenceBatchBroker,
     stop_event: StopSignal,
     experiment_start_monotonic_ns: int,
@@ -409,6 +451,7 @@ def _play_game(
             lineage.search_budget_seed,
             experiment_start_monotonic_ns,
         )
+        trace_enabled = _sample_trace(specification, logical_worker_index, game_index, ply)
         fpu_policy, fpu_reduction, no_visited_child_value = _native_fpu(specification.search)
         adaptive_stopping = _native_adaptive_stopping(specification.search)
         search_configuration = native.FixedPuctConfiguration(
@@ -426,6 +469,10 @@ def _play_game(
             adaptive_stopping=adaptive_stopping,
             budget_class=_native_budget_class(selected_search.budget_class),
             policy_target_weight=selected_search.policy_target_weight,
+            prefix_trace=native.PrefixTraceConfiguration(
+                trace_enabled,
+                list(specification.search_trace_checkpoints) if trace_enabled else [],
+            ),
         )
 
         def evaluate(request: native.GoInferenceRequest) -> native.InferenceResult:
@@ -441,6 +488,22 @@ def _play_game(
             return None
         if result.selected_action is None:
             raise AssertionError('A nonterminal Go search must select an action.')
+        search_trace = (
+            _search_trace_payload(
+                specification,
+                logical_worker_index,
+                game_index,
+                trace_model_source,
+                game_id,
+                ply,
+                encoding,
+                legal_actions,
+                state.state_hash(),
+                result,
+            )
+            if result.prefix_trace
+            else None
+        )
         pending.append(
             _PendingPosition(
                 ply=ply,
@@ -461,6 +524,7 @@ def _play_game(
                 stop_reason=_stop_reason(result.telemetry.stop_reason),
                 policy_target_weight=result.telemetry.policy_target_weight,
                 search_calibration=selected_search.search_calibration,
+                search_trace=search_trace,
             )
         )
         state.apply(result.selected_action)
@@ -512,7 +576,107 @@ def _play_game(
             search_calibration=position.search_calibration,
         )
         records.append(ReplayRecord(envelope=envelope, payload=codec.encode(sample)))
+    for position in pending:
+        if position.search_trace is not None:
+            publish_trace_collection_artifact(
+                Path(specification.search_trace_directory),
+                position.search_trace,
+            )
     return tuple(records)
+
+
+def _trace_sample_seed(
+    specification: GoWorkerSpecification,
+    logical_worker_index: int,
+    game_index: int,
+    ply: int,
+) -> int:
+    return derive_seed(
+        specification.root_seed,
+        SearchTraceSampleSeedCoordinates(
+            purpose=SeedPurpose.SEARCH_TRACE_SAMPLE,
+            process_index=specification.process_index,
+            worker_index=logical_worker_index,
+            game_index=game_index,
+            ply=ply,
+        ),
+    )
+
+
+def _sample_trace(
+    specification: GoWorkerSpecification,
+    logical_worker_index: int,
+    game_index: int,
+    ply: int,
+) -> bool:
+    threshold = int(specification.search_trace_sample_probability * 2**63)
+    return threshold > 0 and _trace_sample_seed(specification, logical_worker_index, game_index, ply) < threshold
+
+
+def _search_trace_payload(
+    specification: GoWorkerSpecification,
+    logical_worker_index: int,
+    game_index: int,
+    trace_model_source: TraceModelIdentity,
+    game_id: UUID,
+    ply: int,
+    encoding: native.GoEncoding,
+    legal_actions: tuple[int, ...],
+    state_hash: int,
+    result: native.SearchResult,
+) -> SearchTraceCollectionPayload:
+    if result.root_value is None:
+        raise AssertionError('A sampled nonterminal root must have a value.')
+    position_id = uuid5(game_id, f'sample:{ply}')
+    observation = SearchTraceObservation(
+        source_position_id=position_id,
+        prefixes=tuple(
+            SearchTraceSnapshot(
+                simulations=snapshot.simulations,
+                root_policy=tuple(snapshot.root_policy),
+                root_visits=tuple(snapshot.root_visits),
+                root_value=snapshot.root_value,
+            )
+            for snapshot in result.prefix_trace
+        ),
+        full=SearchTraceSnapshot(
+            simulations=result.telemetry.actual_simulations,
+            root_policy=tuple(result.root_policy),
+            root_visits=tuple(result.root_visits),
+            root_value=result.root_value,
+        ),
+    )
+    artifact_id = uuid5(position_id, 'search-trace')
+    return SearchTraceCollectionPayload(
+        artifact_id=artifact_id,
+        source_run_id=specification.run_id,
+        source_configuration_sha256=specification.resolved_configuration_sha256,
+        source_model=trace_model_source,
+        game_id=game_id,
+        replay_sample_id=position_id,
+        lifecycle='completed_game_awaiting_replay_commit',
+        game_configuration_sha256=model_sha256(specification.game_configuration),
+        native_state_hash=state_hash,
+        encoding_planes=encoding.planes,
+        encoding_board_size=encoding.board_size,
+        canonical_encoding=tuple(encoding.values),
+        legal_actions=legal_actions,
+        observation=observation,
+        seed_lineage=SearchTraceSampleLineage(
+            derivation_version='az-seed-v2',
+            root_seed=specification.root_seed,
+            process_index=specification.process_index,
+            worker_index=logical_worker_index,
+            game_index=game_index,
+            ply=ply,
+            trace_sample_seed=_trace_sample_seed(
+                specification,
+                logical_worker_index,
+                game_index,
+                ply,
+            ),
+        ),
+    )
 
 
 def _value_target(player_is_black: bool, winner: native.Player | None) -> float:
@@ -539,13 +703,17 @@ def _select_search(
     experiment_start_monotonic_ns: int,
 ) -> _SelectedSearch:
     match search.budget, search.stopping:
-        case FixedSearchBudget(simulations=simulations), VisitMarginAdaptiveRule(calibration_id=calibration_id):
+        case FixedSearchBudget(simulations=simulations), VisitMarginAdaptiveRule(calibration=calibration):
             return _SelectedSearch(
                 SearchStrategy.ADAPTIVE,
                 SearchBudgetClass.FIXED,
                 simulations,
                 1.0,
-                VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id),
+                VisitMarginSearchCalibration(
+                    kind='visit_margin',
+                    artifact_id=calibration.artifact_id,
+                    artifact_sha256=calibration.sha256,
+                ),
             )
         case FixedSearchBudget(simulations=simulations), FullBudgetStopping():
             return _SelectedSearch(
@@ -555,13 +723,18 @@ def _select_search(
                 1.0,
                 NoSearchCalibration(kind='none'),
             )
-        case ProgressiveSearchBudget(stages=stages), VisitMarginAdaptiveRule(calibration_id=calibration_id):
+        case ProgressiveSearchBudget(stages=stages), VisitMarginAdaptiveRule(calibration=calibration):
+            simulation_cap = _progressive_simulation_cap(stages, experiment_start_monotonic_ns)
             return _SelectedSearch(
                 SearchStrategy.ADAPTIVE,
                 SearchBudgetClass.PROGRESSIVE_STAGE,
-                _progressive_simulation_cap(stages, experiment_start_monotonic_ns),
+                simulation_cap,
                 1.0,
-                VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id),
+                VisitMarginSearchCalibration(
+                    kind='visit_margin',
+                    artifact_id=calibration.artifact_id,
+                    artifact_sha256=calibration.sha256,
+                ),
             )
         case ProgressiveSearchBudget(stages=stages), FullBudgetStopping():
             return _SelectedSearch(
@@ -659,8 +832,12 @@ def _search_calibration(search: NativeSearchSpecification) -> SearchCalibrationE
     match search.stopping:
         case FullBudgetStopping():
             return NoSearchCalibration(kind='none')
-        case VisitMarginAdaptiveRule(calibration_id=calibration_id):
-            return VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id)
+        case VisitMarginAdaptiveRule(calibration=calibration):
+            return VisitMarginSearchCalibration(
+                kind='visit_margin',
+                artifact_id=calibration.artifact_id,
+                artifact_sha256=calibration.sha256,
+            )
 
 
 def _root_noise(

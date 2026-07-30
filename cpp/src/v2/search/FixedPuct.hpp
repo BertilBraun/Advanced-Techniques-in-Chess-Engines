@@ -88,6 +88,7 @@ private:
             _initialRootFpu = firstPlayUrgency(root);
             for (int64 simulation = 0; simulation < _configuration.simulationCap; ++simulation) {
                 simulate(root);
+                capturePrefixTrace(root);
                 if (root.visits < _configuration.simulationCap && shouldStopAdaptively(root)) {
                     return completedResult(root, SearchStopReason::AdaptiveConfidence);
                 }
@@ -280,6 +281,30 @@ private:
                        stopping.requiredTopTwoMargin;
         }
 
+        void capturePrefixTrace(const Node &root) {
+            if (!_configuration.prefixTrace.enabled ||
+                _nextTraceCheckpoint >= _configuration.prefixTrace.checkpoints.size() ||
+                root.visits != _configuration.prefixTrace.checkpoints[_nextTraceCheckpoint]) {
+                return;
+            }
+            const int32 actionCount = validatedActionCount(root.state);
+            std::vector<double> policy(static_cast<std::size_t>(actionCount), 0.0);
+            std::vector<int32> visits(static_cast<std::size_t>(actionCount), 0);
+            for (const Child &child : root.children) {
+                const std::size_t index = actionIndex(child.action, actionCount);
+                const int32 childVisits = child.node == nullptr ? 0 : child.node->visits;
+                visits[index] = childVisits;
+                policy[index] = static_cast<double>(childVisits) / static_cast<double>(root.visits);
+            }
+            _prefixTrace.push_back(SearchTraceSnapshot{
+                .simulations = root.visits,
+                .rootPolicy = std::move(policy),
+                .rootVisits = std::move(visits),
+                .rootValue = root.meanValue(),
+            });
+            ++_nextTraceCheckpoint;
+        }
+
         [[nodiscard]] std::optional<double> validatedTerminalValue(const State &state) const {
             const std::optional<double> value = _terminalValue(state);
             if (!value.has_value()) {
@@ -326,6 +351,7 @@ private:
                         .topTwoVisitMargin = 0.0,
                         .initialRootFpu = 0.0,
                     },
+                .prefixTrace = {},
             };
         }
 
@@ -378,6 +404,7 @@ private:
                         .topTwoVisitMargin = topTwoMargin(root),
                         .initialRootFpu = _initialRootFpu,
                     },
+                .prefixTrace = std::move(_prefixTrace),
             };
         }
 
@@ -470,6 +497,8 @@ private:
         int64 _rootInferenceRequests = 0;
         int64 _leafInferenceRequests = 0;
         double _initialRootFpu = 0.0;
+        std::size_t _nextTraceCheckpoint = 0;
+        std::vector<SearchTraceSnapshot> _prefixTrace;
     };
 };
 

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace az::v2::search {
 
@@ -33,6 +34,11 @@ struct AdaptiveStoppingConfiguration {
     double requiredTopTwoMargin = 1.0;
 };
 
+struct PrefixTraceConfiguration {
+    bool enabled = false;
+    std::vector<int32> checkpoints;
+};
+
 struct FixedPuctConfiguration {
     int32 simulationCap;
     double explorationConstant;
@@ -48,6 +54,7 @@ struct FixedPuctConfiguration {
     AdaptiveStoppingConfiguration adaptiveStopping{};
     SearchBudgetClass budgetClass = SearchBudgetClass::Fixed;
     double policyTargetWeight = 1.0;
+    PrefixTraceConfiguration prefixTrace{};
 
     void validate() const {
         if (simulationCap <= 0) {
@@ -104,6 +111,21 @@ struct FixedPuctConfiguration {
                 adaptiveStopping.requiredTopTwoMargin > 1.0) {
                 throw std::invalid_argument("adaptive top-two margin must be finite and in [0, 1]");
             }
+        }
+        if (prefixTrace.enabled) {
+            int32 previous = 0;
+            for (const int32 checkpoint : prefixTrace.checkpoints) {
+                if (checkpoint <= previous || checkpoint >= simulationCap) {
+                    throw std::invalid_argument(
+                        "prefix trace checkpoints must increase strictly and be below the cap");
+                }
+                previous = checkpoint;
+            }
+            if (prefixTrace.checkpoints.empty()) {
+                throw std::invalid_argument("enabled prefix tracing requires checkpoints");
+            }
+        } else if (!prefixTrace.checkpoints.empty()) {
+            throw std::invalid_argument("disabled prefix tracing cannot contain checkpoints");
         }
     }
 };

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import PurePosixPath
+from uuid import UUID
 
 import az_go_native as native
 import pytest
 
+from src.az.config.artifacts import CalibrationArtifactReference
 from src.az.config.search import (
     ConstantTemperature,
     DisabledRootExploration,
@@ -32,6 +35,14 @@ def _search_specification(
         backup_discount=1,
         temperature=ConstantTemperature(kind='constant', temperature=0),
         root_exploration=DisabledRootExploration(kind='disabled'),
+    )
+
+
+def _calibration(identity: int) -> CalibrationArtifactReference:
+    return CalibrationArtifactReference(
+        artifact_id=UUID(int=identity),
+        path=PurePosixPath(f'calibration/{identity}.json'),
+        sha256=f'{identity:064x}',
     )
 
 
@@ -105,7 +116,7 @@ def test_adaptive_selection_carries_calibration_identity() -> None:
                 check_interval_simulations=4,
                 required_top_visit_fraction=0.75,
                 required_top_two_margin=0.5,
-                calibration_id='calibration-2026-07-30',
+                calibration=_calibration(1),
             )
         }
     )
@@ -114,7 +125,7 @@ def test_adaptive_selection_carries_calibration_identity() -> None:
 
     assert selected.strategy is SearchStrategy.ADAPTIVE
     assert selected.budget_class is SearchBudgetClass.FIXED
-    assert selected.search_calibration.calibration_id == 'calibration-2026-07-30'
+    assert selected.search_calibration.artifact_id == UUID(int=1)
 
 
 def test_progressive_adaptive_preserves_progressive_budget_provenance(
@@ -139,7 +150,7 @@ def test_progressive_adaptive_preserves_progressive_budget_provenance(
                 check_interval_simulations=2,
                 required_top_visit_fraction=0.75,
                 required_top_two_margin=0.5,
-                calibration_id='progressive-calibration',
+                calibration=_calibration(2),
             )
         }
     )

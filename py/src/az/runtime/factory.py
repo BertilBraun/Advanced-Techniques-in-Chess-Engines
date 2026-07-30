@@ -5,6 +5,9 @@ from pathlib import Path
 from uuid import UUID
 
 from src.az.config.model import FixedModelSchedule
+from src.az.calibration.calibrate import validate_adaptive_compatibility
+from src.az.calibration.models import load_calibration_artifact
+from src.az.config.search import FixedSearchBudget, ProgressiveSearchBudget
 from src.az.config.root import ResolvedRunConfiguration
 from src.az.config.runtime import TelemetryMetric
 from src.az.config.search import (
@@ -35,6 +38,7 @@ STAGE7_DERIVABLE_METRICS = frozenset(
         TelemetryMetric.OPTIMIZER_STEPS,
         TelemetryMetric.REPLAY_REUSE,
         TelemetryMetric.STOP_REASON,
+        TelemetryMetric.PREFIX_FULL_DISAGREEMENT,
     }
 )
 
@@ -109,17 +113,48 @@ def build_runtime_plan(
         raise ValueError('Replay shard capacity cannot hold the configured games per shard.')
     if configuration.replay.compression != 'none':
         raise ValueError('Stage 7 replay publication supports only explicit uncompressed shards.')
-    if configuration.telemetry.search_trace_sample_probability != 0:
-        raise ValueError('Search trace sampling is reserved for Stage 9.')
-    match configuration.search.stopping:
-        case VisitMarginAdaptiveRule(calibration_id=calibration_id) if calibration_id.startswith('placeholder'):
-            raise ValueError('Adaptive search requires a non-placeholder calibration identifier.')
-        case VisitMarginAdaptiveRule() | FullBudgetStopping():
+    if configuration.telemetry.search_trace_sample_probability > 0:
+        if not configuration.retention.retain_search_traces:
+            raise ValueError('Sampled search traces require trace retention.')
+        match configuration.search.stopping:
+            case FullBudgetStopping():
+                pass
+            case VisitMarginAdaptiveRule():
+                raise ValueError('Prefix/full trace collection requires full-budget stopping.')
+    match configuration.search.stopping, configuration.search.budget:
+        case VisitMarginAdaptiveRule(calibration=reference) as stopping, FixedSearchBudget(simulations=cap):
+            artifact = load_calibration_artifact(reference, environment.output_directory)
+            validate_adaptive_compatibility(
+                artifact,
+                cap,
+                stopping.minimum_simulations,
+                stopping.check_interval_simulations,
+                stopping.required_top_visit_fraction,
+                stopping.required_top_two_margin,
+            )
+        case VisitMarginAdaptiveRule(calibration=reference) as stopping, ProgressiveSearchBudget(stages=stages):
+            artifact = load_calibration_artifact(reference, environment.output_directory)
+            caps = tuple(sorted({stage.simulations for stage in stages}))
+            for cap in caps:
+                validate_adaptive_compatibility(
+                    artifact,
+                    cap,
+                    stopping.minimum_simulations,
+                    stopping.check_interval_simulations,
+                    stopping.required_top_visit_fraction,
+                    stopping.required_top_two_margin,
+                )
+        case FullBudgetStopping(), _:
             pass
     unsupported_metrics = set(configuration.telemetry.required_metrics) - STAGE7_DERIVABLE_METRICS
     if unsupported_metrics:
         unsupported = ', '.join(sorted(metric.value for metric in unsupported_metrics))
         raise ValueError(f'Required telemetry metrics are not derivable in Stage 7: {unsupported}.')
+    if (
+        TelemetryMetric.PREFIX_FULL_DISAGREEMENT in configuration.telemetry.required_metrics
+        and configuration.telemetry.search_trace_sample_probability == 0
+    ):
+        raise ValueError('Prefix/full disagreement requires nonzero search trace sampling.')
     if environment.logical_cpu_count < configuration.hardware.minimum_logical_cpu_count:
         raise ValueError('Observed logical CPU count is below the resolved hardware profile.')
     if environment.ram_gib < configuration.hardware.minimum_ram_gib:
@@ -185,6 +220,9 @@ def build_runtime_plan(
                 resolved_configuration_sha256=environment.resolved_configuration_sha256,
                 telemetry_write_every_seconds=configuration.telemetry.write_every_seconds,
                 resource_sample_every_seconds=configuration.telemetry.resource_sample_every_seconds,
+                search_trace_sample_probability=configuration.telemetry.search_trace_sample_probability,
+                search_trace_checkpoints=configuration.telemetry.search_trace_checkpoints,
+                search_trace_directory=str(environment.output_directory / 'search-traces'),
             )
         )
     topology = RuntimeTopology(

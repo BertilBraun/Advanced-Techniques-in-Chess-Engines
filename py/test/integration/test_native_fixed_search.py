@@ -51,6 +51,39 @@ def test_native_and_python_simulation_limits_match() -> None:
     assert native.MAXIMUM_SIMULATION_COUNT == NATIVE_SIMULATION_COUNT_MAXIMUM
 
 
+def test_opt_in_prefix_trace_exposes_exact_snapshots_without_changing_result() -> None:
+    rules = native.GoRules(5, 1, 80, 2)
+    state = native.GoState(rules)
+    baseline_evaluator = DeterministicEvaluator()
+    traced_evaluator = DeterministicEvaluator()
+    baseline = native.search_go_fixed(state, baseline_evaluator, fixed_configuration(simulation_cap=8))
+    traced_configuration = native.FixedPuctConfiguration(
+        8,
+        1.5,
+        1.0,
+        0.0,
+        0.0,
+        619,
+        620,
+        native.RootNoiseConfiguration(False, 0.3, 0.25),
+        False,
+        native.FpuPolicy.VISITED_CHILD_MEAN,
+        0.0,
+        native.AdaptiveStoppingConfiguration(False, 1, 1, 1.0, 1.0),
+        native.SearchBudgetClass.FIXED,
+        1.0,
+        native.PrefixTraceConfiguration(True, [2, 4, 6]),
+    )
+    traced = native.search_go_fixed(state, traced_evaluator, traced_configuration)
+
+    assert traced.selected_action == baseline.selected_action
+    assert traced.root_visits == baseline.root_visits
+    assert traced.root_value == baseline.root_value
+    assert [snapshot.simulations for snapshot in traced.prefix_trace] == [2, 4, 6]
+    assert all(sum(snapshot.root_visits) == snapshot.simulations for snapshot in traced.prefix_trace)
+    assert baseline.prefix_trace == []
+
+
 def test_fixed_search_runs_through_typed_go_binding_repeatably() -> None:
     rules = native.GoRules(
         board_size=7,

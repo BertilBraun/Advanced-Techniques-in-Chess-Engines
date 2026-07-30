@@ -256,7 +256,8 @@
       "replay_reuse",
       "stop_reason"
     ],
-    "search_trace_sample_probability": 0.0
+    "search_trace_sample_probability": 0.0,
+    "search_trace_checkpoints": []
   },
   "retention": {
     "recent_checkpoint_count": 5,

@@ -33,6 +33,13 @@ struct SearchTelemetry {
     double initialRootFpu;
 };
 
+struct SearchTraceSnapshot {
+    int32 simulations;
+    std::vector<double> rootPolicy;
+    std::vector<int32> rootVisits;
+    double rootValue;
+};
+
 template <typename Action> struct SearchResult {
     std::optional<Action> selectedAction;
     std::vector<double> rootPolicy;
@@ -40,6 +47,7 @@ template <typename Action> struct SearchResult {
     std::optional<double> rootValue;
     std::vector<RootChildStatistics<Action>> rootChildren;
     SearchTelemetry telemetry;
+    std::vector<SearchTraceSnapshot> prefixTrace;
 };
 
 } // namespace az::v2::search

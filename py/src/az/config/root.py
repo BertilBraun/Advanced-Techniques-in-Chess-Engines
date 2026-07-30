@@ -58,6 +58,10 @@ class ResolvedRunConfiguration(FrozenModel):
             raise ValueError('Evaluation and experiment checkpoint schedules must match.')
         if self.evaluation.suite.komi_half_points != self.game.komi_half_points:
             raise ValueError('Evaluation and training komi must match.')
+        if self.telemetry.search_trace_checkpoints and (
+            self.telemetry.search_trace_checkpoints[-1] >= self.search.minimum_budget_cap
+        ):
+            raise ValueError('Every search trace checkpoint must be below every applicable search cap.')
         validate_go_experiment_compatibility(
             self.training.objective,
             self.training.optimizer.weight_decay,

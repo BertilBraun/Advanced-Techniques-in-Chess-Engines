@@ -52,11 +52,16 @@ class TelemetryConfiguration(FrozenModel):
     resource_sample_every_seconds: PositiveInt
     required_metrics: tuple[TelemetryMetric, ...] = Field(min_length=1)
     search_trace_sample_probability: float = Field(ge=0, le=1)
+    search_trace_checkpoints: tuple[PositiveInt, ...]
 
     @model_validator(mode='after')
     def validate_metrics(self) -> TelemetryConfiguration:
         if len(set(self.required_metrics)) != len(self.required_metrics):
             raise ValueError('Required telemetry metrics must be unique.')
+        if tuple(sorted(set(self.search_trace_checkpoints))) != self.search_trace_checkpoints:
+            raise ValueError('Search trace checkpoints must increase strictly.')
+        if (self.search_trace_sample_probability > 0) != bool(self.search_trace_checkpoints):
+            raise ValueError('Search trace checkpoints are required exactly when trace sampling is enabled.')
         return self
 
 

@@ -24,12 +24,14 @@ using inference::InferenceResult;
 using search::AdaptiveStoppingConfiguration;
 using search::FixedPuctConfiguration;
 using search::FpuPolicy;
+using search::PrefixTraceConfiguration;
 using search::RootChildStatistics;
 using search::RootNoiseConfiguration;
 using search::SearchBudgetClass;
 using search::SearchResult;
 using search::SearchStopReason;
 using search::SearchTelemetry;
+using search::SearchTraceSnapshot;
 
 class PythonGoEvaluator {
 public:
@@ -103,6 +105,10 @@ void bindSearch(pybind11::module_ &module) {
                       &AdaptiveStoppingConfiguration::requiredTopVisitFraction)
         .def_readonly("required_top_two_margin",
                       &AdaptiveStoppingConfiguration::requiredTopTwoMargin);
+    py::class_<PrefixTraceConfiguration>(module, "PrefixTraceConfiguration")
+        .def(py::init<bool, std::vector<int32>>(), py::arg("enabled"), py::arg("checkpoints"))
+        .def_readonly("enabled", &PrefixTraceConfiguration::enabled)
+        .def_readonly("checkpoints", &PrefixTraceConfiguration::checkpoints);
     py::class_<FixedPuctConfiguration>(module, "FixedPuctConfiguration")
         .def(py::init<int32, double, double, double, double, uint64, uint64, RootNoiseConfiguration,
                       bool>(),
@@ -118,6 +124,15 @@ void bindSearch(pybind11::module_ &module) {
              py::arg("root_noise_seed"), py::arg("action_sampling_seed"), py::arg("root_noise"),
              py::arg("tree_reuse"), py::arg("fpu_policy"), py::arg("fpu_reduction"),
              py::arg("adaptive_stopping"), py::arg("budget_class"), py::arg("policy_target_weight"))
+        .def(py::init<int32, double, double, double, double, uint64, uint64, RootNoiseConfiguration,
+                      bool, FpuPolicy, double, AdaptiveStoppingConfiguration, SearchBudgetClass,
+                      double, PrefixTraceConfiguration>(),
+             py::arg("simulation_cap"), py::arg("exploration_constant"), py::arg("backup_discount"),
+             py::arg("no_visited_child_value"), py::arg("action_temperature"),
+             py::arg("root_noise_seed"), py::arg("action_sampling_seed"), py::arg("root_noise"),
+             py::arg("tree_reuse"), py::arg("fpu_policy"), py::arg("fpu_reduction"),
+             py::arg("adaptive_stopping"), py::arg("budget_class"), py::arg("policy_target_weight"),
+             py::arg("prefix_trace"))
         .def_readonly("simulation_cap", &FixedPuctConfiguration::simulationCap)
         .def_readonly("exploration_constant", &FixedPuctConfiguration::explorationConstant)
         .def_readonly("backup_discount", &FixedPuctConfiguration::backupDiscount)
@@ -131,7 +146,13 @@ void bindSearch(pybind11::module_ &module) {
         .def_readonly("fpu_reduction", &FixedPuctConfiguration::fpuReduction)
         .def_readonly("adaptive_stopping", &FixedPuctConfiguration::adaptiveStopping)
         .def_readonly("budget_class", &FixedPuctConfiguration::budgetClass)
-        .def_readonly("policy_target_weight", &FixedPuctConfiguration::policyTargetWeight);
+        .def_readonly("policy_target_weight", &FixedPuctConfiguration::policyTargetWeight)
+        .def_readonly("prefix_trace", &FixedPuctConfiguration::prefixTrace);
+    py::class_<SearchTraceSnapshot>(module, "SearchTraceSnapshot")
+        .def_readonly("simulations", &SearchTraceSnapshot::simulations)
+        .def_readonly("root_policy", &SearchTraceSnapshot::rootPolicy)
+        .def_readonly("root_visits", &SearchTraceSnapshot::rootVisits)
+        .def_readonly("root_value", &SearchTraceSnapshot::rootValue);
     py::class_<RootChildStatistics<int32>>(module, "RootChildStatistics")
         .def_readonly("action", &RootChildStatistics<int32>::action)
         .def_readonly("prior", &RootChildStatistics<int32>::prior)
@@ -157,7 +178,8 @@ void bindSearch(pybind11::module_ &module) {
         .def_readonly("root_visits", &SearchResult<int32>::rootVisits)
         .def_readonly("root_value", &SearchResult<int32>::rootValue)
         .def_readonly("root_children", &SearchResult<int32>::rootChildren)
-        .def_readonly("telemetry", &SearchResult<int32>::telemetry);
+        .def_readonly("telemetry", &SearchResult<int32>::telemetry)
+        .def_readonly("prefix_trace", &SearchResult<int32>::prefixTrace);
 
     module.def(
         "search_go_fixed",

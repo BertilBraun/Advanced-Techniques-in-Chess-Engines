@@ -5,7 +5,14 @@ from typing import Literal
 from pydantic import Field, PositiveInt, model_validator
 
 from src.az.config.base import FrozenModel
-from src.az.config.search import SearchConfiguration
+from src.az.config.search import (
+    ConstantTemperature,
+    DisabledRootExploration,
+    DisabledTreeReuse,
+    FixedSearchBudget,
+    FullBudgetStopping,
+    SearchConfiguration,
+)
 from src.az.games.go.configuration import GoEvaluationSuite
 
 
@@ -28,4 +35,24 @@ class EvaluationConfiguration(FrozenModel):
             raise ValueError('Paired evaluation game count must be even.')
         if tuple(sorted(set(self.checkpoint_elapsed_seconds))) != self.checkpoint_elapsed_seconds:
             raise ValueError('Evaluation checkpoint times must be unique and strictly increasing.')
+        match (
+            self.search.budget,
+            self.search.stopping,
+            self.search.root_exploration,
+            self.search.temperature,
+            self.search.tree_reuse,
+        ):
+            case (
+                FixedSearchBudget(),
+                FullBudgetStopping(),
+                DisabledRootExploration(),
+                ConstantTemperature(temperature=0.0),
+                DisabledTreeReuse(),
+            ):
+                pass
+            case _:
+                raise ValueError(
+                    'Common evaluation search requires a fixed full budget, disabled root noise, '
+                    'zero action temperature, and disabled tree reuse.'
+                )
         return self

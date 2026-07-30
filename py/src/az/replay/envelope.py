@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import Field, PositiveInt, field_validator, model_validator
 
-from src.az.config.base import FrozenModel
+from src.az.config.base import FrozenModel, Sha256
 from src.az.config.seeds import (
     ActionSamplingSeedCoordinates,
     DirichletNoiseSeedCoordinates,
@@ -53,7 +53,8 @@ class NoSearchCalibration(FrozenModel):
 
 class VisitMarginSearchCalibration(FrozenModel):
     kind: Literal['visit_margin']
-    calibration_id: str = Field(min_length=1)
+    artifact_id: UUID
+    artifact_sha256: Sha256
 
 
 SearchCalibrationEvidence = Annotated[

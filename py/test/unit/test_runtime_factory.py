@@ -182,7 +182,14 @@ def test_runtime_factory_rejects_insufficient_host_resources(tmp_path: Path) -> 
 def test_runtime_factory_rejects_unimplemented_telemetry_promises(tmp_path: Path) -> None:
     configuration = _configuration()
     traces = configuration.model_copy(
-        update={'telemetry': configuration.telemetry.model_copy(update={'search_trace_sample_probability': 0.1})}
+        update={
+            'telemetry': configuration.telemetry.model_copy(
+                update={
+                    'search_trace_sample_probability': 0.1,
+                    'search_trace_checkpoints': (4,),
+                }
+            )
+        }
     )
     unsupported_metric = configuration.model_copy(
         update={
@@ -192,8 +199,7 @@ def test_runtime_factory_rejects_unimplemented_telemetry_promises(tmp_path: Path
         }
     )
 
-    with pytest.raises(ValueError, match='reserved for Stage 9'):
-        build_runtime_plan(traces, _environment(tmp_path))
+    assert build_runtime_plan(traces, _environment(tmp_path)).search_trace_sample_probability == 0.1
     with pytest.raises(ValueError, match='not derivable'):
         build_runtime_plan(unsupported_metric, _environment(tmp_path))
 

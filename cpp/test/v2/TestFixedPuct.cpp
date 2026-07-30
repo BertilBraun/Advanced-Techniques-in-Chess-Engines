@@ -540,6 +540,44 @@ void testBatchValidationAndOrderedAssociation() {
     });
 }
 
+void testPrefixTraceCapturesExactCheckpointsWithoutChangingSearch() {
+    auto tracedConfiguration = configuration(8);
+    tracedConfiguration.prefixTrace = {
+        .enabled = true,
+        .checkpoints = {2, 5, 7},
+    };
+    FixtureEvaluator tracedEvaluator;
+    const auto traced = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, tracedEvaluator, terminalValue, tracedConfiguration);
+
+    FixtureEvaluator baselineEvaluator;
+    const auto baseline = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, baselineEvaluator, terminalValue, configuration(8));
+
+    assert(traced.selectedAction == baseline.selectedAction);
+    assert(traced.rootVisits == baseline.rootVisits);
+    assert(traced.rootValue == baseline.rootValue);
+    assert(tracedEvaluator.calls == baselineEvaluator.calls);
+    assert(baseline.prefixTrace.empty());
+    assert(traced.prefixTrace.size() == 3);
+    for (std::size_t index = 0; index < traced.prefixTrace.size(); ++index) {
+        const auto &snapshot = traced.prefixTrace[index];
+        assert(snapshot.simulations == tracedConfiguration.prefixTrace.checkpoints[index]);
+        assert(snapshot.rootVisits[0] + snapshot.rootVisits[1] == snapshot.simulations);
+        assert(std::abs(snapshot.rootPolicy[0] + snapshot.rootPolicy[1] - 1.0) < 1e-12);
+        assert(snapshot.rootVisits[2] == 0);
+        assert(snapshot.rootPolicy[2] == 0.0);
+    }
+
+    auto invalid = configuration(8);
+    invalid.prefixTrace = {.enabled = true, .checkpoints = {2, 2}};
+    expectInvalidBatch([&invalid] { invalid.validate(); });
+    invalid.prefixTrace = {.enabled = true, .checkpoints = {8}};
+    expectInvalidBatch([&invalid] { invalid.validate(); });
+    invalid.prefixTrace = {.enabled = false, .checkpoints = {2}};
+    expectInvalidBatch([&invalid] { invalid.validate(); });
+}
+
 } // namespace
 
 int main() {
@@ -561,4 +599,5 @@ int main() {
     testRandomPurposesUseIndependentStreams();
     testInvalidConfigurationAndBatchContract();
     testBatchValidationAndOrderedAssociation();
+    testPrefixTraceCapturesExactCheckpointsWithoutChangingSearch();
 }

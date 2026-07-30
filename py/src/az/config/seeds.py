@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from src.az.config.base import FrozenModel
-from src.az.config.serialization import canonical_json
+from src.az.config.canonical import canonical_json
 
 
 SeedDerivationVersion = Literal['az-seed-v2']
@@ -27,6 +27,10 @@ class SeedPurpose(str, Enum):
     TRAINING_RANDOM = 'training_random'
     AUGMENTATION = 'augmentation'
     DATA_LOADER_ORDER = 'data_loader_order'
+    EVALUATION_GAME = 'evaluation_game'
+    EVALUATION_SEARCH = 'evaluation_search'
+    EVALUATION_ACTION = 'evaluation_action'
+    SEARCH_TRACE_SAMPLE = 'search_trace_sample'
 
 
 class ProcessSeedCoordinates(FrozenModel):
@@ -108,6 +112,37 @@ class DataLoaderOrderSeedCoordinates(FrozenModel):
     epoch_index: int = Field(ge=0)
 
 
+class EvaluationGameSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.EVALUATION_GAME]
+    evaluation_index: int = Field(ge=0)
+    pair_index: int = Field(ge=0)
+    game_in_pair: int = Field(ge=0, le=1)
+
+
+class EvaluationSearchSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.EVALUATION_SEARCH]
+    evaluation_index: int = Field(ge=0)
+    pair_index: int = Field(ge=0)
+    game_in_pair: int = Field(ge=0, le=1)
+    ply: int = Field(ge=0)
+
+
+class EvaluationActionSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.EVALUATION_ACTION]
+    evaluation_index: int = Field(ge=0)
+    pair_index: int = Field(ge=0)
+    game_in_pair: int = Field(ge=0, le=1)
+    ply: int = Field(ge=0)
+
+
+class SearchTraceSampleSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.SEARCH_TRACE_SAMPLE]
+    process_index: int = Field(ge=0)
+    worker_index: int = Field(ge=0)
+    game_index: int = Field(ge=0)
+    ply: int = Field(ge=0)
+
+
 SeedCoordinates = Annotated[
     ProcessSeedCoordinates
     | WorkerSeedCoordinates
@@ -120,7 +155,11 @@ SeedCoordinates = Annotated[
     | ModelInitializationSeedCoordinates
     | TrainingRandomSeedCoordinates
     | AugmentationSeedCoordinates
-    | DataLoaderOrderSeedCoordinates,
+    | DataLoaderOrderSeedCoordinates
+    | EvaluationGameSeedCoordinates
+    | EvaluationSearchSeedCoordinates
+    | EvaluationActionSeedCoordinates
+    | SearchTraceSampleSeedCoordinates,
     Field(discriminator='purpose'),
 ]
 

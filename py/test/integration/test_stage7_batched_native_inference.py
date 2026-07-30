@@ -10,7 +10,7 @@ from torch import Tensor
 native = pytest.importorskip('az_go_native', reason='focused native Go extension has not been built')
 
 from src.az.games.go.model import GoModelOutput, ResidualGoModel
-from src.az.self_play.go_adapter import GoInferenceBatchBroker
+from src.az.inference.go_batching import GoInferenceBatchBroker
 from test.unit.go_stage5_helpers import game_configuration, model_configuration
 
 

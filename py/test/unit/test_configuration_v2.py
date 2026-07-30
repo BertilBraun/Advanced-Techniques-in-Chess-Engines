@@ -233,7 +233,11 @@ def test_serialized_configuration_rejects_non_finite_nested_floats(
                 'check_interval_simulations': 1,
                 'required_top_visit_fraction': 0.8,
                 'required_top_two_margin': 0.5,
-                'calibration_id': 'boundary-test',
+                'calibration': {
+                    'artifact_id': '00000000-0000-0000-0000-000000000001',
+                    'path': 'calibration/test.json',
+                    'sha256': '0' * 64,
+                },
             },
         ),
         (
@@ -244,7 +248,11 @@ def test_serialized_configuration_rejects_non_finite_nested_floats(
                 'check_interval_simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1,
                 'required_top_visit_fraction': 0.8,
                 'required_top_two_margin': 0.5,
-                'calibration_id': 'boundary-test',
+                'calibration': {
+                    'artifact_id': '00000000-0000-0000-0000-000000000001',
+                    'path': 'calibration/test.json',
+                    'sha256': '0' * 64,
+                },
             },
         ),
     ],
@@ -277,7 +285,6 @@ def test_forbids_unknown_fields_at_nested_boundaries() -> None:
     (
         ('go-7x7-progressive.authoring.json', ProgressiveSearchBudget, type(None)),
         ('go-7x7-mixed.authoring.json', MixedSearchBudget, type(None)),
-        ('go-7x7-adaptive.authoring.json', type(None), VisitMarginAdaptiveRule),
     ),
 )
 def test_behavioral_discriminators_select_exact_variants(
@@ -438,6 +445,17 @@ def test_go_evaluation_komi_uses_native_integer_boundaries() -> None:
         ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
 
 
+def test_evaluation_common_search_rejects_tree_reuse() -> None:
+    candidate = resolve_configuration(fixed_authoring()).model_dump(mode='json')
+    candidate['evaluation']['search']['tree_reuse'] = {
+        'kind': 'retain_subtree',
+        'maximum_retained_nodes': 100,
+    }
+
+    with pytest.raises(ValidationError, match='disabled tree reuse'):
+        ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+
 def test_progressive_stages_require_zero_and_strict_order() -> None:
     candidate = load_authoring_configuration(CONFIGURATION_DIRECTORY / 'go-7x7-progressive.authoring.json').model_dump(
         mode='json'
@@ -459,10 +477,19 @@ def test_mixed_search_requires_distinct_caps() -> None:
 
 
 def test_adaptive_minimum_must_be_below_finite_cap() -> None:
-    candidate = load_authoring_configuration(CONFIGURATION_DIRECTORY / 'go-7x7-adaptive.authoring.json').model_dump(
-        mode='json'
-    )
-    candidate['search']['stopping']['minimum_simulations'] = 128
+    candidate = fixed_authoring().model_dump(mode='json')
+    candidate['search']['stopping'] = {
+        'kind': 'visit_margin',
+        'minimum_simulations': 128,
+        'check_interval_simulations': 8,
+        'required_top_visit_fraction': 0.8,
+        'required_top_two_margin': 0.5,
+        'calibration': {
+            'artifact_id': '00000000-0000-0000-0000-000000000001',
+            'path': 'calibration/test.json',
+            'sha256': '1' * 64,
+        },
+    }
 
     with pytest.raises(ValidationError, match='Adaptive stopping minimum'):
         resolve_configuration(AuthoringRunConfiguration.model_validate_json(json.dumps(candidate)))
@@ -478,7 +505,11 @@ def test_adaptive_minimum_must_be_below_every_progressive_cap() -> None:
         'check_interval_simulations': 8,
         'required_top_visit_fraction': 0.8,
         'required_top_two_margin': 0.5,
-        'calibration_id': 'test-calibration',
+        'calibration': {
+            'artifact_id': '00000000-0000-0000-0000-000000000001',
+            'path': 'calibration/test.json',
+            'sha256': '0' * 64,
+        },
     }
 
     with pytest.raises(ValidationError, match='every applicable budget cap'):
@@ -495,7 +526,11 @@ def test_mixed_and_adaptive_composition_is_explicitly_rejected() -> None:
         'check_interval_simulations': 4,
         'required_top_visit_fraction': 0.8,
         'required_top_two_margin': 0.5,
-        'calibration_id': 'test-calibration',
+        'calibration': {
+            'artifact_id': '00000000-0000-0000-0000-000000000001',
+            'path': 'calibration/test.json',
+            'sha256': '0' * 64,
+        },
     }
 
     with pytest.raises(ValidationError, match='cannot be combined with mixed'):

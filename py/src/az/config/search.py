@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from src.az.config.base import FrozenModel
+from src.az.config.artifacts import CalibrationArtifactReference
 
 NATIVE_SIMULATION_COUNT_MAXIMUM = 2_147_483_647
 SearchSimulationCount = Annotated[int, Field(gt=0, le=NATIVE_SIMULATION_COUNT_MAXIMUM)]
@@ -71,7 +72,7 @@ class VisitMarginAdaptiveRule(FrozenModel):
     check_interval_simulations: SearchSimulationCount
     required_top_visit_fraction: float = Field(gt=0.5, le=1)
     required_top_two_margin: float = Field(ge=0, le=1)
-    calibration_id: str = Field(min_length=1)
+    calibration: CalibrationArtifactReference
 
 
 AdaptiveSearchStopping = VisitMarginAdaptiveRule

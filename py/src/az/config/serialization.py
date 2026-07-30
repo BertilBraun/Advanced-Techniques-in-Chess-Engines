@@ -1,22 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 from pydantic import BaseModel
 
+from src.az.config.canonical import canonical_json
 from src.az.config.models import ResolvedRunConfiguration
 from src.az.config.resolution import AuthoringRunConfiguration, resolve_configuration
-
-
-def canonical_json(model: BaseModel) -> str:
-    return json.dumps(
-        model.model_dump(mode='json'),
-        ensure_ascii=False,
-        separators=(',', ':'),
-        sort_keys=True,
-    )
 
 
 def model_sha256(model: BaseModel) -> str:

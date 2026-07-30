@@ -51,6 +51,9 @@ class GoWorkerSpecification(FrozenModel):
     resolved_configuration_sha256: Sha256
     telemetry_write_every_seconds: int = Field(gt=0)
     resource_sample_every_seconds: int = Field(gt=0)
+    search_trace_sample_probability: float = Field(ge=0, le=1)
+    search_trace_checkpoints: tuple[int, ...]
+    search_trace_directory: str = Field(min_length=1)
 
     @model_validator(mode='after')
     def validate_supported_runtime_features(self) -> GoWorkerSpecification:

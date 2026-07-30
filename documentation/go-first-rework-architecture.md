@@ -747,3 +747,94 @@ The final readiness audit traces every resolved configuration field into its
 consumer, every replay field into its producer and consumer, every reported
 metric to recorded evidence, and every retained operational capability to an
 integration or system test.
+
+## 13. Stage 9 research evidence contracts
+
+### 13.1 Prefix traces and adaptive calibration
+
+Prefix tracing is opt-in. A disabled native trace configuration does not
+allocate snapshots. An enabled full-budget search snapshots the root at every
+configured simulation count without changing selection, backup, termination,
+or random streams. Every snapshot records the normalized visit policy, raw
+visits, and current root mean value. Checkpoints must cover every adaptive
+candidate decision point from its minimum through the full cap.
+
+For a prefix policy \(p\) and full-search policy \(q\), policy disagreement is
+total-variation distance:
+
+\[
+  \operatorname{TV}(p,q)=\frac{1}{2}\sum_a |p_a-q_a|.
+\]
+
+Both policies are normalized from positive root visit totals. Prefix
+checkpoints are positive, so there is no zero-visit normalization case; a
+zero-visit input is invalid. Value disagreement is
+\(\lvert v_{\text{prefix}}-v_{\text{full}}\rvert\).
+
+Trace sampling has an independent deterministic seed purpose. A retained trace
+contains its canonical encoding, legal actions, native state hash, exact Go
+configuration digest, game/ply/checkpoint/config identities, and replay sample
+identity. Files are emitted only for completed games and remain explicitly
+marked as awaiting replay commit. Calibration and reporting require the sample
+identity to occur in committed replay evidence, preventing cancelled or orphan
+traces from entering results.
+
+One authenticated calibration artifact may contain multiple cap-specific
+profiles. Every profile has a homogeneous action space and complete checkpoint
+schedule, candidate-level means and distribution summaries, and a selected
+rule. Runtime startup authenticates the referenced file and requires an exact
+profile match for every fixed or progressive cap and all adaptive thresholds.
+
+### 13.2 Common-search paired evaluation
+
+Evaluation uses one fixed PUCT cap, full-budget stopping, disabled root noise,
+and zero action temperature. Both checkpoint players receive the identical
+search configuration and FPU policy. Every pair contains exactly two games,
+with the candidate playing Black then White under identical Go rules and komi.
+Game, search, and action seeds have separate typed derivation purposes.
+
+The stable evaluation identity binds the run/configuration, requested elapsed
+checkpoint, candidate and opponent, common-search digest, and Go rules.
+Individual game results are atomic idempotent artifacts. A scheduled model is
+claimed into immutable evaluation storage by its exact checkpoint and model
+artifact digest, so an interrupted historical evaluation remains resumable
+after the training repository advances. Requested checkpoint time, actual
+checkpoint publication time, and scheduler detection time are distinct
+evidence.
+
+### 13.3 Statistical definitions
+
+Candidate game scores are 1, 0.5, and 0 for win, draw, and loss. Bootstrap
+resampling draws whole color-swapped pairs with replacement. It never treats
+the two games inside a pair as independent. Percentile bounds use linear
+interpolation between ordered bootstrap estimates and record the bootstrap
+seed, sample count, confidence level, and method.
+
+Elo is \(400\log_{10}(s/(1-s))\). For an observed score of exactly zero or one
+over \(N\) games, the finite half-game continuity convention substitutes
+\(1/(2N)\) or \(1-1/(2N)\). The same monotone conversion produces the Elo
+confidence interval.
+
+Learning-curve AUC uses trapezoidal integration of piecewise-linear values over
+the observed elapsed-hour interval only, with no extrapolation. Reports name
+the two quantities separately: score AUC in score-hours and Elo AUC in
+Elo-hours. Final score/Elo and each final value divided by its elapsed hours
+are reported separately.
+
+### 13.4 Matrices and reports
+
+Ablation matrices use explicit typed arms, not an unconstrained Cartesian
+product. Search-compute arms declare only budget and stopping overrides; FPU
+arms declare only FPU overrides. Expansion assigns each arm and seed its own
+experiment identity and output directory. A typed common-control projection
+covers hardware, duration/checkpoints, rules, model, training, replay,
+evaluation, telemetry, and all undeclared search fields; every expanded arm
+must hash to the same projection.
+
+The frozen report payload is wrapped in its canonical SHA-256 and records its
+source artifact hashes. Diagnostics are derived from typed evidence and include
+committed games/positions, total and per-move simulation summaries, budget and
+stop distributions, policy eligibility count/fraction/weight, optimizer steps,
+replay reuse, adaptive stopping, prefix/full disagreement, checkpoint timing,
+and evaluation games/wall time/simulations. Missing resource or GPU evidence is
+reported as unavailable with a reason; it is never imputed.

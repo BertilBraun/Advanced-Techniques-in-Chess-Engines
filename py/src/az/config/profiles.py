@@ -239,6 +239,7 @@ def default_telemetry() -> TelemetryConfiguration:
             TelemetryMetric.STOP_REASON,
         ),
         search_trace_sample_probability=0,
+        search_trace_checkpoints=(),
     )
 
 

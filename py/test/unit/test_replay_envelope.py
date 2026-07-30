@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -149,7 +150,8 @@ def test_valid_adaptive_early_stop_is_bounded() -> None:
     values['budget_class'] = SearchBudgetClass.FIXED
     values['search_calibration'] = VisitMarginSearchCalibration(
         kind='visit_margin',
-        calibration_id='calibration-test',
+        artifact_id=UUID(int=99),
+        artifact_sha256='a' * 64,
     )
     values['stop_reason'] = SearchStopReason.ADAPTIVE_CONFIDENCE
     values['actual_simulations'] = 8
@@ -166,7 +168,8 @@ def test_adaptive_confidence_cannot_label_cap_exhaustion() -> None:
     values['budget_class'] = SearchBudgetClass.FIXED
     values['search_calibration'] = VisitMarginSearchCalibration(
         kind='visit_margin',
-        calibration_id='calibration-test',
+        artifact_id=UUID(int=99),
+        artifact_sha256='a' * 64,
     )
     values['stop_reason'] = SearchStopReason.ADAPTIVE_CONFIDENCE
 

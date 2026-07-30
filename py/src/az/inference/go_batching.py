@@ -86,6 +86,10 @@ class GoInferenceBatchBroker:
                 cache_hits=self._cache_hits,
             )
 
+    @property
+    def model(self) -> ResidualGoModel:
+        return self._model
+
     def take_telemetry(self) -> InferenceBatchTelemetry:
         with self._condition:
             telemetry = InferenceBatchTelemetry(
