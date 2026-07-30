@@ -1,5 +1,12 @@
 # Go-first research platform: target architecture and migration inventory
 
+> **Superseded target architecture.** This document records the completed
+> Go-first rework and its research contracts. Its Go-only product boundary and
+> Python-driven self-play/inference path are superseded by
+> [high-throughput-multigame-rework-plan.md](high-throughput-multigame-rework-plan.md).
+> Preserve this file as implementation history; use the multi-game plan for
+> future architecture and sequencing decisions.
+
 Status: implementation contract for the clean-slate rework. The `PreRework`
 branch at commit `f8cb82a` is the authoritative legacy snapshot; compatibility
 with its Python APIs, checkpoints, replay files, and run configurations is not
