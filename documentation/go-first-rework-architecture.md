@@ -478,11 +478,20 @@ from generated shards and publishes a loadable checkpoint.
 ### Stage 7: self-play/runtime orchestration
 
 Add topology validation, native worker processes, model refresh, wall-clock
-shutdown, resource telemetry, and failure propagation.
+shutdown, resource telemetry, and failure propagation. Replace Stage 6's
+correctness-first full-population replay materialization with an immutable,
+incrementally refreshed shard index and grouped random reads before any
+production-scale execution. Extend checkpoint/resume state with CUDA random
+streams, gradient-scaler state, and process-group/rank lifecycle state needed
+for exact GPU and DDP resume.
 
 Acceptance: a local multi-process smoke run generates data while training,
 refreshes its model, respects the time limit, shuts down cleanly, and records no
-orphan workers or uncredited samples.
+orphan workers or uncredited samples. Published shards are indexed once,
+sampling performs grouped random reads without rescanning the full replay
+population per credit quantum, and a GPU/DDP restart restores CUDA RNG,
+gradient-scaler, process-group, sampler, optimizer, scheduler, and credit-ledger
+state before reproducing the next distributed training behavior.
 
 ### Stage 8: search-compute strategies
 

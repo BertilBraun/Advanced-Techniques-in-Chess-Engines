@@ -11,6 +11,7 @@ from src.az.games.go.model import ResidualGoModel
 from src.az.games.go.replay_codec import GoReplayCodec
 from src.az.games.go.samples import finalize_sample, pending_sample_from_native
 from src.az.games.api import GameIdentifier
+from src.az.replay.credits import ReplayCreditJournal
 from src.az.replay.envelope import GameTermination, ReplayRecord
 from src.az.replay.storage import ReplayShardStorage
 from test.unit.go_stage5_helpers import (
@@ -67,7 +68,15 @@ def test_fixed_search_fixture_round_trips_to_cpu_loss(tmp_path: Path) -> None:
     )
     sample = finalize_sample(pending, 1, 1, GameTermination.TWO_CONSECUTIVE_PASSES)
     codec = GoReplayCodec(game, 1)
-    storage = ReplayShardStorage(tmp_path, 8, 16, GameIdentifier.GO, 1, 'none')
+    storage = ReplayShardStorage(
+        tmp_path,
+        8,
+        16,
+        GameIdentifier.GO,
+        1,
+        'none',
+        ReplayCreditJournal(tmp_path / 'credit-journal.bin'),
+    )
     storage.publish(0, (ReplayRecord(envelope(), codec.encode(sample)),))
     decoded = codec.decode(next(storage.records()).payload)
     batch = codec.create_batch((decoded,))

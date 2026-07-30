@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import BinaryIO, Literal
 
 from src.az.games.api import GameIdentifier
+from src.az.replay.credits import ReplayCreditJournal
 from src.az.replay.envelope import ReplayEnvelope, ReplayRecord
 
 
@@ -79,6 +80,7 @@ class ReplayShardStorage:
         game_identifier: GameIdentifier,
         payload_schema_version: int,
         compression: Literal['none', 'zstd'],
+        credit_journal: ReplayCreditJournal,
     ) -> None:
         if maximum_positions_per_shard <= 0:
             raise ValueError('Maximum positions per shard must be positive.')
@@ -95,7 +97,15 @@ class ReplayShardStorage:
         self._capacity_positions = capacity_positions
         self._game_identifier = game_identifier
         self._payload_schema_version = payload_schema_version
+        self._credit_journal = credit_journal
         self._directory.mkdir(parents=True, exist_ok=True)
+        recovered = self._discover_shards()
+        self._credit_visible_shards(recovered, verify_known=True)
+        self._evict_over_capacity(recovered)
+
+    @property
+    def credit_journal(self) -> ReplayCreditJournal:
+        return self._credit_journal
 
     def publish(self, sequence: int, records: tuple[ReplayRecord, ...]) -> ShardMetadata:
         if sequence < 0:
@@ -108,8 +118,13 @@ class ReplayShardStorage:
             if record.envelope.payload_schema_version != self._payload_schema_version:
                 raise ValueError('Replay envelope payload schema does not match the storage.')
         existing = list(self._discover_shards())
+        self._credit_visible_shards(tuple(existing), verify_known=False)
         if existing and sequence <= existing[-1].sequence:
             raise ValueError('Replay shard sequence must increase strictly across publications.')
+        credit_ids = tuple(record.envelope.replay_credit_id for record in records)
+        self._credit_journal.preflight_new_shard(sequence, credit_ids)
+        self._evict_over_capacity(tuple(existing))
+        existing = list(self._discover_shards())
         destination = self._shard_path(sequence)
         temporary = self._directory / f'.{destination.name}.{os.getpid()}.{threading.get_ident()}.partial'
         try:
@@ -132,6 +147,7 @@ class ReplayShardStorage:
                 os.fsync(stream.fileno())
             try:
                 os.link(temporary, destination)
+                _sync_directory(self._directory)
             except FileExistsError as error:
                 raise ValueError(f'Replay shard sequence {sequence} already exists.') from error
         finally:
@@ -143,6 +159,7 @@ class ReplayShardStorage:
             position_count=len(records),
             byte_count=destination.stat().st_size,
         )
+        self._credit_journal.credit_shard(sequence, credit_ids)
         self._evict_over_capacity((*existing, published))
         return published
 
@@ -231,10 +248,25 @@ class ReplayShardStorage:
     def _evict_over_capacity(self, shards: tuple[ShardMetadata, ...]) -> None:
         metadata = list(shards)
         total = sum(shard.position_count for shard in metadata)
+        deleted = False
         while total > self._capacity_positions:
             oldest = metadata.pop(0)
             oldest.path.unlink()
             total -= oldest.position_count
+            deleted = True
+        if deleted:
+            _sync_directory(self._directory)
+
+    def _credit_visible_shards(
+        self,
+        shards: tuple[ShardMetadata, ...],
+        verify_known: bool,
+    ) -> None:
+        for shard in shards:
+            if not verify_known and self._credit_journal.has_shard(shard.sequence):
+                continue
+            credit_ids = tuple(record.envelope.replay_credit_id for record in self._iter_records(shard.path))
+            self._credit_journal.credit_shard(shard.sequence, credit_ids)
 
     def _discover_shards(self) -> tuple[ShardMetadata, ...]:
         discovered: list[ShardMetadata] = []
@@ -280,3 +312,13 @@ class ReplayShardStorage:
         if sequence < 0 or path.stem != f'shard-{sequence:020d}':
             raise ValueError(f'Invalid replay shard name: {path.name}.')
         return sequence
+
+
+def _sync_directory(directory: Path) -> None:
+    if os.name == 'nt':
+        return
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

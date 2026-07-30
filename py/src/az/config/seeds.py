@@ -23,6 +23,7 @@ class SeedPurpose(str, Enum):
     ACTION_SAMPLING = 'action_sampling'
     REPLAY_SAMPLING = 'replay_sampling'
     MODEL_INITIALIZATION = 'model_initialization'
+    TRAINING_RANDOM = 'training_random'
     AUGMENTATION = 'augmentation'
     DATA_LOADER_ORDER = 'data_loader_order'
 
@@ -80,6 +81,11 @@ class ModelInitializationSeedCoordinates(FrozenModel):
     model_stage: int = Field(ge=0)
 
 
+class TrainingRandomSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.TRAINING_RANDOM]
+    trainer_rank: int = Field(ge=0)
+
+
 class AugmentationSeedCoordinates(FrozenModel):
     purpose: Literal[SeedPurpose.AUGMENTATION]
     trainer_rank: int = Field(ge=0)
@@ -102,6 +108,7 @@ SeedCoordinates = Annotated[
     | ActionSamplingSeedCoordinates
     | ReplaySamplingSeedCoordinates
     | ModelInitializationSeedCoordinates
+    | TrainingRandomSeedCoordinates
     | AugmentationSeedCoordinates
     | DataLoaderOrderSeedCoordinates,
     Field(discriminator='purpose'),
