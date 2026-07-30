@@ -14,6 +14,7 @@ class ScheduledGame:
 class LogicalWorkerGameScheduler:
     first_worker_index: int
     worker_count: int
+    next_game_indices: tuple[int, ...] = ()
     _worker_order: deque[int] = field(init=False)
     _next_game_indices: dict[int, int] = field(init=False)
 
@@ -21,8 +22,13 @@ class LogicalWorkerGameScheduler:
         if self.first_worker_index < 0 or self.worker_count <= 0:
             raise ValueError('Logical worker scheduling requires a nonnegative start and positive count.')
         worker_indices = range(self.first_worker_index, self.first_worker_index + self.worker_count)
+        if self.next_game_indices and (
+            len(self.next_game_indices) != self.worker_count or any(index < 0 for index in self.next_game_indices)
+        ):
+            raise ValueError('Logical worker resume indices must cover every worker and be nonnegative.')
         self._worker_order = deque(worker_indices)
-        self._next_game_indices = {worker_index: 0 for worker_index in worker_indices}
+        starts = self.next_game_indices or (0,) * self.worker_count
+        self._next_game_indices = dict(zip(worker_indices, starts, strict=True))
 
     def next_game(self) -> ScheduledGame:
         logical_worker_index = self._worker_order[0]

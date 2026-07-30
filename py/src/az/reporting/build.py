@@ -18,6 +18,7 @@ from src.az.reporting.models import (
     AvailablePrefixDisagreement,
     CategoryCount,
     CheckpointTimingEvidence,
+    EvaluationProtocolIdentity,
     MetricEvidence,
     PrefixDisagreementAtCheckpoint,
     ReportRun,
@@ -326,8 +327,35 @@ def _report_run(evidence: RunReportEvidence) -> ReportRun:
             for checkpoint, match in zip(evidence.evaluation_checkpoints, matches, strict=True)
         )
     )
+    games = tuple(
+        game for checkpoint in evidence.evaluation_checkpoints for pair in checkpoint.pairs for game in pair.games
+    )
+    protocols = {
+        (
+            game.opponent,
+            game.common_search_sha256,
+            game.board_size,
+            game.komi_half_points,
+            game.scoring_rule,
+            game.ko_rule,
+            game.suicide_rule,
+        )
+        for game in games
+    }
+    if len(protocols) != 1:
+        raise ValueError('Report evaluation evidence must use one homogeneous opponent and Go protocol.')
+    opponent, common_search_sha256, board_size, komi, scoring_rule, ko_rule, suicide_rule = next(iter(protocols))
     return ReportRun(
         identity=evidence.identity,
+        evaluation_protocol=EvaluationProtocolIdentity(
+            opponent=opponent,
+            common_search_sha256=common_search_sha256,
+            board_size=board_size,
+            komi_half_points=komi,
+            scoring_rule=scoring_rule,
+            ko_rule=ko_rule,
+            suicide_rule=suicide_rule,
+        ),
         diagnostics=_diagnostics(evidence),
         final_match=matches[-1],
         learning_curve=curve,

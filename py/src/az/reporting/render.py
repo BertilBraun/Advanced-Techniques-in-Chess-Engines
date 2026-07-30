@@ -68,6 +68,12 @@ def render_markdown(report: ResearchReport) -> str:
                 '',
                 f'## Diagnostics: {run.identity.arm_id.hex} / seed {run.identity.seed}',
                 '',
+                f'- Evaluation opponent: `{canonical_json(run.evaluation_protocol.opponent)}`',
+                f'- Common search SHA-256: `{run.evaluation_protocol.common_search_sha256}`',
+                f'- Go rules: {run.evaluation_protocol.board_size}x{run.evaluation_protocol.board_size}, '
+                f'komi-half-points={run.evaluation_protocol.komi_half_points}, '
+                f'{run.evaluation_protocol.scoring_rule}, {run.evaluation_protocol.ko_rule}, '
+                f'{run.evaluation_protocol.suicide_rule}',
                 f'- Committed positions: {_metric(diagnostics.committed_positions)}',
                 f'- Policy eligible positions: {_metric(diagnostics.policy_eligible_positions)}',
                 f'- Policy eligible fraction: {_metric(diagnostics.policy_eligible_fraction)}',
@@ -112,6 +118,9 @@ def render_csv(report: ResearchReport) -> str:
             'wins',
             'draws',
             'losses',
+            'opponent',
+            'common_search_sha256',
+            'go_rules',
         )
     )
     for run in sorted(report.runs, key=lambda item: (item.identity.arm_id.hex, item.identity.seed)):
@@ -126,6 +135,15 @@ def render_csv(report: ResearchReport) -> str:
                 run.final_match.wins,
                 run.final_match.draws,
                 run.final_match.losses,
+                canonical_json(run.evaluation_protocol.opponent),
+                run.evaluation_protocol.common_search_sha256,
+                (
+                    f'{run.evaluation_protocol.board_size}x{run.evaluation_protocol.board_size};'
+                    f'komi_half_points={run.evaluation_protocol.komi_half_points};'
+                    f'{run.evaluation_protocol.scoring_rule};'
+                    f'{run.evaluation_protocol.ko_rule};'
+                    f'{run.evaluation_protocol.suicide_rule}'
+                ),
             )
         )
     return stream.getvalue()

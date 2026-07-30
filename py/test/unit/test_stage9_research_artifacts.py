@@ -462,6 +462,7 @@ def _game(pair_index: int, game_in_pair: int, score: float) -> EvaluationGameRes
         game_in_pair=game_in_pair,
         requested_elapsed_seconds=3600,
         published_checkpoint_elapsed_seconds=3612.5,
+        common_search_sha256=HASH_A,
         candidate=CANDIDATE,
         opponent=RandomOpponentIdentity(kind='random'),
         candidate_color=candidate_color,
@@ -632,6 +633,7 @@ def test_explicit_ablation_arms_change_only_declared_search_compute_factors() ->
                 required_top_visit_fraction=0.75,
                 required_top_two_margin=0.5,
                 calibration=CalibrationArtifactReference(
+                    artifact_root='reference_artifacts',
                     artifact_id=UUID(int=1),
                     path=PurePosixPath('calibration/test-only.json'),
                     sha256='1' * 64,

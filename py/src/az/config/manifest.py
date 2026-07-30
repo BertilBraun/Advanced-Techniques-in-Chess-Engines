@@ -58,10 +58,16 @@ class DependencyDeclaration(FrozenModel):
 
 class HardwareDeclaration(FrozenModel):
     gpu_model: str = Field(min_length=1)
-    gpu_count: PositiveInt
+    gpu_count: int = Field(ge=0)
     logical_cpu_count: PositiveInt
     ram_gib: float = Field(gt=0)
     free_disk_gib: float = Field(gt=0)
+
+    @model_validator(mode='after')
+    def validate_gpu_identity(self) -> HardwareDeclaration:
+        if (self.gpu_count == 0) != (self.gpu_model == 'none'):
+            raise ValueError("Zero GPUs require model 'none', and model 'none' requires zero GPUs.")
+        return self
 
 
 class RunManifest(FrozenModel):
@@ -124,6 +130,10 @@ def inspect_source_state(repository_root: Path) -> SourceState:
     )
 
 
+def inspect_source_revision(repository_root: Path) -> GitRevision:
+    return _git(repository_root, 'rev-parse', 'HEAD').strip()
+
+
 def default_build_declaration(build_id: str, build_type: str, compiler: str) -> BuildDeclaration:
     return BuildDeclaration(
         build_id=build_id,
@@ -168,10 +178,11 @@ def _validate_runtime_declarations(
     if configuration.experiment.manifest_policy.require_clean_source and not source.clean:
         raise ValueError('The manifest policy requires a clean source worktree.')
     expected = configuration.hardware
-    if hardware.gpu_model != expected.expected_gpu_model:
-        raise ValueError(f'Expected GPU model {expected.expected_gpu_model!r}, found {hardware.gpu_model!r}.')
-    if hardware.gpu_count != expected.expected_gpu_count:
-        raise ValueError(f'Expected {expected.expected_gpu_count} GPUs, found {hardware.gpu_count}.')
+    if expected.profile_name != 'local-cpu-smoke':
+        if hardware.gpu_model != expected.expected_gpu_model:
+            raise ValueError(f'Expected GPU model {expected.expected_gpu_model!r}, found {hardware.gpu_model!r}.')
+        if hardware.gpu_count != expected.expected_gpu_count:
+            raise ValueError(f'Expected {expected.expected_gpu_count} GPUs, found {hardware.gpu_count}.')
     if hardware.logical_cpu_count < expected.minimum_logical_cpu_count:
         raise ValueError('Actual logical CPU count is below the configured minimum.')
     if hardware.ram_gib < expected.minimum_ram_gib:

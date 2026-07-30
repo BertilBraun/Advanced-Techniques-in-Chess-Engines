@@ -83,6 +83,10 @@ class RuntimeOrchestrator:
         games_per_shard: int,
         telemetry_path: Path,
         telemetry_write_every_seconds: float,
+        external_stop_requested: Callable[[], bool] | None = None,
+        runtime_tick: Callable[[float], None] | None = None,
+        experiment_started: Callable[[], None] | None = None,
+        elapsed_offset_seconds: float = 0,
     ) -> None:
         if not worker_specifications:
             raise ValueError('At least one worker specification is required.')
@@ -97,6 +101,8 @@ class RuntimeOrchestrator:
             raise ValueError('Games per replay shard must be positive.')
         if not telemetry_path.is_absolute() or telemetry_write_every_seconds <= 0:
             raise ValueError('Telemetry path must be absolute and cadence must be positive.')
+        if elapsed_offset_seconds < 0:
+            raise ValueError('Runtime elapsed offset cannot be negative.')
         self._worker_entrypoint = worker_entrypoint
         self._worker_specifications = worker_specifications
         self._wall_clock_seconds = wall_clock_seconds
@@ -113,6 +119,10 @@ class RuntimeOrchestrator:
         self._publication_scanned_count = 0
         self._telemetry_journal = TelemetryJournal(telemetry_path)
         self._telemetry_write_every_seconds = telemetry_write_every_seconds
+        self._external_stop_requested = external_stop_requested
+        self._runtime_tick = runtime_tick
+        self._experiment_started = experiment_started
+        self._elapsed_offset_seconds = elapsed_offset_seconds
         self._telemetry_written_count = 0
         self._last_telemetry_write = 0.0
 
@@ -144,11 +154,18 @@ class RuntimeOrchestrator:
             )
             if failure is None:
                 experiment_started_ns = time.monotonic_ns()
-                stop_event.begin_experiment(experiment_started_ns)
+                schedule_epoch_ns = experiment_started_ns - int(self._elapsed_offset_seconds * 1_000_000_000)
+                stop_event.begin_experiment(schedule_epoch_ns)
+                if self._experiment_started is not None:
+                    self._experiment_started()
                 deadline_ns = experiment_started_ns + int(self._wall_clock_seconds * 1_000_000_000)
                 while time.monotonic_ns() < deadline_ns and failure is None:
+                    if self._external_stop_requested is not None and self._external_stop_requested():
+                        break
                     self._drain(message_queue, messages, timeout=0.05)
                     self._publish(messages)
+                    if self._runtime_tick is not None:
+                        self._runtime_tick((time.monotonic_ns() - experiment_started_ns) / 1_000_000_000)
                     failure = next(
                         (message for message in reversed(messages) if isinstance(message, WorkerFailure)),
                         None,

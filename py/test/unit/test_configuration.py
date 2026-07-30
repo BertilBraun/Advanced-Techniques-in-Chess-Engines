@@ -234,6 +234,7 @@ def test_serialized_configuration_rejects_non_finite_nested_floats(
                 'required_top_visit_fraction': 0.8,
                 'required_top_two_margin': 0.5,
                 'calibration': {
+                    'artifact_root': 'reference_artifacts',
                     'artifact_id': '00000000-0000-0000-0000-000000000001',
                     'path': 'calibration/test.json',
                     'sha256': '0' * 64,
@@ -249,6 +250,7 @@ def test_serialized_configuration_rejects_non_finite_nested_floats(
                 'required_top_visit_fraction': 0.8,
                 'required_top_two_margin': 0.5,
                 'calibration': {
+                    'artifact_root': 'reference_artifacts',
                     'artifact_id': '00000000-0000-0000-0000-000000000001',
                     'path': 'calibration/test.json',
                     'sha256': '0' * 64,
@@ -485,6 +487,7 @@ def test_adaptive_minimum_must_be_below_finite_cap() -> None:
         'required_top_visit_fraction': 0.8,
         'required_top_two_margin': 0.5,
         'calibration': {
+            'artifact_root': 'reference_artifacts',
             'artifact_id': '00000000-0000-0000-0000-000000000001',
             'path': 'calibration/test.json',
             'sha256': '1' * 64,
@@ -506,6 +509,7 @@ def test_adaptive_minimum_must_be_below_every_progressive_cap() -> None:
         'required_top_visit_fraction': 0.8,
         'required_top_two_margin': 0.5,
         'calibration': {
+            'artifact_root': 'reference_artifacts',
             'artifact_id': '00000000-0000-0000-0000-000000000001',
             'path': 'calibration/test.json',
             'sha256': '0' * 64,
@@ -527,6 +531,7 @@ def test_mixed_and_adaptive_composition_is_explicitly_rejected() -> None:
         'required_top_visit_fraction': 0.8,
         'required_top_two_margin': 0.5,
         'calibration': {
+            'artifact_root': 'reference_artifacts',
             'artifact_id': '00000000-0000-0000-0000-000000000001',
             'path': 'calibration/test.json',
             'sha256': '0' * 64,

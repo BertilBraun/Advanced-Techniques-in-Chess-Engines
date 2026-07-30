@@ -138,6 +138,8 @@ def run_go_worker(
     last_resource_sample = 0.0
     try:
         specification = GoWorkerSpecification.model_validate_json(serialized_specification)
+        if specification.torch_intraop_thread_count is not None:
+            torch.set_num_threads(specification.torch_intraop_thread_count)
         device = torch.device(specification.device)
         repository = CheckpointRepository(
             Path(specification.checkpoint_directory),
@@ -162,6 +164,7 @@ def run_go_worker(
         scheduler = LogicalWorkerGameScheduler(
             specification.logical_worker_start_index,
             specification.logical_worker_count,
+            specification.next_game_indices,
         )
         maximum_active_games = specification.logical_worker_count * specification.maximum_active_searches_per_worker
         while not stop_event.is_set():

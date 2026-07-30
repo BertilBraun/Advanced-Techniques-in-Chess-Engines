@@ -15,6 +15,7 @@ from src.az.config.search import (
 from src.az.config.runtime import TelemetryMetric
 from src.az.config.serialization import load_authoring_configuration
 from src.az.runtime.factory import RuntimeBuildEnvironment, build_runtime_plan
+from src.az.experiment.smoke import local_cpu_smoke_configuration
 
 
 def _configuration() -> ResolvedRunConfiguration:
@@ -38,6 +39,8 @@ def _environment(tmp_path: Path) -> RuntimeBuildEnvironment:
         ram_gib=configuration.hardware.minimum_ram_gib,
         free_disk_gib=configuration.hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
+        logical_worker_next_game_indices=(0,)
+        * (len(configuration.topology.self_play.device_ids) * configuration.topology.self_play_workers_per_device),
     )
 
 
@@ -64,6 +67,7 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     assert first.maximum_pending_batches == configuration.topology.maximum_pending_inference_batches
     assert first.inference_cache_capacity == configuration.search.inference.cache_capacity
     assert first.value_target_weight == configuration.self_play.value_target_weight
+    assert first.torch_intraop_thread_count is None
     assert first.telemetry_write_every_seconds == configuration.telemetry.write_every_seconds
     assert first.resource_sample_every_seconds == configuration.telemetry.resource_sample_every_seconds
     assert plan.games_per_shard == configuration.self_play.games_per_shard
@@ -81,6 +85,32 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     assert plan.topology.workers[0].maximum_active_searches == (
         configuration.topology.self_play_workers_per_device * configuration.topology.maximum_active_searches_per_worker
     )
+
+
+def test_runtime_factory_sets_explicit_cpu_smoke_worker_thread_limit(
+    tmp_path: Path,
+) -> None:
+    configuration = local_cpu_smoke_configuration()
+    plan = build_runtime_plan(
+        configuration,
+        RuntimeBuildEnvironment(
+            run_id=UUID(int=812),
+            resolved_configuration_sha256='f' * 64,
+            output_directory=tmp_path.resolve(),
+            checkpoint_directory=(tmp_path / 'checkpoints').resolve(),
+            startup_timeout_seconds=30,
+            shutdown_grace_seconds=10,
+            visible_cuda_models=(),
+            logical_cpu_count=configuration.hardware.minimum_logical_cpu_count,
+            ram_gib=configuration.hardware.minimum_ram_gib,
+            free_disk_gib=configuration.hardware.minimum_free_disk_gib,
+            allow_cpu_smoke=True,
+            logical_worker_next_game_indices=(0,),
+        ),
+    )
+
+    assert plan.worker_specifications[0].device == 'cpu'
+    assert plan.worker_specifications[0].torch_intraop_thread_count == 1
 
 
 @pytest.mark.parametrize(
@@ -153,10 +183,32 @@ def test_runtime_factory_rejects_absent_configured_hardware(
         ram_gib=_configuration().hardware.minimum_ram_gib,
         free_disk_gib=_configuration().hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
+        logical_worker_next_game_indices=_environment(tmp_path).logical_worker_next_game_indices,
     )
 
     with pytest.raises(ValueError, match='device count'):
         build_runtime_plan(_configuration(), unavailable)
+
+
+def test_runtime_factory_rejects_cpu_bypass_for_gpu_profile(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+    bypass = RuntimeBuildEnvironment(
+        run_id=environment.run_id,
+        resolved_configuration_sha256=environment.resolved_configuration_sha256,
+        output_directory=environment.output_directory,
+        checkpoint_directory=environment.checkpoint_directory,
+        startup_timeout_seconds=environment.startup_timeout_seconds,
+        shutdown_grace_seconds=environment.shutdown_grace_seconds,
+        visible_cuda_models=(),
+        logical_cpu_count=environment.logical_cpu_count,
+        ram_gib=environment.ram_gib,
+        free_disk_gib=environment.free_disk_gib,
+        allow_cpu_smoke=True,
+        logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
+    )
+
+    with pytest.raises(ValueError, match='explicit local-cpu-smoke'):
+        build_runtime_plan(_configuration(), bypass)
 
 
 def test_runtime_factory_rejects_insufficient_host_resources(tmp_path: Path) -> None:
@@ -173,6 +225,7 @@ def test_runtime_factory_rejects_insufficient_host_resources(tmp_path: Path) -> 
         ram_gib=environment.ram_gib,
         free_disk_gib=environment.free_disk_gib,
         allow_cpu_smoke=False,
+        logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
     )
 
     with pytest.raises(ValueError, match='logical CPU'):

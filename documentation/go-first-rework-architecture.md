@@ -424,8 +424,8 @@ Validation is layered; a later layer does not substitute for an earlier one.
    elapsed-time schedules select the expected strategy.
 6. **System smoke test:** one local short run performs self-play, replay,
    optimization, checkpointing, restart, evaluation, telemetry, graceful
-   shutdown, and report generation. The later full training run is the final
-   system-level test, not a replacement for these checks.
+   shutdown, and report generation. Full-scale multi-GPU validation and
+   strength experiments are deferred to the rented compute node.
 7. **Static/format validation:** Python type annotations and Pydantic types follow
    repository rules; run `ruff format`, `ruff check --fix`, and
    `python -m pytest --import-mode=importlib .\test -q` from `py`. Native changes
@@ -573,8 +573,11 @@ state before reproducing the next distributed training behavior.
   bitwise identity for concurrent scheduling or nondeterministic kernels.
 - Native child processes must be able to import `az_go_native`. Windows
   `spawn` therefore requires the Windows extension directory on child
-  `PYTHONPATH`; the current native integration and system smoke are validated
-  in WSL with the Linux extension directory inherited through `PYTHONPATH`.
+  `PYTHONPATH`. WSL with the Linux extension directory inherited through
+  `PYTHONPATH` is the supported local native-integration and smoke execution
+  path. The final smoke was not rerun after the spawned-worker CPU thread-limit
+  fix; full-scale validation and strength experiments remain deferred to the
+  rented compute node.
 
 ### Stage 8: search-compute strategies
 
@@ -788,6 +791,11 @@ profiles. Every profile has a homogeneous action space and complete checkpoint
 schedule, candidate-level means and distribution summaries, and a selected
 rule. Runtime startup authenticates the referenced file and requires an exact
 profile match for every fixed or progressive cap and all adaptive thresholds.
+The experiment CLI accepts a typed request containing the artifact identity,
+candidate grid, and acceptance rule; it has no implicit candidates or
+thresholds. The resulting reference declares the `reference_artifacts` root.
+A consuming run copies and authenticates that file during freeze, so runtime
+never depends on a mutable path in the source run.
 
 ### 13.2 Common-search paired evaluation
 
@@ -842,3 +850,35 @@ stop distributions, policy eligibility count/fraction/weight, optimizer steps,
 replay reuse, adaptive stopping, prefix/full disagreement, checkpoint timing,
 and evaluation games/wall time/simulations. Missing resource or GPU evidence is
 reported as unavailable with a reason; it is never imputed.
+
+## 14. End-to-end experiment lifecycle
+
+The retained components had durable replay, exact credit accounting,
+authenticated checkpoint resume, native self-play, paired evaluation, and
+evidence-derived reporting, but no experiment-level owner tied them to one
+immutable identity. `az.experiment` now owns that boundary.
+
+The lifecycle has three ordered phases:
+
+1. `training_run`: native self-play and exact-credit optimizer quanta run under
+   one monotonic elapsed-time budget. Replay publication makes new credits
+   visible, training publishes a checkpoint, and self-play workers refresh that
+   checkpoint. Crossing a configured elapsed checkpoint claims immutable model
+   bytes and records requested versus actual publication time.
+2. `evaluation`: the retained checkpoint claims are evaluated with the common
+   paired protocol. Evaluation games are independently resumable and carry the
+   evaluation cost category, so evaluation does not consume the training clock.
+3. `reporting`: raw committed replay envelopes, checkpoint claims, and paired
+   game results are converted to typed report evidence; match statistics and
+   learning-curve statistics are derived by the report builder.
+
+The frozen configuration bytes, semantic configuration digest, run UUID,
+source revision, phase state, and immutable artifact checksums are authenticated
+on every command. A stop request carries the same run/config identity. Resume
+continues the remaining elapsed schedule and uses replay-credit and checkpoint
+repositories rather than initializing a replacement run.
+
+The local CPU profile deliberately reduces board size, model size, search cap,
+game cap, optimizer steps, and pair count. It uses the same production
+components and is a readiness check only; full GPU and strength measurements
+remain external experiment runs.

@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from src.az.config.base import FrozenModel, Sha256
 from src.az.config.serialization import model_sha256
 from src.az.evaluation.statistics import LearningCurveStatistics, MatchStatistics
+from src.az.evaluation.models import EvaluationOpponentIdentity
 
 
 class AvailableMetricEvidence(FrozenModel):
@@ -113,8 +114,19 @@ class RunIdentity(FrozenModel):
     hardware_identity: str = Field(min_length=1)
 
 
+class EvaluationProtocolIdentity(FrozenModel):
+    opponent: EvaluationOpponentIdentity
+    common_search_sha256: Sha256
+    board_size: int = Field(ge=3)
+    komi_half_points: int
+    scoring_rule: Literal['area']
+    ko_rule: Literal['positional_superko']
+    suicide_rule: Literal['illegal']
+
+
 class ReportRun(FrozenModel):
     identity: RunIdentity
+    evaluation_protocol: EvaluationProtocolIdentity
     diagnostics: RunDiagnostics
     final_match: MatchStatistics
     learning_curve: LearningCurveStatistics

@@ -25,3 +25,20 @@ def test_logical_worker_game_lineage_is_unique_and_stable_across_process_ranges(
         (3, 1),
     )
     assert set(first_coordinates).isdisjoint(second_coordinates)
+
+
+def test_logical_worker_resume_offsets_keep_game_identities_disjoint() -> None:
+    resumed = LogicalWorkerGameScheduler(
+        first_worker_index=2,
+        worker_count=2,
+        next_game_indices=(7, 11),
+    )
+
+    coordinates = tuple(resumed.next_game() for _ in range(4))
+
+    assert tuple((game.logical_worker_index, game.game_index) for game in coordinates) == (
+        (2, 7),
+        (3, 11),
+        (2, 8),
+        (3, 12),
+    )

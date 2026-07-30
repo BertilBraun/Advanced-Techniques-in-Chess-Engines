@@ -38,9 +38,15 @@ class HardwareConfiguration(FrozenModel):
     provider: str = Field(min_length=1)
     offer_id: str = Field(min_length=1)
     expected_gpu_model: str = Field(min_length=1)
-    expected_gpu_count: PositiveInt
+    expected_gpu_count: int = Field(ge=0)
     minimum_logical_cpu_count: PositiveInt
     minimum_ram_gib: PositiveFloat
     minimum_free_disk_gib: PositiveFloat
     hourly_cost: float | None = Field(ge=0)
     currency: Literal['EUR', 'USD']
+
+    @model_validator(mode='after')
+    def validate_gpu_identity(self) -> HardwareConfiguration:
+        if (self.expected_gpu_count == 0) != (self.expected_gpu_model == 'none'):
+            raise ValueError("Zero GPUs require model 'none', and model 'none' requires zero GPUs.")
+        return self

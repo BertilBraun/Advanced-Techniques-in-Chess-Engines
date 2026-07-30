@@ -25,7 +25,7 @@ class EvaluationModelArtifactRepository:
         )
         if hashlib.sha256(checkpoint.model_artifact).hexdigest() != identity.model_artifact_sha256:
             raise ValueError('Claimed evaluation model bytes do not match the checkpoint manifest.')
-        path = self._path(identity)
+        path = self.path(identity)
         if path.exists():
             if path.read_bytes() != checkpoint.model_artifact:
                 raise ValueError('Evaluation model identity already resolves to different bytes.')
@@ -41,7 +41,7 @@ class EvaluationModelArtifactRepository:
         return identity
 
     def load(self, identity: CandidateCheckpointIdentity) -> bytes:
-        path = self._path(identity)
+        path = self.path(identity)
         if not path.is_file():
             raise ValueError('Claimed evaluation model artifact is unavailable.')
         contents = path.read_bytes()
@@ -49,7 +49,7 @@ class EvaluationModelArtifactRepository:
             raise ValueError('Claimed evaluation model artifact checksum mismatch.')
         return contents
 
-    def _path(self, identity: CandidateCheckpointIdentity) -> Path:
+    def path(self, identity: CandidateCheckpointIdentity) -> Path:
         return self._directory / (
             f'model-{identity.model_version:010d}-{identity.checkpoint_id.hex}-{identity.model_artifact_sha256}.pt'
         )

@@ -348,3 +348,27 @@ def publish_trace_collection_artifact(
         os.fsync(stream.fileno())
     os.replace(partial, path)
     return path
+
+
+def publish_calibration_artifact(
+    directory: Path,
+    artifact: SearchCalibrationArtifact,
+) -> Path:
+    if not directory.is_absolute():
+        raise ValueError('Calibration artifact directory must be absolute.')
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f'calibration-{artifact.payload.artifact_id.hex}.json'
+    contents = artifact.model_dump_json(indent=2).encode() + b'\n'
+    if path.exists():
+        if path.read_bytes() != contents:
+            raise ValueError('Calibration artifact identity already has different contents.')
+        return path
+    partial = path.with_suffix('.partial')
+    if partial.exists():
+        partial.unlink()
+    with partial.open('xb') as stream:
+        stream.write(contents)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(partial, path)
+    return path

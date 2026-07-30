@@ -119,6 +119,7 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
             ram_gib=configuration.hardware.minimum_ram_gib,
             free_disk_gib=configuration.hardware.minimum_free_disk_gib,
             allow_cpu_smoke=True,
+            logical_worker_next_game_indices=(0,),
         ),
     )
     storage = ReplayShardStorage(
@@ -241,6 +242,7 @@ def test_long_games_stop_cooperatively_without_emitting_partial_samples(
             ram_gib=configuration.hardware.minimum_ram_gib,
             free_disk_gib=configuration.hardware.minimum_free_disk_gib,
             allow_cpu_smoke=True,
+            logical_worker_next_game_indices=(0,),
         ),
     )
     published: list[tuple[ReplayRecord, ...]] = []

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from src.az.config.base import FrozenModel
+from src.az.config.artifacts import CheckpointArtifactReference
 
 NATIVE_INT32_MIN = -(2**31)
 NATIVE_INT32_MAX = 2**31 - 1
@@ -94,7 +94,7 @@ class RandomGoOpponent(FrozenModel):
 
 class CheckpointGoOpponent(FrozenModel):
     kind: Literal['checkpoint']
-    checkpoint_path: PurePosixPath
+    checkpoint: CheckpointArtifactReference
 
 
 GoOpponentConfiguration = Annotated[RandomGoOpponent | CheckpointGoOpponent, Field(discriminator='kind')]

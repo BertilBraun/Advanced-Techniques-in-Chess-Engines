@@ -34,7 +34,7 @@ class GateWorkerSpecification(FrozenModel):
 
 class GateEvidence(FrozenModel):
     worker_index: int = Field(ge=0)
-    experiment_start_monotonic_ns: int = Field(ge=0)
+    experiment_start_monotonic_ns: int
     stop_was_set: bool
 
 
@@ -230,6 +230,7 @@ def _orchestrator(
     startup_timeout_seconds: float = 60,
     worker_count: int = 1,
     worker_specifications: tuple[bytes, ...] | None = None,
+    elapsed_offset_seconds: float = 0,
 ) -> RuntimeOrchestrator:
     start_method = 'spawn'
     serialized_specifications = (
@@ -255,6 +256,7 @@ def _orchestrator(
         games_per_shard=1,
         telemetry_path=(tmp_path / 'telemetry.azt').resolve(),
         telemetry_write_every_seconds=1,
+        elapsed_offset_seconds=elapsed_offset_seconds,
     )
 
 
@@ -347,6 +349,26 @@ def test_startup_failure_releases_gate_without_beginning_experiment(tmp_path: Pa
     assert observation.experiment_start_monotonic_ns == 0
     assert observation.stop_was_set
     assert not any(child.name.startswith('az-self-play-') for child in multiprocessing.active_children())
+
+
+@pytest.mark.integration
+def test_resumed_workers_observe_cumulative_schedule_epoch(tmp_path: Path) -> None:
+    specifications, evidence_paths = _gate_specifications(tmp_path, fail_first_worker=False)
+    offset_seconds = 123
+
+    _orchestrator(
+        tmp_path,
+        _gated_worker,
+        _discard,
+        worker_specifications=specifications,
+        elapsed_offset_seconds=offset_seconds,
+    ).run()
+
+    evidence = tuple(GateEvidence.model_validate_json(path.read_bytes()) for path in evidence_paths)
+    observed_elapsed = tuple(
+        (time.monotonic_ns() - item.experiment_start_monotonic_ns) / 1_000_000_000 for item in evidence
+    )
+    assert all(elapsed >= offset_seconds for elapsed in observed_elapsed)
 
 
 @pytest.mark.integration

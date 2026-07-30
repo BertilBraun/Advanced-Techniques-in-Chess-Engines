@@ -41,6 +41,7 @@ def _search_specification(
 
 def _calibration(identity: int) -> CalibrationArtifactReference:
     return CalibrationArtifactReference(
+        artifact_root='reference_artifacts',
         artifact_id=UUID(int=identity),
         path=PurePosixPath(f'calibration/{identity}.json'),
         sha256=f'{identity:064x}',

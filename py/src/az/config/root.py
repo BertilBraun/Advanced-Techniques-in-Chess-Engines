@@ -52,7 +52,7 @@ class ResolvedRunConfiguration(FrozenModel):
         configured_devices = (
             self.topology.trainer.device_ids + self.topology.self_play.device_ids + self.topology.evaluation.device_ids
         )
-        if max(configured_devices) >= self.hardware.expected_gpu_count:
+        if self.hardware.expected_gpu_count > 0 and max(configured_devices) >= self.hardware.expected_gpu_count:
             raise ValueError('Topology device IDs must be below the expected GPU count.')
         if self.evaluation.checkpoint_elapsed_seconds != self.experiment.checkpoint_elapsed_seconds:
             raise ValueError('Evaluation and experiment checkpoint schedules must match.')

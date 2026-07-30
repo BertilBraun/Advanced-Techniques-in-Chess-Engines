@@ -56,6 +56,7 @@ class RuntimeBuildEnvironment:
     ram_gib: float
     free_disk_gib: float
     allow_cpu_smoke: bool
+    logical_worker_next_game_indices: tuple[int, ...]
 
     def __post_init__(self) -> None:
         if not self.output_directory.is_absolute() or not self.checkpoint_directory.is_absolute():
@@ -86,6 +87,8 @@ def build_runtime_plan(
     configuration: ResolvedRunConfiguration,
     environment: RuntimeBuildEnvironment,
 ) -> RuntimePlan:
+    if environment.allow_cpu_smoke != (configuration.hardware.profile_name == 'local-cpu-smoke'):
+        raise ValueError('CPU smoke execution is permitted only by the explicit local-cpu-smoke hardware profile.')
     match configuration.model.schedule:
         case FixedModelSchedule(architecture=architecture):
             pass
@@ -123,7 +126,10 @@ def build_runtime_plan(
                 raise ValueError('Prefix/full trace collection requires full-budget stopping.')
     match configuration.search.stopping, configuration.search.budget:
         case VisitMarginAdaptiveRule(calibration=reference) as stopping, FixedSearchBudget(simulations=cap):
-            artifact = load_calibration_artifact(reference, environment.output_directory)
+            artifact = load_calibration_artifact(
+                reference,
+                environment.output_directory / reference.artifact_root,
+            )
             validate_adaptive_compatibility(
                 artifact,
                 cap,
@@ -133,7 +139,10 @@ def build_runtime_plan(
                 stopping.required_top_two_margin,
             )
         case VisitMarginAdaptiveRule(calibration=reference) as stopping, ProgressiveSearchBudget(stages=stages):
-            artifact = load_calibration_artifact(reference, environment.output_directory)
+            artifact = load_calibration_artifact(
+                reference,
+                environment.output_directory / reference.artifact_root,
+            )
             caps = tuple(sorted({stage.simulations for stage in stages}))
             for cap in caps:
                 validate_adaptive_compatibility(
@@ -179,6 +188,13 @@ def build_runtime_plan(
     assignments: list[WorkerAssignment] = []
     specifications: list[GoWorkerSpecification] = []
     for worker_index, device_index in enumerate(configuration.topology.self_play.device_ids):
+        first_logical_worker = worker_index * configuration.topology.self_play_workers_per_device
+        total_logical_workers = (
+            len(configuration.topology.self_play.device_ids) * configuration.topology.self_play_workers_per_device
+        )
+        next_game_indices = environment.logical_worker_next_game_indices
+        if len(next_game_indices) != total_logical_workers or any(index < 0 for index in next_game_indices):
+            raise ValueError('Resume game indices must cover every logical self-play worker.')
         assignments.append(
             WorkerAssignment(
                 worker_index=worker_index,
@@ -207,8 +223,11 @@ def build_runtime_plan(
                     temperature=configuration.search.temperature,
                     root_exploration=configuration.search.root_exploration,
                 ),
-                logical_worker_start_index=(worker_index * configuration.topology.self_play_workers_per_device),
+                logical_worker_start_index=first_logical_worker,
                 logical_worker_count=configuration.topology.self_play_workers_per_device,
+                next_game_indices=next_game_indices[
+                    first_logical_worker : first_logical_worker + configuration.topology.self_play_workers_per_device
+                ],
                 maximum_active_searches_per_worker=configuration.topology.maximum_active_searches_per_worker,
                 maximum_batch_size=configuration.search.inference.maximum_batch_size,
                 maximum_wait_microseconds=configuration.search.inference.maximum_wait_microseconds,
@@ -216,6 +235,7 @@ def build_runtime_plan(
                 inference_cache_capacity=configuration.search.inference.cache_capacity,
                 value_target_weight=configuration.self_play.value_target_weight,
                 device='cpu' if environment.allow_cpu_smoke else f'cuda:{device_index}',
+                torch_intraop_thread_count=1 if environment.allow_cpu_smoke else None,
                 checkpoint_directory=str(environment.checkpoint_directory),
                 resolved_configuration_sha256=environment.resolved_configuration_sha256,
                 telemetry_write_every_seconds=configuration.telemetry.write_every_seconds,

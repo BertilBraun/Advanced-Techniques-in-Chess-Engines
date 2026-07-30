@@ -114,6 +114,7 @@ class EvaluationGameResult(FrozenModel):
     game_in_pair: int = Field(ge=0, le=1)
     requested_elapsed_seconds: int = Field(gt=0)
     published_checkpoint_elapsed_seconds: float = Field(ge=0)
+    common_search_sha256: Sha256
     candidate: CandidateCheckpointIdentity
     opponent: EvaluationOpponentIdentity
     candidate_color: GoColor
@@ -184,6 +185,7 @@ class EvaluationPairResult(FrozenModel):
         if (
             first.requested_elapsed_seconds != second.requested_elapsed_seconds
             or first.published_checkpoint_elapsed_seconds != second.published_checkpoint_elapsed_seconds
+            or first.common_search_sha256 != second.common_search_sha256
         ):
             raise ValueError('Pair games must share requested and actual checkpoint timing evidence.')
         if (
