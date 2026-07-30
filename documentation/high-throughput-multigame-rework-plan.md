@@ -52,7 +52,7 @@ The next implementation must follow these decisions.
    the resolved experiment configuration.
 2. **C++ owns the self-play data plane.** Game progression, many simultaneous
    games, MCTS trees, selection threads, virtual loss, leaf batching, native
-   inference, tree reuse, and replay emission stay in a long-lived native
+   inference, tree reuse, and trajectory emission stay in a long-lived native
    session.
 3. **Inference stays in C++.** Production self-play must not perform a pybind
    callback for every evaluated leaf. LibTorch is the initial inference
@@ -62,7 +62,7 @@ The next implementation must follow these decisions.
    samples replay, publishes models, evaluates experiments, and produces
    reports. It does not advance games or schedule individual searches.
 5. **Generic infrastructure and game-specific learning are separate.** Search
-   scheduling, inference batching, replay transport, lifecycle, and reporting
+   scheduling, inference batching, archive transport, lifecycle, and reporting
    are generic. State encodings, action mappings, legal rules, model heads,
    losses, augmentations, and auxiliary targets may be game-specific.
 6. **Performance is a correctness property.** Every hot-path refactor needs a
@@ -73,6 +73,15 @@ The next implementation must follow these decisions.
    wholesale. Restore the proven concepts and tests from `PreRework`, place
    them behind the new interfaces, and leave the Python MCTS and mixed legacy
    control code removed.
+8. **Search trees have centralized storage.** A tree arena owns all node and
+   edge storage for an active root. Search code uses stable indices, not
+   owning pointers or per-node containers, and performs no allocator calls
+   after session warm-up.
+9. **Replay has two intentionally different layers.** An immutable canonical
+   trajectory archive is the durable self-play source of truth. Typed,
+   fixed-shape memory-mapped training shards are disposable materializations
+   of that archive. Changing an input representation or derivable target
+   rematerializes training data rather than rerunning self-play.
 
 ## 3. Current-state assessment
 
@@ -86,6 +95,9 @@ The following current components are useful foundations:
 - the current search-strategy definitions for fixed, progressive, mixed, FPU,
   and adaptive search;
 - replay identity, model-version, and target-weight metadata;
+- the old rolling replay buffer's atomic manifests, checksums, logical versus
+  physical segments, deterministic rank sampling, leases, read-amplification
+  accounting, compaction, and immutable reanalysis sidecars;
 - checkpoint authentication and crash-safe publication concepts;
 - common-search paired evaluation, fixed-elapsed-time checkpoints, bootstrap
   intervals, AUC, and report generation;
@@ -118,6 +130,11 @@ clang-tidy, the integer aliases in `common.hpp`, explicit CMake targets, and
 the new namespace and ownership conventions. Hardcoded chess tensor constants
 must not leak into generic code.
 
+The old replay implementation is a design reference, not a storage-format
+mandate. Its lifecycle and sampling concepts are retained, while HDF5,
+training tensors as the only durable record, and ingestion-time deduplication
+that destroys complete trajectories are not.
+
 ### 3.3 Replace or remove
 
 The following current or historical designs are not part of the target:
@@ -128,6 +145,9 @@ The following current or historical designs are not part of the target:
 - Python MCTS;
 - Go-only root configuration and runtime factories;
 - full checkpoint serialization after every small optimizer quantum;
+- per-node heap ownership and per-node child-vector allocation during search;
+- a single replay format that mixes durable logical observations with one
+  experiment's tensor representation;
 - per-step `.item()`, `.cpu()`, scalar printing, or synchronous metric
   extraction in the training loop;
 - retaining every sampled UUID in Python merely to report a training step;
@@ -166,7 +186,7 @@ splitting an inherently misplaced hot path into more Python functions.
 
 ## 4. System boundaries
 
-The system has four major planes.
+The system has five major planes.
 
 ```text
 +--------------------------------------------------------------------+
@@ -176,12 +196,17 @@ The system has four major planes.
                                  | coarse commands/artifacts
 +--------------------------------v-----------------------------------+
 | Native C++ self-play/evaluation data plane                         |
-| games, MCTS, leaf batching, LibTorch inference, replay shards      |
+| games, MCTS, leaf batching, LibTorch inference, trajectory archive |
 +--------------------------------+-----------------------------------+
-                                 | versioned binary replay
+                                 | canonical Layer A games
++--------------------------------v-----------------------------------+
+| Materialization and replay-data plane                              |
+| typed derivation, fixed mmap Layer B shards, rolling views         |
++--------------------------------+-----------------------------------+
+                                 | materialized batches
 +--------------------------------v-----------------------------------+
 | Python/PyTorch training plane                                      |
-| replay loading, augmentation, DDP, losses, model publication       |
+| mmap loading, DDP, losses, model publication                       |
 +--------------------------------+-----------------------------------+
                                  | immutable model generation
 +--------------------------------v-----------------------------------+
@@ -194,7 +219,7 @@ Communication across a boundary is coarse-grained:
 
 - resolved session configuration at process/session start;
 - immutable model-generation publication;
-- replay shards containing complete positions or games;
+- atomic canonical games and immutable materialized shard generations;
 - periodic aggregate telemetry;
 - stop, drain, refresh, and health commands.
 
@@ -228,7 +253,7 @@ cpp/
 |-- src/search/               generic trees and search policies
 |-- src/inference/            LibTorch backend, buffers, model generations
 |-- src/self_play/            multi-game scheduler and game lifecycle
-|-- src/replay/               shard container, writer, checksums
+|-- src/archive/              canonical trajectories, overlays, checksums
 |-- src/runtime/              session factory and coarse control protocol
 |-- src/apps/                 self-play, evaluation, and UCI executables
 |-- src/bindings/             test/debug Python facade only
@@ -240,7 +265,8 @@ py/src/az/
 |-- games/go/                 Go model, objective, batch/augmentation
 |-- games/chess/              chess model, objective, batch/augmentation
 |-- models/                   shared neural building blocks
-|-- replay/                   catalog, sampling, native shard readers
+|-- materialization/          archive-to-tensor shard builders
+|-- replay/                   materialized catalogs, views, sampling
 |-- training/                 persistent generic DDP trainer
 |-- runtime/                  native-process supervision
 |-- evaluation/               match plans and statistics
@@ -253,7 +279,7 @@ Dependencies point inward:
 - game modules depend on core, not search, inference, or orchestration;
 - search depends on the game concept, not concrete Go/chess modules;
 - inference knows tensor/artifact contracts, not game rules;
-- self-play composes game, search, inference, and replay;
+- self-play composes game, search, inference, and canonical archive emission;
 - native applications depend on runtime/session factories;
 - Python training depends on typed game-training modules, never native
   self-play internals;
@@ -353,14 +379,39 @@ One native worker group is created per self-play GPU. A worker group owns:
 - one search tree per active game;
 - one shared inference service;
 - pinned staging slots;
-- replay shard writers;
+- canonical trajectory writers;
 - aggregate telemetry.
 
 The initial implementation uses one model replica and one batching service per
 GPU. Multiple inference lanes or CUDA streams are a configuration option to
 benchmark, not a reason to duplicate the model by default.
 
-### 6.2 Multi-game scheduler
+### 6.2 Tree arenas
+
+Each active game leases one `TreeArena<Game>` from its worker group's
+preallocated pool. The arena centrally owns bounded contiguous node and edge
+storage. Nodes refer to parents, children, and transpositions with typed
+indices and offsets; a transposition table may point into the arena but never
+owns nodes. Raw owning pointers, `new`, `std::unique_ptr`,
+`std::shared_ptr`, and a separate dynamically allocated child vector per node
+are excluded from selection, expansion, and backup.
+
+Arena capacity, bytes per active root, and the number of leased arenas are
+resolved before session warm-up. Reset and subtree reuse recycle arena
+generations without freeing individual nodes. Capacity exhaustion has an
+explicit configured behavior, such as ending the search at the completed
+budget, pruning, or resetting the root, and always emits telemetry. It never
+falls back to scattered heap allocation. Search-path and temporary result
+storage are likewise reusable bounded buffers.
+
+The old `SearchTree` slot/generation/free-list design is the starting
+reference for stable indices, stale-index detection, rerooting, and bounded
+capacity. Its per-node child vectors are replaced by arena-owned edge spans.
+An instrumented allocator test must observe zero allocations after warm-up
+during representative selection, expansion, inference completion, backup,
+and reroot cycles.
+
+### 6.3 Multi-game scheduler
 
 The scheduler operates over many roots and keeps selection work available
 while inference batches are running. It:
@@ -379,7 +430,7 @@ Search-thread count, active-game count, leaf concurrency per root, batch size,
 maximum batch wait, outstanding slots, and CUDA stream count are independent
 configuration values.
 
-### 6.3 Inference service
+### 6.4 Inference service
 
 The initial backend is a generalized form of `DirectInferencePipeline`:
 
@@ -410,7 +461,7 @@ with LibTorch and the restored pipeline. Every artifact carries:
 Publishing fails unless the exported artifact passes a native warm-up and
 shape/semantic validation for its declared game session.
 
-### 6.4 Search strategy composition
+### 6.5 Search strategy composition
 
 Search behavior is composed from typed policies rather than one monolithic
 mode:
@@ -428,25 +479,63 @@ mode:
 Unsupported combinations fail during configuration resolution. Search
 telemetry records both configured and actual behavior.
 
-### 6.5 Native replay emission
+### 6.6 Canonical trajectory archive (Layer A)
 
-Completed native games are written directly to versioned binary replay shards.
-The generic shard envelope includes:
+The native session writes complete logical games and their search observations
+to an append-only, versioned binary archive. This is the durable source of
+truth. It is independent of the current network input layout, tensor dtype,
+loss function, replay window, and auxiliary heads. Every committed game
+contains:
 
-- game identifier and game-specific payload schema;
-- run/config/model identities;
-- game and position identifiers;
-- deterministic seed lineage;
-- model generation;
-- state/action/policy/value targets;
-- actual simulations, budget class, stop reason, and policy weight;
-- terminal result and termination category;
-- optional feature-specific targets;
-- checksums and atomic publication metadata.
+- schema version, `game_id`, run identity, and `environment_id`;
+- complete rules, board, action-space, encoding, search, exploration,
+  self-play selection, resignation, and restart identities;
+- a reconstructible initial state, including all history and counters required
+  for legality and terminal semantics;
+- deterministic seed lineage and restart/branch provenance;
+- self-play model identity and generation;
+- start/end timestamps, terminal result and reason, winner or score, and total
+  plies;
+- an ordered transition for every ply, including fast searches.
 
-The payload is a discriminated game-specific record. Go and chess do not force
-their tensors or auxiliary fields into one nullable structure. JSON and
-per-position pybind object construction are excluded from production replay.
+Each transition records:
+
+- ply index, player to move, state hash, and action played;
+- search type: full, fast, or reanalysis;
+- requested budget, actual completed visits, early-stop status, root-noise
+  usage, temperature, and model generation;
+- root value and root WDL when the model exposes it;
+- policy-target eligibility and weight;
+- aligned legal-action, post-mask policy-prior, completed visit-count, and
+  root-child-Q arrays;
+- the selected action and any enabled resignation evidence.
+
+The archive schema defines these quantities exactly: child Q excludes
+outstanding virtual loss, priors are the normalized legal priors actually used
+by search, and visits are completed visits at move selection. Periodic state
+hashes validate deterministic reconstruction from the initial state and action
+sequence. Chess restart states include sufficient history for repetition,
+castling, en-passant, and move-clock semantics; a board diagram or FEN alone is
+not necessarily sufficient.
+
+Games publish atomically only after terminal metadata is complete. Files are
+compressed, checksummed, content-addressed, and indexed by immutable manifests;
+temporary partial games are recoverable or discarded and never presented as
+training data. Rolling replay eviction never deletes Layer A. Archive
+retention is a separate explicit policy.
+
+Reanalysis is an immutable overlay keyed by game, ply, model generation, and
+resolved search identity. It never mutates the base trajectory. A downstream
+materialization explicitly selects original, latest, or a named reanalysis
+generation.
+
+The payload is a discriminated game-specific logical record. Go and chess do
+not force optional game fields into one nullable structure. JSON,
+pre-materialized tensors, ingestion-time position deduplication, and
+per-position pybind object construction are excluded from this production
+archive. A future target is reproducible from Layer A only when the archive
+contains its required logical evidence; internal search traces that were
+never recorded cannot be reconstructed later.
 
 ## 7. Training plane
 
@@ -505,17 +594,74 @@ remain tensors on device. At a configured interval:
 Per-step detailed provenance comes from replay/sampler journals, not Python
 lists in the optimizer loop.
 
-### 7.4 Replay pipeline
+### 7.4 Materialized replay dataset (Layer B)
 
-Replay loading uses an incremental index, memory mapping or sequential shard
-reads, persistent loader workers, bounded prefetch, pinned host batches,
-vectorized decoding/augmentation, and explicit target age/model generation.
-Uniform recent replay is the initial baseline.
+A materializer converts a declared immutable Layer A selection into
+homogeneous, fixed-shape, fixed-size memory-mapped shards for one experiment.
+Layer B contains the exact inputs, targets, masks, and weights consumed by
+training; it is disposable, reproducible, and may coexist in several variants
+derived from the same trajectories.
 
-Prioritized replay, recency weighting, deduplication, reanalysis, and growing
-windows are later strategies behind the sampler contract.
+A frozen `MaterializationConfiguration` declares:
 
-### 7.5 Checkpoint and model publication cadence
+- source archive manifest or prefix and reanalysis-overlay selection;
+- game representation and action-space versions;
+- objective and auxiliary-target specifications;
+- full/fast/reanalysis observation inclusion and policy/value weights;
+- value and WDL target derivation;
+- filtering or deduplication, performed only at this layer;
+- deterministic augmentation expansion;
+- tensor dtypes, layouts, row count per shard, and padding behavior.
+
+Each immutable shard is columnar and exposes fixed-offset arrays such as state
+`[N, C, H, W]`, dense policy target `[N, A]`, value or WDL target, legal and
+loss masks, per-head weights, and configured auxiliary targets. It also keeps
+compact row provenance containing at least game ID, ply, source observation,
+and source model generation. The final shard declares its valid row count;
+padding is never sampled.
+
+The materialization manifest records the Layer A identities/root hash, the
+typed configuration hash, materializer source revision, output schema, row
+count, shapes, dtypes, offsets, shard checksums, and shard count. Given the
+same archive, configuration, and implementation, output is byte-identical
+where the declared numeric encoding permits it. Adding a derivable auxiliary
+head or changing an input representation creates a new Layer B generation and
+does not require new self-play.
+
+An incremental online materializer may consume newly committed Layer A games
+and seal full Layer B shards. It cannot expose partially written shards.
+Materialization throughput and backlog are monitored so self-play cannot
+silently outrun training-data production.
+
+### 7.5 Rolling replay view and sampling
+
+The rolling replay buffer is a logical view over immutable Layer B shards, not
+the durable game store. Its first baseline is uniform recent replay. It
+preserves the useful old implementation concepts:
+
+- atomic manifests, checksums, and logical-versus-physical segment identity;
+- deterministic global sampling with non-overlapping rank partitions;
+- batch leases that pin shards while reads are active;
+- bounded Layer B capacity and safe eviction;
+- vectorized multi-row reads grouped by shard and contiguous range;
+- incremental catalogs, compaction when it reduces measured amplification,
+  and explicit age/model-generation statistics;
+- sampler journals that reference materialization and row IDs instead of
+  constructing Python UUID lists in the optimizer loop.
+
+Memory mapping, persistent loader workers, bounded prefetch, reusable pinned
+staging batches, and nonblocking host-to-device copies form the normal read
+path. `torch.frombuffer` or an equivalent typed native view avoids per-row
+Python decoding where ownership and alignment allow it. Metrics include files
+opened, rows and bytes read, read amplification, page faults, cache behavior,
+prefetch stalls, replay age, and source-model freshness.
+
+Prioritized sampling, recency weighting, growing windows, and alternate
+deduplication are later strategies behind the same sampler contract. They
+produce distinct resolved identities and never mutate Layer A or sealed Layer
+B shards.
+
+### 7.6 Checkpoint and model publication cadence
 
 Three cadences are separate:
 
@@ -542,7 +688,9 @@ ExperimentConfiguration
 |-- objective: GoObjectiveConfiguration | ChessObjectiveConfiguration
 |-- search: composed native search policies
 |-- self_play: native worker groups and topology
-|-- replay: storage and sampling
+|-- archive: canonical trajectory storage and retention
+|-- materialization: typed tensor derivation and shard layout
+|-- replay: materialized view and sampling
 |-- training: optimizer/DDP/cadences
 |-- evaluation: opponents/search/checkpoints
 `-- telemetry/retention/research metadata
@@ -564,6 +712,7 @@ with:
 - configuration type and default-disabled baseline behavior;
 - prerequisites and incompatible features;
 - required telemetry;
+- required Layer A evidence and Layer B target/materialization changes;
 - screening and confirmation protocol;
 - implementation and experiment status;
 - links to result artifacts, including neutral or negative results.
@@ -610,6 +759,8 @@ Required operational metrics:
 - CPU utilization and search-thread idle time;
 - optimizer steps and samples per hour;
 - replay reuse, age, and target model age;
+- canonical archive bytes/games per second, materialization throughput and
+  backlog, mmap read amplification, and loader stalls;
 - checkpoint/model-publication overhead;
 - actual simulations and early-stop rates.
 
@@ -747,6 +898,10 @@ Every hot-path change answers:
 - Does it add virtual dispatch inside node traversal?
 - Which benchmark detects regression?
 
+After native-session warm-up, representative MCTS cycles must report zero
+general-purpose allocator calls. Archive serialization may allocate only in
+its isolated writer path and must not stall selection or inference completion.
+
 ### 12.3 Benchmark gates
 
 Before replacing a proven `PreRework` component, capture its benchmark on the
@@ -755,9 +910,10 @@ equal/better games per hour, or equal/better strength per hour despite a
 measured throughput cost.
 
 Native benchmarks cover rules, encoding, selection/expansion/backup, batch
-assembly, inference by batch size, and complete self-play. Training benchmarks
-cover decoding, copy overlap, steps/second, checkpoint/publication pauses, and
-GPU utilization.
+assembly, arena reset/reroot/overflow, inference by batch size, canonical
+archive emission, and complete self-play. Training benchmarks cover
+materialization, mmap shard sampling, read amplification, copy overlap,
+steps/second, checkpoint/publication pauses, and GPU utilization.
 
 ## 13. Staged implementation plan
 
@@ -776,13 +932,16 @@ numerical; no strength claim is made.
 ### Stage 1: native multi-game contracts and build structure
 
 - Add `GameDefinition`, artifact metadata, and native session config.
+- Define the index types, contiguous node/edge arena, generation semantics,
+  capacity policy, and reusable search scratch buffers.
 - Split explicit core, Go, chess, inference, self-play, binding, executable,
   test, and benchmark CMake targets.
 - Use static specialization in hot loops and runtime selection at the factory.
 - Add maintainability gates.
 
 Acceptance: a toy game plus Go instantiate contracts; no Python evaluator is
-required; compile commands cover targets; clang-format/tidy pass.
+required; an instrumented search performs zero allocations after warm-up;
+compile commands cover targets; clang-format/tidy pass.
 
 ### Stage 2: restore chess correctly
 
@@ -809,30 +968,39 @@ explanation; refresh is atomic.
 
 ### Stage 4: generic batched MCTS and native self-play
 
-- Port fixed arenas, multi-root scheduling, virtual loss, batching, tree reuse.
+- Port the useful old fixed-slot behavior into centralized node/edge arenas,
+  then add multi-root scheduling, virtual loss, batching, and tree reuse.
 - Integrate fixed/progressive/mixed/adaptive/FPU strategies.
 - Move game progression and target production into C++.
 - Add coarse start/stop/drain/status/refresh control.
 
 Acceptance: no Python game pool/inference broker in production; both games run
 many simultaneous games; deterministic search matches fixtures; no stranded
-virtual loss; throughput meets Stage 0.
+virtual loss; no search-time heap fallback; arena overflow is tested and
+visible; throughput meets Stage 0.
 
-### Stage 5: versioned native replay transport
+### Stage 5: canonical archive and materialized replay
 
-- Add generic envelope plus Go/chess payloads.
-- Write atomic binary shards and a compact index.
-- Add checksums, model/seed/search evidence, and vectorized pinned decoding.
+- Add complete canonical Go/chess trajectory records, environment identities,
+  reconstruction checks, and immutable reanalysis overlays.
+- Write atomic compressed Layer A files with content checksums and manifests.
+- Add the deterministic typed materializer and fixed-size mmap Layer B shards.
+- Restore rolling logical views, deterministic rank sampling, leases,
+  capacity eviction, freshness, and read-amplification metrics over Layer B.
 
-Acceptance: exact round trips; torn/corrupt data is safe; no per-position
-pybind objects; decoding keeps training fed.
+Acceptance: every fast and full ply round-trips with aligned priors, visits,
+and Q values; games reconstruct with matching state hashes; torn/corrupt data
+is safe; reanalysis does not mutate base games; changing a derivable input or
+auxiliary target rematerializes without self-play; identical inputs produce
+identical shards where declared; mmap sampling keeps training fed without
+per-position pybind objects.
 
 ### Stage 6: rebuild the trainer hot path
 
 - Use a persistent loop.
 - Remove per-step `.item()`, CPU loss copies, UUID lists, and sync logs.
-- Add device metrics, persistent loaders, prefetch, nonblocking copies, DDP,
-  BF16, and optional layout/compile modes.
+- Consume Layer B arrays through persistent loaders, prefetch, reusable pinned
+  batches, nonblocking copies, DDP, BF16, and optional layout/compile modes.
 - Separate progress, restart checkpoint, and inference-publication cadences.
 - Enforce maintainability limits.
 
@@ -902,10 +1070,13 @@ Do not begin feature experiments yet.
 
 1. Add Stage 0 benchmarks for `PreRework` direct inference/multi-root search,
    the callback path, and current trainer.
-2. Specify exact Stage 1 native game/model/session contracts.
-3. Freeze `PreRework` chess policy/encoding parity fixtures.
-4. Restore CMake/LibTorch/Stockfish behind explicit targets.
-5. Implement sequentially, measuring before and after every data-plane change.
+2. Freeze tree allocation/reroot/overflow fixtures and the old replay
+   buffer's manifest, lease, deterministic sampling, and reanalysis behavior.
+3. Specify exact Stage 1 native game/model/session contracts and exact Layer A
+   and Layer B schema semantics.
+4. Freeze `PreRework` chess policy/encoding parity fixtures.
+5. Restore CMake/LibTorch/Stockfish behind explicit targets.
+6. Implement sequentially, measuring before and after every data-plane change.
 
 The first implementation milestone is:
 
