@@ -16,10 +16,11 @@ from src.az.replay.envelope import GameTermination
 from test.unit.go_stage5_helpers import game_configuration, sample
 
 
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
 @pytest.mark.parametrize('sparse', [False, True])
-def test_go_payload_round_trip_is_deterministic(sparse: bool) -> None:
-    configuration = game_configuration()
-    original = sample()
+def test_go_payload_round_trip_is_deterministic(board_size: int, sparse: bool) -> None:
+    configuration = game_configuration(board_size)
+    original = sample(board_size)
     if sparse:
         original = GoSample(
             input_planes=original.input_planes,

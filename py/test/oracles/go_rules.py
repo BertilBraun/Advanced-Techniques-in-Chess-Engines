@@ -29,8 +29,10 @@ class OracleRules:
     history_length: int
 
     def __post_init__(self) -> None:
-        if self.board_size not in (7, 9):
-            raise ValueError('Go board size must be 7 or 9')
+        if self.board_size < 3:
+            raise ValueError('Go board size must be at least 3')
+        if self.board_size * self.board_size >= 2**31 - 1:
+            raise ValueError('Go board area and pass action must fit in int32')
         if self.safety_ply_cap < self.board_size * self.board_size:
             raise ValueError('Go safety ply cap must be at least the board area')
         if self.history_length < 1:

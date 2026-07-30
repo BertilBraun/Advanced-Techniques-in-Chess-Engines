@@ -1,12 +1,13 @@
 #pragma once
 
+#include "common.hpp"
 #include "games/go/GoEncoding.hpp"
 
 #include <cstdint>
 
 namespace az::v2::games::go {
 
-enum class Symmetry : std::int8_t {
+enum class Symmetry : int8 {
     Identity = 0,
     Rotate90 = 1,
     Rotate180 = 2,
@@ -18,29 +19,27 @@ enum class Symmetry : std::int8_t {
 };
 
 struct Coordinate {
-    std::int32_t row;
-    std::int32_t column;
+    int32 row;
+    int32 column;
 
     [[nodiscard]] bool operator==(const Coordinate &) const = default;
 };
 
-[[nodiscard]] Coordinate transform_coordinate(std::int32_t row, std::int32_t column,
-                                              std::int32_t board_size, Symmetry symmetry);
-[[nodiscard]] Symmetry inverse_symmetry(Symmetry symmetry);
-[[nodiscard]] std::int32_t transform_action(std::int32_t action, std::int32_t board_size,
-                                            Symmetry symmetry);
-[[nodiscard]] GoEncoding transform_encoding(const GoEncoding &encoding, Symmetry symmetry);
+[[nodiscard]] Coordinate transformCoordinate(int32 row, int32 column, int32 boardSize,
+                                             Symmetry symmetry);
+[[nodiscard]] Symmetry inverseSymmetry(Symmetry symmetry);
+[[nodiscard]] int32 transformAction(int32 action, int32 boardSize, Symmetry symmetry);
+[[nodiscard]] GoEncoding transformEncoding(const GoEncoding &encoding, Symmetry symmetry);
 
 struct GoSymmetryOperations {
-    using action_type = std::int32_t;
+    using action_type = int32;
     using encoding_type = GoEncoding;
     using symmetry_type = Symmetry;
 
     [[nodiscard]] static Symmetry inverse(Symmetry symmetry);
-    [[nodiscard]] static std::int32_t transform_action(std::int32_t action, std::int32_t board_size,
-                                                       Symmetry symmetry);
-    [[nodiscard]] static GoEncoding transform_encoding(const GoEncoding &encoding,
-                                                       Symmetry symmetry);
+    [[nodiscard]] static int32 transformAction(int32 action, int32 boardSize, Symmetry symmetry);
+    [[nodiscard]] static GoEncoding transformEncoding(const GoEncoding &encoding,
+                                                      Symmetry symmetry);
 };
 
 } // namespace az::v2::games::go

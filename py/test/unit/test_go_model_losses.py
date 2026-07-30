@@ -17,7 +17,7 @@ from test.unit.go_stage5_helpers import (
 )
 
 
-@pytest.mark.parametrize('board_size', [7, 9])
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
 def test_model_forward_shapes_and_bounded_value(board_size: int) -> None:
     game = game_configuration(board_size)
     model = ResidualGoModel(game, model_configuration())

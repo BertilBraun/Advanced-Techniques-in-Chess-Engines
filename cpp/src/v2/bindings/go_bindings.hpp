@@ -4,6 +4,6 @@
 
 namespace az::v2::bindings {
 
-void bind_go(pybind11::module_ &module);
+void bindGo(pybind11::module_ &module);
 
 }

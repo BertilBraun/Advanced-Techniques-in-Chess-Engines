@@ -5,6 +5,7 @@ from enum import IntEnum
 
 import numpy as np
 
+from src.az.games.go.configuration import NATIVE_INT32_MAX
 from src.az.games.go.samples import DensePolicyTarget, GoSample, PolicyTarget, SparsePolicyTarget
 
 
@@ -26,8 +27,10 @@ class GoCoordinate:
 
 
 def _validate_board_size(board_size: int) -> None:
-    if board_size not in (7, 9):
-        raise ValueError('Go symmetry board size must be 7 or 9.')
+    if board_size < 3:
+        raise ValueError('Go symmetry board size must be at least 3.')
+    if board_size * board_size >= NATIVE_INT32_MAX:
+        raise ValueError('The Go board area and pass action must fit in a signed 32-bit integer.')
 
 
 def inverse_symmetry(symmetry: GoSymmetry) -> GoSymmetry:

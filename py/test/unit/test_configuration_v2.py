@@ -329,7 +329,7 @@ def test_reduced_fpu_requires_reduction() -> None:
 @pytest.mark.parametrize(
     ('mutation', 'message'),
     (
-        (('board_size', 8), 'board_size'),
+        (('board_size', 2), 'board_size'),
         (('scoring_rule', 'territory'), 'scoring_rule'),
         (('ko_rule', 'simple'), 'ko_rule'),
         (('suicide_rule', 'allowed'), 'suicide_rule'),
@@ -348,6 +348,37 @@ def test_go_rule_invariants_are_fixed(
 
     with pytest.raises(ValidationError, match=message):
         ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+
+@pytest.mark.parametrize('board_size', [3, 5, 8, 13])
+def test_go_configuration_accepts_general_board_sizes(board_size: int) -> None:
+    candidate = resolve_configuration(fixed_authoring()).model_dump(mode='json')
+    candidate['game']['board_size'] = board_size
+    candidate['game']['safety_ply_cap'] = board_size * board_size * 3
+
+    resolved = ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+    assert resolved.game.board_size == board_size
+    assert resolved.game.action_count == board_size * board_size + 1
+
+
+def test_go_configuration_rejects_unrepresentable_action_space() -> None:
+    candidate = resolve_configuration(fixed_authoring()).model_dump(mode='json')
+    candidate['game']['board_size'] = 46_341
+    candidate['game']['safety_ply_cap'] = 2**31 - 1
+
+    with pytest.raises(ValidationError, match='pass action'):
+        ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+
+def test_go_configuration_accepts_largest_representable_action_space() -> None:
+    candidate = resolve_configuration(fixed_authoring()).model_dump(mode='json')
+    candidate['game']['board_size'] = 46_340
+    candidate['game']['safety_ply_cap'] = 46_340**2
+
+    resolved = ResolvedRunConfiguration.model_validate_json(json.dumps(candidate))
+
+    assert resolved.game.action_count == 46_340**2 + 1
 
 
 def test_komi_is_serialized_as_integer_half_points() -> None:

@@ -16,7 +16,7 @@ from test.unit.go_stage5_helpers import sample
 
 
 @pytest.mark.parametrize('symmetry', list(GoSymmetry))
-@pytest.mark.parametrize('board_size', [7, 9])
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
 def test_all_symmetries_round_trip_state_policy_and_actions(
     symmetry: GoSymmetry,
     board_size: int,
@@ -41,9 +41,9 @@ def test_pass_action_is_invariant(symmetry: GoSymmetry) -> None:
     assert transform_action(49, 7, symmetry) == 49
 
 
-@pytest.mark.parametrize('board_size', [0, 6, 8, 10])
-def test_symmetry_rejects_unsupported_board_sizes(board_size: int) -> None:
-    with pytest.raises(ValueError, match='7 or 9'):
+@pytest.mark.parametrize('board_size', [-1, 0, 1, 2])
+def test_symmetry_rejects_too_small_board_sizes(board_size: int) -> None:
+    with pytest.raises(ValueError, match='at least 3'):
         transform_action(0, board_size, GoSymmetry.IDENTITY)
 
 
@@ -56,5 +56,5 @@ def test_symmetry_rejects_out_of_bounds_coordinates(row: int, column: int) -> No
 def test_symmetry_rejects_malformed_plane_shapes() -> None:
     with pytest.raises(ValueError, match='planes x N x N'):
         transform_planes(np.zeros((2, 7, 8), dtype=np.float32), GoSymmetry.IDENTITY)
-    with pytest.raises(ValueError, match='7 or 9'):
-        transform_planes(np.zeros((2, 8, 8), dtype=np.float32), GoSymmetry.IDENTITY)
+    with pytest.raises(ValueError, match='at least 3'):
+        transform_planes(np.zeros((2, 2, 2), dtype=np.float32), GoSymmetry.IDENTITY)

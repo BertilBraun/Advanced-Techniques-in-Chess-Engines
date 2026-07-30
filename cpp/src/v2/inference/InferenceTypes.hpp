@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.hpp"
+
 #include <cmath>
 #include <concepts>
 #include <cstdint>
@@ -9,13 +11,13 @@
 namespace az::v2::inference {
 
 template <typename Encoding> struct InferenceRequest {
-    std::uint64_t request_id;
+    uint64 requestId;
     Encoding encoding;
-    std::int32_t action_count;
+    int32 actionCount;
 };
 
 struct InferenceResult {
-    std::uint64_t request_id;
+    uint64 requestId;
     std::vector<double> policy;
     double value;
 };
@@ -26,13 +28,13 @@ concept SynchronousEvaluator =
         { evaluator.evaluate(request) } -> std::same_as<InferenceResult>;
     };
 
-inline void validate_result(const InferenceResult &result, std::uint64_t expected_request_id,
-                            std::int32_t action_count) {
-    if (result.request_id != expected_request_id) {
-        throw std::invalid_argument("inference result request_id does not match its request");
+inline void validateResult(const InferenceResult &result, uint64 expected_request_id,
+                           int32 actionCount) {
+    if (result.requestId != expected_request_id) {
+        throw std::invalid_argument("inference result requestId does not match its request");
     }
-    if (action_count <= 0 || result.policy.size() != static_cast<std::size_t>(action_count)) {
-        throw std::invalid_argument("inference policy size does not match action_count");
+    if (actionCount <= 0 || result.policy.size() != static_cast<std::size_t>(actionCount)) {
+        throw std::invalid_argument("inference policy size does not match actionCount");
     }
     if (!std::isfinite(result.value) || result.value < -1.0 || result.value > 1.0) {
         throw std::invalid_argument("inference value must be finite and in [-1, 1]");

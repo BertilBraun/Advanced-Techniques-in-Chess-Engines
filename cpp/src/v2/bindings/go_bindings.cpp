@@ -9,7 +9,7 @@
 
 namespace az::v2::bindings {
 
-void bind_go(pybind11::module_ &module) {
+void bindGo(pybind11::module_ &module) {
     namespace py = pybind11;
     using games::go::AreaScore;
     using games::go::Coordinate;
@@ -22,7 +22,7 @@ void bind_go(pybind11::module_ &module) {
     using games::go::TerminalResult;
     using games::go::TerminationReason;
 
-    module.attr("MAXIMUM_HISTORY_LENGTH") = games::go::maximum_history_length;
+    module.attr("MAXIMUM_HISTORY_LENGTH") = games::go::MAXIMUM_HISTORY_LENGTH;
 
     py::enum_<Stone>(module, "Stone")
         .value("EMPTY", Stone::Empty)
@@ -49,18 +49,17 @@ void bind_go(pybind11::module_ &module) {
         .def(py::self == py::self);
 
     py::class_<GoRules>(module, "GoRules")
-        .def(py::init<std::int32_t, std::int32_t, std::int32_t, std::int32_t>(),
-             py::arg("board_size"), py::arg("komi_half_points"), py::arg("safety_ply_cap"),
-             py::arg("history_length"))
-        .def_readonly("board_size", &GoRules::board_size)
-        .def_readonly("komi_half_points", &GoRules::komi_half_points)
-        .def_readonly("safety_ply_cap", &GoRules::safety_ply_cap)
-        .def_readonly("history_length", &GoRules::history_length)
+        .def(py::init<int32, int32, int32, int32>(), py::arg("board_size"),
+             py::arg("komi_half_points"), py::arg("safety_ply_cap"), py::arg("history_length"))
+        .def_readonly("board_size", &GoRules::boardSize)
+        .def_readonly("komi_half_points", &GoRules::komiHalfPoints)
+        .def_readonly("safety_ply_cap", &GoRules::safetyPlyCap)
+        .def_readonly("history_length", &GoRules::historyLength)
         .def(py::self == py::self);
 
     py::class_<AreaScore>(module, "AreaScore")
-        .def_readonly("black_twice", &AreaScore::black_twice)
-        .def_readonly("white_twice", &AreaScore::white_twice)
+        .def_readonly("black_twice", &AreaScore::blackTwice)
+        .def_readonly("white_twice", &AreaScore::whiteTwice)
         .def_property_readonly("winner", &AreaScore::winner)
         .def(py::self == py::self);
 
@@ -72,7 +71,7 @@ void bind_go(pybind11::module_ &module) {
 
     py::class_<GoEncoding>(module, "GoEncoding")
         .def_readonly("planes", &GoEncoding::planes)
-        .def_readonly("board_size", &GoEncoding::board_size)
+        .def_readonly("board_size", &GoEncoding::boardSize)
         .def_readonly("values", &GoEncoding::values)
         .def("at", &GoEncoding::at)
         .def(py::self == py::self);
@@ -83,29 +82,29 @@ void bind_go(pybind11::module_ &module) {
                     py::arg("current_player"), py::arg("ply"), py::arg("consecutive_passes"),
                     py::arg("position_history"))
         .def_property_readonly("rules", &GoState::rules)
-        .def_property_readonly("board_size", &GoState::board_size)
-        .def_property_readonly("action_count", &GoState::action_count)
-        .def_property_readonly("pass_action", &GoState::pass_action)
-        .def_property_readonly("current_player", &GoState::current_player)
+        .def_property_readonly("board_size", &GoState::boardSize)
+        .def_property_readonly("action_count", &GoState::actionCount)
+        .def_property_readonly("pass_action", &GoState::passAction)
+        .def_property_readonly("current_player", &GoState::currentPlayer)
         .def_property_readonly("ply", &GoState::ply)
-        .def_property_readonly("consecutive_passes", &GoState::consecutive_passes)
+        .def_property_readonly("consecutive_passes", &GoState::consecutivePasses)
         .def_property_readonly("board", &GoState::board)
-        .def("is_legal", &GoState::is_legal)
-        .def("legal_actions", &GoState::legal_actions)
+        .def("is_legal", &GoState::isLegal)
+        .def("legal_actions", &GoState::legalActions)
         .def("apply", &GoState::apply)
-        .def_property_readonly("termination_reason", &GoState::termination_reason)
-        .def_property_readonly("is_terminal", &GoState::is_terminal)
-        .def("terminal_result", &GoState::terminal_result)
-        .def("area_score", &GoState::area_score)
-        .def("canonical_encoding", &GoState::canonical_encoding)
+        .def_property_readonly("termination_reason", &GoState::terminationReason)
+        .def_property_readonly("is_terminal", &GoState::isTerminal)
+        .def("terminal_result", &GoState::terminalResult)
+        .def("area_score", &GoState::areaScore)
+        .def("canonical_encoding", &GoState::canonicalEncoding)
         .def("copy", [](const GoState &state) { return GoState(state); })
-        .def("state_hash", &GoState::state_hash)
+        .def("state_hash", &GoState::stateHash)
         .def(py::self == py::self);
 
-    module.def("inverse_symmetry", &games::go::inverse_symmetry);
-    module.def("transform_action", &games::go::transform_action);
-    module.def("transform_coordinate", &games::go::transform_coordinate);
-    module.def("transform_encoding", &games::go::transform_encoding);
+    module.def("inverse_symmetry", &games::go::inverseSymmetry);
+    module.def("transform_action", &games::go::transformAction);
+    module.def("transform_coordinate", &games::go::transformCoordinate);
+    module.def("transform_encoding", &games::go::transformEncoding);
 }
 
 } // namespace az::v2::bindings

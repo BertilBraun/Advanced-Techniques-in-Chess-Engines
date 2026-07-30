@@ -25,8 +25,6 @@ from src.az.replay.envelope import (
 
 
 def game_configuration(board_size: int = 7, history_length: int = 2) -> GoGameConfiguration:
-    if board_size not in (7, 9):
-        raise ValueError('Test Go board size must be 7 or 9.')
     return GoGameConfiguration(
         kind='go',
         board_size=board_size,

@@ -1,26 +1,30 @@
 #include "games/go/GoSymmetry.hpp"
 
+#include <limits>
 #include <stdexcept>
 
 namespace az::v2::games::go {
 namespace {
 
-std::int32_t checked_point_count(std::int32_t board_size) {
-    if (board_size != 7 && board_size != 9) {
-        throw std::invalid_argument("Go board size must be 7 or 9");
+int32 checkedPointCount(int32 boardSize) {
+    if (boardSize < 3) {
+        throw std::invalid_argument("Go board size must be at least 3");
     }
-    return board_size * board_size;
+    const int64 pointCount = static_cast<int64>(boardSize) * boardSize;
+    if (pointCount >= std::numeric_limits<int32>::max()) {
+        throw std::invalid_argument("Go board area and pass action must fit in int32");
+    }
+    return static_cast<int32>(pointCount);
 }
 
 } // namespace
 
-Coordinate transform_coordinate(std::int32_t row, std::int32_t column, std::int32_t board_size,
-                                Symmetry symmetry) {
-    checked_point_count(board_size);
-    if (row < 0 || row >= board_size || column < 0 || column >= board_size) {
+Coordinate transformCoordinate(int32 row, int32 column, int32 boardSize, Symmetry symmetry) {
+    checkedPointCount(boardSize);
+    if (row < 0 || row >= boardSize || column < 0 || column >= boardSize) {
         throw std::invalid_argument("Go coordinate out of range");
     }
-    const std::int32_t maximum = board_size - 1;
+    const int32 maximum = boardSize - 1;
     switch (symmetry) {
     case Symmetry::Identity:
         return Coordinate{.row = row, .column = column};
@@ -42,7 +46,7 @@ Coordinate transform_coordinate(std::int32_t row, std::int32_t column, std::int3
     throw std::invalid_argument("Unknown Go symmetry");
 }
 
-Symmetry inverse_symmetry(Symmetry symmetry) {
+Symmetry inverseSymmetry(Symmetry symmetry) {
     switch (symmetry) {
     case Symmetry::Identity:
         return Symmetry::Identity;
@@ -64,8 +68,8 @@ Symmetry inverse_symmetry(Symmetry symmetry) {
     throw std::invalid_argument("Unknown Go symmetry");
 }
 
-std::int32_t transform_action(std::int32_t action, std::int32_t board_size, Symmetry symmetry) {
-    const std::int32_t pass = checked_point_count(board_size);
+int32 transformAction(int32 action, int32 boardSize, Symmetry symmetry) {
+    const int32 pass = checkedPointCount(boardSize);
     if (action == pass) {
         return pass;
     }
@@ -73,44 +77,42 @@ std::int32_t transform_action(std::int32_t action, std::int32_t board_size, Symm
         throw std::invalid_argument("Go action out of range");
     }
     const auto [row, column] =
-        transform_coordinate(action / board_size, action % board_size, board_size, symmetry);
-    return row * board_size + column;
+        transformCoordinate(action / boardSize, action % boardSize, boardSize, symmetry);
+    return row * boardSize + column;
 }
 
-GoEncoding transform_encoding(const GoEncoding &encoding, Symmetry symmetry) {
-    const std::int32_t plane_size = checked_point_count(encoding.board_size);
-    if (encoding.planes < 1 || encoding.values.size() != static_cast<std::size_t>(encoding.planes) *
-                                                             static_cast<std::size_t>(plane_size)) {
+GoEncoding transformEncoding(const GoEncoding &encoding, Symmetry symmetry) {
+    const GoEncodingShape shape = checkedEncodingShape(encoding.planes, encoding.boardSize);
+    if (encoding.values.size() != shape.totalSize) {
         throw std::invalid_argument("Go encoding shape is inconsistent");
     }
     GoEncoding transformed{
         .planes = encoding.planes,
-        .board_size = encoding.board_size,
-        .values = std::vector<std::int8_t>(encoding.values.size(), 0),
+        .boardSize = encoding.boardSize,
+        .values = std::vector<int8>(encoding.values.size(), 0),
     };
-    for (std::int32_t plane = 0; plane < encoding.planes; ++plane) {
-        for (std::int32_t row = 0; row < encoding.board_size; ++row) {
-            for (std::int32_t column = 0; column < encoding.board_size; ++column) {
-                const auto [target_row, target_column] =
-                    transform_coordinate(row, column, encoding.board_size, symmetry);
-                const auto target = static_cast<std::size_t>(
-                    plane * plane_size + target_row * encoding.board_size + target_column);
-                transformed.values[target] = encoding.at(plane, row, column);
+    for (int32 plane = 0; plane < encoding.planes; ++plane) {
+        for (int32 row = 0; row < encoding.boardSize; ++row) {
+            for (int32 column = 0; column < encoding.boardSize; ++column) {
+                const auto [targetRow, targetColumn] =
+                    transformCoordinate(row, column, encoding.boardSize, symmetry);
+                const std::size_t target = shape.index(plane, targetRow, targetColumn);
+                const std::size_t source = shape.index(plane, row, column);
+                transformed.values[target] = encoding.values[source];
             }
         }
     }
     return transformed;
 }
 
-Symmetry GoSymmetryOperations::inverse(Symmetry symmetry) { return inverse_symmetry(symmetry); }
+Symmetry GoSymmetryOperations::inverse(Symmetry symmetry) { return inverseSymmetry(symmetry); }
 
-std::int32_t GoSymmetryOperations::transform_action(std::int32_t action, std::int32_t board_size,
-                                                    Symmetry symmetry) {
-    return go::transform_action(action, board_size, symmetry);
+int32 GoSymmetryOperations::transformAction(int32 action, int32 boardSize, Symmetry symmetry) {
+    return go::transformAction(action, boardSize, symmetry);
 }
 
-GoEncoding GoSymmetryOperations::transform_encoding(const GoEncoding &encoding, Symmetry symmetry) {
-    return go::transform_encoding(encoding, symmetry);
+GoEncoding GoSymmetryOperations::transformEncoding(const GoEncoding &encoding, Symmetry symmetry) {
+    return go::transformEncoding(encoding, symmetry);
 }
 
 } // namespace az::v2::games::go

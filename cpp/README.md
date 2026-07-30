@@ -1,5 +1,36 @@
 # C++ Self-Play Engine for AlphaZero-Like Chess Bot
 
+## v2 Go development build
+
+Configure the native Go core, tests, and Python bindings with GCC for runtime
+validation:
+
+```bash
+cmake -S cpp -B cpp/build-v2-python \
+  -DAZ_V2_GO_ONLY=ON \
+  -DAZ_BUILD_V2_PYTHON=ON \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build cpp/build-v2-python
+```
+
+Configure the Clang tooling build separately so clang-tidy consumes a
+Clang-compatible PCH:
+
+```bash
+cmake -S cpp -B cpp/build-v2-clang-tidy \
+  -DAZ_V2_GO_ONLY=ON \
+  -DAZ_BUILD_V2_PYTHON=ON \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-18
+cmake --build cpp/build-v2-clang-tidy
+cp cpp/build-v2-clang-tidy/compile_commands.json cpp/compile_commands.json
+```
+
+The ignored `cpp/compile_commands.json` copy is the IDE- and tooling-discoverable
+database. Regenerate it from the Clang build whenever targets or compile options
+change; do not use the GCC database for clang-tidy because GCC and Clang
+precompiled-header formats are incompatible.
+
 This project is a high-performance C++ backend for an AlphaZero-style chess engine, focused specifically on the computationally intensive MCTS components.  
 It supplements the Python-based system by providing a faster, parallelized multithreaded MCTS engine that can be directly called from Python via PyBind bindings.
 

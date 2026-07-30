@@ -5,3 +5,4 @@ build*/**
 .vs/**
 out/**
 .idea/**
+compile_commands.json

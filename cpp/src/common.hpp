@@ -11,12 +11,6 @@
 #pragma warning(disable : 6262)
 #endif
 
-#include "util/Log.hpp"
-
-#include "util/TimeItGuard.h"
-
-#include "util/py.hpp"
-
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -25,12 +19,13 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <mutex>
-#include <new> // for placement‐new
+#include <new>
 #include <optional>
 #include <queue>
 #include <random>
@@ -53,6 +48,14 @@ typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
 typedef int64_t int64;
+
+#ifndef AZ_V2_GO_ONLY
+
+#include "util/Log.hpp"
+
+#include "util/TimeItGuard.h"
+
+#include "util/py.hpp"
 
 template <typename T> inline size_t indexOf(const std::vector<T> &vec, const T &elem) {
     auto it = std::find(vec.begin(), vec.end(), elem);
@@ -158,3 +161,5 @@ inline std::string toString(const Move move) {
     }
     return ss.str();
 }
+
+#endif

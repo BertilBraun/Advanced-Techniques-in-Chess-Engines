@@ -33,7 +33,7 @@ ResignationConfiguration = Annotated[
 
 class GoGameConfiguration(FrozenModel):
     kind: Literal['go']
-    board_size: Literal[7, 9]
+    board_size: int = Field(strict=True, ge=3, le=NATIVE_INT32_MAX)
     komi_half_points: int = Field(
         strict=True,
         ge=NATIVE_INT32_MIN,
@@ -56,6 +56,8 @@ class GoGameConfiguration(FrozenModel):
 
     @model_validator(mode='after')
     def validate_go_rules(self) -> GoGameConfiguration:
+        if self.board_size * self.board_size >= NATIVE_INT32_MAX:
+            raise ValueError('The Go board area and pass action must fit in a signed 32-bit integer.')
         if self.safety_ply_cap < self.board_size * self.board_size:
             raise ValueError('The safety ply cap must permit at least one move per board point.')
         return self

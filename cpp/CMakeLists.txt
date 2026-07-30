@@ -3,14 +3,13 @@ project(AlphaZeroSelfPlay LANGUAGES CXX)
 
 include(CTest)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 option(AZ_V2_GO_ONLY "Build only the dependency-free v2 Go correctness core" OFF)
 if (AZ_V2_GO_ONLY)
     add_subdirectory(src/v2)
     return()
 endif ()
-
-# --- Export compile commands for Clang-Tidy ---
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # --- Optional: Enable clang-tidy integration ---
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" ON)

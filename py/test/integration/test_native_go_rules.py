@@ -50,8 +50,8 @@ def assert_states_agree(native_game: native.GoState, oracle: OracleGoState) -> N
     assert native_score.white_twice == oracle_score.white_twice
 
 
-@pytest.mark.parametrize('board_size', [7, 9])
-@pytest.mark.parametrize('seed', [20260730, 20260731, 20260732, 20260733])
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
+@pytest.mark.parametrize('seed', [20260730, 20260731])
 def test_randomized_legal_trajectories_match_oracle(board_size: int, seed: int) -> None:
     oracle = OracleGoState(
         OracleRules(
@@ -86,7 +86,7 @@ def test_randomized_legal_trajectories_match_oracle(board_size: int, seed: int) 
         )
 
 
-@pytest.mark.parametrize('board_size', [7, 9])
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
 def test_pass_is_last_action_and_exempt_from_repetition(board_size: int) -> None:
     native_game = native_state(board_size)
     assert native_game.pass_action == board_size * board_size
@@ -213,7 +213,7 @@ def test_copy_hash_cap_scoring_and_restore_validation() -> None:
         )
 
 
-@pytest.mark.parametrize('board_size', [7, 9])
+@pytest.mark.parametrize('board_size', [3, 5, 7, 9, 13])
 def test_all_symmetry_round_trips(board_size: int) -> None:
     native_game = native_state(board_size)
     native_game.apply(0)

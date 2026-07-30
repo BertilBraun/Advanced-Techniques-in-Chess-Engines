@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.hpp"
 #include "games/go/GoState.hpp"
 
 #include <cstdint>
@@ -7,15 +8,26 @@
 
 namespace az::v2::games::go {
 
-struct GoEncoding {
-    std::int32_t planes;
-    std::int32_t board_size;
-    std::vector<std::int8_t> values;
+struct GoEncodingShape {
+    int32 planes;
+    int32 boardSize;
+    std::size_t planeSize;
+    std::size_t totalSize;
 
-    [[nodiscard]] std::int8_t at(std::int32_t plane, std::int32_t row, std::int32_t column) const;
+    [[nodiscard]] std::size_t index(int32 plane, int32 row, int32 column) const;
+};
+
+[[nodiscard]] GoEncodingShape checkedEncodingShape(int32 planes, int32 boardSize);
+
+struct GoEncoding {
+    int32 planes;
+    int32 boardSize;
+    std::vector<int8> values;
+
+    [[nodiscard]] int8 at(int32 plane, int32 row, int32 column) const;
     [[nodiscard]] bool operator==(const GoEncoding &) const = default;
 };
 
-[[nodiscard]] GoEncoding canonical_encoding(const GoState &state);
+[[nodiscard]] GoEncoding canonicalEncoding(const GoState &state);
 
 } // namespace az::v2::games::go

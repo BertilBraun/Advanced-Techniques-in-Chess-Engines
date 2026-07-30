@@ -11,7 +11,7 @@ CheckOptions:
   - { key: readability-identifier-naming.FunctionCase, value: camelBack }
   - { key: readability-identifier-naming.VariableCase, value: camelBack }
   - { key: readability-identifier-naming.PrivateMemberCase, value: camelBack }
-  - { key: readability-identifier-naming.PrivateMemberPrefix, value: m_ }
+  - { key: readability-identifier-naming.PrivateMemberPrefix, value: _ }
 
   # Constants (global static consts)
   - { key: readability-identifier-naming.GlobalConstantCase, value: UPPER_CASE }

@@ -8,79 +8,80 @@
 namespace az::v2::games::go {
 namespace {
 
-constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
-constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+constexpr uint64 FNV_OFFSET = 14695981039346656037ULL;
+constexpr uint64 FNV_PRIME = 1099511628211ULL;
 
-void hash_byte(std::uint64_t &hash, std::uint8_t value) {
+void hashByte(uint64 &hash, uint8 value) {
     hash ^= value;
-    hash *= fnv_prime;
+    hash *= FNV_PRIME;
 }
 
-void hash_int(std::uint64_t &hash, std::int32_t value) {
-    const auto unsigned_value = static_cast<std::uint32_t>(value);
-    for (std::int32_t shift = 0; shift < 32; shift += 8) {
-        hash_byte(hash, static_cast<std::uint8_t>((unsigned_value >> shift) & 0xffU));
+void hashInt(uint64 &hash, int32 value) {
+    const auto unsignedValue = static_cast<uint32>(value);
+    for (int32 shift = 0; shift < 32; shift += 8) {
+        hashByte(hash, static_cast<uint8>((unsignedValue >> shift) & 0xffU));
     }
 }
 
 } // namespace
 
 std::optional<Player> AreaScore::winner() const {
-    if (black_twice > white_twice) {
+    if (blackTwice > whiteTwice) {
         return Player::Black;
     }
-    if (white_twice > black_twice) {
+    if (whiteTwice > blackTwice) {
         return Player::White;
     }
     return std::nullopt;
 }
 
 GoState::GoState(GoRules rules)
-    : rules_(rules), board_(), current_player_(Player::Black), ply_(0), consecutive_passes_(0),
-      termination_reason_(TerminationReason::Ongoing), position_history_() {
-    validate_rules(rules);
-    const auto point_count =
-        static_cast<std::size_t>(rules.board_size) * static_cast<std::size_t>(rules.board_size);
-    board_.assign(point_count, Stone::Empty);
-    position_history_.push_back(board_);
+    : _rules(rules), _board(), _currentPlayer(Player::Black), _ply(0), _consecutivePasses(0),
+      _terminationReason(TerminationReason::Ongoing), _positionHistory() {
+    validateRules(rules);
+    const auto pointCount =
+        static_cast<std::size_t>(rules.boardSize) * static_cast<std::size_t>(rules.boardSize);
+    _board.assign(pointCount, Stone::Empty);
+    _positionHistory.push_back(_board);
 }
 
-GoState::GoState(GoRules rules, std::vector<Stone> board, Player current_player, std::int32_t ply,
-                 std::int32_t consecutive_passes, TerminationReason termination_reason,
-                 std::vector<std::vector<Stone>> position_history)
-    : rules_(rules), board_(std::move(board)), current_player_(current_player), ply_(ply),
-      consecutive_passes_(consecutive_passes), termination_reason_(termination_reason),
-      position_history_(std::move(position_history)) {}
+GoState::GoState(GoRules rules, std::vector<Stone> board, Player currentPlayer, int32 ply,
+                 int32 consecutivePasses, TerminationReason terminationReason,
+                 std::vector<std::vector<Stone>> positionHistory)
+    : _rules(rules), _board(std::move(board)), _currentPlayer(currentPlayer), _ply(ply),
+      _consecutivePasses(consecutivePasses), _terminationReason(terminationReason),
+      _positionHistory(std::move(positionHistory)) {}
 
-void GoState::validate_rules(const GoRules &rules) {
-    if (rules.board_size != 7 && rules.board_size != 9) {
-        throw std::invalid_argument("Go board size must be 7 or 9");
+void GoState::validateRules(const GoRules &rules) {
+    if (rules.boardSize < 3) {
+        throw std::invalid_argument("Go board size must be at least 3");
     }
-    const std::int32_t minimum_ply_cap = rules.board_size * rules.board_size;
-    if (rules.safety_ply_cap < minimum_ply_cap) {
+    const int64 pointCount = static_cast<int64>(rules.boardSize) * rules.boardSize;
+    if (pointCount >= std::numeric_limits<int32>::max()) {
+        throw std::invalid_argument("Go board area and pass action must fit in int32");
+    }
+    if (rules.safetyPlyCap < pointCount) {
         throw std::invalid_argument("Go safety ply cap must be at least the board area");
     }
-    if (rules.history_length < 1) {
+    if (rules.historyLength < 1) {
         throw std::invalid_argument("Go history length must be positive");
     }
-    if (rules.history_length > maximum_history_length) {
+    if (rules.historyLength > MAXIMUM_HISTORY_LENGTH) {
         throw std::invalid_argument("Go history length exceeds the supported maximum");
     }
 }
 
-GoState GoState::restore(GoRules rules, std::vector<Stone> board, Player current_player,
-                         std::int32_t ply, std::int32_t consecutive_passes,
-                         std::vector<std::vector<Stone>> position_history) {
-    validate_rules(rules);
-    const auto point_count =
-        static_cast<std::size_t>(rules.board_size) * static_cast<std::size_t>(rules.board_size);
-    if (board.size() != point_count || position_history.empty() ||
-        position_history.back() != board) {
+GoState GoState::restore(GoRules rules, std::vector<Stone> board, Player currentPlayer, int32 ply,
+                         int32 consecutivePasses, std::vector<std::vector<Stone>> positionHistory) {
+    validateRules(rules);
+    const auto pointCount =
+        static_cast<std::size_t>(rules.boardSize) * static_cast<std::size_t>(rules.boardSize);
+    if (board.size() != pointCount || positionHistory.empty() || positionHistory.back() != board) {
         throw std::invalid_argument("Restored Go board history is inconsistent");
     }
-    if (std::any_of(position_history.begin(), position_history.end(),
-                    [point_count](const std::vector<Stone> &historic_board) {
-                        return historic_board.size() != point_count ||
+    if (std::any_of(positionHistory.begin(), positionHistory.end(),
+                    [pointCount](const std::vector<Stone> &historic_board) {
+                        return historic_board.size() != pointCount ||
                                std::any_of(
                                    historic_board.begin(), historic_board.end(), [](Stone stone) {
                                        return stone != Stone::Empty && stone != Stone::Black &&
@@ -89,90 +90,87 @@ GoState GoState::restore(GoRules rules, std::vector<Stone> board, Player current
                     })) {
         throw std::invalid_argument("Restored Go board history contains invalid data");
     }
-    if (ply < 0 || static_cast<std::size_t>(ply) + 1U != position_history.size()) {
+    if (ply < 0 || static_cast<std::size_t>(ply) + 1U != positionHistory.size()) {
         throw std::invalid_argument("Restored Go ply does not match its position history");
     }
-    if (ply > rules.safety_ply_cap) {
+    if (ply > rules.safetyPlyCap) {
         throw std::invalid_argument("Restored Go ply exceeds the safety ply cap");
     }
-    const Player expected_player = ply % 2 == 0 ? Player::Black : Player::White;
-    if (current_player != expected_player) {
+    const Player expectedPlayer = ply % 2 == 0 ? Player::Black : Player::White;
+    if (currentPlayer != expectedPlayer) {
         throw std::invalid_argument("Restored Go player does not match its ply");
     }
-    if (consecutive_passes < 0 || consecutive_passes > 2 || consecutive_passes > ply) {
+    if (consecutivePasses < 0 || consecutivePasses > 2 || consecutivePasses > ply) {
         throw std::invalid_argument("Restored Go consecutive pass count is invalid");
     }
     if (ply > 0) {
-        const auto &latest = position_history[position_history.size() - 1U];
-        const auto &previous = position_history[position_history.size() - 2U];
-        if ((consecutive_passes == 0) != (latest != previous)) {
+        const auto &latest = positionHistory[positionHistory.size() - 1U];
+        const auto &previous = positionHistory[positionHistory.size() - 2U];
+        if ((consecutivePasses == 0) != (latest != previous)) {
             throw std::invalid_argument("Restored Go pass count does not match its history");
         }
-        if (consecutive_passes == 2) {
-            if (position_history.size() < 3U ||
-                previous != position_history[position_history.size() - 3U]) {
+        if (consecutivePasses == 2) {
+            if (positionHistory.size() < 3U ||
+                previous != positionHistory[positionHistory.size() - 3U]) {
                 throw std::invalid_argument("Restored Go double pass does not match its history");
             }
-        } else if (consecutive_passes == 1 && position_history.size() >= 3U &&
-                   previous == position_history[position_history.size() - 3U]) {
+        } else if (consecutivePasses == 1 && positionHistory.size() >= 3U &&
+                   previous == positionHistory[positionHistory.size() - 3U]) {
             throw std::invalid_argument(
                 "Restored Go single pass follows another pass in its history");
         }
     }
     TerminationReason reason = TerminationReason::Ongoing;
-    if (consecutive_passes == 2) {
+    if (consecutivePasses == 2) {
         reason = TerminationReason::TwoPasses;
-    } else if (ply >= rules.safety_ply_cap) {
+    } else if (ply >= rules.safetyPlyCap) {
         reason = TerminationReason::SafetyPlyCap;
     }
-    return GoState(rules, std::move(board), current_player, ply, consecutive_passes, reason,
-                   std::move(position_history));
+    return GoState(rules, std::move(board), currentPlayer, ply, consecutivePasses, reason,
+                   std::move(positionHistory));
 }
 
-const GoRules &GoState::rules() const { return rules_; }
-std::int32_t GoState::board_size() const { return rules_.board_size; }
-std::int32_t GoState::action_count() const { return rules_.board_size * rules_.board_size + 1; }
-std::int32_t GoState::pass_action() const { return action_count() - 1; }
-Player GoState::current_player() const { return current_player_; }
-std::int32_t GoState::ply() const { return ply_; }
-std::int32_t GoState::consecutive_passes() const { return consecutive_passes_; }
-const std::vector<Stone> &GoState::board() const { return board_; }
-const std::vector<std::vector<Stone>> &GoState::position_history() const {
-    return position_history_;
-}
+const GoRules &GoState::rules() const { return _rules; }
+int32 GoState::boardSize() const { return _rules.boardSize; }
+int32 GoState::actionCount() const { return _rules.boardSize * _rules.boardSize + 1; }
+int32 GoState::passAction() const { return actionCount() - 1; }
+Player GoState::currentPlayer() const { return _currentPlayer; }
+int32 GoState::ply() const { return _ply; }
+int32 GoState::consecutivePasses() const { return _consecutivePasses; }
+const std::vector<Stone> &GoState::board() const { return _board; }
+const std::vector<std::vector<Stone>> &GoState::positionHistory() const { return _positionHistory; }
 
-std::vector<std::int32_t> GoState::neighbors(std::int32_t point) const {
-    const std::int32_t row = point / rules_.board_size;
-    const std::int32_t column = point % rules_.board_size;
-    std::vector<std::int32_t> result;
+std::vector<int32> GoState::neighbors(int32 point) const {
+    const int32 row = point / _rules.boardSize;
+    const int32 column = point % _rules.boardSize;
+    std::vector<int32> result;
     result.reserve(4);
     if (row > 0) {
-        result.push_back(point - rules_.board_size);
+        result.push_back(point - _rules.boardSize);
     }
     if (column > 0) {
         result.push_back(point - 1);
     }
-    if (column + 1 < rules_.board_size) {
+    if (column + 1 < _rules.boardSize) {
         result.push_back(point + 1);
     }
-    if (row + 1 < rules_.board_size) {
-        result.push_back(point + rules_.board_size);
+    if (row + 1 < _rules.boardSize) {
+        result.push_back(point + _rules.boardSize);
     }
     return result;
 }
 
-std::vector<std::int32_t> GoState::group_at(const std::vector<Stone> &board,
-                                            std::int32_t origin) const {
+std::vector<int32> GoState::groupAt(const std::vector<Stone> &board, int32 origin) const {
     const Stone color = board[static_cast<std::size_t>(origin)];
-    std::vector<std::int32_t> group;
-    std::vector<std::int32_t> pending{origin};
+    std::vector<int32> group;
+    std::vector<int32> pending{origin};
     std::vector<bool> seen(board.size(), false);
     seen[static_cast<std::size_t>(origin)] = true;
     while (!pending.empty()) {
-        const std::int32_t point = pending.back();
+        const int32 point = pending.back();
         pending.pop_back();
         group.push_back(point);
-        for (const std::int32_t neighbor : neighbors(point)) {
+        for (const int32 neighbor : neighbors(point)) {
             const auto index = static_cast<std::size_t>(neighbor);
             if (!seen[index] && board[index] == color) {
                 seen[index] = true;
@@ -183,10 +181,10 @@ std::vector<std::int32_t> GoState::group_at(const std::vector<Stone> &board,
     return group;
 }
 
-bool GoState::group_has_liberty(const std::vector<Stone> &board,
-                                const std::vector<std::int32_t> &group) const {
-    for (const std::int32_t point : group) {
-        for (const std::int32_t neighbor : neighbors(point)) {
+bool GoState::groupHasLiberty(const std::vector<Stone> &board,
+                              const std::vector<int32> &group) const {
+    for (const int32 point : group) {
+        for (const int32 neighbor : neighbors(point)) {
             if (board[static_cast<std::size_t>(neighbor)] == Stone::Empty) {
                 return true;
             }
@@ -195,170 +193,170 @@ bool GoState::group_has_liberty(const std::vector<Stone> &board,
     return false;
 }
 
-std::vector<Stone> GoState::board_after_placement(std::int32_t action) const {
-    std::vector<Stone> candidate = board_;
-    const Stone own_stone = stone_for(current_player_);
-    const Stone opponent_stone = stone_for(opponent(current_player_));
-    candidate[static_cast<std::size_t>(action)] = own_stone;
+std::vector<Stone> GoState::boardAfterPlacement(int32 action) const {
+    std::vector<Stone> candidate = _board;
+    const Stone ownStone = stoneFor(_currentPlayer);
+    const Stone opponentStone = stoneFor(opponent(_currentPlayer));
+    candidate[static_cast<std::size_t>(action)] = ownStone;
 
-    for (const std::int32_t neighbor : neighbors(action)) {
-        if (candidate[static_cast<std::size_t>(neighbor)] != opponent_stone) {
+    for (const int32 neighbor : neighbors(action)) {
+        if (candidate[static_cast<std::size_t>(neighbor)] != opponentStone) {
             continue;
         }
-        const std::vector<std::int32_t> group = group_at(candidate, neighbor);
-        if (!group_has_liberty(candidate, group)) {
-            for (const std::int32_t point : group) {
+        const std::vector<int32> group = groupAt(candidate, neighbor);
+        if (!groupHasLiberty(candidate, group)) {
+            for (const int32 point : group) {
                 candidate[static_cast<std::size_t>(point)] = Stone::Empty;
             }
         }
     }
-    if (!group_has_liberty(candidate, group_at(candidate, action))) {
+    if (!groupHasLiberty(candidate, groupAt(candidate, action))) {
         throw std::invalid_argument("Go placement is suicide");
     }
     return candidate;
 }
 
-bool GoState::repeats_position(const std::vector<Stone> &board) const {
-    return std::find(position_history_.begin(), position_history_.end(), board) !=
-           position_history_.end();
+bool GoState::repeatsPosition(const std::vector<Stone> &board) const {
+    return std::find(_positionHistory.begin(), _positionHistory.end(), board) !=
+           _positionHistory.end();
 }
 
-bool GoState::is_legal(std::int32_t action) const {
-    if (is_terminal() || action < 0 || action >= action_count()) {
+bool GoState::isLegal(int32 action) const {
+    if (isTerminal() || action < 0 || action >= actionCount()) {
         return false;
     }
-    if (action == pass_action()) {
+    if (action == passAction()) {
         return true;
     }
-    if (board_[static_cast<std::size_t>(action)] != Stone::Empty) {
+    if (_board[static_cast<std::size_t>(action)] != Stone::Empty) {
         return false;
     }
     try {
-        return !repeats_position(board_after_placement(action));
+        return !repeatsPosition(boardAfterPlacement(action));
     } catch (const std::invalid_argument &) {
         return false;
     }
 }
 
-std::vector<std::int32_t> GoState::legal_actions() const {
-    std::vector<std::int32_t> result;
-    if (is_terminal()) {
+std::vector<int32> GoState::legalActions() const {
+    std::vector<int32> result;
+    if (isTerminal()) {
         return result;
     }
-    for (std::int32_t action = 0; action < action_count(); ++action) {
-        if (is_legal(action)) {
+    for (int32 action = 0; action < actionCount(); ++action) {
+        if (isLegal(action)) {
             result.push_back(action);
         }
     }
     return result;
 }
 
-void GoState::apply(std::int32_t action) {
-    if (!is_legal(action)) {
+void GoState::apply(int32 action) {
+    if (!isLegal(action)) {
         throw std::invalid_argument("Illegal Go action");
     }
-    if (action == pass_action()) {
-        ++consecutive_passes_;
+    if (action == passAction()) {
+        ++_consecutivePasses;
     } else {
-        board_ = board_after_placement(action);
-        consecutive_passes_ = 0;
+        _board = boardAfterPlacement(action);
+        _consecutivePasses = 0;
     }
-    ++ply_;
-    current_player_ = opponent(current_player_);
-    position_history_.push_back(board_);
-    if (consecutive_passes_ == 2) {
-        termination_reason_ = TerminationReason::TwoPasses;
-    } else if (ply_ >= rules_.safety_ply_cap) {
-        termination_reason_ = TerminationReason::SafetyPlyCap;
+    ++_ply;
+    _currentPlayer = opponent(_currentPlayer);
+    _positionHistory.push_back(_board);
+    if (_consecutivePasses == 2) {
+        _terminationReason = TerminationReason::TwoPasses;
+    } else if (_ply >= _rules.safetyPlyCap) {
+        _terminationReason = TerminationReason::SafetyPlyCap;
     }
 }
 
-TerminationReason GoState::termination_reason() const { return termination_reason_; }
-bool GoState::is_terminal() const { return termination_reason_ != TerminationReason::Ongoing; }
+TerminationReason GoState::terminationReason() const { return _terminationReason; }
+bool GoState::isTerminal() const { return _terminationReason != TerminationReason::Ongoing; }
 
-AreaScore GoState::area_score() const {
-    std::int64_t black_area = 0;
-    std::int64_t white_area = 0;
-    std::vector<bool> seen(board_.size(), false);
-    for (std::int32_t point = 0; point < pass_action(); ++point) {
+AreaScore GoState::areaScore() const {
+    int64 blackArea = 0;
+    int64 whiteArea = 0;
+    std::vector<bool> seen(_board.size(), false);
+    for (int32 point = 0; point < passAction(); ++point) {
         const auto index = static_cast<std::size_t>(point);
-        if (board_[index] == Stone::Black) {
-            ++black_area;
+        if (_board[index] == Stone::Black) {
+            ++blackArea;
             continue;
         }
-        if (board_[index] == Stone::White) {
-            ++white_area;
+        if (_board[index] == Stone::White) {
+            ++whiteArea;
             continue;
         }
         if (seen[index]) {
             continue;
         }
-        std::vector<std::int32_t> region;
-        std::vector<std::int32_t> pending{point};
+        std::vector<int32> region;
+        std::vector<int32> pending{point};
         seen[index] = true;
-        bool touches_black = false;
-        bool touches_white = false;
+        bool touchesBlack = false;
+        bool touchesWhite = false;
         while (!pending.empty()) {
-            const std::int32_t empty_point = pending.back();
+            const int32 emptyPoint = pending.back();
             pending.pop_back();
-            region.push_back(empty_point);
-            for (const std::int32_t neighbor : neighbors(empty_point)) {
-                const Stone stone = board_[static_cast<std::size_t>(neighbor)];
+            region.push_back(emptyPoint);
+            for (const int32 neighbor : neighbors(emptyPoint)) {
+                const Stone stone = _board[static_cast<std::size_t>(neighbor)];
                 if (stone == Stone::Black) {
-                    touches_black = true;
+                    touchesBlack = true;
                 } else if (stone == Stone::White) {
-                    touches_white = true;
+                    touchesWhite = true;
                 } else if (!seen[static_cast<std::size_t>(neighbor)]) {
                     seen[static_cast<std::size_t>(neighbor)] = true;
                     pending.push_back(neighbor);
                 }
             }
         }
-        if (touches_black && !touches_white) {
-            black_area += static_cast<std::int64_t>(region.size());
-        } else if (touches_white && !touches_black) {
-            white_area += static_cast<std::int64_t>(region.size());
+        if (touchesBlack && !touchesWhite) {
+            blackArea += static_cast<int64>(region.size());
+        } else if (touchesWhite && !touchesBlack) {
+            whiteArea += static_cast<int64>(region.size());
         }
     }
     return AreaScore{
-        .black_twice = black_area * 2,
-        .white_twice = white_area * 2 + static_cast<std::int64_t>(rules_.komi_half_points),
+        .blackTwice = blackArea * 2,
+        .whiteTwice = whiteArea * 2 + static_cast<int64>(_rules.komiHalfPoints),
     };
 }
 
-TerminalResult GoState::terminal_result() const {
-    if (termination_reason_ == TerminationReason::Ongoing) {
+TerminalResult GoState::terminalResult() const {
+    if (_terminationReason == TerminationReason::Ongoing) {
         return TerminalResult{
-            .reason = termination_reason_, .score = std::nullopt, .winner = std::nullopt};
+            .reason = _terminationReason, .score = std::nullopt, .winner = std::nullopt};
     }
-    if (termination_reason_ == TerminationReason::SafetyPlyCap) {
+    if (_terminationReason == TerminationReason::SafetyPlyCap) {
         return TerminalResult{
-            .reason = termination_reason_, .score = std::nullopt, .winner = std::nullopt};
+            .reason = _terminationReason, .score = std::nullopt, .winner = std::nullopt};
     }
-    const AreaScore score = area_score();
-    return TerminalResult{.reason = termination_reason_, .score = score, .winner = score.winner()};
+    const AreaScore score = areaScore();
+    return TerminalResult{.reason = _terminationReason, .score = score, .winner = score.winner()};
 }
 
-std::uint64_t GoState::state_hash() const {
-    std::uint64_t hash = fnv_offset;
-    hash_int(hash, rules_.board_size);
-    hash_int(hash, rules_.komi_half_points);
-    hash_int(hash, rules_.safety_ply_cap);
-    hash_int(hash, rules_.history_length);
-    hash_byte(hash, static_cast<std::uint8_t>(current_player_));
-    hash_int(hash, ply_);
-    hash_int(hash, consecutive_passes_);
-    hash_byte(hash, static_cast<std::uint8_t>(termination_reason_));
-    for (const auto &historic_board : position_history_) {
-        for (const Stone stone : historic_board) {
-            hash_byte(hash, static_cast<std::uint8_t>(stone));
+uint64 GoState::stateHash() const {
+    uint64 hash = FNV_OFFSET;
+    hashInt(hash, _rules.boardSize);
+    hashInt(hash, _rules.komiHalfPoints);
+    hashInt(hash, _rules.safetyPlyCap);
+    hashInt(hash, _rules.historyLength);
+    hashByte(hash, static_cast<uint8>(_currentPlayer));
+    hashInt(hash, _ply);
+    hashInt(hash, _consecutivePasses);
+    hashByte(hash, static_cast<uint8>(_terminationReason));
+    for (const auto &historicBoard : _positionHistory) {
+        for (const Stone stone : historicBoard) {
+            hashByte(hash, static_cast<uint8>(stone));
         }
-        hash_byte(hash, std::numeric_limits<std::uint8_t>::max());
+        hashByte(hash, std::numeric_limits<uint8>::max());
     }
     return hash;
 }
 
-Stone GoState::stone_for(Player player) { return static_cast<Stone>(player); }
+Stone GoState::stoneFor(Player player) { return static_cast<Stone>(player); }
 Player GoState::opponent(Player player) {
     return player == Player::Black ? Player::White : Player::Black;
 }

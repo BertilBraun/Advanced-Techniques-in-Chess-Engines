@@ -26,16 +26,16 @@ static_assert(az::v2::games::GameSymmetry<GoSymmetryOperations>);
 
 namespace {
 
-GoRules rules(std::int32_t size = 7, std::int32_t cap = 200) {
+GoRules rules(int32 size = 7, int32 cap = 200) {
     return GoRules{
-        .board_size = size,
-        .komi_half_points = 15,
-        .safety_ply_cap = cap,
-        .history_length = 4,
+        .boardSize = size,
+        .komiHalfPoints = 15,
+        .safetyPlyCap = cap,
+        .historyLength = 4,
     };
 }
 
-std::vector<Stone> board_with(std::initializer_list<std::pair<std::int32_t, Stone>> stones) {
+std::vector<Stone> boardWith(std::initializer_list<std::pair<int32, Stone>> stones) {
     std::vector<Stone> board(49, Stone::Empty);
     for (const auto &[point, stone] : stones) {
         board[static_cast<std::size_t>(point)] = stone;
@@ -43,166 +43,164 @@ std::vector<Stone> board_with(std::initializer_list<std::pair<std::int32_t, Ston
     return board;
 }
 
-void test_configuration_and_passes() {
-    for (const std::int32_t size : {7, 9}) {
+void testConfigurationAndPasses() {
+    for (const int32 size : {3, 5, 7, 9, 13}) {
         GoState state(rules(size));
-        assert(state.action_count() == size * size + 1);
-        assert(state.pass_action() == size * size);
-        assert(state.legal_actions().size() == static_cast<std::size_t>(size * size + 1));
-        state.apply(state.pass_action());
-        assert(!state.is_terminal());
-        assert(state.is_legal(state.pass_action()));
-        state.apply(state.pass_action());
-        assert(state.is_terminal());
-        assert(state.termination_reason() == TerminationReason::TwoPasses);
-        assert(state.legal_actions().empty());
-        assert(state.terminal_result().score.has_value());
-        assert(state.terminal_result().winner == Player::White);
+        assert(state.actionCount() == size * size + 1);
+        assert(state.passAction() == size * size);
+        assert(state.legalActions().size() == static_cast<std::size_t>(size * size + 1));
+        state.apply(state.passAction());
+        assert(!state.isTerminal());
+        assert(state.isLegal(state.passAction()));
+        state.apply(state.passAction());
+        assert(state.isTerminal());
+        assert(state.terminationReason() == TerminationReason::TwoPasses);
+        assert(state.legalActions().empty());
+        assert(state.terminalResult().score.has_value());
+        assert(state.terminalResult().winner == Player::White);
     }
 }
 
-void test_capture_and_suicide() {
-    const auto capture_board =
-        board_with({{8, Stone::White}, {1, Stone::Black}, {7, Stone::Black}, {9, Stone::Black}});
-    GoState capture =
-        GoState::restore(rules(), capture_board, Player::Black, 0, 0, {capture_board});
+void testCaptureAndSuicide() {
+    const auto captureBoard =
+        boardWith({{8, Stone::White}, {1, Stone::Black}, {7, Stone::Black}, {9, Stone::Black}});
+    GoState capture = GoState::restore(rules(), captureBoard, Player::Black, 0, 0, {captureBoard});
     capture.apply(15);
     assert(capture.board()[8] == Stone::Empty);
 
-    const auto multi_capture_board = board_with({{8, Stone::White},
-                                                 {9, Stone::White},
-                                                 {1, Stone::Black},
-                                                 {2, Stone::Black},
-                                                 {7, Stone::Black},
-                                                 {10, Stone::Black},
-                                                 {15, Stone::Black}});
-    GoState multi_capture =
-        GoState::restore(rules(), multi_capture_board, Player::Black, 0, 0, {multi_capture_board});
-    multi_capture.apply(16);
-    assert(multi_capture.board()[8] == Stone::Empty);
-    assert(multi_capture.board()[9] == Stone::Empty);
+    const auto multiCaptureBoard = boardWith({{8, Stone::White},
+                                              {9, Stone::White},
+                                              {1, Stone::Black},
+                                              {2, Stone::Black},
+                                              {7, Stone::Black},
+                                              {10, Stone::Black},
+                                              {15, Stone::Black}});
+    GoState multiCapture =
+        GoState::restore(rules(), multiCaptureBoard, Player::Black, 0, 0, {multiCaptureBoard});
+    multiCapture.apply(16);
+    assert(multiCapture.board()[8] == Stone::Empty);
+    assert(multiCapture.board()[9] == Stone::Empty);
 
-    const auto suicide_board =
-        board_with({{1, Stone::Black}, {2, Stone::White}, {7, Stone::White}, {8, Stone::White}});
+    const auto suicideBoard =
+        boardWith({{1, Stone::Black}, {2, Stone::White}, {7, Stone::White}, {8, Stone::White}});
     const GoState suicide =
-        GoState::restore(rules(), suicide_board, Player::Black, 0, 0, {suicide_board});
-    assert(!suicide.is_legal(0));
+        GoState::restore(rules(), suicideBoard, Player::Black, 0, 0, {suicideBoard});
+    assert(!suicide.isLegal(0));
 }
 
-void test_positional_superko() {
-    const auto before = board_with({{8, Stone::White},
-                                    {14, Stone::White},
-                                    {16, Stone::White},
-                                    {22, Stone::White},
-                                    {1, Stone::Black},
-                                    {7, Stone::Black},
-                                    {9, Stone::Black}});
+void testPositionalSuperko() {
+    const auto before = boardWith({{8, Stone::White},
+                                   {14, Stone::White},
+                                   {16, Stone::White},
+                                   {22, Stone::White},
+                                   {1, Stone::Black},
+                                   {7, Stone::Black},
+                                   {9, Stone::Black}});
     GoState ko = GoState::restore(rules(), before, Player::Black, 0, 0, {before});
     ko.apply(15);
-    assert(!ko.is_legal(8));
+    assert(!ko.isLegal(8));
 
-    const auto repeated = board_with({{14, Stone::White},
-                                      {16, Stone::White},
-                                      {22, Stone::White},
-                                      {1, Stone::Black},
-                                      {7, Stone::Black},
-                                      {9, Stone::Black},
-                                      {15, Stone::Black}});
-    const auto middle = board_with({{30, Stone::White}});
-    const GoState longer_cycle =
+    const auto repeated = boardWith({{14, Stone::White},
+                                     {16, Stone::White},
+                                     {22, Stone::White},
+                                     {1, Stone::Black},
+                                     {7, Stone::Black},
+                                     {9, Stone::Black},
+                                     {15, Stone::Black}});
+    const auto middle = boardWith({{30, Stone::White}});
+    const GoState longerCycle =
         GoState::restore(rules(), before, Player::Black, 2, 0, {repeated, middle, before});
-    assert(!longer_cycle.is_legal(15));
+    assert(!longerCycle.isLegal(15));
 }
 
-void test_copy_hash_and_cap() {
+void testCopyHashAndCap() {
     GoState state(rules());
-    assert(state.state_hash() == 6493982775080899741ULL);
+    assert(state.stateHash() == 6493982775080899741ULL);
     state.apply(0);
     GoState copy = state;
     assert(copy == state);
-    assert(copy.state_hash() == state.state_hash());
+    assert(copy.stateHash() == state.stateHash());
     copy.apply(1);
     assert(!(copy == state));
-    assert(copy.state_hash() != state.state_hash());
-    GoState long_game(rules());
-    for (std::int32_t ply = 0; ply < 48; ++ply) {
-        const auto legal = long_game.legal_actions();
-        const auto placement =
-            std::find_if(legal.begin(), legal.end(), [&long_game](std::int32_t action) {
-                return action != long_game.pass_action();
-            });
+    assert(copy.stateHash() != state.stateHash());
+    GoState longGame(rules());
+    for (int32 ply = 0; ply < 48; ++ply) {
+        const auto legal = longGame.legalActions();
+        const auto placement = std::find_if(legal.begin(), legal.end(), [&longGame](int32 action) {
+            return action != longGame.passAction();
+        });
         assert(placement != legal.end());
-        long_game.apply(*placement);
+        longGame.apply(*placement);
     }
-    GoState capped = GoState::restore(rules(7, 49), long_game.board(), long_game.current_player(),
-                                      long_game.ply(), long_game.consecutive_passes(),
-                                      long_game.position_history());
-    capped.apply(capped.pass_action());
-    assert(capped.termination_reason() == TerminationReason::SafetyPlyCap);
-    assert(!capped.terminal_result().score.has_value());
-    assert(!capped.terminal_result().winner.has_value());
+    GoState capped =
+        GoState::restore(rules(7, 49), longGame.board(), longGame.currentPlayer(), longGame.ply(),
+                         longGame.consecutivePasses(), longGame.positionHistory());
+    capped.apply(capped.passAction());
+    assert(capped.terminationReason() == TerminationReason::SafetyPlyCap);
+    assert(!capped.terminalResult().score.has_value());
+    assert(!capped.terminalResult().winner.has_value());
 }
 
-void test_restored_pass_invariants() {
-    const auto empty = board_with({});
-    const auto placed = board_with({{0, Stone::Black}});
-    const GoState no_pass = GoState::restore(rules(), placed, Player::White, 1, 0, {empty, placed});
-    const GoState one_pass =
+void testRestoredPassInvariants() {
+    const auto empty = boardWith({});
+    const auto placed = boardWith({{0, Stone::Black}});
+    const GoState noPass = GoState::restore(rules(), placed, Player::White, 1, 0, {empty, placed});
+    const GoState onePass =
         GoState::restore(rules(), placed, Player::Black, 2, 1, {empty, placed, placed});
-    const GoState two_passes =
+    const GoState twoPasses =
         GoState::restore(rules(), placed, Player::White, 3, 2, {empty, placed, placed, placed});
-    assert(no_pass.consecutive_passes() == 0);
-    assert(one_pass.consecutive_passes() == 1);
-    assert(two_passes.termination_reason() == TerminationReason::TwoPasses);
+    assert(noPass.consecutivePasses() == 0);
+    assert(onePass.consecutivePasses() == 1);
+    assert(twoPasses.terminationReason() == TerminationReason::TwoPasses);
 
-    bool rejected_zero_with_duplicate = false;
+    bool rejectedZeroWithDuplicate = false;
     try {
         (void) GoState::restore(rules(), empty, Player::White, 1, 0, {empty, empty});
     } catch (const std::invalid_argument &) {
-        rejected_zero_with_duplicate = true;
+        rejectedZeroWithDuplicate = true;
     }
-    assert(rejected_zero_with_duplicate);
+    assert(rejectedZeroWithDuplicate);
 
-    bool rejected_single_after_pass = false;
+    bool rejectedSingleAfterPass = false;
     try {
         (void) GoState::restore(rules(), placed, Player::White, 3, 1,
                                 {empty, placed, placed, placed});
     } catch (const std::invalid_argument &) {
-        rejected_single_after_pass = true;
+        rejectedSingleAfterPass = true;
     }
-    assert(rejected_single_after_pass);
+    assert(rejectedSingleAfterPass);
 
-    bool rejected_incomplete_double_pass = false;
+    bool rejectedIncompleteDoublePass = false;
     try {
         (void) GoState::restore(rules(), placed, Player::Black, 2, 2, {empty, placed, placed});
     } catch (const std::invalid_argument &) {
-        rejected_incomplete_double_pass = true;
+        rejectedIncompleteDoublePass = true;
     }
-    assert(rejected_incomplete_double_pass);
+    assert(rejectedIncompleteDoublePass);
 }
 
-void test_area_scoring_with_integer_komi() {
-    const auto neutral_board = board_with({{0, Stone::Black}, {48, Stone::White}});
+void testAreaScoringWithIntegerKomi() {
+    const auto neutralBoard = boardWith({{0, Stone::Black}, {48, Stone::White}});
     const GoState state =
-        GoState::restore(rules(), neutral_board, Player::Black, 0, 0, {neutral_board});
-    const auto score = state.area_score();
-    assert(score.black_twice == 2);
-    assert(score.white_twice == 17);
+        GoState::restore(rules(), neutralBoard, Player::Black, 0, 0, {neutralBoard});
+    const auto score = state.areaScore();
+    assert(score.blackTwice == 2);
+    assert(score.whiteTwice == 17);
     assert(score.winner() == Player::White);
 
-    const auto surrounded_corner = board_with({{1, Stone::Black}, {7, Stone::Black}});
+    const auto surroundedCorner = boardWith({{1, Stone::Black}, {7, Stone::Black}});
     const GoState territory =
-        GoState::restore(rules(), surrounded_corner, Player::Black, 0, 0, {surrounded_corner});
-    const auto territory_score = territory.area_score();
-    assert(territory_score.black_twice == 98);
-    assert(territory_score.white_twice == 15);
+        GoState::restore(rules(), surroundedCorner, Player::Black, 0, 0, {surroundedCorner});
+    const auto territoryScore = territory.areaScore();
+    assert(territoryScore.blackTwice == 98);
+    assert(territoryScore.whiteTwice == 15);
 }
 
-void test_encoding_and_symmetry() {
+void testEncodingAndSymmetry() {
     GoState state(rules());
     state.apply(0);
     state.apply(8);
-    const auto encoding = az::v2::games::go::canonical_encoding(state);
+    const auto encoding = az::v2::games::go::canonicalEncoding(state);
     assert(encoding.planes == 9);
     assert(encoding.at(0, 0, 0) == 1);
     assert(encoding.at(1, 1, 1) == 1);
@@ -215,123 +213,164 @@ void test_encoding_and_symmetry() {
         Symmetry::ReflectRotate180, Symmetry::ReflectRotate270,
     };
     for (const Symmetry symmetry : symmetries) {
-        for (std::int32_t action = 0; action < state.action_count(); ++action) {
-            const std::int32_t transformed =
-                az::v2::games::go::transform_action(action, state.board_size(), symmetry);
-            const std::int32_t restored = az::v2::games::go::transform_action(
-                transformed, state.board_size(), az::v2::games::go::inverse_symmetry(symmetry));
+        for (int32 action = 0; action < state.actionCount(); ++action) {
+            const int32 transformed =
+                az::v2::games::go::transformAction(action, state.boardSize(), symmetry);
+            const int32 restored = az::v2::games::go::transformAction(
+                transformed, state.boardSize(), az::v2::games::go::inverseSymmetry(symmetry));
             assert(restored == action);
         }
-        const auto transformed = az::v2::games::go::transform_encoding(encoding, symmetry);
-        const auto restored = az::v2::games::go::transform_encoding(
-            transformed, az::v2::games::go::inverse_symmetry(symmetry));
+        const auto transformed = az::v2::games::go::transformEncoding(encoding, symmetry);
+        const auto restored = az::v2::games::go::transformEncoding(
+            transformed, az::v2::games::go::inverseSymmetry(symmetry));
         assert(restored == encoding);
     }
 }
 
-void test_invalid_inputs() {
-    bool rejected_size = false;
-    try {
-        GoState invalid(rules(8));
-    } catch (const std::invalid_argument &) {
-        rejected_size = true;
+void testInvalidInputs() {
+    constexpr int32 largestRepresentableBoardSize = 46'340;
+    const int32 largestPassAction = largestRepresentableBoardSize * largestRepresentableBoardSize;
+    const az::v2::games::go::GoEncodingShape largestShape =
+        az::v2::games::go::checkedEncodingShape(2, largestRepresentableBoardSize);
+    assert(largestShape.planeSize == static_cast<std::size_t>(largestPassAction));
+    assert(largestShape.totalSize == static_cast<std::size_t>(largestPassAction) * 2U);
+    assert(largestShape.index(1, largestRepresentableBoardSize - 1,
+                              largestRepresentableBoardSize - 1) == largestShape.totalSize - 1U);
+    if constexpr (sizeof(std::size_t) == sizeof(uint32)) {
+        bool rejectedUnrepresentableEncodingSize = false;
+        try {
+            (void) az::v2::games::go::checkedEncodingShape(3, largestRepresentableBoardSize);
+        } catch (const std::length_error &) {
+            rejectedUnrepresentableEncodingSize = true;
+        }
+        assert(rejectedUnrepresentableEncodingSize);
+    } else {
+        const az::v2::games::go::GoEncodingShape maximumPlaneShape =
+            az::v2::games::go::checkedEncodingShape(std::numeric_limits<int32>::max(),
+                                                    largestRepresentableBoardSize);
+        assert(maximumPlaneShape.totalSize ==
+               static_cast<std::size_t>(std::numeric_limits<int32>::max()) *
+                   static_cast<std::size_t>(largestPassAction));
     }
-    assert(rejected_size);
+    assert(az::v2::games::go::transformAction(largestPassAction, largestRepresentableBoardSize,
+                                              Symmetry::Rotate90) == largestPassAction);
 
-    bool rejected_extreme_size = false;
+    const az::v2::games::go::GoEncoding malformedEncoding{
+        .planes = 2,
+        .boardSize = largestRepresentableBoardSize,
+        .values = {},
+    };
+    bool rejectedMalformedEncoding = false;
     try {
-        GoState invalid(GoRules{.board_size = std::numeric_limits<std::int32_t>::max(),
-                                .komi_half_points = 15,
-                                .safety_ply_cap = std::numeric_limits<std::int32_t>::max(),
-                                .history_length = 4});
+        (void) malformedEncoding.at(1, largestRepresentableBoardSize - 1,
+                                    largestRepresentableBoardSize - 1);
     } catch (const std::invalid_argument &) {
-        rejected_extreme_size = true;
+        rejectedMalformedEncoding = true;
     }
-    assert(rejected_extreme_size);
+    assert(rejectedMalformedEncoding);
 
-    bool rejected_small_cap = false;
+    bool rejectedSize = false;
+    try {
+        GoState invalid(rules(2));
+    } catch (const std::invalid_argument &) {
+        rejectedSize = true;
+    }
+    assert(rejectedSize);
+
+    bool rejectedExtremeSize = false;
+    try {
+        GoState invalid(GoRules{.boardSize = std::numeric_limits<int32>::max(),
+                                .komiHalfPoints = 15,
+                                .safetyPlyCap = std::numeric_limits<int32>::max(),
+                                .historyLength = 4});
+    } catch (const std::invalid_argument &) {
+        rejectedExtremeSize = true;
+    }
+    assert(rejectedExtremeSize);
+
+    bool rejectedSmallCap = false;
     try {
         GoState invalid(rules(7, 48));
     } catch (const std::invalid_argument &) {
-        rejected_small_cap = true;
+        rejectedSmallCap = true;
     }
-    assert(rejected_small_cap);
+    assert(rejectedSmallCap);
 
-    bool rejected_extreme_history = false;
+    bool rejectedExtremeHistory = false;
     try {
-        GoState invalid(GoRules{.board_size = 7,
-                                .komi_half_points = 15,
-                                .safety_ply_cap = 200,
-                                .history_length = std::numeric_limits<std::int32_t>::max()});
+        GoState invalid(GoRules{.boardSize = 7,
+                                .komiHalfPoints = 15,
+                                .safetyPlyCap = 200,
+                                .historyLength = std::numeric_limits<int32>::max()});
     } catch (const std::invalid_argument &) {
-        rejected_extreme_history = true;
+        rejectedExtremeHistory = true;
     }
-    assert(rejected_extreme_history);
+    assert(rejectedExtremeHistory);
 
-    const auto empty = board_with({});
-    bool rejected_extreme_ply = false;
+    const auto empty = boardWith({});
+    bool rejectedExtremePly = false;
     try {
-        (void) GoState::restore(rules(), empty, Player::White,
-                                std::numeric_limits<std::int32_t>::max(), 0, {empty});
+        (void) GoState::restore(rules(), empty, Player::White, std::numeric_limits<int32>::max(), 0,
+                                {empty});
     } catch (const std::invalid_argument &) {
-        rejected_extreme_ply = true;
+        rejectedExtremePly = true;
     }
-    assert(rejected_extreme_ply);
+    assert(rejectedExtremePly);
 
-    GoState beyond_cap_source(rules());
-    for (std::int32_t ply = 0; ply < 50; ++ply) {
-        const auto legal = beyond_cap_source.legal_actions();
+    GoState beyondCapSource(rules());
+    for (int32 ply = 0; ply < 50; ++ply) {
+        const auto legal = beyondCapSource.legalActions();
         const auto placement =
-            std::find_if(legal.begin(), legal.end(), [&beyond_cap_source](std::int32_t action) {
-                return action != beyond_cap_source.pass_action();
+            std::find_if(legal.begin(), legal.end(), [&beyondCapSource](int32 action) {
+                return action != beyondCapSource.passAction();
             });
         assert(placement != legal.end());
-        beyond_cap_source.apply(*placement);
+        beyondCapSource.apply(*placement);
     }
-    bool rejected_ply_beyond_cap = false;
+    bool rejectedPlyBeyondCap = false;
     try {
-        (void) GoState::restore(rules(7, 49), beyond_cap_source.board(),
-                                beyond_cap_source.current_player(), beyond_cap_source.ply(),
-                                beyond_cap_source.consecutive_passes(),
-                                beyond_cap_source.position_history());
+        (void) GoState::restore(rules(7, 49), beyondCapSource.board(),
+                                beyondCapSource.currentPlayer(), beyondCapSource.ply(),
+                                beyondCapSource.consecutivePasses(),
+                                beyondCapSource.positionHistory());
     } catch (const std::invalid_argument &) {
-        rejected_ply_beyond_cap = true;
+        rejectedPlyBeyondCap = true;
     }
-    assert(rejected_ply_beyond_cap);
+    assert(rejectedPlyBeyondCap);
 
-    bool rejected_transform_size = false;
+    bool rejectedTransformSize = false;
     try {
-        (void) az::v2::games::go::transform_action(0, std::numeric_limits<std::int32_t>::max(),
-                                                   Symmetry::Identity);
+        (void) az::v2::games::go::transformAction(0, largestRepresentableBoardSize + 1,
+                                                  Symmetry::Identity);
     } catch (const std::invalid_argument &) {
-        rejected_transform_size = true;
+        rejectedTransformSize = true;
     }
-    assert(rejected_transform_size);
+    assert(rejectedTransformSize);
 
-    bool rejected_symmetry = false;
+    bool rejectedSymmetry = false;
     try {
-        (void) az::v2::games::go::inverse_symmetry(static_cast<Symmetry>(127));
+        (void) az::v2::games::go::inverseSymmetry(static_cast<Symmetry>(127));
     } catch (const std::invalid_argument &) {
-        rejected_symmetry = true;
+        rejectedSymmetry = true;
     }
-    assert(rejected_symmetry);
+    assert(rejectedSymmetry);
 
     GoState state(rules());
-    assert(!state.is_legal(-1));
-    assert(!state.is_legal(state.action_count()));
+    assert(!state.isLegal(-1));
+    assert(!state.isLegal(state.actionCount()));
     state.apply(0);
-    assert(!state.is_legal(0));
+    assert(!state.isLegal(0));
 }
 
 } // namespace
 
 int main() {
-    test_configuration_and_passes();
-    test_capture_and_suicide();
-    test_positional_superko();
-    test_copy_hash_and_cap();
-    test_restored_pass_invariants();
-    test_area_scoring_with_integer_komi();
-    test_encoding_and_symmetry();
-    test_invalid_inputs();
+    testConfigurationAndPasses();
+    testCaptureAndSuicide();
+    testPositionalSuperko();
+    testCopyHashAndCap();
+    testRestoredPassInvariants();
+    testAreaScoringWithIntegerKomi();
+    testEncodingAndSymmetry();
+    testInvalidInputs();
 }

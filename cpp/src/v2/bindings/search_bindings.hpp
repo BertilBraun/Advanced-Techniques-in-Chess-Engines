@@ -4,6 +4,6 @@
 
 namespace az::v2::bindings {
 
-void bind_search(pybind11::module_ &module);
+void bindSearch(pybind11::module_ &module);
 
 } // namespace az::v2::bindings

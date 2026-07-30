@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -12,9 +14,9 @@ namespace az::v2::search {
 
 class SeededRandom {
 public:
-    explicit SeededRandom(std::uint64_t seed) : engine_(seed) {}
+    explicit SeededRandom(uint64 seed) : _engine(seed) {}
 
-    [[nodiscard]] std::size_t sample_discrete(const std::vector<double> &weights) {
+    [[nodiscard]] std::size_t sampleDiscrete(const std::vector<double> &weights) {
         double total = 0.0;
         for (const double weight : weights) {
             if (!std::isfinite(weight) || weight < 0.0) {
@@ -25,7 +27,7 @@ public:
         if (!(total > 0.0) || !std::isfinite(total)) {
             throw std::invalid_argument("sampling weights must have positive finite mass");
         }
-        const double draw = uniform_(engine_) * total;
+        const double draw = _uniform(_engine) * total;
         double cumulative = 0.0;
         for (std::size_t index = 0; index < weights.size(); ++index) {
             cumulative += weights[index];
@@ -45,7 +47,7 @@ public:
         std::vector<double> samples(size);
         double total = 0.0;
         for (double &sample : samples) {
-            sample = gamma(engine_);
+            sample = gamma(_engine);
             total += sample;
         }
         if (!(total > 0.0) || !std::isfinite(total)) {
@@ -58,8 +60,8 @@ public:
     }
 
 private:
-    std::mt19937_64 engine_;
-    std::uniform_real_distribution<double> uniform_{0.0, 1.0};
+    std::mt19937_64 _engine;
+    std::uniform_real_distribution<double> _uniform{0.0, 1.0};
 };
 
 } // namespace az::v2::search

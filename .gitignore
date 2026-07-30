@@ -28,3 +28,6 @@ cpp/libtorch**/**
 
 !documentation/**
 /py/training_data/
+
+downloaded-*/**
+.codex-*/**

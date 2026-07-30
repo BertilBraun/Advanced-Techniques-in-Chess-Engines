@@ -5,6 +5,6 @@
 
 PYBIND11_MODULE(az_go_native, module) {
     module.doc() = "Typed native Go correctness core";
-    az::v2::bindings::bind_go(module);
-    az::v2::bindings::bind_search(module);
+    az::v2::bindings::bindGo(module);
+    az::v2::bindings::bindSearch(module);
 }

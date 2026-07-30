@@ -323,7 +323,11 @@ needs it.
 
 ## 7. Native Go/search boundary
 
-The initial native Go contract supports board size 7 or 9 using the same code:
+The native Go contract is board-size agnostic. It accepts every square board
+with side length at least 3 whose area plus the pass action is representable by
+the native signed 32-bit action type. This is a representational bound, not a
+gameplay restriction; 7x7 and 9x9 are experiment profiles rather than special
+cases in the rules:
 
 - action space `board_size * board_size + 1`, with pass as the final action;
 - area scoring with explicit `komi_half_points: int`; scores are compared in
@@ -355,6 +359,20 @@ information where applicable, and a `SearchTelemetry` record. Python bindings
 must expose typed result objects rather than positional tuples or dictionaries.
 No Stockfish type, FEN/UCI representation, chess action constant, or board-size
 constant may appear in `cpp/src/v2/search` or `cpp/src/v2/inference`.
+
+The current pybind adapter uses `PythonGoEvaluator`: native C++ owns tree
+traversal, selection, expansion, and backup, but releases and reacquires the GIL
+to submit each leaf request to the Python runtime's per-device inference broker.
+The broker combines requests from many concurrently running native searches into
+model batches. This differs from the legacy `DirectInferencePipeline`, which
+owned the queue, batching thread, and Torch model invocation in C++. The current
+boundary keeps search and model implementations independently configurable and
+avoids a LibTorch dependency in the v2 core, at the cost of a pybind/GIL
+round-trip per evaluated leaf and Python-side batching overhead. Runtime
+telemetry must determine whether that cost is material. If it is, the preferred
+optimization is a typed native batch-queue adapter behind the existing inference
+request/result contract, not coupling the search template directly to a Go
+model or restoring the legacy chess inference classes.
 
 ## 8. Determinism and experiment identity
 
