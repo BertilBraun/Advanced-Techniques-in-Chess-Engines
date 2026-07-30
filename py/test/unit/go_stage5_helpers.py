@@ -15,6 +15,7 @@ from src.az.games.go.configuration import (
 from src.az.games.go.samples import DensePolicyTarget, GoSample
 from src.az.replay.envelope import (
     GameTermination,
+    NoSearchCalibration,
     ReplayEnvelope,
     RootDiagnostics,
     SearchBudgetClass,
@@ -128,4 +129,5 @@ def envelope(
         ),
         termination=termination,
         replay_credit_id=UUID(int=20 + sample_index),
+        search_calibration=NoSearchCalibration(kind='none'),
     )

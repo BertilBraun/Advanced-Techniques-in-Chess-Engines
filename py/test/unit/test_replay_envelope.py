@@ -11,6 +11,7 @@ from src.az.replay.envelope import (
     SearchBudgetClass,
     SearchStopReason,
     SearchStrategy,
+    VisitMarginSearchCalibration,
     derive_self_play_seed_lineage,
 )
 from test.unit.go_stage5_helpers import envelope
@@ -145,7 +146,11 @@ def test_envelope_rejects_tampered_search_provenance(mutate: str, message: str) 
 def test_valid_adaptive_early_stop_is_bounded() -> None:
     values = envelope().model_dump()
     values['search_strategy'] = SearchStrategy.ADAPTIVE
-    values['budget_class'] = SearchBudgetClass.ADAPTIVE
+    values['budget_class'] = SearchBudgetClass.FIXED
+    values['search_calibration'] = VisitMarginSearchCalibration(
+        kind='visit_margin',
+        calibration_id='calibration-test',
+    )
     values['stop_reason'] = SearchStopReason.ADAPTIVE_CONFIDENCE
     values['actual_simulations'] = 8
     values['root_diagnostics']['visit_count'] = 8
@@ -153,3 +158,17 @@ def test_valid_adaptive_early_stop_is_bounded() -> None:
     adaptive = ReplayEnvelope.model_validate(values)
 
     assert adaptive.actual_simulations == 8
+
+
+def test_adaptive_confidence_cannot_label_cap_exhaustion() -> None:
+    values = envelope().model_dump()
+    values['search_strategy'] = SearchStrategy.ADAPTIVE
+    values['budget_class'] = SearchBudgetClass.FIXED
+    values['search_calibration'] = VisitMarginSearchCalibration(
+        kind='visit_margin',
+        calibration_id='calibration-test',
+    )
+    values['stop_reason'] = SearchStopReason.ADAPTIVE_CONFIDENCE
+
+    with pytest.raises(ValidationError, match='before the configured cap'):
+        ReplayEnvelope.model_validate(values)

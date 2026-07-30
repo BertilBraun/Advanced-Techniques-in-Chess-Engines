@@ -6,7 +6,10 @@ from pydantic import Field, model_validator
 
 from src.az.config.base import FrozenModel, Sha256
 from src.az.config.search import (
+    FpuConfiguration,
     RootExplorationConfiguration,
+    SearchBudgetConfiguration,
+    SearchStoppingConfiguration,
     TemperatureConfiguration,
 )
 from src.az.games.go.configuration import (
@@ -16,11 +19,12 @@ from src.az.games.go.configuration import (
 )
 
 
-class FixedNativeSearchSpecification(FrozenModel):
-    simulation_cap: int = Field(gt=0, le=2**31 - 1)
+class NativeSearchSpecification(FrozenModel):
+    budget: SearchBudgetConfiguration
+    stopping: SearchStoppingConfiguration
+    fpu: FpuConfiguration
     exploration_constant: float = Field(gt=0)
     backup_discount: float = Field(gt=0, le=1)
-    no_visited_child_value: float = Field(ge=-1, le=1)
     temperature: TemperatureConfiguration
     root_exploration: RootExplorationConfiguration
 
@@ -33,7 +37,7 @@ class GoWorkerSpecification(FrozenModel):
     game_configuration: GoGameConfiguration
     model_configuration: ResidualGoModelConfiguration
     model_initialization_seed: int = Field(ge=0, le=2**63 - 1)
-    search: FixedNativeSearchSpecification
+    search: NativeSearchSpecification
     logical_worker_start_index: int = Field(ge=0)
     logical_worker_count: int = Field(gt=0)
     maximum_active_searches_per_worker: int = Field(gt=0)

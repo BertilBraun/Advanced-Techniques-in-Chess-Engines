@@ -21,6 +21,7 @@ class SeedPurpose(str, Enum):
     SEARCH = 'search'
     DIRICHLET_NOISE = 'dirichlet_noise'
     ACTION_SAMPLING = 'action_sampling'
+    SEARCH_BUDGET = 'search_budget'
     REPLAY_SAMPLING = 'replay_sampling'
     MODEL_INITIALIZATION = 'model_initialization'
     TRAINING_RANDOM = 'training_random'
@@ -70,6 +71,14 @@ class ActionSamplingSeedCoordinates(FrozenModel):
     ply: int = Field(ge=0)
 
 
+class SearchBudgetSeedCoordinates(FrozenModel):
+    purpose: Literal[SeedPurpose.SEARCH_BUDGET]
+    process_index: int = Field(ge=0)
+    worker_index: int = Field(ge=0)
+    game_index: int = Field(ge=0)
+    ply: int = Field(ge=0)
+
+
 class ReplaySamplingSeedCoordinates(FrozenModel):
     purpose: Literal[SeedPurpose.REPLAY_SAMPLING]
     trainer_rank: int = Field(ge=0)
@@ -106,6 +115,7 @@ SeedCoordinates = Annotated[
     | SearchSeedCoordinates
     | DirichletNoiseSeedCoordinates
     | ActionSamplingSeedCoordinates
+    | SearchBudgetSeedCoordinates
     | ReplaySamplingSeedCoordinates
     | ModelInitializationSeedCoordinates
     | TrainingRandomSeedCoordinates

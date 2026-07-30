@@ -6,7 +6,7 @@ from base64 import b64decode, b64encode
 from pydantic import Field
 
 from src.az.config.base import FrozenModel
-from src.az.replay.envelope import ReplayEnvelope, ReplayRecord
+from src.az.replay.envelope import ReplayEnvelope, ReplayRecord, SearchCalibrationEvidence
 
 
 class IpcReplayRecord(FrozenModel):
@@ -49,6 +49,7 @@ class WorkerProgress(FrozenModel):
     interval_total_inference_wait_microseconds: int = Field(ge=0)
     interval_inference_cache_hits: int = Field(ge=0)
     monotonic_seconds: float = Field(ge=0)
+    search_calibration: SearchCalibrationEvidence
 
 
 class WorkerResourceSample(FrozenModel):

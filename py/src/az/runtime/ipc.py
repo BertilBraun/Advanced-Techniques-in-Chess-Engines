@@ -9,6 +9,10 @@ class StopSignal(Protocol):
     def set(self) -> None: ...
 
 
+class RuntimeControlSignal(StopSignal, Protocol):
+    def wait_for_experiment_start(self) -> int: ...
+
+
 class ByteQueue(Protocol):
     def put(self, value: bytes) -> None: ...
 

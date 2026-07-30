@@ -1,15 +1,14 @@
 #pragma once
 
 #include "common.hpp"
+#include "search/SearchConfiguration.hpp"
 
-#include <cstdint>
 #include <optional>
 #include <vector>
 
 namespace az::v2::search {
 
-enum class SearchBudgetClass : int8 { Fixed = 0 };
-enum class SearchStopReason : int8 { FullBudget = 0, TerminalRoot = 1 };
+enum class SearchStopReason : int8 { FullBudget = 0, TerminalRoot = 1, AdaptiveConfidence = 2 };
 
 template <typename Action> struct RootChildStatistics {
     Action action;
@@ -31,6 +30,7 @@ struct SearchTelemetry {
     int64 totalInferenceRequests;
     double rootEntropy;
     double topTwoVisitMargin;
+    double initialRootFpu;
 };
 
 template <typename Action> struct SearchResult {

@@ -575,8 +575,36 @@ state before reproducing the next distributed training behavior.
 
 ### Stage 8: search-compute strategies
 
-Add progressive and mixed budgets, adaptive trace collection/stopping, and the
-three FPU policies as independent native strategies.
+Add progressive and mixed budgets, adaptive stopping, and the three FPU
+policies as independent native strategies. Every worker waits at a parent-owned
+start gate and receives the same monotonic experiment epoch; progressive stage
+selection uses integer elapsed seconds from that epoch, with a stage becoming
+active exactly when `elapsed_seconds >= start_elapsed_seconds`. Mixed budget
+selection derives an independent per-position `search_budget` random seed from
+process, worker, game, and ply coordinates. It never consumes root-noise or
+action-selection random streams.
+
+All FPU values use the parent position's current-player perspective, matching
+the action Q values used in PUCT. Parent-value FPU uses the parent's backed-up
+mean when visited and its stored network expansion value before its first
+backup. Reduced-parent FPU is the deliberately simplified KataGo-style formula
+`parent_value - reduction * sqrt(visited_child_prior_mass)`, where prior mass is
+the sum of priors of children with at least one visit. It does not claim
+KataGo's additional utility mixing or loss-proportion behavior. Visited-child
+mean FPU is the arithmetic mean of visited action Q values and uses its explicit
+configured fallback when no child has been visited.
+
+Adaptive visit-margin stopping first checks exactly at the configured minimum
+and then when `(actual_simulations - minimum_simulations) % check_interval == 0`.
+It stops when both the leading move's
+visit fraction and the normalized top-two visit margin meet their thresholds.
+These conditions are heuristic confidence criteria: they do not prove that the
+leader is mathematically impossible to overturn before the cap. The configured
+fixed or progressive cap remains a hard maximum. Production execution requires
+a non-placeholder calibration identity. Full-search trace collection, prefix
+comparison, disagreement calculation, and construction/authentication of
+calibration artifacts remain a Stage 9 boundary; Stage 8 leaves disagreement
+fields absent rather than fabricating them.
 
 Acceptance: every strategy has deterministic unit fixtures; mixed searches set
 policy weights correctly; progressive stages use elapsed time; adaptive runs

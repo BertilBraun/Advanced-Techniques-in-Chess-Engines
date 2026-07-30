@@ -12,7 +12,7 @@ import torch
 
 from src.az.replay.envelope import ReplayRecord
 from src.az.replay.storage import ShardMetadata
-from src.az.runtime.ipc import ByteQueue, StopSignal
+from src.az.runtime.ipc import ByteQueue, RuntimeControlSignal
 from src.az.runtime.messages import (
     RuntimeFailure,
     RuntimeMessage,
@@ -29,11 +29,35 @@ from src.az.runtime.topology import RuntimeTopology
 
 
 WorkerEntrypoint = Callable[
-    [bytes, StopSignal, ByteQueue],
+    [bytes, RuntimeControlSignal, ByteQueue],
     None,
 ]
 ReplayPublisher = Callable[[tuple[ReplayRecord, ...]], ShardMetadata]
 MESSAGE_ADAPTER = TypeAdapter(RuntimeMessage)
+
+
+class _RuntimeControl:
+    def __init__(self, context: multiprocessing.context.BaseContext) -> None:
+        self._stop = context.Event()
+        self._start = context.Event()
+        self._epoch = context.Value('q', 0)
+
+    def is_set(self) -> bool:
+        return self._stop.is_set()
+
+    def set(self) -> None:
+        self._stop.set()
+        self._start.set()
+
+    def begin_experiment(self, monotonic_ns: int) -> None:
+        with self._epoch.get_lock():
+            self._epoch.value = monotonic_ns
+        self._start.set()
+
+    def wait_for_experiment_start(self) -> int:
+        self._start.wait()
+        with self._epoch.get_lock():
+            return int(self._epoch.value)
 
 
 @dataclass(frozen=True)
@@ -94,8 +118,8 @@ class RuntimeOrchestrator:
 
     def run(self) -> RuntimeResult:
         startup_started = time.monotonic()
-        experiment_started: float | None = None
-        stop_event = self._context.Event()
+        experiment_started_ns: int | None = None
+        stop_event = _RuntimeControl(self._context)
         message_queue: ByteQueue = self._context.Queue()
         processes = tuple(
             self._context.Process(
@@ -118,24 +142,26 @@ class RuntimeOrchestrator:
                 processes,
                 startup_started + self._startup_timeout_seconds,
             )
-            experiment_started = time.monotonic()
-            deadline = experiment_started + self._wall_clock_seconds
-            while time.monotonic() < deadline and failure is None:
-                self._drain(message_queue, messages, timeout=0.05)
-                self._publish(messages)
-                failure = next(
-                    (message for message in reversed(messages) if isinstance(message, WorkerFailure)),
-                    None,
+            if failure is None:
+                experiment_started_ns = time.monotonic_ns()
+                stop_event.begin_experiment(experiment_started_ns)
+                deadline_ns = experiment_started_ns + int(self._wall_clock_seconds * 1_000_000_000)
+                while time.monotonic_ns() < deadline_ns and failure is None:
+                    self._drain(message_queue, messages, timeout=0.05)
+                    self._publish(messages)
+                    failure = next(
+                        (message for message in reversed(messages) if isinstance(message, WorkerFailure)),
+                        None,
+                    )
+                    if self._stopped_worker_indices(messages) == set(range(len(processes))) or all(
+                        not process.is_alive() for process in processes
+                    ):
+                        break
+                timed_out = (
+                    time.monotonic_ns() >= deadline_ns
+                    and any(process.is_alive() for process in processes)
+                    and self._stopped_worker_indices(messages) != set(range(len(processes)))
                 )
-                if self._stopped_worker_indices(messages) == set(range(len(processes))) or all(
-                    not process.is_alive() for process in processes
-                ):
-                    break
-            timed_out = (
-                time.monotonic() >= deadline
-                and any(process.is_alive() for process in processes)
-                and self._stopped_worker_indices(messages) != set(range(len(processes)))
-            )
         except Exception as error:
             runtime_failure = error
             self._abort_publications(messages)
@@ -224,9 +250,14 @@ class RuntimeOrchestrator:
         stopped = {message.worker_index for message in messages if isinstance(message, WorkerStopped)}
         if stopped != set(range(len(processes))):
             raise RuntimeError('Not every self-play worker reported a clean stop.')
-        experiment_elapsed = 0.0 if experiment_started is None else time.monotonic() - experiment_started
+        experiment_elapsed = (
+            0.0 if experiment_started_ns is None else (time.monotonic_ns() - experiment_started_ns) / 1_000_000_000
+        )
         return RuntimeResult(
-            startup_elapsed_seconds=((experiment_started or time.monotonic()) - startup_started),
+            startup_elapsed_seconds=(
+                (experiment_started_ns / 1_000_000_000 if experiment_started_ns is not None else time.monotonic())
+                - startup_started
+            ),
             elapsed_seconds=experiment_elapsed,
             messages=tuple(messages),
             orphan_process_ids=orphan_ids,

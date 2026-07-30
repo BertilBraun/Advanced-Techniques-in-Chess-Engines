@@ -8,7 +8,6 @@
 #undef NDEBUG
 #endif
 #include <cassert>
-#include <cstdint>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -180,6 +179,89 @@ void testVisitedChildMeanFpu() {
     assert(result.rootVisits[0] == 2);
     assert(result.rootVisits[1] == 0);
     assert(std::abs(result.rootChildren[1].actionValue - 1.0) < 1e-12);
+}
+
+void testParentValueFpuUsesExpansionValueBeforeFirstBackup() {
+    FixtureEvaluator evaluator;
+    evaluator.rootValue = 0.625;
+    auto searchConfiguration = configuration(1);
+    searchConfiguration.fpuPolicy = az::v2::search::FpuPolicy::ParentValue;
+    const auto result = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, searchConfiguration);
+    assert(result.rootVisits[0] == 0);
+    assert(std::abs(result.telemetry.initialRootFpu - 0.625) < 1e-12);
+}
+
+void testReducedParentFpuUsesVisitedPolicyMass() {
+    FixtureEvaluator evaluator;
+    evaluator.rootPolicy = {0.1, 0.9, 0.0};
+    evaluator.leaf_value = -1.0;
+    auto searchConfiguration = configuration(1);
+    searchConfiguration.fpuPolicy = az::v2::search::FpuPolicy::ReducedParentValue;
+    searchConfiguration.fpuReduction = 0.5;
+    const auto result = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, searchConfiguration);
+    const double expected = 1.0 - 0.5 * std::sqrt(0.9);
+    assert(result.rootVisits[0] == 0);
+    assert(std::abs(result.rootChildren[0].actionValue - expected) < 1e-12);
+}
+
+void testAdaptiveStoppingChecksOnlyConfiguredIntervals() {
+    FixtureEvaluator evaluator;
+    evaluator.rootPolicy = {0.001, 0.999, 0.0};
+    auto searchConfiguration = configuration(20);
+    searchConfiguration.explorationConstant = 0.01;
+    searchConfiguration.adaptiveStopping = {
+        .enabled = true,
+        .minimumSimulations = 10,
+        .checkIntervalSimulations = 4,
+        .requiredTopVisitFraction = 0.75,
+        .requiredTopTwoMargin = 0.5,
+    };
+    const auto result = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, searchConfiguration);
+    assert(result.telemetry.actualSimulations == 10);
+    assert(result.telemetry.stopReason == az::v2::search::SearchStopReason::AdaptiveConfidence);
+    assert(result.telemetry.budgetClass == az::v2::search::SearchBudgetClass::Fixed);
+}
+
+void testBudgetMetadataDoesNotChangeSearch() {
+    FixtureEvaluator evaluator;
+    auto searchConfiguration = configuration(3);
+    searchConfiguration.budgetClass = az::v2::search::SearchBudgetClass::MixedFast;
+    searchConfiguration.policyTargetWeight = 0.0;
+    const auto result = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, searchConfiguration);
+    assert(result.telemetry.actualSimulations == 3);
+    assert(result.telemetry.budgetClass == az::v2::search::SearchBudgetClass::MixedFast);
+    assert(!result.telemetry.policyTargetEligible);
+    assert(result.telemetry.policyTargetWeight == 0.0);
+}
+
+void testAdaptiveCadenceAtCapReportsFullBudget() {
+    FixtureEvaluator evaluator;
+    evaluator.rootPolicy = {0.5, 0.5, 0.0};
+    auto prefixConfiguration = configuration(2);
+    prefixConfiguration.explorationConstant = 0.01;
+    const auto prefix = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, prefixConfiguration);
+    assert(prefix.rootVisits == std::vector<int32>({1, 1, 0}));
+
+    auto searchConfiguration = configuration(3);
+    searchConfiguration.explorationConstant = 0.01;
+    searchConfiguration.adaptiveStopping = {
+        .enabled = true,
+        .minimumSimulations = 2,
+        .checkIntervalSimulations = 1,
+        .requiredTopVisitFraction = 0.6,
+        .requiredTopTwoMargin = 0.3,
+    };
+    const auto result = az::v2::search::FixedPuctSearch<FixtureState>::run(
+        FixtureState{}, evaluator, terminalValue, searchConfiguration);
+    assert(result.rootVisits == std::vector<int32>({2, 1, 0}));
+    assert(result.telemetry.actualSimulations == 3);
+    assert(result.telemetry.topTwoVisitMargin > 0.3);
+    assert(result.telemetry.stopReason == az::v2::search::SearchStopReason::FullBudget);
 }
 
 void testTerminalLeafSkipsInference() {
@@ -464,6 +546,11 @@ int main() {
     testMaskingBackupAndExactAccounting();
     testZeroLegalMassBecomesUniform();
     testVisitedChildMeanFpu();
+    testParentValueFpuUsesExpansionValueBeforeFirstBackup();
+    testReducedParentFpuUsesVisitedPolicyMass();
+    testAdaptiveStoppingChecksOnlyConfiguredIntervals();
+    testBudgetMetadataDoesNotChangeSearch();
+    testAdaptiveCadenceAtCapReportsFullBudget();
     testTerminalLeafSkipsInference();
     testCensoredTerminalLeafUsesInferenceWithoutExpansion();
     testTerminalRootIsTypedAndDoesNotInfer();

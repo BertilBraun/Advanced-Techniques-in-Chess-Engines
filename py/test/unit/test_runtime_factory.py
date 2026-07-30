@@ -51,10 +51,10 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     first = plan.worker_specifications[0]
     assert first.game_configuration == configuration.game
     assert first.model_configuration == configuration.model.schedule.architecture
-    assert first.search.simulation_cap == configuration.search.budget.simulations
+    assert first.search.budget == configuration.search.budget
     assert first.search.exploration_constant == configuration.search.algorithm.exploration_constant
     assert first.search.backup_discount == configuration.search.backup_discount
-    assert first.search.no_visited_child_value == configuration.search.fpu.no_visited_child_value
+    assert first.search.fpu == configuration.search.fpu
     assert first.search.root_exploration == configuration.search.root_exploration
     assert first.search.temperature == configuration.search.temperature
     assert first.logical_worker_count == configuration.topology.self_play_workers_per_device
@@ -88,20 +88,6 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     (
         (
             {
-                'budget': MixedSearchBudget(
-                    kind='mixed',
-                    cheap_simulations=2,
-                    full_simulations=8,
-                    full_search_probability=0.25,
-                    cheap_policy_target_weight=0,
-                    full_policy_target_weight=1,
-                )
-            },
-            'fixed search budgets',
-        ),
-        ({'fpu': ParentValueFpu(kind='parent_value')}, 'visited-child-mean FPU'),
-        (
-            {
                 'tree_reuse': RetainSubtree(
                     kind='retain_subtree',
                     maximum_retained_nodes=100,
@@ -111,7 +97,7 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
         ),
     ),
 )
-def test_runtime_factory_rejects_stage8_search_features(
+def test_runtime_factory_rejects_unsupported_search_features(
     tmp_path: Path,
     search_update: dict[str, object],
     message: str,
@@ -121,6 +107,35 @@ def test_runtime_factory_rejects_stage8_search_features(
 
     with pytest.raises(ValueError, match=message):
         build_runtime_plan(unsupported, _environment(tmp_path))
+
+
+@pytest.mark.parametrize(
+    'search_update',
+    (
+        {
+            'budget': MixedSearchBudget(
+                kind='mixed',
+                cheap_simulations=2,
+                full_simulations=8,
+                full_search_probability=0.25,
+                cheap_policy_target_weight=0,
+                full_policy_target_weight=1,
+            )
+        },
+        {'fpu': ParentValueFpu(kind='parent_value')},
+    ),
+)
+def test_runtime_factory_accepts_stage8_search_features(
+    tmp_path: Path,
+    search_update: dict[str, object],
+) -> None:
+    configuration = _configuration()
+    supported = configuration.model_copy(update={'search': configuration.search.model_copy(update=search_update)})
+
+    plan = build_runtime_plan(supported, _environment(tmp_path))
+
+    assert plan.worker_specifications[0].search.budget == supported.search.budget
+    assert plan.worker_specifications[0].search.fpu == supported.search.fpu
 
 
 def test_runtime_factory_rejects_absent_configured_hardware(

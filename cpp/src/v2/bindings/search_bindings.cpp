@@ -7,7 +7,6 @@
 #include "search/SearchConfiguration.hpp"
 #include "search/SearchTelemetry.hpp"
 
-#include <cstdint>
 #include <optional>
 #include <pybind11/functional.h>
 #include <pybind11/stl.h>
@@ -22,7 +21,9 @@ using games::go::GoState;
 using games::go::TerminationReason;
 using inference::InferenceRequest;
 using inference::InferenceResult;
+using search::AdaptiveStoppingConfiguration;
 using search::FixedPuctConfiguration;
+using search::FpuPolicy;
 using search::RootChildStatistics;
 using search::RootNoiseConfiguration;
 using search::SearchBudgetClass;
@@ -60,10 +61,18 @@ void bindSearch(pybind11::module_ &module) {
     module.attr("MAXIMUM_SIMULATION_COUNT") = search::MAXIMUM_SIMULATION_COUNT;
 
     py::enum_<SearchBudgetClass>(module, "SearchBudgetClass")
-        .value("FIXED", SearchBudgetClass::Fixed);
+        .value("FIXED", SearchBudgetClass::Fixed)
+        .value("PROGRESSIVE_STAGE", SearchBudgetClass::ProgressiveStage)
+        .value("MIXED_FAST", SearchBudgetClass::MixedFast)
+        .value("MIXED_FULL", SearchBudgetClass::MixedFull);
     py::enum_<SearchStopReason>(module, "SearchStopReason")
         .value("FULL_BUDGET", SearchStopReason::FullBudget)
-        .value("TERMINAL_ROOT", SearchStopReason::TerminalRoot);
+        .value("TERMINAL_ROOT", SearchStopReason::TerminalRoot)
+        .value("ADAPTIVE_CONFIDENCE", SearchStopReason::AdaptiveConfidence);
+    py::enum_<FpuPolicy>(module, "FpuPolicy")
+        .value("PARENT_VALUE", FpuPolicy::ParentValue)
+        .value("REDUCED_PARENT_VALUE", FpuPolicy::ReducedParentValue)
+        .value("VISITED_CHILD_MEAN", FpuPolicy::VisitedChildMean);
 
     py::class_<InferenceRequest<GoEncoding>>(module, "GoInferenceRequest")
         .def_readonly("request_id", &InferenceRequest<GoEncoding>::requestId)
@@ -82,6 +91,18 @@ void bindSearch(pybind11::module_ &module) {
         .def_readonly("enabled", &RootNoiseConfiguration::enabled)
         .def_readonly("alpha", &RootNoiseConfiguration::alpha)
         .def_readonly("fraction", &RootNoiseConfiguration::fraction);
+    py::class_<AdaptiveStoppingConfiguration>(module, "AdaptiveStoppingConfiguration")
+        .def(py::init<bool, int32, int32, double, double>(), py::arg("enabled"),
+             py::arg("minimum_simulations"), py::arg("check_interval_simulations"),
+             py::arg("required_top_visit_fraction"), py::arg("required_top_two_margin"))
+        .def_readonly("enabled", &AdaptiveStoppingConfiguration::enabled)
+        .def_readonly("minimum_simulations", &AdaptiveStoppingConfiguration::minimumSimulations)
+        .def_readonly("check_interval_simulations",
+                      &AdaptiveStoppingConfiguration::checkIntervalSimulations)
+        .def_readonly("required_top_visit_fraction",
+                      &AdaptiveStoppingConfiguration::requiredTopVisitFraction)
+        .def_readonly("required_top_two_margin",
+                      &AdaptiveStoppingConfiguration::requiredTopTwoMargin);
     py::class_<FixedPuctConfiguration>(module, "FixedPuctConfiguration")
         .def(py::init<int32, double, double, double, double, uint64, uint64, RootNoiseConfiguration,
                       bool>(),
@@ -89,6 +110,14 @@ void bindSearch(pybind11::module_ &module) {
              py::arg("no_visited_child_value"), py::arg("action_temperature"),
              py::arg("root_noise_seed"), py::arg("action_sampling_seed"), py::arg("root_noise"),
              py::arg("tree_reuse"))
+        .def(py::init<int32, double, double, double, double, uint64, uint64, RootNoiseConfiguration,
+                      bool, FpuPolicy, double, AdaptiveStoppingConfiguration, SearchBudgetClass,
+                      double>(),
+             py::arg("simulation_cap"), py::arg("exploration_constant"), py::arg("backup_discount"),
+             py::arg("no_visited_child_value"), py::arg("action_temperature"),
+             py::arg("root_noise_seed"), py::arg("action_sampling_seed"), py::arg("root_noise"),
+             py::arg("tree_reuse"), py::arg("fpu_policy"), py::arg("fpu_reduction"),
+             py::arg("adaptive_stopping"), py::arg("budget_class"), py::arg("policy_target_weight"))
         .def_readonly("simulation_cap", &FixedPuctConfiguration::simulationCap)
         .def_readonly("exploration_constant", &FixedPuctConfiguration::explorationConstant)
         .def_readonly("backup_discount", &FixedPuctConfiguration::backupDiscount)
@@ -97,7 +126,12 @@ void bindSearch(pybind11::module_ &module) {
         .def_readonly("root_noise_seed", &FixedPuctConfiguration::rootNoiseSeed)
         .def_readonly("action_sampling_seed", &FixedPuctConfiguration::actionSamplingSeed)
         .def_readonly("root_noise", &FixedPuctConfiguration::rootNoise)
-        .def_readonly("tree_reuse", &FixedPuctConfiguration::treeReuse);
+        .def_readonly("tree_reuse", &FixedPuctConfiguration::treeReuse)
+        .def_readonly("fpu_policy", &FixedPuctConfiguration::fpuPolicy)
+        .def_readonly("fpu_reduction", &FixedPuctConfiguration::fpuReduction)
+        .def_readonly("adaptive_stopping", &FixedPuctConfiguration::adaptiveStopping)
+        .def_readonly("budget_class", &FixedPuctConfiguration::budgetClass)
+        .def_readonly("policy_target_weight", &FixedPuctConfiguration::policyTargetWeight);
     py::class_<RootChildStatistics<int32>>(module, "RootChildStatistics")
         .def_readonly("action", &RootChildStatistics<int32>::action)
         .def_readonly("prior", &RootChildStatistics<int32>::prior)
@@ -115,7 +149,8 @@ void bindSearch(pybind11::module_ &module) {
         .def_readonly("leaf_inference_requests", &SearchTelemetry::leafInferenceRequests)
         .def_readonly("total_inference_requests", &SearchTelemetry::totalInferenceRequests)
         .def_readonly("root_entropy", &SearchTelemetry::rootEntropy)
-        .def_readonly("top_two_visit_margin", &SearchTelemetry::topTwoVisitMargin);
+        .def_readonly("top_two_visit_margin", &SearchTelemetry::topTwoVisitMargin)
+        .def_readonly("initial_root_fpu", &SearchTelemetry::initialRootFpu);
     py::class_<SearchResult<int32>>(module, "SearchResult")
         .def_readonly("selected_action", &SearchResult<int32>::selectedAction)
         .def_readonly("root_policy", &SearchResult<int32>::rootPolicy)

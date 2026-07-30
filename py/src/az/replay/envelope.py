@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, PositiveInt, field_validator, model_validator
@@ -15,6 +15,7 @@ from src.az.config.seeds import (
     GameSeedCoordinates,
     ProcessSeedCoordinates,
     SearchSeedCoordinates,
+    SearchBudgetSeedCoordinates,
     SeedDerivationVersion,
     SeedPurpose,
     WorkerSeedCoordinates,
@@ -38,13 +39,27 @@ class SearchBudgetClass(str, Enum):
     PROGRESSIVE_STAGE = 'progressive_stage'
     MIXED_FAST = 'mixed_fast'
     MIXED_FULL = 'mixed_full'
-    ADAPTIVE = 'adaptive'
 
 
 class SearchStopReason(str, Enum):
     FULL_BUDGET = 'full_budget'
     ADAPTIVE_CONFIDENCE = 'adaptive_confidence'
     TERMINAL_ROOT = 'terminal_root'
+
+
+class NoSearchCalibration(FrozenModel):
+    kind: Literal['none']
+
+
+class VisitMarginSearchCalibration(FrozenModel):
+    kind: Literal['visit_margin']
+    calibration_id: str = Field(min_length=1)
+
+
+SearchCalibrationEvidence = Annotated[
+    NoSearchCalibration | VisitMarginSearchCalibration,
+    Field(discriminator='kind'),
+]
 
 
 class GameTermination(str, Enum):
@@ -70,6 +85,7 @@ class SelfPlaySeedLineage(FrozenModel):
     search_seed: int = Field(ge=0, le=2**63 - 1)
     root_noise_seed: int = Field(ge=0, le=2**63 - 1)
     action_sampling_seed: int = Field(ge=0, le=2**63 - 1)
+    search_budget_seed: int = Field(ge=0, le=2**63 - 1)
 
     @model_validator(mode='after')
     def validate_derivation(self) -> SelfPlaySeedLineage:
@@ -125,6 +141,16 @@ class SelfPlaySeedLineage(FrozenModel):
                     ply=self.ply,
                 ),
             ),
+            derive_seed(
+                self.root_seed,
+                SearchBudgetSeedCoordinates(
+                    purpose=SeedPurpose.SEARCH_BUDGET,
+                    process_index=self.process_index,
+                    worker_index=self.worker_index,
+                    game_index=self.game_index,
+                    ply=self.ply,
+                ),
+            ),
         )
         actual = (
             self.process_seed,
@@ -133,6 +159,7 @@ class SelfPlaySeedLineage(FrozenModel):
             self.search_seed,
             self.root_noise_seed,
             self.action_sampling_seed,
+            self.search_budget_seed,
         )
         if actual != expected:
             raise ValueError('Replay self-play seed lineage does not match the stable derivations.')
@@ -182,6 +209,13 @@ def derive_self_play_seed_lineage(
         game_index=game_index,
         ply=ply,
     )
+    search_budget_coordinates = SearchBudgetSeedCoordinates(
+        purpose=SeedPurpose.SEARCH_BUDGET,
+        process_index=process_index,
+        worker_index=worker_index,
+        game_index=game_index,
+        ply=ply,
+    )
     return SelfPlaySeedLineage(
         derivation_version='az-seed-v2',
         root_seed=root_seed,
@@ -195,6 +229,7 @@ def derive_self_play_seed_lineage(
         search_seed=derive_seed(root_seed, search_coordinates),
         root_noise_seed=derive_seed(root_seed, root_noise_coordinates),
         action_sampling_seed=derive_seed(root_seed, action_sampling_coordinates),
+        search_budget_seed=derive_seed(root_seed, search_budget_coordinates),
     )
 
 
@@ -228,6 +263,7 @@ class ReplayEnvelope(FrozenModel):
     root_diagnostics: RootDiagnostics
     termination: GameTermination
     replay_credit_id: UUID
+    search_calibration: SearchCalibrationEvidence
 
     @field_validator('created_at')
     @classmethod
@@ -260,10 +296,22 @@ class ReplayEnvelope(FrozenModel):
                 SearchBudgetClass.MIXED_FULL,
             ):
                 raise ValueError('Mixed search requires a mixed fast or full budget class.')
-            case SearchStrategy.ADAPTIVE if self.budget_class is not SearchBudgetClass.ADAPTIVE:
-                raise ValueError('Adaptive search requires the adaptive budget class.')
+            case SearchStrategy.ADAPTIVE if self.budget_class not in (
+                SearchBudgetClass.FIXED,
+                SearchBudgetClass.PROGRESSIVE_STAGE,
+            ):
+                raise ValueError('Adaptive stopping requires a fixed or progressive budget class.')
             case _:
                 pass
+        match self.search_strategy, self.search_calibration:
+            case SearchStrategy.ADAPTIVE, VisitMarginSearchCalibration():
+                pass
+            case SearchStrategy.ADAPTIVE, NoSearchCalibration():
+                raise ValueError('Adaptive search requires visit-margin calibration evidence.')
+            case _, NoSearchCalibration():
+                pass
+            case _, VisitMarginSearchCalibration():
+                raise ValueError('Visit-margin calibration evidence requires adaptive search.')
         match self.stop_reason:
             case SearchStopReason.FULL_BUDGET if self.actual_simulations != self.configured_simulation_cap:
                 raise ValueError('Full-budget search must consume its configured cap.')
@@ -273,6 +321,8 @@ class ReplayEnvelope(FrozenModel):
                 raise ValueError('Terminal-root search cannot simulate or contribute a policy target.')
             case SearchStopReason.ADAPTIVE_CONFIDENCE if self.search_strategy is not SearchStrategy.ADAPTIVE:
                 raise ValueError('Adaptive-confidence stopping requires adaptive search.')
+            case SearchStopReason.ADAPTIVE_CONFIDENCE if self.actual_simulations >= self.configured_simulation_cap:
+                raise ValueError('Adaptive-confidence stopping must occur before the configured cap.')
             case _:
                 pass
         return self

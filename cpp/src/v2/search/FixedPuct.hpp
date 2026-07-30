@@ -11,7 +11,6 @@
 #include <cmath>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -62,6 +61,7 @@ private:
         bool expanded = false;
         int32 visits = 0;
         double valueSum = 0.0;
+        double expansionValue = 0.0;
         std::optional<double> censoredTerminalValue;
         std::vector<Child> children;
 
@@ -85,10 +85,14 @@ private:
 
             Node root(initial_state);
             (void) expand(root, true);
+            _initialRootFpu = firstPlayUrgency(root);
             for (int64 simulation = 0; simulation < _configuration.simulationCap; ++simulation) {
                 simulate(root);
+                if (root.visits < _configuration.simulationCap && shouldStopAdaptively(root)) {
+                    return completedResult(root, SearchStopReason::AdaptiveConfidence);
+                }
             }
-            return completedResult(root);
+            return completedResult(root, SearchStopReason::FullBudget);
         }
 
     private:
@@ -142,6 +146,7 @@ private:
                 });
             }
             node.expanded = true;
+            node.expansionValue = inferenceResult.value;
             return inferenceResult.value;
         }
 
@@ -191,7 +196,7 @@ private:
         }
 
         [[nodiscard]] Child &selectChild(Node &node) const {
-            const double fpu = visitedChildMean(node);
+            const double fpu = firstPlayUrgency(node);
             const double parentScale = std::sqrt(static_cast<double>(node.visits));
             std::size_t bestIndex = 0;
             double bestScore = -std::numeric_limits<double>::infinity();
@@ -225,6 +230,54 @@ private:
             }
             return count == 0 ? _configuration.noVisitedChildValue
                               : total / static_cast<double>(count);
+        }
+
+        [[nodiscard]] double firstPlayUrgency(const Node &node) const {
+            switch (_configuration.fpuPolicy) {
+            case FpuPolicy::ParentValue:
+                return parentValueEstimate(node);
+            case FpuPolicy::ReducedParentValue: {
+                double visitedPriorMass = 0.0;
+                for (const Child &child : node.children) {
+                    if (child.node != nullptr && child.node->visits > 0) {
+                        visitedPriorMass += child.prior;
+                    }
+                }
+                return parentValueEstimate(node) -
+                       _configuration.fpuReduction * std::sqrt(visitedPriorMass);
+            }
+            case FpuPolicy::VisitedChildMean:
+                return visitedChildMean(node);
+            }
+            throw std::logic_error("unknown FPU policy");
+        }
+
+        [[nodiscard]] static double parentValueEstimate(const Node &node) {
+            return node.visits == 0 ? node.expansionValue : node.meanValue();
+        }
+
+        [[nodiscard]] bool shouldStopAdaptively(const Node &root) const {
+            const AdaptiveStoppingConfiguration &stopping = _configuration.adaptiveStopping;
+            if (!stopping.enabled || root.visits < stopping.minimumSimulations ||
+                (root.visits - stopping.minimumSimulations) % stopping.checkIntervalSimulations !=
+                    0) {
+                return false;
+            }
+            int32 first = 0;
+            int32 second = 0;
+            for (const Child &child : root.children) {
+                const int32 visits = child.node == nullptr ? 0 : child.node->visits;
+                if (visits > first) {
+                    second = first;
+                    first = visits;
+                } else if (visits > second) {
+                    second = visits;
+                }
+            }
+            const double simulations = static_cast<double>(root.visits);
+            return static_cast<double>(first) / simulations >= stopping.requiredTopVisitFraction &&
+                   static_cast<double>(first - second) / simulations >=
+                       stopping.requiredTopTwoMargin;
         }
 
         [[nodiscard]] std::optional<double> validatedTerminalValue(const State &state) const {
@@ -261,7 +314,7 @@ private:
                     SearchTelemetry{
                         .configuredCap = _configuration.simulationCap,
                         .actualSimulations = 0,
-                        .budgetClass = SearchBudgetClass::Fixed,
+                        .budgetClass = _configuration.budgetClass,
                         .stopReason = SearchStopReason::TerminalRoot,
                         .policyTargetEligible = false,
                         .policyTargetWeight = 0.0,
@@ -271,11 +324,13 @@ private:
                         .totalInferenceRequests = 0,
                         .rootEntropy = 0.0,
                         .topTwoVisitMargin = 0.0,
+                        .initialRootFpu = 0.0,
                     },
             };
         }
 
-        [[nodiscard]] SearchResult<action_type> completedResult(const Node &root) {
+        [[nodiscard]] SearchResult<action_type> completedResult(const Node &root,
+                                                                SearchStopReason stopReason) {
             const auto actionCount = validatedActionCount(root.state);
             std::vector<double> policy(static_cast<std::size_t>(actionCount), 0.0);
             std::vector<int32> visits(static_cast<std::size_t>(actionCount), 0);
@@ -287,7 +342,7 @@ private:
                 visits[index] = childVisits;
                 policy[index] = static_cast<double>(childVisits) / static_cast<double>(root.visits);
                 const double actionValue =
-                    childVisits == 0 ? visitedChildMean(root)
+                    childVisits == 0 ? firstPlayUrgency(root)
                                      : -_configuration.backupDiscount * child.node->meanValue();
                 children.push_back(RootChildStatistics<action_type>{
                     .action = child.action,
@@ -311,16 +366,17 @@ private:
                     SearchTelemetry{
                         .configuredCap = _configuration.simulationCap,
                         .actualSimulations = root.visits,
-                        .budgetClass = SearchBudgetClass::Fixed,
-                        .stopReason = SearchStopReason::FullBudget,
-                        .policyTargetEligible = true,
-                        .policyTargetWeight = 1.0,
+                        .budgetClass = _configuration.budgetClass,
+                        .stopReason = stopReason,
+                        .policyTargetEligible = _configuration.policyTargetWeight > 0.0,
+                        .policyTargetWeight = _configuration.policyTargetWeight,
                         .rootVisitCount = root.visits,
                         .rootInferenceRequests = _rootInferenceRequests,
                         .leafInferenceRequests = _leafInferenceRequests,
                         .totalInferenceRequests = _rootInferenceRequests + _leafInferenceRequests,
                         .rootEntropy = policyEntropy(root),
                         .topTwoVisitMargin = topTwoMargin(root),
+                        .initialRootFpu = _initialRootFpu,
                     },
             };
         }
@@ -413,6 +469,7 @@ private:
         uint64 _nextRequestId = 0;
         int64 _rootInferenceRequests = 0;
         int64 _leafInferenceRequests = 0;
+        double _initialRootFpu = 0.0;
     };
 };
 

@@ -9,9 +9,8 @@ from src.az.config.root import ResolvedRunConfiguration
 from src.az.config.runtime import TelemetryMetric
 from src.az.config.search import (
     DisabledTreeReuse,
-    FixedSearchBudget,
     FullBudgetStopping,
-    VisitedChildMeanFpu,
+    VisitMarginAdaptiveRule,
 )
 from src.az.config.seeds import (
     ModelInitializationSeedCoordinates,
@@ -22,7 +21,7 @@ from src.az.config.training import InitialStateOnly
 from src.az.games.go.configuration import DisabledResignation
 from src.az.runtime.topology import RuntimeTopology, WorkerAssignment
 from src.az.self_play.configuration import (
-    FixedNativeSearchSpecification,
+    NativeSearchSpecification,
     GoWorkerSpecification,
 )
 
@@ -88,21 +87,6 @@ def build_runtime_plan(
             pass
         case _:
             raise ValueError('Stage 7 runtime supports only a fixed model schedule.')
-    match configuration.search.budget:
-        case FixedSearchBudget(simulations=simulation_cap):
-            pass
-        case _:
-            raise ValueError('Stage 7 runtime supports only fixed search budgets.')
-    match configuration.search.stopping:
-        case FullBudgetStopping():
-            pass
-        case _:
-            raise ValueError('Stage 7 runtime supports only full-budget stopping.')
-    match configuration.search.fpu:
-        case VisitedChildMeanFpu(no_visited_child_value=no_visited_child_value):
-            pass
-        case _:
-            raise ValueError('Stage 7 runtime supports only visited-child-mean FPU.')
     match configuration.search.tree_reuse:
         case DisabledTreeReuse():
             pass
@@ -127,6 +111,11 @@ def build_runtime_plan(
         raise ValueError('Stage 7 replay publication supports only explicit uncompressed shards.')
     if configuration.telemetry.search_trace_sample_probability != 0:
         raise ValueError('Search trace sampling is reserved for Stage 9.')
+    match configuration.search.stopping:
+        case VisitMarginAdaptiveRule(calibration_id=calibration_id) if calibration_id.startswith('placeholder'):
+            raise ValueError('Adaptive search requires a non-placeholder calibration identifier.')
+        case VisitMarginAdaptiveRule() | FullBudgetStopping():
+            pass
     unsupported_metrics = set(configuration.telemetry.required_metrics) - STAGE7_DERIVABLE_METRICS
     if unsupported_metrics:
         unsupported = ', '.join(sorted(metric.value for metric in unsupported_metrics))
@@ -174,11 +163,12 @@ def build_runtime_plan(
                 game_configuration=configuration.game,
                 model_configuration=architecture,
                 model_initialization_seed=model_seed,
-                search=FixedNativeSearchSpecification(
-                    simulation_cap=simulation_cap,
+                search=NativeSearchSpecification(
+                    budget=configuration.search.budget,
+                    stopping=configuration.search.stopping,
+                    fpu=configuration.search.fpu,
                     exploration_constant=configuration.search.algorithm.exploration_constant,
                     backup_discount=configuration.search.backup_discount,
-                    no_visited_child_value=no_visited_child_value,
                     temperature=configuration.search.temperature,
                     root_exploration=configuration.search.root_exploration,
                 ),

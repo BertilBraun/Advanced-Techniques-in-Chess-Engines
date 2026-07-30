@@ -15,9 +15,18 @@ from src.az.config.search import (
     ConstantTemperature,
     DirichletRootExploration,
     DisabledRootExploration,
+    FixedSearchBudget,
+    FullBudgetStopping,
+    MixedSearchBudget,
+    ParentValueFpu,
     PlyTemperatureSchedule,
+    ProgressiveSearchBudget,
+    ReducedParentValueFpu,
     RootExplorationConfiguration,
+    SearchBudgetStage,
     TemperatureConfiguration,
+    VisitMarginAdaptiveRule,
+    VisitedChildMeanFpu,
 )
 from src.az.games.api import GameIdentifier
 from src.az.games.go.configuration import (
@@ -28,13 +37,16 @@ from src.az.games.go.replay_codec import GoReplayCodec
 from src.az.games.go.samples import PendingGoSearchSample, finalize_sample, pending_sample_from_native
 from src.az.replay.envelope import (
     GameTermination,
+    NoSearchCalibration,
     ReplayEnvelope,
     ReplayRecord,
     RootDiagnostics,
+    SearchCalibrationEvidence,
     SearchBudgetClass,
     SearchStopReason,
     SearchStrategy,
     SelfPlaySeedLineage,
+    VisitMarginSearchCalibration,
     derive_self_play_seed_lineage,
 )
 from src.az.runtime.messages import (
@@ -48,9 +60,9 @@ from src.az.runtime.messages import (
     WorkerStopped,
 )
 from src.az.runtime.telemetry import sample_process_resources
-from src.az.runtime.ipc import ByteQueue, StopSignal
+from src.az.runtime.ipc import ByteQueue, RuntimeControlSignal, StopSignal
 from src.az.self_play.go_adapter import GoInferenceBatchBroker
-from src.az.self_play.configuration import GoWorkerSpecification
+from src.az.self_play.configuration import GoWorkerSpecification, NativeSearchSpecification
 from src.az.self_play.model_refresh import load_newer_model_checkpoint
 from src.az.self_play.scheduling import LogicalWorkerGameScheduler
 from src.az.training.checkpoints import CheckpointRepository
@@ -65,6 +77,21 @@ class _PendingPosition:
     entropy: float
     top_two_margin: float
     seed_lineage: SelfPlaySeedLineage
+    search_strategy: SearchStrategy
+    budget_class: SearchBudgetClass
+    configured_simulation_cap: int
+    stop_reason: SearchStopReason
+    policy_target_weight: float
+    search_calibration: SearchCalibrationEvidence
+
+
+@dataclass(frozen=True)
+class _SelectedSearch:
+    strategy: SearchStrategy
+    budget_class: SearchBudgetClass
+    simulation_cap: int
+    policy_target_weight: float
+    search_calibration: SearchCalibrationEvidence
 
 
 class _SearchCancelled(Exception):
@@ -88,7 +115,7 @@ def _send(
 
 def run_go_worker(
     serialized_specification: bytes,
-    stop_event: StopSignal,
+    stop_event: RuntimeControlSignal,
     message_queue: ByteQueue,
 ) -> None:
     specification: GoWorkerSpecification | None = None
@@ -118,6 +145,7 @@ def run_go_worker(
                 model_version=model_version,
             ),
         )
+        experiment_start_monotonic_ns = stop_event.wait_for_experiment_start()
         scheduler = LogicalWorkerGameScheduler(
             specification.logical_worker_start_index,
             specification.logical_worker_count,
@@ -145,6 +173,7 @@ def run_go_worker(
                             checkpoint_id,
                             broker,
                             stop_event,
+                            experiment_start_monotonic_ns,
                         )
                     refresh_requested = False
                     while active:
@@ -185,6 +214,7 @@ def run_go_worker(
                                     interval_total_inference_wait_microseconds=telemetry.total_wait_microseconds,
                                     interval_inference_cache_hits=telemetry.cache_hits,
                                     monotonic_seconds=now,
+                                    search_calibration=_search_calibration(specification.search),
                                 ),
                             )
                             last_progress = now
@@ -218,6 +248,7 @@ def run_go_worker(
                                 checkpoint_id,
                                 broker,
                                 stop_event,
+                                experiment_start_monotonic_ns,
                             )
             refreshed = _refresh_model(
                 specification,
@@ -272,6 +303,7 @@ def _submit_game(
     checkpoint_id: str,
     broker: GoInferenceBatchBroker,
     stop_event: StopSignal,
+    experiment_start_monotonic_ns: int,
 ) -> None:
     scheduled = scheduler.next_game()
     future = executor.submit(
@@ -282,6 +314,7 @@ def _submit_game(
         checkpoint_id,
         broker,
         stop_event,
+        experiment_start_monotonic_ns,
     )
     active[future] = scheduled.logical_worker_index
 
@@ -343,6 +376,7 @@ def _play_game(
     checkpoint_id: str,
     broker: GoInferenceBatchBroker,
     stop_event: StopSignal,
+    experiment_start_monotonic_ns: int,
 ) -> tuple[ReplayRecord, ...] | None:
     game_configuration = specification.game_configuration
     rules = native.GoRules(
@@ -370,16 +404,28 @@ def _play_game(
         )
         encoding = state.canonical_encoding()
         legal_actions = tuple(state.legal_actions())
+        selected_search = _select_search(
+            specification.search,
+            lineage.search_budget_seed,
+            experiment_start_monotonic_ns,
+        )
+        fpu_policy, fpu_reduction, no_visited_child_value = _native_fpu(specification.search)
+        adaptive_stopping = _native_adaptive_stopping(specification.search)
         search_configuration = native.FixedPuctConfiguration(
-            simulation_cap=specification.search.simulation_cap,
+            simulation_cap=selected_search.simulation_cap,
             exploration_constant=specification.search.exploration_constant,
             backup_discount=specification.search.backup_discount,
-            no_visited_child_value=specification.search.no_visited_child_value,
+            no_visited_child_value=no_visited_child_value,
             action_temperature=_temperature(specification.search.temperature, ply),
             root_noise_seed=lineage.root_noise_seed,
             action_sampling_seed=lineage.action_sampling_seed,
             root_noise=_root_noise(specification.search.root_exploration),
             tree_reuse=False,
+            fpu_policy=fpu_policy,
+            fpu_reduction=fpu_reduction,
+            adaptive_stopping=adaptive_stopping,
+            budget_class=_native_budget_class(selected_search.budget_class),
+            policy_target_weight=selected_search.policy_target_weight,
         )
 
         def evaluate(request: native.GoInferenceRequest) -> native.InferenceResult:
@@ -409,6 +455,12 @@ def _play_game(
                 entropy=result.telemetry.root_entropy,
                 top_two_margin=result.telemetry.top_two_visit_margin,
                 seed_lineage=lineage,
+                search_strategy=selected_search.strategy,
+                budget_class=selected_search.budget_class,
+                configured_simulation_cap=selected_search.simulation_cap,
+                stop_reason=_stop_reason(result.telemetry.stop_reason),
+                policy_target_weight=result.telemetry.policy_target_weight,
+                search_calibration=selected_search.search_calibration,
             )
         )
         state.apply(result.selected_action)
@@ -439,13 +491,13 @@ def _play_game(
             created_at=datetime.now(timezone.utc),
             ply=position.ply,
             checkpoint_id=checkpoint_id,
-            search_strategy=SearchStrategy.FIXED,
-            budget_class=SearchBudgetClass.FIXED,
-            configured_simulation_cap=specification.search.simulation_cap,
+            search_strategy=position.search_strategy,
+            budget_class=position.budget_class,
+            configured_simulation_cap=position.configured_simulation_cap,
             actual_simulations=position.actual_simulations,
-            stop_reason=SearchStopReason.FULL_BUDGET,
+            stop_reason=position.stop_reason,
             policy_target_eligible=position.sample.policy_weight > 0,
-            policy_target_weight=position.sample.policy_weight,
+            policy_target_weight=position.policy_target_weight,
             value_target_eligible=termination is not GameTermination.SAFETY_PLY_CAP,
             value_target_weight=sample.value_weight,
             root_diagnostics=RootDiagnostics(
@@ -457,6 +509,7 @@ def _play_game(
             ),
             termination=termination,
             replay_credit_id=uuid5(sample_id, 'replay-credit'),
+            search_calibration=position.search_calibration,
         )
         records.append(ReplayRecord(envelope=envelope, payload=codec.encode(sample)))
     return tuple(records)
@@ -478,6 +531,136 @@ def _temperature(configuration: TemperatureConfiguration, ply: int) -> float:
                 if ply < stage.maximum_ply_exclusive:
                     return stage.temperature
             return final
+
+
+def _select_search(
+    search: NativeSearchSpecification,
+    search_budget_seed: int,
+    experiment_start_monotonic_ns: int,
+) -> _SelectedSearch:
+    match search.budget, search.stopping:
+        case FixedSearchBudget(simulations=simulations), VisitMarginAdaptiveRule(calibration_id=calibration_id):
+            return _SelectedSearch(
+                SearchStrategy.ADAPTIVE,
+                SearchBudgetClass.FIXED,
+                simulations,
+                1.0,
+                VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id),
+            )
+        case FixedSearchBudget(simulations=simulations), FullBudgetStopping():
+            return _SelectedSearch(
+                SearchStrategy.FIXED,
+                SearchBudgetClass.FIXED,
+                simulations,
+                1.0,
+                NoSearchCalibration(kind='none'),
+            )
+        case ProgressiveSearchBudget(stages=stages), VisitMarginAdaptiveRule(calibration_id=calibration_id):
+            return _SelectedSearch(
+                SearchStrategy.ADAPTIVE,
+                SearchBudgetClass.PROGRESSIVE_STAGE,
+                _progressive_simulation_cap(stages, experiment_start_monotonic_ns),
+                1.0,
+                VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id),
+            )
+        case ProgressiveSearchBudget(stages=stages), FullBudgetStopping():
+            return _SelectedSearch(
+                SearchStrategy.PROGRESSIVE,
+                SearchBudgetClass.PROGRESSIVE_STAGE,
+                _progressive_simulation_cap(stages, experiment_start_monotonic_ns),
+                1.0,
+                NoSearchCalibration(kind='none'),
+            )
+        case MixedSearchBudget(
+            cheap_simulations=cheap,
+            full_simulations=full,
+            full_search_probability=probability,
+            cheap_policy_target_weight=cheap_weight,
+            full_policy_target_weight=full_weight,
+        ), FullBudgetStopping():
+            choose_full = search_budget_seed < int(probability * 2**63)
+            return _SelectedSearch(
+                SearchStrategy.MIXED,
+                SearchBudgetClass.MIXED_FULL if choose_full else SearchBudgetClass.MIXED_FAST,
+                full if choose_full else cheap,
+                full_weight if choose_full else cheap_weight,
+                NoSearchCalibration(kind='none'),
+            )
+        case _:
+            raise AssertionError('Search configuration validation excludes this combination.')
+
+
+def _progressive_simulation_cap(
+    stages: tuple[SearchBudgetStage, ...],
+    experiment_start_monotonic_ns: int,
+) -> int:
+    elapsed_seconds = max(
+        0,
+        (time.monotonic_ns() - experiment_start_monotonic_ns) // 1_000_000_000,
+    )
+    selected = stages[0]
+    for stage in stages[1:]:
+        if elapsed_seconds < stage.start_elapsed_seconds:
+            break
+        selected = stage
+    return selected.simulations
+
+
+def _native_fpu(
+    search: NativeSearchSpecification,
+) -> tuple[native.FpuPolicy, float, float]:
+    match search.fpu:
+        case ParentValueFpu():
+            return native.FpuPolicy.PARENT_VALUE, 0.0, 0.0
+        case ReducedParentValueFpu(reduction=reduction):
+            return native.FpuPolicy.REDUCED_PARENT_VALUE, reduction, 0.0
+        case VisitedChildMeanFpu(no_visited_child_value=fallback):
+            return native.FpuPolicy.VISITED_CHILD_MEAN, 0.0, fallback
+
+
+def _native_adaptive_stopping(
+    search: NativeSearchSpecification,
+) -> native.AdaptiveStoppingConfiguration:
+    match search.stopping:
+        case FullBudgetStopping():
+            return native.AdaptiveStoppingConfiguration(False, 1, 1, 1.0, 1.0)
+        case VisitMarginAdaptiveRule(
+            minimum_simulations=minimum,
+            check_interval_simulations=interval,
+            required_top_visit_fraction=fraction,
+            required_top_two_margin=margin,
+        ):
+            return native.AdaptiveStoppingConfiguration(True, minimum, interval, fraction, margin)
+
+
+def _native_budget_class(budget_class: SearchBudgetClass) -> native.SearchBudgetClass:
+    match budget_class:
+        case SearchBudgetClass.FIXED:
+            return native.SearchBudgetClass.FIXED
+        case SearchBudgetClass.PROGRESSIVE_STAGE:
+            return native.SearchBudgetClass.PROGRESSIVE_STAGE
+        case SearchBudgetClass.MIXED_FAST:
+            return native.SearchBudgetClass.MIXED_FAST
+        case SearchBudgetClass.MIXED_FULL:
+            return native.SearchBudgetClass.MIXED_FULL
+
+
+def _stop_reason(reason: native.SearchStopReason) -> SearchStopReason:
+    match reason:
+        case native.SearchStopReason.FULL_BUDGET:
+            return SearchStopReason.FULL_BUDGET
+        case native.SearchStopReason.ADAPTIVE_CONFIDENCE:
+            return SearchStopReason.ADAPTIVE_CONFIDENCE
+        case native.SearchStopReason.TERMINAL_ROOT:
+            return SearchStopReason.TERMINAL_ROOT
+
+
+def _search_calibration(search: NativeSearchSpecification) -> SearchCalibrationEvidence:
+    match search.stopping:
+        case FullBudgetStopping():
+            return NoSearchCalibration(kind='none')
+        case VisitMarginAdaptiveRule(calibration_id=calibration_id):
+            return VisitMarginSearchCalibration(kind='visit_margin', calibration_id=calibration_id)
 
 
 def _root_noise(
