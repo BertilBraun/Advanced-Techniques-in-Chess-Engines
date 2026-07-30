@@ -4,10 +4,12 @@ import hashlib
 import os
 import struct
 import threading
+import bisect
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Literal
+from uuid import UUID
 
 from src.az.games.api import GameIdentifier
 from src.az.replay.credits import ReplayCreditJournal
@@ -29,6 +31,35 @@ class ShardMetadata:
     sequence: int
     position_count: int
     byte_count: int
+
+
+@dataclass(frozen=True)
+class ReplayRecordLocation:
+    shard_sequence: int
+    path: Path
+    record_index: int
+    byte_offset: int
+    sample_id: UUID
+
+
+@dataclass(frozen=True)
+class IndexedReplayShard:
+    metadata: ShardMetadata
+    records: tuple[ReplayRecordLocation, ...]
+
+
+@dataclass(frozen=True)
+class ReplayCatalogSnapshot:
+    shards: tuple[IndexedReplayShard, ...]
+    cumulative_position_counts: tuple[int, ...]
+    position_count: int
+
+    def location(self, global_index: int) -> ReplayRecordLocation:
+        if not 0 <= global_index < self.position_count:
+            raise ValueError('Replay catalog index is outside the population.')
+        shard_index = bisect.bisect_right(self.cumulative_position_counts, global_index)
+        previous_count = 0 if shard_index == 0 else self.cumulative_position_counts[shard_index - 1]
+        return self.shards[shard_index].records[global_index - previous_count]
 
 
 def _canonical_envelope(envelope: ReplayEnvelope) -> bytes:
@@ -172,6 +203,69 @@ class ReplayShardStorage:
 
     def read(self, path: Path) -> tuple[ReplayRecord, ...]:
         return tuple(self._iter_records(path))
+
+    def read_locations(
+        self,
+        locations: tuple[ReplayRecordLocation, ...],
+    ) -> tuple[ReplayRecord, ...]:
+        if not locations:
+            raise ValueError('At least one replay record location is required.')
+        grouped: dict[Path, list[tuple[int, ReplayRecordLocation]]] = {}
+        for result_index, location in enumerate(locations):
+            resolved = self._resolve_shard_path(location.path)
+            grouped.setdefault(resolved, []).append((result_index, location))
+        results: list[ReplayRecord | None] = [None] * len(locations)
+        for path, requested in grouped.items():
+            footer_offset = path.stat().st_size - FOOTER_SIZE
+            with path.open('rb') as stream:
+                for result_index, location in sorted(requested, key=lambda item: item[1].byte_offset):
+                    if (
+                        location.shard_sequence != self._parse_sequence(path)
+                        or location.record_index < 0
+                        or not len(SHARD_MAGIC) <= location.byte_offset < footer_offset
+                    ):
+                        raise ValueError('Replay record location is outside its indexed shard.')
+                    stream.seek(location.byte_offset)
+                    record = _read_record(stream, footer_offset)
+                    if record.envelope.sample_id != location.sample_id:
+                        raise ValueError('Indexed replay sample identity does not match shard contents.')
+                    if record.envelope.game_identifier != self._game_identifier:
+                        raise ValueError('Grouped replay game identity does not match the storage.')
+                    if record.envelope.payload_schema_version != self._payload_schema_version:
+                        raise ValueError('Grouped replay payload schema does not match the storage.')
+                    results[result_index] = record
+        if any(record is None for record in results):
+            raise AssertionError('Grouped replay read did not populate every requested record.')
+        return tuple(record for record in results if record is not None)
+
+    def index_shard(self, metadata: ShardMetadata) -> IndexedReplayShard:
+        resolved = self._resolve_shard_path(metadata.path)
+        expected_count, footer_offset = self._validated_footer(resolved)
+        if expected_count != metadata.position_count:
+            raise ValueError('Replay shard metadata changed while it was being indexed.')
+        locations: list[ReplayRecordLocation] = []
+        with resolved.open('rb') as stream:
+            if _read_exact(stream, len(SHARD_MAGIC), 'header') != SHARD_MAGIC:
+                raise ValueError('Replay shard has an invalid header.')
+            for record_index in range(expected_count):
+                byte_offset = stream.tell()
+                record = _read_record(stream, footer_offset)
+                if record.envelope.game_identifier != self._game_identifier:
+                    raise ValueError('Replay envelope game identity does not match the storage.')
+                if record.envelope.payload_schema_version != self._payload_schema_version:
+                    raise ValueError('Replay envelope payload schema does not match the storage.')
+                locations.append(
+                    ReplayRecordLocation(
+                        shard_sequence=metadata.sequence,
+                        path=resolved,
+                        record_index=record_index,
+                        byte_offset=byte_offset,
+                        sample_id=record.envelope.sample_id,
+                    )
+                )
+            if stream.tell() != footer_offset:
+                raise ValueError('Replay shard record count or framing is invalid.')
+        return IndexedReplayShard(metadata=metadata, records=tuple(locations))
 
     def _iter_records(self, path: Path) -> Iterator[ReplayRecord]:
         resolved = self._resolve_shard_path(path)
@@ -322,3 +416,57 @@ def _sync_directory(directory: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+class IncrementalReplayCatalog:
+    """Immutable snapshots backed by shards that are fully indexed exactly once."""
+
+    def __init__(self, storage: ReplayShardStorage) -> None:
+        self._storage = storage
+        self._indexed: dict[int, IndexedReplayShard] = {}
+        self._sample_shards: dict[UUID, int] = {}
+        self._snapshot = ReplayCatalogSnapshot(
+            shards=(),
+            cumulative_position_counts=(),
+            position_count=0,
+        )
+
+    @property
+    def snapshot(self) -> ReplayCatalogSnapshot:
+        return self._snapshot
+
+    def refresh(self) -> ReplayCatalogSnapshot:
+        visible = self._storage.shards()
+        visible_sequences = {metadata.sequence for metadata in visible}
+        for sequence in set(self._indexed) - visible_sequences:
+            for location in self._indexed[sequence].records:
+                del self._sample_shards[location.sample_id]
+        self._indexed = {sequence: shard for sequence, shard in self._indexed.items() if sequence in visible_sequences}
+        for metadata in visible:
+            existing = self._indexed.get(metadata.sequence)
+            if existing is not None:
+                if existing.metadata != metadata:
+                    raise ValueError('An immutable replay shard changed after indexing.')
+                continue
+            indexed = self._storage.index_shard(metadata)
+            for location in indexed.records:
+                if location.sample_id in self._sample_shards:
+                    raise ValueError('Replay sample identities must be unique across the catalog.')
+            self._indexed[metadata.sequence] = indexed
+            self._sample_shards.update((location.sample_id, metadata.sequence) for location in indexed.records)
+        shards = tuple(self._indexed[metadata.sequence] for metadata in visible)
+        position_count = sum(len(shard.records) for shard in shards)
+        cumulative: list[int] = []
+        running = 0
+        for shard in shards:
+            running += len(shard.records)
+            cumulative.append(running)
+        self._snapshot = ReplayCatalogSnapshot(
+            shards=shards,
+            cumulative_position_counts=tuple(cumulative),
+            position_count=position_count,
+        )
+        return self._snapshot
+
+    def read(self, locations: tuple[ReplayRecordLocation, ...]) -> tuple[ReplayRecord, ...]:
+        return self._storage.read_locations(locations)

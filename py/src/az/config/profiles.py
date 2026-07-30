@@ -78,7 +78,7 @@ def default_topology() -> TopologyConfiguration:
         self_play=DeviceAssignment(device_ids=(0, 1)),
         evaluation=DeviceAssignment(device_ids=(0,)),
         self_play_workers_per_device=2,
-        native_threads_per_worker=4,
+        maximum_active_searches_per_worker=64,
         inference_workers_per_device=1,
         inference_batch_size=128,
         maximum_pending_inference_batches=2,
@@ -165,7 +165,6 @@ def default_search_inference() -> SearchInferenceConfiguration:
 def default_self_play() -> SelfPlayConfiguration:
     return SelfPlayConfiguration(
         start_states=InitialStateOnly(kind='initial_state_only'),
-        concurrent_games_per_worker=64,
         games_per_shard=32,
         value_target_weight=1,
         capped_game_policy_targets_remain_eligible=True,
@@ -229,7 +228,16 @@ def default_telemetry() -> TelemetryConfiguration:
     return TelemetryConfiguration(
         write_every_seconds=10,
         resource_sample_every_seconds=5,
-        required_metrics=tuple(TelemetryMetric),
+        required_metrics=(
+            TelemetryMetric.GAMES,
+            TelemetryMetric.POSITIONS,
+            TelemetryMetric.ACTUAL_SIMULATIONS,
+            TelemetryMetric.BUDGET_CLASS,
+            TelemetryMetric.POLICY_ELIGIBILITY,
+            TelemetryMetric.OPTIMIZER_STEPS,
+            TelemetryMetric.REPLAY_REUSE,
+            TelemetryMetric.STOP_REASON,
+        ),
         search_trace_sample_probability=0,
     )
 

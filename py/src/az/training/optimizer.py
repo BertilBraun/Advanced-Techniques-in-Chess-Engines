@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import io
 import math
+from base64 import b64decode, b64encode
+from typing import Annotated, Literal
 
 import torch
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 from torch import nn
 from torch.optim import Optimizer
 
@@ -145,3 +147,69 @@ def restore_torch_random_state(artifact: bytes) -> None:
         raise ValueError('Torch random-state artifact cannot be empty.')
     state = torch.frombuffer(bytearray(artifact), dtype=torch.uint8).clone()
     torch.set_rng_state(state)
+
+
+class NoCudaRandomStream(FrozenModel):
+    kind: Literal['none']
+
+
+class AssignedCudaRandomStream(FrozenModel):
+    kind: Literal['assigned_cuda']
+    device_index: int = Field(ge=0)
+    device_name: str = Field(min_length=1)
+    state_base64: str = Field(min_length=1)
+
+
+CudaRandomStream = Annotated[
+    NoCudaRandomStream | AssignedCudaRandomStream,
+    Field(discriminator='kind'),
+]
+
+
+def serialize_assigned_cuda_random_state(device: torch.device) -> bytes:
+    if device.type != 'cuda':
+        return (NoCudaRandomStream(kind='none').model_dump_json() + '\n').encode()
+    if device.index is None:
+        raise ValueError('CUDA training device must have an explicit index.')
+    state = torch.cuda.get_rng_state(device)
+    artifact = AssignedCudaRandomStream(
+        kind='assigned_cuda',
+        device_index=device.index,
+        device_name=torch.cuda.get_device_name(device),
+        state_base64=b64encode(state.cpu().numpy().tobytes()).decode('ascii'),
+    )
+    return (artifact.model_dump_json() + '\n').encode()
+
+
+def restore_assigned_cuda_random_state(artifact: bytes, device: torch.device) -> None:
+    if not artifact:
+        raise ValueError('CUDA random-state artifact cannot be empty.')
+    state = TypeAdapter(CudaRandomStream).validate_json(artifact)
+    match state:
+        case NoCudaRandomStream():
+            if device.type == 'cuda':
+                raise ValueError('CUDA trainer cannot restore an absent CUDA random stream.')
+        case AssignedCudaRandomStream(
+            device_index=device_index,
+            device_name=device_name,
+            state_base64=state_base64,
+        ):
+            if device.type != 'cuda' or device.index != device_index:
+                raise ValueError('CUDA random stream device identity does not match trainer assignment.')
+            if torch.cuda.get_device_name(device) != device_name:
+                raise ValueError('CUDA random stream model identity does not match trainer assignment.')
+            state_bytes = b64decode(state_base64, validate=True)
+            random_state = torch.frombuffer(bytearray(state_bytes), dtype=torch.uint8).clone()
+            torch.cuda.set_rng_state(random_state, device)
+
+
+def serialize_gradient_scaler(scaler: torch.amp.GradScaler) -> bytes:
+    stream = io.BytesIO()
+    torch.save(scaler.state_dict(), stream)
+    return stream.getvalue()
+
+
+def restore_gradient_scaler(scaler: torch.amp.GradScaler, artifact: bytes) -> None:
+    if not artifact:
+        raise ValueError('Gradient-scaler artifact cannot be empty.')
+    scaler.load_state_dict(torch.load(io.BytesIO(artifact), map_location='cpu', weights_only=True))

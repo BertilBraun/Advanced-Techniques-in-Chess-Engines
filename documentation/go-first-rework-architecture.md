@@ -493,6 +493,68 @@ population per credit quantum, and a GPU/DDP restart restores CUDA RNG,
 gradient-scaler, process-group, sampler, optimizer, scheduler, and credit-ledger
 state before reproducing the next distributed training behavior.
 
+#### Stage 7 operational guarantees and limitations
+
+- Replay shards are immutable. The incremental catalog validates a shard
+  checksum, record framing, schema, and identities exactly once when it first
+  becomes visible. The catalog retains per-shard indexes and cumulative
+  position counts rather than a flat population-sized record list. A training
+  sample maps deterministic global indexes into shard-local locations; reads
+  are grouped by shard and seek directly to those records. Eviction removes
+  catalog entries but never rewrites durable replay-credit history.
+- The parent runtime is the only replay publisher. Worker IPC transfers typed
+  completed games and buffers exactly the configured number of games per full
+  shard, with at most one partial shutdown shard. `ReplayShardStorage.publish`
+  commits the shard and credit journal before the runtime acknowledges worker
+  publication. Incomplete games are discarded and a publication failure stops
+  the run without crediting pending samples.
+- The resolved run configuration is the runtime construction boundary. It maps
+  game, fixed model, fixed search, replay, topology, hardware, telemetry, and
+  duration settings into a validated runtime plan; strategies reserved for
+  Stage 8 are rejected instead of being silently approximated. Runtime
+  construction validates observed GPU models/count, logical CPUs, RAM, and
+  free disk. Nonzero search-trace sampling and metrics not derivable from
+  Stage 7 replay, credit, checkpoint, or runtime evidence are also rejected.
+- One self-play process and one inference/model owner serve each configured
+  device. Each logical worker has a stable global identity and monotonic
+  per-worker game sequence. `maximum_active_searches_per_worker` maps directly
+  to actual in-flight native searches; the fixed baseline therefore runs 128
+  active searches per device to feed batch 128, at the cost of 128 blocked
+  search threads and their tree/state memory. C++ owns traversal, backup, and
+  action selection. Scalar callbacks submit to a bounded broker, which batches
+  up to the configured size or wait deadline and uses compact byte cache keys.
+  Completed games emit incrementally, progress/resource heartbeats remain live,
+  and a model pointer advance drains only active games before an authenticated
+  model-only refresh.
+- Runtime startup has its own bounded timeout and requires exactly one typed
+  ready event from every worker. The monotonic experiment wall clock starts
+  only after that readiness barrier. Cooperative stop is followed by a
+  configured grace interval, a bounded post-exit lifecycle-message drain, and
+  forced termination when necessary. Telemetry uses a framed,
+  checksummed, fsynced journal that repairs a torn final frame. Replay
+  publication evidence records committed games, positions, shard sequence,
+  and full/partial status only after shard and credit commit. Nonzero exits,
+  missing clean-stop messages, inference failures, publication failures, and
+  remaining process IDs are fatal and retain an explicit failure event.
+- Distributed training uses PyTorch DDP and publishes one atomic global
+  checkpoint generation. Each rank first stages its rank-specific CPU RNG,
+  assigned-device CUDA RNG stream, sampler, replay-credit, and process-group
+  lifecycle state. Rank zero commits the shared model, optimizer, and AMP
+  scaler only after every rank is present and compatible. Collective
+  phase-status checks make staging or commit failure visible to every rank;
+  the prior pointer remains authoritative. A crash between generation rename
+  and pointer replacement is recovered by authenticating the orphan generation
+  and idempotently advancing the pointer. Retention preflights and handles both
+  single-rank and distributed generations.
+- Strict determinism is limited to a single CPU trainer. Concurrent CPU/Gloo
+  runs are recorded as seeded-concurrent and CUDA/NCCL runs as best-effort
+  CUDA: restoring assigned random streams and lifecycle state does not claim
+  bitwise identity for concurrent scheduling or nondeterministic kernels.
+- Native child processes must be able to import `az_go_native`. Windows
+  `spawn` therefore requires the Windows extension directory on child
+  `PYTHONPATH`; the current native integration and system smoke are validated
+  in WSL with the Linux extension directory inherited through `PYTHONPATH`.
+
 ### Stage 8: search-compute strategies
 
 Add progressive and mixed budgets, adaptive trace collection/stopping, and the

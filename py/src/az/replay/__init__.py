@@ -2,7 +2,14 @@ from src.az.replay.codec import ReplayCodec
 from src.az.replay.credits import ReplayCreditJournal, ReplayCreditSnapshot, ReplayCreditState
 from src.az.replay.envelope import ReplayEnvelope, ReplayRecord
 from src.az.replay.sampling import DeterministicReplaySampler, ReplaySamplerState
-from src.az.replay.storage import ReplayShardStorage, ShardMetadata
+from src.az.replay.storage import (
+    IncrementalReplayCatalog,
+    IndexedReplayShard,
+    ReplayCatalogSnapshot,
+    ReplayRecordLocation,
+    ReplayShardStorage,
+    ShardMetadata,
+)
 
 __all__ = [
     'ReplayCodec',
@@ -15,4 +22,8 @@ __all__ = [
     'ReplaySamplerState',
     'ReplayShardStorage',
     'ShardMetadata',
+    'IncrementalReplayCatalog',
+    'IndexedReplayShard',
+    'ReplayCatalogSnapshot',
+    'ReplayRecordLocation',
 ]

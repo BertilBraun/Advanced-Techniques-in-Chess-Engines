@@ -18,7 +18,6 @@ StartStateConfiguration = InitialStateOnly
 
 class SelfPlayConfiguration(FrozenModel):
     start_states: StartStateConfiguration
-    concurrent_games_per_worker: PositiveInt
     games_per_shard: PositiveInt
     value_target_weight: PositiveFloat
     capped_game_policy_targets_remain_eligible: Literal[True]

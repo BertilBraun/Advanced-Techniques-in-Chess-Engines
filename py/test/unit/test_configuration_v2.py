@@ -531,7 +531,7 @@ def test_every_authoring_category_override_flows_to_resolved_configuration() -> 
     candidate = fixed_authoring().model_dump(mode='json')
     candidate['experiment']['duration_seconds'] = 22_000
     candidate['hardware']['expected_gpu_model'] = 'override-gpu'
-    candidate['topology']['native_threads_per_worker'] = 7
+    candidate['topology']['maximum_active_searches_per_worker'] = 7
     candidate['game']['komi_half_points'] = 13
     candidate['model']['schedule']['architecture']['channels'] = 96
     candidate['search']['algorithm']['exploration_constant'] = 1.25
@@ -541,7 +541,6 @@ def test_every_authoring_category_override_flows_to_resolved_configuration() -> 
     candidate['search']['tree_reuse'] = {'kind': 'disabled'}
     candidate['search']['inference']['maximum_batch_size'] = 32
     candidate['search']['backup_discount'] = 0.9
-    candidate['self_play']['concurrent_games_per_worker'] = 7
     candidate['replay']['capacity_positions'] = 123_456
     candidate['replay']['shard_directory'] = 'custom/replay'
     candidate['replay']['credits']['target_reuse'] = 3
@@ -560,7 +559,7 @@ def test_every_authoring_category_override_flows_to_resolved_configuration() -> 
 
     assert resolved.experiment.duration_seconds == 22_000
     assert resolved.hardware.expected_gpu_model == 'override-gpu'
-    assert resolved.topology.native_threads_per_worker == 7
+    assert resolved.topology.maximum_active_searches_per_worker == 7
     assert resolved.game.komi_half_points == 13
     assert resolved.model.schedule.architecture.channels == 96
     assert resolved.search.algorithm.exploration_constant == pytest.approx(1.25)
@@ -570,7 +569,6 @@ def test_every_authoring_category_override_flows_to_resolved_configuration() -> 
     assert resolved.search.tree_reuse.kind == 'disabled'
     assert resolved.search.inference.maximum_batch_size == 32
     assert resolved.search.backup_discount == pytest.approx(0.9)
-    assert resolved.self_play.concurrent_games_per_worker == 7
     assert resolved.replay.capacity_positions == 123_456
     assert str(resolved.replay.shard_directory) == 'custom/replay'
     assert resolved.replay.credits.target_reuse == pytest.approx(3)

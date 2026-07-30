@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 import torch
+from torch import nn
 
 from src.az.games.go.augmentation import GoSymmetry, transform_sample
 from src.az.games.go.configuration import (
@@ -73,6 +74,19 @@ class GoTrainingModule:
     def calculate_loss(self, batch: GoBatch) -> GoLossResult:
         return calculate_go_loss(
             self._model(batch.inputs),
+            batch,
+            self._model,
+            self._objective_configuration,
+        )
+
+    def calculate_loss_with_model(
+        self,
+        batch: GoBatch,
+        model: nn.Module,
+    ) -> GoLossResult:
+        outputs = model(batch.inputs)
+        return calculate_go_loss(
+            outputs,
             batch,
             self._model,
             self._objective_configuration,

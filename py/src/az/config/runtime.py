@@ -26,7 +26,7 @@ class TopologyConfiguration(FrozenModel):
     self_play: DeviceAssignment
     evaluation: DeviceAssignment
     self_play_workers_per_device: PositiveInt
-    native_threads_per_worker: PositiveInt
+    maximum_active_searches_per_worker: PositiveInt
     inference_workers_per_device: PositiveInt
     inference_batch_size: PositiveInt
     maximum_pending_inference_batches: PositiveInt

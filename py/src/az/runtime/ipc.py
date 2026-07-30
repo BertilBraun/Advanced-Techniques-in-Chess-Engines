@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+
+class StopSignal(Protocol):
+    def is_set(self) -> bool: ...
+
+    def set(self) -> None: ...
+
+
+class ByteQueue(Protocol):
+    def put(self, value: bytes) -> None: ...
+
+    def get(self, block: bool = True, timeout: float | None = None) -> bytes: ...
+
+    def close(self) -> None: ...
+
+    def join_thread(self) -> None: ...

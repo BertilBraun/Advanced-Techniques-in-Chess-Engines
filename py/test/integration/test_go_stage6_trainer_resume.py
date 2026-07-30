@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import UUID
 
 import torch
+from src.az.config.base import DeterminismMode
 
 from src.az.config.seeds import ModelInitializationSeedCoordinates, SeedPurpose, derive_seed
 from src.az.config.training import (
@@ -120,6 +121,7 @@ def _trainer(root: Path, storage: ReplayShardStorage) -> CreditTrainer:
         credit_configuration=_credit_configuration(),
         root_seed=ROOT_SEED,
         rank=TrainingRank(rank=0, world_size=1, device=torch.device('cpu')),
+        run_determinism_mode=DeterminismMode.SEEDED_CONCURRENT,
     )
 
 

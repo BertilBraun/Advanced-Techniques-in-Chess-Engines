@@ -13,6 +13,7 @@ from src.az.config.seeds import (
     derive_seed,
 )
 from src.az.replay.envelope import ReplayRecord
+from src.az.replay.storage import IncrementalReplayCatalog
 
 
 class ReplaySamplerState(FrozenModel):
@@ -70,3 +71,44 @@ class DeterministicReplaySampler:
         )
         self._state = ReplaySamplerState(next_optimizer_step=optimizer_step + 1)
         return SampledReplay(records=selected, augmentation_seeds=augmentation_seeds)
+
+    def sample_catalog(
+        self,
+        catalog: IncrementalReplayCatalog,
+        batch_size: int,
+    ) -> SampledReplay:
+        snapshot = catalog.snapshot
+        if snapshot.position_count == 0:
+            raise ValueError('Cannot sample from an empty replay catalog.')
+        if batch_size <= 0:
+            raise ValueError('Replay batch size must be positive.')
+        optimizer_step = self._state.next_optimizer_step
+        sampling_seed = derive_seed(
+            self._root_seed,
+            ReplaySamplingSeedCoordinates(
+                purpose=SeedPurpose.REPLAY_SAMPLING,
+                trainer_rank=self._trainer_rank,
+                optimizer_step=optimizer_step,
+            ),
+        )
+        generator = random.Random(sampling_seed)
+        selected_locations = tuple(
+            snapshot.location(generator.randrange(snapshot.position_count)) for _ in range(batch_size)
+        )
+        augmentation_seeds = tuple(
+            derive_seed(
+                self._root_seed,
+                AugmentationSeedCoordinates(
+                    purpose=SeedPurpose.AUGMENTATION,
+                    trainer_rank=self._trainer_rank,
+                    optimizer_step=optimizer_step,
+                    sample_index=sample_index,
+                ),
+            )
+            for sample_index in range(batch_size)
+        )
+        self._state = ReplaySamplerState(next_optimizer_step=optimizer_step + 1)
+        return SampledReplay(
+            records=catalog.read(selected_locations),
+            augmentation_seeds=augmentation_seeds,
+        )
