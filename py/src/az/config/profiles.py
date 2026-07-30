@@ -21,7 +21,6 @@ from src.az.config.search import (
     FullBudgetStopping,
     PuctSearchConfiguration,
     PlyTemperatureSchedule,
-    RetainSubtree,
     RootExplorationConfiguration,
     SearchAlgorithmConfiguration,
     SearchConfiguration,
@@ -152,7 +151,7 @@ def default_temperature() -> TemperatureConfiguration:
 
 
 def default_tree_reuse() -> TreeReuseConfiguration:
-    return RetainSubtree(kind='retain_subtree', maximum_retained_nodes=100_000)
+    return DisabledTreeReuse(kind='disabled')
 
 
 def default_search_inference() -> SearchInferenceConfiguration:

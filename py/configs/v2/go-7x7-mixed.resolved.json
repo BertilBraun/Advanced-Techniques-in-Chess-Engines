@@ -130,8 +130,7 @@
       "final_temperature": 0.0
     },
     "tree_reuse": {
-      "kind": "retain_subtree",
-      "maximum_retained_nodes": 100000
+      "kind": "disabled"
     },
     "inference": {
       "maximum_batch_size": 128,

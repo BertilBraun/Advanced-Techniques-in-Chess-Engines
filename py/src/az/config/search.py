@@ -6,6 +6,9 @@ from pydantic import Field, PositiveFloat, PositiveInt, model_validator
 
 from src.az.config.base import FrozenModel
 
+NATIVE_SIMULATION_COUNT_MAXIMUM = 2_147_483_647
+SearchSimulationCount = Annotated[int, Field(gt=0, le=NATIVE_SIMULATION_COUNT_MAXIMUM)]
+
 
 class PuctSearchConfiguration(FrozenModel):
     kind: Literal['puct']
@@ -17,12 +20,12 @@ SearchAlgorithmConfiguration = PuctSearchConfiguration
 
 class FixedSearchBudget(FrozenModel):
     kind: Literal['fixed']
-    simulations: PositiveInt
+    simulations: SearchSimulationCount
 
 
 class SearchBudgetStage(FrozenModel):
     start_elapsed_seconds: int = Field(ge=0)
-    simulations: PositiveInt
+    simulations: SearchSimulationCount
 
 
 class ProgressiveSearchBudget(FrozenModel):
@@ -39,8 +42,8 @@ class ProgressiveSearchBudget(FrozenModel):
 
 class MixedSearchBudget(FrozenModel):
     kind: Literal['mixed']
-    cheap_simulations: PositiveInt
-    full_simulations: PositiveInt
+    cheap_simulations: SearchSimulationCount
+    full_simulations: SearchSimulationCount
     full_search_probability: float = Field(gt=0, lt=1)
     cheap_policy_target_weight: float = Field(ge=0)
     full_policy_target_weight: PositiveFloat
@@ -64,8 +67,8 @@ class FullBudgetStopping(FrozenModel):
 
 class VisitMarginAdaptiveRule(FrozenModel):
     kind: Literal['visit_margin']
-    minimum_simulations: PositiveInt
-    check_interval_simulations: PositiveInt
+    minimum_simulations: SearchSimulationCount
+    check_interval_simulations: SearchSimulationCount
     required_top_visit_fraction: float = Field(gt=0.5, le=1)
     required_top_two_margin: float = Field(ge=0, le=1)
     calibration_id: str = Field(min_length=1)

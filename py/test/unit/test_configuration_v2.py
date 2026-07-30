@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -23,11 +24,16 @@ from src.az.config.manifest import (
     inspect_source_state,
 )
 from src.az.config.models import (
+    FixedSearchBudget,
     MixedSearchBudget,
     ProgressiveSearchBudget,
     ResolvedRunConfiguration,
     SearchConfiguration,
     VisitMarginAdaptiveRule,
+)
+from src.az.config.search import (
+    NATIVE_SIMULATION_COUNT_MAXIMUM,
+    SearchBudgetStage,
 )
 from src.az.config.resolution import AuthoringRunConfiguration, resolve_configuration
 from src.az.config.seeds import (
@@ -82,6 +88,131 @@ def test_resolution_materializes_every_root_category() -> None:
     assert serialized['search']['backup_discount'] == 1.0
     assert serialized['training']['objective']['kind'] == 'go_policy_value'
     assert serialized['telemetry']['required_metrics']
+
+
+def test_fixed_baseline_maps_only_implemented_native_search_choices() -> None:
+    search = resolve_configuration(fixed_authoring()).search
+
+    assert search.algorithm.kind == 'puct'
+    assert search.algorithm.exploration_constant == pytest.approx(1.5)
+    assert search.budget.kind == 'fixed'
+    assert search.budget.simulations == 64
+    assert search.stopping.kind == 'full_budget'
+    assert search.fpu.kind == 'visited_child_mean'
+    assert search.fpu.no_visited_child_value == 0
+    assert search.root_exploration.kind == 'dirichlet'
+    assert search.root_exploration.alpha == pytest.approx(0.3)
+    assert search.root_exploration.exploration_fraction == pytest.approx(0.25)
+    assert search.temperature.kind == 'by_ply'
+    assert search.temperature.stages[0].maximum_ply_exclusive == 20
+    assert search.temperature.stages[0].temperature == 1
+    assert search.temperature.final_temperature == 0
+    assert search.tree_reuse.kind == 'disabled'
+    assert search.backup_discount == 1
+
+
+def test_native_simulation_count_boundary_is_explicit() -> None:
+    assert (
+        FixedSearchBudget(kind='fixed', simulations=NATIVE_SIMULATION_COUNT_MAXIMUM).simulations
+        == NATIVE_SIMULATION_COUNT_MAXIMUM
+    )
+    assert (
+        SearchBudgetStage(
+            start_elapsed_seconds=0,
+            simulations=NATIVE_SIMULATION_COUNT_MAXIMUM,
+        ).simulations
+        == NATIVE_SIMULATION_COUNT_MAXIMUM
+    )
+
+
+@pytest.mark.parametrize(
+    'invalid_value',
+    [math.inf, -math.inf, math.nan],
+    ids=['positive-infinity', 'negative-infinity', 'nan'],
+)
+@pytest.mark.parametrize(
+    'nested_field',
+    ['search-algorithm', 'search-temperature', 'search-root-noise', 'optimizer'],
+)
+def test_serialized_configuration_rejects_non_finite_nested_floats(
+    invalid_value: float,
+    nested_field: str,
+) -> None:
+    candidate = fixed_authoring().model_dump(mode='python')
+    match nested_field:
+        case 'search-algorithm':
+            candidate['search']['algorithm']['exploration_constant'] = invalid_value
+        case 'search-temperature':
+            candidate['search']['temperature'] = {
+                'kind': 'constant',
+                'temperature': invalid_value,
+            }
+        case 'search-root-noise':
+            candidate['search']['root_exploration']['alpha'] = invalid_value
+        case 'optimizer':
+            candidate['training']['optimizer']['learning_rate'] = invalid_value
+        case _:
+            raise AssertionError('unhandled test field')
+
+    with pytest.raises(ValidationError, match='finite number'):
+        AuthoringRunConfiguration.model_validate(candidate)
+
+
+@pytest.mark.parametrize(
+    ('model_type', 'payload'),
+    [
+        (
+            FixedSearchBudget,
+            {'kind': 'fixed', 'simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1},
+        ),
+        (
+            SearchBudgetStage,
+            {
+                'start_elapsed_seconds': 0,
+                'simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1,
+            },
+        ),
+        (
+            MixedSearchBudget,
+            {
+                'kind': 'mixed',
+                'cheap_simulations': 1,
+                'full_simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1,
+                'full_search_probability': 0.25,
+                'cheap_policy_target_weight': 0,
+                'full_policy_target_weight': 1,
+            },
+        ),
+        (
+            VisitMarginAdaptiveRule,
+            {
+                'kind': 'visit_margin',
+                'minimum_simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1,
+                'check_interval_simulations': 1,
+                'required_top_visit_fraction': 0.8,
+                'required_top_two_margin': 0.5,
+                'calibration_id': 'boundary-test',
+            },
+        ),
+        (
+            VisitMarginAdaptiveRule,
+            {
+                'kind': 'visit_margin',
+                'minimum_simulations': 1,
+                'check_interval_simulations': NATIVE_SIMULATION_COUNT_MAXIMUM + 1,
+                'required_top_visit_fraction': 0.8,
+                'required_top_two_margin': 0.5,
+                'calibration_id': 'boundary-test',
+            },
+        ),
+    ],
+)
+def test_native_simulation_counts_reject_values_above_int32(
+    model_type: type[FixedSearchBudget | SearchBudgetStage | MixedSearchBudget | VisitMarginAdaptiveRule],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match='less than or equal'):
+        model_type.model_validate(payload)
 
 
 def test_resolved_configuration_is_frozen() -> None:

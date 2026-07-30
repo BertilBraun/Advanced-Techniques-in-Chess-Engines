@@ -23,6 +23,15 @@ if (BUILD_TESTING)
         target_compile_options(GoStateV2Test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif ()
     add_test(NAME GoStateV2Test COMMAND GoStateV2Test)
+
+    add_executable(FixedPuctV2Test ../../test/v2/TestFixedPuct.cpp)
+    target_link_libraries(FixedPuctV2Test PRIVATE az_v2_go)
+    if (MSVC)
+        target_compile_options(FixedPuctV2Test PRIVATE /W4 /WX)
+    else ()
+        target_compile_options(FixedPuctV2Test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif ()
+    add_test(NAME FixedPuctV2Test COMMAND FixedPuctV2Test)
 endif ()
 
 option(AZ_BUILD_V2_PYTHON "Build the focused v2 Go Python binding" OFF)
@@ -35,6 +44,16 @@ if (AZ_BUILD_V2_PYTHON)
             GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4
     )
     FetchContent_MakeAvailable(pybind11)
-    pybind11_add_module(az_go_native bindings/module.cpp bindings/go_bindings.cpp)
+    pybind11_add_module(
+            az_go_native
+            bindings/module.cpp
+            bindings/go_bindings.cpp
+            bindings/search_bindings.cpp
+    )
     target_link_libraries(az_go_native PRIVATE az_v2_go)
+    if (MSVC)
+        target_compile_options(az_go_native PRIVATE /W4 /WX)
+    else ()
+        target_compile_options(az_go_native PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif ()
 endif ()
