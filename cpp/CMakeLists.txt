@@ -25,6 +25,28 @@ function(az_enable_warnings target)
     endif ()
 endfunction()
 
+FetchContent_Declare(
+        Stockfish
+        GIT_REPOSITORY https://github.com/BertilBraun/Stockfish.git
+        GIT_TAG 22956373a5618da5634966e22a250a0482680d9c
+        PATCH_COMMAND
+        ${CMAKE_COMMAND}
+        -DREPOSITORY=<SOURCE_DIR>
+        -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/stockfish-bounded-repetition.patch
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplyPatchOnce.cmake
+)
+FetchContent_MakeAvailable(Stockfish)
+
+add_library(
+        az_stockfish_rules
+        ${stockfish_SOURCE_DIR}/src/bitboard.cpp
+        ${stockfish_SOURCE_DIR}/src/memory.cpp
+        ${stockfish_SOURCE_DIR}/src/misc.cpp
+        ${stockfish_SOURCE_DIR}/src/movegen.cpp
+        ${stockfish_SOURCE_DIR}/src/position.cpp
+)
+target_include_directories(az_stockfish_rules SYSTEM PUBLIC ${stockfish_SOURCE_DIR}/src)
+
 add_library(az_core INTERFACE)
 target_include_directories(az_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_sources(
@@ -61,8 +83,20 @@ target_link_libraries(az_go PUBLIC az_core)
 target_precompile_headers(az_go PRIVATE src/common.hpp)
 az_enable_warnings(az_go)
 
+add_library(
+        az_chess
+        src/games/chess/ChessDefinition.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessPolicy.cpp
+        src/games/chess/ChessState.cpp
+)
+target_link_libraries(az_chess PUBLIC az_core az_stockfish_rules)
+target_precompile_headers(az_chess PRIVATE src/common.hpp)
+az_enable_warnings(az_chess)
+
 if (ENABLE_NATIVE_ARCHITECTURE AND NOT MSVC)
     target_compile_options(az_go PRIVATE -march=native)
+    target_compile_options(az_chess PRIVATE -march=native)
 endif ()
 
 if (BUILD_TESTING)
@@ -89,6 +123,12 @@ if (BUILD_TESTING)
     target_precompile_headers(TreeArenaTest PRIVATE src/common.hpp)
     az_enable_warnings(TreeArenaTest)
     add_test(NAME TreeArenaTest COMMAND TreeArenaTest)
+
+    add_executable(ChessStateTest test/TestChessState.cpp)
+    target_link_libraries(ChessStateTest PRIVATE az_chess)
+    target_precompile_headers(ChessStateTest PRIVATE src/common.hpp)
+    az_enable_warnings(ChessStateTest)
+    add_test(NAME ChessStateTest COMMAND ChessStateTest)
 endif ()
 
 if (AZ_BUILD_PYTHON)

@@ -63,14 +63,14 @@ def chess_configuration() -> ChessExperimentConfiguration:
             kind="chess",
             variant="standard",
             input_encoding="canonical_8x8_history_v1",
-            action_encoding="az_8x8x73",
+            action_encoding="canonical_1880_move_map_v1",
             history_length=8,
             repetition_draw_count=3,
             halfmove_draw_ply_count=100,
             insufficient_material_draw=True,
             safety_ply_cap=1_024,
             perspective="side_to_move",
-            symmetry_group="horizontal_reflection",
+            symmetry_group="identity",
         ),
         model=ChessModelConfiguration(
             schedule=FixedChessModelSchedule(
@@ -156,7 +156,7 @@ def test_root_discriminator_round_trips_complete_game_branches() -> None:
 
     assert validate_resolved_configuration_json(go.model_dump_json()) == go
     assert validate_resolved_configuration_json(chess.model_dump_json()) == chess
-    assert chess.game_configuration.action_count == 4_672
+    assert chess.game_configuration.action_count == 1_880
 
 
 @pytest.mark.parametrize(

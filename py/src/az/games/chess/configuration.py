@@ -30,18 +30,18 @@ class ChessGameConfiguration(FrozenModel):
     kind: Literal["chess"]
     variant: Literal["standard"]
     input_encoding: Literal["canonical_8x8_history_v1"]
-    action_encoding: Literal["az_8x8x73"]
+    action_encoding: Literal["canonical_1880_move_map_v1"]
     history_length: PositiveInt
     repetition_draw_count: Literal[3]
     halfmove_draw_ply_count: Literal[100]
     insufficient_material_draw: Literal[True]
     safety_ply_cap: PositiveInt
     perspective: Literal["side_to_move"]
-    symmetry_group: Literal["horizontal_reflection"]
+    symmetry_group: Literal["identity"]
 
     @property
     def action_count(self) -> int:
-        return 8 * 8 * 73
+        return 1_880
 
 
 class ResidualChessModelConfiguration(FrozenModel):
