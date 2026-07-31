@@ -10,9 +10,10 @@ change without waiting for the user to repeat them.
    `documentation/high-throughput-multigame-rework-plan.md`.
 3. Read the nearest component README and any nested `AGENTS.md`.
 4. Inspect `git status` and preserve all unrelated or user-owned changes.
-5. Inspect the equivalent component at `PreRework` (`f8cb82a`) before replacing
-   or restoring it. Use `git show PreRework:<path>`; do not rewrite that
-   reference branch.
+5. When restoring a proven component, inspect its equivalent at `PreRework`
+   (`f8cb82a`) before replacing it. Use `git show PreRework:<path>`; do not
+   rewrite that reference branch. This is not a prerequisite for new
+   architectural foundation work.
 
 The rework plan controls architecture. The handoff records implementation
 intent and reference behavior. `THINGS_TO_TRY.md` is an idea backlog, not
@@ -192,13 +193,14 @@ Default maintainability limits:
 - Evaluation jobs may lag but cannot be silently skipped.
 - Stockfish configuration and adapters exist only in the chess experiment
   variant.
-- Low-budget match evaluation batches across many complete native games. It
-  permits at most one in-flight leaf per root and uses no virtual loss.
-- Timed interactive/user play is a separate typed search mode. It may use
-  multiple in-flight leaves per root and virtual loss, and must drain safely at
-  the deadline.
-- Do not reuse interactive parallel-search settings for the training-progress
-  ladder or implement either mode as Python per-move orchestration.
+- Self-play and evaluation use the same general native batched MCTS, tree, and
+  inference implementation.
+- Low-budget match evaluation constrains that shared engine to at most one
+  in-flight leaf per root and no virtual loss while batching across many
+  complete native games.
+- Timed interactive/user play, its parallel-leaf and virtual-loss policy, and
+  UCI are deferred. Do not implement evaluation as Python per-move
+  orchestration.
 
 ## Validation
 

@@ -1,6 +1,6 @@
 # Multi-game AlphaZero rework handoff
 
-Status: architecture and implementation planning
+Status: active implementation handoff
 
 Reference snapshot: `PreRework` / `f8cb82a`
 
@@ -18,6 +18,10 @@ Use 7x7 Go for rapid screening, selected 9x9 Go for scale confirmation, and
 then transfer demonstrated improvements to chess. The final target is a
 from-scratch chess run on four RTX 4090 GPUs, 120 GiB host RAM, and 128 CPU
 cores for less than 48 hours.
+
+Go supports every square board size of at least 3 that fits the signed native
+action representation. A resolved Go session uses one fixed board size; 7x7
+and 9x9 are experiment profiles, not implementation limits.
 
 The immediate task is restoration and architectural cleanup, not a research
 feature sprint.
@@ -57,7 +61,7 @@ Python MCTS, chess-specific globals, HDF5 coupling, and maintainability debt.
 
 ## 4. Reference components to inspect
 
-Before implementing a replacement, inspect and benchmark these reference
+When restoring or replacing a proven component, inspect these reference
 components:
 
 | Concern | `PreRework` reference |
@@ -78,7 +82,9 @@ components:
 | chess encoding and action mapping | `cpp/src/BoardEncoding.*`, `cpp/src/MoveEncoding.*` |
 
 Use `git show PreRework:<path>` to inspect the snapshot without disturbing the
-current worktree.
+current worktree. Reference comparison harnesses and paired execution are
+postponed for the current foundation phase and are not prerequisites for new
+contracts, build structure, or game abstractions.
 
 ## 5. Required production topology
 
@@ -174,7 +180,7 @@ lifecycle failures.
 - multi-game scheduler;
 - native inference batching and model generation lifecycle;
 - complete evaluation match runner and opponent adapters;
-- batched-match and timed-interactive evaluation schedulers;
+- batched-match scheduling on the shared MCTS engine;
 - worker pause/drain/resume;
 - replay shard container and publication;
 - aggregate telemetry.
@@ -228,10 +234,11 @@ The game literal is the serialization discriminator. Every worker, trainer
 rank, replay manifest, checkpoint, and evaluation task in a run carries and
 validates the same game identity. Resume fails before launch on a mismatch.
 
-Each game variant has distinct `BatchedMatchSearchConfiguration` and
-`TimedInteractiveSearchConfiguration` values. The first structurally disables
-virtual loss and intra-root parallel leaves; the second requires explicit
-deadline, leaf concurrency, and virtual-loss settings.
+Each game variant has a constrained native match-search configuration.
+Low-budget matches use the same general batched MCTS implementation as
+self-play while structurally disabling virtual loss and intra-root parallel
+leaves. Timed interactive search and its deadline, parallel-leaf, and
+virtual-loss settings are deferred.
 
 ## 9. Two-layer replay direction
 
@@ -291,7 +298,7 @@ A different representation or objective still receives a new end-to-end run.
 The two layers decouple producer latency from trainer I/O; they are not a reason
 to reuse fixed self-play data for ordinary ablations.
 
-## 10. Native evaluation with two search modes
+## 10. Native evaluation with shared batched MCTS
 
 The existing `PreRework` evaluation tree, batching, opponents, match semantics,
 and reports are references. Do not preserve its Python ownership boundary.
@@ -324,16 +331,11 @@ At tiny visit budgets, intra-root virtual loss would consume a significant
 fraction of the search and bias results. One hundred independent games already
 provide sufficient batching parallelism.
 
-### Timed interactive/user play
-
-One user game does not provide enough independent roots. Timed interactive
-search therefore permits multiple outstanding leaves from the active tree,
-multiple selection threads, and configured virtual loss. It drains safely at
-the deadline, reports overshoot, and reuses the selected subtree.
-
-This mode measures and serves final user-facing strength under time control.
-It shares rules, tree storage, selection, inference, and result processing with
-match search, but not the scheduling/parallelism policy.
+Timed interactive/user play, UCI, deadline scheduling, intra-root parallel
+leaves, and virtual-loss tuning are deferred. The current implementation uses
+one general native batched MCTS/tree/inference implementation for self-play and
+evaluation; match evaluation constrains its scheduling rather than introducing
+a second search implementation.
 
 At fixed elapsed checkpoints run the low-search progress ladder. The default
 plan uses roughly 100 games per opponent under a frozen small search budget:
@@ -361,21 +363,39 @@ checkpoint stays queued and visible until completed or explicitly failed.
 
 Do not skip directly to feature experiments.
 
-1. Freeze reference benchmarks and parity fixtures.
-2. Define generic game, artifact, session, topology, and replay contracts.
-3. Restore chess rules, history, encoding, and tests.
-4. Restore generalized native LibTorch inference.
-5. Restore arena-backed cohort MCTS and the 4x4 worker topology.
-6. Restore fast Layer A producer shards, trainer-side Layer B materialization,
+1. Establish the architecture/build/game/config foundation: generic game,
+   artifact, session, topology, and replay contracts plus complete one-game Go
+   and chess configuration variants.
+2. Restore chess rules, history, encoding, and tests within that foundation.
+3. Restore generalized native LibTorch inference.
+4. Restore arena-backed cohort MCTS and the 4x4 worker topology.
+5. Restore fast Layer A producer shards, trainer-side Layer B materialization,
    and the persistent trainer hot path.
-7. Restore the complete native progress-evaluation ladder and both evaluation
-   search modes.
-8. Establish stable 7x7, 9x9, and short chess baselines.
-9. Implement root-asynchronous scheduling as an isolated measured variant.
-10. Begin the fixed/progressive/mixed/adaptive search ablations.
+6. Restore the complete native progress-evaluation ladder using the shared
+   batched search engine.
 
 Each item is a sequence of coherent reviewed commits, not one large rewrite
 commit.
+
+Stable baselines, root-asynchronous scheduling, search/training ablations,
+timed interactive play, UCI, chess transfer pilots, and final training are
+deferred beyond the current implementation scope.
+
+### Current structural status
+
+- Deferred reference benchmarking: intentionally postponed.
+- Joint foundation and chess restoration: partial inherited Go foundation;
+  complete native contracts, arenas, build targets, chess, and the complete
+  configuration union remain.
+- Native LibTorch inference and generic native self-play: not started; the
+  predecessor still uses a Python inference callback and Python game lifecycle.
+- Two-layer replay: not started; the predecessor replay remains a useful
+  checksummed storage and sampling reference.
+- Trainer/runtime: partial predecessor foundation; Layer B consumption and the
+  16-worker to 4-DDP-plus-4-worker transition remain.
+- Experiment lifecycle/evaluation: partial predecessor foundation; complete
+  native matches, chess opponents, and coarse Python job ownership remain.
+- Stage 8 and later: deferred.
 
 ## 12. Definition of done for restored infrastructure
 
@@ -409,7 +429,8 @@ Do not silently decide these during an unrelated implementation:
 - Layer A shard size/compression and Layer B row/shard layout/dtype tradeoffs;
 - CPU affinity and NUMA placement;
 - exact low-search evaluation budget after reference parity.
-- timed-interactive leaf parallelism, virtual-loss magnitude, and batch wait.
+- timed-interactive leaf parallelism, virtual-loss magnitude, and batch wait
+  after interactive play enters scope.
 
 Resolve each with a typed configuration, benchmark, and recorded decision.
 
@@ -431,10 +452,11 @@ until the user confirms the compute environment is available.
 
 1. Read `AGENTS.md`, this handoff, and the relevant plan stage.
 2. Run `git status`; identify and preserve unrelated changes.
-3. Inspect the `PreRework` component and existing benchmark evidence.
+3. Inspect `PreRework` only when restoring or replacing the relevant proven
+   component.
 4. State the smallest stage-scoped objective.
-5. Capture or identify the parity fixture and prepare the performance
-   baseline command; defer target execution when required.
+5. Capture the relevant structural/parity fixture; prepare performance
+   comparison commands when restoring a proven hot-path component.
 6. Implement without mixing a restoration and a speculative optimization.
 7. Format, lint, compile, test, and run only a short smoke if needed.
 8. Regenerate `cpp/compile_commands.json` for native target changes.

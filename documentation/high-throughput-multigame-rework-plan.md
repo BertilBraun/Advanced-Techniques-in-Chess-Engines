@@ -1,6 +1,7 @@
 # High-throughput multi-game AlphaZero architecture and rework plan
 
-Status: proposed architecture; implementation has not started.
+Status: active rework. The Go-only predecessor is implemented; the target
+multi-game stages are not yet complete.
 
 This document supersedes the Go-only target architecture in
 `go-first-rework-architecture.md`. The earlier document remains useful as a
@@ -96,10 +97,11 @@ The next implementation must follow these decisions.
     is a discriminated union of complete Go, chess, or future-game experiment
     configurations. A run cannot mix one game's rules with another game's
     model, objective, replay schema, self-play, or evaluation settings.
-13. **Evaluation search has two explicit modes.** Low-budget training
-    evaluation batches across many independent games with one outstanding leaf
-    per root and no virtual loss. Time-controlled interactive play parallelizes
-    within the active root and uses virtual loss to keep search/inference busy.
+13. **Evaluation reuses the general batched MCTS implementation.** Low-budget
+    training evaluation batches across many independent games with one
+    outstanding leaf per root and no virtual loss. Time-controlled interactive
+    play, UCI, and specialized intra-root parallel/virtual-loss scheduling are
+    deferred.
 
 ## 3. Current-state assessment
 
@@ -145,9 +147,8 @@ The following concepts should return:
 - native inference/search timing and batch histograms;
 - four workers per GPU, four search threads per worker, persistent four-rank
   DDP, and drain/pause/resume coordination;
-- native complete-match evaluation using the same tree and inference
-  implementation, with separate batched-match and timed-interactive scheduler
-  policies.
+- native complete-match evaluation using the same general batched MCTS, tree,
+  and inference implementation. Timed-interactive scheduling is deferred.
 
 The restored code must use the project PCH, configured clang-format and
 clang-tidy, the integer aliases in `common.hpp`, explicit CMake targets, and
@@ -729,11 +730,11 @@ ExperimentConfiguration
 |-- GoExperimentConfiguration
 |   |-- game: Literal["go"]
 |   |-- rules/board, Go model/objective, Go Layer A/B schemas
-|   `-- search, self-play, training, Go match/interactive evaluation, telemetry
+|   `-- search, self-play, training, Go match evaluation, telemetry
 `-- ChessExperimentConfiguration
     |-- game: Literal["chess"]
     |-- rules/history, chess model/objective, chess Layer A/B schemas
-    `-- search, self-play, training, chess match/interactive evaluation, telemetry
+    `-- search, self-play, training, chess match evaluation, telemetry
 ```
 
 There is no independently selectable `game` union beside independent model,
@@ -750,19 +751,17 @@ another complete experiment variant.
 The native session receives the compact, versioned resolved branch for that
 one game; it does not parse Python class names or unvalidated string keys.
 
-Each per-game evaluation branch contains two non-interchangeable search
-variants:
+Each per-game evaluation branch contains a constrained match-search
+configuration:
 
 ```text
-EvaluationSearchConfiguration
-|-- BatchedMatchSearchConfiguration
-|   `-- fixed visits, many games, one in-flight leaf/root, virtual loss off
-`-- TimedInteractiveSearchConfiguration
-    `-- deadline, parallel leaves/root, virtual loss on
+BatchedMatchSearchConfiguration
+`-- fixed visits, many games, one in-flight leaf/root, virtual loss off
 ```
 
-Invalid combinations, such as virtual loss in the low-visit progress ladder,
-fail during configuration resolution.
+Invalid match combinations, such as virtual loss in the low-visit progress
+ladder, fail during configuration resolution. Timed interactive search is
+deferred.
 
 ### 8.1 Feature registry
 
@@ -863,22 +862,11 @@ At low visit counts, multiple selections from one root would spend a material
 part of the budget under virtual loss and distort the comparison. With many
 games available, intra-root parallelism is unnecessary for batch occupancy.
 
-#### Timed interactive search
-
-User-facing play has one or very few active games and a wall-clock deadline.
-It uses the same game rules, tree, selection, inference, and result-processing
-components with a different scheduler policy:
-
-- multiple outstanding leaves from the active root;
-- configured virtual loss to prevent duplicate parallel selection;
-- multiple CPU selection threads and native batched inference;
-- deadline-aware submission/drain and measured deadline overshoot;
-- subtree reuse between user moves.
-
-This is the mode used to assess or expose final user-game strength under time
-control. It is not used for the low-search training-progress ladder. The two
-modes are separate typed configurations and parity fixtures, not runtime flags
-scattered through selection code.
+Timed interactive search, deadline scheduling, intra-root parallel leaves,
+virtual loss for user play, and UCI are deferred. Self-play and evaluation use
+the same general native batched MCTS/tree/inference implementation; match
+evaluation applies constrained scheduling to that engine rather than adding a
+separate fast-evaluation search implementation.
 
 The previous lightweight playing suite remains the main strength/progress
 indicator during a run. Every configured elapsed checkpoint is evaluated with
@@ -928,8 +916,6 @@ Required operational metrics:
 - inference batch-size distribution, latency, and queue wait;
 - match roots per batch and assertion that low-budget evaluation used zero
   virtual loss and at most one in-flight leaf per root;
-- interactive parallel leaves, virtual-loss collisions, deadline overshoot,
-  and searches completed per second;
 - GPU utilization and memory;
 - CPU utilization and search-thread idle time;
 - optimizer steps and samples per hour;
@@ -977,20 +963,18 @@ A Go improvement is not assumed to transfer to chess.
 Reports distinguish demonstrated Go improvements, demonstrated chess
 improvements, and transferred components without isolated chess confirmation.
 
-### 10.5 Interactive play and chess adapters
+### 10.5 Deferred interactive play and chess adapters
 
-Go and chess interactive play use timed interactive search. Offline reference
-matches use batched low-budget or explicitly configured higher-budget match
-search. Both reuse the same native game/search/inference components without
-sharing their scheduler policy.
+Offline reference matches use the shared batched native game/search/inference
+components. Interactive play and its specialized scheduling policy are
+deferred.
 
 Chess reference opponents include fixed archived project checkpoints and
 pinned Stockfish configurations. Color and opening assignments are paired.
 
-A UCI executable is restored only after the native chess session is stable. It
-is a thin protocol adapter over timed interactive search, not a separate engine
-or search tree. A Go user-play adapter follows the same session boundary
-without chess-specific protocol or Stockfish fields.
+A future UCI executable will be a thin adapter over the shared engine after
+native chess and timed interactive scheduling are stable. It is not in the
+current implementation scope.
 
 ## 11. Feature roadmap from `THINGS_TO_TRY.md`
 
@@ -1118,7 +1102,7 @@ Each coherent stage step is committed after its structural checks pass. A
 stage is accepted only after every required structural and deferred runtime
 gate passes.
 
-### Stage 0: freeze evidence and benchmark harnesses
+### Deferred reference benchmarking (not a prerequisite)
 
 - Keep `PreRework` immutable.
 - Freeze commands and inputs for its direct inference, cohort-barrier
@@ -1133,9 +1117,17 @@ Structural acceptance: commands, inputs, and schemas are reproducible and the
 harnesses compile. Runtime acceptance remains pending until target execution
 produces numerical restoration thresholds. No strength claim is made.
 
-### Stage 1: native multi-game contracts and build structure
+Stages 1 and 2 form one architectural foundation phase. Their contract,
+configuration, build, Go, and chess work may interleave and must be complete
+together before dependent migrations begin.
+
+### Stage 1: multi-game contracts, configuration, and build structure
 
 - Add `GameDefinition`, artifact metadata, and native session config.
+- Add complete discriminated Go and chess experiment-configuration branches;
+  one resolved run selects exactly one game.
+- Preserve arbitrary square Go boards of size at least 3, with one fixed size
+  per resolved native session.
 - Define the index types, contiguous node/edge arena, generation semantics,
   capacity policy, and reusable search scratch buffers.
 - Split explicit core, Go, chess, inference, self-play, evaluation, binding,
@@ -1143,19 +1135,21 @@ produces numerical restoration thresholds. No strength claim is made.
 - Use static specialization in hot loops and runtime selection at the factory.
 - Add maintainability gates.
 
-Acceptance: a toy game plus Go instantiate contracts; no Python evaluator is
-required; an instrumented search performs zero allocations after warm-up;
+Acceptance: a toy game plus Go instantiate contracts; the complete
+configuration union cannot mix game-specific components; no Python evaluator
+is required; an instrumented search performs zero allocations after warm-up;
 compile commands cover targets; clang-format/tidy pass.
 
-### Stage 2: restore chess correctly
+### Stage 2: restore chess within the shared foundation
 
 - Restore pinned Stockfish and patch.
 - Port board/history, encoding, action mapping, terminal outcomes, and tests.
 - Add differential legality and repetition/rule-draw/castling/en-passant/
   promotion fixtures.
 
-Acceptance: typed config selects Go or chess; both instantiate native
-contracts; chess parity passes; search/inference is not duplicated by game.
+Acceptance: the Stage 1 typed config selects Go or chess; both instantiate
+native contracts; chess parity passes; search/inference is not duplicated by
+game.
 
 ### Stage 3: restore and generalize native LibTorch inference
 
@@ -1185,7 +1179,8 @@ explanation; refresh is atomic.
 Acceptance: no Python game pool/inference broker in production; both games run
 many simultaneous games; deterministic search matches fixtures; no stranded
 virtual loss; no search-time heap fallback; arena overflow is tested and
-visible; the reference topology and cohort scheduler meet Stage 0.
+visible; the reference topology and cohort scheduler are structurally ready
+for deferred reference benchmarking.
 
 ### Stage 5: two-layer replay pipeline
 
@@ -1226,28 +1221,27 @@ stranded GPU work, or an unacknowledged worker.
 
 ### Stage 7: game-selectable experiment lifecycle
 
-- Add a discriminated union of complete Go and chess experiment
-  configurations; make cross-game component combinations unrepresentable.
+- Use and validate the complete Go/chess experiment union established in the
+  foundation phase.
 - Replace Go runtime factories with native-session launch config.
 - Preserve manifests, stop/resume, elapsed checkpoints, calibration, and
   artifact authentication.
 - Restore the `PreRework` evaluation tree, efficient batching, opponent
   semantics, and reports inside a native complete-match executable; Python
   retains only coarse job scheduling and report aggregation.
-- Add batched match search with one in-flight leaf/root and no virtual loss,
-  plus a separate timed interactive mode with parallel leaves and virtual loss.
+- Add batched match scheduling with one in-flight leaf/root and no virtual
+  loss on the same general MCTS implementation used by self-play.
 - Generalize the native match boundary for Go while keeping Stockfish
   chess-only.
-- Add the thin UCI adapter after chess evaluation is stable.
 
 Acceptance: one discriminator selects a compatible complete stack; invalid
 combinations fail before launch; identities do not repeat on resume; generic
 orchestration has no scattered game-specific branches; evaluation records raw
 games and cannot silently skip an elapsed checkpoint; a native 100-game job
 does not call Python per game/move/leaf; low-budget fixtures prove virtual loss
-is absent; timed fixtures prove safe in-flight draining at the deadline.
+is absent.
 
-### Stage 8: stable baselines and profiling
+### Stage 8: stable baselines and profiling — DEFERRED
 
 - Establish 7x7, selected 9x9, and short chess baselines.
 - Establish the reference topology first, then benchmark active games, batches,
@@ -1259,7 +1253,7 @@ is absent; timed fixtures prove safe in-flight draining at the deadline.
 Acceptance: GPUs stay fed; bottlenecks are quantified; baseline strength is
 reproducible enough for screening; no conclusion depends on one seed.
 
-### Stage 9: search-compute ablations
+### Stage 9: search-compute ablations — DEFERRED
 
 - fixed vs progressive vs mixed vs adaptive;
 - FPU after that comparison;
@@ -1269,7 +1263,7 @@ reproducible enough for screening; no conclusion depends on one seed.
 Acceptance: common hardware/time/init/seeds/search; AUC/final strength with
 intervals; throughput explains outcomes; negative and neutral results remain.
 
-### Stage 10: training/data/model ablations
+### Stage 10: training/data/model ablations — DEFERRED
 
 - replay ratio/window/publication cadence;
 - progressive scaling and global context;
@@ -1280,7 +1274,7 @@ intervals; throughput explains outcomes; negative and neutral results remain.
 Acceptance: features have isolated evidence or are labeled unisolated;
 interactions are measured; selected 9x9 confirmation is complete.
 
-### Stage 11: chess transfer and final run
+### Stage 11: chess transfer and final run — DEFERRED
 
 - Run bounded chess pilots.
 - Tune four-GPU topology and final chess representation.
@@ -1297,19 +1291,17 @@ identified without post-hoc opponent cherry-picking.
 
 Do not begin feature experiments yet.
 
-1. Add reproducible Stage 0 benchmark harnesses and frozen configurations for
-   `PreRework` direct inference/multi-root search, 4x4 worker topology,
-   pause/resume transition, callback path, and current trainer; defer target
-   hardware execution.
+1. Define the joint Stage 1/2 game, artifact, session, topology, replay, and
+   complete one-game experiment configuration contracts.
 2. Freeze tree allocation/reroot/overflow fixtures and the old replay
    buffer's manifest, lease, deterministic sampling, and reanalysis behavior.
-3. Specify exact Stage 1 native game/model/session contracts, complete
-   one-game experiment variants, and Layer A/B replay schemas.
-4. Freeze `PreRework` chess policy/encoding parity fixtures.
-5. Freeze the previous 100-game evaluation ladder's opponent, scheduling, and
+3. Freeze `PreRework` chess policy/encoding parity fixtures when beginning the
+   chess restoration slice.
+4. Freeze the previous 100-game evaluation ladder's opponent, scheduling, and
    result-reporting parity fixtures.
-6. Restore CMake/LibTorch/Stockfish behind explicit targets.
-7. Implement sequentially, measuring before and after every data-plane change.
+5. Restore CMake/LibTorch/Stockfish behind explicit targets.
+6. Implement sequentially, preparing deferred measurements before promoting
+   proven hot-path replacements.
 
 The first implementation milestone is:
 
