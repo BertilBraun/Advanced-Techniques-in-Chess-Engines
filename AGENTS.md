@@ -40,12 +40,14 @@ authorization to implement every item.
 
 - Go and chess are first-class games selected by typed configuration. One
   experiment configuration is exactly one game.
-- C++ owns game progression, MCTS, tree storage, multi-game scheduling,
-  leaf batching, LibTorch inference, subtree reuse, and replay emission.
+- C++ owns self-play and evaluation game progression, MCTS, tree storage,
+  opponent turns, multi-game scheduling, leaf batching, LibTorch inference,
+  subtree reuse, native match results, and replay emission.
 - Production self-play never calls Python once per leaf and never uses Python
   MCTS or a Python inference broker.
-- Python owns typed configuration, supervision, training/autograd, evaluation
-  scheduling, experiment lifecycle, and reporting.
+- Python owns typed configuration, supervision, training/autograd, coarse
+  native evaluation-job scheduling, experiment lifecycle, result aggregation,
+  and reporting. It never advances evaluation games or handles moves/leaves.
 - Game rules, encodings, action maps, models, losses, augmentations, and
   auxiliary targets may be game-specific. Do not force them into a nullable
   universal structure.
@@ -55,9 +57,10 @@ authorization to implement every item.
   from committed Layer B.
 - Playing strength from the fixed low-search evaluation ladder is the primary
   progress signal. Training loss and throughput do not replace it.
-- Restore the `PreRework` evaluation implementation conservatively. Generalize
-  it for Go and clean responsibility boundaries; do not redesign its efficient
-  native search, opponent scheduling, or result concepts without evidence.
+- Use the `PreRework` evaluation tree, batching, opponents, semantics, and
+  reports as references, but keep complete match execution in C++. Generalize
+  it for Go and clean responsibility boundaries; do not replace its efficient
+  native search concepts without evidence.
 
 The root configuration is a discriminated union of complete
 `GoExperimentConfiguration`, `ChessExperimentConfiguration`, and future
@@ -189,6 +192,13 @@ Default maintainability limits:
 - Evaluation jobs may lag but cannot be silently skipped.
 - Stockfish configuration and adapters exist only in the chess experiment
   variant.
+- Low-budget match evaluation batches across many complete native games. It
+  permits at most one in-flight leaf per root and uses no virtual loss.
+- Timed interactive/user play is a separate typed search mode. It may use
+  multiple in-flight leaves per root and virtual loss, and must drain safely at
+  the deadline.
+- Do not reuse interactive parallel-search settings for the training-progress
+  ladder or implement either mode as Python per-move orchestration.
 
 ## Validation
 

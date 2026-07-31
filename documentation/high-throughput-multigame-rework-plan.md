@@ -50,17 +50,18 @@ The next implementation must follow these decisions.
 1. **Chess is a first-class supported game.** It is restored from `PreRework`
    and adapted to the new contracts. Go and chess must be selectable through
    the resolved experiment configuration.
-2. **C++ owns the self-play data plane.** Game progression, many simultaneous
-   games, MCTS trees, selection threads, virtual loss, leaf batching, native
-   inference, tree reuse, and replay emission stay in a long-lived native
-   session.
+2. **C++ owns self-play and evaluation game execution.** Game progression,
+   simultaneous games, MCTS trees, opponent turns, selection threads, virtual
+   loss where appropriate, leaf batching, native inference, tree reuse, match
+   results, and replay emission stay in long-lived native sessions.
 3. **Inference stays in C++.** Production self-play must not perform a pybind
    callback for every evaluated leaf. LibTorch is the initial inference
    backend. Other backends may be added behind the same native contract.
 4. **Python owns the control and training planes.** Python resolves
-   configuration, starts and monitors native sessions, owns PyTorch autograd,
-   samples replay, publishes models, evaluates experiments, and produces
-   reports. It does not advance games or schedule individual searches.
+   configuration, starts and monitors native self-play/evaluation sessions,
+   owns PyTorch autograd, samples replay, publishes models, schedules coarse
+   evaluation jobs, aggregates results, and produces reports. It does not
+   advance games, choose opponent moves, or schedule individual searches.
 5. **Generic infrastructure and game-specific learning are separate.** Search
    scheduling, inference batching, replay transport, lifecycle, and reporting
    are generic. State encodings, action mappings, legal rules, model heads,
@@ -95,6 +96,10 @@ The next implementation must follow these decisions.
     is a discriminated union of complete Go, chess, or future-game experiment
     configurations. A run cannot mix one game's rules with another game's
     model, objective, replay schema, self-play, or evaluation settings.
+13. **Evaluation search has two explicit modes.** Low-budget training
+    evaluation batches across many independent games with one outstanding leaf
+    per root and no virtual loss. Time-controlled interactive play parallelizes
+    within the active root and uses virtual loss to keep search/inference busy.
 
 ## 3. Current-state assessment
 
@@ -140,7 +145,9 @@ The following concepts should return:
 - native inference/search timing and batch histograms;
 - four workers per GPU, four search threads per worker, persistent four-rank
   DDP, and drain/pause/resume coordination;
-- native evaluation using the same search and inference implementation.
+- native complete-match evaluation using the same tree and inference
+  implementation, with separate batched-match and timed-interactive scheduler
+  policies.
 
 The restored code must use the project PCH, configured clang-format and
 clang-tidy, the integer aliases in `common.hpp`, explicit CMake targets, and
@@ -224,14 +231,15 @@ The system has four major planes.
 +--------------------------------+-----------------------------------+
                                  | immutable model generation
 +--------------------------------v-----------------------------------+
-| Evaluation and research plane                                      |
-| native matches, common search, statistics, ablation reports        |
+| Research analysis plane                                            |
+| completed native match reports, statistics, ablation evidence      |
 +--------------------------------------------------------------------+
 ```
 
 Communication across a boundary is coarse-grained:
 
 - resolved session configuration at process/session start;
+- resolved native match jobs and completed immutable match reports;
 - immutable model-generation publication;
 - atomic Layer A producer shards and Layer B materialization manifests;
 - periodic aggregate telemetry;
@@ -271,6 +279,7 @@ cpp/
 |-- src/inference/            LibTorch backend, buffers, model generations
 |-- src/self_play/            multi-game scheduler and game lifecycle
 |-- src/replay/               Layer A records, writer, manifests, checksums
+|-- src/evaluation/           native matches, opponents, search modes
 |-- src/runtime/              session factory and coarse control protocol
 |-- src/apps/                 self-play, evaluation, and UCI executables
 |-- src/bindings/             test/debug Python facade only
@@ -285,7 +294,7 @@ py/src/az/
 |-- replay/                   Layer A intake, Layer B materialization/sampling
 |-- training/                 persistent generic DDP trainer
 |-- runtime/                  native-process supervision
-|-- evaluation/               match plans and statistics
+|-- evaluation/               native job plans and report aggregation
 |-- experiments/              lifecycle, feature registry, matrices
 `-- reporting/                evidence assembly and rendering
 ```
@@ -296,6 +305,8 @@ Dependencies point inward:
 - search depends on the game concept, not concrete Go/chess modules;
 - inference knows tensor/artifact contracts, not game rules;
 - self-play composes game, search, inference, and Layer A emission;
+- evaluation composes game, search, inference, and opponent adapters and emits
+  complete native match reports;
 - native applications depend on runtime/session factories;
 - Python training depends on typed game-training modules, never native
   self-play internals;
@@ -430,7 +441,7 @@ An instrumented allocator test must observe zero allocations after warm-up
 during representative selection, expansion, inference completion, backup,
 and reroot cycles.
 
-### 6.3 Multi-game scheduler
+### 6.3 Self-play multi-game scheduler
 
 The first scheduler variant reproduces `PreRework` cohort behavior. Within one
 submitted cohort it schedules leaves fairly over many roots and overlaps
@@ -438,7 +449,7 @@ selection, inference, result processing, and backup. The call completes only
 when every root in the cohort has reached its budget and drained outstanding
 leaves. This known-good barriered behavior is the parity baseline.
 
-Both scheduler variants:
+Both self-play lifecycle variants:
 
 1. chooses a schedulable root fairly;
 2. selects a leaf and applies virtual loss;
@@ -718,11 +729,11 @@ ExperimentConfiguration
 |-- GoExperimentConfiguration
 |   |-- game: Literal["go"]
 |   |-- rules/board, Go model/objective, Go Layer A/B schemas
-|   `-- search, self-play, training, Go evaluation, telemetry
+|   `-- search, self-play, training, Go match/interactive evaluation, telemetry
 `-- ChessExperimentConfiguration
     |-- game: Literal["chess"]
     |-- rules/history, chess model/objective, chess Layer A/B schemas
-    `-- search, self-play, training, chess evaluation, telemetry
+    `-- search, self-play, training, chess match/interactive evaluation, telemetry
 ```
 
 There is no independently selectable `game` union beside independent model,
@@ -738,6 +749,20 @@ another complete experiment variant.
 
 The native session receives the compact, versioned resolved branch for that
 one game; it does not parse Python class names or unvalidated string keys.
+
+Each per-game evaluation branch contains two non-interchangeable search
+variants:
+
+```text
+EvaluationSearchConfiguration
+|-- BatchedMatchSearchConfiguration
+|   `-- fixed visits, many games, one in-flight leaf/root, virtual loss off
+`-- TimedInteractiveSearchConfiguration
+    `-- deadline, parallel leaves/root, virtual loss on
+```
+
+Invalid combinations, such as virtual loss in the low-visit progress ladder,
+fail during configuration resolution.
 
 ### 8.1 Feature registry
 
@@ -799,17 +824,61 @@ explicitly measured.
 
 ### 10.1 Required progress-evaluation ladder
 
-The `PreRework` evaluation subsystem is a conservative restoration target, not
-a redesign target. Preserve its efficient native evaluation MCTS/search tree,
-model-versus-model execution, random and Stockfish adapters, concurrent task
-scheduling, device assignment, historical-checkpoint rotation, paired match
-records, TensorBoard metrics, raw reports, and failure handling. Cleanup may
-separate responsibilities and add types, but must not change match semantics or
-replace the efficient search path without parity and performance evidence.
+The `PreRework` evaluation search tree, batching, match semantics, opponent
+ladder, and result formats are references. The target ownership is stricter:
+C++ runs complete games and matches. A native evaluation executable owns game
+states, legal moves, both players' turns, search trees, inference batching,
+random/model/engine opponent adapters, termination, and raw match results.
+Python submits a coarse resolved match job, monitors it, schedules checkpoints
+and devices, then aggregates the completed native report. No move, leaf, or
+game round-trip crosses Python.
+
+Preserve the reference's efficient evaluation MCTS/search tree,
+model-versus-model behavior, random and Stockfish semantics,
+historical-checkpoint rotation, paired match records, TensorBoard metrics, raw
+reports, and failure visibility. Cleanup may separate responsibilities and add
+types, but must not replace the fast native path without parity and performance
+evidence. Stockfish is an external UCI opponent behind a native match adapter;
+it does not move the match loop into Python.
 
 Generalization adds Go state/action support and Go-appropriate opponents to the
 same concepts. Stockfish and chess opening handling remain chess-only through
 the complete per-game configuration variants.
+
+#### Batched low-budget match search
+
+Training-progress and offline paired evaluation run approximately 100 games
+concurrently in one native job. Search parallelism comes from independent game
+roots:
+
+- exactly one outstanding leaf evaluation per root;
+- no virtual loss;
+- fixed completed-visit budgets with no in-flight overshoot;
+- deterministic root selection and move choice;
+- inference batches assembled across games and, where applicable, both model
+  generations;
+- exploration noise and self-play temperature disabled.
+
+At low visit counts, multiple selections from one root would spend a material
+part of the budget under virtual loss and distort the comparison. With many
+games available, intra-root parallelism is unnecessary for batch occupancy.
+
+#### Timed interactive search
+
+User-facing play has one or very few active games and a wall-clock deadline.
+It uses the same game rules, tree, selection, inference, and result-processing
+components with a different scheduler policy:
+
+- multiple outstanding leaves from the active root;
+- configured virtual loss to prevent duplicate parallel selection;
+- multiple CPU selection threads and native batched inference;
+- deadline-aware submission/drain and measured deadline overshoot;
+- subtree reuse between user moves.
+
+This is the mode used to assess or expose final user-game strength under time
+control. It is not used for the low-search training-progress ladder. The two
+modes are separate typed configurations and parity fixtures, not runtime flags
+scattered through selection code.
 
 The previous lightweight playing suite remains the main strength/progress
 indicator during a run. Every configured elapsed checkpoint is evaluated with
@@ -857,6 +926,10 @@ Required operational metrics:
 - games and positions per hour;
 - simulations and evaluated leaves per second;
 - inference batch-size distribution, latency, and queue wait;
+- match roots per batch and assertion that low-budget evaluation used zero
+  virtual loss and at most one in-flight leaf per root;
+- interactive parallel leaves, virtual-loss collisions, deadline overshoot,
+  and searches completed per second;
 - GPU utilization and memory;
 - CPU utilization and search-thread idle time;
 - optimizer steps and samples per hour;
@@ -904,16 +977,20 @@ A Go improvement is not assumed to transfer to chess.
 Reports distinguish demonstrated Go improvements, demonstrated chess
 improvements, and transferred components without isolated chess confirmation.
 
-### 10.5 Chess evaluation and play
+### 10.5 Interactive play and chess adapters
 
-Chess evaluation uses the same native search/inference session as self-play,
-with exploration disabled and an explicit evaluation search configuration.
-Reference opponents include fixed archived project checkpoints and pinned
-Stockfish configurations. Color and opening assignments are paired.
+Go and chess interactive play use timed interactive search. Offline reference
+matches use batched low-budget or explicitly configured higher-budget match
+search. Both reuse the same native game/search/inference components without
+sharing their scheduler policy.
+
+Chess reference opponents include fixed archived project checkpoints and
+pinned Stockfish configurations. Color and opening assignments are paired.
 
 A UCI executable is restored only after the native chess session is stable. It
-is a thin protocol adapter over the same chess search/inference implementation,
-not a separate engine or search tree.
+is a thin protocol adapter over timed interactive search, not a separate engine
+or search tree. A Go user-play adapter follows the same session boundary
+without chess-specific protocol or Stockfish fields.
 
 ## 11. Feature roadmap from `THINGS_TO_TRY.md`
 
@@ -1061,8 +1138,8 @@ produces numerical restoration thresholds. No strength claim is made.
 - Add `GameDefinition`, artifact metadata, and native session config.
 - Define the index types, contiguous node/edge arena, generation semantics,
   capacity policy, and reusable search scratch buffers.
-- Split explicit core, Go, chess, inference, self-play, binding, executable,
-  test, and benchmark CMake targets.
+- Split explicit core, Go, chess, inference, self-play, evaluation, binding,
+  executable, test, and benchmark CMake targets.
 - Use static specialization in hot loops and runtime selection at the factory.
 - Add maintainability gates.
 
@@ -1154,15 +1231,21 @@ stranded GPU work, or an unacknowledged worker.
 - Replace Go runtime factories with native-session launch config.
 - Preserve manifests, stop/resume, elapsed checkpoints, calibration, and
   artifact authentication.
-- Conservatively restore the `PreRework` evaluation scheduler, efficient
-  native evaluation search, reports, and 100-game low-search ladder; generalize
-  its game boundary for Go while keeping Stockfish chess-only.
+- Restore the `PreRework` evaluation tree, efficient batching, opponent
+  semantics, and reports inside a native complete-match executable; Python
+  retains only coarse job scheduling and report aggregation.
+- Add batched match search with one in-flight leaf/root and no virtual loss,
+  plus a separate timed interactive mode with parallel leaves and virtual loss.
+- Generalize the native match boundary for Go while keeping Stockfish
+  chess-only.
 - Add the thin UCI adapter after chess evaluation is stable.
 
 Acceptance: one discriminator selects a compatible complete stack; invalid
 combinations fail before launch; identities do not repeat on resume; generic
 orchestration has no scattered game-specific branches; evaluation records raw
-games and cannot silently skip an elapsed checkpoint.
+games and cannot silently skip an elapsed checkpoint; a native 100-game job
+does not call Python per game/move/leaf; low-budget fixtures prove virtual loss
+is absent; timed fixtures prove safe in-flight draining at the deadline.
 
 ### Stage 8: stable baselines and profiling
 

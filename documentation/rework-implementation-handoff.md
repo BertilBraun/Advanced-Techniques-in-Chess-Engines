@@ -73,7 +73,7 @@ components:
 | reanalysis overlays | `py/src/train/ReplayReanalysis.py` |
 | evaluation ladder | `py/src/cluster/EvaluationProcess.py` |
 | efficient evaluation search | `cpp/src/MCTS/EvalMCTS*`, `cpp/src/MCTS/EvalSearchTree.*` |
-| model match execution | `py/src/eval/ModelEvaluationCpp.py` |
+| legacy match wrapper/provenance | `py/src/eval/ModelEvaluationCpp.py` |
 | chess rules and history | `cpp/src/Board.*`, pinned Stockfish dependency and patch |
 | chess encoding and action mapping | `cpp/src/BoardEncoding.*`, `cpp/src/MoveEncoding.*` |
 
@@ -173,6 +173,8 @@ lifecycle failures.
 - search-policy composition;
 - multi-game scheduler;
 - native inference batching and model generation lifecycle;
+- complete evaluation match runner and opponent adapters;
+- batched-match and timed-interactive evaluation schedulers;
 - worker pause/drain/resume;
 - replay shard container and publication;
 - aggregate telemetry.
@@ -195,7 +197,7 @@ lifecycle failures.
 - persistent DDP loop;
 - replay catalog and deterministic sampling;
 - checkpoints and model publication;
-- evaluation scheduling and result storage;
+- coarse native evaluation-job scheduling and report aggregation;
 - experiment manifests and reports.
 
 ### Game-specific Python code
@@ -225,6 +227,11 @@ game to select a chess model, loss, replay schema, or Stockfish evaluator.
 The game literal is the serialization discriminator. Every worker, trainer
 rank, replay manifest, checkpoint, and evaluation task in a run carries and
 validates the same game identity. Resume fails before launch on a mismatch.
+
+Each game variant has distinct `BatchedMatchSearchConfiguration` and
+`TimedInteractiveSearchConfiguration` values. The first structurally disables
+virtual loss and intra-root parallel leaves; the second requires explicit
+deadline, leaf concurrency, and virtual-loss settings.
 
 ## 9. Two-layer replay direction
 
@@ -284,23 +291,49 @@ A different representation or objective still receives a new end-to-end run.
 The two layers decouple producer latency from trainer I/O; they are not a reason
 to reuse fixed self-play data for ordinary ablations.
 
-## 10. Evaluation is a conservative restoration
+## 10. Native evaluation with two search modes
 
-The existing `PreRework` evaluation design was sound. Restore rather than
-redesign:
+The existing `PreRework` evaluation tree, batching, opponents, match semantics,
+and reports are references. Do not preserve its Python ownership boundary.
+The target native evaluation executable owns complete games:
 
-- efficient native evaluation MCTS and evaluation tree;
-- current-versus-random and policy-only-versus-random;
-- previous, historical, and stable reference checkpoints;
-- chess Stockfish skill and fixed-node opponents;
-- concurrent evaluation task scheduling and device cycling;
-- paired colors/openings, raw match records, TensorBoard metrics, confidence
-  reporting, retries, and failure visibility.
+- game states, legal moves, terminal decisions, and both players' turns;
+- evaluation trees, leaf selection, batching, inference, and move choice;
+- random and model opponents;
+- external Stockfish UCI communication for chess;
+- paired colors/openings and raw game/match results.
 
-Cleanup should split responsibilities and strengthen types without changing
-match semantics or replacing the efficient native search. Add a game-generic
-match boundary and Go state/action support. Stockfish and chess opening
-settings remain present only in `ChessExperimentConfiguration`.
+Python resolves and submits coarse evaluation jobs, assigns devices, monitors
+processes, rotates historical checkpoints, and aggregates completed native
+reports. It never advances a game or handles a move/leaf callback.
+
+Cleanup should strengthen types without changing reference match semantics or
+replacing the efficient native search. Add Go state/action support at the
+native match boundary. Stockfish and chess opening settings remain present only
+in `ChessExperimentConfiguration`.
+
+### Low-budget training and offline matches
+
+Run roughly 100 games concurrently. Each root has at most one outstanding leaf
+and uses no virtual loss. Sequential MCTS semantics are preserved within each
+tree while inference batches are filled across independent games. Completed
+visits exactly match the fixed budget; root noise and self-play temperature
+are disabled.
+
+At tiny visit budgets, intra-root virtual loss would consume a significant
+fraction of the search and bias results. One hundred independent games already
+provide sufficient batching parallelism.
+
+### Timed interactive/user play
+
+One user game does not provide enough independent roots. Timed interactive
+search therefore permits multiple outstanding leaves from the active tree,
+multiple selection threads, and configured virtual loss. It drains safely at
+the deadline, reports overshoot, and reuses the selected subtree.
+
+This mode measures and serves final user-facing strength under time control.
+It shares rules, tree storage, selection, inference, and result processing with
+match search, but not the scheduling/parallelism policy.
 
 At fixed elapsed checkpoints run the low-search progress ladder. The default
 plan uses roughly 100 games per opponent under a frozen small search budget:
@@ -335,7 +368,8 @@ Do not skip directly to feature experiments.
 5. Restore arena-backed cohort MCTS and the 4x4 worker topology.
 6. Restore fast Layer A producer shards, trainer-side Layer B materialization,
    and the persistent trainer hot path.
-7. Restore the complete progress-evaluation ladder.
+7. Restore the complete native progress-evaluation ladder and both evaluation
+   search modes.
 8. Establish stable 7x7, 9x9, and short chess baselines.
 9. Implement root-asynchronous scheduling as an isolated measured variant.
 10. Begin the fixed/progressive/mixed/adaptive search ablations.
@@ -375,6 +409,7 @@ Do not silently decide these during an unrelated implementation:
 - Layer A shard size/compression and Layer B row/shard layout/dtype tradeoffs;
 - CPU affinity and NUMA placement;
 - exact low-search evaluation budget after reference parity.
+- timed-interactive leaf parallelism, virtual-loss magnitude, and batch wait.
 
 Resolve each with a typed configuration, benchmark, and recorded decision.
 
