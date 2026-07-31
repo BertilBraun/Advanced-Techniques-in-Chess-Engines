@@ -6,9 +6,10 @@ state mutation, encoding, and the predecessor fixed PUCT implementation are
 native. Go supports arbitrary square board sizes from 3 upward, subject only
 to the signed 32-bit action-space representation.
 
-The common game/session contracts and bounded tree arena are foundations for
-both Go and chess. Native chess rules, search execution, LibTorch inference,
-and complete multi-game sessions remain pending.
+The common game/session contracts and bounded tree arena support both Go and
+chess. Native chess rules, canonical 29-plane encoding, and the restored
+1880-action policy map are present. Batched search execution, LibTorch
+inference, and complete multi-game sessions remain pending.
 
 `src/common.hpp` is the project precompiled header. Native code uses its
 `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, and `int64`

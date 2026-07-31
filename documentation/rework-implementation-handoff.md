@@ -384,15 +384,18 @@ deferred beyond the current implementation scope.
 ### Current structural status
 
 - Deferred reference benchmarking: intentionally postponed.
-- Joint foundation and chess restoration: partial inherited Go foundation;
-  complete native contracts, arenas, build targets, chess, and the complete
-  configuration union remain.
+- Joint foundation and chess restoration: native contracts, a typed
+  preallocated arena, split core/search/Go/chess targets, complete Go/chess
+  configuration branches, and the initial Stockfish-backed chess
+  rules/encoding/policy restoration are implemented. Arena integration into
+  search and broader chess differential parity remain.
 - Native LibTorch inference and generic native self-play: not started; the
   predecessor still uses a Python inference callback and Python game lifecycle.
 - Two-layer replay: not started; the predecessor replay remains a useful
   checksummed storage and sampling reference.
-- Trainer/runtime: partial predecessor foundation; Layer B consumption and the
-  16-worker to 4-DDP-plus-4-worker transition remain.
+- Trainer/runtime: explicit four-process-per-GPU, four-thread-per-process
+  assignments and optimizer active/paused worker IDs are resolved. Layer B
+  consumption and the drain/pause/acknowledge transition itself remain.
 - Experiment lifecycle/evaluation: partial predecessor foundation; complete
   native matches, chess opponents, and coarse Python job ownership remain.
 - Stage 8 and later: deferred.
