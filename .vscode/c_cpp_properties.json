@@ -1,0 +1,48 @@
+{
+    "configurations": [
+        {
+            "name": "Windows-Clang",
+            "compilerPath": "C:/src/msys64/mingw64/bin/clang++.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-clang-x64",
+            "includePath": [
+                "${workspaceFolder}/cpp/src",
+                "${workspaceFolder}/cpp/build-go-clang/_deps/pybind11-src/include",
+                "${env:LOCALAPPDATA}/Programs/Python/Python310/Include"
+            ],
+            "forcedInclude": [
+                "${workspaceFolder}/cpp/src/common.hpp"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/cpp/src",
+                    "${workspaceFolder}/cpp/test"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
+        },
+        {
+            "name": "WSL-Clang",
+            "compilerPath": "/usr/bin/clang++-18",
+            "compileCommands": "${workspaceFolder}/cpp/build-go-clang/compile_commands.json",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "linux-clang-x64",
+            "includePath": [
+                "${workspaceFolder}/cpp/src"
+            ],
+            "forcedInclude": [
+                "${workspaceFolder}/cpp/src/common.hpp"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/cpp/src",
+                    "${workspaceFolder}/cpp/test"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
+        }
+    ],
+    "version": 4
+}

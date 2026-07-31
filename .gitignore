@@ -15,6 +15,10 @@ graph*
 **.processed
 
 **/.vscode/**
+!/.vscode/
+!/.vscode/c_cpp_properties.json
+!/.vscode/extensions.json
+!/.vscode/settings.json
 
 **/models/memory/**
 **/data/**
