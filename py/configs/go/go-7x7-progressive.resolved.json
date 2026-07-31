@@ -52,7 +52,12 @@
         0
       ]
     },
-    "self_play_workers_per_device": 2,
+    "self_play_workers_per_device": 4,
+    "search_threads_per_worker": 4,
+    "optimizer_active_self_play_worker_ids": [
+      0,
+      4
+    ],
     "maximum_active_searches_per_worker": 64,
     "inference_workers_per_device": 1,
     "inference_batch_size": 128,

@@ -25,7 +25,10 @@ from src.az.config.seeds import (
     derive_seed,
 )
 from src.az.config.training import InitialStateOnly
-from src.az.games.go.configuration import DisabledResignation
+from src.az.games.go.configuration import (
+    DisabledResignation,
+    ResidualGoModelConfiguration,
+)
 from src.az.runtime.topology import RuntimeTopology, WorkerAssignment
 from src.az.self_play.configuration import (
     NativeSearchSpecification,
@@ -60,7 +63,7 @@ class RuntimeBuildEnvironment:
     ram_gib: float
     free_disk_gib: float
     allow_cpu_smoke: bool
-    logical_worker_next_game_indices: tuple[int, ...]
+    worker_next_game_indices: tuple[int, ...]
 
     def __post_init__(self) -> None:
         if (
@@ -92,6 +95,99 @@ class RuntimePlan:
     resource_sample_every_seconds: int
     required_metrics: tuple[TelemetryMetric, ...]
     search_trace_sample_probability: float
+
+
+def _build_worker_processes(
+    configuration: GoExperimentConfiguration,
+    environment: RuntimeBuildEnvironment,
+    architecture: ResidualGoModelConfiguration,
+    model_seed: int,
+) -> tuple[tuple[WorkerAssignment, ...], tuple[GoWorkerSpecification, ...]]:
+    worker_count = configuration.topology.self_play_worker_count
+    next_game_indices = environment.worker_next_game_indices
+    if len(next_game_indices) != worker_count or any(
+        index < 0 for index in next_game_indices
+    ):
+        raise ValueError(
+            "Resume game indices must cover every self-play worker process."
+        )
+    assignments: list[WorkerAssignment] = []
+    specifications: list[GoWorkerSpecification] = []
+    workers_per_device = configuration.topology.self_play_workers_per_device
+    for device_position, device_index in enumerate(
+        configuration.topology.self_play.device_ids
+    ):
+        for device_worker_index in range(workers_per_device):
+            worker_index = device_position * workers_per_device + device_worker_index
+            assignments.append(
+                WorkerAssignment(
+                    worker_index=worker_index,
+                    device_worker_index=device_worker_index,
+                    device_index=None if environment.allow_cpu_smoke else device_index,
+                    search_thread_count=configuration.topology.search_threads_per_worker,
+                    maximum_active_searches=configuration.topology.maximum_active_searches_per_worker,
+                )
+            )
+            specifications.append(
+                _build_worker_specification(
+                    configuration,
+                    environment,
+                    architecture,
+                    model_seed,
+                    worker_index,
+                    device_index,
+                    next_game_indices[worker_index],
+                )
+            )
+    return tuple(assignments), tuple(specifications)
+
+
+def _build_worker_specification(
+    configuration: GoExperimentConfiguration,
+    environment: RuntimeBuildEnvironment,
+    architecture: ResidualGoModelConfiguration,
+    model_seed: int,
+    worker_index: int,
+    device_index: int,
+    next_game_index: int,
+) -> GoWorkerSpecification:
+    return GoWorkerSpecification(
+        worker_index=worker_index,
+        process_index=worker_index,
+        run_id=environment.run_id,
+        root_seed=configuration.experiment.root_seed,
+        game_configuration=configuration.game_configuration,
+        model_configuration=architecture,
+        model_initialization_seed=model_seed,
+        search=NativeSearchSpecification(
+            budget=configuration.search.budget,
+            stopping=configuration.search.stopping,
+            fpu=configuration.search.fpu,
+            exploration_constant=configuration.search.algorithm.exploration_constant,
+            backup_discount=configuration.search.backup_discount,
+            temperature=configuration.search.temperature,
+            root_exploration=configuration.search.root_exploration,
+        ),
+        logical_worker_start_index=worker_index,
+        logical_worker_count=1,
+        next_game_indices=(next_game_index,),
+        search_threads_per_worker=configuration.topology.search_threads_per_worker,
+        maximum_active_searches_per_worker=configuration.topology.maximum_active_searches_per_worker,
+        maximum_batch_size=configuration.search.inference.maximum_batch_size,
+        maximum_wait_microseconds=configuration.search.inference.maximum_wait_microseconds,
+        maximum_pending_batches=configuration.topology.maximum_pending_inference_batches,
+        inference_cache_capacity=configuration.search.inference.cache_capacity,
+        value_target_weight=configuration.self_play.value_target_weight,
+        device="cpu" if environment.allow_cpu_smoke else f"cuda:{device_index}",
+        torch_intraop_thread_count=1 if environment.allow_cpu_smoke else None,
+        checkpoint_directory=str(environment.checkpoint_directory),
+        resolved_configuration_sha256=environment.resolved_configuration_sha256,
+        telemetry_write_every_seconds=configuration.telemetry.write_every_seconds,
+        resource_sample_every_seconds=configuration.telemetry.resource_sample_every_seconds,
+        search_trace_sample_probability=configuration.telemetry.search_trace_sample_probability,
+        search_trace_checkpoints=configuration.telemetry.search_trace_checkpoints,
+        search_trace_directory=str(environment.output_directory / "search-traces"),
+    )
 
 
 def build_runtime_plan(
@@ -244,80 +340,15 @@ def build_runtime_plan(
             model_stage=0,
         ),
     )
-    assignments: list[WorkerAssignment] = []
-    specifications: list[GoWorkerSpecification] = []
-    for worker_index, device_index in enumerate(
-        configuration.topology.self_play.device_ids
-    ):
-        first_logical_worker = (
-            worker_index * configuration.topology.self_play_workers_per_device
-        )
-        total_logical_workers = (
-            len(configuration.topology.self_play.device_ids)
-            * configuration.topology.self_play_workers_per_device
-        )
-        next_game_indices = environment.logical_worker_next_game_indices
-        if len(next_game_indices) != total_logical_workers or any(
-            index < 0 for index in next_game_indices
-        ):
-            raise ValueError(
-                "Resume game indices must cover every logical self-play worker."
-            )
-        assignments.append(
-            WorkerAssignment(
-                worker_index=worker_index,
-                device_index=None if environment.allow_cpu_smoke else device_index,
-                maximum_active_searches=(
-                    configuration.topology.self_play_workers_per_device
-                    * configuration.topology.maximum_active_searches_per_worker
-                ),
-            )
-        )
-        specifications.append(
-            GoWorkerSpecification(
-                worker_index=worker_index,
-                process_index=worker_index,
-                run_id=environment.run_id,
-                root_seed=configuration.experiment.root_seed,
-                game_configuration=configuration.game_configuration,
-                model_configuration=architecture,
-                model_initialization_seed=model_seed,
-                search=NativeSearchSpecification(
-                    budget=configuration.search.budget,
-                    stopping=configuration.search.stopping,
-                    fpu=configuration.search.fpu,
-                    exploration_constant=configuration.search.algorithm.exploration_constant,
-                    backup_discount=configuration.search.backup_discount,
-                    temperature=configuration.search.temperature,
-                    root_exploration=configuration.search.root_exploration,
-                ),
-                logical_worker_start_index=first_logical_worker,
-                logical_worker_count=configuration.topology.self_play_workers_per_device,
-                next_game_indices=next_game_indices[
-                    first_logical_worker : first_logical_worker
-                    + configuration.topology.self_play_workers_per_device
-                ],
-                maximum_active_searches_per_worker=configuration.topology.maximum_active_searches_per_worker,
-                maximum_batch_size=configuration.search.inference.maximum_batch_size,
-                maximum_wait_microseconds=configuration.search.inference.maximum_wait_microseconds,
-                maximum_pending_batches=configuration.topology.maximum_pending_inference_batches,
-                inference_cache_capacity=configuration.search.inference.cache_capacity,
-                value_target_weight=configuration.self_play.value_target_weight,
-                device="cpu" if environment.allow_cpu_smoke else f"cuda:{device_index}",
-                torch_intraop_thread_count=1 if environment.allow_cpu_smoke else None,
-                checkpoint_directory=str(environment.checkpoint_directory),
-                resolved_configuration_sha256=environment.resolved_configuration_sha256,
-                telemetry_write_every_seconds=configuration.telemetry.write_every_seconds,
-                resource_sample_every_seconds=configuration.telemetry.resource_sample_every_seconds,
-                search_trace_sample_probability=configuration.telemetry.search_trace_sample_probability,
-                search_trace_checkpoints=configuration.telemetry.search_trace_checkpoints,
-                search_trace_directory=str(
-                    environment.output_directory / "search-traces"
-                ),
-            )
-        )
+    assignments, specifications = _build_worker_processes(
+        configuration,
+        environment,
+        architecture,
+        model_seed,
+    )
     topology = RuntimeTopology(
-        workers=tuple(assignments),
+        workers=assignments,
+        optimizer_active_worker_ids=configuration.topology.optimizer_active_self_play_worker_ids,
         trainer_device_indices=(
             ()
             if environment.allow_cpu_smoke
@@ -339,7 +370,7 @@ def build_runtime_plan(
         ) from error
     return RuntimePlan(
         topology=topology,
-        worker_specifications=tuple(specifications),
+        worker_specifications=specifications,
         replay_directory=environment.output_directory.joinpath(*replay_relative.parts),
         telemetry_path=environment.output_directory / "runtime-telemetry.azt",
         duration_seconds=configuration.experiment.duration_seconds,

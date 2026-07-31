@@ -68,6 +68,8 @@ def _runtime_configuration() -> ResolvedRunConfiguration:
             "self_play": DeviceAssignment(device_ids=(0,)),
             "evaluation": DeviceAssignment(device_ids=(0,)),
             "self_play_workers_per_device": 1,
+            "search_threads_per_worker": 1,
+            "optimizer_active_self_play_worker_ids": (0,),
             "maximum_active_searches_per_worker": 2,
             "inference_workers_per_device": 1,
             "inference_batch_size": 2,
@@ -145,7 +147,7 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
             ram_gib=configuration.hardware.minimum_ram_gib,
             free_disk_gib=configuration.hardware.minimum_free_disk_gib,
             allow_cpu_smoke=True,
-            logical_worker_next_game_indices=(0,),
+            worker_next_game_indices=(0,),
         ),
     )
     storage = ReplayShardStorage(
@@ -294,7 +296,7 @@ def test_long_games_stop_cooperatively_without_emitting_partial_samples(
             ram_gib=configuration.hardware.minimum_ram_gib,
             free_disk_gib=configuration.hardware.minimum_free_disk_gib,
             allow_cpu_smoke=True,
-            logical_worker_next_game_indices=(0,),
+            worker_next_game_indices=(0,),
         ),
     )
     published: list[tuple[ReplayRecord, ...]] = []

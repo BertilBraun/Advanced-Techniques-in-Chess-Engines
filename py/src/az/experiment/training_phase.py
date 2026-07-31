@@ -134,9 +134,8 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
             ram_gib=observed_hardware.ram_gib,
             free_disk_gib=observed_hardware.free_disk_gib,
             allow_cpu_smoke=allow_cpu_smoke,
-            logical_worker_next_game_indices=commit_journal.next_game_indices(
-                len(configuration.topology.self_play.device_ids)
-                * configuration.topology.self_play_workers_per_device
+            worker_next_game_indices=commit_journal.next_game_indices(
+                configuration.topology.self_play_worker_count
             ),
         ),
     )

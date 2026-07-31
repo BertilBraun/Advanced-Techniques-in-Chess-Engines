@@ -41,11 +41,7 @@ def _environment(tmp_path: Path) -> RuntimeBuildEnvironment:
         ram_gib=configuration.hardware.minimum_ram_gib,
         free_disk_gib=configuration.hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
-        logical_worker_next_game_indices=(0,)
-        * (
-            len(configuration.topology.self_play.device_ids)
-            * configuration.topology.self_play_workers_per_device
-        ),
+        worker_next_game_indices=(0,) * configuration.topology.self_play_worker_count,
     )
 
 
@@ -55,8 +51,8 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     configuration = _configuration()
     plan = build_runtime_plan(configuration, _environment(tmp_path))
 
-    assert len(plan.worker_specifications) == len(
-        configuration.topology.self_play.device_ids
+    assert (
+        len(plan.worker_specifications) == configuration.topology.self_play_worker_count
     )
     first = plan.worker_specifications[0]
     assert first.game_configuration == configuration.game_configuration
@@ -70,10 +66,8 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     assert first.search.fpu == configuration.search.fpu
     assert first.search.root_exploration == configuration.search.root_exploration
     assert first.search.temperature == configuration.search.temperature
-    assert (
-        first.logical_worker_count
-        == configuration.topology.self_play_workers_per_device
-    )
+    assert first.logical_worker_count == 1
+    assert first.search_threads_per_worker == 4
     assert (
         first.maximum_active_searches_per_worker
         == configuration.topology.maximum_active_searches_per_worker
@@ -121,12 +115,19 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
         specification.device for specification in plan.worker_specifications
     ) == (
         "cuda:0",
+        "cuda:0",
+        "cuda:0",
+        "cuda:0",
+        "cuda:1",
+        "cuda:1",
+        "cuda:1",
         "cuda:1",
     )
     assert plan.topology.workers[0].maximum_active_searches == (
-        configuration.topology.self_play_workers_per_device
-        * configuration.topology.maximum_active_searches_per_worker
+        configuration.topology.maximum_active_searches_per_worker
     )
+    assert plan.topology.optimizer_active_worker_ids == (0, 4)
+    assert plan.topology.optimizer_paused_worker_ids == (1, 2, 3, 5, 6, 7)
 
 
 def test_runtime_factory_sets_explicit_cpu_smoke_worker_thread_limit(
@@ -147,12 +148,15 @@ def test_runtime_factory_sets_explicit_cpu_smoke_worker_thread_limit(
             ram_gib=configuration.hardware.minimum_ram_gib,
             free_disk_gib=configuration.hardware.minimum_free_disk_gib,
             allow_cpu_smoke=True,
-            logical_worker_next_game_indices=(0,),
+            worker_next_game_indices=(0,),
         ),
     )
 
     assert plan.worker_specifications[0].device == "cpu"
     assert plan.worker_specifications[0].torch_intraop_thread_count == 1
+    assert plan.worker_specifications[0].search_threads_per_worker == 1
+    assert plan.topology.optimizer_active_worker_ids == (0,)
+    assert plan.topology.optimizer_paused_worker_ids == ()
 
 
 @pytest.mark.parametrize(
@@ -229,9 +233,7 @@ def test_runtime_factory_rejects_absent_configured_hardware(
         ram_gib=_configuration().hardware.minimum_ram_gib,
         free_disk_gib=_configuration().hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
-        logical_worker_next_game_indices=_environment(
-            tmp_path
-        ).logical_worker_next_game_indices,
+        worker_next_game_indices=_environment(tmp_path).worker_next_game_indices,
     )
 
     with pytest.raises(ValueError, match="device count"):
@@ -252,7 +254,7 @@ def test_runtime_factory_rejects_cpu_bypass_for_gpu_profile(tmp_path: Path) -> N
         ram_gib=environment.ram_gib,
         free_disk_gib=environment.free_disk_gib,
         allow_cpu_smoke=True,
-        logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
+        worker_next_game_indices=environment.worker_next_game_indices,
     )
 
     with pytest.raises(ValueError, match="explicit local-cpu-smoke"):
@@ -273,7 +275,7 @@ def test_runtime_factory_rejects_insufficient_host_resources(tmp_path: Path) -> 
         ram_gib=environment.ram_gib,
         free_disk_gib=environment.free_disk_gib,
         allow_cpu_smoke=False,
-        logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
+        worker_next_game_indices=environment.worker_next_game_indices,
     )
 
     with pytest.raises(ValueError, match="logical CPU"):
@@ -327,7 +329,4 @@ def test_active_search_capacity_is_driven_by_topology_configuration(
     plan = build_runtime_plan(altered, _environment(tmp_path))
 
     assert plan.worker_specifications[0].maximum_active_searches_per_worker == 3
-    assert (
-        plan.topology.workers[0].maximum_active_searches
-        == 3 * altered.topology.self_play_workers_per_device
-    )
+    assert plan.topology.workers[0].maximum_active_searches == 3

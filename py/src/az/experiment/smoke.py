@@ -64,6 +64,8 @@ def local_cpu_smoke_configuration() -> ResolvedRunConfiguration:
             self_play=DeviceAssignment(device_ids=(0,)),
             evaluation=DeviceAssignment(device_ids=(0,)),
             self_play_workers_per_device=1,
+            search_threads_per_worker=1,
+            optimizer_active_self_play_worker_ids=(0,),
             maximum_active_searches_per_worker=1,
             inference_workers_per_device=1,
             inference_batch_size=1,

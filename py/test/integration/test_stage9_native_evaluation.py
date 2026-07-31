@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 import torch
 
-native = pytest.importorskip('az_go_native', reason='focused native Go extension has not been built')
+native = pytest.importorskip(
+    "az_go_native", reason="focused native Go extension has not been built"
+)
 
 from src.az.calibration.calibrate import committed_trace_observations
 from src.az.calibration.models import (
@@ -36,51 +40,62 @@ from src.az.evaluation.protocol import (
     derive_evaluation_id,
 )
 from src.az.evaluation.storage import EvaluationResultRepository
-from src.az.games.go.configuration import DisabledResignation, GoGameConfiguration, ResidualGoModelConfiguration
+from src.az.games.go.configuration import (
+    DisabledResignation,
+    GoGameConfiguration,
+    ResidualGoModelConfiguration,
+)
 from src.az.games.go.model import ResidualGoModel
 from src.az.inference.go_batching import GoInferenceBatchBroker
-from src.az.self_play.configuration import GoWorkerSpecification, NativeSearchSpecification
+from src.az.self_play.configuration import (
+    GoWorkerSpecification,
+    NativeSearchSpecification,
+)
 from src.az.self_play.worker import _sample_trace, _search_trace_payload
 
 
-def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors(tmp_path: Path) -> None:
+def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors(
+    tmp_path: Path,
+) -> None:
     game = GoGameConfiguration(
-        kind='go',
+        kind="go",
         board_size=3,
         komi_half_points=1,
-        scoring_rule='area',
-        ko_rule='positional_superko',
-        suicide_rule='illegal',
+        scoring_rule="area",
+        ko_rule="positional_superko",
+        suicide_rule="illegal",
         pass_exempt_from_superko=True,
-        score_comparison='doubled_integer_points',
+        score_comparison="doubled_integer_points",
         safety_ply_cap=18,
         history_length=2,
         history_planes_per_position=2,
         include_color_plane=True,
-        pass_action='last',
-        normal_termination='two_consecutive_passes',
-        symmetry_group='dihedral_8',
+        pass_action="last",
+        normal_termination="two_consecutive_passes",
+        symmetry_group="dihedral_8",
         capped_game_value_target_weight=0,
-        resignation=DisabledResignation(kind='disabled'),
+        resignation=DisabledResignation(kind="disabled"),
     )
     model_configuration = ResidualGoModelConfiguration(
-        family='residual_go',
+        family="residual_go",
         channels=4,
         residual_blocks=1,
         policy_channels=2,
         value_hidden_size=4,
-        normalization='batch',
-        activation='relu',
+        normalization="batch",
+        activation="relu",
     )
     search = SearchConfiguration(
-        algorithm=PuctSearchConfiguration(kind='puct', exploration_constant=1.5),
-        budget=FixedSearchBudget(kind='fixed', simulations=2),
-        stopping=FullBudgetStopping(kind='full_budget'),
-        fpu=VisitedChildMeanFpu(kind='visited_child_mean', no_visited_child_value=0),
-        root_exploration=DisabledRootExploration(kind='disabled'),
-        temperature=ConstantTemperature(kind='constant', temperature=0),
-        tree_reuse=DisabledTreeReuse(kind='disabled'),
-        inference=SearchInferenceConfiguration(maximum_batch_size=2, maximum_wait_microseconds=0, cache_capacity=0),
+        algorithm=PuctSearchConfiguration(kind="puct", exploration_constant=1.5),
+        budget=FixedSearchBudget(kind="fixed", simulations=2),
+        stopping=FullBudgetStopping(kind="full_budget"),
+        fpu=VisitedChildMeanFpu(kind="visited_child_mean", no_visited_child_value=0),
+        root_exploration=DisabledRootExploration(kind="disabled"),
+        temperature=ConstantTemperature(kind="constant", temperature=0),
+        tree_reuse=DisabledTreeReuse(kind="disabled"),
+        inference=SearchInferenceConfiguration(
+            maximum_batch_size=2, maximum_wait_microseconds=0, cache_capacity=0
+        ),
         backup_discount=1,
     )
     torch.manual_seed(7)
@@ -88,11 +103,11 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
     run_id = UUID(int=699)
     candidate = CandidateCheckpointIdentity(
         checkpoint_id=UUID(int=701),
-        model_artifact_sha256='a' * 64,
+        model_artifact_sha256="a" * 64,
         model_version=1,
     )
-    opponent = RandomOpponentIdentity(kind='random')
-    configuration_sha256 = 'b' * 64
+    opponent = RandomOpponentIdentity(kind="random")
+    configuration_sha256 = "b" * 64
     search_sha256 = model_sha256(search)
     evaluation_id = derive_evaluation_id(
         run_id,
@@ -107,7 +122,7 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
     with GoInferenceBatchBroker(
         model=model,
         configuration=game,
-        device=torch.device('cpu'),
+        device=torch.device("cpu"),
         maximum_batch_size=2,
         maximum_wait_microseconds=0,
         maximum_pending_batches=2,
@@ -126,14 +141,16 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
             opponent=opponent,
             game=game,
         )
-        with pytest.raises(ValueError, match='model does not match'):
+        with pytest.raises(ValueError, match="model does not match"):
             PairedGoEvaluator(
                 specification,
                 NativeCheckpointEvaluationPlayer(
                     broker,
                     search,
                     LoadedEvaluationModel(
-                        identity=candidate.model_copy(update={'checkpoint_id': UUID(int=999)}),
+                        identity=candidate.model_copy(
+                            update={"checkpoint_id": UUID(int=999)}
+                        ),
                         model=model,
                     ),
                 ),
@@ -152,7 +169,7 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
         )
         pair = evaluator.evaluate_pair(0)
 
-        trace_directory = (tmp_path / 'traces').resolve()
+        trace_directory = (tmp_path / "traces").resolve()
         worker = GoWorkerSpecification(
             worker_index=0,
             process_index=0,
@@ -173,13 +190,14 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
             logical_worker_start_index=0,
             logical_worker_count=1,
             next_game_indices=(0,),
+            search_threads_per_worker=1,
             maximum_active_searches_per_worker=1,
             maximum_batch_size=2,
             maximum_wait_microseconds=0,
             maximum_pending_batches=2,
             inference_cache_capacity=0,
             value_target_weight=1,
-            device='cpu',
+            device="cpu",
             torch_intraop_thread_count=1,
             checkpoint_directory=str(tmp_path.resolve()),
             resolved_configuration_sha256=configuration_sha256,
@@ -219,7 +237,7 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
             0,
             0,
             InitialTraceModelIdentity(
-                kind='initial_model',
+                kind="initial_model",
                 model_initialization_seed=7,
                 model_configuration_sha256=model_sha256(model_configuration),
             ),
@@ -236,13 +254,20 @@ def test_real_native_checkpoint_search_pairs_against_random_with_balanced_colors
             (loaded_trace.artifact,),
             frozenset((payload.replay_sample_id,)),
         ) == (payload.observation,)
-        zero_sampling = worker.model_copy(update={'search_trace_sample_probability': 0})
+        zero_sampling = worker.model_copy(update={"search_trace_sample_probability": 0})
         before = tuple(trace_directory.iterdir())
         assert not _sample_trace(zero_sampling, 0, 0, 0)
         assert tuple(trace_directory.iterdir()) == before
 
-    assert tuple(game_result.candidate_color.value for game_result in pair.games) == ('black', 'white')
+    assert tuple(game_result.candidate_color.value for game_result in pair.games) == (
+        "black",
+        "white",
+    )
     assert all(game_result.komi_half_points == 1 for game_result in pair.games)
-    assert all(game_result.candidate_actual_simulations > 0 for game_result in pair.games)
-    assert all(game_result.opponent_actual_simulations == 0 for game_result in pair.games)
+    assert all(
+        game_result.candidate_actual_simulations > 0 for game_result in pair.games
+    )
+    assert all(
+        game_result.opponent_actual_simulations == 0 for game_result in pair.games
+    )
     assert evaluator.evaluate_pair(0) == pair

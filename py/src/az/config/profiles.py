@@ -59,16 +59,16 @@ def default_manifest_policy() -> ManifestPolicy:
 
 def planned_hardware_profile() -> HardwareConfiguration:
     return HardwareConfiguration(
-        profile_name='planned-two-gpu-experiment-node',
-        provider='planned-gpu-rental',
-        offer_id='planned-2x-rtx4090-profile',
-        expected_gpu_model='NVIDIA GeForce RTX 4090',
+        profile_name="planned-two-gpu-experiment-node",
+        provider="planned-gpu-rental",
+        offer_id="planned-2x-rtx4090-profile",
+        expected_gpu_model="NVIDIA GeForce RTX 4090",
         expected_gpu_count=2,
         minimum_logical_cpu_count=16,
         minimum_ram_gib=64,
         minimum_free_disk_gib=100,
         hourly_cost=None,
-        currency='EUR',
+        currency="EUR",
     )
 
 
@@ -77,7 +77,9 @@ def default_topology() -> TopologyConfiguration:
         trainer=DeviceAssignment(device_ids=(0, 1)),
         self_play=DeviceAssignment(device_ids=(0, 1)),
         evaluation=DeviceAssignment(device_ids=(0,)),
-        self_play_workers_per_device=2,
+        self_play_workers_per_device=4,
+        search_threads_per_worker=4,
+        optimizer_active_self_play_worker_ids=(0, 4),
         maximum_active_searches_per_worker=64,
         inference_workers_per_device=1,
         inference_batch_size=128,
@@ -89,69 +91,71 @@ def default_topology() -> TopologyConfiguration:
 
 def default_game() -> GoGameConfiguration:
     return GoGameConfiguration(
-        kind='go',
+        kind="go",
         board_size=7,
         komi_half_points=15,
-        scoring_rule='area',
-        ko_rule='positional_superko',
-        suicide_rule='illegal',
+        scoring_rule="area",
+        ko_rule="positional_superko",
+        suicide_rule="illegal",
         pass_exempt_from_superko=True,
-        score_comparison='doubled_integer_points',
+        score_comparison="doubled_integer_points",
         safety_ply_cap=512,
         history_length=8,
         history_planes_per_position=2,
         include_color_plane=True,
-        pass_action='last',
-        normal_termination='two_consecutive_passes',
-        symmetry_group='dihedral_8',
+        pass_action="last",
+        normal_termination="two_consecutive_passes",
+        symmetry_group="dihedral_8",
         capped_game_value_target_weight=0,
-        resignation=DisabledResignation(kind='disabled'),
+        resignation=DisabledResignation(kind="disabled"),
     )
 
 
 def default_model_architecture() -> ResidualGoModelConfiguration:
     return ResidualGoModelConfiguration(
-        family='residual_go',
+        family="residual_go",
         channels=128,
         residual_blocks=10,
         policy_channels=2,
         value_hidden_size=256,
-        normalization='batch',
-        activation='relu',
+        normalization="batch",
+        activation="relu",
     )
 
 
 def default_model() -> ModelConfiguration:
     return ModelConfiguration(
         schedule=FixedModelSchedule(
-            kind='fixed',
+            kind="fixed",
             architecture=default_model_architecture(),
         )
     )
 
 
 def default_search_algorithm() -> SearchAlgorithmConfiguration:
-    return PuctSearchConfiguration(kind='puct', exploration_constant=1.5)
+    return PuctSearchConfiguration(kind="puct", exploration_constant=1.5)
 
 
 def default_fpu() -> FpuConfiguration:
-    return VisitedChildMeanFpu(kind='visited_child_mean', no_visited_child_value=0)
+    return VisitedChildMeanFpu(kind="visited_child_mean", no_visited_child_value=0)
 
 
 def default_root_exploration() -> RootExplorationConfiguration:
-    return DirichletRootExploration(kind='dirichlet', alpha=0.3, exploration_fraction=0.25)
+    return DirichletRootExploration(
+        kind="dirichlet", alpha=0.3, exploration_fraction=0.25
+    )
 
 
 def default_temperature() -> TemperatureConfiguration:
     return PlyTemperatureSchedule(
-        kind='by_ply',
+        kind="by_ply",
         stages=(TemperatureStage(maximum_ply_exclusive=20, temperature=1),),
         final_temperature=0,
     )
 
 
 def default_tree_reuse() -> TreeReuseConfiguration:
-    return DisabledTreeReuse(kind='disabled')
+    return DisabledTreeReuse(kind="disabled")
 
 
 def default_search_inference() -> SearchInferenceConfiguration:
@@ -164,11 +168,11 @@ def default_search_inference() -> SearchInferenceConfiguration:
 
 def default_self_play() -> SelfPlayConfiguration:
     return SelfPlayConfiguration(
-        start_states=InitialStateOnly(kind='initial_state_only'),
+        start_states=InitialStateOnly(kind="initial_state_only"),
         games_per_shard=32,
         value_target_weight=1,
         capped_game_policy_targets_remain_eligible=True,
-        policy_target_source='search_budget',
+        policy_target_source="search_budget",
     )
 
 
@@ -186,17 +190,17 @@ def default_training() -> TrainingConfiguration:
         local_batch_size=512,
         maximum_optimizer_steps=500_000,
         optimizer=AdamWOptimizerConfiguration(
-            kind='adamw',
+            kind="adamw",
             learning_rate=0.002,
             beta_1=0.9,
             beta_2=0.999,
             epsilon=1e-8,
             weight_decay=1e-4,
         ),
-        learning_rate_schedule=ConstantLearningRate(kind='constant', multiplier=1),
-        precision='bfloat16',
+        learning_rate_schedule=ConstantLearningRate(kind="constant", multiplier=1),
+        precision="bfloat16",
         objective=GoObjectiveConfiguration(
-            kind='go_policy_value',
+            kind="go_policy_value",
             policy_loss_weight=1,
             value_loss_weight=1,
             l2_regularization_weight=0,
@@ -209,19 +213,19 @@ def default_training() -> TrainingConfiguration:
 def default_evaluation_search() -> SearchConfiguration:
     return SearchConfiguration(
         algorithm=default_search_algorithm(),
-        budget=FixedSearchBudget(kind='fixed', simulations=128),
-        stopping=FullBudgetStopping(kind='full_budget'),
+        budget=FixedSearchBudget(kind="fixed", simulations=128),
+        stopping=FullBudgetStopping(kind="full_budget"),
         fpu=default_fpu(),
-        root_exploration=DisabledRootExploration(kind='disabled'),
-        temperature=ConstantTemperature(kind='constant', temperature=0),
-        tree_reuse=DisabledTreeReuse(kind='disabled'),
+        root_exploration=DisabledRootExploration(kind="disabled"),
+        temperature=ConstantTemperature(kind="constant", temperature=0),
+        tree_reuse=DisabledTreeReuse(kind="disabled"),
         inference=default_search_inference(),
         backup_discount=1,
     )
 
 
 def default_evaluation_opponent() -> RandomGoOpponent:
-    return RandomGoOpponent(kind='random')
+    return RandomGoOpponent(kind="random")
 
 
 def default_telemetry() -> TelemetryConfiguration:

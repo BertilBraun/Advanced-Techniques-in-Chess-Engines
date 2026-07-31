@@ -41,13 +41,14 @@ class GoWorkerSpecification(FrozenModel):
     logical_worker_start_index: int = Field(ge=0)
     logical_worker_count: int = Field(gt=0)
     next_game_indices: tuple[int, ...]
+    search_threads_per_worker: int = Field(gt=0)
     maximum_active_searches_per_worker: int = Field(gt=0)
     maximum_batch_size: int = Field(gt=0)
     maximum_wait_microseconds: int = Field(ge=0)
     maximum_pending_batches: int = Field(gt=0)
     inference_cache_capacity: int = Field(ge=0)
     value_target_weight: float = Field(gt=0)
-    device: str = Field(pattern=r'^(cpu|cuda:[0-9]+)$')
+    device: str = Field(pattern=r"^(cpu|cuda:[0-9]+)$")
     torch_intraop_thread_count: int | None = Field(gt=0)
     checkpoint_directory: str = Field(min_length=1)
     resolved_configuration_sha256: Sha256
@@ -57,14 +58,18 @@ class GoWorkerSpecification(FrozenModel):
     search_trace_checkpoints: tuple[int, ...]
     search_trace_directory: str = Field(min_length=1)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_supported_runtime_features(self) -> GoWorkerSpecification:
         if len(self.next_game_indices) != self.logical_worker_count or any(
             index < 0 for index in self.next_game_indices
         ):
-            raise ValueError('Worker resume indices must cover every logical worker and be nonnegative.')
+            raise ValueError(
+                "Worker resume indices must cover every logical worker and be nonnegative."
+            )
         match self.game_configuration.resignation:
             case DisabledResignation():
                 return self
             case _:
-                raise ValueError('Stage 7 native Go self-play does not implement resignation.')
+                raise ValueError(
+                    "Stage 7 native Go self-play does not implement resignation."
+                )
