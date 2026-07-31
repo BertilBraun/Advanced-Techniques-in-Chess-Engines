@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, PositiveInt
+from pydantic import Field, JsonValue, PositiveInt, TypeAdapter
 
 from src.az.config.base import FrozenModel
 from src.az.config.evaluation import EvaluationConfiguration
@@ -33,7 +34,11 @@ from src.az.config.profiles import (
     default_tree_reuse,
     planned_hardware_profile,
 )
-from src.az.config.root import ResolvedRunConfiguration
+from src.az.config.root import (
+    ChessExperimentConfiguration,
+    GoExperimentConfiguration,
+    ResolvedRunConfiguration,
+)
 from src.az.config.runtime import (
     RetentionConfiguration,
     TelemetryConfiguration,
@@ -61,23 +66,43 @@ from src.az.games.go.configuration import (
     GoGameConfiguration,
     GoOpponentConfiguration,
 )
+from src.az.games.chess.configuration import (
+    ChessEvaluationConfiguration,
+    ChessGameConfiguration,
+    ChessModelConfiguration,
+    ChessReplayConfiguration,
+    ChessTrainingConfiguration,
+)
 
 
 class AuthoringExperimentConfiguration(ExperimentConfiguration):
     duration_seconds: PositiveInt = 21_600
-    checkpoint_elapsed_seconds: tuple[PositiveInt, ...] = (900, 1_800, 3_600, 7_200, 14_400, 21_600)
+    checkpoint_elapsed_seconds: tuple[PositiveInt, ...] = (
+        900,
+        1_800,
+        3_600,
+        7_200,
+        14_400,
+        21_600,
+    )
     manifest_policy: ManifestPolicy = Field(default_factory=default_manifest_policy)
 
 
 class AuthoringSearchConfiguration(SearchConfiguration):
-    algorithm: SearchAlgorithmConfiguration = Field(default_factory=default_search_algorithm)
+    algorithm: SearchAlgorithmConfiguration = Field(
+        default_factory=default_search_algorithm
+    )
     budget: SearchBudgetConfiguration
-    stopping: SearchStoppingConfiguration = FullBudgetStopping(kind='full_budget')
+    stopping: SearchStoppingConfiguration = FullBudgetStopping(kind="full_budget")
     fpu: FpuConfiguration = Field(default_factory=default_fpu)
-    root_exploration: RootExplorationConfiguration = Field(default_factory=default_root_exploration)
+    root_exploration: RootExplorationConfiguration = Field(
+        default_factory=default_root_exploration
+    )
     temperature: TemperatureConfiguration = Field(default_factory=default_temperature)
     tree_reuse: TreeReuseConfiguration = Field(default_factory=default_tree_reuse)
-    inference: SearchInferenceConfiguration = Field(default_factory=default_search_inference)
+    inference: SearchInferenceConfiguration = Field(
+        default_factory=default_search_inference
+    )
     backup_discount: float = Field(default=1, gt=0, le=1)
 
 
@@ -91,8 +116,8 @@ def default_replay() -> AuthoringReplayConfiguration:
         shard_directory=None,
         maximum_positions_per_shard=16_384,
         payload_schema_version=1,
-        compression='none',
-        sampling='uniform',
+        compression="none",
+        sampling="uniform",
         credits=default_replay_credits(),
     )
 
@@ -101,36 +126,97 @@ class AuthoringEvaluationConfiguration(FrozenModel):
     search: SearchConfiguration = Field(default_factory=default_evaluation_search)
     paired_games_per_checkpoint: PositiveInt = 200
     bootstrap_samples: PositiveInt = 10_000
-    confidence_method: Literal['paired_bootstrap'] = 'paired_bootstrap'
+    confidence_method: Literal["paired_bootstrap"] = "paired_bootstrap"
     confidence_level: float = Field(default=0.95, gt=0, lt=1)
     bootstrap_seed: int | None = Field(default=None, ge=0, le=2**63 - 1)
-    opponent: GoOpponentConfiguration = Field(default_factory=default_evaluation_opponent)
+    opponent: GoOpponentConfiguration = Field(
+        default_factory=default_evaluation_opponent
+    )
     komi_half_points: int | None = Field(default=None, strict=True)
 
 
-class AuthoringRunConfiguration(FrozenModel):
+class AuthoringGoExperimentConfiguration(FrozenModel):
     schema_version: Literal[2] = 2
+    game: Literal["go"] = "go"
     experiment: AuthoringExperimentConfiguration
     search: AuthoringSearchConfiguration
     hardware: HardwareConfiguration = Field(default_factory=planned_hardware_profile)
     topology: TopologyConfiguration = Field(default_factory=default_topology)
-    game: GoGameConfiguration = Field(default_factory=default_game)
+    game_configuration: GoGameConfiguration = Field(default_factory=default_game)
     model: ModelConfiguration = Field(default_factory=default_model)
     self_play: SelfPlayConfiguration = Field(default_factory=default_self_play)
     replay: AuthoringReplayConfiguration = Field(default_factory=default_replay)
     training: TrainingConfiguration = Field(default_factory=default_training)
-    evaluation: AuthoringEvaluationConfiguration = Field(default_factory=AuthoringEvaluationConfiguration)
+    evaluation: AuthoringEvaluationConfiguration = Field(
+        default_factory=AuthoringEvaluationConfiguration
+    )
     telemetry: TelemetryConfiguration = Field(default_factory=default_telemetry)
     retention: RetentionConfiguration = Field(default_factory=default_retention)
 
 
-def resolve_configuration(authoring: AuthoringRunConfiguration) -> ResolvedRunConfiguration:
-    return ResolvedRunConfiguration(
+class AuthoringChessExperimentConfiguration(FrozenModel):
+    schema_version: Literal[2] = 2
+    game: Literal["chess"] = "chess"
+    experiment: AuthoringExperimentConfiguration
+    search: AuthoringSearchConfiguration
+    hardware: HardwareConfiguration
+    topology: TopologyConfiguration
+    game_configuration: ChessGameConfiguration
+    model: ChessModelConfiguration
+    self_play: SelfPlayConfiguration
+    replay: ChessReplayConfiguration
+    training: ChessTrainingConfiguration
+    evaluation: ChessEvaluationConfiguration
+    telemetry: TelemetryConfiguration
+    retention: RetentionConfiguration
+
+
+AuthoringRunConfiguration = Annotated[
+    AuthoringGoExperimentConfiguration | AuthoringChessExperimentConfiguration,
+    Field(discriminator="game"),
+]
+
+AUTHORING_RUN_CONFIGURATION_ADAPTER = TypeAdapter(AuthoringRunConfiguration)
+
+AuthoringConfigurationInput = (
+    Mapping[str, JsonValue]
+    | AuthoringGoExperimentConfiguration
+    | AuthoringChessExperimentConfiguration
+)
+
+
+def validate_authoring_configuration(
+    value: AuthoringConfigurationInput,
+) -> AuthoringRunConfiguration:
+    return AUTHORING_RUN_CONFIGURATION_ADAPTER.validate_python(value)
+
+
+def validate_authoring_configuration_json(
+    contents: str | bytes,
+) -> AuthoringRunConfiguration:
+    return AUTHORING_RUN_CONFIGURATION_ADAPTER.validate_json(contents)
+
+
+def resolve_configuration(
+    authoring: AuthoringRunConfiguration,
+) -> ResolvedRunConfiguration:
+    match authoring:
+        case AuthoringGoExperimentConfiguration():
+            return _resolve_go_configuration(authoring)
+        case AuthoringChessExperimentConfiguration():
+            return _resolve_chess_configuration(authoring)
+
+
+def _resolve_go_configuration(
+    authoring: AuthoringGoExperimentConfiguration,
+) -> GoExperimentConfiguration:
+    return GoExperimentConfiguration(
         schema_version=2,
+        game="go",
         experiment=_resolve_experiment(authoring.experiment),
         hardware=authoring.hardware,
         topology=authoring.topology,
-        game=authoring.game,
+        game_configuration=authoring.game_configuration,
         model=authoring.model,
         search=_resolve_search(authoring.search),
         self_play=authoring.self_play,
@@ -142,7 +228,30 @@ def resolve_configuration(authoring: AuthoringRunConfiguration) -> ResolvedRunCo
     )
 
 
-def _resolve_experiment(authoring: AuthoringExperimentConfiguration) -> ExperimentConfiguration:
+def _resolve_chess_configuration(
+    authoring: AuthoringChessExperimentConfiguration,
+) -> ChessExperimentConfiguration:
+    return ChessExperimentConfiguration(
+        schema_version=2,
+        game="chess",
+        experiment=_resolve_experiment(authoring.experiment),
+        hardware=authoring.hardware,
+        topology=authoring.topology,
+        game_configuration=authoring.game_configuration,
+        model=authoring.model,
+        search=_resolve_search(authoring.search),
+        self_play=authoring.self_play,
+        replay=authoring.replay,
+        training=authoring.training,
+        evaluation=authoring.evaluation,
+        telemetry=authoring.telemetry,
+        retention=authoring.retention,
+    )
+
+
+def _resolve_experiment(
+    authoring: AuthoringExperimentConfiguration,
+) -> ExperimentConfiguration:
     return ExperimentConfiguration(
         name=authoring.name,
         arm_id=authoring.arm_id,
@@ -169,8 +278,13 @@ def _resolve_search(authoring: AuthoringSearchConfiguration) -> SearchConfigurat
     )
 
 
-def _resolve_replay(authoring: AuthoringRunConfiguration) -> ReplayConfiguration:
-    shard_directory = authoring.replay.shard_directory or authoring.experiment.output_directory / 'replay'
+def _resolve_replay(
+    authoring: AuthoringGoExperimentConfiguration,
+) -> ReplayConfiguration:
+    shard_directory = (
+        authoring.replay.shard_directory
+        or authoring.experiment.output_directory / "replay"
+    )
     return ReplayConfiguration(
         capacity_positions=authoring.replay.capacity_positions,
         shard_directory=shard_directory,
@@ -182,7 +296,9 @@ def _resolve_replay(authoring: AuthoringRunConfiguration) -> ReplayConfiguration
     )
 
 
-def _resolve_evaluation(authoring: AuthoringRunConfiguration) -> EvaluationConfiguration:
+def _resolve_evaluation(
+    authoring: AuthoringGoExperimentConfiguration,
+) -> EvaluationConfiguration:
     evaluation = authoring.evaluation
     return EvaluationConfiguration(
         search=evaluation.search,
@@ -192,16 +308,18 @@ def _resolve_evaluation(authoring: AuthoringRunConfiguration) -> EvaluationConfi
         confidence_method=evaluation.confidence_method,
         confidence_level=evaluation.confidence_level,
         bootstrap_seed=(
-            evaluation.bootstrap_seed if evaluation.bootstrap_seed is not None else authoring.experiment.root_seed
+            evaluation.bootstrap_seed
+            if evaluation.bootstrap_seed is not None
+            else authoring.experiment.root_seed
         ),
         suite=GoEvaluationSuite(
-            kind='go_paired',
+            kind="go_paired",
             opponent=evaluation.opponent,
             alternate_colors=True,
             komi_half_points=(
                 evaluation.komi_half_points
                 if evaluation.komi_half_points is not None
-                else authoring.game.komi_half_points
+                else authoring.game_configuration.komi_half_points
             ),
         ),
     )

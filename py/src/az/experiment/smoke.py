@@ -7,7 +7,7 @@ from src.az.config.experiment import HardwareConfiguration, ManifestPolicy
 from src.az.config.model import FixedModelSchedule, ModelConfiguration
 from src.az.config.resolution import (
     AuthoringExperimentConfiguration,
-    AuthoringRunConfiguration,
+    AuthoringGoExperimentConfiguration,
     AuthoringSearchConfiguration,
     resolve_configuration,
 )
@@ -23,15 +23,15 @@ from src.az.games.go.configuration import ResidualGoModelConfiguration
 
 
 def local_cpu_smoke_configuration() -> ResolvedRunConfiguration:
-    authoring = AuthoringRunConfiguration(
+    authoring = AuthoringGoExperimentConfiguration(
         experiment=AuthoringExperimentConfiguration(
-            name='go-local-readiness',
-            arm_id='local-cpu-smoke',
-            hypothesis='The real Go pipeline completes a bounded CPU lifecycle.',
+            name="go-local-readiness",
+            arm_id="local-cpu-smoke",
+            hypothesis="The real Go pipeline completes a bounded CPU lifecycle.",
             root_seed=2026073002,
             duration_seconds=12,
             checkpoint_elapsed_seconds=(12,),
-            output_directory=PurePosixPath('runs/go-local-readiness'),
+            output_directory=PurePosixPath("runs/go-local-readiness"),
             manifest_policy=ManifestPolicy(
                 require_clean_source=False,
                 record_dependency_versions=True,
@@ -39,8 +39,8 @@ def local_cpu_smoke_configuration() -> ResolvedRunConfiguration:
             ),
         ),
         search=AuthoringSearchConfiguration(
-            budget=FixedSearchBudget(kind='fixed', simulations=1),
-            root_exploration=DisabledRootExploration(kind='disabled'),
+            budget=FixedSearchBudget(kind="fixed", simulations=1),
+            root_exploration=DisabledRootExploration(kind="disabled"),
             inference=SearchInferenceConfiguration(
                 maximum_batch_size=1,
                 maximum_wait_microseconds=1_000,
@@ -48,16 +48,16 @@ def local_cpu_smoke_configuration() -> ResolvedRunConfiguration:
             ),
         ),
         hardware=HardwareConfiguration(
-            profile_name='local-cpu-smoke',
-            provider='local',
-            offer_id='cpu-readiness',
-            expected_gpu_model='none',
+            profile_name="local-cpu-smoke",
+            provider="local",
+            offer_id="cpu-readiness",
+            expected_gpu_model="none",
             expected_gpu_count=0,
             minimum_logical_cpu_count=1,
             minimum_ram_gib=1,
             minimum_free_disk_gib=1,
             hourly_cost=0,
-            currency='EUR',
+            currency="EUR",
         ),
         topology=TopologyConfiguration(
             trainer=DeviceAssignment(device_ids=(0,)),
@@ -73,64 +73,70 @@ def local_cpu_smoke_configuration() -> ResolvedRunConfiguration:
         ),
     )
     tiny_architecture = ResidualGoModelConfiguration(
-        family='residual_go',
+        family="residual_go",
         channels=4,
         residual_blocks=1,
         policy_channels=2,
         value_hidden_size=8,
-        normalization='batch',
-        activation='relu',
+        normalization="batch",
+        activation="relu",
     )
     authoring = authoring.model_copy(
         update={
-            'game': authoring.game.model_copy(
+            "game_configuration": authoring.game_configuration.model_copy(
                 update={
-                    'board_size': 3,
-                    'safety_ply_cap': 9,
-                    'history_length': 2,
+                    "board_size": 3,
+                    "safety_ply_cap": 9,
+                    "history_length": 2,
                 }
             ),
-            'model': ModelConfiguration(schedule=FixedModelSchedule(kind='fixed', architecture=tiny_architecture)),
-            'self_play': authoring.self_play.model_copy(update={'games_per_shard': 1}),
-            'replay': authoring.replay.model_copy(
+            "model": ModelConfiguration(
+                schedule=FixedModelSchedule(
+                    kind="fixed", architecture=tiny_architecture
+                )
+            ),
+            "self_play": authoring.self_play.model_copy(update={"games_per_shard": 1}),
+            "replay": authoring.replay.model_copy(
                 update={
-                    'capacity_positions': 90,
-                    'maximum_positions_per_shard': 9,
-                    'credits': ReplayCreditConfiguration(
+                    "capacity_positions": 90,
+                    "maximum_positions_per_shard": 9,
+                    "credits": ReplayCreditConfiguration(
                         target_reuse=1,
                         optimizer_steps_per_quantum=1,
                         minimum_positions_before_training=1,
                     ),
                 }
             ),
-            'training': authoring.training.model_copy(
+            "training": authoring.training.model_copy(
                 update={
-                    'global_batch_size': 1,
-                    'local_batch_size': 1,
-                    'maximum_optimizer_steps': 1,
-                    'precision': 'float32',
-                    'checkpoint_every_optimizer_steps': 1,
+                    "global_batch_size": 1,
+                    "local_batch_size": 1,
+                    "maximum_optimizer_steps": 1,
+                    "precision": "float32",
+                    "checkpoint_every_optimizer_steps": 1,
                 }
             ),
-            'evaluation': authoring.evaluation.model_copy(
+            "evaluation": authoring.evaluation.model_copy(
                 update={
-                    'search': authoring.evaluation.search.model_copy(
+                    "search": authoring.evaluation.search.model_copy(
                         update={
-                            'budget': FixedSearchBudget(kind='fixed', simulations=1),
-                            'inference': SearchInferenceConfiguration(
+                            "budget": FixedSearchBudget(kind="fixed", simulations=1),
+                            "inference": SearchInferenceConfiguration(
                                 maximum_batch_size=1,
                                 maximum_wait_microseconds=1_000,
                                 cache_capacity=32,
                             ),
                         }
                     ),
-                    'paired_games_per_checkpoint': 2,
-                    'bootstrap_samples': 10,
+                    "paired_games_per_checkpoint": 2,
+                    "bootstrap_samples": 10,
                 }
             ),
-            'telemetry': authoring.telemetry.model_copy(
-                update={'write_every_seconds': 1, 'resource_sample_every_seconds': 1}
+            "telemetry": authoring.telemetry.model_copy(
+                update={"write_every_seconds": 1, "resource_sample_every_seconds": 1}
             ),
         }
     )
-    return resolve_configuration(AuthoringRunConfiguration.model_validate(authoring.model_dump()))
+    return resolve_configuration(
+        AuthoringGoExperimentConfiguration.model_validate(authoring.model_dump())
+    )

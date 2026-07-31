@@ -57,28 +57,30 @@ from src.az.training.checkpoints import ModelCheckpointManifest
 def run_evaluation(repository: ExperimentRunRepository) -> ExperimentRunState:
     state = begin_phase(repository, ExperimentPhase.EVALUATION)
     configuration = load_resolved_configuration(repository.configuration_path)
-    match configuration.game:
-        case GoGameConfiguration() as game:
-            pass
-        case _:
-            raise ValueError('Go evaluation requires a Go game configuration.')
+    if configuration.game != "go":
+        raise ValueError("Native evaluation currently supports only Go experiments.")
+    game = configuration.game_configuration
     match configuration.model.schedule:
         case FixedModelSchedule(architecture=architecture):
             pass
         case _:
-            raise ValueError('The current Go evaluator requires a fixed model schedule.')
-    model_artifacts = EvaluationModelArtifactRepository((repository.directory / 'evaluation-models').resolve())
-    evaluation_device = (
-        torch.device('cpu')
-        if configuration.hardware.profile_name == 'local-cpu-smoke'
-        else torch.device(f'cuda:{configuration.topology.evaluation.device_ids[0]}')
+            raise ValueError(
+                "The current Go evaluator requires a fixed model schedule."
+            )
+    model_artifacts = EvaluationModelArtifactRepository(
+        (repository.directory / "evaluation-models").resolve()
     )
-    if evaluation_device.type == 'cpu':
+    evaluation_device = (
+        torch.device("cpu")
+        if configuration.hardware.profile_name == "local-cpu-smoke"
+        else torch.device(f"cuda:{configuration.topology.evaluation.device_ids[0]}")
+    )
+    if evaluation_device.type == "cpu":
         torch.set_num_threads(1)
     claims = load_checkpoint_claims(repository, state)
     require_exact_artifact_files(
-        repository.directory / 'evaluation-models',
-        '*.pt',
+        repository.directory / "evaluation-models",
+        "*.pt",
         tuple(model_artifacts.path(claim.candidate) for claim in claims),
     )
     search_sha256 = model_sha256(configuration.evaluation.search)
@@ -89,7 +91,9 @@ def run_evaluation(repository: ExperimentRunRepository) -> ExperimentRunState:
         evaluation_device,
         repository.directory,
     )
-    result_repository = EvaluationResultRepository((repository.directory / 'evaluation-results').resolve())
+    result_repository = EvaluationResultRepository(
+        (repository.directory / "evaluation-results").resolve()
+    )
     for evaluation_index, claim in enumerate(claims):
         loaded_model = LoadedEvaluationModel(
             identity=claim.candidate,
@@ -158,7 +162,9 @@ def run_evaluation(repository: ExperimentRunRepository) -> ExperimentRunState:
                 opponent_player,
                 result_repository,
             )
-            for pair_index in range(configuration.evaluation.paired_games_per_checkpoint // 2):
+            for pair_index in range(
+                configuration.evaluation.paired_games_per_checkpoint // 2
+            ):
                 if repository.stop_requested():
                     return interrupt_phase(
                         repository,
@@ -183,15 +189,20 @@ def run_evaluation(repository: ExperimentRunRepository) -> ExperimentRunState:
             game_in_pair,
         )
         for evaluation_index, claim in enumerate(claims)
-        for pair_index in range(configuration.evaluation.paired_games_per_checkpoint // 2)
+        for pair_index in range(
+            configuration.evaluation.paired_games_per_checkpoint // 2
+        )
         for game_in_pair in (0, 1)
     )
     require_exact_artifact_files(
-        repository.directory / 'evaluation-results',
-        '*.json',
+        repository.directory / "evaluation-results",
+        "*.json",
         expected_paths,
     )
-    artifacts = tuple(repository.artifact(RunArtifactKind.EVALUATION_RESULT, path) for path in expected_paths)
+    artifacts = tuple(
+        repository.artifact(RunArtifactKind.EVALUATION_RESULT, path)
+        for path in expected_paths
+    )
     return complete_phase(
         repository,
         state,
@@ -210,21 +221,29 @@ def load_checkpoint_claims(
         RunArtifactKind.CHECKPOINT_CLAIM,
     )
     require_exact_artifact_files(
-        repository.directory / 'checkpoint-claims',
-        '*.json',
+        repository.directory / "checkpoint-claims",
+        "*.json",
         paths,
     )
-    claims = tuple(ScheduledCheckpointClaim.model_validate_json(path.read_bytes()) for path in paths)
+    claims = tuple(
+        ScheduledCheckpointClaim.model_validate_json(path.read_bytes())
+        for path in paths
+    )
     if not claims:
-        raise ValueError('Evaluation requires at least one elapsed-time checkpoint claim.')
+        raise ValueError(
+            "Evaluation requires at least one elapsed-time checkpoint claim."
+        )
     if any(
-        claim.run_id != state.run_id or claim.resolved_configuration_sha256 != state.resolved_configuration_sha256
+        claim.run_id != state.run_id
+        or claim.resolved_configuration_sha256 != state.resolved_configuration_sha256
         for claim in claims
     ):
-        raise ValueError('Checkpoint claim does not belong to the active run identity.')
+        raise ValueError("Checkpoint claim does not belong to the active run identity.")
     requested = tuple(claim.requested_elapsed_seconds for claim in claims)
     if tuple(sorted(set(requested))) != requested:
-        raise ValueError('Checkpoint claims must have unique increasing requested times.')
+        raise ValueError(
+            "Checkpoint claims must have unique increasing requested times."
+        )
     return claims
 
 
@@ -244,7 +263,7 @@ def evaluation_pair(
         or tuple(game.game_in_pair for game in selected) != (0, 1)
         or any(game.evaluation_id != evaluation_id for game in selected)
     ):
-        raise ValueError('An evaluation pair requires exactly games zero and one.')
+        raise ValueError("An evaluation pair requires exactly games zero and one.")
     return EvaluationPairResult(
         evaluation_id=evaluation_id,
         pair_index=pair_index,
@@ -261,10 +280,12 @@ def load_evaluation_opponent(
 ) -> tuple[EvaluationOpponentIdentity, LoadedEvaluationModel | None]:
     match configuration.evaluation.suite.opponent:
         case RandomGoOpponent():
-            return RandomOpponentIdentity(kind='random'), None
+            return RandomOpponentIdentity(kind="random"), None
         case CheckpointGoOpponent(checkpoint=reference):
-            artifact_root = (run_directory / 'reference-artifacts').resolve()
-            manifest_path = artifact_root.joinpath(*reference.manifest_path.parts).resolve()
+            artifact_root = (run_directory / "reference-artifacts").resolve()
+            manifest_path = artifact_root.joinpath(
+                *reference.manifest_path.parts
+            ).resolve()
             model_path = artifact_root.joinpath(*reference.model_path.parts).resolve()
             if (
                 artifact_root not in manifest_path.parents
@@ -272,10 +293,17 @@ def load_evaluation_opponent(
                 or not manifest_path.is_file()
                 or not model_path.is_file()
             ):
-                raise ValueError('Evaluation checkpoint opponent is outside its authenticated artifact root.')
+                raise ValueError(
+                    "Evaluation checkpoint opponent is outside its authenticated artifact root."
+                )
             manifest_contents = manifest_path.read_bytes()
-            if hashlib.sha256(manifest_contents).hexdigest() != reference.manifest_sha256:
-                raise ValueError('Evaluation checkpoint opponent manifest checksum mismatch.')
+            if (
+                hashlib.sha256(manifest_contents).hexdigest()
+                != reference.manifest_sha256
+            ):
+                raise ValueError(
+                    "Evaluation checkpoint opponent manifest checksum mismatch."
+                )
             manifest = ModelCheckpointManifest.model_validate_json(manifest_contents)
             artifact = model_path.read_bytes()
             if (
@@ -283,7 +311,9 @@ def load_evaluation_opponent(
                 or manifest.model.sha256 != reference.model_artifact_sha256
                 or manifest.model.filename != model_path.name
             ):
-                raise ValueError('Evaluation checkpoint opponent model does not match its manifest.')
+                raise ValueError(
+                    "Evaluation checkpoint opponent model does not match its manifest."
+                )
             identity = CandidateCheckpointIdentity(
                 checkpoint_id=manifest.checkpoint_id,
                 model_artifact_sha256=manifest.model.sha256,
@@ -299,7 +329,7 @@ def load_evaluation_opponent(
                 ),
             )
             return CheckpointOpponentIdentity(
-                kind='checkpoint',
+                kind="checkpoint",
                 checkpoint=identity,
             ), loaded
 
@@ -311,7 +341,9 @@ def load_evaluation_model(
     device: torch.device,
 ) -> ResidualGoModel:
     model = ResidualGoModel(game, architecture).to(device)
-    model.load_state_dict(torch.load(io.BytesIO(artifact), map_location=device, weights_only=True))
+    model.load_state_dict(
+        torch.load(io.BytesIO(artifact), map_location=device, weights_only=True)
+    )
     return model
 
 

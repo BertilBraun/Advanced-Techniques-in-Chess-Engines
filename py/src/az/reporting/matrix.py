@@ -11,7 +11,11 @@ from src.az.config.evaluation import EvaluationConfiguration
 from src.az.config.experiment import ExperimentConfiguration, HardwareConfiguration
 from src.az.config.model import ModelConfiguration
 from src.az.config.root import ResolvedRunConfiguration
-from src.az.config.runtime import RetentionConfiguration, TelemetryConfiguration, TopologyConfiguration
+from src.az.config.runtime import (
+    RetentionConfiguration,
+    TelemetryConfiguration,
+    TopologyConfiguration,
+)
 from src.az.config.search import (
     FpuConfiguration,
     RootExplorationConfiguration,
@@ -24,7 +28,11 @@ from src.az.config.search import (
     SearchInferenceConfiguration,
 )
 from src.az.config.serialization import model_sha256
-from src.az.config.training import ReplayConfiguration, SelfPlayConfiguration, TrainingConfiguration
+from src.az.config.training import (
+    ReplayConfiguration,
+    SelfPlayConfiguration,
+    TrainingConfiguration,
+)
 from src.az.games.go.configuration import GoGameConfiguration
 
 
@@ -70,28 +78,28 @@ class CommonControls(FrozenModel):
 
 
 class SearchComputeAblationMatrix(FrozenModel):
-    kind: Literal['search_compute']
+    kind: Literal["search_compute"]
     schema_version: Literal[1] = 1
     matrix_id: UUID
     common_configuration: ResolvedRunConfiguration
     arms: tuple[SearchComputeArmDefinition, ...] = Field(min_length=2)
     root_seeds: tuple[int, ...] = Field(min_length=2)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_matrix(self) -> SearchComputeAblationMatrix:
         _validate_identities(self.arms, self.root_seeds)
         return self
 
 
 class FpuAblationMatrix(FrozenModel):
-    kind: Literal['fpu']
+    kind: Literal["fpu"]
     schema_version: Literal[1] = 1
     matrix_id: UUID
     common_configuration: ResolvedRunConfiguration
     arms: tuple[FpuArmDefinition, ...] = Field(min_length=2)
     root_seeds: tuple[int, ...] = Field(min_length=2)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_matrix(self) -> FpuAblationMatrix:
         _validate_identities(self.arms, self.root_seeds)
         return self
@@ -114,21 +122,24 @@ def _validate_identities(
     seeds: tuple[int, ...],
 ) -> None:
     if len({arm.arm_id for arm in arms}) != len(arms):
-        raise ValueError('Ablation arm identities must be unique.')
+        raise ValueError("Ablation arm identities must be unique.")
     if len({arm.output_directory for arm in arms}) != len(arms):
-        raise ValueError('Ablation arm output directories must be unique.')
+        raise ValueError("Ablation arm output directories must be unique.")
     if len(set(seeds)) != len(seeds):
-        raise ValueError('Ablation root seeds must be unique.')
+        raise ValueError("Ablation root seeds must be unique.")
     if any(seed < 0 or seed > 2**63 - 1 for seed in seeds):
-        raise ValueError('Ablation root seeds must be between zero and 2^63 - 1.')
+        raise ValueError("Ablation root seeds must be between zero and 2^63 - 1.")
 
 
-def _controls(configuration: ResolvedRunConfiguration, matrix_kind: Literal['search_compute', 'fpu']) -> CommonControls:
+def _controls(
+    configuration: ResolvedRunConfiguration,
+    matrix_kind: Literal["search_compute", "fpu"],
+) -> CommonControls:
     search = configuration.search
     return CommonControls(
         hardware=configuration.hardware,
         topology=configuration.topology,
-        game=configuration.game,
+        game=configuration.game_configuration,
         model=configuration.model,
         self_play=configuration.self_play,
         replay=configuration.replay,
@@ -144,9 +155,9 @@ def _controls(configuration: ResolvedRunConfiguration, matrix_kind: Literal['sea
         search_tree_reuse=search.tree_reuse,
         search_inference=search.inference,
         search_backup_discount=search.backup_discount,
-        search_budget=search.budget if matrix_kind == 'fpu' else None,
-        search_stopping=search.stopping if matrix_kind == 'fpu' else None,
-        search_fpu=search.fpu if matrix_kind == 'search_compute' else None,
+        search_budget=search.budget if matrix_kind == "fpu" else None,
+        search_stopping=search.stopping if matrix_kind == "fpu" else None,
+        search_fpu=search.fpu if matrix_kind == "search_compute" else None,
     )
 
 
@@ -184,7 +195,7 @@ def _experiment(
         root_seed=seed,
         duration_seconds=base.duration_seconds,
         checkpoint_elapsed_seconds=base.checkpoint_elapsed_seconds,
-        output_directory=output_directory / f'seed-{seed}',
+        output_directory=output_directory / f"seed-{seed}",
         manifest_policy=base.manifest_policy,
     )
 
@@ -194,21 +205,7 @@ def _configuration(
     experiment: ExperimentConfiguration,
     search: SearchConfiguration,
 ) -> ResolvedRunConfiguration:
-    return ResolvedRunConfiguration(
-        schema_version=base.schema_version,
-        experiment=experiment,
-        hardware=base.hardware,
-        topology=base.topology,
-        game=base.game,
-        model=base.model,
-        search=search,
-        self_play=base.self_play,
-        replay=base.replay,
-        training=base.training,
-        evaluation=base.evaluation,
-        telemetry=base.telemetry,
-        retention=base.retention,
-    )
+    return base.model_copy(update={"experiment": experiment, "search": search})
 
 
 def expand_matrix(matrix: AblationMatrix) -> tuple[ExpandedAblationArm, ...]:
@@ -227,15 +224,21 @@ def expand_matrix(matrix: AblationMatrix) -> tuple[ExpandedAblationArm, ...]:
             )
             match matrix, arm:
                 case SearchComputeAblationMatrix(), SearchComputeArmDefinition():
-                    search = _search(base.search, arm.budget, arm.stopping, base.search.fpu)
+                    search = _search(
+                        base.search, arm.budget, arm.stopping, base.search.fpu
+                    )
                 case FpuAblationMatrix(), FpuArmDefinition():
-                    search = _search(base.search, base.search.budget, base.search.stopping, arm.fpu)
+                    search = _search(
+                        base.search, base.search.budget, base.search.stopping, arm.fpu
+                    )
                 case _:
-                    raise AssertionError('Matrix type fixes its arm definition type.')
+                    raise AssertionError("Matrix type fixes its arm definition type.")
             configured = _configuration(base, experiment, search)
             if model_sha256(_controls(configured, matrix.kind)) != controls_sha256:
-                raise AssertionError('Expanded arm changed an undeclared common control.')
-            identity = f'{arm.arm_id}:seed:{seed}'
+                raise AssertionError(
+                    "Expanded arm changed an undeclared common control."
+                )
+            identity = f"{arm.arm_id}:seed:{seed}"
             expanded.append(
                 ExpandedAblationArm(
                     arm_id=uuid5(matrix.matrix_id, identity),

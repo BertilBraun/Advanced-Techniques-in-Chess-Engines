@@ -19,16 +19,18 @@ from src.az.experiment.smoke import local_cpu_smoke_configuration
 
 
 def _configuration() -> ResolvedRunConfiguration:
-    return resolve_configuration(load_authoring_configuration(Path('configs/go/go-7x7-fixed.authoring.json')))
+    return resolve_configuration(
+        load_authoring_configuration(Path("configs/go/go-7x7-fixed.authoring.json"))
+    )
 
 
 def _environment(tmp_path: Path) -> RuntimeBuildEnvironment:
     configuration = _configuration()
     return RuntimeBuildEnvironment(
         run_id=UUID(int=811),
-        resolved_configuration_sha256='e' * 64,
+        resolved_configuration_sha256="e" * 64,
         output_directory=tmp_path.resolve(),
-        checkpoint_directory=(tmp_path / 'checkpoints').resolve(),
+        checkpoint_directory=(tmp_path / "checkpoints").resolve(),
         startup_timeout_seconds=120,
         shutdown_grace_seconds=30,
         visible_cuda_models=(
@@ -40,7 +42,10 @@ def _environment(tmp_path: Path) -> RuntimeBuildEnvironment:
         free_disk_gib=configuration.hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
         logical_worker_next_game_indices=(0,)
-        * (len(configuration.topology.self_play.device_ids) * configuration.topology.self_play_workers_per_device),
+        * (
+            len(configuration.topology.self_play.device_ids)
+            * configuration.topology.self_play_workers_per_device
+        ),
     )
 
 
@@ -50,40 +55,77 @@ def test_runtime_factory_consumes_fixed_baseline_configuration(
     configuration = _configuration()
     plan = build_runtime_plan(configuration, _environment(tmp_path))
 
-    assert len(plan.worker_specifications) == len(configuration.topology.self_play.device_ids)
+    assert len(plan.worker_specifications) == len(
+        configuration.topology.self_play.device_ids
+    )
     first = plan.worker_specifications[0]
-    assert first.game_configuration == configuration.game
+    assert first.game_configuration == configuration.game_configuration
     assert first.model_configuration == configuration.model.schedule.architecture
     assert first.search.budget == configuration.search.budget
-    assert first.search.exploration_constant == configuration.search.algorithm.exploration_constant
+    assert (
+        first.search.exploration_constant
+        == configuration.search.algorithm.exploration_constant
+    )
     assert first.search.backup_discount == configuration.search.backup_discount
     assert first.search.fpu == configuration.search.fpu
     assert first.search.root_exploration == configuration.search.root_exploration
     assert first.search.temperature == configuration.search.temperature
-    assert first.logical_worker_count == configuration.topology.self_play_workers_per_device
-    assert first.maximum_active_searches_per_worker == configuration.topology.maximum_active_searches_per_worker
+    assert (
+        first.logical_worker_count
+        == configuration.topology.self_play_workers_per_device
+    )
+    assert (
+        first.maximum_active_searches_per_worker
+        == configuration.topology.maximum_active_searches_per_worker
+    )
     assert first.maximum_batch_size == configuration.search.inference.maximum_batch_size
-    assert first.maximum_wait_microseconds == configuration.search.inference.maximum_wait_microseconds
-    assert first.maximum_pending_batches == configuration.topology.maximum_pending_inference_batches
-    assert first.inference_cache_capacity == configuration.search.inference.cache_capacity
+    assert (
+        first.maximum_wait_microseconds
+        == configuration.search.inference.maximum_wait_microseconds
+    )
+    assert (
+        first.maximum_pending_batches
+        == configuration.topology.maximum_pending_inference_batches
+    )
+    assert (
+        first.inference_cache_capacity == configuration.search.inference.cache_capacity
+    )
     assert first.value_target_weight == configuration.self_play.value_target_weight
     assert first.torch_intraop_thread_count is None
-    assert first.telemetry_write_every_seconds == configuration.telemetry.write_every_seconds
-    assert first.resource_sample_every_seconds == configuration.telemetry.resource_sample_every_seconds
+    assert (
+        first.telemetry_write_every_seconds
+        == configuration.telemetry.write_every_seconds
+    )
+    assert (
+        first.resource_sample_every_seconds
+        == configuration.telemetry.resource_sample_every_seconds
+    )
     assert plan.games_per_shard == configuration.self_play.games_per_shard
     assert plan.duration_seconds == configuration.experiment.duration_seconds
     assert plan.startup_timeout_seconds == 120
     assert plan.required_metrics == configuration.telemetry.required_metrics
-    assert plan.search_trace_sample_probability == configuration.telemetry.search_trace_sample_probability
-    assert plan.replay_directory == tmp_path.resolve() / 'replay'
-    assert plan.topology.trainer_device_indices == configuration.topology.trainer.device_ids
-    assert plan.topology.evaluation_device_indices == configuration.topology.evaluation.device_ids
-    assert tuple(specification.device for specification in plan.worker_specifications) == (
-        'cuda:0',
-        'cuda:1',
+    assert (
+        plan.search_trace_sample_probability
+        == configuration.telemetry.search_trace_sample_probability
+    )
+    assert plan.replay_directory == tmp_path.resolve() / "replay"
+    assert (
+        plan.topology.trainer_device_indices
+        == configuration.topology.trainer.device_ids
+    )
+    assert (
+        plan.topology.evaluation_device_indices
+        == configuration.topology.evaluation.device_ids
+    )
+    assert tuple(
+        specification.device for specification in plan.worker_specifications
+    ) == (
+        "cuda:0",
+        "cuda:1",
     )
     assert plan.topology.workers[0].maximum_active_searches == (
-        configuration.topology.self_play_workers_per_device * configuration.topology.maximum_active_searches_per_worker
+        configuration.topology.self_play_workers_per_device
+        * configuration.topology.maximum_active_searches_per_worker
     )
 
 
@@ -95,9 +137,9 @@ def test_runtime_factory_sets_explicit_cpu_smoke_worker_thread_limit(
         configuration,
         RuntimeBuildEnvironment(
             run_id=UUID(int=812),
-            resolved_configuration_sha256='f' * 64,
+            resolved_configuration_sha256="f" * 64,
             output_directory=tmp_path.resolve(),
-            checkpoint_directory=(tmp_path / 'checkpoints').resolve(),
+            checkpoint_directory=(tmp_path / "checkpoints").resolve(),
             startup_timeout_seconds=30,
             shutdown_grace_seconds=10,
             visible_cuda_models=(),
@@ -109,21 +151,21 @@ def test_runtime_factory_sets_explicit_cpu_smoke_worker_thread_limit(
         ),
     )
 
-    assert plan.worker_specifications[0].device == 'cpu'
+    assert plan.worker_specifications[0].device == "cpu"
     assert plan.worker_specifications[0].torch_intraop_thread_count == 1
 
 
 @pytest.mark.parametrize(
-    ('search_update', 'message'),
+    ("search_update", "message"),
     (
         (
             {
-                'tree_reuse': RetainSubtree(
-                    kind='retain_subtree',
+                "tree_reuse": RetainSubtree(
+                    kind="retain_subtree",
                     maximum_retained_nodes=100,
                 )
             },
-            'disabled tree reuse',
+            "disabled tree reuse",
         ),
     ),
 )
@@ -133,18 +175,20 @@ def test_runtime_factory_rejects_unsupported_search_features(
     message: str,
 ) -> None:
     configuration = _configuration()
-    unsupported = configuration.model_copy(update={'search': configuration.search.model_copy(update=search_update)})
+    unsupported = configuration.model_copy(
+        update={"search": configuration.search.model_copy(update=search_update)}
+    )
 
     with pytest.raises(ValueError, match=message):
         build_runtime_plan(unsupported, _environment(tmp_path))
 
 
 @pytest.mark.parametrize(
-    'search_update',
+    "search_update",
     (
         {
-            'budget': MixedSearchBudget(
-                kind='mixed',
+            "budget": MixedSearchBudget(
+                kind="mixed",
                 cheap_simulations=2,
                 full_simulations=8,
                 full_search_probability=0.25,
@@ -152,7 +196,7 @@ def test_runtime_factory_rejects_unsupported_search_features(
                 full_policy_target_weight=1,
             )
         },
-        {'fpu': ParentValueFpu(kind='parent_value')},
+        {"fpu": ParentValueFpu(kind="parent_value")},
     ),
 )
 def test_runtime_factory_accepts_stage8_search_features(
@@ -160,7 +204,9 @@ def test_runtime_factory_accepts_stage8_search_features(
     search_update: dict[str, object],
 ) -> None:
     configuration = _configuration()
-    supported = configuration.model_copy(update={'search': configuration.search.model_copy(update=search_update)})
+    supported = configuration.model_copy(
+        update={"search": configuration.search.model_copy(update=search_update)}
+    )
 
     plan = build_runtime_plan(supported, _environment(tmp_path))
 
@@ -173,9 +219,9 @@ def test_runtime_factory_rejects_absent_configured_hardware(
 ) -> None:
     unavailable = RuntimeBuildEnvironment(
         run_id=UUID(int=812),
-        resolved_configuration_sha256='f' * 64,
+        resolved_configuration_sha256="f" * 64,
         output_directory=tmp_path.resolve(),
-        checkpoint_directory=(tmp_path / 'checkpoints').resolve(),
+        checkpoint_directory=(tmp_path / "checkpoints").resolve(),
         startup_timeout_seconds=120,
         shutdown_grace_seconds=30,
         visible_cuda_models=(),
@@ -183,10 +229,12 @@ def test_runtime_factory_rejects_absent_configured_hardware(
         ram_gib=_configuration().hardware.minimum_ram_gib,
         free_disk_gib=_configuration().hardware.minimum_free_disk_gib,
         allow_cpu_smoke=False,
-        logical_worker_next_game_indices=_environment(tmp_path).logical_worker_next_game_indices,
+        logical_worker_next_game_indices=_environment(
+            tmp_path
+        ).logical_worker_next_game_indices,
     )
 
-    with pytest.raises(ValueError, match='device count'):
+    with pytest.raises(ValueError, match="device count"):
         build_runtime_plan(_configuration(), unavailable)
 
 
@@ -207,7 +255,7 @@ def test_runtime_factory_rejects_cpu_bypass_for_gpu_profile(tmp_path: Path) -> N
         logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
     )
 
-    with pytest.raises(ValueError, match='explicit local-cpu-smoke'):
+    with pytest.raises(ValueError, match="explicit local-cpu-smoke"):
         build_runtime_plan(_configuration(), bypass)
 
 
@@ -228,42 +276,58 @@ def test_runtime_factory_rejects_insufficient_host_resources(tmp_path: Path) -> 
         logical_worker_next_game_indices=environment.logical_worker_next_game_indices,
     )
 
-    with pytest.raises(ValueError, match='logical CPU'):
+    with pytest.raises(ValueError, match="logical CPU"):
         build_runtime_plan(_configuration(), insufficient)
 
 
-def test_runtime_factory_rejects_unimplemented_telemetry_promises(tmp_path: Path) -> None:
+def test_runtime_factory_rejects_unimplemented_telemetry_promises(
+    tmp_path: Path,
+) -> None:
     configuration = _configuration()
     traces = configuration.model_copy(
         update={
-            'telemetry': configuration.telemetry.model_copy(
+            "telemetry": configuration.telemetry.model_copy(
                 update={
-                    'search_trace_sample_probability': 0.1,
-                    'search_trace_checkpoints': (4,),
+                    "search_trace_sample_probability": 0.1,
+                    "search_trace_checkpoints": (4,),
                 }
             )
         }
     )
     unsupported_metric = configuration.model_copy(
         update={
-            'telemetry': configuration.telemetry.model_copy(
-                update={'required_metrics': (TelemetryMetric.GPU_UTILIZATION,)}
+            "telemetry": configuration.telemetry.model_copy(
+                update={"required_metrics": (TelemetryMetric.GPU_UTILIZATION,)}
             )
         }
     )
 
-    assert build_runtime_plan(traces, _environment(tmp_path)).search_trace_sample_probability == 0.1
-    with pytest.raises(ValueError, match='not derivable'):
+    assert (
+        build_runtime_plan(
+            traces, _environment(tmp_path)
+        ).search_trace_sample_probability
+        == 0.1
+    )
+    with pytest.raises(ValueError, match="not derivable"):
         build_runtime_plan(unsupported_metric, _environment(tmp_path))
 
 
-def test_active_search_capacity_is_driven_by_topology_configuration(tmp_path: Path) -> None:
+def test_active_search_capacity_is_driven_by_topology_configuration(
+    tmp_path: Path,
+) -> None:
     configuration = _configuration()
     altered = configuration.model_copy(
-        update={'topology': configuration.topology.model_copy(update={'maximum_active_searches_per_worker': 3})}
+        update={
+            "topology": configuration.topology.model_copy(
+                update={"maximum_active_searches_per_worker": 3}
+            )
+        }
     )
 
     plan = build_runtime_plan(altered, _environment(tmp_path))
 
     assert plan.worker_specifications[0].maximum_active_searches_per_worker == 3
-    assert plan.topology.workers[0].maximum_active_searches == 3 * altered.topology.self_play_workers_per_device
+    assert (
+        plan.topology.workers[0].maximum_active_searches
+        == 3 * altered.topology.self_play_workers_per_device
+    )

@@ -28,7 +28,7 @@ from src.az.config.manifest import (
     file_sha256,
 )
 from src.az.config.serialization import write_resolved_configuration
-from src.az.config.root import ResolvedRunConfiguration
+from src.az.config.root import validate_resolved_configuration
 from src.az.config.search import FixedSearchBudget, VisitMarginAdaptiveRule
 from src.az.experiment.environment import inspect_hardware
 from src.az.experiment.lifecycle import (
@@ -47,14 +47,14 @@ from test.unit.go_stage5_helpers import envelope
 
 def _freeze(tmp_path: Path) -> ExperimentRunRepository:
     configuration = local_cpu_smoke_configuration()
-    configuration_path = tmp_path / 'smoke.json'
+    configuration_path = tmp_path / "smoke.json"
     write_resolved_configuration(configuration_path, configuration)
-    repository = ExperimentRunRepository((tmp_path / 'run').resolve())
-    lock_path = Path('requirements-training.lock').resolve()
+    repository = ExperimentRunRepository((tmp_path / "run").resolve())
+    lock_path = Path("requirements-training.lock").resolve()
     manifest = build_manifest(
         configuration=configuration,
-        repository_root=Path('..').resolve(),
-        build=current_python_build('unit-test'),
+        repository_root=Path("..").resolve(),
+        build=current_python_build("unit-test"),
         dependencies=DependencyDeclaration(
             lock_file=lock_path,
             lock_file_sha256=file_sha256(lock_path),
@@ -62,11 +62,13 @@ def _freeze(tmp_path: Path) -> ExperimentRunRepository:
         ),
         hardware=inspect_hardware(repository.directory),
     )
-    repository.freeze(configuration_path, UUID(int=11), manifest, Path('..').resolve())
+    repository.freeze(configuration_path, UUID(int=11), manifest, Path("..").resolve())
     return repository
 
 
-def test_frozen_run_authenticates_configuration_source_and_stop_resume(tmp_path: Path) -> None:
+def test_frozen_run_authenticates_configuration_source_and_stop_resume(
+    tmp_path: Path,
+) -> None:
     repository = _freeze(tmp_path)
     initial = repository.load()
 
@@ -75,8 +77,8 @@ def test_frozen_run_authenticates_configuration_source_and_stop_resume(tmp_path:
     request = repository.request_stop()
     stopped = initial.model_copy(
         update={
-            'status': ExperimentStatus.STOPPED,
-            'stop_requested': True,
+            "status": ExperimentStatus.STOPPED,
+            "stop_requested": True,
         }
     )
     repository.save(initial, stopped)
@@ -90,20 +92,26 @@ def test_frozen_run_authenticates_configuration_source_and_stop_resume(tmp_path:
 
 def test_frozen_run_rejects_configuration_tampering(tmp_path: Path) -> None:
     repository = _freeze(tmp_path)
-    repository.configuration_path.write_bytes(repository.configuration_path.read_bytes() + b' ')
+    repository.configuration_path.write_bytes(
+        repository.configuration_path.read_bytes() + b" "
+    )
 
-    with pytest.raises(ValueError, match='configuration'):
+    with pytest.raises(ValueError, match="configuration"):
         repository.load()
 
 
 def test_run_state_rejects_concurrent_overwrite(tmp_path: Path) -> None:
     repository = _freeze(tmp_path)
     initial = repository.load()
-    first = initial.model_copy(update={'updated_at': initial.updated_at.replace(microsecond=1)})
-    second = initial.model_copy(update={'updated_at': initial.updated_at.replace(microsecond=2)})
+    first = initial.model_copy(
+        update={"updated_at": initial.updated_at.replace(microsecond=1)}
+    )
+    second = initial.model_copy(
+        update={"updated_at": initial.updated_at.replace(microsecond=2)}
+    )
 
     repository.save(initial, first)
-    with pytest.raises(ValueError, match='concurrently'):
+    with pytest.raises(ValueError, match="concurrently"):
         repository.save(initial, second)
 
 
@@ -112,7 +120,7 @@ def test_explicit_recovery_handles_crash_between_running_state_and_lease(
 ) -> None:
     repository = _freeze(tmp_path)
     ready = repository.load()
-    running = ready.model_copy(update={'status': ExperimentStatus.RUNNING})
+    running = ready.model_copy(update={"status": ExperimentStatus.RUNNING})
     repository.save(ready, running)
 
     recovered = repository.resume(recover_crash=True)
@@ -126,7 +134,7 @@ def test_stop_at_training_deadline_advances_to_resumable_evaluation(
 ) -> None:
     repository = _freeze(tmp_path)
     ready = repository.load()
-    running = ready.model_copy(update={'status': ExperimentStatus.RUNNING})
+    running = ready.model_copy(update={"status": ExperimentStatus.RUNNING})
     repository.save(ready, running)
     repository.acquire_lease(running)
     repository.request_stop()
@@ -144,15 +152,15 @@ def test_stop_at_training_deadline_advances_to_resumable_evaluation(
 def test_authoritative_directory_rejects_unregistered_evaluation_result(
     tmp_path: Path,
 ) -> None:
-    directory = tmp_path / 'evaluation-results'
+    directory = tmp_path / "evaluation-results"
     directory.mkdir()
-    expected = directory / 'expected.json'
-    expected.write_text('{}', encoding='utf-8')
-    injected = directory / 'injected.json'
-    injected.write_text('{}', encoding='utf-8')
+    expected = directory / "expected.json"
+    expected.write_text("{}", encoding="utf-8")
+    injected = directory / "injected.json"
+    injected.write_text("{}", encoding="utf-8")
 
-    with pytest.raises(ValueError, match='unregistered'):
-        require_exact_artifact_files(directory, '*.json', (expected,))
+    with pytest.raises(ValueError, match="unregistered"):
+        require_exact_artifact_files(directory, "*.json", (expected,))
 
 
 def test_calibration_cli_publishes_reference_from_registered_committed_trace(
@@ -162,12 +170,14 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
     repository = _freeze(tmp_path)
     state = repository.load()
     sample_id = UUID(int=1_001)
-    journal = ReplayCommitJournal((repository.directory / 'replay-commits.azc').resolve())
+    journal = ReplayCommitJournal(
+        (repository.directory / "replay-commits.azc").resolve()
+    )
     journal.commit(
         (
             ReplayRecord(
-                envelope=envelope(1).model_copy(update={'sample_id': sample_id}),
-                payload=b'payload',
+                envelope=envelope(1).model_copy(update={"sample_id": sample_id}),
+                payload=b"payload",
             ),
         )
     )
@@ -192,20 +202,20 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
         for simulations in (2, 4, 6, 8)
     )
     trace_path = publish_trace_collection_artifact(
-        (repository.directory / 'search-traces').resolve(),
+        (repository.directory / "search-traces").resolve(),
         SearchTraceCollectionPayload(
             artifact_id=UUID(int=2_001),
             source_run_id=state.run_id,
             source_configuration_sha256=state.resolved_configuration_sha256,
             source_model=InitialTraceModelIdentity(
-                kind='initial_model',
+                kind="initial_model",
                 model_initialization_seed=7,
-                model_configuration_sha256='a' * 64,
+                model_configuration_sha256="a" * 64,
             ),
             game_id=UUID(int=3_001),
             replay_sample_id=sample_id,
-            lifecycle='completed_game_awaiting_replay_commit',
-            game_configuration_sha256='b' * 64,
+            lifecycle="completed_game_awaiting_replay_commit",
+            game_configuration_sha256="b" * 64,
             native_state_hash=1,
             encoding_planes=5,
             encoding_board_size=3,
@@ -228,7 +238,7 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
         ),
     )
     repository.register_artifact(RunArtifactKind.SEARCH_TRACE, trace_path)
-    request_path = tmp_path / 'calibration-request.json'
+    request_path = tmp_path / "calibration-request.json"
     request_path.write_text(
         """
 {
@@ -247,16 +257,16 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
   }
 }
 """.strip(),
-        encoding='utf-8',
+        encoding="utf-8",
     )
 
     assert (
         main(
             (
-                'calibrate',
-                '--run-directory',
+                "calibrate",
+                "--run-directory",
                 str(repository.directory),
-                '--request',
+                "--request",
                 str(request_path),
             )
         )
@@ -266,21 +276,23 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
     output = capsys.readouterr().out
     assert '"artifact_id": "00000000-0000-0000-0000-000000000063"' in output
     reference = CalibrationArtifactReference.model_validate_json(output)
-    assert reference.artifact_root == 'reference_artifacts'
+    assert reference.artifact_root == "reference_artifacts"
     calibration_artifacts = tuple(
-        artifact for artifact in repository.load().artifacts if artifact.kind is RunArtifactKind.CALIBRATION
+        artifact
+        for artifact in repository.load().artifacts
+        if artifact.kind is RunArtifactKind.CALIBRATION
     )
     assert len(calibration_artifacts) == 1
 
     adaptive = local_cpu_smoke_configuration()
-    adaptive = ResolvedRunConfiguration.model_validate(
+    adaptive = validate_resolved_configuration(
         adaptive.model_copy(
             update={
-                'search': adaptive.search.model_copy(
+                "search": adaptive.search.model_copy(
                     update={
-                        'budget': FixedSearchBudget(kind='fixed', simulations=8),
-                        'stopping': VisitMarginAdaptiveRule(
-                            kind='visit_margin',
+                        "budget": FixedSearchBudget(kind="fixed", simulations=8),
+                        "stopping": VisitMarginAdaptiveRule(
+                            kind="visit_margin",
                             minimum_simulations=2,
                             check_interval_simulations=2,
                             required_top_visit_fraction=0.75,
@@ -292,15 +304,15 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
             }
         ).model_dump()
     )
-    adaptive_path = tmp_path / 'adaptive.json'
+    adaptive_path = tmp_path / "adaptive.json"
     write_resolved_configuration(adaptive_path, adaptive)
-    dependency_lock = Path('requirements-training.lock').resolve()
-    source_root = Path('..').resolve()
-    adaptive_repository = ExperimentRunRepository((tmp_path / 'adaptive-run').resolve())
+    dependency_lock = Path("requirements-training.lock").resolve()
+    source_root = Path("..").resolve()
+    adaptive_repository = ExperimentRunRepository((tmp_path / "adaptive-run").resolve())
     adaptive_manifest = build_manifest(
         configuration=adaptive,
         repository_root=source_root,
-        build=current_python_build('unit-test'),
+        build=current_python_build("unit-test"),
         dependencies=DependencyDeclaration(
             lock_file=dependency_lock,
             lock_file_sha256=file_sha256(dependency_lock),
@@ -315,6 +327,12 @@ def test_calibration_cli_publishes_reference_from_registered_committed_trace(
         source_root,
         repository.directory,
     )
-    copied = tuple(artifact for artifact in frozen.artifacts if artifact.kind is RunArtifactKind.REFERENCE_ARTIFACT)
+    copied = tuple(
+        artifact
+        for artifact in frozen.artifacts
+        if artifact.kind is RunArtifactKind.REFERENCE_ARTIFACT
+    )
     assert len(copied) == 1
-    assert (adaptive_repository.directory / 'reference-artifacts' / reference.path).is_file()
+    assert (
+        adaptive_repository.directory / "reference-artifacts" / reference.path
+    ).is_file()

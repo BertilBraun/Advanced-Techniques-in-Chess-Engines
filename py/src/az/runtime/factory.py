@@ -8,7 +8,11 @@ from src.az.config.model import FixedModelSchedule
 from src.az.calibration.calibrate import validate_adaptive_compatibility
 from src.az.calibration.models import load_calibration_artifact
 from src.az.config.search import FixedSearchBudget, ProgressiveSearchBudget
-from src.az.config.root import ResolvedRunConfiguration
+from src.az.config.root import (
+    ChessExperimentConfiguration,
+    GoExperimentConfiguration,
+    ResolvedRunConfiguration,
+)
 from src.az.config.runtime import TelemetryMetric
 from src.az.config.search import (
     DisabledTreeReuse,
@@ -59,12 +63,19 @@ class RuntimeBuildEnvironment:
     logical_worker_next_game_indices: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if not self.output_directory.is_absolute() or not self.checkpoint_directory.is_absolute():
-            raise ValueError('Runtime output and checkpoint directories must be absolute.')
+        if (
+            not self.output_directory.is_absolute()
+            or not self.checkpoint_directory.is_absolute()
+        ):
+            raise ValueError(
+                "Runtime output and checkpoint directories must be absolute."
+            )
         if self.startup_timeout_seconds <= 0 or self.shutdown_grace_seconds <= 0:
-            raise ValueError('Runtime startup timeout and shutdown grace must be positive.')
+            raise ValueError(
+                "Runtime startup timeout and shutdown grace must be positive."
+            )
         if self.logical_cpu_count <= 0 or self.ram_gib <= 0 or self.free_disk_gib <= 0:
-            raise ValueError('Runtime hardware observations must be positive.')
+            raise ValueError("Runtime hardware observations must be positive.")
 
 
 @dataclass(frozen=True)
@@ -87,45 +98,72 @@ def build_runtime_plan(
     configuration: ResolvedRunConfiguration,
     environment: RuntimeBuildEnvironment,
 ) -> RuntimePlan:
-    if environment.allow_cpu_smoke != (configuration.hardware.profile_name == 'local-cpu-smoke'):
-        raise ValueError('CPU smoke execution is permitted only by the explicit local-cpu-smoke hardware profile.')
+    if environment.allow_cpu_smoke != (
+        configuration.hardware.profile_name == "local-cpu-smoke"
+    ):
+        raise ValueError(
+            "CPU smoke execution is permitted only by the explicit local-cpu-smoke hardware profile."
+        )
     match configuration.model.schedule:
         case FixedModelSchedule(architecture=architecture):
             pass
         case _:
-            raise ValueError('Stage 7 runtime supports only a fixed model schedule.')
+            raise ValueError("Stage 7 runtime supports only a fixed model schedule.")
     match configuration.search.tree_reuse:
         case DisabledTreeReuse():
             pass
         case _:
-            raise ValueError('Stage 7 runtime requires disabled tree reuse.')
+            raise ValueError("Stage 7 runtime requires disabled tree reuse.")
     match configuration.self_play.start_states:
         case InitialStateOnly():
             pass
-    match configuration.game.resignation:
+    match configuration:
+        case GoExperimentConfiguration():
+            pass
+        case ChessExperimentConfiguration():
+            raise ValueError(
+                "Native runtime launch currently supports only Go experiments."
+            )
+    match configuration.game_configuration.resignation:
         case DisabledResignation():
             pass
         case _:
-            raise ValueError('Stage 7 runtime does not implement resignation.')
+            raise ValueError("Stage 7 runtime does not implement resignation.")
     if configuration.topology.inference_workers_per_device != 1:
-        raise ValueError('Stage 7 uses exactly one shared inference owner per self-play device.')
-    if configuration.search.inference.maximum_batch_size != configuration.topology.inference_batch_size:
-        raise ValueError('Search and topology inference batch sizes must match.')
-    maximum_shard_positions = configuration.self_play.games_per_shard * configuration.game.safety_ply_cap
+        raise ValueError(
+            "Stage 7 uses exactly one shared inference owner per self-play device."
+        )
+    if (
+        configuration.search.inference.maximum_batch_size
+        != configuration.topology.inference_batch_size
+    ):
+        raise ValueError("Search and topology inference batch sizes must match.")
+    maximum_shard_positions = (
+        configuration.self_play.games_per_shard
+        * configuration.game_configuration.safety_ply_cap
+    )
     if maximum_shard_positions > configuration.replay.maximum_positions_per_shard:
-        raise ValueError('Replay shard capacity cannot hold the configured games per shard.')
-    if configuration.replay.compression != 'none':
-        raise ValueError('Stage 7 replay publication supports only explicit uncompressed shards.')
+        raise ValueError(
+            "Replay shard capacity cannot hold the configured games per shard."
+        )
+    if configuration.replay.compression != "none":
+        raise ValueError(
+            "Stage 7 replay publication supports only explicit uncompressed shards."
+        )
     if configuration.telemetry.search_trace_sample_probability > 0:
         if not configuration.retention.retain_search_traces:
-            raise ValueError('Sampled search traces require trace retention.')
+            raise ValueError("Sampled search traces require trace retention.")
         match configuration.search.stopping:
             case FullBudgetStopping():
                 pass
             case VisitMarginAdaptiveRule():
-                raise ValueError('Prefix/full trace collection requires full-budget stopping.')
+                raise ValueError(
+                    "Prefix/full trace collection requires full-budget stopping."
+                )
     match configuration.search.stopping, configuration.search.budget:
-        case VisitMarginAdaptiveRule(calibration=reference) as stopping, FixedSearchBudget(simulations=cap):
+        case VisitMarginAdaptiveRule(
+            calibration=reference
+        ) as stopping, FixedSearchBudget(simulations=cap):
             artifact = load_calibration_artifact(
                 reference,
                 environment.output_directory / reference.artifact_root,
@@ -138,7 +176,9 @@ def build_runtime_plan(
                 stopping.required_top_visit_fraction,
                 stopping.required_top_two_margin,
             )
-        case VisitMarginAdaptiveRule(calibration=reference) as stopping, ProgressiveSearchBudget(stages=stages):
+        case VisitMarginAdaptiveRule(
+            calibration=reference
+        ) as stopping, ProgressiveSearchBudget(stages=stages):
             artifact = load_calibration_artifact(
                 reference,
                 environment.output_directory / reference.artifact_root,
@@ -155,29 +195,48 @@ def build_runtime_plan(
                 )
         case FullBudgetStopping(), _:
             pass
-    unsupported_metrics = set(configuration.telemetry.required_metrics) - STAGE7_DERIVABLE_METRICS
+    unsupported_metrics = (
+        set(configuration.telemetry.required_metrics) - STAGE7_DERIVABLE_METRICS
+    )
     if unsupported_metrics:
-        unsupported = ', '.join(sorted(metric.value for metric in unsupported_metrics))
-        raise ValueError(f'Required telemetry metrics are not derivable in Stage 7: {unsupported}.')
+        unsupported = ", ".join(sorted(metric.value for metric in unsupported_metrics))
+        raise ValueError(
+            f"Required telemetry metrics are not derivable in Stage 7: {unsupported}."
+        )
     if (
-        TelemetryMetric.PREFIX_FULL_DISAGREEMENT in configuration.telemetry.required_metrics
+        TelemetryMetric.PREFIX_FULL_DISAGREEMENT
+        in configuration.telemetry.required_metrics
         and configuration.telemetry.search_trace_sample_probability == 0
     ):
-        raise ValueError('Prefix/full disagreement requires nonzero search trace sampling.')
+        raise ValueError(
+            "Prefix/full disagreement requires nonzero search trace sampling."
+        )
     if environment.logical_cpu_count < configuration.hardware.minimum_logical_cpu_count:
-        raise ValueError('Observed logical CPU count is below the resolved hardware profile.')
+        raise ValueError(
+            "Observed logical CPU count is below the resolved hardware profile."
+        )
     if environment.ram_gib < configuration.hardware.minimum_ram_gib:
-        raise ValueError('Observed RAM is below the resolved hardware profile.')
+        raise ValueError("Observed RAM is below the resolved hardware profile.")
     if environment.free_disk_gib < configuration.hardware.minimum_free_disk_gib:
-        raise ValueError('Observed free disk is below the resolved hardware profile.')
+        raise ValueError("Observed free disk is below the resolved hardware profile.")
     if not environment.allow_cpu_smoke:
-        if len(environment.visible_cuda_models) < configuration.hardware.expected_gpu_count:
-            raise ValueError('Visible CUDA device count is below the resolved hardware profile.')
+        if (
+            len(environment.visible_cuda_models)
+            < configuration.hardware.expected_gpu_count
+        ):
+            raise ValueError(
+                "Visible CUDA device count is below the resolved hardware profile."
+            )
         expected = configuration.hardware.expected_gpu_model
         if any(
-            model != expected for model in environment.visible_cuda_models[: configuration.hardware.expected_gpu_count]
+            model != expected
+            for model in environment.visible_cuda_models[
+                : configuration.hardware.expected_gpu_count
+            ]
         ):
-            raise ValueError('Visible CUDA model does not match the resolved hardware profile.')
+            raise ValueError(
+                "Visible CUDA model does not match the resolved hardware profile."
+            )
     model_seed = derive_seed(
         configuration.experiment.root_seed,
         ModelInitializationSeedCoordinates(
@@ -187,14 +246,23 @@ def build_runtime_plan(
     )
     assignments: list[WorkerAssignment] = []
     specifications: list[GoWorkerSpecification] = []
-    for worker_index, device_index in enumerate(configuration.topology.self_play.device_ids):
-        first_logical_worker = worker_index * configuration.topology.self_play_workers_per_device
+    for worker_index, device_index in enumerate(
+        configuration.topology.self_play.device_ids
+    ):
+        first_logical_worker = (
+            worker_index * configuration.topology.self_play_workers_per_device
+        )
         total_logical_workers = (
-            len(configuration.topology.self_play.device_ids) * configuration.topology.self_play_workers_per_device
+            len(configuration.topology.self_play.device_ids)
+            * configuration.topology.self_play_workers_per_device
         )
         next_game_indices = environment.logical_worker_next_game_indices
-        if len(next_game_indices) != total_logical_workers or any(index < 0 for index in next_game_indices):
-            raise ValueError('Resume game indices must cover every logical self-play worker.')
+        if len(next_game_indices) != total_logical_workers or any(
+            index < 0 for index in next_game_indices
+        ):
+            raise ValueError(
+                "Resume game indices must cover every logical self-play worker."
+            )
         assignments.append(
             WorkerAssignment(
                 worker_index=worker_index,
@@ -211,7 +279,7 @@ def build_runtime_plan(
                 process_index=worker_index,
                 run_id=environment.run_id,
                 root_seed=configuration.experiment.root_seed,
-                game_configuration=configuration.game,
+                game_configuration=configuration.game_configuration,
                 model_configuration=architecture,
                 model_initialization_seed=model_seed,
                 search=NativeSearchSpecification(
@@ -226,7 +294,8 @@ def build_runtime_plan(
                 logical_worker_start_index=first_logical_worker,
                 logical_worker_count=configuration.topology.self_play_workers_per_device,
                 next_game_indices=next_game_indices[
-                    first_logical_worker : first_logical_worker + configuration.topology.self_play_workers_per_device
+                    first_logical_worker : first_logical_worker
+                    + configuration.topology.self_play_workers_per_device
                 ],
                 maximum_active_searches_per_worker=configuration.topology.maximum_active_searches_per_worker,
                 maximum_batch_size=configuration.search.inference.maximum_batch_size,
@@ -234,7 +303,7 @@ def build_runtime_plan(
                 maximum_pending_batches=configuration.topology.maximum_pending_inference_batches,
                 inference_cache_capacity=configuration.search.inference.cache_capacity,
                 value_target_weight=configuration.self_play.value_target_weight,
-                device='cpu' if environment.allow_cpu_smoke else f'cuda:{device_index}',
+                device="cpu" if environment.allow_cpu_smoke else f"cuda:{device_index}",
                 torch_intraop_thread_count=1 if environment.allow_cpu_smoke else None,
                 checkpoint_directory=str(environment.checkpoint_directory),
                 resolved_configuration_sha256=environment.resolved_configuration_sha256,
@@ -242,23 +311,37 @@ def build_runtime_plan(
                 resource_sample_every_seconds=configuration.telemetry.resource_sample_every_seconds,
                 search_trace_sample_probability=configuration.telemetry.search_trace_sample_probability,
                 search_trace_checkpoints=configuration.telemetry.search_trace_checkpoints,
-                search_trace_directory=str(environment.output_directory / 'search-traces'),
+                search_trace_directory=str(
+                    environment.output_directory / "search-traces"
+                ),
             )
         )
     topology = RuntimeTopology(
         workers=tuple(assignments),
-        trainer_device_indices=(() if environment.allow_cpu_smoke else configuration.topology.trainer.device_ids),
-        evaluation_device_indices=(() if environment.allow_cpu_smoke else configuration.topology.evaluation.device_ids),
+        trainer_device_indices=(
+            ()
+            if environment.allow_cpu_smoke
+            else configuration.topology.trainer.device_ids
+        ),
+        evaluation_device_indices=(
+            ()
+            if environment.allow_cpu_smoke
+            else configuration.topology.evaluation.device_ids
+        ),
     )
     try:
-        replay_relative = configuration.replay.shard_directory.relative_to(configuration.experiment.output_directory)
+        replay_relative = configuration.replay.shard_directory.relative_to(
+            configuration.experiment.output_directory
+        )
     except ValueError as error:
-        raise ValueError('Replay shard directory must be below the experiment output directory.') from error
+        raise ValueError(
+            "Replay shard directory must be below the experiment output directory."
+        ) from error
     return RuntimePlan(
         topology=topology,
         worker_specifications=tuple(specifications),
         replay_directory=environment.output_directory.joinpath(*replay_relative.parts),
-        telemetry_path=environment.output_directory / 'runtime-telemetry.azt',
+        telemetry_path=environment.output_directory / "runtime-telemetry.azt",
         duration_seconds=configuration.experiment.duration_seconds,
         startup_timeout_seconds=environment.startup_timeout_seconds,
         shutdown_grace_seconds=environment.shutdown_grace_seconds,

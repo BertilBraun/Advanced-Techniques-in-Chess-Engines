@@ -1,5 +1,6 @@
 {
   "schema_version": 2,
+  "game": "go",
   "experiment": {
     "name": "go-7x7-search-compute",
     "arm_id": "progressive",

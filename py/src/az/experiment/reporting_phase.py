@@ -45,15 +45,21 @@ from src.az.training.checkpoints import (
 def run_reporting(repository: ExperimentRunRepository) -> ExperimentRunState:
     state = begin_phase(repository, ExperimentPhase.REPORTING)
     configuration = load_resolved_configuration(repository.configuration_path)
-    manifest = RunManifest.model_validate_json((repository.directory / repository.MANIFEST_FILENAME).read_bytes())
+    manifest = RunManifest.model_validate_json(
+        (repository.directory / repository.MANIFEST_FILENAME).read_bytes()
+    )
     match configuration.model.schedule:
         case FixedModelSchedule(architecture=architecture):
             pass
         case _:
-            raise ValueError('The current Go report pipeline requires a fixed model schedule.')
-    commit_journal = ReplayCommitJournal((repository.directory / 'replay-commits.azc').resolve())
+            raise ValueError(
+                "The current Go report pipeline requires a fixed model schedule."
+            )
+    commit_journal = ReplayCommitJournal(
+        (repository.directory / "replay-commits.azc").resolve()
+    )
     checkpoint_repository = CheckpointRepository(
-        (repository.directory / 'checkpoints').resolve(),
+        (repository.directory / "checkpoints").resolve(),
         state.run_id,
         state.resolved_configuration_sha256,
     )
@@ -63,19 +69,22 @@ def run_reporting(repository: ExperimentRunRepository) -> ExperimentRunState:
         RunArtifactKind.EVALUATION_RESULT,
     )
     if not result_paths:
-        raise ValueError('Reporting requires completed evaluation results.')
+        raise ValueError("Reporting requires completed evaluation results.")
     require_exact_artifact_files(
-        repository.directory / 'evaluation-results',
-        '*.json',
+        repository.directory / "evaluation-results",
+        "*.json",
         result_paths,
     )
-    loaded_games = tuple(EvaluationGameResult.model_validate_json(path.read_bytes()) for path in result_paths)
+    loaded_games = tuple(
+        EvaluationGameResult.model_validate_json(path.read_bytes())
+        for path in result_paths
+    )
     claims = load_checkpoint_claims(repository, state)
     opponent, _ = load_evaluation_opponent(
         configuration,
-        configuration.game,
+        configuration.game_configuration,
         architecture,
-        torch.device('cpu'),
+        torch.device("cpu"),
         repository.directory,
     )
     search_sha256 = model_sha256(configuration.evaluation.search)
@@ -90,13 +99,20 @@ def run_reporting(repository: ExperimentRunRepository) -> ExperimentRunState:
             claim.requested_elapsed_seconds,
             claim.candidate,
             opponent,
-            configuration.game,
+            configuration.game_configuration,
         )
-        games = tuple(game for game in loaded_games if game.evaluation_id == evaluation_id)
+        games = tuple(
+            game for game in loaded_games if game.evaluation_id == evaluation_id
+        )
         pair_indices = tuple(sorted({game.pair_index for game in games}))
-        if len(pair_indices) != (configuration.evaluation.paired_games_per_checkpoint // 2):
-            raise ValueError('Reporting requires every scheduled evaluation pair.')
-        pairs = tuple(evaluation_pair(evaluation_id, pair_index, games) for pair_index in pair_indices)
+        if len(pair_indices) != (
+            configuration.evaluation.paired_games_per_checkpoint // 2
+        ):
+            raise ValueError("Reporting requires every scheduled evaluation pair.")
+        pairs = tuple(
+            evaluation_pair(evaluation_id, pair_index, games)
+            for pair_index in pair_indices
+        )
         evaluation_checkpoints.append(
             EvaluationCheckpointEvidence(
                 elapsed_hours=claim.requested_elapsed_seconds / 3600,
@@ -124,14 +140,14 @@ def run_reporting(repository: ExperimentRunRepository) -> ExperimentRunState:
         RunArtifactKind.SEARCH_TRACE,
     )
     require_exact_artifact_files(
-        repository.directory / 'search-traces',
-        'trace-*.json',
+        repository.directory / "search-traces",
+        "trace-*.json",
         trace_paths,
     )
     evidence = RunReportEvidence(
         identity=RunIdentity(
             run_id=state.run_id,
-            arm_id=uuid5(state.run_id, f'arm:{configuration.experiment.arm_id}'),
+            arm_id=uuid5(state.run_id, f"arm:{configuration.experiment.arm_id}"),
             seed=configuration.experiment.root_seed,
             resolved_configuration_sha256=state.resolved_configuration_sha256,
             source_revision=state.source_revision,
@@ -150,25 +166,30 @@ def run_reporting(repository: ExperimentRunRepository) -> ExperimentRunState:
         ),
         gpu_utilization_percent=None,
         source_artifact_sha256s=tuple(artifact.sha256 for artifact in state.artifacts),
-        search_trace_artifacts=tuple(load_trace_collection_artifact(path).artifact for path in trace_paths),
+        search_trace_artifacts=tuple(
+            load_trace_collection_artifact(path).artifact for path in trace_paths
+        ),
     )
     report = build_report(
-        report_id=uuid5(state.run_id, 'report'),
-        title=f'{configuration.experiment.name}: {configuration.experiment.arm_id}',
-        matrix_id=uuid5(state.run_id, 'single-run-matrix'),
+        report_id=uuid5(state.run_id, "report"),
+        title=f"{configuration.experiment.name}: {configuration.experiment.arm_id}",
+        matrix_id=uuid5(state.run_id, "single-run-matrix"),
         common_controls_sha256=model_sha256(configuration.evaluation.search),
         runs=(evidence,),
     )
-    report_directory = repository.directory / 'report'
+    report_directory = repository.directory / "report"
     report_directory.mkdir(exist_ok=True)
     outputs = (
-        (report_directory / 'report.json', render_machine_json(report.payload)),
-        (report_directory / 'report.md', render_markdown(report.payload)),
-        (report_directory / 'report.csv', render_csv(report.payload)),
+        (report_directory / "report.json", render_machine_json(report.payload)),
+        (report_directory / "report.md", render_markdown(report.payload)),
+        (report_directory / "report.csv", render_csv(report.payload)),
     )
     for path, contents in outputs:
-        path.write_text(contents, encoding='utf-8', newline='\n')
-    artifacts = tuple(repository.artifact(RunArtifactKind.RESEARCH_REPORT, path) for path, _ in outputs)
+        path.write_text(contents, encoding="utf-8", newline="\n")
+    artifacts = tuple(
+        repository.artifact(RunArtifactKind.RESEARCH_REPORT, path)
+        for path, _ in outputs
+    )
     return complete_phase(
         repository,
         state,
@@ -181,10 +202,15 @@ def current_trainer_state(
     repository: CheckpointRepository,
     configured_world_size: int,
 ) -> TrainerCheckpointState:
-    pointer = CheckpointPointer.model_validate_json(repository.pointer_path.read_bytes())
-    if pointer.checkpoint_directory.startswith('distributed-'):
-        states = tuple(repository.load_distributed(rank).rank.state for rank in range(configured_world_size))
+    pointer = CheckpointPointer.model_validate_json(
+        repository.pointer_path.read_bytes()
+    )
+    if pointer.checkpoint_directory.startswith("distributed-"):
+        states = tuple(
+            repository.load_distributed(rank).rank.state
+            for rank in range(configured_world_size)
+        )
         if len(set(states)) != 1:
-            raise ValueError('Distributed checkpoint ranks disagree on trainer state.')
+            raise ValueError("Distributed checkpoint ranks disagree on trainer state.")
         return states[0]
     return repository.load_current().manifest.state

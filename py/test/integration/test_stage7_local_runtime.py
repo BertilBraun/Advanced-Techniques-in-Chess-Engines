@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import multiprocessing
 from pathlib import Path
 from uuid import UUID
@@ -9,12 +11,14 @@ import torch
 from src.az.config.base import DeterminismMode
 from src.az.config.model import FixedModelSchedule
 from src.az.config.resolution import resolve_configuration
-from src.az.config.root import ResolvedRunConfiguration
+from src.az.config.root import ResolvedRunConfiguration, validate_resolved_configuration
 from src.az.config.serialization import load_authoring_configuration
 from src.az.config.runtime import DeviceAssignment
 from src.az.config.search import FixedSearchBudget
 
-native = pytest.importorskip('az_go_native', reason='focused native Go extension has not been built')
+native = pytest.importorskip(
+    "az_go_native", reason="focused native Go extension has not been built"
+)
 
 from src.az.config.training import (
     AdamWOptimizerConfiguration,
@@ -27,71 +31,93 @@ from src.az.games.go.module import create_go_training_module
 from src.az.replay.credits import ReplayCreditJournal
 from src.az.replay.envelope import ReplayRecord
 from src.az.replay.storage import ReplayShardStorage, ShardMetadata
-from src.az.runtime.messages import WorkerModelRefreshed, WorkerProgress, WorkerResourceSample, WorkerStopped
+from src.az.runtime.messages import (
+    WorkerModelRefreshed,
+    WorkerProgress,
+    WorkerResourceSample,
+    WorkerStopped,
+)
 from src.az.runtime.factory import RuntimeBuildEnvironment, build_runtime_plan
 from src.az.runtime.orchestrator import RuntimeOrchestrator
 from src.az.self_play.worker import run_go_worker
 from src.az.training.checkpoints import CheckpointRepository
 from src.az.training.distributed import TrainingRank
 from src.az.training.trainer import CreditTrainer
-from test.unit.go_stage5_helpers import game_configuration, model_configuration, objective_configuration
+from test.unit.go_stage5_helpers import (
+    game_configuration,
+    model_configuration,
+    objective_configuration,
+)
 
 pytestmark = pytest.mark.integration
 RUN_ID = UUID(int=701)
-CONFIGURATION_SHA256 = 'c' * 64
+CONFIGURATION_SHA256 = "c" * 64
 
 
 def _runtime_configuration() -> ResolvedRunConfiguration:
-    configuration = resolve_configuration(load_authoring_configuration(Path('configs/go/go-7x7-fixed.authoring.json')))
-    game = game_configuration().model_copy(update={'safety_ply_cap': 49})
+    configuration = resolve_configuration(
+        load_authoring_configuration(Path("configs/go/go-7x7-fixed.authoring.json"))
+    )
+    game = game_configuration().model_copy(update={"safety_ply_cap": 49})
     architecture = model_configuration().model_copy(
-        update={'channels': 4, 'residual_blocks': 1, 'value_hidden_size': 8}
+        update={"channels": 4, "residual_blocks": 1, "value_hidden_size": 8}
     )
     topology = configuration.topology.model_copy(
         update={
-            'trainer': DeviceAssignment(device_ids=(0,)),
-            'self_play': DeviceAssignment(device_ids=(0,)),
-            'evaluation': DeviceAssignment(device_ids=(0,)),
-            'self_play_workers_per_device': 1,
-            'maximum_active_searches_per_worker': 2,
-            'inference_workers_per_device': 1,
-            'inference_batch_size': 2,
-            'maximum_pending_inference_batches': 2,
+            "trainer": DeviceAssignment(device_ids=(0,)),
+            "self_play": DeviceAssignment(device_ids=(0,)),
+            "evaluation": DeviceAssignment(device_ids=(0,)),
+            "self_play_workers_per_device": 1,
+            "maximum_active_searches_per_worker": 2,
+            "inference_workers_per_device": 1,
+            "inference_batch_size": 2,
+            "maximum_pending_inference_batches": 2,
         }
     )
     search = configuration.search.model_copy(
         update={
-            'budget': FixedSearchBudget(kind='fixed', simulations=1),
-            'inference': configuration.search.inference.model_copy(
+            "budget": FixedSearchBudget(kind="fixed", simulations=1),
+            "inference": configuration.search.inference.model_copy(
                 update={
-                    'maximum_batch_size': 2,
-                    'maximum_wait_microseconds': 100_000,
-                    'cache_capacity': 32,
+                    "maximum_batch_size": 2,
+                    "maximum_wait_microseconds": 100_000,
+                    "cache_capacity": 32,
                 }
             ),
         }
     )
-    self_play = configuration.self_play.model_copy(update={'games_per_shard': 2})
-    replay = configuration.replay.model_copy(update={'maximum_positions_per_shard': 98, 'capacity_positions': 512})
-    training = configuration.training.model_copy(update={'global_batch_size': 1, 'local_batch_size': 1})
-    experiment = configuration.experiment.model_copy(update={'duration_seconds': 20, 'checkpoint_elapsed_seconds': ()})
-    model = configuration.model.model_copy(
-        update={'schedule': FixedModelSchedule(kind='fixed', architecture=architecture)}
+    self_play = configuration.self_play.model_copy(update={"games_per_shard": 2})
+    replay = configuration.replay.model_copy(
+        update={"maximum_positions_per_shard": 98, "capacity_positions": 512}
     )
-    return ResolvedRunConfiguration.model_validate(
+    training = configuration.training.model_copy(
+        update={"global_batch_size": 1, "local_batch_size": 1}
+    )
+    experiment = configuration.experiment.model_copy(
+        update={"duration_seconds": 20, "checkpoint_elapsed_seconds": ()}
+    )
+    model = configuration.model.model_copy(
+        update={"schedule": FixedModelSchedule(kind="fixed", architecture=architecture)}
+    )
+    return validate_resolved_configuration(
         configuration.model_copy(
             update={
-                'experiment': experiment,
-                'topology': topology,
-                'game': game,
-                'model': model,
-                'search': search,
-                'self_play': self_play,
-                'replay': replay,
-                'training': training,
-                'evaluation': configuration.evaluation.model_copy(update={'checkpoint_elapsed_seconds': ()}),
-                'telemetry': configuration.telemetry.model_copy(
-                    update={'write_every_seconds': 1, 'resource_sample_every_seconds': 1}
+                "experiment": experiment,
+                "topology": topology,
+                "game": game,
+                "model": model,
+                "search": search,
+                "self_play": self_play,
+                "replay": replay,
+                "training": training,
+                "evaluation": configuration.evaluation.model_copy(
+                    update={"checkpoint_elapsed_seconds": ()}
+                ),
+                "telemetry": configuration.telemetry.model_copy(
+                    update={
+                        "write_every_seconds": 1,
+                        "resource_sample_every_seconds": 1,
+                    }
                 ),
             }
         ).model_dump()
@@ -102,9 +128,9 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
     tmp_path: Path,
 ) -> None:
     configuration = _runtime_configuration()
-    game = configuration.game
+    game = configuration.game_configuration
     model = configuration.model.schedule.architecture
-    checkpoint_directory = (tmp_path / 'checkpoints').resolve()
+    checkpoint_directory = (tmp_path / "checkpoints").resolve()
     plan = build_runtime_plan(
         configuration,
         RuntimeBuildEnvironment(
@@ -123,15 +149,17 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
         ),
     )
     storage = ReplayShardStorage(
-        directory=tmp_path / 'replay',
+        directory=tmp_path / "replay",
         maximum_positions_per_shard=configuration.replay.maximum_positions_per_shard,
         capacity_positions=configuration.replay.capacity_positions,
         game_identifier=GameIdentifier.GO,
         payload_schema_version=1,
-        compression='none',
-        credit_journal=ReplayCreditJournal(tmp_path / 'credits.azc'),
+        compression="none",
+        credit_journal=ReplayCreditJournal(tmp_path / "credits.azc"),
     )
-    repository = CheckpointRepository(checkpoint_directory, RUN_ID, CONFIGURATION_SHA256)
+    repository = CheckpointRepository(
+        checkpoint_directory, RUN_ID, CONFIGURATION_SHA256
+    )
     sequence = 0
     trainer: CreditTrainer | None = None
 
@@ -145,7 +173,7 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
                 model_configuration=model,
                 objective_configuration=objective_configuration(),
                 payload_schema_version=1,
-                device=torch.device('cpu'),
+                device=torch.device("cpu"),
                 model_initialization_seed=11,
             )
             trainer = CreditTrainer(
@@ -157,15 +185,17 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
                     local_batch_size=1,
                     maximum_optimizer_steps=1,
                     optimizer=AdamWOptimizerConfiguration(
-                        kind='adamw',
+                        kind="adamw",
                         learning_rate=0.001,
                         beta_1=0.9,
                         beta_2=0.999,
                         epsilon=1e-8,
                         weight_decay=0,
                     ),
-                    learning_rate_schedule=ConstantLearningRate(kind='constant', multiplier=1),
-                    precision='float32',
+                    learning_rate_schedule=ConstantLearningRate(
+                        kind="constant", multiplier=1
+                    ),
+                    precision="float32",
                     objective=objective_configuration(),
                     checkpoint_every_optimizer_steps=1,
                     gradient_clip_norm=1,
@@ -176,17 +206,22 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
                     minimum_positions_before_training=1,
                 ),
                 root_seed=17,
-                rank=TrainingRank(rank=0, world_size=1, device=torch.device('cpu')),
+                rank=TrainingRank(rank=0, world_size=1, device=torch.device("cpu")),
                 run_determinism_mode=DeterminismMode.SEEDED_CONCURRENT,
             )
             trainer.train_quantum()
         return metadata
 
-    start_method = 'forkserver' if 'forkserver' in multiprocessing.get_all_start_methods() else 'spawn'
+    start_method = (
+        "forkserver"
+        if "forkserver" in multiprocessing.get_all_start_methods()
+        else "spawn"
+    )
     result = RuntimeOrchestrator(
         worker_entrypoint=run_go_worker,
         worker_specifications=tuple(
-            specification.model_dump_json().encode() for specification in plan.worker_specifications
+            specification.model_dump_json().encode()
+            for specification in plan.worker_specifications
         ),
         wall_clock_seconds=plan.duration_seconds,
         startup_timeout_seconds=plan.startup_timeout_seconds,
@@ -199,15 +234,24 @@ def test_bounded_multiprocess_runtime_generates_trains_refreshes_and_stops(
         telemetry_write_every_seconds=plan.telemetry_write_every_seconds,
     ).run()
 
-    progress = tuple(message for message in result.messages if isinstance(message, WorkerProgress))
+    progress = tuple(
+        message for message in result.messages if isinstance(message, WorkerProgress)
+    )
     assert result.orphan_process_ids == ()
     assert result.timed_out
     assert result.elapsed_seconds <= 45
-    stopped = next(message for message in result.messages if isinstance(message, WorkerStopped))
+    stopped = next(
+        message for message in result.messages if isinstance(message, WorkerStopped)
+    )
     assert storage.credit_journal.credited_unique_positions == stopped.emitted_positions
     assert repository.load_current().manifest.state.replay_credits.model_version == 1
-    assert any(isinstance(message, WorkerModelRefreshed) and message.model_version == 1 for message in result.messages)
-    assert max(message.interval_maximum_inference_batch_size for message in progress) == 2
+    assert any(
+        isinstance(message, WorkerModelRefreshed) and message.model_version == 1
+        for message in result.messages
+    )
+    assert (
+        max(message.interval_maximum_inference_batch_size for message in progress) == 2
+    )
     assert plan.telemetry_path.is_file()
 
 
@@ -215,19 +259,27 @@ def test_long_games_stop_cooperatively_without_emitting_partial_samples(
     tmp_path: Path,
 ) -> None:
     base = _runtime_configuration()
-    configuration = ResolvedRunConfiguration.model_validate(
+    configuration = validate_resolved_configuration(
         base.model_copy(
             update={
-                'experiment': base.experiment.model_copy(update={'duration_seconds': 20}),
-                'game': base.game.model_copy(update={'safety_ply_cap': 512}),
-                'search': base.search.model_copy(
-                    update={'budget': FixedSearchBudget(kind='fixed', simulations=100_000)}
+                "experiment": base.experiment.model_copy(
+                    update={"duration_seconds": 20}
                 ),
-                'replay': base.replay.model_copy(update={'maximum_positions_per_shard': 1_024}),
+                "game_configuration": base.game_configuration.model_copy(
+                    update={"safety_ply_cap": 512}
+                ),
+                "search": base.search.model_copy(
+                    update={
+                        "budget": FixedSearchBudget(kind="fixed", simulations=100_000)
+                    }
+                ),
+                "replay": base.replay.model_copy(
+                    update={"maximum_positions_per_shard": 1_024}
+                ),
             }
         ).model_dump()
     )
-    checkpoint_directory = (tmp_path / 'checkpoints').resolve()
+    checkpoint_directory = (tmp_path / "checkpoints").resolve()
     plan = build_runtime_plan(
         configuration,
         RuntimeBuildEnvironment(
@@ -249,13 +301,18 @@ def test_long_games_stop_cooperatively_without_emitting_partial_samples(
 
     def publish(records: tuple[ReplayRecord, ...]) -> ShardMetadata:
         published.append(records)
-        return ShardMetadata(Path('unused'), len(published) - 1, len(records), 1)
+        return ShardMetadata(Path("unused"), len(published) - 1, len(records), 1)
 
-    start_method = 'forkserver' if 'forkserver' in multiprocessing.get_all_start_methods() else 'spawn'
+    start_method = (
+        "forkserver"
+        if "forkserver" in multiprocessing.get_all_start_methods()
+        else "spawn"
+    )
     result = RuntimeOrchestrator(
         worker_entrypoint=run_go_worker,
         worker_specifications=tuple(
-            specification.model_dump_json().encode() for specification in plan.worker_specifications
+            specification.model_dump_json().encode()
+            for specification in plan.worker_specifications
         ),
         wall_clock_seconds=plan.duration_seconds,
         startup_timeout_seconds=plan.startup_timeout_seconds,
@@ -268,7 +325,9 @@ def test_long_games_stop_cooperatively_without_emitting_partial_samples(
         telemetry_write_every_seconds=plan.telemetry_write_every_seconds,
     ).run()
 
-    stopped = next(message for message in result.messages if isinstance(message, WorkerStopped))
+    stopped = next(
+        message for message in result.messages if isinstance(message, WorkerStopped)
+    )
     assert result.timed_out
     assert result.elapsed_seconds <= 32
     assert result.orphan_process_ids == ()

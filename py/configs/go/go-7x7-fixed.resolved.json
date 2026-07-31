@@ -1,5 +1,6 @@
 {
   "schema_version": 2,
+  "game": "go",
   "experiment": {
     "name": "go-7x7-search-compute",
     "arm_id": "fixed",
@@ -59,7 +60,7 @@
     "data_loader_workers_per_rank": 4,
     "evaluation_concurrency": 1
   },
-  "game": {
+  "game_configuration": {
     "kind": "go",
     "board_size": 7,
     "komi_half_points": 15,

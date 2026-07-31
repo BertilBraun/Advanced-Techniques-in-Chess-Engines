@@ -5,7 +5,8 @@ from enum import Enum
 
 
 class GameIdentifier(str, Enum):
-    GO = 'go'
+    GO = "go"
+    CHESS = "chess"
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,8 @@ class GameRegistry:
                 from src.az.games.go.module import GO_GAME_MODULE
 
                 return GO_GAME_MODULE
+            case GameIdentifier.CHESS:
+                raise ValueError("Native chess game registration is not available yet.")
 
 
 def create_game_registry() -> GameRegistry:

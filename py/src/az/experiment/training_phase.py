@@ -14,8 +14,15 @@ import torch
 import torch.distributed as distributed
 
 from src.az.config.model import FixedModelSchedule
-from src.az.config.root import ResolvedRunConfiguration
-from src.az.config.seeds import ModelInitializationSeedCoordinates, SeedPurpose, derive_seed
+from src.az.config.root import (
+    ResolvedRunConfiguration,
+    validate_resolved_configuration_json,
+)
+from src.az.config.seeds import (
+    ModelInitializationSeedCoordinates,
+    SeedPurpose,
+    derive_seed,
+)
 from src.az.config.serialization import load_resolved_configuration
 from src.az.evaluation.checkpoints import EvaluationModelArtifactRepository
 from src.az.experiment.lifecycle import (
@@ -84,24 +91,30 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
     state = begin_phase(repository, ExperimentPhase.TRAINING_RUN)
     configuration = load_resolved_configuration(repository.configuration_path)
     storage = _replay_storage(repository, configuration)
-    commit_journal = ReplayCommitJournal((repository.directory / 'replay-commits.azc').resolve())
+    commit_journal = ReplayCommitJournal(
+        (repository.directory / "replay-commits.azc").resolve()
+    )
     commit_journal.commit(tuple(storage.records()))
-    checkpoint_directory = (repository.directory / 'checkpoints').resolve()
+    checkpoint_directory = (repository.directory / "checkpoints").resolve()
     checkpoint_repository = CheckpointRepository(
         checkpoint_directory,
         state.run_id,
         state.resolved_configuration_sha256,
     )
-    allow_cpu_smoke = configuration.hardware.profile_name == 'local-cpu-smoke'
+    allow_cpu_smoke = configuration.hardware.profile_name == "local-cpu-smoke"
     if allow_cpu_smoke:
         torch.set_num_threads(1)
     trainer = (
-        _create_trainer(configuration, storage, checkpoint_repository, torch.device('cpu'), 0, 1)
+        _create_trainer(
+            configuration, storage, checkpoint_repository, torch.device("cpu"), 0, 1
+        )
         if allow_cpu_smoke
         else None
     )
-    model_artifacts = EvaluationModelArtifactRepository((repository.directory / 'evaluation-models').resolve())
-    claims_directory = repository.directory / 'checkpoint-claims'
+    model_artifacts = EvaluationModelArtifactRepository(
+        (repository.directory / "evaluation-models").resolve()
+    )
+    claims_directory = repository.directory / "checkpoint-claims"
     claims_directory.mkdir(exist_ok=True)
     observed_hardware = inspect_hardware(repository.directory)
     plan = build_runtime_plan(
@@ -113,29 +126,37 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
             checkpoint_directory=checkpoint_directory,
             startup_timeout_seconds=30,
             shutdown_grace_seconds=10,
-            visible_cuda_models=tuple(torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())),
+            visible_cuda_models=tuple(
+                torch.cuda.get_device_name(index)
+                for index in range(torch.cuda.device_count())
+            ),
             logical_cpu_count=observed_hardware.logical_cpu_count,
             ram_gib=observed_hardware.ram_gib,
             free_disk_gib=observed_hardware.free_disk_gib,
             allow_cpu_smoke=allow_cpu_smoke,
             logical_worker_next_game_indices=commit_journal.next_game_indices(
-                len(configuration.topology.self_play.device_ids) * configuration.topology.self_play_workers_per_device
+                len(configuration.topology.self_play.device_ids)
+                * configuration.topology.self_play_workers_per_device
             ),
         ),
     )
     already_elapsed = state.self_play_elapsed_seconds or 0
-    remaining_seconds = max(0.001, configuration.experiment.duration_seconds - already_elapsed)
+    remaining_seconds = max(
+        0.001, configuration.experiment.duration_seconds - already_elapsed
+    )
     next_sequence = max((shard.sequence for shard in storage.shards()), default=-1) + 1
     retained_checkpoint_manifest_sha256: str | None = None
     context = multiprocessing.get_context(
-        'forkserver' if 'forkserver' in multiprocessing.get_all_start_methods() else 'spawn'
+        "forkserver"
+        if "forkserver" in multiprocessing.get_all_start_methods()
+        else "spawn"
     )
     trainer_stop = context.Event()
     trainer_start = context.Event()
     replay_lock = context.Lock()
     trainer_errors = context.Queue()
     trainer_ready = context.Queue()
-    distributed_init_path = (repository.directory / 'distributed-init').resolve()
+    distributed_init_path = (repository.directory / "distributed-init").resolve()
     if distributed_init_path.exists():
         distributed_init_path.unlink()
     trainer_processes = (
@@ -159,7 +180,7 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
                     trainer_errors,
                     trainer_ready,
                 ),
-                name=f'az-trainer-{rank}',
+                name=f"az-trainer-{rank}",
             )
             for rank in range(len(configuration.topology.trainer.device_ids))
         )
@@ -183,7 +204,9 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
             except queue.Empty:
                 break
         failures.extend(
-            f'exit code {process.exitcode}' for process in trainer_processes if process.exitcode not in (0, None)
+            f"exit code {process.exitcode}"
+            for process in trainer_processes
+            if process.exitcode not in (0, None)
         )
         trainer_errors.close()
         trainer_errors.join_thread()
@@ -197,7 +220,9 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
             ready_ranks.add(int(trainer_ready.get(timeout=30).decode()))
         except queue.Empty as error:
             shutdown_trainers()
-            raise TimeoutError('Distributed trainer ranks did not become ready.') from error
+            raise TimeoutError(
+                "Distributed trainer ranks did not become ready."
+            ) from error
 
     def publish(records: tuple[ReplayRecord, ...]) -> ShardMetadata:
         nonlocal next_sequence
@@ -212,10 +237,12 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
         if not checkpoint_repository.has_current():
             return
         for requested in configuration.experiment.checkpoint_elapsed_seconds:
-            path = claims_directory / f'elapsed-{requested:010d}.json'
+            path = claims_directory / f"elapsed-{requested:010d}.json"
             if requested > cumulative_elapsed or path.exists():
                 continue
-            candidate = model_artifacts.claim(checkpoint_repository.load_current_model())
+            candidate = model_artifacts.claim(
+                checkpoint_repository.load_current_model()
+            )
             claim = ScheduledCheckpointClaim(
                 run_id=state.run_id,
                 resolved_configuration_sha256=state.resolved_configuration_sha256,
@@ -223,14 +250,18 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
                 published_elapsed_seconds=cumulative_elapsed,
                 candidate=candidate,
             )
-            path.write_text(claim.model_dump_json(indent=2) + '\n', encoding='utf-8', newline='\n')
+            path.write_text(
+                claim.model_dump_json(indent=2) + "\n", encoding="utf-8", newline="\n"
+            )
 
     def apply_retention_if_advanced() -> None:
         nonlocal retained_checkpoint_manifest_sha256
         if not checkpoint_repository.has_current():
             return
         with replay_lock:
-            pointer = CheckpointPointer.model_validate_json(checkpoint_repository.pointer_path.read_bytes())
+            pointer = CheckpointPointer.model_validate_json(
+                checkpoint_repository.pointer_path.read_bytes()
+            )
             if pointer.manifest_sha256 == retained_checkpoint_manifest_sha256:
                 return
             apply_checkpoint_retention(
@@ -249,7 +280,8 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
         result = RuntimeOrchestrator(
             worker_entrypoint=run_go_worker,
             worker_specifications=tuple(
-                specification.model_dump_json().encode() for specification in plan.worker_specifications
+                specification.model_dump_json().encode()
+                for specification in plan.worker_specifications
             ),
             wall_clock_seconds=remaining_seconds,
             startup_timeout_seconds=plan.startup_timeout_seconds,
@@ -268,58 +300,85 @@ def run_training_window(repository: ExperimentRunRepository) -> ExperimentRunSta
     finally:
         failures = shutdown_trainers()
         if failures:
-            raise RuntimeError(f'Distributed trainer failed: {failures}.')
+            raise RuntimeError(f"Distributed trainer failed: {failures}.")
     elapsed = already_elapsed + min(result.elapsed_seconds, remaining_seconds)
     apply_retention_if_advanced()
     claim_crossed_checkpoints(min(result.elapsed_seconds, remaining_seconds))
 
     def immutable_evidence(include_final_checkpoint: bool) -> tuple[RunArtifact, ...]:
         claim_paths = tuple(
-            claims_directory / f'elapsed-{requested:010d}.json'
+            claims_directory / f"elapsed-{requested:010d}.json"
             for requested in configuration.experiment.checkpoint_elapsed_seconds
-            if (claims_directory / f'elapsed-{requested:010d}.json').is_file()
+            if (claims_directory / f"elapsed-{requested:010d}.json").is_file()
         )
-        require_exact_artifact_files(claims_directory, '*.json', claim_paths)
-        claims = tuple(ScheduledCheckpointClaim.model_validate_json(path.read_bytes()) for path in claim_paths)
-        evaluation_model_paths = tuple(model_artifacts.path(claim.candidate) for claim in claims)
+        require_exact_artifact_files(claims_directory, "*.json", claim_paths)
+        claims = tuple(
+            ScheduledCheckpointClaim.model_validate_json(path.read_bytes())
+            for path in claim_paths
+        )
+        evaluation_model_paths = tuple(
+            model_artifacts.path(claim.candidate) for claim in claims
+        )
         require_exact_artifact_files(
-            repository.directory / 'evaluation-models',
-            '*.pt',
+            repository.directory / "evaluation-models",
+            "*.pt",
             evaluation_model_paths,
         )
         trace_paths = tuple(
             path
-            for sample_id in sorted(commit_journal.sample_ids, key=lambda identity: identity.hex)
+            for sample_id in sorted(
+                commit_journal.sample_ids, key=lambda identity: identity.hex
+            )
             if (
-                path := repository.directory / 'search-traces' / f'trace-{uuid5(sample_id, "search-trace").hex}.json'
+                path := repository.directory
+                / "search-traces"
+                / f"trace-{uuid5(sample_id, 'search-trace').hex}.json"
             ).is_file()
         )
         require_exact_artifact_files(
-            repository.directory / 'search-traces',
-            'trace-*.json',
+            repository.directory / "search-traces",
+            "trace-*.json",
             trace_paths,
         )
         checkpoint_artifacts = (
-            _checkpoint_artifacts(repository, checkpoint_repository) if include_final_checkpoint else ()
+            _checkpoint_artifacts(repository, checkpoint_repository)
+            if include_final_checkpoint
+            else ()
         )
         return (
             *checkpoint_artifacts,
-            *tuple(repository.artifact(RunArtifactKind.CHECKPOINT_CLAIM, path) for path in claim_paths),
-            *tuple(repository.artifact(RunArtifactKind.EVALUATION_MODEL, path) for path in evaluation_model_paths),
-            *tuple(repository.artifact(RunArtifactKind.SEARCH_TRACE, path) for path in trace_paths),
+            *tuple(
+                repository.artifact(RunArtifactKind.CHECKPOINT_CLAIM, path)
+                for path in claim_paths
+            ),
+            *tuple(
+                repository.artifact(RunArtifactKind.EVALUATION_MODEL, path)
+                for path in evaluation_model_paths
+            ),
+            *tuple(
+                repository.artifact(RunArtifactKind.SEARCH_TRACE, path)
+                for path in trace_paths
+            ),
         )
 
-    if repository.stop_requested() and elapsed < configuration.experiment.duration_seconds:
+    if (
+        repository.stop_requested()
+        and elapsed < configuration.experiment.duration_seconds
+    ):
         return interrupt_phase(repository, state, elapsed, immutable_evidence(False))
     if not checkpoint_repository.has_current():
-        raise RuntimeError('Training window ended without a publishable model checkpoint.')
+        raise RuntimeError(
+            "Training window ended without a publishable model checkpoint."
+        )
     missing_claims = tuple(
         requested
         for requested in configuration.experiment.checkpoint_elapsed_seconds
-        if not (claims_directory / f'elapsed-{requested:010d}.json').is_file()
+        if not (claims_directory / f"elapsed-{requested:010d}.json").is_file()
     )
     if missing_claims:
-        raise RuntimeError(f'Training window ended without scheduled checkpoint claims: {missing_claims}.')
+        raise RuntimeError(
+            f"Training window ended without scheduled checkpoint claims: {missing_claims}."
+        )
     immutable_artifacts = immutable_evidence(True)
     all_artifacts = (
         *immutable_artifacts,
@@ -355,12 +414,12 @@ def _create_trainer(
         case FixedModelSchedule(architecture=architecture):
             pass
         case _:
-            raise ValueError('The current Go trainer requires a fixed model schedule.')
+            raise ValueError("The current Go trainer requires a fixed model schedule.")
     match configuration.training.objective:
         case GoObjectiveConfiguration() as objective:
             pass
         case _:
-            raise ValueError('The Go trainer requires the Go policy/value objective.')
+            raise ValueError("The Go trainer requires the Go policy/value objective.")
     model_seed = derive_seed(
         configuration.experiment.root_seed,
         ModelInitializationSeedCoordinates(
@@ -369,7 +428,7 @@ def _create_trainer(
         ),
     )
     module = create_go_training_module(
-        game_configuration=configuration.game,
+        game_configuration=configuration.game_configuration,
         model_configuration=architecture,
         objective_configuration=objective,
         payload_schema_version=configuration.replay.payload_schema_version,
@@ -387,7 +446,9 @@ def _create_trainer(
             rank=rank,
             world_size=world_size,
             device=device,
-            backend=DistributedBackend.GLOO if device.type == 'cpu' else DistributedBackend.NCCL,
+            backend=DistributedBackend.GLOO
+            if device.type == "cpu"
+            else DistributedBackend.NCCL,
         ),
         run_determinism_mode=configuration.experiment.manifest_policy.determinism_mode,
     )
@@ -400,7 +461,8 @@ def _train_one_available(
     repository: ExperimentRunRepository,
 ) -> bool:
     if (
-        trainer.credit_state.completed_optimizer_steps >= configuration.training.maximum_optimizer_steps
+        trainer.credit_state.completed_optimizer_steps
+        >= configuration.training.maximum_optimizer_steps
         or repository.stop_requested()
     ):
         return False
@@ -408,11 +470,17 @@ def _train_one_available(
         storage.credit_journal.snapshot,
         Decimal(str(configuration.replay.credits.target_reuse)),
     )
-    remaining_steps = configuration.training.maximum_optimizer_steps - reconciled.completed_optimizer_steps
-    quantum_steps = min(configuration.replay.credits.optimizer_steps_per_quantum, remaining_steps)
+    remaining_steps = (
+        configuration.training.maximum_optimizer_steps
+        - reconciled.completed_optimizer_steps
+    )
+    quantum_steps = min(
+        configuration.replay.credits.optimizer_steps_per_quantum, remaining_steps
+    )
     required = Decimal(quantum_steps * configuration.training.global_batch_size)
     if (
-        reconciled.credited_unique_positions < configuration.replay.credits.minimum_positions_before_training
+        reconciled.credited_unique_positions
+        < configuration.replay.credits.minimum_positions_before_training
         or reconciled.available_position_credits < required
     ):
         return False
@@ -436,9 +504,9 @@ def _run_distributed_trainer(
     ready_queue: _ByteQueue,
 ) -> None:
     try:
-        configuration = ResolvedRunConfiguration.model_validate_json(serialized_configuration)
+        configuration = validate_resolved_configuration_json(serialized_configuration)
         run_directory = Path(run_directory_text).resolve()
-        device = torch.device(f'cuda:{device_index}')
+        device = torch.device(f"cuda:{device_index}")
         torch.cuda.set_device(device)
         distributed.init_process_group(
             backend=DistributedBackend.NCCL.value,
@@ -450,12 +518,14 @@ def _run_distributed_trainer(
         ready_queue.put(str(rank).encode())
         start_signal.wait()
         checkpoint_repository = CheckpointRepository(
-            (run_directory / 'checkpoints').resolve(),
+            (run_directory / "checkpoints").resolve(),
             UUID(run_id_text),
             configuration_sha256,
         )
         while True:
-            continue_training = torch.tensor(int(not stop_signal.is_set()), device=device, dtype=torch.int32)
+            continue_training = torch.tensor(
+                int(not stop_signal.is_set()), device=device, dtype=torch.int32
+            )
             distributed.all_reduce(continue_training, op=distributed.ReduceOp.MIN)
             if int(continue_training.item()) == 0:
                 break
@@ -468,7 +538,9 @@ def _run_distributed_trainer(
                     configuration,
                 )
                 credit_state = (
-                    checkpoint_repository.load_distributed(rank).rank.state.replay_credits
+                    checkpoint_repository.load_distributed(
+                        rank
+                    ).rank.state.replay_credits
                     if checkpoint_repository.has_current()
                     else ReplayCreditState.initial()
                 )
@@ -476,8 +548,14 @@ def _run_distributed_trainer(
                     storage.credit_journal.snapshot,
                     Decimal(str(configuration.replay.credits.target_reuse)),
                 )
-                remaining_steps = configuration.training.maximum_optimizer_steps - reconciled.completed_optimizer_steps
-                quantum_steps = min(configuration.replay.credits.optimizer_steps_per_quantum, remaining_steps)
+                remaining_steps = (
+                    configuration.training.maximum_optimizer_steps
+                    - reconciled.completed_optimizer_steps
+                )
+                quantum_steps = min(
+                    configuration.replay.credits.optimizer_steps_per_quantum,
+                    remaining_steps,
+                )
                 enough_credits = (
                     remaining_steps > 0
                     and reconciled.credited_unique_positions
@@ -485,7 +563,9 @@ def _run_distributed_trainer(
                     and reconciled.available_position_credits
                     >= Decimal(quantum_steps * configuration.training.global_batch_size)
                 )
-                readiness = torch.tensor(int(enough_credits), device=device, dtype=torch.int32)
+                readiness = torch.tensor(
+                    int(enough_credits), device=device, dtype=torch.int32
+                )
                 distributed.all_reduce(readiness, op=distributed.ReduceOp.MIN)
                 if int(readiness.item()) == 1:
                     trainer = _create_trainer(
@@ -504,7 +584,7 @@ def _run_distributed_trainer(
             if not enough_credits:
                 time.sleep(0.05)
     except Exception as error:
-        error_queue.put(f'rank {rank}: {type(error).__name__}: {error}'.encode())
+        error_queue.put(f"rank {rank}: {type(error).__name__}: {error}".encode())
         stop_signal.set()
         raise
     finally:
@@ -517,13 +597,13 @@ def _replay_storage(
     configuration: ResolvedRunConfiguration,
 ) -> ReplayShardStorage:
     return ReplayShardStorage(
-        directory=(repository.directory / 'replay').resolve(),
+        directory=(repository.directory / "replay").resolve(),
         maximum_positions_per_shard=configuration.replay.maximum_positions_per_shard,
         capacity_positions=configuration.replay.capacity_positions,
         game_identifier=GameIdentifier.GO,
         payload_schema_version=configuration.replay.payload_schema_version,
         compression=configuration.replay.compression,
-        credit_journal=ReplayCreditJournal(repository.directory / 'replay-credits.azc'),
+        credit_journal=ReplayCreditJournal(repository.directory / "replay-credits.azc"),
     )
 
 
@@ -533,24 +613,30 @@ def _checkpoint_artifacts(
 ) -> tuple[RunArtifact, ...]:
     if not checkpoints.has_current():
         return ()
-    pointer = CheckpointPointer.model_validate_json(checkpoints.pointer_path.read_bytes())
-    checkpoint_directory = checkpoints.pointer_path.parent / pointer.checkpoint_directory
-    if pointer.checkpoint_directory.startswith('distributed-'):
-        manifest_path = checkpoint_directory / 'distributed-manifest.json'
-        manifest = DistributedCheckpointManifest.model_validate_json(manifest_path.read_bytes())
+    pointer = CheckpointPointer.model_validate_json(
+        checkpoints.pointer_path.read_bytes()
+    )
+    checkpoint_directory = (
+        checkpoints.pointer_path.parent / pointer.checkpoint_directory
+    )
+    if pointer.checkpoint_directory.startswith("distributed-"):
+        manifest_path = checkpoint_directory / "distributed-manifest.json"
+        manifest = DistributedCheckpointManifest.model_validate_json(
+            manifest_path.read_bytes()
+        )
         expected_paths = (
             manifest_path,
             checkpoint_directory / manifest.model.filename,
             checkpoint_directory / manifest.optimizer.filename,
             checkpoint_directory / manifest.gradient_scaler.filename,
             *tuple(
-                checkpoint_directory / f'rank-{rank.rank:05d}' / artifact.filename
+                checkpoint_directory / f"rank-{rank.rank:05d}" / artifact.filename
                 for rank in manifest.ranks
                 for artifact in (rank.torch_random_state, rank.cuda_random_stream)
             ),
         )
     else:
-        manifest_path = checkpoint_directory / 'manifest.json'
+        manifest_path = checkpoint_directory / "manifest.json"
         manifest = CheckpointManifest.model_validate_json(manifest_path.read_bytes())
         expected_paths = (
             manifest_path,
@@ -565,10 +651,17 @@ def _checkpoint_artifacts(
                 )
             ),
         )
-    actual_paths = frozenset(path.resolve() for path in checkpoint_directory.rglob('*') if path.is_file())
+    actual_paths = frozenset(
+        path.resolve() for path in checkpoint_directory.rglob("*") if path.is_file()
+    )
     if actual_paths != frozenset(path.resolve() for path in expected_paths):
-        raise ValueError('Final checkpoint contains missing or unregistered files.')
+        raise ValueError("Final checkpoint contains missing or unregistered files.")
     return (
-        repository.artifact(RunArtifactKind.CHECKPOINT_POINTER, checkpoints.pointer_path),
-        *tuple(repository.artifact(RunArtifactKind.CHECKPOINT, path) for path in expected_paths),
+        repository.artifact(
+            RunArtifactKind.CHECKPOINT_POINTER, checkpoints.pointer_path
+        ),
+        *tuple(
+            repository.artifact(RunArtifactKind.CHECKPOINT, path)
+            for path in expected_paths
+        ),
     )
