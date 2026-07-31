@@ -1,9 +1,17 @@
-# Python Go experiment platform
+# Python multi-game control-plane foundation
 
-Python provides the typed control plane around the native `az_go_native`
-extension. The active modules cover configuration, self-play, inference
-batching, replay credits/storage, training and checkpoint resume, evaluation,
-adaptive calibration, experiment matrices, and research reports.
+Python provides the typed control plane for the multi-game rework. The root
+configuration is a discriminated union of complete Go and chess experiment
+branches, so one run selects exactly one compatible game/configuration stack.
+The active Go predecessor modules cover self-play, inference batching, replay
+credits/storage, training and checkpoint resume, evaluation, adaptive
+calibration, experiment matrices, and research reports.
+
+Chess configuration and validation exist as an architectural foundation.
+Native chess execution, model training, replay materialization, and evaluation
+remain pending. The current `az_go_native` callback path is retained only as
+the predecessor Go implementation while native multi-game sessions and
+LibTorch inference are restored.
 
 Run commands from this directory so the repository's `src` package is
 importable.
@@ -19,7 +27,8 @@ then add its build directory to `PYTHONPATH`.
 
 ## Configuration
 
-Validate and resolve a Go authoring configuration:
+The top-level `game` discriminator selects the complete Go or chess branch.
+Validate and resolve the checked-in Go authoring configuration:
 
 ```powershell
 python -m src.az.config.cli validate .\configs\go\go-7x7-fixed.authoring.json
@@ -42,11 +51,18 @@ CUDA and multi-rank integration tests skip unless their required infrastructure
 is configured. A short system smoke is the local readiness check; full
 multi-GPU training is deliberately not part of local validation.
 
+## Runtime execution is deferred
+
+Do not launch training, performance benchmarks, prolonged self-play, or full
+evaluation until the target compute environment is explicitly available. The
+commands below document the existing Go lifecycle for later execution; they do
+not imply that the multi-game rework or native chess runtime is complete.
+
 ## Experiment lifecycle
 
-`src.az.experiment.cli` is the production entry point. A run directory owns one
-immutable run ID, resolved-configuration digest, source revision, checksummed
-artifact lineage, and resumable phase state.
+`src.az.experiment.cli` is the existing Go predecessor entry point. A run
+directory owns one immutable run ID, resolved-configuration digest, source
+revision, checksummed artifact lineage, and resumable phase state.
 
 ```powershell
 python -m src.az.experiment.cli validate .\configs\go\go-7x7-fixed.authoring.json

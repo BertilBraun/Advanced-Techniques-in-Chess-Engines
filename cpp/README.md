@@ -1,8 +1,14 @@
-# Native Go rules and search
+# Native multi-game engine foundation
 
-The C++20 library is the only production implementation of Go state mutation
-and MCTS. It supports arbitrary square board sizes from 3 upward, subject only
+The C++20 rework now separates common contracts (`az_core`), generic search
+infrastructure (`az_search`), and the Go specialization (`az_go`). Go rules,
+state mutation, encoding, and the predecessor fixed PUCT implementation are
+native. Go supports arbitrary square board sizes from 3 upward, subject only
 to the signed 32-bit action-space representation.
+
+The common game/session contracts and bounded tree arena are foundations for
+both Go and chess. Native chess rules, search execution, LibTorch inference,
+and complete multi-game sessions remain pending.
 
 `src/common.hpp` is the project precompiled header. Native code uses its
 `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, and `int64`
@@ -18,10 +24,15 @@ cmake --build .\cpp\build --parallel
 ctest --test-dir .\cpp\build --output-on-failure
 ```
 
-The Python module is `az_go_native`. Native search owns traversal, selection,
-expansion, and backup. Its `PythonGoEvaluator` callback submits typed leaf
-requests to Python's per-device inference broker, which batches PyTorch model
-execution. There is no LibTorch model owner or batching thread in C++.
+The current Python module remains `az_go_native`. Its
+`PythonGoEvaluator` callback submits typed leaf requests to Python's per-device
+inference broker. This is the predecessor Go path, not the target production
+architecture; the target keeps complete self-play search, batching, and
+LibTorch inference in C++.
+
+These commands perform structural compilation and unit tests only. Do not run
+training, performance benchmarks, or prolonged GPU work until the target
+compute environment is explicitly available.
 
 ## Clang tooling and IDE database
 
@@ -37,8 +48,9 @@ Copy-Item .\cpp\build-clang\compile_commands.json .\cpp\compile_commands.json
 ```
 
 `compile_commands.json` is ignored but should be regenerated after target or
-compiler-option changes. Format with the repository `.clang-format` and run
-clang-tidy with `.clang-tidy`.
+compiler-option changes so `az_core`, `az_go`, `az_search`, their tests, and
+enabled bindings are visible to IDE and clang-tidy tooling. Format with the
+repository `.clang-format` and run clang-tidy with `.clang-tidy`.
 
 ## VS Code IntelliSense
 
