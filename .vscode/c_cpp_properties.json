@@ -8,6 +8,7 @@
             "intelliSenseMode": "windows-clang-x64",
             "includePath": [
                 "${workspaceFolder}/cpp/src",
+                "${workspaceFolder}/cpp/build-codex/_deps/stockfish-src/src",
                 "${workspaceFolder}/cpp/build-go-clang/_deps/pybind11-src/include",
                 "${env:LOCALAPPDATA}/Programs/Python/Python310/Include"
             ],
@@ -17,7 +18,8 @@
             "browse": {
                 "path": [
                     "${workspaceFolder}/cpp/src",
-                    "${workspaceFolder}/cpp/test"
+                    "${workspaceFolder}/cpp/test",
+                    "${workspaceFolder}/cpp/build-codex/_deps/stockfish-src/src"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             }
@@ -30,7 +32,8 @@
             "cppStandard": "c++20",
             "intelliSenseMode": "linux-clang-x64",
             "includePath": [
-                "${workspaceFolder}/cpp/src"
+                "${workspaceFolder}/cpp/src",
+                "${workspaceFolder}/cpp/build-codex/_deps/stockfish-src/src"
             ],
             "forcedInclude": [
                 "${workspaceFolder}/cpp/src/common.hpp"
@@ -38,7 +41,8 @@
             "browse": {
                 "path": [
                     "${workspaceFolder}/cpp/src",
-                    "${workspaceFolder}/cpp/test"
+                    "${workspaceFolder}/cpp/test",
+                    "${workspaceFolder}/cpp/build-codex/_deps/stockfish-src/src"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             }
