@@ -6,6 +6,9 @@ Reference snapshot: `PreRework` / `f8cb82a`
 
 Controlling plan: `documentation/high-throughput-multigame-rework-plan.md`
 
+Runtime status: target-hardware benchmarks, end-to-end runs, training, and
+full evaluation are deferred until the user confirms compute access.
+
 ## 1. Mission
 
 Build the strongest from-scratch AlphaZero-style engine obtainable within a
@@ -69,6 +72,8 @@ components:
 | rolling replay | `py/src/train/RollingReplayBuffer.py` |
 | reanalysis overlays | `py/src/train/ReplayReanalysis.py` |
 | evaluation ladder | `py/src/cluster/EvaluationProcess.py` |
+| efficient evaluation search | `cpp/src/MCTS/EvalMCTS*`, `cpp/src/MCTS/EvalSearchTree.*` |
+| model match execution | `py/src/eval/ModelEvaluationCpp.py` |
 | chess rules and history | `cpp/src/Board.*`, pinned Stockfish dependency and patch |
 | chess encoding and action mapping | `cpp/src/BoardEncoding.*`, `cpp/src/MoveEncoding.*` |
 
@@ -186,6 +191,7 @@ lifecycle failures.
 
 - frozen typed configuration and resolution;
 - process supervision;
+- single Layer A intake and Layer B materialization service;
 - persistent DDP loop;
 - replay catalog and deterministic sampling;
 - checkpoints and model publication;
@@ -201,26 +207,68 @@ lifecycle failures.
 - artifact export;
 - game-specific evaluation opponents or diagnostics.
 
-## 8. Replay direction
+## 8. One-game configuration boundary
 
-The production baseline has one durable training path:
+One serialized experiment configuration describes exactly one game. Model this
+as a discriminated union of complete variants:
 
-1. native self-play keeps an unfinished game's training observations in
-   bounded memory;
-2. terminal completion supplies outcome targets;
-3. the worker writes exact fixed-shape rows into immutable mmap shards;
-4. atomic manifests expose sealed shards to the rolling replay catalog;
-5. deterministic samplers group reads by shard and feed persistent pinned
-   batches.
+- `GoExperimentConfiguration` contains Go rules/board, Go model and objective,
+  Go Layer A/B schemas, self-play, training, and Go evaluation.
+- `ChessExperimentConfiguration` contains chess rules/history, chess model and
+  objective, chess Layer A/B schemas, self-play, training, and chess
+  evaluation.
 
-The replay schema is resolved with the game, representation, model heads, and
-objective. A different representation or auxiliary objective gets a new
-end-to-end run and a different schema. Do not build a mandatory canonical
-trajectory/materialization pipeline.
+Shared topology, optimizer, search-policy, and telemetry structures may be
+reused inside the variants. Do not expose independent unions that allow a Go
+game to select a chess model, loss, replay schema, or Stockfish evaluator.
 
-Optional logical trajectory capture may be introduced only for a named
-consumer such as adaptive-stop calibration, difficult-state mining, restart
-states, or reanalysis. Measure its cost and keep it disabled otherwise.
+The game literal is the serialization discriminator. Every worker, trainer
+rank, replay manifest, checkpoint, and evaluation task in a run carries and
+validates the same game identity. Resume fails before launch on a mismatch.
+
+## 9. Two-layer replay direction
+
+### Layer A: fast native producer spool
+
+Self-play workers always generate compact Layer A shards. They group samples
+by completed game and store the compact game-specific state/input payload
+already available to native inference plus sparse variable-length root search
+observations. They do not construct dense action tensors or mmap layout. A
+background writer batches several completed games, performs sequential atomic
+publication, and returns to search quickly.
+
+Layer A contains terminal metadata, model and environment identity, and
+per-ply compact state, priors, visits, child Q, selected/played action, budget,
+search type, weights, and diagnostics. Every fast and full search is retained.
+It is representation-specific to the current one-game run rather than a
+universal archive. Full initial-state/action reconstruction data is included
+only when a named feature needs it.
+
+The writer queue is bounded. Backpressure stops admission of new games rather
+than blocking leaf completion or dropping samples. Layer A shards remain
+immutable until acknowledged as fully materialized.
+
+### Layer B: large trainer-ready mmap shards
+
+The trainer control process owns exactly one replay maintainer. While it waits
+for enough presentation credits, that maintainer:
+
+1. discovers Layer A through incremental manifests;
+2. claims each producer shard idempotently;
+3. decodes compact state payloads;
+4. derives dense policy/value/auxiliary targets and deterministic
+   augmentation;
+5. fills large fixed-shape columnar mmap shards;
+6. atomically commits a Layer B manifest and source-to-row ledger;
+7. awards credits for newly committed eligible rows;
+8. acknowledges Layer A retention or deletion.
+
+DDP ranks do not materialize data. They read only committed Layer B through
+deterministic rank-partitioned sampling and persistent pinned batches.
+
+Crashes cannot expose partial shards or duplicate credits. Layer A deletion is
+allowed only after every contained game maps durably to Layer B and no
+diagnostic/reanalysis lease pins it.
 
 Preserve from the old replay design:
 
@@ -232,7 +280,27 @@ Preserve from the old replay design:
 - vectorized reads and read-amplification accounting;
 - immutable reanalysis sidecars when reanalysis is enabled.
 
-## 9. Evaluation is not optional
+A different representation or objective still receives a new end-to-end run.
+The two layers decouple producer latency from trainer I/O; they are not a reason
+to reuse fixed self-play data for ordinary ablations.
+
+## 10. Evaluation is a conservative restoration
+
+The existing `PreRework` evaluation design was sound. Restore rather than
+redesign:
+
+- efficient native evaluation MCTS and evaluation tree;
+- current-versus-random and policy-only-versus-random;
+- previous, historical, and stable reference checkpoints;
+- chess Stockfish skill and fixed-node opponents;
+- concurrent evaluation task scheduling and device cycling;
+- paired colors/openings, raw match records, TensorBoard metrics, confidence
+  reporting, retries, and failure visibility.
+
+Cleanup should split responsibilities and strengthen types without changing
+match semantics or replacing the efficient native search. Add a game-generic
+match boundary and Go state/action support. Stockfish and chess opening
+settings remain present only in `ChessExperimentConfiguration`.
 
 At fixed elapsed checkpoints run the low-search progress ladder. The default
 plan uses roughly 100 games per opponent under a frozen small search budget:
@@ -256,7 +324,7 @@ remain the confirmatory publication protocol.
 Evaluation is asynchronous and resource-budgeted. It may lag, but every due
 checkpoint stays queued and visible until completed or explicitly failed.
 
-## 10. Implementation sequence
+## 11. Implementation sequence
 
 Do not skip directly to feature experiments.
 
@@ -265,7 +333,8 @@ Do not skip directly to feature experiments.
 3. Restore chess rules, history, encoding, and tests.
 4. Restore generalized native LibTorch inference.
 5. Restore arena-backed cohort MCTS and the 4x4 worker topology.
-6. Restore direct mmap replay and the persistent trainer hot path.
+6. Restore fast Layer A producer shards, trainer-side Layer B materialization,
+   and the persistent trainer hot path.
 7. Restore the complete progress-evaluation ladder.
 8. Establish stable 7x7, 9x9, and short chess baselines.
 9. Implement root-asynchronous scheduling as an isolated measured variant.
@@ -274,12 +343,13 @@ Do not skip directly to feature experiments.
 Each item is a sequence of coherent reviewed commits, not one large rewrite
 commit.
 
-## 11. Definition of done for restored infrastructure
+## 12. Definition of done for restored infrastructure
 
 A restored component is not complete merely because it compiles.
 
 - It has parity fixtures against the relevant reference behavior.
-- Hot-path benchmarks were captured before and after.
+- Hot-path benchmark harnesses and frozen inputs exist; measurements are
+  captured before promotion when the target hardware becomes available.
 - Both Go and chess fit the contract where the stage requires them.
 - C++ formatting, clang-tidy, warnings, compilation, and tests pass.
 - Python formatting, lint, typing conventions, and relevant tests pass.
@@ -289,7 +359,11 @@ A restored component is not complete merely because it compiles.
 - No long compute claim is made from a smoke test.
 - The coherent change is committed without unrelated workspace files.
 
-## 12. Known decisions still requiring measurement
+Until runtime access returns, a component may be labeled only `structurally
+complete; runtime validation pending`. It cannot replace or delete its
+reference path on the strength of unexecuted benchmarks.
+
+## 13. Known decisions still requiring measurement
 
 Do not silently decide these during an unrelated implementation:
 
@@ -298,19 +372,34 @@ Do not silently decide these during an unrelated implementation:
 - inference batch size, outstanding slots, and CUDA streams;
 - four model replicas per GPU versus later process consolidation;
 - optimizer quantum duration and self-play/training duty cycle;
-- exact replay row/shard layout and dtype tradeoffs;
+- Layer A shard size/compression and Layer B row/shard layout/dtype tradeoffs;
 - CPU affinity and NUMA placement;
 - exact low-search evaluation budget after reference parity.
 
 Resolve each with a typed configuration, benchmark, and recorded decision.
 
-## 13. Starting a new implementation session
+## 14. Deferred execution period
+
+For the next few days, prepare code for later execution:
+
+- compile and run static analysis;
+- add focused unit and deterministic parity tests;
+- define schemas, manifests, state machines, and failure recovery;
+- create benchmark executables/scripts and frozen configurations;
+- record exact commands, expected artifacts, and acceptance thresholds.
+
+Do not execute or claim target-hardware benchmarks, training runs, complete
+self-play integrations, full evaluation suites, or playing-strength results
+until the user confirms the compute environment is available.
+
+## 15. Starting a new implementation session
 
 1. Read `AGENTS.md`, this handoff, and the relevant plan stage.
 2. Run `git status`; identify and preserve unrelated changes.
 3. Inspect the `PreRework` component and existing benchmark evidence.
 4. State the smallest stage-scoped objective.
-5. Capture or identify the parity fixture and performance baseline.
+5. Capture or identify the parity fixture and prepare the performance
+   baseline command; defer target execution when required.
 6. Implement without mixing a restoration and a speculative optimization.
 7. Format, lint, compile, test, and run only a short smoke if needed.
 8. Regenerate `cpp/compile_commands.json` for native target changes.

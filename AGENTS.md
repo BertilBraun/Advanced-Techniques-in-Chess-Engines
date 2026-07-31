@@ -25,16 +25,21 @@ authorization to implement every item.
 - Backward compatibility is not required when a cleaner typed interface is
   available.
 - Do not modify unrelated code or absorb existing workspace changes.
-- Benchmark a proven `PreRework` hot-path component before replacing it.
+- Define and prepare a benchmark for a proven `PreRework` hot-path component
+  before replacing it; execute both sides before promoting the replacement.
 - Restore behavior first, then optimize it in a separate change with evidence.
 - Commit each validated feature-sized change before starting the next one.
 - Do not begin research ablations before the stable baseline stages pass.
-- Do not run long training, self-play, or evaluation jobs locally. Unit tests,
-  benchmarks, and at most a very short end-to-end smoke test are allowed.
+- Until the user explicitly says the target compute environment is available,
+  do not run performance benchmarks, training, end-to-end self-play, or full
+  evaluation. Prepare their harnesses and frozen configurations. Compilation,
+  static checks, unit tests, deterministic fixtures, and very short
+  non-performance smoke tests are allowed.
 
 ## Non-negotiable architecture
 
-- Go and chess are first-class games selected by typed configuration.
+- Go and chess are first-class games selected by typed configuration. One
+  experiment configuration is exactly one game.
 - C++ owns game progression, MCTS, tree storage, multi-game scheduling,
   leaf batching, LibTorch inference, subtree reuse, and replay emission.
 - Production self-play never calls Python once per leaf and never uses Python
@@ -44,10 +49,20 @@ authorization to implement every item.
 - Game rules, encodings, action maps, models, losses, augmentations, and
   auxiliary targets may be game-specific. Do not force them into a nullable
   universal structure.
-- Native self-play writes training-ready fixed-shape mmap replay shards.
-  Canonical trajectory capture is optional and default-disabled.
+- Native self-play writes compact Layer A producer shards quickly. The single
+  trainer-side replay maintainer materializes them into large fixed-shape mmap
+  Layer B shards while waiting for presentation credits. DDP ranks train only
+  from committed Layer B.
 - Playing strength from the fixed low-search evaluation ladder is the primary
   progress signal. Training loss and throughput do not replace it.
+- Restore the `PreRework` evaluation implementation conservatively. Generalize
+  it for Go and clean responsibility boundaries; do not redesign its efficient
+  native search, opponent scheduling, or result concepts without evidence.
+
+The root configuration is a discriminated union of complete
+`GoExperimentConfiguration`, `ChessExperimentConfiguration`, and future
+per-game variants. Do not model game, model, objective, replay, and evaluation
+as independently mixable unions.
 
 ## Reference hardware topology
 
@@ -148,12 +163,23 @@ Default maintainability limits:
 
 ## Replay and evaluation rules
 
-- Replay schemas are resolved with the game, model, and objective.
-- Shards are immutable after atomic publication and include shapes, dtypes,
-  valid rows, identities, source revisions, and checksums.
+- Layer A schemas are game-specific, representation-specific compact
+  state/input payloads plus sparse search observations, grouped by completed
+  game and optimized for sequential native writes. Workers do not build dense
+  action tensors or mmap layout.
+- Layer B schemas are resolved with the one-game experiment's representation,
+  model, and objective and are optimized for large shuffled mmap reads.
+- Layer A and B shards are immutable after atomic publication and include
+  identities, source revisions, and checksums. Layer B additionally declares
+  shapes, dtypes, offsets, and valid rows.
+- A single trainer-control replay maintainer consumes Layer A idempotently
+  while waiting for credits. Credits are awarded only for uniquely committed
+  eligible Layer B rows.
 - Preserve the old replay buffer's deterministic rank sampling, leases,
   logical/physical separation, freshness, bounded capacity, and
   read-amplification telemetry.
+- Layer A may be deleted only after its complete Layer B mapping is durable and
+  no lease pins it.
 - Every elapsed evaluation checkpoint runs the configured low-search ladder:
   MCTS versus random, policy-only versus random, previous/milestone models, and
   chess-only Stockfish opponents.
@@ -161,6 +187,8 @@ Default maintainability limits:
   alternating colors or paired openings, raw outcomes, W/D/L, score, and
   uncertainty.
 - Evaluation jobs may lag but cannot be silently skipped.
+- Stockfish configuration and adapters exist only in the chess experiment
+  variant.
 
 ## Validation
 
@@ -197,6 +225,7 @@ python -m pytest --import-mode=importlib .\test -q
 ```
 
 Narrow test selection is acceptable for a focused intermediate commit. Before
-completing a stage, run the complete relevant C++ and Python unit suites.
-Always report commands run, failures, and intentionally skipped long-running
-tests.
+recording a stage as structurally complete, run the complete relevant C++ and
+Python unit suites. Mark hardware/runtime gates as pending rather than claiming
+the stage accepted. Always report commands run, failures, and intentionally
+deferred benchmarks or long-running tests.
