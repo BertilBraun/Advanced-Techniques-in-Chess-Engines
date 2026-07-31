@@ -25,13 +25,39 @@ function(az_enable_warnings target)
     endif ()
 endfunction()
 
+add_library(az_core INTERFACE)
+target_include_directories(az_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_sources(
+        az_core
+        INTERFACE
+        src/core/ArtifactMetadata.hpp
+        src/core/SessionConfiguration.hpp
+        src/games/GameDefinition.hpp
+        src/games/game_concepts.hpp
+)
+
+add_library(az_search INTERFACE)
+target_link_libraries(az_search INTERFACE az_core)
+target_sources(
+        az_search
+        INTERFACE
+        src/inference/InferenceBatch.hpp
+        src/inference/InferenceTypes.hpp
+        src/search/FixedPuct.hpp
+        src/search/SearchConfiguration.hpp
+        src/search/SearchTelemetry.hpp
+        src/search/SeededRandom.hpp
+        src/search/TreeArena.hpp
+)
+
 add_library(
         az_go
+        src/games/go/GoDefinition.cpp
         src/games/go/GoEncoding.cpp
         src/games/go/GoState.cpp
         src/games/go/GoSymmetry.cpp
 )
-target_include_directories(az_go PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(az_go PUBLIC az_core)
 target_precompile_headers(az_go PRIVATE src/common.hpp)
 az_enable_warnings(az_go)
 
@@ -47,10 +73,22 @@ if (BUILD_TESTING)
     add_test(NAME GoStateTest COMMAND GoStateTest)
 
     add_executable(FixedPuctTest test/TestFixedPuct.cpp)
-    target_link_libraries(FixedPuctTest PRIVATE az_go)
+    target_link_libraries(FixedPuctTest PRIVATE az_go az_search)
     target_precompile_headers(FixedPuctTest PRIVATE src/common.hpp)
     az_enable_warnings(FixedPuctTest)
     add_test(NAME FixedPuctTest COMMAND FixedPuctTest)
+
+    add_executable(GameContractsTest test/TestGameContracts.cpp)
+    target_link_libraries(GameContractsTest PRIVATE az_go)
+    target_precompile_headers(GameContractsTest PRIVATE src/common.hpp)
+    az_enable_warnings(GameContractsTest)
+    add_test(NAME GameContractsTest COMMAND GameContractsTest)
+
+    add_executable(TreeArenaTest test/TestTreeArena.cpp)
+    target_link_libraries(TreeArenaTest PRIVATE az_search)
+    target_precompile_headers(TreeArenaTest PRIVATE src/common.hpp)
+    az_enable_warnings(TreeArenaTest)
+    add_test(NAME TreeArenaTest COMMAND TreeArenaTest)
 endif ()
 
 if (AZ_BUILD_PYTHON)
@@ -68,7 +106,7 @@ if (AZ_BUILD_PYTHON)
             src/bindings/go_bindings.cpp
             src/bindings/search_bindings.cpp
     )
-    target_link_libraries(az_go_native PRIVATE az_go)
+    target_link_libraries(az_go_native PRIVATE az_go az_search)
     target_precompile_headers(az_go_native PRIVATE src/common.hpp)
     az_enable_warnings(az_go_native)
 endif ()
