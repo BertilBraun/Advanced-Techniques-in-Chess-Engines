@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 #pragma warning(disable : 4365)
 #pragma warning(disable : 4514)
 #pragma warning(disable : 4710)
