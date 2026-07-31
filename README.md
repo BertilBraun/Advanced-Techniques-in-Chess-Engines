@@ -29,6 +29,10 @@ See [cpp/README.md](cpp/README.md) for the native build and
 
 The controlling architecture and implementation plan is
 [documentation/high-throughput-multigame-rework-plan.md](documentation/high-throughput-multigame-rework-plan.md).
+The implementation handoff and reference-behavior guide is
+[documentation/rework-implementation-handoff.md](documentation/rework-implementation-handoff.md).
+Repository-wide coding and validation requirements are in
+[AGENTS.md](AGENTS.md).
 The completed Go-first architecture and migration record remains in
 [documentation/go-first-rework-architecture.md](documentation/go-first-rework-architecture.md)
 as superseded implementation history.

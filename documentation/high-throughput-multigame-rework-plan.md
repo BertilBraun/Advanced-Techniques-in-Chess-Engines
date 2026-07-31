@@ -88,6 +88,10 @@ The next implementation must follow these decisions.
     previous and milestone models, plus pinned Stockfish conditions for chess.
     Loss curves and throughput diagnose the system but do not substitute for
     measured playing strength.
+11. **Restore the proven topology before redesigning it.** The four-GPU
+    baseline is four self-play processes per GPU with four search threads each.
+    Four persistent DDP ranks pause three workers per GPU during optimizer
+    quanta, leaving four DDP ranks and four self-play workers active.
 
 ## 3. Current-state assessment
 
@@ -131,6 +135,8 @@ The following concepts should return:
 - dedicated native inference threads and CUDA streams;
 - LibTorch model loading, warm-up, inference, and model refresh;
 - native inference/search timing and batch histograms;
+- four workers per GPU, four search threads per worker, persistent four-rank
+  DDP, and drain/pause/resume coordination;
 - native evaluation using the same search and inference implementation.
 
 The restored code must use the project PCH, configured clang-format and
@@ -233,9 +239,12 @@ the Python boundary.
 ### 4.1 Production deployment form
 
 The production self-play unit is a long-lived native executable, initially
-`az_selfplay_worker`, with one process per assigned inference GPU. Python starts
-it with an immutable resolved session file and supervises its exit status.
-Control uses coarse, authenticated messages or atomic control artifacts for:
+`az_selfplay_worker`. The restoration baseline starts four independent worker
+processes on each assigned GPU, matching the proven `PreRework` deployment.
+Python starts each process with an immutable resolved session file and
+supervises its exit status. A later process-consolidation experiment must beat
+this reference before replacing it. Control uses coarse, authenticated messages
+or atomic control artifacts for:
 
 - stop and drain;
 - model-generation availability;
@@ -374,20 +383,23 @@ needed for legality and value semantics.
 
 ### 6.1 Per-device worker group
 
-One native worker group is created per self-play GPU. A worker group owns:
+One device group contains four long-lived native self-play worker processes.
+Each process matches the proven reference topology and owns:
 
-- one loaded model generation per inference replica;
-- a configurable number of CPU selection threads;
-- a large pool of simultaneous games;
-- one search tree per active game;
-- one shared inference service;
-- pinned staging slots;
-- asynchronous replay-shard writers;
-- aggregate telemetry.
+- one loaded model replica and native inference service;
+- four CPU search/selection threads;
+- its own pool of simultaneous games and tree arenas;
+- pinned inference staging slots;
+- asynchronous replay-shard output;
+- process-local telemetry and health state.
 
-The initial implementation uses one model replica and one batching service per
-GPU. Multiple inference lanes or CUDA streams are a configuration option to
-benchmark, not a reason to duplicate the model by default.
+On four GPUs this produces 16 active self-play processes and 64 search threads
+outside optimizer phases. Process count, threads per process, games, batch
+size, and outstanding inference slots remain typed configuration values, but
+`4 processes/GPU x 4 threads/process` is the restoration baseline. A
+single-process-per-GPU design, shared model replica, additional inference
+lanes, or CUDA streams are later measured alternatives, not unvalidated
+defaults.
 
 ### 6.2 Tree arenas
 
@@ -416,8 +428,13 @@ and reroot cycles.
 
 ### 6.3 Multi-game scheduler
 
-The scheduler operates over many roots and keeps selection work available
-while inference batches are running. It:
+The first scheduler variant reproduces `PreRework` cohort behavior. Within one
+submitted cohort it schedules leaves fairly over many roots and overlaps
+selection, inference, result processing, and backup. The call completes only
+when every root in the cohort has reached its budget and drained outstanding
+leaves. This known-good barriered behavior is the parity baseline.
+
+Both scheduler variants:
 
 1. chooses a schedulable root fairly;
 2. selects a leaf and applies virtual loss;
@@ -425,13 +442,35 @@ while inference batches are running. It:
 4. submits a full batch or a latency-bounded partial batch;
 5. processes completed policy/value tensors;
 6. expands and backs up leaves;
-7. detects search completion and advances games;
+7. detects search completion and drains its outstanding leaves;
 8. reuses the selected subtree when enabled;
-9. immediately schedules replacement work.
+9. returns or requeues completed work according to the configured scheduler.
 
 Search-thread count, active-game count, leaf concurrency per root, batch size,
 maximum batch wait, outstanding slots, and CUDA stream count are independent
 configuration values.
+
+The optional `root_asynchronous` variant removes the cohort completion barrier.
+Once one root has met its budget and `in_flight == 0`, the owning game state
+machine freezes the search observation, selects and applies the move, reroots,
+increments a root-generation token, and immediately makes the next position
+schedulable. A fast search therefore does not wait for unrelated full or slow
+searches.
+
+Asynchronous advancement is contained inside the native scheduler rather than
+expressed as callbacks or ad-hoc game threads. Pending leaves carry a game ID
+and root generation; completion against an obsolete generation is an internal
+error. A root cannot advance with virtual loss or inference outstanding, model
+refresh drains all generations, and replay order is independent of completion
+order. Per-game random streams prevent scheduling order from changing search
+randomness.
+
+This variant is implemented only after cohort parity, in a separate commit and
+behind a discriminator. Compare completed games/positions per hour, evaluated
+leaves per second, inference batch occupancy, fast-root completion delay, CPU
+idle time, memory, and determinism. It replaces the barriered baseline only
+with a measured throughput or strength-per-hour improvement and no lifecycle
+or replay correctness regression.
 
 ### 6.4 Inference service
 
@@ -693,21 +732,38 @@ not replace held-out confirmatory runs.
 
 ## 9. Process and hardware topology
 
-The system supports:
+The default topology closely reproduces the working `PreRework` configuration
+on the planned four-RTX-4090 node:
 
-- **exclusive:** separate GPUs for self-play inference and DDP training;
-- **colocated:** training and inference share GPUs with explicit streams and
-  measured contention;
-- **phased:** bounded self-play and training bursts use all GPUs in turn.
+| Phase | Per GPU | Four-GPU total |
+|---|---:|---:|
+| self-play-dominant | 4 self-play workers x 4 CPU threads | 16 workers, 64 search threads |
+| optimizer active | 1 self-play worker + 1 DDP rank | 4 workers, 4 DDP ranks, 16 search threads |
 
-The final topology is selected by strength per wall-clock hour. For the planned
-four-RTX-4090 node, initial candidates are two inference plus two DDP GPUs, one
-inference plus three DDP GPUs, four colocated GPUs, and short all-GPU phased
-bursts.
+All four DDP trainer ranks are persistent, one per GPU. Outside optimizer
+quanta they are idle while all 16 self-play workers run. Before a training
+quantum, the supervisor drains and pauses three workers on each GPU, leaving
+one worker colocated with the GPU's DDP rank. After the quantum and any required
+model publication boundary, the paused workers resume. Pause acknowledgement,
+drain duration, remaining-worker throughput, trainer utilization, and resume
+latency are recorded.
 
-The 128 CPU cores feed native search and replay decoding. CPU affinity, NUMA
-placement, pinned-memory pressure, and worker counts are recorded and
-benchmarked.
+The mapping from worker IDs to GPUs and the three paused IDs per GPU is
+explicit in the resolved configuration and resume state. A failure cannot
+silently leave the system at reduced worker count. Model refresh, replay
+flushes, evaluation, and shutdown use the same drain/acknowledgement protocol.
+
+This is the performance reference, not a timeless constant. Exclusive GPU
+splits, fully colocated workers, all-GPU phased bursts, process consolidation,
+or different worker/thread counts are benchmark candidates only after the
+reference is restored. They replace it based on strength per wall-clock hour,
+not architectural neatness.
+
+The 128 CPU cores provide headroom for the 64 reference search threads,
+replay writers/loaders, trainer input work, evaluation, supervision, and OS
+activity. CPU affinity, NUMA placement, PyTorch intra/inter-op limits,
+pinned-memory pressure, process model replicas, and file descriptors are
+explicitly measured.
 
 ## 10. Evaluation methodology
 
@@ -928,9 +984,11 @@ Each stage is committed only after acceptance passes.
 ### Stage 0: freeze evidence and benchmark both designs
 
 - Keep `PreRework` immutable.
-- Benchmark its direct inference and multi-root search.
+- Benchmark its direct inference, cohort-barrier multi-root search, and
+  4-workers/GPU x 4-threads/worker deployment.
 - Benchmark the current callback path and trainer.
-- Record throughput, utilization, latency, memory, and model shapes.
+- Record throughput, batch occupancy, barrier delay, utilization, latency,
+  process/model memory, pause/resume timing, and model shapes.
 
 Acceptance: commands and schemas are reproducible; restoration targets are
 numerical; no strength claim is made.
@@ -964,8 +1022,9 @@ contracts; chess parity passes; search/inference is not duplicated by game.
 - Port `DirectInferenceRunner/Pipeline`.
 - Replace globals with artifact/session metadata and specialized tensor
   contracts.
-- Add pinned slots, one model replica/device, streams, warm-up, refresh, and
-  failure propagation.
+- Add pinned slots, one model replica/worker process, warm-up, refresh, and
+  failure propagation. Restore four replicas/device before testing process
+  consolidation or shared-replica alternatives.
 - Export artifacts from Go and chess modules.
 
 Acceptance: zero Python calls per leaf; numerical parity for both games;
@@ -976,14 +1035,17 @@ explanation; refresh is atomic.
 
 - Port the useful old fixed-slot behavior into centralized node/edge arenas,
   then add multi-root scheduling, virtual loss, batching, and tree reuse.
+- Restore the cohort-barrier scheduler first with parity fixtures; keep
+  root-asynchronous advancement behind a separate discriminator and commit.
 - Integrate fixed/progressive/mixed/adaptive/FPU strategies.
 - Move game progression and target production into C++.
 - Add coarse start/stop/drain/status/refresh control.
+- Launch four worker processes per GPU with four search threads per process.
 
 Acceptance: no Python game pool/inference broker in production; both games run
 many simultaneous games; deterministic search matches fixtures; no stranded
 virtual loss; no search-time heap fallback; arena overflow is tested and
-visible; throughput meets Stage 0.
+visible; the reference topology and cohort scheduler meet Stage 0.
 
 ### Stage 5: direct materialized replay
 
@@ -1008,11 +1070,15 @@ per-position pybind objects.
 - Consume replay arrays through persistent loaders, prefetch, reusable pinned
   batches, nonblocking copies, DDP, BF16, and optional layout/compile modes.
 - Separate progress, restart checkpoint, and inference-publication cadences.
+- Restore the supervisor transition that drains and pauses three workers per
+  GPU during four-rank DDP quanta, then reliably resumes them.
 - Enforce maintainability limits.
 
 Acceptance: profiler shows no unintended step synchronization; throughput and
 utilization meet targets; restart state is complete; publication pauses are
-reported; Go/chess share the trainer loop.
+reported; Go/chess share the trainer loop; the system transitions between 16
+self-play workers and 4 DDP + 4 self-play workers without lost replay,
+stranded GPU work, or an unacknowledged worker.
 
 ### Stage 7: game-selectable experiment lifecycle
 
@@ -1032,7 +1098,9 @@ games and cannot silently skip an elapsed checkpoint.
 ### Stage 8: stable baselines and profiling
 
 - Establish 7x7, selected 9x9, and short chess baselines.
-- Tune active games, threads, batches, streams, loaders, and GPU partition.
+- Establish the reference topology first, then benchmark active games, batches,
+  loaders, root-asynchronous scheduling, streams, process consolidation, and
+  alternate GPU partitions one variable at a time.
 - Benchmark the evaluation ladder's resource cost and backlog behavior.
 - Lock configs and initial weights.
 
@@ -1078,7 +1146,8 @@ identified without post-hoc opponent cherry-picking.
 Do not begin feature experiments yet.
 
 1. Add Stage 0 benchmarks for `PreRework` direct inference/multi-root search,
-   the callback path, and current trainer.
+   4x4 worker topology, pause/resume transition, callback path, and current
+   trainer.
 2. Freeze tree allocation/reroot/overflow fixtures and the old replay
    buffer's manifest, lease, deterministic sampling, and reanalysis behavior.
 3. Specify exact Stage 1 native game/model/session contracts and the direct
