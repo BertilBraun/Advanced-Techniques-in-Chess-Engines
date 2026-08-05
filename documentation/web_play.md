@@ -1,14 +1,14 @@
 # Public web play
 
 The web-play deployment consists of a static Vite client in `deployment/web/`
-and a typed FastAPI service in `deployment/web/backend/`. The API is authoritative for FEN
-and move validation. The browser sends the starting FEN and complete UCI history
-on every turn, so a request can recover after Modal has scaled the only container to zero.
-The client stores the last authoritative game state and play settings in browser
-local storage. Reloading the same site origin restores the board immediately;
-the next turn reuses the UUID session when it still exists or reconstructs the
-game from complete history after a cold start. Starting a new game clears the
-stored state.
+and a typed FastAPI service in `deployment/web/backend/`. The API is
+authoritative for FEN and move validation. The browser sends the starting FEN
+and complete UCI history on every turn, so a request can recover after Modal has
+scaled the only container to zero. The client stores the last authoritative
+game state and play settings in browser local storage. Reloading the same site
+origin restores the board immediately; the next turn reuses the UUID session
+when it still exists or reconstructs the game from complete history after a
+cold start. Starting a new game clears the stored state.
 
 ## Analysis semantics
 
@@ -54,8 +54,17 @@ The local model path is intentionally required. API tests inject a test-local
 engine and therefore do not need the native extension or a trained model:
 
 ```powershell
+$webBackendPythonPath = $env:PYTHONPATH
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
 python -m pytest --import-mode=importlib .\..\deployment\web\backend\test -q
+$testExitCode = $LASTEXITCODE
+$env:PYTHONPATH = $webBackendPythonPath
+if ($testExitCode -ne 0) { exit $testExitCode }
 ```
+
+Clearing `PYTHONPATH` before pytest starts prevents the repository's `py`
+package from shadowing pytest's own `py.path` dependency. The deployment test
+configuration adds the repository root only after pytest has initialized.
 
 ## Local browser client
 
