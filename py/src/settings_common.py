@@ -40,7 +40,7 @@ DEFAULT_RUNTIME_LIMITS = RuntimeLimits(
 
 DEFAULT_ARTIFACT_RETENTION = ArtifactRetention(
     checkpoint_count=5,
-    replay_window_iterations=30,
+    replay_window_model_versions=30,
     recent_inference_checkpoint_count=11,
     milestone_inference_interval=10,
 )

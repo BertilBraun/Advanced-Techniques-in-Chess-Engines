@@ -492,10 +492,10 @@ def credit_evaluation_arguments(
     translated.evaluation.previous_model_offsets = tuple(
         offset * versions_per_evaluation for offset in evaluation.previous_model_offsets
     )
-    translated.evaluation.historical_model_iterations = tuple(
-        checkpoint_ordinal * versions_per_evaluation for checkpoint_ordinal in evaluation.historical_model_iterations
+    translated.evaluation.historical_model_versions = tuple(
+        checkpoint_ordinal * versions_per_evaluation for checkpoint_ordinal in evaluation.historical_model_versions
     )
-    translated.evaluation.every_n_iterations = versions_per_evaluation
+    translated.evaluation.every_n_model_versions = versions_per_evaluation
     translated.artifact_retention = replace(
         translated.artifact_retention,
         milestone_inference_interval=versions_per_evaluation,

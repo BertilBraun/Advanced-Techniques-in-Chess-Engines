@@ -178,8 +178,8 @@ class SelfPlay:
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.device_id = device_id
         self.args = args.self_play
-        self.search_warmup_iterations = args.self_play_search_warmup_iterations
-        self.endgame_shortcut_fade_iterations = args.self_play_endgame_shortcut_fade_iterations
+        self.search_warmup_iterations = args.self_play_search_warmup_model_versions
+        self.endgame_shortcut_fade_iterations = args.self_play_endgame_shortcut_fade_model_versions
         self.save_path = args.save_path
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
         self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}
@@ -741,9 +741,9 @@ class SelfPlay:
         initial_maximum = self.args.maximum_game_plies
         if initial_maximum is None:
             return None
-        if self.iteration < self.args.maximum_game_plies_hold_until_iteration:
+        if self.iteration < self.args.maximum_game_plies_hold_until_model_version:
             return initial_maximum
-        schedule_end = self.args.maximum_game_plies_until_iteration
+        schedule_end = self.args.maximum_game_plies_until_model_version
         final_maximum = self.args.final_maximum_game_plies
         if self.iteration >= schedule_end:
             return final_maximum

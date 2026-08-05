@@ -280,16 +280,16 @@ class WorkloadConfiguration(BaseModel):
     self_play_searches_per_turn: int = Field(gt=0)
     self_play_initial_searches_per_turn: int | None = Field(default=None, gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
-    self_play_search_warmup_iterations: int = Field(ge=0)
+    self_play_search_warmup_model_versions: int = Field(ge=0)
     outcome_value_loss_weight: float = Field(default=0.85, ge=0.0, le=1.0)
     mcts_value_loss_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     mcts_value_loss_scale: float = Field(default=1.0, gt=0.0)
     mcts_value_target_warmup_optimizer_steps: int = Field(default=0, ge=0)
     duplicate_multiplicity_weight_cap: float | None = Field(default=4.0, ge=1.0)
-    self_play_endgame_shortcut_fade_iterations: int = Field(default=0, ge=0)
+    self_play_endgame_shortcut_fade_model_versions: int = Field(default=0, ge=0)
     self_play_maximum_game_plies: int | None = Field(default=None, gt=0)
-    self_play_maximum_game_plies_until_iteration: int = Field(default=0, ge=0)
-    self_play_maximum_game_plies_hold_until_iteration: int = Field(default=0, ge=0)
+    self_play_maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
+    self_play_maximum_game_plies_hold_until_model_version: int = Field(default=0, ge=0)
     self_play_final_maximum_game_plies: int | None = Field(default=None, gt=0)
     self_play_endgame_continuation_start_plies: int | None = Field(default=None, gt=0)
     self_play_low_material_termination_minimum_plies: int = Field(default=0, ge=0)
@@ -323,8 +323,8 @@ class WorkloadConfiguration(BaseModel):
             raise ValueError('Value-objective component weights must sum to 1.')
         if self.teacher_evaluation_games % 2 or self.teacher_evaluation_games > self.evaluation_games:
             raise ValueError('Teacher evaluation games must be an even subset of the paired evaluation games.')
-        if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_iteration == 0):
-            raise ValueError('Self-play maximum game plies and its iteration limit must be configured together.')
+        if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_model_version == 0):
+            raise ValueError('Self-play maximum game plies and its model-version limit must be configured together.')
         if self.self_play_final_maximum_game_plies is not None:
             if self.self_play_maximum_game_plies is None:
                 raise ValueError('Final self-play maximum game plies require an initial maximum.')
@@ -357,7 +357,7 @@ class RetentionConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
     checkpoint_count: int = Field(gt=0)
-    replay_window_iterations: int = Field(gt=0)
+    replay_window_model_versions: int = Field(gt=0)
     recent_inference_checkpoint_count: int = Field(gt=0)
     milestone_inference_interval: int = Field(gt=0)
 
@@ -376,7 +376,7 @@ class EvaluationProtocolConfiguration(BaseModel):
     evaluation_dataset_path: str | None
     evaluate_initial_checkpoint: bool
     previous_model_offsets: tuple[int, ...]
-    historical_model_iterations: tuple[int, ...]
+    historical_model_versions: tuple[int, ...]
     historical_model_rotation_period: int = Field(gt=0)
     stockfish_skill_levels: tuple[int, ...]
     evaluate_random: bool
@@ -391,10 +391,10 @@ class EvaluationProtocolConfiguration(BaseModel):
             raise ValueError('Evaluation dataset path must be configured exactly when dataset evaluation is enabled.')
         if any(offset <= 0 for offset in self.previous_model_offsets):
             raise ValueError('Previous-model offsets must be positive.')
-        if any(iteration < 0 for iteration in self.historical_model_iterations):
-            raise ValueError('Historical model iterations cannot be negative.')
-        if tuple(sorted(set(self.historical_model_iterations))) != self.historical_model_iterations:
-            raise ValueError('Historical model iterations must be unique and increasing.')
+        if any(model_version < 0 for model_version in self.historical_model_versions):
+            raise ValueError('Historical model versions cannot be negative.')
+        if tuple(sorted(set(self.historical_model_versions))) != self.historical_model_versions:
+            raise ValueError('Historical model versions must be unique and increasing.')
         if any(not 0 <= level <= 20 for level in self.stockfish_skill_levels):
             raise ValueError('Stockfish skill levels must be between 0 and 20.')
         return self
@@ -447,9 +447,10 @@ class RunConfiguration(BaseModel):
             raise ValueError('Recent inference-checkpoint retention must exceed every previous-model offset.')
         milestone_interval = self.retention.milestone_inference_interval
         if any(
-            iteration % milestone_interval != 0 for iteration in self.evaluation_protocol.historical_model_iterations
+            model_version % milestone_interval != 0
+            for model_version in self.evaluation_protocol.historical_model_versions
         ):
-            raise ValueError('Historical model iterations must align with the retained inference-checkpoint interval.')
+            raise ValueError('Historical model versions must align with the retained inference-checkpoint interval.')
         credit_training = self.workload.credit_training
         if credit_training.initial_replay_capacity_unique_positions > credit_training.replay_capacity_unique_positions:
             raise ValueError('Initial replay capacity must not exceed maximum replay capacity.')
@@ -724,17 +725,21 @@ def apply_run_configuration(
         workload.self_play_fast_searches_per_turn / workload.self_play_searches_per_turn
     )
     training_args.random_seed = workload.random_seed
-    training_args.self_play_search_warmup_iterations = workload.self_play_search_warmup_iterations
+    training_args.self_play_search_warmup_model_versions = workload.self_play_search_warmup_model_versions
     training_args.training.outcome_value_loss_weight = workload.outcome_value_loss_weight
     training_args.training.mcts_value_loss_weight = workload.mcts_value_loss_weight
     training_args.training.mcts_value_loss_scale = workload.mcts_value_loss_scale
     training_args.training.mcts_value_target_warmup_optimizer_steps = workload.mcts_value_target_warmup_optimizer_steps
     training_args.training.duplicate_multiplicity_weight_cap = workload.duplicate_multiplicity_weight_cap
-    training_args.self_play_endgame_shortcut_fade_iterations = workload.self_play_endgame_shortcut_fade_iterations
+    training_args.self_play_endgame_shortcut_fade_model_versions = (
+        workload.self_play_endgame_shortcut_fade_model_versions
+    )
     training_args.self_play.maximum_game_plies = workload.self_play_maximum_game_plies
-    training_args.self_play.maximum_game_plies_until_iteration = workload.self_play_maximum_game_plies_until_iteration
-    training_args.self_play.maximum_game_plies_hold_until_iteration = (
-        workload.self_play_maximum_game_plies_hold_until_iteration
+    training_args.self_play.maximum_game_plies_until_model_version = (
+        workload.self_play_maximum_game_plies_until_model_version
+    )
+    training_args.self_play.maximum_game_plies_hold_until_model_version = (
+        workload.self_play_maximum_game_plies_hold_until_model_version
     )
     training_args.self_play.final_maximum_game_plies = workload.self_play_final_maximum_game_plies
     training_args.self_play.endgame_continuation_start_plies = workload.self_play_endgame_continuation_start_plies
@@ -802,7 +807,7 @@ def apply_run_configuration(
     )
     training_args.artifact_retention = ArtifactRetention(
         checkpoint_count=retention.checkpoint_count,
-        replay_window_iterations=retention.replay_window_iterations,
+        replay_window_model_versions=retention.replay_window_model_versions,
         recent_inference_checkpoint_count=retention.recent_inference_checkpoint_count,
         milestone_inference_interval=retention.milestone_inference_interval,
     )
@@ -846,7 +851,7 @@ def apply_run_configuration(
         training_args.evaluation.bootstrap_samples = evaluation_protocol.bootstrap_samples
         training_args.evaluation.mcts_threads = evaluation_protocol.mcts_threads
         training_args.evaluation.previous_model_offsets = evaluation_protocol.previous_model_offsets
-        training_args.evaluation.historical_model_iterations = evaluation_protocol.historical_model_iterations
+        training_args.evaluation.historical_model_versions = evaluation_protocol.historical_model_versions
         training_args.evaluation.historical_model_rotation_period = evaluation_protocol.historical_model_rotation_period
         training_args.evaluation.stockfish_skill_levels = evaluation_protocol.stockfish_skill_levels
         training_args.evaluation.stockfish_binary_path = (

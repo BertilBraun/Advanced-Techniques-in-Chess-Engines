@@ -91,7 +91,7 @@ def _arguments(
     evaluation = EvaluationParams(
         num_searches_per_turn=64,
         num_games=2,
-        every_n_iterations=1,
+        every_n_model_versions=1,
         evaluate_initial_checkpoint=False,
         max_concurrent_tasks=1,
         inference_cache_capacity=0,
@@ -105,7 +105,7 @@ def _arguments(
         bootstrap_samples=10,
         mcts_threads=1,
         previous_model_offsets=(1, 2),
-        historical_model_iterations=(1, 2, 3),
+        historical_model_versions=(1, 2, 3),
         historical_model_rotation_period=1,
         stockfish_skill_levels=(),
         stockfish_binary_path=None,
@@ -306,6 +306,6 @@ def test_credit_evaluation_offsets_are_evaluation_checkpoint_ordinals(tmp_path: 
 
     assert translated.evaluation is not None
     assert translated.evaluation.previous_model_offsets == (20, 40)
-    assert translated.evaluation.historical_model_iterations == (20, 40, 60)
-    assert translated.evaluation.every_n_iterations == 20
+    assert translated.evaluation.historical_model_versions == (20, 40, 60)
+    assert translated.evaluation.every_n_model_versions == 20
     assert translated.artifact_retention.milestone_inference_interval == 20

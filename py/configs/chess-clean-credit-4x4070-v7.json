@@ -83,13 +83,13 @@
     },
     "self_play_searches_per_turn": 600,
     "self_play_fast_searches_per_turn": 150,
-    "self_play_search_warmup_iterations": 15,
+    "self_play_search_warmup_model_versions": 15,
     "outcome_value_loss_weight": 0.85,
     "mcts_value_loss_weight": 0.15,
     "mcts_value_loss_scale": 25.0,
-    "self_play_endgame_shortcut_fade_iterations": 0,
+    "self_play_endgame_shortcut_fade_model_versions": 0,
     "self_play_maximum_game_plies": 250,
-    "self_play_maximum_game_plies_until_iteration": 1,
+    "self_play_maximum_game_plies_until_model_version": 1,
     "self_play_final_maximum_game_plies": 250,
     "self_play_low_material_termination_minimum_plies": 0,
     "self_play_low_material_termination_piece_threshold_per_player": 0,
@@ -127,7 +127,7 @@
   },
   "retention": {
     "checkpoint_count": 5,
-    "replay_window_iterations": 15,
+    "replay_window_model_versions": 15,
     "recent_inference_checkpoint_count": 11,
     "milestone_inference_interval": 20
   },
@@ -143,7 +143,7 @@
     "evaluation_dataset_path": "py/reference/chess-elite-2024-10-50-schema3.hdf5",
     "evaluate_initial_checkpoint": true,
     "previous_model_offsets": [5, 10],
-    "historical_model_iterations": [
+    "historical_model_versions": [
       0,
       20,
       40,

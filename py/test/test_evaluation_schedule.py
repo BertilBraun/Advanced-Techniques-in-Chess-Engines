@@ -2,7 +2,7 @@ import pytest
 
 from src.experiment.evaluation_schedule import (
     evaluation_device_for_task,
-    select_historical_model_iterations,
+    select_historical_model_versions,
 )
 
 
@@ -46,7 +46,7 @@ def test_historical_models_rotate_across_five_evaluation_buckets(
     current_iteration: int,
     expected_iterations: tuple[int, ...],
 ) -> None:
-    selected = select_historical_model_iterations(
+    selected = select_historical_model_versions(
         current_iteration,
         HISTORICAL_MODELS,
         milestone_interval=20,
@@ -58,7 +58,7 @@ def test_historical_models_rotate_across_five_evaluation_buckets(
 
 
 def test_rotation_period_one_preserves_full_historical_sweep() -> None:
-    selected = select_historical_model_iterations(
+    selected = select_historical_model_versions(
         142,
         HISTORICAL_MODELS,
         milestone_interval=20,
@@ -80,7 +80,7 @@ def test_historical_models_alternate_on_every_evaluation(
     current_iteration: int,
     expected_iterations: tuple[int, ...],
 ) -> None:
-    selected = select_historical_model_iterations(
+    selected = select_historical_model_versions(
         current_iteration,
         (0, 20, 40, 60, 80),
         milestone_interval=20,
@@ -104,7 +104,7 @@ def test_historical_model_rotation_rejects_non_positive_periods(
     message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
-        select_historical_model_iterations(
+        select_historical_model_versions(
             142,
             HISTORICAL_MODELS,
             milestone_interval,
@@ -114,4 +114,4 @@ def test_historical_model_rotation_rejects_non_positive_periods(
 
 def test_historical_model_rotation_rejects_non_positive_evaluation_intervals() -> None:
     with pytest.raises(ValueError, match='Evaluation interval'):
-        select_historical_model_iterations(10, HISTORICAL_MODELS, 20, 2, evaluation_interval=0)
+        select_historical_model_versions(10, HISTORICAL_MODELS, 20, 2, evaluation_interval=0)

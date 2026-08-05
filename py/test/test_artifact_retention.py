@@ -53,7 +53,7 @@ def test_retention_keeps_five_resumable_checkpoints_and_bounded_replay(tmp_path:
         latest_checkpoint_iteration=10,
         retention=ArtifactRetention(
             checkpoint_count=5,
-            replay_window_iterations=3,
+            replay_window_model_versions=3,
             recent_inference_checkpoint_count=5,
             milestone_inference_interval=10,
         ),

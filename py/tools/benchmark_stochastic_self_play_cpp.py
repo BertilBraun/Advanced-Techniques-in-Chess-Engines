@@ -136,8 +136,8 @@ def parse_arguments() -> Arguments:
         '--iteration',
         type=int,
         default=max(
-            TRAINING_ARGS.self_play_search_warmup_iterations,
-            TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations,
+            TRAINING_ARGS.self_play_search_warmup_model_versions,
+            TRAINING_ARGS.self_play_endgame_shortcut_fade_model_versions,
         ),
     )
     parser.add_argument('--ready-file', type=Path)

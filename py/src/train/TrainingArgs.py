@@ -30,7 +30,7 @@ class MCTSParams:
     """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
 
     dirichlet_alpha: float
-    """Return the Dirichlet alpha used to encourage root exploration for an iteration."""
+    """Return the Dirichlet alpha used to encourage root exploration for a model version."""
 
     c_param: float
     """This is the c parameter to use for the UCB1 formula in the MCTS algorithm in self-play. It is used to balance exploration and exploitation in the MCTS algorithm. Values between 1 and 6 seem sensible. The higher the value the more exploration is favored over exploitation."""
@@ -98,12 +98,12 @@ class SelfPlayParams:
     """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
 
     maximum_game_plies: int | None = None
-    """Maximum self-play game length while the iteration limit is active."""
+    """Maximum self-play game length while the model-version limit is active."""
 
-    maximum_game_plies_until_iteration: int = 0
+    maximum_game_plies_until_model_version: int = 0
     """Iteration at which the game-length schedule reaches its final value."""
 
-    maximum_game_plies_hold_until_iteration: int = 0
+    maximum_game_plies_hold_until_model_version: int = 0
     """Iteration before which the initial game-length cap remains fixed."""
 
     final_maximum_game_plies: int | None = None
@@ -198,7 +198,7 @@ class RuntimeLimits:
 @dataclass(frozen=True)
 class ArtifactRetention:
     checkpoint_count: int
-    replay_window_iterations: int
+    replay_window_model_versions: int
     recent_inference_checkpoint_count: int
     milestone_inference_interval: int
 
@@ -292,7 +292,7 @@ class TrainingParams:
     """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
 
     learning_rate: Callable[[int, OptimizerType], float]
-    """This is a function that returns the learning rate to use for the training. The function should take the current iteration as input and return the learning rate to use for that iteration.
+    """Return the learning rate for the current optimizer step.
     Example:
     def learning_rate(current_iteration: int) -> float:
         if current_iteration < 10:
@@ -303,7 +303,7 @@ class TrainingParams:
     """
 
     learning_rate_scheduler: Callable[[float, float], float]
-    """This is a function that returns the learning rate to use for the training. The function should take the batch percentage and the base learning rate as input and return the learning rate to use for that batch. This is used to implement a learning rate scheduler that changes the learning rate during training. The batch percentage is the percentage of the batch that has been processed so far. The base learning rate is the learning rate to use for the current iteration.
+    """Return the within-quantum learning rate from batch progress and the base learning rate.
     Example:
     def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
         min_lr = base_lr / 10
@@ -360,7 +360,7 @@ class EvaluationParams:
     num_games: int
     """This is the number of games to play for the evaluation. The more games the more accurate the evaluation but the longer the evaluation. Typically 32-256 for evaluation"""
 
-    every_n_iterations: int
+    every_n_model_versions: int
     """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
 
     evaluate_initial_checkpoint: bool
@@ -386,7 +386,7 @@ class EvaluationParams:
     bootstrap_samples: int
     mcts_threads: int
     previous_model_offsets: tuple[int, ...]
-    historical_model_iterations: tuple[int, ...]
+    historical_model_versions: tuple[int, ...]
     historical_model_rotation_period: int
     stockfish_skill_levels: tuple[int, ...]
     stockfish_binary_path: str | None
@@ -404,7 +404,7 @@ class EvaluationParams:
 @dataclass
 class TrainingArgs:
     save_path: str
-    """This is the path to save the model, datasamples, training logs, etc. to after each iteration"""
+    """Path for model generations, replay, telemetry, and evaluation artifacts."""
 
     network: NetworkParams
     self_play: SelfPlayParams
@@ -413,8 +413,8 @@ class TrainingArgs:
     run_limits: RuntimeLimits
     artifact_retention: ArtifactRetention
     random_seed: int
-    self_play_search_warmup_iterations: int
-    self_play_endgame_shortcut_fade_iterations: int = 0
+    self_play_search_warmup_model_versions: int
+    self_play_endgame_shortcut_fade_model_versions: int = 0
     evaluation: EvaluationParams | None = None
     on_startup: Callable[[], None] | None = None
     """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

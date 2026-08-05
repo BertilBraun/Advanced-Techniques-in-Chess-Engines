@@ -220,7 +220,7 @@ class SelfPlayProcess:
             return None
         return current_model_version >= 0
 
-    def flush_replay_shard(self, iteration: int) -> None:
+    def flush_replay_shard(self, model_version: int) -> None:
         if not len(self.self_play.dataset):
             return
 
@@ -234,11 +234,11 @@ class SelfPlayProcess:
         model_version_ranges = self.self_play.dataset.stats.game_model_version_ranges
         minimum_model_version = min(
             (minimum for minimum, _ in model_version_ranges),
-            default=iteration,
+            default=model_version,
         )
         maximum_model_version = max(
             (maximum for _, maximum in model_version_ranges),
-            default=iteration,
+            default=model_version,
         )
         manifest = commit_replay_shard(
             dataset=self.self_play.dataset,
@@ -247,18 +247,18 @@ class SelfPlayProcess:
             minimum_model_version=minimum_model_version,
             maximum_model_version=maximum_model_version,
         )
-        log_scalar('replay/raw_rows_per_shard', manifest.raw_sample_count, iteration)
-        log_scalar('replay/unique_groups_per_shard', manifest.unique_sample_count, iteration)
-        log_scalar('replay/duplicate_factor_per_shard', manifest.duplicate_factor, iteration)
+        log_scalar('replay/raw_rows_per_shard', manifest.raw_sample_count, model_version)
+        log_scalar('replay/unique_groups_per_shard', manifest.unique_sample_count, model_version)
+        log_scalar('replay/duplicate_factor_per_shard', manifest.duplicate_factor, model_version)
         log_scalar(
             'replay/effective_multiplicity_weight_per_shard',
             manifest.effective_multiplicity_weight,
-            iteration,
+            model_version,
         )
         log_scalar(
             'replay/conflicting_target_groups_per_shard',
             manifest.conflicting_target_groups,
-            iteration,
+            model_version,
         )
         self.last_flushed_completed_searches = completed_searches
         self.self_play.dataset = SelfPlayDataset()

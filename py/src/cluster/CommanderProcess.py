@@ -557,10 +557,10 @@ class CommanderProcess:
             return True
         return False
 
-    def _ensure_model_exists(self, starting_iteration: int) -> None:
-        if checkpoint_manifest_path(starting_iteration, self.args.save_path).exists():
+    def _ensure_model_exists(self, starting_model_version: int) -> None:
+        if checkpoint_manifest_path(starting_model_version, self.args.save_path).exists():
             load_model_and_optimizer(
-                starting_iteration,
+                starting_model_version,
                 self.args.network,
                 torch.device(
                     self.args.cluster.trainer_device_type,
@@ -571,7 +571,7 @@ class CommanderProcess:
             )
             return
         model, optimizer = load_model_and_optimizer(
-            starting_iteration,
+            starting_model_version,
             self.args.network,
             torch.device(
                 self.args.cluster.trainer_device_type,
@@ -580,4 +580,4 @@ class CommanderProcess:
             self.args.save_path,
             self.args.training.optimizer,
         )
-        save_model_and_optimizer(model, optimizer, starting_iteration, self.args.save_path)
+        save_model_and_optimizer(model, optimizer, starting_model_version, self.args.save_path)

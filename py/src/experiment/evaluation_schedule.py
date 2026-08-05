@@ -6,9 +6,9 @@ def evaluation_device_for_task(device_cycle: tuple[int, ...], task_index: int) -
     return device_cycle[task_index % len(device_cycle)]
 
 
-def select_historical_model_iterations(
+def select_historical_model_versions(
     current_iteration: int,
-    historical_model_iterations: tuple[int, ...],
+    historical_model_versions: tuple[int, ...],
     milestone_interval: int,
     rotation_period: int,
     evaluation_interval: int = 1,
@@ -23,7 +23,7 @@ def select_historical_model_iterations(
     current_bucket = (current_iteration // evaluation_interval) % rotation_period
     return tuple(
         historical_iteration
-        for historical_iteration in historical_model_iterations
+        for historical_iteration in historical_model_versions
         if historical_iteration < current_iteration
         and (historical_iteration // milestone_interval) % rotation_period == current_bucket
     )

@@ -13,8 +13,8 @@ def self_play_client(iteration: int, final_maximum_game_plies: int | None = None
     client = object.__new__(SelfPlay)
     client.args = SimpleNamespace(
         maximum_game_plies=200,
-        maximum_game_plies_hold_until_iteration=0,
-        maximum_game_plies_until_iteration=50,
+        maximum_game_plies_hold_until_model_version=0,
+        maximum_game_plies_until_model_version=50,
         final_maximum_game_plies=final_maximum_game_plies,
         endgame_continuation_start_plies=None,
         low_material_termination_minimum_plies=0,
@@ -157,6 +157,6 @@ def test_maximum_game_plies_increases_from_200_to_250(
     expected_maximum: int,
 ) -> None:
     client = self_play_client(iteration, final_maximum_game_plies=250)
-    client.args.maximum_game_plies_until_iteration = 80
+    client.args.maximum_game_plies_until_model_version = 80
 
     assert client._maximum_game_plies() == expected_maximum

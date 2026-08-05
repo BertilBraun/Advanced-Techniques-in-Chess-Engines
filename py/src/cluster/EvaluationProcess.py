@@ -28,7 +28,7 @@ from src.experiment.evaluation_protocol import (
 )
 from src.experiment.evaluation_schedule import (
     evaluation_device_for_task,
-    select_historical_model_iterations,
+    select_historical_model_versions,
 )
 from src.experiment.run_configuration import RunManifest
 
@@ -631,18 +631,18 @@ class EvaluationProcess:
                     )
                     start_process(p, physical_device_id)
 
-            historical_model_iterations = (
+            historical_model_versions = (
                 ()
                 if tier is EvaluationTier.INSPECTION
-                else select_historical_model_iterations(
+                else select_historical_model_versions(
                     iteration,
-                    self.eval_args.historical_model_iterations,
+                    self.eval_args.historical_model_versions,
                     self.args.artifact_retention.milestone_inference_interval,
                     self.eval_args.historical_model_rotation_period,
-                    self.eval_args.every_n_iterations,
+                    self.eval_args.every_n_model_versions,
                 )
             )
-            for historical_iteration in historical_model_iterations:
+            for historical_iteration in historical_model_versions:
                 model_evaluation, physical_device_id = create_model_evaluation()
                 p = mp.Process(
                     target=_eval_vs_iteration,

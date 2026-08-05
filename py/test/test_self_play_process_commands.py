@@ -162,7 +162,7 @@ def test_replay_flush_records_only_new_completed_searches(
 
     monkeypatch.setattr('src.cluster.SelfPlayProcess.commit_replay_shard', capture_shard)
 
-    process.flush_replay_shard(iteration=4)
+    process.flush_replay_shard(model_version=4)
 
     assert captured_searches == [27]
     assert process.last_flushed_completed_searches == 37

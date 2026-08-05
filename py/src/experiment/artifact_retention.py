@@ -58,11 +58,11 @@ def _retain_inference_model(
 def _write_filtered_manifest(
     save_folder: Path,
     checkpoint_iteration: int,
-    replay_window_iterations: int,
+    replay_window_model_versions: int,
 ) -> None:
     manifest_path = save_folder / f'checkpoint_{checkpoint_iteration}.json'
     manifest = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-    earliest_replay_iteration = max(0, checkpoint_iteration - replay_window_iterations)
+    earliest_replay_iteration = max(0, checkpoint_iteration - replay_window_model_versions)
     replay_files = tuple(
         reference
         for reference in manifest.replay_files
@@ -84,7 +84,7 @@ def apply_artifact_retention(
         raise ValueError('Latest checkpoint iteration cannot be negative.')
     if retention.checkpoint_count <= 0:
         raise ValueError('Checkpoint retention count must be positive.')
-    if retention.replay_window_iterations <= 0:
+    if retention.replay_window_model_versions <= 0:
         raise ValueError('Replay window retention must be positive.')
     if retention.recent_inference_checkpoint_count <= 0:
         raise ValueError('Recent inference-checkpoint retention count must be positive.')
@@ -104,7 +104,7 @@ def apply_artifact_retention(
         _write_filtered_manifest(
             save_folder,
             checkpoint_iteration,
-            retention.replay_window_iterations,
+            retention.replay_window_model_versions,
         )
 
     deleted_checkpoint_files = 0
@@ -125,7 +125,7 @@ def apply_artifact_retention(
 
     earliest_replay_iteration = max(
         0,
-        earliest_checkpoint_iteration - retention.replay_window_iterations,
+        earliest_checkpoint_iteration - retention.replay_window_model_versions,
     )
     deleted_replay_directories = 0
     for path in save_folder.iterdir():
