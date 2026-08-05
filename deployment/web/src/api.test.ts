@@ -40,7 +40,7 @@ describe("ChessApi", () => {
       starting_fen: "fen",
       moves_uci: ["e2e4"],
       human_move_uci: "g1f3",
-      analysis: { mode: "mcts", time_limit_seconds: 12 },
+      analysis: { type: "timed_mcts", seconds: 12 },
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -49,7 +49,7 @@ describe("ChessApi", () => {
       starting_fen: "fen",
       moves_uci: ["e2e4"],
       human_move_uci: "g1f3",
-      analysis: { mode: "mcts", time_limit_seconds: 12 },
+      analysis: { type: "timed_mcts", seconds: 12 },
     });
   });
 

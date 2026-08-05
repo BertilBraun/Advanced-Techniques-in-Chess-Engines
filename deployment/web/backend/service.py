@@ -2,21 +2,22 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import chess
 
-from web_play.contracts import (
-    AnalysisOptions,
-    AnalysisResult,
+from deployment.web.backend.contracts import (
     CreateGameResponse,
     GameState,
     PlayTurnRequest,
     PlayTurnResponse,
     SideToMove,
-    TimedAnalysis,
 )
-from web_play.engine import InteractiveEngine, InteractiveGame
+from src.interactive.analysis import AnalysisResult
+
+if TYPE_CHECKING:
+    from src.interactive.engine import InteractiveEngine, InteractiveGame
 
 
 @dataclass
@@ -35,9 +36,7 @@ class GameService:
         self._registry_lock = threading.Lock()
         self._search_lock = threading.Lock()
 
-    def create_game(
-        self, starting_fen: str, moves_uci: tuple[str, ...]
-    ) -> CreateGameResponse:
+    def create_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> CreateGameResponse:
         with self._search_lock:
             game = self._engine.new_game(starting_fen, moves_uci)
             token = uuid4()
@@ -57,7 +56,7 @@ class GameService:
             analysis: AnalysisResult | None = None
             engine_move_uci: str | None = None
             if not session.game.is_game_over:
-                analysis = session.game.analyze(_timed_analysis(request.analysis))
+                analysis = session.game.analyze(request.analysis)
                 engine_move_uci = analysis.chosen_move_uci
                 session.game.apply_move(engine_move_uci)
                 complete_moves.append(engine_move_uci)
@@ -73,15 +72,10 @@ class GameService:
         with self._registry_lock:
             self._sessions.pop(token, None)
 
-    def _synchronize(
-        self, token: UUID, starting_fen: str, moves_uci: tuple[str, ...]
-    ) -> GameSession:
+    def _synchronize(self, token: UUID, starting_fen: str, moves_uci: tuple[str, ...]) -> GameSession:
         with self._registry_lock:
             current = self._sessions.get(token)
-        if current is not None and (
-            current.starting_fen == starting_fen
-            and current.complete_moves_uci == moves_uci
-        ):
+        if current is not None and (current.starting_fen == starting_fen and current.complete_moves_uci == moves_uci):
             return current
 
         recovered = GameSession(
@@ -94,21 +88,13 @@ class GameService:
         return recovered
 
 
-def _timed_analysis(options: AnalysisOptions) -> TimedAnalysis:
-    return TimedAnalysis(
-        mode=options.mode, time_limit_seconds=options.time_limit_seconds
-    )
-
-
 def _game_state(session: GameSession) -> GameState:
     board = chess.Board(session.game.fen)
     return GameState(
         starting_fen=session.starting_fen,
         moves_uci=session.complete_moves_uci,
         fen=session.game.fen,
-        side_to_move=SideToMove.WHITE
-        if board.turn is chess.WHITE
-        else SideToMove.BLACK,
+        side_to_move=SideToMove.WHITE if board.turn is chess.WHITE else SideToMove.BLACK,
         game_over=session.game.is_game_over,
         result=session.game.result,
     )

@@ -1,10 +1,9 @@
 export type AnalysisMode = "policy" | "mcts";
 export type PlayerSide = "white" | "black";
 
-export interface AnalysisOptions {
-  readonly mode: AnalysisMode;
-  readonly time_limit_seconds: number;
-}
+export type AnalysisRequest =
+  | { readonly type: "policy" }
+  | { readonly type: "timed_mcts"; readonly seconds: number };
 
 export interface GameState {
   readonly starting_fen: string;
@@ -19,7 +18,6 @@ export interface OutcomePrediction {
   readonly win: number;
   readonly draw: number;
   readonly loss: number;
-  readonly perspective: "side_to_move";
 }
 
 export interface CandidateMove {
@@ -27,22 +25,18 @@ export interface CandidateMove {
   readonly policy_prior: number;
   readonly visits: number;
   readonly visit_share: number;
-  readonly mean_search_value: number | null;
-}
-
-export interface SearchMetrics {
-  readonly searches: number;
-  readonly maximum_depth: number;
-  readonly elapsed_milliseconds: number;
+  readonly mean_value: number | null;
 }
 
 export interface AnalysisResult {
   readonly chosen_move_uci: string;
-  readonly root_value: number;
-  readonly outcome_prediction: OutcomePrediction | null;
+  readonly value: number;
+  readonly outcome: OutcomePrediction | null;
   readonly candidates: readonly CandidateMove[];
-  readonly metrics: SearchMetrics;
-  readonly principal_variation: readonly string[] | null;
+  readonly searches: number;
+  readonly maximum_depth: number;
+  readonly elapsed_milliseconds: number;
+  readonly principal_variation: readonly string[];
 }
 
 export interface CreateGameResponse {
@@ -60,5 +54,5 @@ export interface PlayTurnRequest {
   readonly starting_fen: string;
   readonly moves_uci: readonly string[];
   readonly human_move_uci: string | null;
-  readonly analysis: AnalysisOptions;
+  readonly analysis: AnalysisRequest;
 }

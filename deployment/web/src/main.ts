@@ -11,6 +11,7 @@ import piecesUrl from "cm-chessboard/assets/pieces/staunty.svg?url";
 import { ChessApi, normalizeApiBaseUrl } from "./api.ts";
 import type {
   AnalysisMode,
+  AnalysisRequest,
   AnalysisResult,
   GameState,
   PlayerSide,
@@ -182,11 +183,10 @@ function setPhase(nextPhase: UiPhase, detail?: string): void {
   if (nextPhase !== "playing") board.disableMoveInput();
 }
 
-function analysisOptions(): { mode: AnalysisMode; time_limit_seconds: number } {
-  return {
-    mode: selectedValue<AnalysisMode>("mode"),
-    time_limit_seconds: Number(timeRange.value),
-  };
+function analysisRequest(): AnalysisRequest {
+  return selectedValue<AnalysisMode>("mode") === "policy"
+    ? { type: "policy" }
+    : { type: "timed_mcts", seconds: Number(timeRange.value) };
 }
 
 function renderHistory(): void {
@@ -208,15 +208,15 @@ function renderAnalysis(analysis: AnalysisResult | null): void {
   requiredElement<HTMLDivElement>("#analysis-content").hidden = analysis === null;
   if (!analysis) return;
 
-  const outcome = analysis.outcome_prediction;
+  const outcome = analysis.outcome;
   requiredElement("#wdl-win").textContent = outcome ? percent(outcome.win) : "N/A";
   requiredElement("#wdl-draw").textContent = outcome ? percent(outcome.draw) : "N/A";
   requiredElement("#wdl-loss").textContent = outcome ? percent(outcome.loss) : "N/A";
-  requiredElement("#metric-searches").textContent = analysis.metrics.searches.toLocaleString();
-  requiredElement("#metric-depth").textContent = String(analysis.metrics.maximum_depth);
-  requiredElement("#metric-elapsed").textContent = `${analysis.metrics.elapsed_milliseconds.toLocaleString()} ms`;
-  requiredElement("#metric-value").textContent = signedValue(analysis.root_value);
-  requiredElement("#pv-value").textContent = analysis.principal_variation?.join(" ") || "N/A";
+  requiredElement("#metric-searches").textContent = analysis.searches.toLocaleString();
+  requiredElement("#metric-depth").textContent = String(analysis.maximum_depth);
+  requiredElement("#metric-elapsed").textContent = `${analysis.elapsed_milliseconds.toLocaleString()} ms`;
+  requiredElement("#metric-value").textContent = signedValue(analysis.value);
+  requiredElement("#pv-value").textContent = analysis.principal_variation.join(" ") || "N/A";
   requiredElement<HTMLTableSectionElement>("#candidate-body").innerHTML = analysis.candidates
     .map(
       (candidate, index) => `
@@ -225,7 +225,7 @@ function renderAnalysis(analysis: AnalysisResult | null): void {
           <td>${percent(candidate.policy_prior)}</td>
           <td>${candidate.visits.toLocaleString()}</td>
           <td>${percent(candidate.visit_share)}</td>
-          <td>${signedValue(candidate.mean_search_value)}</td>
+          <td>${signedValue(candidate.mean_value)}</td>
         </tr>`,
     )
     .join("");
@@ -247,14 +247,14 @@ async function acceptState(state: GameState, animate: boolean): Promise<void> {
 
 function persistCurrentGame(): void {
   if (!gameToken || !authoritativeState) return;
-  const options = analysisOptions();
+  const mode = selectedValue<AnalysisMode>("mode");
   saveStoredGame(window.localStorage, {
     version: 1,
     game_token: gameToken,
     state: authoritativeState,
     player_side: playerSide,
-    analysis_mode: options.mode,
-    time_limit_seconds: options.time_limit_seconds,
+    analysis_mode: mode,
+    time_limit_seconds: Number(timeRange.value),
   });
 }
 
@@ -272,7 +272,7 @@ async function requestTurn(humanMoveUci: string | null): Promise<void> {
       starting_fen: authoritativeState.starting_fen,
       moves_uci: authoritativeState.moves_uci,
       human_move_uci: humanMoveUci,
-      analysis: analysisOptions(),
+      analysis: analysisRequest(),
     });
     await acceptState(response.state, true);
     renderAnalysis(response.analysis);
