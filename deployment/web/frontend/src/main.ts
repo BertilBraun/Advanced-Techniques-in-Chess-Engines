@@ -18,6 +18,7 @@ import type {
 } from "./contracts.ts";
 import {
   STARTING_FEN,
+  gameOutcomeMessage,
   historyRows,
   matchingLegalUci,
   percent,
@@ -57,7 +58,17 @@ root.innerHTML = `
           <span id="status-pulse" class="status-pulse"></span>
           <div><strong id="status-title">Configure a game</strong><span id="status-detail">Choose your side and search mode.</span></div>
         </div>
-        <div id="board" class="board" aria-label="Interactive chessboard"></div>
+        <div class="board-shell">
+          <div id="board" class="board" aria-label="Interactive chessboard"></div>
+          <section id="game-over-overlay" class="game-over-overlay" aria-labelledby="game-over-title" hidden>
+            <div class="game-over-card">
+              <span class="game-over-label">Game over</span>
+              <h2 id="game-over-title">Game over</h2>
+              <p id="game-over-detail">The game has ended.</p>
+              <button id="play-again" class="overlay-button" type="button">Play again <span aria-hidden="true">â†’</span></button>
+            </div>
+          </section>
+        </div>
         <div class="board-footer">
           <span id="turn-label">Ready when you are</span>
           <button id="new-game-inline" class="text-button" type="button" hidden>New game</button>
@@ -153,6 +164,7 @@ let phase: UiPhase = "setup";
 
 const startButton = requiredElement<HTMLButtonElement>("#start-game");
 const newGameButton = requiredElement<HTMLButtonElement>("#new-game-inline");
+const playAgainButton = requiredElement<HTMLButtonElement>("#play-again");
 const timeControl = requiredElement<HTMLDivElement>("#time-control");
 const timeRange = requiredElement<HTMLInputElement>("#time-range");
 const timeOutput = requiredElement<HTMLOutputElement>("#time-output");
@@ -231,6 +243,16 @@ function renderAnalysis(analysis: AnalysisResult | null): void {
     .join("");
 }
 
+function renderGameOver(show: boolean): void {
+  const overlay = requiredElement<HTMLElement>("#game-over-overlay");
+  overlay.hidden = !show;
+  if (!show) return;
+  const message = gameOutcomeMessage(game, authoritativeState?.result ?? null);
+  requiredElement("#game-over-title").textContent = message.title;
+  requiredElement("#game-over-detail").textContent = message.detail;
+  playAgainButton.focus();
+}
+
 async function acceptState(state: GameState, animate: boolean): Promise<void> {
   authoritativeState = state;
   game = reconstructGame(state.starting_fen, state.moves_uci);
@@ -242,6 +264,9 @@ async function acceptState(state: GameState, animate: boolean): Promise<void> {
     : `${state.side_to_move === "white" ? "White" : "Black"} to move`;
   if (state.game_over) {
     setPhase("game-over", state.result ?? "The game has ended.");
+    renderGameOver(true);
+  } else {
+    renderGameOver(false);
   }
 }
 
@@ -300,6 +325,7 @@ async function startGame(): Promise<void> {
   const previousToken = gameToken;
   gameToken = null;
   authoritativeState = null;
+  renderGameOver(false);
   clearStoredGame(window.localStorage);
   if (previousToken) void api.endGame(previousToken).catch(() => undefined);
   playerSide = selectedValue<PlayerSide>("side");
@@ -362,10 +388,12 @@ timeRange.addEventListener("input", () => {
   persistCurrentGame();
 });
 startButton.addEventListener("click", () => void startGame());
+playAgainButton.addEventListener("click", () => void startGame());
 newGameButton.addEventListener("click", () => {
   const previousToken = gameToken;
   gameToken = null;
   authoritativeState = null;
+  renderGameOver(false);
   clearStoredGame(window.localStorage);
   if (previousToken) void api.endGame(previousToken).catch(() => undefined);
   setPhase("setup");

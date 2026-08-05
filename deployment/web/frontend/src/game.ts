@@ -9,6 +9,11 @@ export interface HistoryEntry {
   readonly black: string | null;
 }
 
+export interface GameOutcomeMessage {
+  readonly title: string;
+  readonly detail: string;
+}
+
 export function matchingLegalUci(
   game: Chess,
   from: string,
@@ -57,4 +62,36 @@ export function percent(value: number): string {
 
 export function signedValue(value: number | null): string {
   return value === null ? "N/A" : `${value >= 0 ? "+" : ""}${value.toFixed(3)}`;
+}
+
+export function gameOutcomeMessage(
+  game: Chess,
+  result: string | null,
+): GameOutcomeMessage {
+  if (result === "1-0") {
+    return {
+      title: "White wins",
+      detail: game.isCheckmate() ? "White won by checkmate." : "White won the game.",
+    };
+  }
+  if (result === "0-1") {
+    return {
+      title: "Black wins",
+      detail: game.isCheckmate() ? "Black won by checkmate." : "Black won the game.",
+    };
+  }
+  if (result === "1/2-1/2") {
+    if (game.isStalemate()) return { title: "It's a draw", detail: "Draw by stalemate." };
+    if (game.isThreefoldRepetition()) {
+      return { title: "It's a draw", detail: "Draw by threefold repetition." };
+    }
+    if (game.isInsufficientMaterial()) {
+      return { title: "It's a draw", detail: "Draw by insufficient material." };
+    }
+    if (game.isDrawByFiftyMoves()) {
+      return { title: "It's a draw", detail: "Draw by the fifty-move rule." };
+    }
+    return { title: "It's a draw", detail: "The game ended in a draw." };
+  }
+  return { title: "Game over", detail: result ?? "The game has ended." };
 }

@@ -51,9 +51,18 @@ h1 em { font-family: "Playfair Display", Georgia, serif; font-weight: 600; color
 .status-card[data-phase="error"] .status-pulse { background: #ed715b; }
 @keyframes pulse { 50% { opacity: .3; transform: scale(.75); } }
 
+.board-shell { position: relative; }
 .board { width: 100%; background: #dedbd1; box-shadow: 0 24px 70px #3e3a2b1a; }
 .board .cm-chessboard .board.chess-club .square.white { fill: #d7d2c4; }
 .board .cm-chessboard .board.chess-club .square.black { fill: #71877c; }
+.game-over-overlay { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: clamp(18px, 5vw, 48px); background: #20211dd9; backdrop-filter: blur(3px); animation: reveal-game-over .22s ease-out; }
+.game-over-card { width: min(390px, 100%); padding: clamp(24px, 5vw, 42px); border: 1px solid #ffffff4d; color: white; background: #20211df2; text-align: center; box-shadow: 0 24px 70px #0006; }
+.game-over-label { color: #efa052; font: 500 10px "DM Mono", monospace; letter-spacing: .2em; text-transform: uppercase; }
+.game-over-card h2 { margin: 13px 0 8px; font-family: "Playfair Display", Georgia, serif; font-size: clamp(31px, 5vw, 48px); font-style: italic; line-height: 1; }
+.game-over-card p { margin: 0 0 24px; color: #d4d5cf; font-size: 13px; }
+.overlay-button { width: 100%; padding: 14px 17px; border: 1px solid white; display: flex; justify-content: space-between; color: var(--ink); background: white; font-weight: 700; }
+.overlay-button:hover { border-color: var(--accent); color: white; background: var(--accent); }
+@keyframes reveal-game-over { from { opacity: 0; } }
 .board-footer { min-height: 44px; padding: 12px 2px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 .text-button { padding: 0; border: 0; background: transparent; color: var(--accent); font-weight: 700; }
 
