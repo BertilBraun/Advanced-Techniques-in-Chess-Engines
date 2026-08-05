@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import chess
 import chess.engine
+import numpy as np
 
 if TYPE_CHECKING:
     from AlphaZeroCpp import MCTS, MCTSParams, MCTSResult, MCTSRoot
@@ -16,22 +17,22 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.eval.ModelEvaluationPy import (
-    _play_paired_models_search,
-    policy_evaluator,
+from src.eval.evaluation_types import (
     Results,
     EvaluationMove,
     EvaluationTerminal,
+    EvaluationModel,
     PairedEvaluationDecision,
     PairedEvaluationModel,
 )
+from src.eval.paired_match import play_paired_models
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
-from src.mcts.MCTS import action_probabilities
+from src.self_play.visit_policy import action_probabilities
 from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
 from src.util.save_paths import inference_model_path, load_model, model_save_path
 from src.experiment.evaluation_protocol import (
@@ -39,6 +40,21 @@ from src.experiment.evaluation_protocol import (
     build_paired_schedule,
     load_opening_suite,
 )
+
+
+def policy_evaluator(current_model: InferenceClient | NonCachingInferenceClient) -> EvaluationModel:
+    def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+        results = current_model.inference_batch(boards)
+        policies = []
+        for board, (visit_counts, _) in zip(boards, results):
+            policy = np.zeros(CurrentGame.action_size, dtype=np.float32)
+            for move, score in visit_counts:
+                policy[move] = score
+            assert policy.sum() >= 0, f'Policy for board {board} has negative sum: {policy.sum()}'
+            policies.append(policy / policy.sum())
+        return policies
+
+    return evaluator
 
 
 def history_aware_root(board: CurrentBoard, mcts: MCTS) -> MCTSRoot:
@@ -251,7 +267,7 @@ class ModelEvaluation:
 
             return [get_random_policy(board) for board in boards]
 
-        results, _ = _play_paired_models_search(
+        results, _ = play_paired_models(
             iteration=self.iteration,
             candidate_model=paired_policy_model,
             opponent_model=random_evaluator,
@@ -359,7 +375,7 @@ class ModelEvaluation:
             results = current.search([MCTSBoard(history_aware_root(board, current), False) for board in boards])
             return self._search_decisions(results.results)
 
-        results, records = _play_paired_models_search(
+        results, records = play_paired_models(
             iteration=self.iteration,
             candidate_model=current_model,
             opponent_model=eval_model,
@@ -414,7 +430,6 @@ class ModelEvaluation:
 
 if __name__ == '__main__':
     from src.settings import TRAINING_ARGS
-    from src.eval.ModelEvaluationPy import EVAL_DEVICE
 
-    evaluation = ModelEvaluation(0, TRAINING_ARGS, EVAL_DEVICE, 100, 400)
+    evaluation = ModelEvaluation(0, TRAINING_ARGS, 0, 100, 400)
     print('Evaluation vs Random:', evaluation.play_vs_random())

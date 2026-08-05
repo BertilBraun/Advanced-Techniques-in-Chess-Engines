@@ -5,9 +5,9 @@ import subprocess
 import torch
 from torch import multiprocessing as mp
 
-from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.eval.ModelEvaluationPy import Results
+from src.eval.evaluation_types import Results
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import log_scalar, TensorboardWriter

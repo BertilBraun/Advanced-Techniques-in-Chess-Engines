@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.experiment.run_configuration import apply_run_configuration, load_run_configuration
 from src.settings import TRAINING_ARGS
 

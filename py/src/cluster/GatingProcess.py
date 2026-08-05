@@ -1,4 +1,4 @@
-from src.eval.ModelEvaluationCpp import ModelEvaluation
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.train.TrainingArgs import TrainingArgs
 from src.util.communication import Communication
 from src.util.exceptions import log_exceptions

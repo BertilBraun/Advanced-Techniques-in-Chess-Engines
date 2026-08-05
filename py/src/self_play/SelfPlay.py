@@ -44,7 +44,7 @@ from src.self_play.value_target import (
     outcome_from_sample_perspective,
 )
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
-from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
+from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.train.ReplayReanalysis import ReanalysisPosition, ReanalysisTarget
@@ -174,7 +174,7 @@ def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
     )
 
 
-class SelfPlayCpp:
+class SelfPlay:
     def __init__(self, device_id: int, args: TrainingArgs) -> None:
         self.device_id = device_id
         self.args = args.self_play
@@ -623,9 +623,9 @@ class SelfPlayCpp:
 
     def _should_force_fast_endgame_playout(self, game: SelfPlayGame) -> bool:
         continuation_start = self.args.endgame_continuation_start_plies
-        if CURRENT_GAME == 'chess' and continuation_start is not None and len(game.played_moves) >= continuation_start:
+        if continuation_start is not None and len(game.played_moves) >= continuation_start:
             return True
-        if CURRENT_GAME != 'chess' or self.endgame_shortcut_strength <= 0.0:
+        if self.endgame_shortcut_strength <= 0.0:
             return False
         if len(game.played_moves) < self.args.num_moves_after_which_to_play_greedy:
             return False
@@ -645,7 +645,7 @@ class SelfPlayCpp:
         )
 
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
-        if CURRENT_GAME != 'chess' or game.low_material_termination_evaluated:
+        if game.low_material_termination_evaluated:
             return False
         if len(game.played_moves) < self.args.low_material_termination_minimum_plies:
             return False

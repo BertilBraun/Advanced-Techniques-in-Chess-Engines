@@ -6,7 +6,7 @@ from src.util.log import log
 from src.settings import TRAINING_ARGS
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
-from src.eval.AlphaZeroBotCpp import AlphaZeroBot
+from src.eval.AlphaZeroBot import AlphaZeroBot
 from src.util.save_paths import get_latest_model_iteration, model_save_path
 
 HUMAN_PLAY = True

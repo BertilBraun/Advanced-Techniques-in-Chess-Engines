@@ -9,17 +9,17 @@ import pytest
 from torch import multiprocessing as mp
 
 import src.cluster.EvaluationProcess as evaluation_process_module
-import src.eval.ModelEvaluationCpp as evaluation_module
+import src.eval.ModelEvaluation as evaluation_module
 from src.cluster.EvaluationProcess import (
     _activate_evaluation_device,
     _model_engine_condition,
     _reap_evaluation_tasks,
     _terminate_evaluation_tasks,
 )
-from src.eval.ModelEvaluationCpp import ModelEvaluation
-from src.eval.ModelEvaluationPy import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
+from src.eval.ModelEvaluation import ModelEvaluation
+from src.eval.evaluation_types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
-from src.mcts.MCTS import action_probabilities
+from src.self_play.visit_policy import action_probabilities
 from src.settings import CurrentBoard
 from src.train.TrainingArgs import DirectSelfPlayParams, TrainingArgs
 
@@ -182,7 +182,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     fake_alpha_zero_cpp.MCTSBoard = _FakeMctsBoard
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
     monkeypatch.setattr(ModelEvaluation, 'mcts_args', property(mcts_parameters))
-    monkeypatch.setattr(evaluation_module, '_play_paired_models_search', fake_paired_match)
+    monkeypatch.setattr(evaluation_module, 'play_paired_models', fake_paired_match)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
     model_evaluation.iteration = iteration
@@ -284,7 +284,7 @@ def test_policy_evaluation_uses_non_cached_inference_client(
         'NonCachingInferenceClient',
         FakeNonCachingInferenceClient,
     )
-    monkeypatch.setattr(evaluation_module, '_play_paired_models_search', finish_without_games)
+    monkeypatch.setattr(evaluation_module, 'play_paired_models', finish_without_games)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
     model_evaluation.iteration = 7

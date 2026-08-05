@@ -20,7 +20,7 @@ from AlphaZeroCpp import (
     MCTS,
     MCTSParams,
 )
-from src.self_play.SelfPlayCpp import SelfPlayCpp
+from src.self_play.SelfPlay import SelfPlay
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS
 
@@ -219,7 +219,7 @@ def seed_python_libraries(seed: int, device: int) -> None:
     np.random.seed(seed)
 
 
-def create_self_play(arguments: Arguments) -> SelfPlayCpp:
+def create_self_play(arguments: Arguments) -> SelfPlay:
     configuration = copy.deepcopy(TRAINING_ARGS)
     configuration.random_seed = arguments.seed
     configuration.self_play.num_parallel_games = arguments.games
@@ -228,7 +228,7 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
     configuration.self_play.mcts.num_parallel_searches = arguments.parallel_searches
     configuration.self_play.mcts.num_threads = arguments.threads
 
-    self_play = SelfPlayCpp(arguments.device, configuration)
+    self_play = SelfPlay(arguments.device, configuration)
     self_play.update_search_schedule(self_play.search_schedule(arguments.iteration))
 
     fast_searches = (
@@ -274,7 +274,7 @@ def create_self_play(arguments: Arguments) -> SelfPlayCpp:
     return self_play
 
 
-def run_warmup(self_play: SelfPlayCpp, steps: int) -> None:
+def run_warmup(self_play: SelfPlay, steps: int) -> None:
     for _ in range(steps):
         self_play.self_play()
     self_play.dataset = SelfPlayDataset()
@@ -303,7 +303,7 @@ def difference(current: int, initial: int) -> int:
 
 def build_result(
     arguments: Arguments,
-    self_play: SelfPlayCpp,
+    self_play: SelfPlay,
     initial_statistics: InferenceStatistics,
     final_statistics: InferenceStatistics,
     elapsed_seconds: float,

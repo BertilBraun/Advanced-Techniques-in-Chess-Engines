@@ -10,7 +10,8 @@ from src.experiment.evaluation_protocol import (
     load_opening_suite,
     summarize_match,
 )
-from src.eval.ModelEvaluationPy import EvaluationMove, EvaluationTerminal, Results, _play_paired_models_search
+from src.eval.evaluation_types import EvaluationMove, EvaluationTerminal, Results
+from src.eval.paired_match import play_paired_models
 from src.settings import CurrentBoard, CurrentGame
 
 
@@ -105,7 +106,7 @@ def test_paired_match_reuses_opening_with_colors_swapped() -> None:
     opening = load_opening_suite(OPENING_SUITE_PATH)[0]
     schedule = build_paired_schedule((opening,))
 
-    results, records = _play_paired_models_search(
+    results, records = play_paired_models(
         iteration=1,
         candidate_model=first_legal_move,
         opponent_model=first_legal_move,
@@ -130,7 +131,7 @@ def test_paired_match_adjudicates_native_terminal_decision_as_draw() -> None:
     def terminal_decision(boards: list[CurrentBoard]) -> list[EvaluationTerminal]:
         return [EvaluationTerminal() for _ in boards]
 
-    results, records = _play_paired_models_search(
+    results, records = play_paired_models(
         iteration=1,
         candidate_model=terminal_decision,
         opponent_model=terminal_decision,

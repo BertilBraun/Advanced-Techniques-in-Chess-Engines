@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlayCpp import SelfPlayCpp, SelfPlayGame
+from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
 from src.self_play.resignation import (
     CompletedResignationAudit,
     ExternalResignationSafetyApproval,
@@ -86,7 +86,7 @@ def test_native_child_edge_value_is_converted_to_root_perspective() -> None:
 
 
 def test_root_and_best_child_must_both_cross_the_governing_threshold() -> None:
-    client = object.__new__(SelfPlayCpp)
+    client = object.__new__(SelfPlay)
     client.args = SimpleNamespace(resignation=ResignationParams(minimum_eligible_ply=0))
     client.iteration = 40
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=-0.90)
@@ -104,7 +104,7 @@ def test_root_and_best_child_must_both_cross_the_governing_threshold() -> None:
 
 
 def test_audit_without_cutoff_records_full_trajectory_without_stopping_replay() -> None:
-    client = object.__new__(SelfPlayCpp)
+    client = object.__new__(SelfPlay)
     client.args = SimpleNamespace(resignation=ResignationParams(minimum_eligible_ply=0))
     client.iteration = 40
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=None)
@@ -121,11 +121,11 @@ def test_audit_without_cutoff_records_full_trajectory_without_stopping_replay() 
 def test_post_cutoff_audit_positions_cannot_enter_ordinary_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = object.__new__(SelfPlayCpp)
+    client = object.__new__(SelfPlay)
     client.args = SimpleNamespace(mcts=SimpleNamespace(playout_cap_randomization=1.0))
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=-0.97)
     game.resignation_trigger_ply = 80
-    monkeypatch.setattr('src.self_play.SelfPlayCpp.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.self_play.SelfPlay.random.random', lambda: 0.0)
 
     assert client._should_run_full_search(game, force_fast_endgame_playout=False) is False
 
@@ -287,7 +287,7 @@ def test_first_observed_false_non_loss_stops_bootstrap_immediately(
 
 
 def test_real_resignation_is_a_hard_loss(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = object.__new__(SelfPlayCpp)
+    client = object.__new__(SelfPlay)
     game = SelfPlayGame(production_resignation_enabled=True, resignation_threshold=-0.95)
     replacement = SelfPlayGame()
     calls: list[tuple[float, ResignationTerminationReason]] = []

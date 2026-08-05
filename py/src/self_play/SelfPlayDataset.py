@@ -14,7 +14,7 @@ from typing import Any
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, decode_board_states, encode_board_state
-from src.mcts.MCTS import action_probabilities
+from src.self_play.visit_policy import action_probabilities
 from src.settings import CurrentGame, USE_GPU
 from src.util import random_id
 from src.util.timing import timeit

@@ -9,7 +9,7 @@ model replicas and CUDA streams. They consume stable encoded batch slots and nev
 nodes. The MCTS hot path no longer uses the cached or non-cached general inference clients.
 
 The Python configuration exposes `inference_workers` and uses `maximum_batch_size` as the direct
-worker batch capacity. `AlphaZeroBotCpp` defaults to two workers with batches of 64 based on the
+worker batch capacity. `AlphaZeroBot` defaults to two workers with batches of 64 based on the
 integrated measurements below. Policy mode sends exactly one encoded position through a direct
 worker and does not create or mutate an MCTS tree frontier.
 

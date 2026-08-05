@@ -7,7 +7,7 @@ from src.games.Board import Player
 if TYPE_CHECKING:
     from src.eval.Bot import Bot
 from src.eval.GameManager import GameManager
-from src.eval.ModelEvaluationPy import Results
+from src.eval.evaluation_types import Results
 import multiprocessing as mp
 
 

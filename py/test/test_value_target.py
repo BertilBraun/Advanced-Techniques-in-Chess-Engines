@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 from src.Network import Network
 from src.self_play.SelfPlayDataset import SelfPlayDataset, TrainingBatch
-from src.self_play.SelfPlayCpp import SelfPlayCpp, SelfPlayGame, SelfPlayGameMemory
+from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, SelfPlayGameMemory
 from src.self_play.value_target import (
     FinalOutcome,
     ReplayValueTarget,
@@ -147,7 +147,7 @@ def test_outcome_perspective_alternates_without_distance_discount() -> None:
 
 
 def test_self_play_stores_hard_outcome_and_independent_root_values_without_discount() -> None:
-    self_play = object.__new__(SelfPlayCpp)
+    self_play = object.__new__(SelfPlay)
     self_play.args = SimpleNamespace(mcts=SimpleNamespace(min_visit_count=0))
     self_play.dataset = SelfPlayDataset()
     self_play.iteration = 0

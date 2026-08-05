@@ -7,8 +7,6 @@ from src.util.tensorboard import *
 
 USE_GPU = torch.cuda.is_available()
 
-USE_CPP = False  # NOTE: set to True if you want to use the C++ self play implementation (only available for chess at the moment)
-
 
 def get_run_id() -> int:
     for run in range(10000):

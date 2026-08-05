@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlayCpp import SelfPlayCpp, SelfPlayGame, has_positive_visit_counts
+from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
 from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import DirectSelfPlayParams
 
@@ -141,7 +141,7 @@ def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.Monk
     training_args.self_play.initial_num_searches_per_turn = 100
     training_args.self_play.mcts.num_searches_per_turn = 600
     training_args.self_play_search_warmup_iterations = 100
-    self_play = SelfPlayCpp(device_id=0, args=training_args)
+    self_play = SelfPlay(device_id=0, args=training_args)
 
     self_play._set_mcts(iteration=50)
 
@@ -168,7 +168,7 @@ def test_self_play_constructs_direct_inference_pipeline(monkeypatch: pytest.Monk
         inference_batch_size=64,
         outstanding_batches_per_worker=1,
     )
-    self_play = SelfPlayCpp(device_id=0, args=training_args)
+    self_play = SelfPlay(device_id=0, args=training_args)
 
     self_play._set_mcts(iteration=50)
 
@@ -179,7 +179,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
-    self_play = object.__new__(SelfPlayCpp)
+    self_play = object.__new__(SelfPlay)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
     self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
     self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations
@@ -194,7 +194,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     self_play.completed_searches = 19
     self_play.mcts = _LifecycleMcts(events, self_play.search_schedule_state.arena_capacity)
     previous_mcts = self_play.mcts
-    monkeypatch.setattr('src.self_play.SelfPlayCpp.log_scalar', lambda *_args: None)
+    monkeypatch.setattr('src.self_play.SelfPlay.log_scalar', lambda *_args: None)
 
     self_play.refresh_model(1, 'updated.jit.pt')
 
@@ -209,7 +209,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
 
 
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
-    self_play = object.__new__(SelfPlayCpp)
+    self_play = object.__new__(SelfPlay)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
     self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
     self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations

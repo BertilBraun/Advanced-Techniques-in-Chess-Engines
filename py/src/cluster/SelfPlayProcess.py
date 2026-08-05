@@ -9,7 +9,7 @@ import torch
 
 from src.cluster.TrainerProcess import number_of_games_in_iteration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import TensorboardWriter, USE_GPU, USE_CPP, TRAINING_ARGS, log_scalar
+from src.settings import TensorboardWriter, USE_GPU, TRAINING_ARGS, log_scalar
 from src.util.communication import (
     Communication,
     FLUSH_REPLAY_SHARD,
@@ -34,11 +34,7 @@ from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
 from src.util.save_paths import model_save_path
 from src.util.timing import reset_times
-
-if USE_CPP:
-    from src.self_play.SelfPlayCpp import SelfPlayCpp as SelfPlay
-else:
-    from src.self_play.SelfPlayPy import SelfPlayPy as SelfPlay
+from src.self_play.SelfPlay import SelfPlay
 
 
 def run_self_play_process(

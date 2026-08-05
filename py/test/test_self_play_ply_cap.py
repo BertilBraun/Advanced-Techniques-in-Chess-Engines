@@ -5,14 +5,15 @@ from types import SimpleNamespace
 import chess
 import pytest
 
-from src.self_play.SelfPlayCpp import SelfPlayCpp, SelfPlayGame
+from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 
 
-def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> SelfPlayCpp:
-    client = object.__new__(SelfPlayCpp)
+def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> SelfPlay:
+    client = object.__new__(SelfPlay)
     client.args = SimpleNamespace(
         maximum_game_plies=200,
+        maximum_game_plies_hold_until_iteration=0,
         maximum_game_plies_until_iteration=50,
         final_maximum_game_plies=final_maximum_game_plies,
         endgame_continuation_start_plies=None,

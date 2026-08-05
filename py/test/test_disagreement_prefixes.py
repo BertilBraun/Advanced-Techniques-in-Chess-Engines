@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlayCpp import new_game_from_encoded_prefix, policy_search_disagreement
+from src.self_play.SelfPlay import new_game_from_encoded_prefix, policy_search_disagreement
 from src.settings import CurrentGame
 
 

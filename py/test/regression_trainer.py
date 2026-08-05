@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.Network import Network
-from src.eval.ModelEvaluationPy import ModelEvaluation
+from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayTrainDataset import SelfPlayTrainDataset
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
