@@ -99,6 +99,27 @@ Search parameters are runtime values. Layout-dependent native types use the
 supported compile-time game and board-size instantiations selected during
 startup.
 
+### Training lifecycle
+
+Presentation-credit training is the single training lifecycle. The commander
+starts persistent self-play and trainer processes, maintains replay while
+credits accumulate, starts one optimizer quantum when enough credits exist,
+publishes the resulting model generation, schedules evaluation, records
+telemetry, and continues until a configured run limit is reached.
+
+Credit parameters are required training configuration rather than an optional
+mode. Credit accounting, recovery, replay maintenance, model publication,
+evaluation scheduling, and shutdown each have focused owners. The commander
+coordinates those components at one level of abstraction.
+
+### Native search path
+
+The production system has one MCTS implementation: the native C++ search used
+by self-play, evaluation, and interactive analysis. Python owns supervision,
+experiment policy, target construction, training, and result aggregation.
+Python modules that supervise native work use canonical names such as
+`SelfPlay`, `ModelEvaluation`, and `AlphaZeroBot`.
+
 ### Game specialization
 
 Chess and Go are concrete first-class implementations. Shared orchestration,
@@ -128,7 +149,8 @@ Python remains responsible for experiment and process orchestration, game-level
 self-play policy, replay maintenance, target construction, training, evaluation
 scheduling, and reporting. Native code remains responsible for game-state
 operations and complete batched tree searches with direct model inference.
-Python advances completed searches at the existing coarse boundary.
+Python supervisors consume completed native search results at the existing
+coarse boundary.
 
 ### Go rules and position representation
 
@@ -136,15 +158,32 @@ The first Go implementation supports configurable 7x7 and 9x9 boards, komi,
 pass moves, two-pass termination, a configured scoring rule, a maximum-move
 safety bound, and simple ko represented by the ko point.
 
-The native representation uses a fixed-size bitboard:
+The native representation uses the shared fixed-size
+`BitBoard<BoardSize>` value type in `cpp/src/util/BitBoard.hpp`. It stores its
+words in `std::array<uint64_t, word_count>` and maintains zeroed padding bits
+for board sizes that do not fill the final word.
 
 ```cpp
-template <size_t NumSquares>
-struct BitBoard {
-    static constexpr size_t NUM_WORDS = (NumSquares + 63) / 64;
-    std::array<uint64_t, NUM_WORDS> words;
+template <size_t BoardSize>
+class BitBoard {
+    static constexpr size_t bit_count = BoardSize * BoardSize;
+    static constexpr size_t word_count = (bit_count + 63) / 64;
+    using Storage = std::array<uint64_t, word_count>;
 };
 ```
+
+`BitBoard` is a small mutable value type for local algorithms. Its public
+mutation operations preserve its representation invariants, and serialized
+word access is read-only. Game positions and replay records provide immutable
+ownership boundaries: move application constructs a new position, and a
+published replay record is not subsequently modified.
+
+Chess and Go share the bitboard storage and mechanical encoding utilities
+without sharing plane semantics. A compact chess state may store binary planes
+as `std::array<BitBoard<8>, BinaryPlaneCount>` beside its scalar-plane array,
+while Go histories store arrays of absolute black and white bitboards.
+Stockfish continues to use its own bitboard type inside chess rules. Conversion
+occurs only at the chess encoding boundary.
 
 `GoPosition<BoardSize, HistoryLength>` contains:
 
@@ -308,58 +347,91 @@ process group and records the resulting status.
 
 | ID | Task | Status |
 | --- | --- | --- |
-| R1 | Model-publication tree reset | awaiting_user_review |
-| R2 | Chess completed-game persistence and replay materialization | pending |
-| R3 | Chess RAM replay, batch construction, and DDP integration | pending |
-| R4 | Chess game-contract and configuration extraction | pending |
-| R5 | Native Go game implementation | pending |
-| R6 | Go pipeline integration | pending |
-| R7 | Go evaluation and elapsed checkpoint scheduling | pending |
-| R8 | Resource-aware experiment queue | pending |
-| R9 | Integrated validation and benchmark preparation | pending |
-| R10 | Target-hardware baseline and screening experiments | pending |
+| R1 | Remove Python MCTS and obsolete games | pending |
+| R2 | Credit-only training lifecycle and commander cleanup | pending |
+| R3 | Chess completed-game persistence and replay materialization | pending |
+| R4 | Chess RAM replay, batch construction, and DDP integration | pending |
+| R5 | Chess game-contract and configuration extraction | pending |
+| R6 | Shared bitboard and chess packed-plane integration | pending |
+| R7 | Native Go game implementation | pending |
+| R8 | Go pipeline integration | pending |
+| R9 | Go evaluation and elapsed checkpoint scheduling | pending |
+| R10 | Resource-aware experiment queue | pending |
+| R11 | Integrated validation and benchmark preparation | pending |
+| R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 awaiting user review; no later phase is authorized.
+Current authorization: plan review only.
 
-### R1 — Model-publication tree reset
-
-Implemented scope (revised 2026-08-05):
-
-- preserve the existing commander publication, worker pause/resume, model
-  notification, acknowledgement, and dead-worker recovery flow unchanged;
-- make `SelfPlayCpp.refresh_model()` always reset every retained tree after a
-  successful model load;
-- remove the optional reset flag so every model-load call site shares the same
-  invariant;
-- retain game state, replay data, search schedules, and cumulative statistics.
+### R1 — Remove Python MCTS and obsolete games
 
 Deliverables:
 
-- reset every retained self-play tree after a newly loaded model;
-- leave the existing model-publication and worker lifecycle protocol unchanged;
-- cover successful and failed refresh behavior deterministically.
+- remove the Python MCTS and MCTS-node implementation, its graph and speed
+  utilities, and production or test paths that execute Python search;
+- remove `SelfPlayPy`, `AlphaZeroBotPy`, and the Python-search evaluation
+  implementation;
+- remove the runtime implementation switch and make native search the single
+  production path;
+- rename the native-backed Python supervisors to canonical modules and classes:
+  `SelfPlay`, `ModelEvaluation`, and `AlphaZeroBot`;
+- move evaluation results, paired-match decisions, visit normalization, and
+  other retained non-search concepts into focused canonical modules before
+  removing their former owners;
+- remove Checkers, Connect4, Hex, and TicTacToe implementations, settings,
+  visualizations, tests, and selection paths;
+- retain the chess Python state and orchestration code required at the coarse
+  native boundary;
+- update imports, configuration, entry points, documentation, and tests to the
+  canonical native-backed path.
 
 Review evidence:
 
-- a successful C++ model refresh resets an existing chess search tree while
-  preserving the active game and other self-play state;
-- a failed model refresh preserves the previous model and tree;
-- credit and legacy refresh paths use the unconditional reset boundary;
-- existing pause, resume, publication, acknowledgement, and recovery tests
-  continue to pass.
+- repository search finds no Python MCTS implementation or implementation-mode
+  switch;
+- self-play, evaluation, and interactive entry points instantiate only the
+  canonical native-backed supervisors;
+- retained shared evaluation and policy utilities have no dependency on a
+  deleted search implementation;
+- focused chess self-play and evaluation tests pass through native search;
+- the complete available Python suite contains no collection dependency on the
+  removed games or Python MCTS.
 
-Validation:
+### R2 — Credit-only training lifecycle and commander cleanup
 
-- `uv run ruff format` and `uv run ruff check --fix` passed on all changed
-  Python files;
-- `python -m pytest --import-mode=importlib
-  .\test\test_self_play_inference_client.py
-  .\test\test_self_play_process_commands.py .\test\test_self_play_pause.py
-  .\test\test_commander_training_cleanup.py
-  .\test\test_credit_trainer_protocol.py
-  .\test\test_credit_runtime_integration.py -q` passed 37 tests.
+Deliverables:
 
-### R2 — Chess completed-game persistence and replay materialization
+- make presentation-credit training the required training configuration and
+  direct `CommanderProcess.run()` lifecycle;
+- remove the iteration-based training loop, trainer, replay buffer, gating
+  process, iteration messages, iteration telemetry, settings, entry points, and
+  tests;
+- move helpers still required by the persistent DDP trainer or dataset
+  evaluation into focused modules, then make the persistent trainer the
+  canonical `TrainerProcess`;
+- remove credit-versus-iteration branches from the commander, self-play
+  process, run configuration, and training configuration;
+- retain model generation as checkpoint identity while credits and optimizer
+  steps control training progress;
+- decompose the commander lifecycle into focused initialization and recovery,
+  replay maintenance, credit observation, optimizer-quantum, publication,
+  evaluation, telemetry, and shutdown operations;
+- keep the public commander loop readable at one level of abstraction;
+- update tests around the single lifecycle, training failure cleanup, worker
+  pause/resume, recovery, publication, evaluation, and shutdown.
+
+Review evidence:
+
+- repository search finds no legacy iteration trainer, gating process,
+  iteration replay buffer, or training-mode branch;
+- a valid run configuration always contains the credit schedule required to
+  start training;
+- deterministic commander tests cover waiting for credits, running one
+  quantum, publication, recovery, evaluation scheduling, run limits, and clean
+  shutdown;
+- persistent DDP ranks remain alive across optimizer quanta;
+- a short credit-training smoke path produces the next model generation.
+
+### R3 — Chess completed-game persistence and replay materialization
 
 Deliverables:
 
@@ -381,7 +453,7 @@ Review evidence:
   as live ingestion;
 - stored chess fixtures can derive every initially configured target.
 
-### R3 — Chess RAM replay, batch construction, and DDP integration
+### R4 — Chess RAM replay, batch construction, and DDP integration
 
 Deliverables:
 
@@ -402,7 +474,7 @@ Review evidence:
 - encoded chess batches match reference fixtures;
 - a short chess optimizer smoke test completes.
 
-### R4 — Chess game-contract and configuration extraction
+### R5 — Chess game-contract and configuration extraction
 
 Deliverables:
 
@@ -443,12 +515,39 @@ Review evidence:
 
 The task ends for user inspection after the chess abstraction is complete.
 
-### R5 — Native Go game implementation
+### R6 — Shared bitboard and chess packed-plane integration
 
 Deliverables:
 
-- integrate the bitboard implementation supplied for this task into the C++
-  game module and align it with the fixed-size representation in this plan;
+- complete `BitBoard<BoardSize>` as the canonical fixed-size square-board bit
+  container and add focused constexpr and runtime tests;
+- keep mutation through invariant-preserving value operations and expose word
+  storage read-only;
+- canonicalize padding bits when constructing or deserializing boards whose
+  final word is only partially used;
+- use `std::array<BitBoard<8>, BinaryPlaneCount>` for compact chess binary
+  planes beside the existing scalar-plane array;
+- convert Stockfish bitboards only at the chess encoding boundary;
+- share mechanical word serialization, hashing, equality, and direct batch
+  expansion where chess and future Go representations have identical needs;
+- update the chess completed-game, replay, and batch fixtures to the bitboard
+  representation without changing their game-specific schemas or plane
+  meanings.
+
+Review evidence:
+
+- tests cover empty/full boards, point mapping, set algebra, iteration,
+  multiword boards, and canonical padding for 7x7, 8x8, and 9x9;
+- serialized bitboards round-trip with stable word ordering and zeroed padding;
+- chess compact states and decoded batches match their pre-conversion fixtures;
+- Stockfish rule and move-generation code continues to use its native bitboard
+  representation.
+
+### R7 — Native Go game implementation
+
+Deliverables:
+
+- use the shared bitboard and packed-plane utilities established in R6;
 - implement the immutable Go position and history representation for the
   supported compile-time board sizes;
 - implement initial position, legal action generation, immutable transitions,
@@ -475,7 +574,7 @@ Review evidence:
 The task ends for user inspection with a tested native Go game, before it is
 connected to self-play or training.
 
-### R6 — Go pipeline integration
+### R8 — Go pipeline integration
 
 Deliverables:
 
@@ -493,7 +592,7 @@ Deliverables:
 - extend the completed-game schema, target materializer, active replay, and
   batch construction path with their Go-specific representations;
 - connect Go completed-game publication, replay credits, DDP sampling, and
-  optimizer input to the infrastructure established in R2 and R3;
+  optimizer input to the infrastructure established in R3 and R4;
 - adapt the C++ and Python contracts where end-to-end Go integration reveals a
   concrete missing requirement;
 - remove converted chess assumptions from shared orchestration and search
@@ -507,13 +606,13 @@ Review evidence:
   and losses match deterministic fixtures;
 - Go archive rebuild and replay tests match live ingestion;
 - short CPU self-play and optimizer smoke tests complete for Go;
-- a Go model publication resets active trees through the R1 boundary;
+- a Go model publication resets active trees after loading the new model;
 - chess component and smoke tests continue to pass through the shared path.
 
 The task ends for user inspection with Go connected through configuration,
 self-play, inference, and training.
 
-### R7 — Go evaluation and elapsed checkpoint scheduling
+### R9 — Go evaluation and elapsed checkpoint scheduling
 
 Deliverables:
 
@@ -534,7 +633,7 @@ Review evidence:
   handling;
 - a short scheduled smoke run publishes complete checkpoint artifacts.
 
-### R8 — Resource-aware experiment queue
+### R10 — Resource-aware experiment queue
 
 Deliverables:
 
@@ -552,7 +651,7 @@ Review evidence:
 - success, failure, and termination release their slots and update status;
 - queue order is deterministic for the same configurations and resources.
 
-### R9 — Integrated validation and benchmark preparation
+### R11 — Integrated validation and benchmark preparation
 
 Deliverables:
 
@@ -571,7 +670,7 @@ Review evidence:
   configuration;
 - benchmark inputs are fixed before renting the compute node.
 
-### R10 — Target-hardware baseline and screening experiments
+### R12 — Target-hardware baseline and screening experiments
 
 Deliverables:
 
@@ -598,5 +697,4 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
-| 2026-08-05 | R1 | Decision | Keep the pre-R1 publication and worker-lifecycle protocol. Make tree reset an invariant of successful self-play model loading. | Reset to pre-R1 commit `a99c51d`; implement only the unconditional tree reset and focused tests. |
-| 2026-08-05 | R6 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
+| 2026-08-05 | R8 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
