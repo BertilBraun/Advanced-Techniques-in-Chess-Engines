@@ -25,7 +25,7 @@ from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.util.save_paths import CheckpointManifest
 
 
-CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-continuation-4x4070-pilot.json'
+CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-clean-credit-4x4070-v13.json'
 
 
 def _write_run_manifest(run_path: Path, source_revision: str = 'a' * 40) -> RunManifest:

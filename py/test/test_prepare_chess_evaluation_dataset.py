@@ -8,7 +8,7 @@ from tools import prepare_chess_evaluation_dataset
 
 
 def test_prepare_dataset_records_source_and_hash(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    configuration = load_run_configuration(Path('configs/chess-clean-4x4070-main.json'))
+    configuration = load_run_configuration(Path('configs/chess-clean-credit-4x4070-v13.json'))
     dataset_path = tmp_path / 'memory.hdf5'
     manifest_path = tmp_path / 'manifest.json'
 
