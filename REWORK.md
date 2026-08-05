@@ -117,7 +117,8 @@ The concrete implementations determine:
 - model definition and loss;
 - compact completed-game and replay representations.
 
-The first implementation pass traces the complete chess path and extracts its
+The completed-game and replay boundaries are first established with chess.
+The next implementation pass traces the resulting chess path and extracts its
 game-specific decisions behind explicit C++ and Python contracts. It also
 separates shared experiment settings from chess settings. The native Go game
 then implements those contracts, and its integration provides the concrete
@@ -307,12 +308,12 @@ process group and records the resulting status.
 
 | ID | Task | Status |
 | --- | --- | --- |
-| R1 | Chess game-contract and configuration extraction | pending |
-| R2 | Native Go game implementation | pending |
-| R3 | Go pipeline integration | pending |
-| R4 | Model-publication tree reset | pending |
-| R5 | Completed-game persistence and replay materialization | pending |
-| R6 | RAM replay, batch construction, and DDP integration | pending |
+| R1 | Model-publication tree reset | pending |
+| R2 | Chess completed-game persistence and replay materialization | pending |
+| R3 | Chess RAM replay, batch construction, and DDP integration | pending |
+| R4 | Chess game-contract and configuration extraction | pending |
+| R5 | Native Go game implementation | pending |
+| R6 | Go pipeline integration | pending |
 | R7 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R8 | Resource-aware experiment queue | pending |
 | R9 | Integrated validation and benchmark preparation | pending |
@@ -320,7 +321,66 @@ process group and records the resulting status.
 
 Current authorization: plan review only.
 
-### R1 — Chess game-contract and configuration extraction
+### R1 — Model-publication tree reset
+
+Deliverables:
+
+- make model publication a coordinated boundary for active self-play workers;
+- reset every active self-play tree after the newly published model is loaded;
+- resume searches after workers acknowledge the new model generation;
+- add generation and reset telemetry for the publication boundary.
+
+Review evidence:
+
+- deterministic tests publish a new model while workers own active trees;
+- every worker acknowledges the same model generation;
+- all post-publication searches start from fresh trees and use the new model;
+- a chess publication smoke test completes cleanly.
+
+### R2 — Chess completed-game persistence and replay materialization
+
+Deliverables:
+
+- define the versioned chess completed-game schema;
+- publish one atomic completed-game file per worker game;
+- implement the single-owner inbox consumer and framed per-iteration archives;
+- implement crash recovery for inbox files and incomplete final archive
+  records;
+- build the chess target materializer;
+- connect materialized eligible positions to replay credits;
+- add archive inspection and replay-rebuild commands;
+- replace the chess sample-writing path.
+
+Review evidence:
+
+- concurrent publisher tests produce complete, uniquely named files;
+- interruption tests recover every durably published game exactly once;
+- archive rebuild produces the same ordered compact chess samples and credits
+  as live ingestion;
+- stored chess fixtures can derive every initially configured target.
+
+### R3 — Chess RAM replay, batch construction, and DDP integration
+
+Deliverables:
+
+- implement the bounded compact FIFO and FIFO eviction for chess samples;
+- define the replay freeze/ingest phase transition;
+- distribute a frozen snapshot to persistent DDP ranks;
+- adapt deterministic rank sampling;
+- implement chess augmentation and direct preallocated batch encoding;
+- overlap pinned-memory batch preparation and device transfer;
+- emit capacity, eviction, credit, freshness, memory, and timing telemetry;
+- replace the chess disk-backed training path.
+
+Review evidence:
+
+- FIFO capacity, order, eviction, and phase transitions pass deterministic
+  tests;
+- DDP tests show reproducible, non-overlapping rank samples;
+- encoded chess batches match reference fixtures;
+- a short chess optimizer smoke test completes.
+
+### R4 — Chess game-contract and configuration extraction
 
 Deliverables:
 
@@ -361,7 +421,7 @@ Review evidence:
 
 The task ends for user inspection after the chess abstraction is complete.
 
-### R2 — Native Go game implementation
+### R5 — Native Go game implementation
 
 Deliverables:
 
@@ -393,7 +453,7 @@ Review evidence:
 The task ends for user inspection with a tested native Go game, before it is
 connected to self-play or training.
 
-### R3 — Go pipeline integration
+### R6 — Go pipeline integration
 
 Deliverables:
 
@@ -408,8 +468,10 @@ Deliverables:
 - add the Python Go implementation for compact samples, target construction,
   augmentation, batch encoding, model, loss, and coarse self-play
   orchestration;
-- connect Go completed-game output to the current data path until R5 replaces
-  that path;
+- extend the completed-game schema, target materializer, active replay, and
+  batch construction path with their Go-specific representations;
+- connect Go completed-game publication, replay credits, DDP sampling, and
+  optimizer input to the infrastructure established in R2 and R3;
 - adapt the C++ and Python contracts where end-to-end Go integration reveals a
   concrete missing requirement;
 - remove converted chess assumptions from shared orchestration and search
@@ -421,70 +483,13 @@ Review evidence:
 - invalid Go-specific combinations fail with precise errors;
 - encoded Go inputs, policy targets, value targets, symmetries, model outputs,
   and losses match deterministic fixtures;
+- Go archive rebuild and replay tests match live ingestion;
 - short CPU self-play and optimizer smoke tests complete for Go;
+- a Go model publication resets active trees through the R1 boundary;
 - chess component and smoke tests continue to pass through the shared path.
 
 The task ends for user inspection with Go connected through configuration,
 self-play, inference, and training.
-
-### R4 — Model-publication tree reset
-
-Deliverables:
-
-- make model publication a coordinated boundary for active self-play workers;
-- reset every active self-play tree after the newly published model is loaded;
-- resume searches after workers acknowledge the new model generation;
-- add generation and reset telemetry for the publication boundary.
-
-Review evidence:
-
-- deterministic tests publish a new model while workers own active trees;
-- every worker acknowledges the same model generation;
-- all post-publication searches start from fresh trees and use the new model;
-- chess and Go publication smoke tests complete cleanly.
-
-### R5 — Completed-game persistence and replay materialization
-
-Deliverables:
-
-- define versioned chess and Go completed-game schemas;
-- publish one atomic completed-game file per worker game;
-- implement the single-owner inbox consumer and framed per-iteration archives;
-- implement crash recovery for inbox files and incomplete final archive
-  records;
-- build game-specific target materializers;
-- connect materialized eligible positions to replay credits;
-- add archive inspection and replay-rebuild commands;
-- replace the converted sample-writing path.
-
-Review evidence:
-
-- concurrent publisher tests produce complete, uniquely named files;
-- interruption tests recover every durably published game exactly once;
-- archive rebuild produces the same ordered compact samples and credits as live
-  ingestion;
-- stored fixtures can derive every initially configured target.
-
-### R6 — RAM replay, batch construction, and DDP integration
-
-Deliverables:
-
-- implement the bounded compact FIFO and FIFO eviction;
-- define the replay freeze/ingest phase transition;
-- distribute a frozen snapshot to persistent DDP ranks;
-- adapt deterministic rank sampling;
-- implement game-specific augmentation and direct preallocated batch encoding;
-- overlap pinned-memory batch preparation and device transfer;
-- emit capacity, eviction, credit, freshness, memory, and timing telemetry;
-- replace the converted disk-backed training path.
-
-Review evidence:
-
-- FIFO capacity, order, eviction, and phase transitions pass deterministic
-  tests;
-- DDP tests show reproducible, non-overlapping rank samples;
-- encoded chess and Go batches match reference fixtures;
-- a short optimizer smoke test completes for both games.
 
 ### R7 — Go evaluation and elapsed checkpoint scheduling
 
@@ -571,4 +576,4 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
-| 2026-08-05 | R3 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
+| 2026-08-05 | R6 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
