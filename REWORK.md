@@ -117,9 +117,11 @@ The concrete implementations determine:
 - model definition and loss;
 - compact completed-game and replay representations.
 
-The shared interfaces should be extracted at the point where both concrete
-games need them. This keeps the contracts driven by working chess and Go use
-cases.
+The first implementation pass traces the complete chess path and extracts its
+game-specific decisions behind explicit C++ and Python contracts. It also
+separates shared experiment settings from chess settings. The native Go game
+then implements those contracts, and its integration provides the concrete
+second use case for any further boundary adjustments.
 
 Python remains responsible for experiment and process orchestration, game-level
 self-play policy, replay maintenance, target construction, training, evaluation
@@ -171,8 +173,7 @@ perspective while encoding a neural-network batch.
 
 Expanded tree nodes retain complete positions. A child edge initially stores
 its action, prior, visit and value statistics, and child-node index. Its
-position is created once when the child becomes a node. Every active self-play
-tree is reset when a newly published model is loaded. The native Go rules,
+position is created once when the child becomes a node. The native Go rules,
 action mapping, history updates, terminal detection, scoring, and symmetries
 receive deterministic unit tests against independently checked fixtures.
 
@@ -306,66 +307,143 @@ process group and records the resulting status.
 
 | ID | Task | Status |
 | --- | --- | --- |
-| R1 | Typed experiment configuration | pending |
-| R2 | Concrete chess/Go game boundary and Go integration | pending |
-| R3 | Completed-game persistence and replay materialization | pending |
-| R4 | RAM replay, batch construction, and DDP integration | pending |
-| R5 | Go evaluation and elapsed checkpoint scheduling | pending |
-| R6 | Resource-aware experiment queue | pending |
-| R7 | Integrated validation and benchmark preparation | pending |
-| R8 | Target-hardware baseline and screening experiments | pending |
+| R1 | Chess game-contract and configuration extraction | pending |
+| R2 | Native Go game implementation | pending |
+| R3 | Go pipeline integration | pending |
+| R4 | Model-publication tree reset | pending |
+| R5 | Completed-game persistence and replay materialization | pending |
+| R6 | RAM replay, batch construction, and DDP integration | pending |
+| R7 | Go evaluation and elapsed checkpoint scheduling | pending |
+| R8 | Resource-aware experiment queue | pending |
+| R9 | Integrated validation and benchmark preparation | pending |
+| R10 | Target-hardware baseline and screening experiments | pending |
 
 Current authorization: plan review only.
 
-### R1 — Typed experiment configuration
+### R1 — Chess game-contract and configuration extraction
 
 Deliverables:
 
-- inventory the existing run-configuration models and every consumer affected
-  by game selection;
-- adapt the current frozen Pydantic configuration into complete chess and Go
-  variants while preserving the existing typed configuration structure;
+- trace chess-specific assumptions through C++ game state and actions, search,
+  inference encoding, bindings, replay representation, and serialization;
+- trace chess-specific assumptions through Python self-play control, sample and
+  target construction, augmentation, batching, model and loss construction,
+  evaluation, and reporting;
+- define the C++ game contract used by chess, including position lifecycle,
+  legal actions, transitions, terminal results, action mapping, input encoding,
+  and representation dimensions;
+- define the corresponding Python contract for game-level orchestration,
+  compact samples, targets, batch construction, model and loss creation,
+  augmentation, and game-specific evaluation configuration;
+- convert the chess path to use those contracts while retaining its current
+  behavior and external interfaces;
+- inventory current settings and assign each setting to shared experiment
+  infrastructure or the chess experiment variant;
+- adapt the frozen Pydantic configuration into a complete
+  `ChessExperimentConfiguration` with cohesive shared component
+  configurations;
 - add YAML loading, canonical resolved JSON output, and queue validation;
 - route configuration explicitly to Python and native entry points;
-- progressively remove static settings as each value becomes owned by the
-  adapted run configuration;
-- add parsing, default-resolution, union-discrimination, cross-field, and
-  round-trip tests;
-- provide minimal valid chess, 7x7 Go, and 9x9 Go experiment files.
+- remove each converted static setting when its canonical typed owner is in
+  use;
+- add parsing, default-resolution, cross-field, and round-trip tests;
+- provide a minimal valid chess experiment file.
 
 Review evidence:
 
-- the three example files validate and resolve deterministically;
-- invalid game-specific combinations fail with precise errors;
-- affected entry points consume typed configuration values.
+- the chess example validates and resolves deterministically;
+- invalid chess and shared-setting combinations fail with precise errors;
+- a contract inventory identifies every discovered chess-specific assumption,
+  its canonical owner, and the converted call site;
+- chess component tests pass through the extracted C++ and Python contracts;
+- representative chess positions produce unchanged legal actions, encoded
+  inputs, policy indices, targets, and model shapes.
 
-### R2 — Concrete chess/Go game boundary and Go integration
+The task ends for user inspection after the chess abstraction is complete.
+
+### R2 — Native Go game implementation
 
 Deliverables:
 
-- identify the minimal shared contracts from the concrete chess and Go needs;
-- implement the fixed-size Go bitboard and immutable position/history model;
-- implement and test Go rules, scoring, action mapping, encoding, and
-  symmetries for 7x7 and 9x9;
-- select supported native game instantiations from the experiment
-  configuration;
-- connect Go positions to batched search and inference;
-- add the Go model, loss, target definitions, and coarse Python self-play
-  orchestration;
-- reset every active self-play tree when a new model publication is loaded;
-- remove game assumptions replaced by the new typed boundary.
+- integrate the bitboard implementation supplied for this task into the C++
+  game module and align it with the fixed-size representation in this plan;
+- implement the immutable Go position and history representation for the
+  supported compile-time board sizes;
+- implement initial position, legal action generation, immutable transitions,
+  capture, suicide handling, simple ko, pass, terminal detection, scoring, and
+  the maximum-move safety result;
+- implement Go action encoding and decoding, network input encoding, hashing,
+  and board symmetries required by the C++ contract;
+- expose focused bindings for independently exercising Go positions, actions,
+  transitions, terminal results, scoring, and encoding;
+- adapt the extracted C++ contract where the concrete Go implementation
+  demonstrates a missing semantic requirement;
+- record each contract adjustment and its corresponding chess adaptation.
 
 Review evidence:
 
 - deterministic Go fixtures pass for captures, suicide, ko, pass termination,
   scoring, zero-initialized history, history shifts, actions, and symmetries;
-- chess component tests continue to pass through the new boundary;
-- model-refresh tests verify that no search statistics survive publication of a
-  new model;
-- short CPU smoke searches complete for both games with valid policy and value
-  shapes.
+- fixtures cover both 7x7 and 9x9 compile-time instantiations;
+- bound Go operations agree with native results and independently checked
+  fixtures;
+- chess contract tests remain unchanged or receive documented adaptations for
+  a contract change required by Go.
 
-### R3 — Completed-game persistence and replay materialization
+The task ends for user inspection with a tested native Go game, before it is
+connected to self-play or training.
+
+### R3 — Go pipeline integration
+
+Deliverables:
+
+- extend the root experiment union with a complete
+  `GoExperimentConfiguration`, including board size, rules, representation,
+  model, training objective, self-play, replay, and evaluation settings;
+- add minimal valid 7x7 and 9x9 Go experiment files and include them in queue
+  validation;
+- select supported native Go instantiations from the resolved experiment;
+- connect Go positions, action dimensions, and input dimensions to batched
+  search and direct inference;
+- add the Python Go implementation for compact samples, target construction,
+  augmentation, batch encoding, model, loss, and coarse self-play
+  orchestration;
+- connect Go completed-game output to the current data path until R5 replaces
+  that path;
+- adapt the C++ and Python contracts where end-to-end Go integration reveals a
+  concrete missing requirement;
+- remove converted chess assumptions from shared orchestration and search
+  entry points.
+
+Review evidence:
+
+- 7x7 and 9x9 configurations validate and resolve deterministically;
+- invalid Go-specific combinations fail with precise errors;
+- encoded Go inputs, policy targets, value targets, symmetries, model outputs,
+  and losses match deterministic fixtures;
+- short CPU self-play and optimizer smoke tests complete for Go;
+- chess component and smoke tests continue to pass through the shared path.
+
+The task ends for user inspection with Go connected through configuration,
+self-play, inference, and training.
+
+### R4 — Model-publication tree reset
+
+Deliverables:
+
+- make model publication a coordinated boundary for active self-play workers;
+- reset every active self-play tree after the newly published model is loaded;
+- resume searches after workers acknowledge the new model generation;
+- add generation and reset telemetry for the publication boundary.
+
+Review evidence:
+
+- deterministic tests publish a new model while workers own active trees;
+- every worker acknowledges the same model generation;
+- all post-publication searches start from fresh trees and use the new model;
+- chess and Go publication smoke tests complete cleanly.
+
+### R5 — Completed-game persistence and replay materialization
 
 Deliverables:
 
@@ -387,7 +465,7 @@ Review evidence:
   ingestion;
 - stored fixtures can derive every initially configured target.
 
-### R4 — RAM replay, batch construction, and DDP integration
+### R6 — RAM replay, batch construction, and DDP integration
 
 Deliverables:
 
@@ -408,7 +486,7 @@ Review evidence:
 - encoded chess and Go batches match reference fixtures;
 - a short optimizer smoke test completes for both games.
 
-### R5 — Go evaluation and elapsed checkpoint scheduling
+### R7 — Go evaluation and elapsed checkpoint scheduling
 
 Deliverables:
 
@@ -429,7 +507,7 @@ Review evidence:
   handling;
 - a short scheduled smoke run publishes complete checkpoint artifacts.
 
-### R6 — Resource-aware experiment queue
+### R8 — Resource-aware experiment queue
 
 Deliverables:
 
@@ -447,7 +525,7 @@ Review evidence:
 - success, failure, and termination release their slots and update status;
 - queue order is deterministic for the same configurations and resources.
 
-### R7 — Integrated validation and benchmark preparation
+### R9 — Integrated validation and benchmark preparation
 
 Deliverables:
 
@@ -466,7 +544,7 @@ Review evidence:
   configuration;
 - benchmark inputs are fixed before renting the compute node.
 
-### R8 — Target-hardware baseline and screening experiments
+### R10 — Target-hardware baseline and screening experiments
 
 Deliverables:
 
@@ -493,4 +571,4 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
-| 2026-08-05 | R2 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
+| 2026-08-05 | R3 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
