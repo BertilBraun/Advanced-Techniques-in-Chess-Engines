@@ -137,10 +137,6 @@ def _credit_parameters() -> CreditTrainingParams:
         maximum_replay_capacity_unique_positions=100,
         replay_capacity_ramp_model_versions=10,
         retained_checkpoint_interval_steps=50,
-        evaluation_interval_optimizer_steps=50,
-        evaluation_timeout_seconds=60,
-        evaluation_maximum_attempts=2,
-        evaluation_retry_backoff_seconds=0,
     )
 
 
@@ -151,7 +147,19 @@ def _training_arguments(run_path: Path) -> TrainingArgs:
         local_batch_size=1,
         credit_training=_credit_parameters(),
     )
-    return replace(TRAINING_ARGS, save_path=str(run_path), training=training)
+    return replace(
+        TRAINING_ARGS,
+        save_path=str(run_path),
+        training=training,
+        evaluation_schedule=replace(
+            TRAINING_ARGS.evaluation_schedule,
+            interval_optimizer_steps=50,
+            full_interval_optimizer_steps=100,
+            timeout_seconds=60,
+            maximum_attempts=2,
+            retry_backoff_seconds=0,
+        ),
+    )
 
 
 def _replay_dataset(sample_count: int) -> SelfPlayDataset:

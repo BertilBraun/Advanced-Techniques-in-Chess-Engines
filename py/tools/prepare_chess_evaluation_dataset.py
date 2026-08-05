@@ -44,7 +44,7 @@ def prepare_dataset(
     configuration: RunConfiguration,
     manifest_output: Path,
 ) -> ChessEvaluationDatasetManifest:
-    configured_path = configuration.evaluation_protocol.evaluation_dataset_path
+    configured_path = configuration.evaluation.protocol.evaluation_dataset_path
     if configured_path is None:
         raise ValueError('Run configuration does not enable a fixed evaluation dataset.')
     dataset_path = SOURCE_ROOT / configured_path

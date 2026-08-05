@@ -74,10 +74,12 @@ def main() -> None:
         raise ValueError(f'Evaluation benchmark output already exists: {arguments.output_path}')
 
     configuration = load_run_configuration(arguments.run_config)
-    evaluation_protocol = configuration.evaluation_protocol.model_copy(
+    evaluation_protocol = configuration.evaluation.protocol.model_copy(
         update={'raw_results_subdirectory': str(arguments.raw_results_directory.resolve())}
     )
-    isolated_configuration = configuration.model_copy(update={'evaluation_protocol': evaluation_protocol})
+    isolated_configuration = configuration.model_copy(
+        update={'evaluation': configuration.evaluation.model_copy(update={'protocol': evaluation_protocol})}
+    )
     training_arguments = copy.deepcopy(TRAINING_ARGS)
     apply_run_configuration(training_arguments, isolated_configuration)
     training_arguments.save_path = str(arguments.model_directory.resolve())

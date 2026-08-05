@@ -20,8 +20,12 @@ def test_prepare_dataset_records_source_and_hash(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(prepare_chess_evaluation_dataset, 'ensure_eval_dataset_exists', create_dataset)
     configuration = configuration.model_copy(
         update={
-            'evaluation_protocol': configuration.evaluation_protocol.model_copy(
-                update={'evaluation_dataset_path': 'memory.hdf5'}
+            'evaluation': configuration.evaluation.model_copy(
+                update={
+                    'protocol': configuration.evaluation.protocol.model_copy(
+                        update={'evaluation_dataset_path': 'memory.hdf5'}
+                    )
+                }
             )
         }
     )

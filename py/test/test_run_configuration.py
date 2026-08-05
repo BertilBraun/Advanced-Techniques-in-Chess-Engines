@@ -8,8 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from src.experiment.run_configuration import (
-    OptimizerStepLearningRateStage,
-    PiecewiseOptimizerStepLearningRate,
+    ModelVersionLearningRateStage,
+    PiecewiseModelVersionLearningRate,
     ResolvedHardware,
     RunConfiguration,
     apply_run_configuration,
@@ -76,17 +76,53 @@ def test_run_configuration_applies_required_credit_schedule_directly() -> None:
     assert parameters.optimizer_steps_per_quantum == 500
     assert parameters.maximum_optimizer_steps == 500_000
     assert parameters.replay_ratio == 8
+    assert parameters.replay_capacity_for_model_version(0) == 200_000
+    assert parameters.replay_capacity_for_model_version(100) == 1_350_000
+    assert parameters.replay_capacity_for_model_version(200) == 2_500_000
     assert arguments.training.global_batch_size == 2_048
     assert arguments.training.local_batch_size == 512
     assert arguments.cluster.trainer_ddp_device_ids == (3, 2, 1, 0)
 
 
-def test_optimizer_step_learning_rate_uses_latest_started_stage() -> None:
-    schedule = PiecewiseOptimizerStepLearningRate(
+def test_evaluation_configuration_owns_workload_schedule_and_protocol() -> None:
+    configuration = load_run_configuration(LATEST_CONFIGURATION_PATH)
+    arguments = copy.deepcopy(TRAINING_ARGS)
+
+    apply_run_configuration(arguments, configuration)
+
+    assert configuration.evaluation.games == 100
+    assert configuration.evaluation.schedule.interval_optimizer_steps == 1_500
+    assert configuration.evaluation.protocol.opening_suite_path.endswith('main-monitoring-openings-50.tsv')
+    assert arguments.evaluation_schedule.interval_optimizer_steps == 1_500
+
+
+@pytest.mark.parametrize(
+    ('owner', 'field_name', 'value'),
+    (
+        ('workload', 'evaluation_games', 100),
+        ('credit_training', 'evaluation_timeout_seconds', 7_200),
+    ),
+)
+def test_evaluation_fields_are_rejected_outside_evaluation_configuration(
+    owner: str,
+    field_name: str,
+    value: object,
+) -> None:
+    candidate = load_run_configuration(LATEST_CONFIGURATION_PATH).model_dump()
+    target = candidate['workload'] if owner == 'workload' else candidate['workload']['credit_training']
+    target[field_name] = value
+
+    with pytest.raises(ValidationError, match=field_name):
+        RunConfiguration.model_validate(candidate)
+
+
+def test_model_version_learning_rate_uses_latest_started_stage() -> None:
+    schedule = PiecewiseModelVersionLearningRate(
         (
-            OptimizerStepLearningRateStage(start_optimizer_step=0, learning_rate=0.005),
-            OptimizerStepLearningRateStage(start_optimizer_step=60, learning_rate=0.002),
-        )
+            ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.005),
+            ModelVersionLearningRateStage(start_model_version=6, learning_rate=0.002),
+        ),
+        optimizer_steps_per_model_version=10,
     )
 
     assert schedule(59, 'adamw') == pytest.approx(0.005)
@@ -94,13 +130,13 @@ def test_optimizer_step_learning_rate_uses_latest_started_stage() -> None:
     assert pickle.loads(pickle.dumps(schedule))(60, 'adamw') == pytest.approx(0.002)
 
 
-@pytest.mark.parametrize('optimizer_steps', ((100,), (0, 100, 100), (0, 200, 100)))
-def test_credit_learning_rate_schedule_requires_zero_based_increasing_steps(
-    optimizer_steps: tuple[int, ...],
+@pytest.mark.parametrize('model_versions', ((100,), (0, 100, 100), (0, 200, 100)))
+def test_credit_learning_rate_schedule_requires_zero_based_increasing_model_versions(
+    model_versions: tuple[int, ...],
 ) -> None:
     candidate = load_run_configuration(LATEST_CONFIGURATION_PATH).model_dump()
     candidate['workload']['credit_training']['learning_rate_schedule'] = tuple(
-        {'start_optimizer_step': optimizer_step, 'learning_rate': 0.002} for optimizer_step in optimizer_steps
+        {'start_model_version': model_version, 'learning_rate': 0.002} for model_version in model_versions
     )
 
     with pytest.raises(ValidationError, match='learning-rate'):

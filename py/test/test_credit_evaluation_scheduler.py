@@ -77,10 +77,6 @@ def _arguments(
         maximum_replay_capacity_unique_positions=2_500_000,
         replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
-        evaluation_interval_optimizer_steps=1_000,
-        evaluation_timeout_seconds=60,
-        evaluation_maximum_attempts=maximum_attempts,
-        evaluation_retry_backoff_seconds=retry_backoff_seconds,
     )
     training = replace(
         TRAINING_ARGS.training,
@@ -118,6 +114,14 @@ def _arguments(
         TRAINING_ARGS,
         save_path=str(run_path),
         training=training,
+        evaluation_schedule=replace(
+            TRAINING_ARGS.evaluation_schedule,
+            interval_optimizer_steps=1_000,
+            full_interval_optimizer_steps=2_000,
+            timeout_seconds=60,
+            maximum_attempts=maximum_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+        ),
         evaluation=evaluation,
     )
 

@@ -436,7 +436,7 @@ class CommanderProcess:
         if not manifest_path.exists():
             return
         checkpoint = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-        transient_evaluation_checkpoint = optimizer_step % parameters.evaluation_interval_optimizer_steps == 0
+        transient_evaluation_checkpoint = optimizer_step % self.args.evaluation_schedule.interval_optimizer_steps == 0
         file_names = [checkpoint.model_path, checkpoint.optimizer_path]
         if not transient_evaluation_checkpoint:
             file_names.append(checkpoint.jit_model_path)

@@ -493,19 +493,19 @@ class Trainer:
     def train(
         self,
         dataloader: TrainingBatchLoader,
-        iteration: int,
+        optimizer_step: int,
     ) -> TrainingStats:
         """Train policy and the blended soft-WDL value target."""
-        base_lr: float = self.args.learning_rate(iteration, self.args.optimizer)
+        base_lr: float = self.args.learning_rate(optimizer_step, self.args.optimizer)
         if self.rank == 0:
-            log_scalar('training/learning_rate', base_lr, iteration)
-            log(f'Setting learning rate to {base_lr} for iteration {iteration}')
+            log_scalar('training/learning_rate', base_lr, optimizer_step)
+            log(f'Setting learning rate to {base_lr} at optimizer step {optimizer_step}')
 
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = base_lr
 
         warmup_steps = self.args.mcts_value_target_warmup_optimizer_steps
-        warmup_progress = 1.0 if warmup_steps == 0 else min(1.0, iteration / warmup_steps)
+        warmup_progress = 1.0 if warmup_steps == 0 else min(1.0, optimizer_step / warmup_steps)
         mcts_value_target_weight = self.args.mcts_value_loss_weight * warmup_progress
         return self._train_epoch(dataloader, mcts_value_target_weight)
 

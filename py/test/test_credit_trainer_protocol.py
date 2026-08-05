@@ -426,18 +426,10 @@ def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) 
 
 def test_transient_evaluation_checkpoint_keeps_only_jit_artifact(tmp_path: Path) -> None:
     arguments = _credit_training_arguments()
-    parameters = arguments.training.credit_training
-    assert parameters is not None
     arguments = replace(
         arguments,
         save_path=str(tmp_path),
-        training=replace(
-            arguments.training,
-            credit_training=replace(
-                parameters,
-                evaluation_interval_optimizer_steps=500,
-            ),
-        ),
+        evaluation_schedule=replace(arguments.evaluation_schedule, interval_optimizer_steps=500),
     )
     manifest = CheckpointManifest(
         iteration=10,

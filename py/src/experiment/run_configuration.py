@@ -26,6 +26,7 @@ from src.train.TrainingArgs import (
     ClusterParams,
     CreditTrainingParams,
     DirectSelfPlayParams,
+    EvaluationScheduleParams,
     OptimizerType,
     RuntimeLimits,
     TrainingArgs,
@@ -181,8 +182,8 @@ class TopologyConfiguration(FrozenModel):
         return self
 
 
-class OptimizerStepLearningRateStage(FrozenModel):
-    start_optimizer_step: int = Field(ge=0)
+class ModelVersionLearningRateStage(FrozenModel):
+    start_model_version: int = Field(ge=0)
     learning_rate: float = Field(gt=0)
 
 
@@ -220,24 +221,19 @@ class CreditTrainingConfiguration(FrozenModel):
     replay_ratio: Decimal = Field(gt=0)
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
-    replay_capacity_unique_positions: int = Field(gt=0)
+    maximum_replay_capacity_unique_positions: int = Field(gt=0)
     initial_replay_capacity_unique_positions: int = Field(gt=0)
     replay_capacity_ramp_model_versions: int = Field(gt=0)
     retained_checkpoint_interval_steps: int = Field(gt=0)
-    learning_rate_schedule: tuple[OptimizerStepLearningRateStage, ...] = Field(min_length=1)
-    evaluation_interval_optimizer_steps: int = Field(default=1_000, gt=0)
-    full_evaluation_interval_optimizer_steps: int = Field(default=2_000, gt=0)
-    evaluation_timeout_seconds: float = Field(default=2 * 60 * 60, gt=0)
-    evaluation_maximum_attempts: int = Field(default=3, gt=0)
-    evaluation_retry_backoff_seconds: float = Field(default=60, ge=0)
+    learning_rate_schedule: tuple[ModelVersionLearningRateStage, ...] = Field(min_length=1)
 
     @model_validator(mode='after')
     def validate_learning_rate_schedule(self) -> CreditTrainingConfiguration:
-        optimizer_steps = tuple(stage.start_optimizer_step for stage in self.learning_rate_schedule)
-        if optimizer_steps[0] != 0:
-            raise ValueError('Credit learning-rate schedule must start at optimizer step zero.')
-        if tuple(sorted(set(optimizer_steps))) != optimizer_steps:
-            raise ValueError('Credit learning-rate stages must have unique, increasing optimizer steps.')
+        model_versions = tuple(stage.start_model_version for stage in self.learning_rate_schedule)
+        if model_versions[0] != 0:
+            raise ValueError('Credit learning-rate schedule must start at model version zero.')
+        if tuple(sorted(set(model_versions))) != model_versions:
+            raise ValueError('Credit learning-rate stages must have unique, increasing model versions.')
         return self
 
     def to_parameters(self) -> CreditTrainingParams:
@@ -246,14 +242,9 @@ class CreditTrainingConfiguration(FrozenModel):
             optimizer_steps_per_quantum=self.optimizer_steps_per_quantum,
             maximum_optimizer_steps=self.maximum_optimizer_steps,
             initial_replay_capacity_unique_positions=self.initial_replay_capacity_unique_positions,
-            maximum_replay_capacity_unique_positions=self.replay_capacity_unique_positions,
+            maximum_replay_capacity_unique_positions=self.maximum_replay_capacity_unique_positions,
             replay_capacity_ramp_model_versions=self.replay_capacity_ramp_model_versions,
             retained_checkpoint_interval_steps=self.retained_checkpoint_interval_steps,
-            evaluation_interval_optimizer_steps=self.evaluation_interval_optimizer_steps,
-            full_evaluation_interval_optimizer_steps=self.full_evaluation_interval_optimizer_steps,
-            evaluation_timeout_seconds=self.evaluation_timeout_seconds,
-            evaluation_maximum_attempts=self.evaluation_maximum_attempts,
-            evaluation_retry_backoff_seconds=self.evaluation_retry_backoff_seconds,
         )
 
 
@@ -289,10 +280,6 @@ class WorkloadConfiguration(FrozenModel):
     replay_reanalysis_maximum_positions_per_refresh: int = Field(default=32, gt=0)
     resignation: ResignationConfiguration = ResignationConfiguration()
     random_seed: int = Field(ge=0)
-    evaluation_games: int = Field(gt=0)
-    evaluation_searches_per_turn: int = Field(gt=0)
-    teacher_evaluation_searches_per_turn: int = Field(default=600, gt=0)
-    teacher_evaluation_games: int = Field(default=16, gt=0)
 
     @model_validator(mode='after')
     def validate_workload(self) -> WorkloadConfiguration:
@@ -306,8 +293,6 @@ class WorkloadConfiguration(FrozenModel):
             raise ValueError('Initial self-play searches cannot exceed final self-play searches.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
-        if self.teacher_evaluation_games % 2 or self.teacher_evaluation_games > self.evaluation_games:
-            raise ValueError('Teacher evaluation games must be an even subset of the paired evaluation games.')
         if (self.self_play_maximum_game_plies is None) != (self.self_play_maximum_game_plies_until_model_version == 0):
             raise ValueError('Self-play maximum game plies and its model-version limit must be configured together.')
         if self.self_play_final_maximum_game_plies is not None:
@@ -379,6 +364,34 @@ class EvaluationProtocolConfiguration(FrozenModel):
         return self
 
 
+class EvaluationScheduleConfiguration(FrozenModel):
+    interval_optimizer_steps: int = Field(gt=0)
+    full_interval_optimizer_steps: int = Field(gt=0)
+    timeout_seconds: float = Field(gt=0)
+    maximum_attempts: int = Field(gt=0)
+    retry_backoff_seconds: float = Field(ge=0)
+
+    def to_parameters(self, optimizer_steps_per_quantum: int) -> EvaluationScheduleParams:
+        parameters = EvaluationScheduleParams(**self.model_dump())
+        parameters.validate_for_optimizer_quantum(optimizer_steps_per_quantum)
+        return parameters
+
+
+class EvaluationConfiguration(FrozenModel):
+    games: int = Field(gt=0)
+    searches_per_turn: int = Field(gt=0)
+    teacher_searches_per_turn: int = Field(gt=0)
+    teacher_games: int = Field(gt=0)
+    schedule: EvaluationScheduleConfiguration
+    protocol: EvaluationProtocolConfiguration
+
+    @model_validator(mode='after')
+    def validate_teacher_games(self) -> EvaluationConfiguration:
+        if self.teacher_games % 2 or self.teacher_games > self.games:
+            raise ValueError('Teacher evaluation games must be an even subset of the paired evaluation games.')
+        return self
+
+
 class EnvironmentConfiguration(FrozenModel):
     runtime_image: str
     python_version: str
@@ -403,7 +416,7 @@ class RunConfiguration(FrozenModel):
     workload: WorkloadConfiguration
     safety: SafetyConfiguration
     retention: RetentionConfiguration | None = None
-    evaluation_protocol: EvaluationProtocolConfiguration
+    evaluation: EvaluationConfiguration
     environment: EnvironmentConfiguration
 
     @model_validator(mode='after')
@@ -415,19 +428,23 @@ class RunConfiguration(FrozenModel):
                 f'Global training batch size {self.workload.training_global_batch_size} must equal '
                 f'local batch size {self.workload.training_local_batch_size} times world size {world_size}.'
             )
+        self.evaluation.schedule.to_parameters(self.workload.credit_training.optimizer_steps_per_quantum)
         if self.retention is None:
             return self
-        offsets = self.evaluation_protocol.previous_model_offsets
+        offsets = self.evaluation.protocol.previous_model_offsets
         if offsets and max(offsets) >= self.retention.recent_inference_checkpoint_count:
             raise ValueError('Recent inference-checkpoint retention must exceed every previous-model offset.')
         milestone_interval = self.retention.milestone_inference_interval
         if any(
             model_version % milestone_interval != 0
-            for model_version in self.evaluation_protocol.historical_model_versions
+            for model_version in self.evaluation.protocol.historical_model_versions
         ):
             raise ValueError('Historical model versions must align with the retained inference-checkpoint interval.')
         credit_training = self.workload.credit_training
-        if credit_training.initial_replay_capacity_unique_positions > credit_training.replay_capacity_unique_positions:
+        if (
+            credit_training.initial_replay_capacity_unique_positions
+            > credit_training.maximum_replay_capacity_unique_positions
+        ):
             raise ValueError('Initial replay capacity must not exceed maximum replay capacity.')
         return self
 
@@ -475,13 +492,15 @@ class RunManifest(FrozenModel):
 
 
 @dataclass(frozen=True)
-class PiecewiseOptimizerStepLearningRate:
-    stages: tuple[OptimizerStepLearningRateStage, ...]
+class PiecewiseModelVersionLearningRate:
+    stages: tuple[ModelVersionLearningRateStage, ...]
+    optimizer_steps_per_model_version: int
 
     def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
+        model_version = optimizer_step // self.optimizer_steps_per_model_version
         selected_stage = self.stages[0]
         for stage in self.stages[1:]:
-            if stage.start_optimizer_step > optimizer_step:
+            if stage.start_model_version > model_version:
                 break
             selected_stage = stage
         return selected_stage.learning_rate
@@ -685,9 +704,12 @@ def apply_run_configuration(
     training_args.training.global_batch_size = workload.training_global_batch_size
     training_args.training.local_batch_size = workload.training_local_batch_size
     training_args.training.credit_training = workload.credit_training.to_parameters()
+    training_args.evaluation_schedule = configuration.evaluation.schedule.to_parameters(
+        workload.credit_training.optimizer_steps_per_quantum
+    )
     if training_args.training.num_epochs != 1:
         raise ValueError('Presentation-credit training replaces epochs with exact optimizer-step quanta.')
-    training_args.training.max_buffer_samples = workload.credit_training.replay_capacity_unique_positions
+    training_args.training.max_buffer_samples = workload.credit_training.maximum_replay_capacity_unique_positions
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
     training_args.self_play.initial_num_searches_per_turn = workload.self_play_initial_searches_per_turn
     training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
@@ -746,8 +768,9 @@ def apply_run_configuration(
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
     training_args.self_play.mcts.num_parallel_searches = topology.self_play_parallel_searches
     training_args.training.num_workers = topology.dataloader_workers
-    training_args.training.learning_rate = PiecewiseOptimizerStepLearningRate(
-        workload.credit_training.learning_rate_schedule
+    training_args.training.learning_rate = PiecewiseModelVersionLearningRate(
+        workload.credit_training.learning_rate_schedule,
+        workload.credit_training.optimizer_steps_per_quantum,
     )
     training_args.cluster = ClusterParams(
         trainer_device_type=topology.trainer_device_type,
@@ -782,11 +805,12 @@ def apply_run_configuration(
     )
 
     if training_args.evaluation is not None:
-        evaluation_protocol = configuration.evaluation_protocol
-        training_args.evaluation.num_games = workload.evaluation_games
-        training_args.evaluation.num_searches_per_turn = workload.evaluation_searches_per_turn
-        training_args.evaluation.teacher_searches_per_turn = workload.teacher_evaluation_searches_per_turn
-        training_args.evaluation.teacher_evaluation_games = workload.teacher_evaluation_games
+        evaluation = configuration.evaluation
+        evaluation_protocol = evaluation.protocol
+        training_args.evaluation.num_games = evaluation.games
+        training_args.evaluation.num_searches_per_turn = evaluation.searches_per_turn
+        training_args.evaluation.teacher_searches_per_turn = evaluation.teacher_searches_per_turn
+        training_args.evaluation.teacher_evaluation_games = evaluation.teacher_games
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
         training_args.evaluation.parallel_searches = topology.evaluation_parallel_searches
         training_args.evaluation.use_inference_cache = topology.use_evaluation_inference_cache
@@ -900,17 +924,17 @@ def prepare_training_run(
     if configuration.safety.maximum_open_file_count >= open_file_soft_limit:
         raise ValueError('The open-file safety stop must be lower than the process soft limit.')
 
-    opening_suite_path = _resolve_source_path(configuration.evaluation_protocol.opening_suite_path)
+    opening_suite_path = _resolve_source_path(configuration.evaluation.protocol.opening_suite_path)
     openings = load_opening_suite(opening_suite_path)
     expected_evaluation_games = len(openings) * 2
-    if configuration.workload.evaluation_games != expected_evaluation_games:
+    if configuration.evaluation.games != expected_evaluation_games:
         raise ValueError(
             f'Configured evaluation requires {expected_evaluation_games} games for '
             f'{len(openings)} color-swapped openings, but '
-            f'{configuration.workload.evaluation_games} games were requested.'
+            f'{configuration.evaluation.games} games were requested.'
         )
 
-    configured_evaluation_dataset_path = configuration.evaluation_protocol.evaluation_dataset_path
+    configured_evaluation_dataset_path = configuration.evaluation.protocol.evaluation_dataset_path
     evaluation_dataset_path = (
         _resolve_source_path(configured_evaluation_dataset_path)
         if configured_evaluation_dataset_path is not None
@@ -919,7 +943,7 @@ def prepare_training_run(
     if evaluation_dataset_path is not None and not evaluation_dataset_path.is_file():
         raise ValueError(f'Evaluation dataset does not exist: {evaluation_dataset_path}')
 
-    configured_stockfish_binary_path = configuration.evaluation_protocol.stockfish_binary_path
+    configured_stockfish_binary_path = configuration.evaluation.protocol.stockfish_binary_path
     stockfish_binary_path = (
         Path(configured_stockfish_binary_path) if configured_stockfish_binary_path is not None else None
     )

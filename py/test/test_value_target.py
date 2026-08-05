@@ -283,7 +283,7 @@ def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
         training_parameters(mcts_value_target_warmup_optimizer_steps=100),
     )
 
-    stats = warmup_trainer.train(FixedBatchLoader(batch), iteration=50)
+    stats = warmup_trainer.train(FixedBatchLoader(batch), optimizer_step=50)
 
     assert stats.mcts_value_target_weight == pytest.approx(0.075)
 

@@ -207,6 +207,32 @@ OptimizerType = Literal['adamw', 'sgd']
 
 
 @dataclass(frozen=True)
+class EvaluationScheduleParams:
+    interval_optimizer_steps: int
+    full_interval_optimizer_steps: int
+    timeout_seconds: float
+    maximum_attempts: int
+    retry_backoff_seconds: float
+
+    def validate_for_optimizer_quantum(self, optimizer_steps_per_quantum: int) -> None:
+        if self.interval_optimizer_steps <= 0:
+            raise ValueError('Evaluation interval must be positive.')
+        if self.interval_optimizer_steps % optimizer_steps_per_quantum:
+            raise ValueError('Evaluation interval must align with training quanta.')
+        if (
+            self.full_interval_optimizer_steps < self.interval_optimizer_steps
+            or self.full_interval_optimizer_steps % self.interval_optimizer_steps
+        ):
+            raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
+        if self.timeout_seconds <= 0:
+            raise ValueError('Evaluation timeout must be positive.')
+        if self.maximum_attempts <= 0:
+            raise ValueError('Evaluation maximum attempts must be positive.')
+        if self.retry_backoff_seconds < 0:
+            raise ValueError('Evaluation retry backoff cannot be negative.')
+
+
+@dataclass(frozen=True)
 class CreditTrainingParams:
     replay_ratio: Decimal
     optimizer_steps_per_quantum: int
@@ -215,11 +241,6 @@ class CreditTrainingParams:
     maximum_replay_capacity_unique_positions: int
     replay_capacity_ramp_model_versions: int
     retained_checkpoint_interval_steps: int
-    evaluation_interval_optimizer_steps: int = 1_000
-    full_evaluation_interval_optimizer_steps: int = 2_000
-    evaluation_timeout_seconds: float = 2 * 60 * 60
-    evaluation_maximum_attempts: int = 3
-    evaluation_retry_backoff_seconds: float = 60
 
     def __post_init__(self) -> None:
         if self.replay_ratio <= 0:
@@ -240,21 +261,6 @@ class CreditTrainingParams:
             raise ValueError('Retained checkpoint interval must be positive.')
         if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Retained checkpoint interval must align with training quanta.')
-        if self.evaluation_interval_optimizer_steps <= 0:
-            raise ValueError('Evaluation interval must be positive.')
-        if self.evaluation_interval_optimizer_steps % self.optimizer_steps_per_quantum:
-            raise ValueError('Evaluation interval must align with training quanta.')
-        if (
-            self.full_evaluation_interval_optimizer_steps < self.evaluation_interval_optimizer_steps
-            or self.full_evaluation_interval_optimizer_steps % self.evaluation_interval_optimizer_steps
-        ):
-            raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
-        if self.evaluation_timeout_seconds <= 0:
-            raise ValueError('Evaluation timeout must be positive.')
-        if self.evaluation_maximum_attempts <= 0:
-            raise ValueError('Evaluation maximum attempts must be positive.')
-        if self.evaluation_retry_backoff_seconds < 0:
-            raise ValueError('Evaluation retry backoff cannot be negative.')
 
     def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
         if global_batch_size <= 0:
@@ -294,10 +300,10 @@ class TrainingParams:
     learning_rate: Callable[[int, OptimizerType], float]
     """Return the learning rate for the current optimizer step.
     Example:
-    def learning_rate(current_iteration: int) -> float:
-        if current_iteration < 10:
+    def learning_rate(optimizer_step: int) -> float:
+        if optimizer_step < 10:
             return 0.2
-        if current_iteration < 20:
+        if optimizer_step < 20:
             return 0.02
         return 0.002
     """
@@ -412,6 +418,7 @@ class TrainingArgs:
     cluster: ClusterParams
     run_limits: RuntimeLimits
     artifact_retention: ArtifactRetention
+    evaluation_schedule: EvaluationScheduleParams
     random_seed: int
     self_play_search_warmup_model_versions: int
     self_play_endgame_shortcut_fade_model_versions: int = 0

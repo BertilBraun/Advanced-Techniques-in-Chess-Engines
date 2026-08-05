@@ -101,15 +101,15 @@ class CreditEvaluationScheduler:
         run_id: int,
         args: TrainingArgs,
     ) -> None:
-        parameters = args.training.credit_training
+        parameters = args.evaluation_schedule
 
         self.run_id = run_id
         self.args = args
-        self.timeout_seconds = parameters.evaluation_timeout_seconds
-        self.maximum_attempts = parameters.evaluation_maximum_attempts
-        self.retry_backoff_seconds = parameters.evaluation_retry_backoff_seconds
-        self.evaluation_interval_optimizer_steps = parameters.evaluation_interval_optimizer_steps
-        self.full_evaluation_interval_optimizer_steps = parameters.full_evaluation_interval_optimizer_steps
+        self.timeout_seconds = parameters.timeout_seconds
+        self.maximum_attempts = parameters.maximum_attempts
+        self.retry_backoff_seconds = parameters.retry_backoff_seconds
+        self.evaluation_interval_optimizer_steps = parameters.interval_optimizer_steps
+        self.full_evaluation_interval_optimizer_steps = parameters.full_interval_optimizer_steps
         self.state_path = Path(args.save_path) / 'credit-evaluation-state.json'
         self._process: EvaluationProcessHandle | None = None
         self._state = self._load_state()
@@ -466,12 +466,13 @@ def credit_evaluation_arguments(
     completed_optimizer_steps: int,
 ) -> TrainingArgs:
     parameters = args.training.credit_training
+    schedule = args.evaluation_schedule
     evaluation = args.evaluation
     if evaluation is None:
         return args
-    if completed_optimizer_steps % parameters.evaluation_interval_optimizer_steps:
+    if completed_optimizer_steps % schedule.interval_optimizer_steps:
         raise ValueError('Credit evaluation must use a complete evaluation-checkpoint boundary.')
-    versions_per_evaluation = parameters.evaluation_interval_optimizer_steps // parameters.optimizer_steps_per_quantum
+    versions_per_evaluation = schedule.interval_optimizer_steps // parameters.optimizer_steps_per_quantum
     translated = copy.deepcopy(args)
     assert translated.evaluation is not None
     translated.evaluation.previous_model_offsets = tuple(
