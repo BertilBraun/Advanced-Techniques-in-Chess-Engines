@@ -1,9 +1,9 @@
 # Public web play
 
-The web-play deployment consists of a static Vite client in `web/` and a typed
-FastAPI service in `py/web_play/`. The API is authoritative for FEN and move
-validation. The browser sends the starting FEN and complete UCI history on every
-turn, so a request can recover after Modal has scaled the only container to zero.
+The web-play deployment consists of a static Vite client in `deployment/web/`
+and a typed FastAPI service in `py/web_play/`. The API is authoritative for FEN
+and move validation. The browser sends the starting FEN and complete UCI history
+on every turn, so a request can recover after Modal has scaled the only container to zero.
 The client stores the last authoritative game state and play settings in browser
 local storage. Reloading the same site origin restores the board immediately;
 the next turn reuses the UUID session when it still exists or reconstructs the
@@ -58,17 +58,17 @@ python -m pytest --import-mode=importlib .\test\web_play -q
 
 ## Local browser client
 
-From `web/`, copy `.env.example` to `.env.local` if the API is not on the
-documented local URL, then run:
+From `deployment/web/`, copy `.env.example` to `.env.local` if the API is not on
+the documented local URL, then run:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Use `npm run build` for the static production bundle in `web/dist/`. Host that
-directory on any static host and set `VITE_API_BASE_URL` at build time to the
-deployed Modal API URL.
+Use `npm run build` for the static production bundle in
+`deployment/web/dist/`. Host that directory on any static host and set
+`VITE_API_BASE_URL` at build time to the deployed Modal API URL.
 
 ## Modal deployment
 

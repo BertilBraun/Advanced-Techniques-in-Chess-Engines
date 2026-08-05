@@ -175,20 +175,32 @@ Detailed roadmap available in **[Future Work](documentation/future.md)**.
 
 ## **Getting Started**
 
-### **Quick Start**
+### **Remote Training Setup**
 
-The entire system can be installed and configured with a single command:
+The remote bootstrap clones a clean checkout, installs the locked training
+environment, compiles the Release C++ extension, and then runs the supplied
+command. The node image must provide Git, Python with `venv`, CMake, a C++20
+compiler, and the required NVIDIA driver and CUDA toolkit.
 
 ```bash
-curl https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/refs/heads/master/getting_started.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/setup_remote.sh \
+  | bash -s -- bash -c 'python py/train.py \
+      --run-config py/configs/chess-clean-4x4070-main.json \
+      --expected-source-revision "$ENGINE_SOURCE_REVISION" \
+      --approval-file /data/run-approval.json'
 ```
 
-This script handles dependency installation, environment configuration, and initiates the training process.
+Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`,
+`ENGINE_VIRTUAL_ENVIRONMENT`, or `ENGINE_REPOSITORY_URL` to override the
+checkout and environment locations. The approval record and run configuration
+remain explicit inputs so a bootstrap cannot silently start an unapproved
+production run.
 
 ### **Project Structure**
 
 - **`py/`**: Python components for training orchestration and experimentation
 - **`cpp/`**: High-performance C++ implementations for self-play and inference
+- **`deployment/`**: Remote setup, web client, and service deployment assets
 - **`documentation/`**: Comprehensive technical documentation and analysis
 - **`documentation/chess_results/`**: Detailed Chess performance data and sample games
 
