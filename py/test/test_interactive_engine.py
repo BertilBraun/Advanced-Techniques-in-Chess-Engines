@@ -13,19 +13,17 @@ from torch import Tensor, nn
 pytest.importorskip('AlphaZeroCpp')
 from AlphaZeroCpp import InteractiveSearchParams
 
-from src.eval.InteractiveEngine import (
-    AnalysisMode,
+from src.interactive.analysis import (
     AnalysisResult,
-    InferenceTarget,
-    InteractiveEngine,
+    CountedMctsAnalysis,
+    PolicyAnalysis,
+    TimedMctsAnalysis,
 )
+from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.interactive.engine import InteractiveEngine
 from src.settings import CurrentGame
-from src.uci.optimized import (
-    OptimizedEngineConfiguration,
-    OptimizedUciEngine,
-    OptimizedUciGame,
-)
-from src.uci.server import SearchMode, SearchRequest, UciServer
+from src.uci.engine import UciConfiguration, UciEngine, UciGame
+from src.uci.server import UciServer
 
 
 class _UniformModel(nn.Module):
@@ -65,15 +63,17 @@ def model_path(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(model_path: Path) -> InteractiveEngine:
     return InteractiveEngine(
-        model_path=str(model_path),
-        device_id=0,
-        parallel_searches=2,
-        c_param=1.0,
-        maximum_batch_size=2,
-        outstanding_batches_per_worker=2,
-        batch_collection_timeout_microseconds=50,
-        cache_capacity=10_000,
-        inference_target=InferenceTarget.CPU,
+        InteractiveEngineConfiguration(
+            model_path=str(model_path),
+            device_id=0,
+            parallel_searches=2,
+            exploration_constant=1.0,
+            maximum_batch_size=2,
+            outstanding_batches_per_worker=2,
+            batch_collection_timeout_microseconds=50,
+            cache_capacity=10_000,
+            inference_target=InferenceTarget.CPU,
+        )
     )
 
 
@@ -85,19 +85,21 @@ def invalid_engine(tmp_path: Path) -> InteractiveEngine:
     path = tmp_path / 'invalid-outcome.jit.pt'
     traced.save(str(path))
     return InteractiveEngine(
-        model_path=str(path),
-        device_id=0,
-        parallel_searches=8,
-        c_param=1.0,
-        inference_workers=2,
-        outstanding_batches_per_worker=2,
-        inference_target=InferenceTarget.CPU,
+        InteractiveEngineConfiguration(
+            model_path=str(path),
+            device_id=0,
+            parallel_searches=8,
+            exploration_constant=1.0,
+            inference_workers=2,
+            outstanding_batches_per_worker=2,
+            inference_target=InferenceTarget.CPU,
+        )
     )
 
 
 def test_policy_preserves_wdl_and_bypasses_search(engine: InteractiveEngine) -> None:
     game = engine.new_game(chess.STARTING_FEN, ())
-    result = game.analyze(AnalysisMode.POLICY)
+    result = game.analyze(PolicyAnalysis())
 
     assert result.searches == 0
     assert result.maximum_depth == 0
@@ -111,12 +113,14 @@ def test_policy_preserves_wdl_and_bypasses_search(engine: InteractiveEngine) -> 
 def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
     with pytest.raises(ValueError, match='outstanding_batches_per_worker'):
         InteractiveEngine(
-            model_path=str(model_path),
-            device_id=0,
-            parallel_searches=2,
-            c_param=1.0,
-            outstanding_batches_per_worker=3,
-            inference_target=InferenceTarget.CPU,
+            InteractiveEngineConfiguration(
+                model_path=str(model_path),
+                device_id=0,
+                parallel_searches=2,
+                exploration_constant=1.0,
+                outstanding_batches_per_worker=3,
+                inference_target=InferenceTarget.CPU,
+            )
         )
 
 
@@ -131,7 +135,7 @@ def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(
 ) -> None:
     starting_fen = chess.STARTING_FEN
     game = engine.new_game(starting_fen, ())
-    result = game.analyze(AnalysisMode.MCTS, search_limit=32)
+    result = game.analyze(CountedMctsAnalysis(searches=32))
 
     assert result.searches == 32
     assert result.candidates == tuple(
@@ -161,10 +165,10 @@ def test_human_reply_reuses_a_less_searched_descendant(
     engine: InteractiveEngine,
 ) -> None:
     game = engine.new_game(chess.STARTING_FEN, ())
-    engine_result = game.analyze(AnalysisMode.MCTS, search_limit=96)
+    engine_result = game.analyze(CountedMctsAnalysis(searches=96))
     game.apply_move(engine_result.chosen_move_uci)
 
-    reply_analysis = game.analyze(AnalysisMode.MCTS, search_limit=64)
+    reply_analysis = game.analyze(CountedMctsAnalysis(searches=64))
     searched_replies = tuple(candidate for candidate in reply_analysis.candidates if candidate.visits > 0)
     assert len(searched_replies) > 1
     human_reply = min(
@@ -176,7 +180,7 @@ def test_human_reply_reuses_a_less_searched_descendant(
     assert game.root_visits == human_reply.visits
 
     additional_searches = 16
-    game.analyze(AnalysisMode.MCTS, search_limit=additional_searches)
+    game.analyze(CountedMctsAnalysis(searches=additional_searches))
     assert game.root_visits == human_reply.visits + additional_searches
 
 
@@ -195,7 +199,7 @@ def test_history_replay_and_apply_move_reject_illegal_continuations(
 
 def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
     game = engine.new_game(chess.STARTING_FEN, ())
-    result = game.analyze(AnalysisMode.MCTS, time_limit_seconds=1)
+    result = game.analyze(TimedMctsAnalysis(seconds=1))
     metrics = engine.inference_metrics()
 
     assert result.searches > 0
@@ -213,23 +217,23 @@ def test_inference_failure_cancels_every_tree_reservation(
     game = invalid_engine.new_game(chess.STARTING_FEN, ())
 
     with pytest.raises(RuntimeError, match='WDL output'):
-        game.analyze(AnalysisMode.MCTS, search_limit=16)
+        game.analyze(CountedMctsAnalysis(searches=16))
     assert game.root_visits == 0
 
     with pytest.raises(RuntimeError, match='WDL output'):
-        game.analyze(AnalysisMode.MCTS, search_limit=16)
+        game.analyze(CountedMctsAnalysis(searches=16))
     assert game.root_visits == 0
 
 
-def test_optimized_uci_search_observes_stop_between_native_slices(
+def test_uci_search_observes_stop_between_native_slices(
     engine: InteractiveEngine,
 ) -> None:
-    game = OptimizedUciGame(engine.new_game(chess.STARTING_FEN, ()), search_slice_seconds=1)
+    game = UciGame(engine.new_game(chess.STARTING_FEN, ()), UciConfiguration(search_slice_seconds=1))
     stop_event = Event()
     results: list[AnalysisResult] = []
 
     def analyze() -> None:
-        results.append(game.analyze(SearchRequest(SearchMode.MCTS, 3, stop_event)))
+        results.append(game.analyze(TimedMctsAnalysis(seconds=3), stop_event))
 
     started = time.monotonic()
     search_thread = Thread(target=analyze)
@@ -244,19 +248,21 @@ def test_optimized_uci_search_observes_stop_between_native_slices(
     assert chess.Move.from_uci(results[0].chosen_move_uci) in chess.Board().legal_moves
 
 
-def test_optimized_uci_server_returns_legal_bestmove(model_path: Path) -> None:
-    engine = OptimizedUciEngine(
-        OptimizedEngineConfiguration(
-            model_path=str(model_path),
-            device_id=0,
-            parallel_searches=2,
-            exploration_constant=1.0,
-            inference_workers=2,
-            outstanding_batches_per_worker=2,
-            maximum_batch_size=2,
-            search_slice_seconds=1,
-            inference_target=InferenceTarget.CPU,
-        )
+def test_uci_server_returns_legal_bestmove(model_path: Path) -> None:
+    engine = UciEngine(
+        InteractiveEngine(
+            InteractiveEngineConfiguration(
+                model_path=str(model_path),
+                device_id=0,
+                parallel_searches=2,
+                exploration_constant=1.0,
+                inference_workers=2,
+                outstanding_batches_per_worker=2,
+                maximum_batch_size=2,
+                inference_target=InferenceTarget.CPU,
+            )
+        ),
+        UciConfiguration(search_slice_seconds=1),
     )
     output = io.StringIO()
     server = UciServer(engine, output, io.StringIO())

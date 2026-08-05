@@ -1,66 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 
+import chess
 from AlphaZeroCpp import (
-    AnalysisMode as NativeAnalysisMode,
+    AnalysisMode,
     InferenceClientParams,
     InferenceDevice,
-    InteractiveEngine as NativeInteractiveEngine,
-    InteractiveGame as NativeInteractiveGame,
+    InteractiveEngine as BoundInteractiveEngine,
+    InteractiveGame as BoundInteractiveGame,
     InteractiveSearchParams,
 )
-
-
-class AnalysisMode(str, Enum):
-    POLICY = 'policy'
-    MCTS = 'mcts'
-
-
-class InferenceTarget(str, Enum):
-    AUTO = 'auto'
-    CPU = 'cpu'
-    CUDA = 'cuda'
-
-
-@dataclass(frozen=True)
-class OutcomePrediction:
-    """Network W/D/L probabilities from the side-to-move perspective."""
-
-    win: float
-    draw: float
-    loss: float
-
-
-@dataclass(frozen=True)
-class CandidateAnalysis:
-    """A candidate value is from the root side-to-move perspective."""
-
-    move_uci: str
-    policy_prior: float
-    visits: int
-    visit_share: float
-    mean_value: float | None
-
-
-@dataclass(frozen=True)
-class AnalysisResult:
-    """Interactive analysis ordered by final preference.
-
-    MCTS chooses maximum visits, breaking ties by higher prior and then ascending UCI.
-    ``value`` and candidate means are from the root side-to-move perspective.
-    ``outcome`` is the root network W/D/L evaluation, not a conversion of search value.
-    """
-
-    chosen_move_uci: str
-    value: float
-    outcome: OutcomePrediction | None
-    candidates: tuple[CandidateAnalysis, ...]
-    searches: int
-    maximum_depth: int
-    elapsed_milliseconds: int
-    principal_variation: tuple[str, ...]
+from src.interactive.analysis import (
+    AnalysisRequest,
+    AnalysisResult,
+    CandidateAnalysis,
+    CountedMctsAnalysis,
+    OutcomePrediction,
+    PolicyAnalysis,
+    TimedMctsAnalysis,
+)
+from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 
 
 @dataclass(frozen=True)
@@ -81,48 +41,36 @@ class InferenceMetrics:
 
 
 class InteractiveEngine:
-    def __init__(
-        self,
-        model_path: str,
-        device_id: int,
-        parallel_searches: int,
-        c_param: float,
-        inference_workers: int = 2,
-        outstanding_batches_per_worker: int = 2,
-        maximum_batch_size: int | None = None,
-        batch_collection_timeout_microseconds: int = 500,
-        cache_capacity: int = 250_000,
-        inference_target: InferenceTarget = InferenceTarget.AUTO,
-    ) -> None:
+    def __init__(self, configuration: InteractiveEngineConfiguration) -> None:
         target_mapping = {
             InferenceTarget.AUTO: InferenceDevice.AUTO,
             InferenceTarget.CPU: InferenceDevice.CPU,
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
-        resolved_batch_size = parallel_searches if maximum_batch_size is None else maximum_batch_size
+        batch_size = configuration.resolved_batch_size
         client_parameters = InferenceClientParams(
-            device_id=device_id,
-            currentModelPath=model_path,
-            maxBatchSize=resolved_batch_size,
-            microsecondsTimeoutInferenceThread=batch_collection_timeout_microseconds,
-            cacheCapacity=cache_capacity,
-            device=target_mapping[inference_target],
+            device_id=configuration.device_id,
+            currentModelPath=configuration.model_path,
+            maxBatchSize=batch_size,
+            microsecondsTimeoutInferenceThread=configuration.batch_collection_timeout_microseconds,
+            cacheCapacity=configuration.cache_capacity,
+            device=target_mapping[configuration.inference_target],
         )
-        self._native = NativeInteractiveEngine(
+        self._bound_engine = BoundInteractiveEngine(
             client_parameters,
             InteractiveSearchParams(
-                exploration_constant=c_param,
-                inference_workers=inference_workers,
-                inference_batch_size=resolved_batch_size,
-                outstanding_batches_per_worker=outstanding_batches_per_worker,
+                exploration_constant=configuration.exploration_constant,
+                inference_workers=configuration.inference_workers,
+                inference_batch_size=batch_size,
+                outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
             ),
         )
 
     def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame:
-        return InteractiveGame(self._native.new_game(starting_fen, moves_uci))
+        return InteractiveGame(self._bound_engine.new_game(starting_fen, moves_uci))
 
     def inference_metrics(self) -> InferenceMetrics:
-        statistics = self._native.get_inference_statistics()
+        statistics = self._bound_engine.get_inference_statistics()
         return InferenceMetrics(
             evaluations=statistics.evaluations,
             cache_hits=statistics.cacheHits,
@@ -141,36 +89,45 @@ class InteractiveEngine:
 
 
 class InteractiveGame:
-    def __init__(self, native_game: NativeInteractiveGame) -> None:
-        self._native = native_game
+    def __init__(self, bound_game: BoundInteractiveGame) -> None:
+        self._bound_game = bound_game
 
     @property
     def fen(self) -> str:
-        return self._native.fen
+        return self._bound_game.fen
 
     @property
     def starting_fen(self) -> str:
-        return self._native.starting_fen
+        return self._bound_game.starting_fen
 
     @property
     def moves_uci(self) -> tuple[str, ...]:
-        return tuple(self._native.moves_uci)
+        return tuple(self._bound_game.moves_uci)
 
     @property
     def root_visits(self) -> int:
-        return self._native.root_visits
+        return self._bound_game.root_visits
+
+    @property
+    def is_game_over(self) -> bool:
+        return chess.Board(self.fen).is_game_over(claim_draw=True)
+
+    @property
+    def result(self) -> str | None:
+        board = chess.Board(self.fen)
+        return board.result(claim_draw=True) if board.is_game_over(claim_draw=True) else None
 
     def apply_move(self, move_uci: str) -> None:
-        self._native.apply_move(move_uci)
+        self._bound_game.apply_move(move_uci)
 
-    def analyze(
-        self,
-        mode: AnalysisMode,
-        time_limit_seconds: int | None = None,
-        search_limit: int | None = None,
-    ) -> AnalysisResult:
-        native_mode = NativeAnalysisMode.POLICY if mode is AnalysisMode.POLICY else NativeAnalysisMode.MCTS
-        result = self._native.analyze(native_mode, time_limit_seconds, search_limit)
+    def analyze(self, request: AnalysisRequest) -> AnalysisResult:
+        match request:
+            case PolicyAnalysis():
+                result = self._bound_game.analyze(AnalysisMode.POLICY, None, None)
+            case TimedMctsAnalysis(seconds=seconds):
+                result = self._bound_game.analyze(AnalysisMode.MCTS, seconds, None)
+            case CountedMctsAnalysis(searches=searches):
+                result = self._bound_game.analyze(AnalysisMode.MCTS, None, searches)
         outcome = (
             None
             if result.outcome is None

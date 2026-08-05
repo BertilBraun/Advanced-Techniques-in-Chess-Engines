@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from src.eval.Bot import Bot
-from src.eval.InteractiveEngine import AnalysisMode, InteractiveEngine, InteractiveGame
 from src.eval.LegalMoveSelection import select_legal_analysis_move
+from src.interactive.analysis import PolicyAnalysis, TimedMctsAnalysis
+from src.interactive.configuration import InteractiveEngineConfiguration
+from src.interactive.engine import InteractiveEngine, InteractiveGame
 from src.settings import CurrentBoard, CurrentGameMove, PLAY_C_PARAM
 from src.util.log import log
 
@@ -19,12 +21,14 @@ class AlphaZeroBot(Bot):
         if not network_eval_only and not 1.0 <= max_time_to_think < 31.0:
             raise ValueError('MCTS max_time_to_think must be between 1 and 30 seconds')
         self.engine = InteractiveEngine(
-            model_path=current_model_path,
-            device_id=device_id,
-            parallel_searches=64,
-            c_param=PLAY_C_PARAM,
-            inference_workers=2,
-            outstanding_batches_per_worker=2,
+            InteractiveEngineConfiguration(
+                model_path=current_model_path,
+                device_id=device_id,
+                parallel_searches=64,
+                exploration_constant=PLAY_C_PARAM,
+                inference_workers=2,
+                outstanding_batches_per_worker=2,
+            )
         )
         self.network_eval_only = network_eval_only
         self.time_limit_seconds = int(max_time_to_think)
@@ -51,9 +55,8 @@ class AlphaZeroBot(Bot):
 
     def think(self, board: CurrentBoard) -> CurrentGameMove:
         game = self._synchronize_game(board)
-        mode = AnalysisMode.POLICY if self.network_eval_only else AnalysisMode.MCTS
-        time_limit_seconds = None if self.network_eval_only else self.time_limit_seconds
-        result = game.analyze(mode=mode, time_limit_seconds=time_limit_seconds)
+        request = PolicyAnalysis() if self.network_eval_only else TimedMctsAnalysis(seconds=self.time_limit_seconds)
+        result = game.analyze(request)
         ordered_candidates_uci = tuple(candidate.move_uci for candidate in result.candidates)
         selection = select_legal_analysis_move(
             board.board,
@@ -62,7 +65,7 @@ class AlphaZeroBot(Bot):
         )
         game.apply_move(selection.move.uci())
         log('---------------------- Alpha Zero Best Move ----------------------')
-        log('Mode:', mode.value)
+        log('Mode:', request.type)
         log('Best move:', selection.move.uci())
         log('Root value:', result.value)
         log('Completed searches:', result.searches)

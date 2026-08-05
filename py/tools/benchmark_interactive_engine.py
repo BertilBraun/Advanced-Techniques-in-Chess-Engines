@@ -15,14 +15,14 @@ import chess
 import torch
 from pydantic import BaseModel, ConfigDict
 
-from src.eval.InteractiveEngine import (
-    AnalysisMode,
+from src.interactive.analysis import (
     AnalysisResult,
-    InferenceMetrics,
-    InferenceTarget,
-    InteractiveEngine,
-    InteractiveGame,
+    CountedMctsAnalysis,
+    PolicyAnalysis,
+    TimedMctsAnalysis,
 )
+from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.interactive.engine import InferenceMetrics, InteractiveEngine, InteractiveGame
 
 
 class RunStatus(str, Enum):
@@ -407,15 +407,17 @@ def _configurations(arguments: ParsedArguments) -> tuple[BenchmarkConfiguration,
 
 def _engine(arguments: ParsedArguments, configuration: BenchmarkConfiguration) -> InteractiveEngine:
     return InteractiveEngine(
-        model_path=str(arguments.model),
-        device_id=configuration.device_id,
-        parallel_searches=configuration.inference_batch_size,
-        c_param=arguments.c_param,
-        maximum_batch_size=configuration.inference_batch_size,
-        inference_workers=configuration.inference_workers,
-        outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
-        cache_capacity=arguments.cache_capacity,
-        inference_target=configuration.inference_target,
+        InteractiveEngineConfiguration(
+            model_path=str(arguments.model),
+            device_id=configuration.device_id,
+            parallel_searches=configuration.inference_batch_size,
+            exploration_constant=arguments.c_param,
+            maximum_batch_size=configuration.inference_batch_size,
+            inference_workers=configuration.inference_workers,
+            outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
+            cache_capacity=arguments.cache_capacity,
+            inference_target=configuration.inference_target,
+        )
     )
 
 
@@ -435,13 +437,13 @@ def run_configuration(
     game: InteractiveGame | None = None
     try:
         engine = _engine(arguments, configuration)
-        engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(AnalysisMode.POLICY)
+        engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(PolicyAnalysis())
         game = engine.new_game(arguments.starting_fen, arguments.moves_uci)
         root_visits_before = game.root_visits
         result = (
-            game.analyze(AnalysisMode.MCTS, time_limit_seconds=configuration.budget)
+            game.analyze(TimedMctsAnalysis(seconds=configuration.budget))
             if configuration.workload is WorkloadKind.TIMED
-            else game.analyze(AnalysisMode.MCTS, search_limit=configuration.budget)
+            else game.analyze(CountedMctsAnalysis(searches=configuration.budget))
         )
         peak_cuda_memory_mib = (
             torch.cuda.max_memory_reserved(configuration.device_id) / (1024 * 1024)
@@ -494,7 +496,7 @@ def main() -> None:
     )
     reference_engine = _engine(arguments, reference_configuration)
     reference = reference_engine.new_game(arguments.starting_fen, arguments.moves_uci).analyze(
-        AnalysisMode.MCTS, search_limit=arguments.reference_searches
+        CountedMctsAnalysis(searches=arguments.reference_searches)
     )
     del reference_engine
     gc.collect()

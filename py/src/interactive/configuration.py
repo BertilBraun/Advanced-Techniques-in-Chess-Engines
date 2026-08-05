@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from math import isfinite
+
+
+class InferenceTarget(str, Enum):
+    AUTO = 'auto'
+    CPU = 'cpu'
+    CUDA = 'cuda'
+
+
+@dataclass(frozen=True)
+class InteractiveEngineConfiguration:
+    model_path: str
+    device_id: int = 0
+    parallel_searches: int = 64
+    exploration_constant: float = 1.0
+    inference_workers: int = 2
+    outstanding_batches_per_worker: int = 2
+    maximum_batch_size: int | None = None
+    batch_collection_timeout_microseconds: int = 500
+    cache_capacity: int = 250_000
+    inference_target: InferenceTarget = InferenceTarget.AUTO
+
+    def __post_init__(self) -> None:
+        if not self.model_path:
+            raise ValueError('model_path must not be empty.')
+        if self.parallel_searches < 1:
+            raise ValueError('parallel_searches must be positive.')
+        if not isfinite(self.exploration_constant) or self.exploration_constant < 0:
+            raise ValueError('exploration_constant must be finite and non-negative.')
+        if self.inference_workers < 1:
+            raise ValueError('inference_workers must be positive.')
+        if not 1 <= self.outstanding_batches_per_worker <= 2:
+            raise ValueError('outstanding_batches_per_worker must be in [1, 2].')
+        if self.maximum_batch_size is not None and self.maximum_batch_size < 1:
+            raise ValueError('maximum_batch_size must be positive when supplied.')
+        if self.batch_collection_timeout_microseconds < 0:
+            raise ValueError('batch_collection_timeout_microseconds must not be negative.')
+        if self.cache_capacity < 0:
+            raise ValueError('cache_capacity must not be negative.')
+
+    @property
+    def resolved_batch_size(self) -> int:
+        return self.parallel_searches if self.maximum_batch_size is None else self.maximum_batch_size

@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from threading import Event
 
 import pytest
 
 from src.uci.server import (
     PositionCommand,
     SearchMode,
-    SearchRequest,
     UciServer,
     parse_move_time_seconds,
     parse_position,
     parse_search_mode,
 )
+from src.interactive.analysis import AnalysisRequest, TimedMctsAnalysis
+from src.uci.engine import UciConfiguration, UciGame
 
 
 @dataclass(frozen=True)
@@ -37,13 +39,15 @@ class FakeGame:
         self.moves_uci = list(moves_uci)
         self.result_move = result_move
         self.result_candidates_uci = (result_move,) if result_candidates_uci is None else result_candidates_uci
-        self.requests: list[SearchRequest] = []
+        self.requests: list[AnalysisRequest] = []
+        self.stop_events: list[Event] = []
 
     def apply_move(self, move_uci: str) -> None:
         self.moves_uci.append(move_uci)
 
-    def analyze(self, request: SearchRequest) -> FakeResult:
+    def analyze(self, request: AnalysisRequest, stop_event: Event) -> FakeResult:
         self.requests.append(request)
+        self.stop_events.append(stop_event)
         return FakeResult(
             self.result_move,
             tuple(FakeCandidate(move_uci) for move_uci in self.result_candidates_uci),
@@ -51,9 +55,10 @@ class FakeGame:
 
 
 class StoppableFakeGame(FakeGame):
-    def analyze(self, request: SearchRequest) -> FakeResult:
+    def analyze(self, request: AnalysisRequest, stop_event: Event) -> FakeResult:
         self.requests.append(request)
-        if not request.stop_event.wait(timeout=2):
+        self.stop_events.append(stop_event)
+        if not stop_event.wait(timeout=2):
             raise ValueError('Test search was not stopped.')
         return FakeResult(
             self.result_move,
@@ -73,6 +78,25 @@ class FakeEngine:
         )
         self.games.append(game)
         return game
+
+
+class FakeInteractiveGame:
+    def __init__(self) -> None:
+        self.requests: list[AnalysisRequest] = []
+
+    def analyze(self, request: AnalysisRequest) -> FakeResult:
+        self.requests.append(request)
+        return FakeResult('e2e4', (FakeCandidate('e2e4'),))
+
+
+def test_uci_game_slices_timed_searches() -> None:
+    game = FakeInteractiveGame()
+    uci_game = UciGame(game, UciConfiguration(search_slice_seconds=2))
+
+    result = uci_game.analyze(TimedMctsAnalysis(seconds=5), Event())
+
+    assert result.chosen_move_uci == 'e2e4'
+    assert [request.seconds for request in game.requests if isinstance(request, TimedMctsAnalysis)] == [2, 2, 1]
 
 
 def test_parse_position_validates_and_retains_complete_history() -> None:
@@ -185,5 +209,5 @@ def test_server_stop_signals_active_analysis() -> None:
     server.process('stop')
     server._stop_search(wait=True)
 
-    assert engine.games[0].requests[0].stop_event.is_set()
+    assert engine.games[0].stop_events[0].is_set()
     assert output.getvalue() == 'bestmove e2e4\n'

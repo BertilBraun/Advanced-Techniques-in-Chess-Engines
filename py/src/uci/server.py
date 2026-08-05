@@ -4,11 +4,15 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event, Lock, Thread
-from typing import Protocol, TextIO
+from typing import TYPE_CHECKING, TextIO
 
 import chess
 
 from src.eval.LegalMoveSelection import select_legal_analysis_move
+from src.interactive.analysis import AnalysisRequest, PolicyAnalysis, TimedMctsAnalysis
+
+if TYPE_CHECKING:
+    from src.uci.engine import UciEngine, UciGame
 
 ENGINE_NAME = 'AlphaZeroCpp'
 ENGINE_AUTHOR = 'AlphaZeroCpp contributors'
@@ -25,32 +29,6 @@ class SearchMode(str, Enum):
 class PositionCommand:
     starting_fen: str
     moves_uci: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class SearchRequest:
-    mode: SearchMode
-    time_limit_seconds: int
-    stop_event: Event
-
-
-class CandidateAnalysis(Protocol):
-    move_uci: str
-
-
-class AnalysisResult(Protocol):
-    chosen_move_uci: str
-    candidates: tuple[CandidateAnalysis, ...]
-
-
-class InteractiveGame(Protocol):
-    def apply_move(self, move_uci: str) -> None: ...
-
-    def analyze(self, request: SearchRequest) -> AnalysisResult: ...
-
-
-class InteractiveEngine(Protocol):
-    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame: ...
 
 
 def parse_position(command: str) -> PositionCommand:
@@ -112,7 +90,7 @@ def parse_search_mode(command: str) -> SearchMode:
 class UciServer:
     def __init__(
         self,
-        engine: InteractiveEngine,
+        engine: UciEngine,
         standard_output: TextIO = sys.stdout,
         standard_error: TextIO = sys.stderr,
     ) -> None:
@@ -122,7 +100,7 @@ class UciServer:
         self._output_lock = Lock()
         self._position = PositionCommand(chess.STARTING_FEN, ())
         self._board = chess.Board()
-        self._game: InteractiveGame | None = None
+        self._game: UciGame | None = None
         self._game_position = PositionCommand(chess.STARTING_FEN, ())
         self._search_mode = SearchMode.MCTS
         self._search_thread: Thread | None = None
@@ -202,21 +180,31 @@ class UciServer:
             self._game_position = self._position
 
         stop_event = Event()
-        request = SearchRequest(self._search_mode, time_limit_seconds, stop_event)
+        request: AnalysisRequest = (
+            PolicyAnalysis()
+            if self._search_mode is SearchMode.POLICY
+            else TimedMctsAnalysis(seconds=time_limit_seconds)
+        )
         game = self._game
         board = self._board.copy(stack=True)
         self._stop_event = stop_event
         self._search_thread = Thread(
             target=self._search,
-            args=(game, board, request),
+            args=(game, board, request, stop_event),
             name='uci-search',
             daemon=True,
         )
         self._search_thread.start()
 
-    def _search(self, game: InteractiveGame, board: chess.Board, request: SearchRequest) -> None:
+    def _search(
+        self,
+        game: UciGame,
+        board: chess.Board,
+        request: AnalysisRequest,
+        stop_event: Event,
+    ) -> None:
         try:
-            result = game.analyze(request)
+            result = game.analyze(request, stop_event)
             ordered_candidates_uci = tuple(candidate.move_uci for candidate in result.candidates)
             selection = select_legal_analysis_move(
                 board,
