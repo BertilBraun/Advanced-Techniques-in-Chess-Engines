@@ -1,4 +1,4 @@
-# AlphaZero-Clone: General Deep Reinforcement Learning for Board Games
+# AlphaZero-Clone: Deep Reinforcement Learning for Chess
 
 Play the trained chess model through the browser with the
 [public web-play API, UI, and Modal deployment guide](documentation/web_play.md).
@@ -7,13 +7,13 @@ Play the trained chess model through the browser with the
 
 ## **Project Overview**
 
-**AlphaZero-Clone** is a personal implementation of AlphaZero's deep reinforcement learning approach, designed to master board games through self-play without human knowledge. This project demonstrates that sophisticated AI techniques can achieve strong performance on modest personal budgets, successfully scaling from simple games like Tic-Tac-Toe to complex strategy games like Chess.
+**AlphaZero-Clone** is a personal implementation of AlphaZero's deep reinforcement learning approach for chess through self-play without human knowledge. This project demonstrates that sophisticated AI techniques can achieve strong performance on modest personal budgets.
 
 The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to learn optimal play through millions of self-play games. The implementation focuses on practical optimization and efficiency, achieving intermediate-level Chess play on limited computational resources.
 
 ### **Core Features**
 
-- **General Game Framework**: Extensible architecture supporting multiple board games with minimal modification
+- **Chess Training Platform**: Native chess search with Python training and experiment orchestration
 - **Self-Play Learning**: Learns optimal strategies without human knowledge or game-specific heuristics
 - **Distributed Training**: Scalable across multiple GPUs and CPU cores with asynchronous data generation
 - **Production-Ready Performance**: Optimized C++ MCTS implementation achieving ~77k searches per second during self play and 6-12k searches per second during evaluation per GPU
@@ -21,17 +21,7 @@ The system combines Monte Carlo Tree Search (MCTS) with deep neural networks to 
 
 ---
 
-## **Supported Games and Results**
-
-### **Game Progression**
-
-| Game             | Board Size   | Complexity   | Status             | Performance Notes                  |
-| ---------------- | ------------ | ------------ | ------------------ | ---------------------------------- |
-| **Tic-Tac-Toe**  | 3x3          | ~10³ states  | Solved             | Perfect play achieved              |
-| **Connect Four** | 7x6          | ~10¹³ states | Mastered           | Strong tactical understanding      |
-| **Checkers**     | 8x8          | ~10²⁰ states | Strong             | Solid positional and tactical play |
-| **Hex**          | 7x7 to 11x11 | ~10²⁵ states | Strong             | Effective on multiple board sizes  |
-| **Chess**        | 8x8          | ~10⁴⁷ states | **~2000-2100 Elo** | **Intermediate-level mastery**     |
+## **Chess Results**
 
 ### **Chess Performance Analysis**
 

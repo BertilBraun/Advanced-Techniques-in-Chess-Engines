@@ -176,17 +176,3 @@ if __name__ == '__main__':
     log()
     log('Most relevant hyperparameters:')
     log(optuna.importance.get_param_importances(study))
-
-"""After Optimizing for TicTacToe:
-
-Study statistics:
-  Number of finished trials: 88
-  Number of pruned trials: 20
-  Number of complete trials: 28
-
-Best trial (Trial: 79) with loss 0.698 (after 6 iterations):
-{'mcts_num_searches_per_turn': 100, 'mcts_dirichlet_epsilon': 0.0, 'mcts_dirichlet_alpha': 0.2, 'mcts_c_param': 1.0, 'network_num_layers': 2, 'network_hidden_size_exponent': 5, 'selfplay_temperature': 1.8, 'selfplay_num_games_per_iteration': 512, 'training_num_epochs': 4, 'training_batch_size_exponent': 8, 'training_learning_rate_initial': 0.02310216465004561, 'learning_rate_decay_rate': 0.8624339039875765, 'sampling_window_initial': 3, 'sampling_window_max': 25}
-
-Most relevant hyperparameters:
-{'mcts_dirichlet_epsilon': np.float64(0.34450795717547333), 'sampling_window_max': np.float64(0.17085732233001472), 'training_batch_size_exponent': np.float64(0.15131826914727717), 'mcts_c_param': np.float64(0.1443145208637471), 'learning_rate_decay_rate': np.float64(0.09779456325483078), 'selfplay_temperature': np.float64(0.05329892198678179), 'network_hidden_size_exponent': np.float64(0.01277041094967793), 'mcts_num_searches_per_turn': np.float64(0.009384432920882502), 'selfplay_num_games_per_iteration': np.float64(0.005003434178581438), 'sampling_window_initial': np.float64(0.004917520690605678), 'network_num_layers': np.float64(0.004213624212112882), 'training_num_epochs': np.float64(0.0016190222900145524)}
-"""

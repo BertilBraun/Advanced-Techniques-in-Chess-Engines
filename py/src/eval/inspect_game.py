@@ -1,11 +1,7 @@
 import time
 
-from src.settings import CurrentGame, CurrentGameVisuals, CURRENT_GAME
-
-if CURRENT_GAME == 'hex':
-    from src.eval.HexGUI import HexGridGameGUI as GUI
-else:
-    from src.eval.GridGUI import BaseGridGameGUI as GUI
+from src.eval.GridGUI import BaseGridGameGUI
+from src.settings import CurrentGame, CurrentGameVisuals
 
 # NOTE: Copy this move list from tensorboard
 move_list = '1:2,3,1,7,5,4,8'  # example move list
@@ -14,7 +10,7 @@ result, moves = move_list.split(':', maxsplit=1)
 moves = moves.split(',')
 
 
-def display_board(move_index: int, gui: GUI):
+def display_board(move_index: int, gui: BaseGridGameGUI) -> None:
     board = CurrentGame.get_initial_board()
     for move in moves[:move_index]:
         board.make_move(CurrentGame.decode_move(int(move), board))
@@ -23,11 +19,11 @@ def display_board(move_index: int, gui: GUI):
     gui.update_display()
 
 
-def main():
+def main() -> None:
     _, rows, cols = CurrentGame.representation_shape
     if hasattr(CurrentGame.get_initial_board(), 'board_dimensions'):
         rows, cols = CurrentGame.get_initial_board().board_dimensions  # type: ignore
-    gui = GUI(
+    gui = BaseGridGameGUI(
         rows, cols, title=f'Game Inspector: Press left and right to navigate through the game. Game Result: {result}'
     )
 

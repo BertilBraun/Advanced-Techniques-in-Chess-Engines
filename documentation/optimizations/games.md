@@ -2,11 +2,7 @@
 
 ## Symmetric Variations
 
-Most games have symmetric variations, which can be used to reduce the number of states that have to be evaluated and yield more training samples or reducing the chance of overfitting, as a game line will not always be added in the same orientation. This is especially useful for games with a high correlation between successive board states, such as Connect4, Hex or Go. The model recognizes the board line and overfits the value head to the board line, which is not desirable. Therefore, we use symmetries to permute the input board states and not add all variations of the same board state, but only a few of them. This way, the model is trained on a more diverse dataset and the training is more stable. These symmetries have to ensure, that the orientation is still preserved, i.e. in chess, each encoded board must have the current player on top.
-
-TicTacToe can use 4 rotational symmetries and 2 mirror symmetries, which gives a total of 8 symmetries. This can be used to reduce the number of states that have to be evaluated and yield more training samples.
-Connect4 can use a vertical mirror symmetry, all other symmetries are not valid, as they would change the orientation of the board.
-Chess does not have any real symmetries, as the orientation of the board is important. However, the board can be mirrored as an approximation, which up to very high levels of play is not distinguishable from the original board. This can be used to reduce the number of states that have to be evaluated and yield more training samples.
+Chess does not have exact geometric symmetries because board orientation and piece movement are significant. The board can still be mirrored as an approximation to diversify training samples.
 
 ## Chess Encoding
 

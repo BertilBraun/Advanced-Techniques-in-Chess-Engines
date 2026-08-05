@@ -57,7 +57,7 @@ Avoiding overfitting to common game lines:
 
 - Reduce samples per game rather than using every state as training target
 - Prevents network from memorizing and overfitting to frequently occurring positions
-- Particularly important for games like Go and Hex where board states change gradually between moves
+- Particularly important for games where board states change gradually between moves
 
 ## 3. System Performance Optimizations
 

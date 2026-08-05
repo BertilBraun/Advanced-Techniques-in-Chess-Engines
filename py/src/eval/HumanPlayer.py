@@ -2,12 +2,8 @@ import time
 from typing import Optional, Tuple
 
 from src.eval.Bot import Bot
-from src.settings import CurrentGameMove, CurrentBoard, CurrentGame, CurrentGameVisuals, CURRENT_GAME
-
-if CURRENT_GAME == 'hex':
-    from src.eval.HexGUI import HexGridGameGUI as GUI
-else:
-    from src.eval.GridGUI import BaseGridGameGUI as GUI
+from src.eval.GridGUI import BaseGridGameGUI
+from src.settings import CurrentGameMove, CurrentBoard, CurrentGame, CurrentGameVisuals
 
 
 class HumanPlayer(Bot):
@@ -17,7 +13,7 @@ class HumanPlayer(Bot):
         _, rows, cols = CurrentGame.representation_shape
         if hasattr(CurrentBoard(), 'board_dimensions'):
             rows, cols = CurrentBoard().board_dimensions  # type: ignore
-        self.gui = GUI(rows, cols)
+        self.gui = BaseGridGameGUI(rows, cols)
         self.game_visuals = CurrentGameVisuals
         self.selected_cell: Optional[Tuple[int, int]] = None
 
@@ -76,12 +72,9 @@ class HumanPlayer(Bot):
         self.gui.update_display()
 
     def handle_click(self, board: CurrentBoard, cell: Tuple[int, int]) -> Optional[CurrentGameMove]:
-        # If game is one-click move (like Connect4), we try to form a move immediately
         if not self.game_visuals.is_two_click_game():
-            # Single-click logic: just try to form a move
             return self.game_visuals.try_make_move(board, None, cell)
 
-        # If two-click game (Chess/Checkers):
         if self.selected_cell is None:
             # First click: select a piece if valid
             moves_from_cell = self.game_visuals.get_moves_from_square(board, *cell)
