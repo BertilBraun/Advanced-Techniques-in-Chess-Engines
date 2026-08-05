@@ -1,0 +1,9 @@
+line-length = 120
+target-version = 'py310'
+
+[lint]
+ignore = ['F405', 'F403', 'E402']
+
+[format]
+quote-style = 'single'
+docstring-code-format = true
