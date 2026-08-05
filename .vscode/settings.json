@@ -4,5 +4,6 @@
     "files.associations": {
         "*.h": "cpp",
         "*.hpp": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "C:/Projects/Papers/projects/advanced-techniques-chess-engines/sources/main/cpp"
 }

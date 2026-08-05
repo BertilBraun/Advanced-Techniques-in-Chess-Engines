@@ -263,8 +263,9 @@ The concrete implementation follows repository naming and integer-alias rules.
 
 A Go position contains:
 
-- black stones;
-- white stones;
+- history of
+   - black stones;
+   - white stones;
 - player to move;
 - ko point;
 - consecutive passes;
@@ -276,11 +277,7 @@ A Go position contains:
 Positions are treated as immutable. Child construction has the logical form:
 
 ```cpp
-void makeChildPosition(
-    const GoPosition &parent,
-    Action action,
-    GoPosition &destination
-);
+GoPosition makeMove(const GoPosition &parent, Action action);
 ```
 
 No undo API is required.
@@ -309,8 +306,6 @@ batch.
 - Preserve the proven bounded node-slot arena, generations, subtree reuse, and
   recycled per-node child-vector capacity from `PreRework`.
 - Keep all legal actions in the standard PUCT baseline.
-- Do not introduce top-k or top-p edge pruning into the baseline. Candidate
-  restriction is a separately configured research feature.
 - Do not replace per-node child vectors with a central edge arena without new
   benchmark evidence.
 

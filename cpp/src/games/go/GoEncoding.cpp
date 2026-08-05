@@ -55,9 +55,9 @@ int8 GoEncoding::at(int32 plane, int32 row, int32 column) const {
 }
 
 GoEncoding canonicalEncoding(const GoState &state) {
-    const int32 historyLength = state.rules().historyLength;
+    const std::size_t historyLength = state.rules().historyLength;
     const int32 boardSize = state.boardSize();
-    const int32 planeCount = historyLength * 2 + 1;
+    const std::size_t planeCount = historyLength * 2 + 1;
     const GoEncodingShape shape = checkedEncodingShape(planeCount, boardSize);
     GoEncoding encoding{
         .planes = planeCount,
@@ -67,24 +67,24 @@ GoEncoding canonicalEncoding(const GoState &state) {
     const Stone own = state.currentPlayer() == Player::Black ? Stone::Black : Stone::White;
     const Stone opponent = own == Stone::Black ? Stone::White : Stone::Black;
     const auto &history = state.positionHistory();
-    for (int32 offset = 0; offset < historyLength; ++offset) {
-        if (static_cast<std::size_t>(offset) >= history.size()) {
+    for (std::size_t offset = 0; offset < historyLength; ++offset) {
+        if (offset >= history.size()) {
             break;
         }
-        const auto &board = history[history.size() - 1U - static_cast<std::size_t>(offset)];
+        const auto &board = history[history.size() - 1U - offset];
         for (std::size_t point = 0; point < shape.planeSize; ++point) {
             const Stone stone = board[point];
             if (stone == own) {
-                const auto plane = static_cast<std::size_t>(offset) * 2U;
+                const auto plane = offset * 2U;
                 encoding.values[plane * shape.planeSize + point] = 1;
             } else if (stone == opponent) {
-                const auto plane = static_cast<std::size_t>(offset) * 2U + 1U;
+                const auto plane = offset * 2U + 1U;
                 encoding.values[plane * shape.planeSize + point] = 1;
             }
         }
     }
     if (state.currentPlayer() == Player::Black) {
-        const auto colorPlane = static_cast<std::size_t>(planeCount - 1);
+        const auto colorPlane = planeCount - 1;
         for (std::size_t point = 0; point < shape.planeSize; ++point) {
             encoding.values[colorPlane * shape.planeSize + point] = 1;
         }
