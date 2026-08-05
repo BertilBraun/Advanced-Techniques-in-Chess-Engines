@@ -196,7 +196,6 @@ class SelfPlayProcess:
             self.self_play.refresh_model(
                 model_version,
                 Path(self.args.save_path) / publication.jit_model.path,
-                discard_roots=True,
             )
             if self.node_id == 0:
                 self._reanalyse_recent_replay(model_version)
@@ -215,7 +214,6 @@ class SelfPlayProcess:
             self.self_play.refresh_model(
                 model_version,
                 model_save_path(model_version, self.args.save_path).with_suffix('.jit.pt'),
-                discard_roots=True,
             )
             self.communication.send_to_id(
                 self_play_model_refreshed_message(model_version),

@@ -25,7 +25,6 @@ from src.self_play.curriculum import curriculum_progress
 from src.settings import CURRENT_GAME, CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
-from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import log_scalar
 from src.util.timing import timeit
@@ -145,8 +144,6 @@ class SelfPlayPy:
         self,
         model_version: int,
         model_path: str | PathLike[str],
-        *,
-        discard_roots: bool = False,
     ) -> None:
         if model_version < 0:
             raise ValueError('Model version must be nonnegative.')
@@ -154,8 +151,6 @@ class SelfPlayPy:
             raise ValueError('Model version must increase on every refresh.')
         if self.search_schedule_state is None:
             raise RuntimeError('Search schedule must be initialized before loading a model.')
-        if discard_roots:
-            log('Python self-play does not retain MCTS roots between searches.')
         self.client.refresh_model(model_version, model_path)
         self.model_version = model_version
         self.model_refresh_acknowledgements.append(model_version)

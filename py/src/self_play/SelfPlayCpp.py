@@ -349,8 +349,6 @@ class SelfPlayCpp:
         self,
         model_version: int,
         model_path: str | PathLike[str],
-        *,
-        discard_roots: bool = False,
     ) -> None:
         if model_version < 0:
             raise ValueError('Model version must be nonnegative.')
@@ -390,10 +388,9 @@ class SelfPlayCpp:
         self.model_version = model_version
         self.model_refresh_acknowledgements.append(model_version)
         log_scalar('inference/acknowledged_model_version', model_version)
-        if discard_roots:
-            for game in self.self_play_games:
-                if game.already_expanded_node is not None:
-                    game.already_expanded_node.reset()
+        for game in self.self_play_games:
+            if game.already_expanded_node is not None:
+                game.already_expanded_node.reset()
 
     def _set_mcts(self, iteration: int) -> None:
         self.update_search_schedule(self.search_schedule(iteration))

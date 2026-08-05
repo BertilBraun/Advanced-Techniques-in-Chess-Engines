@@ -175,7 +175,7 @@ def test_self_play_constructs_direct_inference_pipeline(monkeypatch: pytest.Monk
     assert _FakeMcts.direct_inference_params == _FakeDirectSelfPlayInferenceParams(2, 64, 1)
 
 
-def test_model_refresh_retains_self_play_state(
+def test_model_refresh_retains_game_state_and_resets_search_tree(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -205,7 +205,7 @@ def test_model_refresh_retains_self_play_state(
     assert self_play.search_schedule_state == self_play.search_schedule(0)
     assert self_play.model_version == 1
     assert self_play.model_refresh_acknowledgements == [0, 1]
-    assert events == ['refresh:1:updated.jit.pt']
+    assert events == ['refresh:1:updated.jit.pt', 'reset_root']
 
 
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -230,24 +230,3 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
 
     assert self_play.model_version == 7
     assert self_play.model_refresh_acknowledgements == [7]
-
-
-def test_diagnostic_refresh_can_discard_roots(monkeypatch: pytest.MonkeyPatch) -> None:
-    events: list[str] = []
-    self_play = object.__new__(SelfPlayCpp)
-    self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
-    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_iterations
-    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_iterations
-    self_play.iteration = 0
-    self_play.model_version = 0
-    self_play.model_refresh_acknowledgements = [0]
-    self_play.search_schedule_state = self_play.search_schedule(0)
-    root = _LifecycleRoot(events)
-    self_play.self_play_games = [SimpleNamespace(already_expanded_node=root)]
-    self_play.mcts = _LifecycleMcts([], self_play.search_schedule_state.arena_capacity)
-    monkeypatch.setattr('src.self_play.SelfPlayCpp.log_scalar', lambda *_args: None)
-
-    self_play.refresh_model(1, 'updated.jit.pt', discard_roots=True)
-
-    assert self_play.self_play_games[0].already_expanded_node is root
-    assert events == ['reset_root']
