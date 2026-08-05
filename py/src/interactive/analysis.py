@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-
-class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
+from src.util.frozen_model import FrozenModel
 
 
 class PolicyAnalysis(FrozenModel):

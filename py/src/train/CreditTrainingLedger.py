@@ -5,7 +5,9 @@ import time
 from decimal import Decimal
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from src.util.frozen_model import FrozenModel
 
 from src.train.TrainingArgs import CreditTrainingParams
 from src.util.atomic_file import write_text_atomically
@@ -22,9 +24,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-class CreditTrainingProgress(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditTrainingProgress(FrozenModel):
     schema_version: int = CREDIT_LEDGER_SCHEMA_VERSION
     credited_unique_samples: int = Field(ge=0)
     earned_position_credits: Decimal = Field(ge=0)
@@ -105,9 +105,7 @@ class CreditTrainingProgress(BaseModel):
         )
 
 
-class PreparedTrainingQuantum(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PreparedTrainingQuantum(FrozenModel):
     schema_version: int = CREDIT_LEDGER_SCHEMA_VERSION
     previous_progress: CreditTrainingProgress
     prepared_progress: CreditTrainingProgress
@@ -126,9 +124,7 @@ class PreparedTrainingQuantum(BaseModel):
         return self
 
 
-class CommittedTrainingQuantum(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CommittedTrainingQuantum(FrozenModel):
     schema_version: int = CREDIT_LEDGER_SCHEMA_VERSION
     progress: CreditTrainingProgress
     checkpoint_manifest_path: str

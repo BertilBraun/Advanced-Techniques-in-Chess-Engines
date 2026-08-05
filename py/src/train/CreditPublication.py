@@ -5,7 +5,9 @@ from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from src.util.frozen_model import FrozenModel
 
 from src.experiment.run_configuration import RunManifest, configuration_sha256
 from src.train.CreditTrainingLedger import CreditTrainingProgress
@@ -29,16 +31,12 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-class PublishedArtifact(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PublishedArtifact(FrozenModel):
     path: str = Field(min_length=1)
     sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
-class CreditPublicationManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditPublicationManifest(FrozenModel):
     schema_version: int = CREDIT_PUBLICATION_SCHEMA_VERSION
     model_version: int = Field(ge=0)
     completed_optimizer_steps: int = Field(ge=0)
@@ -71,9 +69,7 @@ class CreditPublicationManifest(BaseModel):
         return self
 
 
-class CreditPublicationPointer(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditPublicationPointer(FrozenModel):
     model_version: int = Field(ge=0)
     manifest_path: str = Field(min_length=1)
     manifest_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')

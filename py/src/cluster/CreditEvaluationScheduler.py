@@ -7,7 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from src.util.frozen_model import FrozenModel
 from torch.multiprocessing import Process
 
 from src.cluster.EvaluationProcess import EvaluationTier, run_evaluation_process
@@ -45,9 +47,7 @@ class CreditEvaluationStatus(str, Enum):
     COALESCED = 'coalesced'
 
 
-class CreditEvaluationSource(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditEvaluationSource(FrozenModel):
     model_version: int = Field(ge=0)
     completed_optimizer_steps: int = Field(ge=0)
     trained_position_presentations: int = Field(ge=0)
@@ -56,26 +56,20 @@ class CreditEvaluationSource(BaseModel):
     jit_model_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
-class PendingCreditEvaluation(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PendingCreditEvaluation(FrozenModel):
     source: CreditEvaluationSource
     next_attempt: int = Field(ge=1)
     not_before_seconds: float = Field(ge=0)
 
 
-class ActiveCreditEvaluation(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ActiveCreditEvaluation(FrozenModel):
     source: CreditEvaluationSource
     attempt: int = Field(ge=1)
     started_at_seconds: float = Field(ge=0)
     process_id: int | None
 
 
-class CreditEvaluationResult(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditEvaluationResult(FrozenModel):
     source: CreditEvaluationSource
     attempt: int = Field(ge=1)
     status: CreditEvaluationStatus
@@ -85,9 +79,7 @@ class CreditEvaluationResult(BaseModel):
     failure: str | None
 
 
-class CreditEvaluationSchedulerState(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditEvaluationSchedulerState(FrozenModel):
     schema_version: int = CREDIT_EVALUATION_SCHEMA_VERSION
     pending: PendingCreditEvaluation | None = None
     deferred: PendingCreditEvaluation | None = None

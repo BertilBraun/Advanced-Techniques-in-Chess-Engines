@@ -8,15 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import psutil
-from pydantic import BaseModel, ConfigDict
+
+from src.util.frozen_model import FrozenModel
 
 from src.experiment.cost_accounting import CostCurrency, estimated_cost
 from src.util.background_worker import BackgroundWorker
 
 
-class GpuTelemetry(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class GpuTelemetry(FrozenModel):
     index: int
     name: str
     utilization_percent: float
@@ -26,9 +25,7 @@ class GpuTelemetry(BaseModel):
     power_watts: float
 
 
-class ResourceTelemetry(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ResourceTelemetry(FrozenModel):
     timestamp_utc: datetime
     elapsed_seconds: float
     cost_currency: CostCurrency

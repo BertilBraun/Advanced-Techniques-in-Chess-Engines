@@ -3,7 +3,8 @@ from enum import Enum
 from pathlib import Path
 from time import monotonic
 
-from pydantic import BaseModel, ConfigDict
+
+from src.util.frozen_model import FrozenModel
 
 from src.experiment.cost_accounting import CostCurrency, estimated_cost
 from src.util.atomic_file import write_text_atomically
@@ -15,9 +16,7 @@ class RunOutcomeStatus(str, Enum):
     FAILED = 'failed'
 
 
-class RunOutcome(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RunOutcome(FrozenModel):
     status: RunOutcomeStatus
     reason: str | None
     completed_at_utc: datetime

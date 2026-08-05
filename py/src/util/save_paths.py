@@ -5,7 +5,8 @@ from os import PathLike
 from time import sleep
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+
+from src.util.frozen_model import FrozenModel
 
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams, OptimizerType
@@ -13,16 +14,12 @@ from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
 
 
-class ReplayFileReference(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ReplayFileReference(FrozenModel):
     path: str
     size_bytes: int
 
 
-class CheckpointManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CheckpointManifest(FrozenModel):
     iteration: int
     model_path: str
     model_sha256: str

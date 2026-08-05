@@ -6,7 +6,9 @@ from enum import Enum
 from math import log10
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from src.util.frozen_model import FrozenModel
 
 from src.util.atomic_file import write_text_atomically
 
@@ -22,25 +24,19 @@ class GameOutcome(str, Enum):
     LOSS = 'loss'
 
 
-class Opening(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class Opening(FrozenModel):
     opening_id: str = Field(min_length=1)
     fen: str = Field(min_length=1)
 
 
-class ScheduledGame(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ScheduledGame(FrozenModel):
     schedule_index: int
     opening_id: str
     fen: str
     candidate_color: PlayerColor
 
 
-class GameRecord(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class GameRecord(FrozenModel):
     schedule_index: int
     opening_id: str
     starting_fen: str
@@ -49,9 +45,7 @@ class GameRecord(BaseModel):
     moves_uci: tuple[str, ...]
 
 
-class MatchSummary(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class MatchSummary(FrozenModel):
     game_count: int
     opening_pair_count: int
     wins: int
@@ -65,16 +59,12 @@ class MatchSummary(BaseModel):
     descriptive_logistic_elo_confidence_high: float | None
 
 
-class EngineSetting(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class EngineSetting(FrozenModel):
     name: str
     value: str
 
 
-class EngineCondition(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class EngineCondition(FrozenModel):
     identifier: str
     artifact_sha256: str
     search_limit_name: str
@@ -83,9 +73,7 @@ class EngineCondition(BaseModel):
     settings: tuple[EngineSetting, ...]
 
 
-class MatchConditions(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class MatchConditions(FrozenModel):
     source_revision: str
     evaluation_source_revision: str
     opening_suite_path: str
@@ -97,9 +85,7 @@ class MatchConditions(BaseModel):
     bootstrap_samples: int
 
 
-class MatchReport(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class MatchReport(FrozenModel):
     conditions: MatchConditions
     summary: MatchSummary
     games: tuple[GameRecord, ...]

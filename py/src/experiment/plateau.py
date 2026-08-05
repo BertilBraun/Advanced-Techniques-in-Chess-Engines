@@ -1,6 +1,8 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from src.util.frozen_model import FrozenModel
 
 
 class PlateauStatus(str, Enum):
@@ -10,9 +12,7 @@ class PlateauStatus(str, Enum):
     INSUFFICIENT_EVIDENCE = 'insufficient_evidence'
 
 
-class CheckpointEvaluation(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CheckpointEvaluation(FrozenModel):
     iteration: int = Field(ge=0)
     score_vs_archive: float = Field(ge=0, le=1)
     score_confidence_low: float = Field(ge=0, le=1)
@@ -21,9 +21,7 @@ class CheckpointEvaluation(BaseModel):
     value_loss: float | None = Field(default=None, ge=0)
 
 
-class PlateauRule(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PlateauRule(FrozenModel):
     minimum_iteration: int = Field(ge=0)
     evaluation_spacing: int = Field(gt=0)
     consecutive_evaluations: int = Field(ge=3)
@@ -34,9 +32,7 @@ class PlateauRule(BaseModel):
     regression_score_confidence_high: float = Field(gt=0, lt=0.5)
 
 
-class PlateauDecision(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PlateauDecision(FrozenModel):
     status: PlateauStatus
     reason: str
     evaluated_iterations: tuple[int, ...]

@@ -14,7 +14,9 @@ from typing import Annotated, Literal
 
 import psutil
 import torch
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from src.util.frozen_model import FrozenModel
 
 from src.experiment.cost_accounting import CostCurrency
 from src.self_play.resignation import ResignationParams
@@ -52,17 +54,13 @@ class ResumeMode(str, Enum):
     RANDOM_INITIALIZATION = 'random_initialization'
 
 
-class WeightsOnlyResumeConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class WeightsOnlyResumeConfiguration(FrozenModel):
     mode: Literal[ResumeMode.WEIGHTS_ONLY]
     model_path: str
     optimizer: OptimizerType
 
 
-class RandomInitializationResumeConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RandomInitializationResumeConfiguration(FrozenModel):
     mode: Literal[ResumeMode.RANDOM_INITIALIZATION]
     optimizer: OptimizerType
 
@@ -73,9 +71,7 @@ ResumeConfiguration = Annotated[
 ]
 
 
-class BudgetConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class BudgetConfiguration(FrozenModel):
     currency: CostCurrency
     hourly_price: float = Field(gt=0)
     maximum_cost: float | None
@@ -92,9 +88,7 @@ class BudgetConfiguration(BaseModel):
         return self
 
 
-class HardwareConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class HardwareConfiguration(FrozenModel):
     provider_name: str = Field(min_length=1)
     offer_id: str = Field(min_length=1)
     gpu_model: str = Field(min_length=1)
@@ -104,9 +98,7 @@ class HardwareConfiguration(BaseModel):
     minimum_disk_gib: int = Field(gt=0)
 
 
-class TopologyConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class TopologyConfiguration(FrozenModel):
     trainer_device_type: Literal['cuda', 'cpu']
     trainer_process_group_backend: Literal['nccl', 'gloo']
     trainer_rank_zero_device_id: int = Field(ge=0)
@@ -189,16 +181,12 @@ class TopologyConfiguration(BaseModel):
         return self
 
 
-class OptimizerStepLearningRateStage(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class OptimizerStepLearningRateStage(FrozenModel):
     start_optimizer_step: int = Field(ge=0)
     learning_rate: float = Field(gt=0)
 
 
-class ResignationConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ResignationConfiguration(FrozenModel):
     audit_enabled: bool = False
     production_enabled: bool = False
     audit_game_probability: float = Field(default=0.10, ge=0.0, le=1.0)
@@ -228,9 +216,7 @@ class ResignationConfiguration(BaseModel):
         return ResignationParams(**self.model_dump())
 
 
-class CreditTrainingConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditTrainingConfiguration(FrozenModel):
     replay_ratio: Decimal = Field(gt=0)
     optimizer_steps_per_quantum: int = Field(gt=0)
     maximum_optimizer_steps: int = Field(gt=0)
@@ -271,9 +257,7 @@ class CreditTrainingConfiguration(BaseModel):
         )
 
 
-class WorkloadConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class WorkloadConfiguration(FrozenModel):
     games_per_replay_file: int = Field(gt=0)
     training_global_batch_size: int = Field(gt=0)
     training_local_batch_size: int = Field(gt=0)
@@ -345,27 +329,21 @@ class WorkloadConfiguration(BaseModel):
         return self
 
 
-class SafetyConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class SafetyConfiguration(FrozenModel):
     maximum_open_file_count: int = Field(gt=0)
     maximum_host_ram_percent: float = Field(gt=0, lt=100)
     minimum_free_disk_gib: float = Field(gt=0)
     telemetry_interval_seconds: float = Field(gt=0)
 
 
-class RetentionConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RetentionConfiguration(FrozenModel):
     checkpoint_count: int = Field(gt=0)
     replay_window_model_versions: int = Field(gt=0)
     recent_inference_checkpoint_count: int = Field(gt=0)
     milestone_inference_interval: int = Field(gt=0)
 
 
-class EvaluationProtocolConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class EvaluationProtocolConfiguration(FrozenModel):
     opening_suite_path: str
     reference_model_path: str | None
     raw_results_subdirectory: str
@@ -401,9 +379,7 @@ class EvaluationProtocolConfiguration(BaseModel):
         return self
 
 
-class EnvironmentConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class EnvironmentConfiguration(FrozenModel):
     runtime_image: str
     python_version: str
     torch_version: str
@@ -414,9 +390,7 @@ class EnvironmentConfiguration(BaseModel):
     minimum_open_file_soft_limit: int = Field(gt=0)
 
 
-class RunConfiguration(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RunConfiguration(FrozenModel):
     run_name: str = Field(min_length=1)
     tensorboard_run_directory: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*$')
     stage: TrainingStage
@@ -458,9 +432,7 @@ class RunConfiguration(BaseModel):
         return self
 
 
-class ResolvedHardware(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ResolvedHardware(FrozenModel):
     visible_gpu_names: tuple[str, ...]
     visible_gpu_count: int
     logical_cpu_count: int
@@ -468,9 +440,7 @@ class ResolvedHardware(BaseModel):
     free_disk_gib: float
 
 
-class ApprovalRecord(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ApprovalRecord(FrozenModel):
     approved_by: str = Field(min_length=1)
     approved_at_utc: datetime
     run_name: str
@@ -490,9 +460,7 @@ class ApprovalRecord(BaseModel):
         return self
 
 
-class RunManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RunManifest(FrozenModel):
     configuration: RunConfiguration
     approval: ApprovalRecord
     resolved_hardware: ResolvedHardware

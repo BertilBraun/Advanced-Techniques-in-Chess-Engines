@@ -5,7 +5,9 @@ from enum import Enum
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
+
+from src.util.frozen_model import FrozenModel
 
 from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.train.TrainingStats import TrainingStats
@@ -23,9 +25,7 @@ class CreditEvaluationTelemetryStatus(str, Enum):
     COALESCED = 'coalesced'
 
 
-class CreditTrainingTelemetry(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CreditTrainingTelemetry(FrozenModel):
     trained_position_presentations: int = Field(ge=0)
     optimizer_step: int = Field(ge=0)
     training_quantum: int = Field(ge=0)

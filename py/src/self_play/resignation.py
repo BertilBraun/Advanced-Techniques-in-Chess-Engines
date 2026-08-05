@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from filelock import FileLock
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError
+
+from src.util.frozen_model import FrozenModel
 
 from src.util.atomic_file import write_text_atomically
 
@@ -82,9 +84,7 @@ class ResignationParams:
             raise ValueError('Production resignation fade length cannot be negative.')
 
 
-class ResignationObservation(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ResignationObservation(FrozenModel):
     model_version: int = Field(ge=0)
     ply: int = Field(ge=0)
     side_to_move: Literal[-1, 1]
@@ -92,9 +92,7 @@ class ResignationObservation(BaseModel):
     best_child_value: float = Field(ge=-1.0, le=1.0)
 
 
-class CompletedResignationAudit(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CompletedResignationAudit(FrozenModel):
     game_id: str
     observations: tuple[ResignationObservation, ...]
     audit_cutoff_threshold: float | None
@@ -104,9 +102,7 @@ class CompletedResignationAudit(BaseModel):
     termination_reason: ResignationTerminationReason
 
 
-class ThresholdStatistics(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ThresholdStatistics(FrozenModel):
     threshold: float
     completed_triggers: int
     recovered_wins: int
@@ -115,9 +111,7 @@ class ThresholdStatistics(BaseModel):
     false_non_loss_upper_confidence: float
 
 
-class ResignationCalibrationState(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ResignationCalibrationState(FrozenModel):
     schema_version: int = 1
     configuration_fingerprint: str
     bootstrap_aggressiveness_complete: bool = False
@@ -138,9 +132,7 @@ class ResignationAssignment:
     governing_threshold: float | None
 
 
-class ExternalResignationSafetyApproval(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ExternalResignationSafetyApproval(FrozenModel):
     approved: bool
     approved_through_model_version: int = Field(ge=0)
     reason: str = Field(min_length=1)

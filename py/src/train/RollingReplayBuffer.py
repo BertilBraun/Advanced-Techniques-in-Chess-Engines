@@ -19,7 +19,9 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+
+from src.util.frozen_model import FrozenModel
 
 from src.Encoding import decode_board_states
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
@@ -48,9 +50,7 @@ ROLLING_REPLAY_INDEX_SCHEMA_VERSION = 3
 COMPACTION_MANIFEST_SCHEMA_VERSION = 1
 
 
-class TerminationCounts(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class TerminationCounts(FrozenModel):
     natural: int
     resignation: int
     ply_cap: int
@@ -69,9 +69,7 @@ class TerminationCounts(BaseModel):
         )
 
 
-class ReplayShardManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ReplayShardManifest(FrozenModel):
     schema_version: int
     shard_id: str
     game_count: int
@@ -99,9 +97,7 @@ class ReplayPayloadKind(str, Enum):
     COMPACTED_CONTAINER = 'compacted_container'
 
 
-class LogicalReplaySegment(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class LogicalReplaySegment(FrozenModel):
     segment_id: str
     source_manifest: ReplayShardManifest
     physical_payload_id: str
@@ -109,9 +105,7 @@ class LogicalReplaySegment(BaseModel):
     unique_sample_count: int
 
 
-class PhysicalReplayPayload(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class PhysicalReplayPayload(FrozenModel):
     payload_id: str
     kind: ReplayPayloadKind
     hdf5_file_name: str
@@ -120,9 +114,7 @@ class PhysicalReplayPayload(BaseModel):
     content_sha256: str
 
 
-class CompactionSourceRange(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class CompactionSourceRange(FrozenModel):
     segment_id: str
     source_shard_id: str
     container_offset: int
@@ -130,9 +122,7 @@ class CompactionSourceRange(BaseModel):
     source_content_sha256: str
 
 
-class ReplayCompactionManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ReplayCompactionManifest(FrozenModel):
     schema_version: int
     container_id: str
     target_unique_positions: int
@@ -148,9 +138,7 @@ class ReplayCompactionManifest(BaseModel):
     hdf5_file_name: str
 
 
-class ActiveCompactionPlan(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class ActiveCompactionPlan(FrozenModel):
     container_id: str
     source_segment_ids: tuple[str, ...]
     total_rows: int
@@ -159,9 +147,7 @@ class ActiveCompactionPlan(BaseModel):
     manifest_file_name: str
 
 
-class RollingReplayIndexState(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
+class RollingReplayIndexState(FrozenModel):
     schema_version: int
     sampler_seed: int
     credited_unique_samples: int = Field(ge=0)
