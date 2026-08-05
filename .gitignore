@@ -25,6 +25,9 @@ cpp/libtorch**/**
 
 **/.cache/**
 /cpp_py/reference
+/cpp/compile_commands.json
+/.codex-diagnostics/
+/downloaded-training-artifacts/
 
 !documentation/**
 /py/training_data/
