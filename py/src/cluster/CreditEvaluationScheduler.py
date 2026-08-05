@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import copy
-import os
 import time
-import uuid
 from dataclasses import replace
 from enum import Enum
 from pathlib import Path
@@ -21,6 +19,7 @@ from src.train.CreditPublication import (
     publication_manifest_path,
 )
 from src.train.TrainingArgs import TrainingArgs
+from src.util.atomic_file import write_text_atomically
 from src.util.log import log, warn
 
 
@@ -467,13 +466,7 @@ class CreditEvaluationScheduler:
         return CreditEvaluationSchedulerState.model_validate_json(self.state_path.read_text(encoding='utf-8'))
 
     def _persist(self) -> None:
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = self.state_path.with_name(f'.{self.state_path.name}.{uuid.uuid4().hex}.tmp')
-        with temporary_path.open('x', encoding='utf-8') as output:
-            output.write(self._state.model_dump_json(indent=2) + '\n')
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary_path, self.state_path)
+        write_text_atomically(self.state_path, self._state.model_dump_json(indent=2) + '\n')
 
 
 def credit_evaluation_arguments(

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
 from src.self_play.resignation import ResignationParams
+from src.util.atomic_file import write_text_atomically
 from src.train.TrainingArgs import (
     ArtifactRetention,
     ClusterParams,
@@ -884,17 +885,10 @@ def write_run_manifest(path: Path, manifest: RunManifest) -> RunManifest:
             if archived != existing:
                 raise ValueError(f'Run manifest history collision: {history_path}')
         else:
-            _write_text_atomically(history_path, existing_serialized + '\n')
+            write_text_atomically(history_path, existing_serialized + '\n')
 
-    _write_text_atomically(path, serialized + '\n')
+    write_text_atomically(path, serialized + '\n')
     return manifest
-
-
-def _write_text_atomically(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix(path.suffix + '.tmp')
-    temporary_path.write_text(content, encoding='utf-8')
-    temporary_path.replace(path)
 
 
 def prepare_training_run(

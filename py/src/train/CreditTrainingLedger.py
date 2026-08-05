@@ -1,28 +1,17 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import time
-import uuid
 from decimal import Decimal
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.train.TrainingArgs import CreditTrainingParams
+from src.util.atomic_file import write_text_atomically
 
 
 CREDIT_LEDGER_SCHEMA_VERSION = 1
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-    with temporary_path.open('x', encoding='utf-8') as file:
-        file.write(content)
-        file.flush()
-        os.fsync(file.fileno())
-    os.replace(temporary_path, path)
 
 
 def _sha256(path: Path) -> str:
@@ -207,7 +196,7 @@ class CreditTrainingLedger:
             checkpoint_manifest_sha256=_sha256(checkpoint_manifest_path),
             prepared_at_seconds=time.time(),
         )
-        _atomic_write(self.prepared_path, prepared.model_dump_json(indent=2) + '\n')
+        write_text_atomically(self.prepared_path, prepared.model_dump_json(indent=2) + '\n')
         return prepared
 
     def commit_prepared_quantum(self) -> CreditTrainingProgress:
@@ -223,7 +212,7 @@ class CreditTrainingLedger:
         commit_path = self._commit_path(prepared.prepared_progress.completed_training_quanta)
         if commit_path.exists():
             raise RuntimeError(f'Training quantum is already committed: {commit_path}')
-        _atomic_write(commit_path, committed.model_dump_json(indent=2) + '\n')
+        write_text_atomically(commit_path, committed.model_dump_json(indent=2) + '\n')
         self._progress = prepared.prepared_progress
         self._persist_progress()
         self.prepared_path.unlink()
@@ -301,7 +290,7 @@ class CreditTrainingLedger:
             raise ValueError('Training quantum consumes the wrong number of credits.')
 
     def _persist_progress(self) -> None:
-        _atomic_write(self.progress_path, self._progress.model_dump_json(indent=2) + '\n')
+        write_text_atomically(self.progress_path, self._progress.model_dump_json(indent=2) + '\n')
 
     def _commit_path(self, quantum: int) -> Path:
         return self.committed_directory / f'quantum_{quantum:010d}.json'

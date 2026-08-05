@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams, OptimizerType
+from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
 
 
@@ -258,9 +259,7 @@ def save_model_and_optimizer(
         replay_files=_replay_file_references(save_folder),
     )
     manifest_path = checkpoint_manifest_path(iteration, save_folder)
-    temporary_manifest_path = _temporary_path(manifest_path)
-    temporary_manifest_path.write_text(manifest.model_dump_json(indent=2) + '\n', encoding='utf-8')
-    temporary_manifest_path.replace(manifest_path)
+    write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')
 
 
 def get_latest_model_version(save_folder: str | PathLike) -> int:

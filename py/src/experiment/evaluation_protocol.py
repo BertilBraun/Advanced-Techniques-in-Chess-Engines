@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.util.atomic_file import write_text_atomically
+
 
 class PlayerColor(str, Enum):
     WHITE = 'white'
@@ -228,7 +230,4 @@ def summarize_match(
 
 
 def write_match_report(path: Path, report: MatchReport) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_name(f'.{path.name}.tmp')
-    temporary_path.write_text(report.model_dump_json(indent=2) + '\n', encoding='utf-8')
-    temporary_path.replace(path)
+    write_text_atomically(path, report.model_dump_json(indent=2) + '\n')

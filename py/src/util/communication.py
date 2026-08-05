@@ -2,10 +2,10 @@
 # for now this is via files, but in the future this could be via sockets or other means
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import time
-import uuid
+
+from src.util.atomic_file import write_text_atomically
 
 
 STOP_SELF_PLAY = 'STOP SELF PLAY'
@@ -38,12 +38,7 @@ class Communication:
     def publish_persistent_value(self, identifier: str, value: str) -> None:
         """Atomically replace a persistent command value read by many workers."""
         path = self._file_path(identifier)
-        temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-        with temporary_path.open('x', encoding='utf-8') as file:
-            file.write(value)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary_path, path)
+        write_text_atomically(path, value)
 
     def is_received(self, identifier: str) -> bool:
         """Checks if a message has been received by checking for the existence of the file."""
@@ -79,12 +74,7 @@ class Communication:
     def send_value_to_id(self, identifier: str, node_id: int, value: str) -> None:
         """Atomically send a value to one node-specific mailbox."""
         file_path = self.folder / f'{identifier}_node_{node_id}.txt'
-        temporary_path = file_path.with_name(f'.{file_path.name}.{uuid.uuid4().hex}.tmp')
-        with temporary_path.open('x', encoding='utf-8') as file:
-            file.write(value)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary_path, file_path)
+        write_text_atomically(file_path, value)
 
     def try_receive_from_id(self, identifier: str, node_id: int) -> bool:
         """Tries to receive a message from a specific node by checking for the existence of the file."""

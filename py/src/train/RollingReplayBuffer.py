@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.Encoding import decode_board_states
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
+from src.util.atomic_file import write_text_atomically
 from src.self_play.SelfPlayDataset import (
     ReplaySampleMetadata,
     SelfPlayDataset,
@@ -323,13 +324,7 @@ class _ActiveLeasePins:
 
 
 def _atomic_write_json(path: Path, payload: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-    with temporary_path.open('x', encoding='utf-8') as file:
-        file.write(payload)
-        file.flush()
-        os.fsync(file.fileno())
-    os.replace(temporary_path, path)
+    write_text_atomically(path, payload)
 
 
 def file_sha256(path: Path) -> str:

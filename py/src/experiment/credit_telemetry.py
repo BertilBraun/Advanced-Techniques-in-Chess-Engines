@@ -4,12 +4,12 @@ from decimal import Decimal
 from enum import Enum
 import os
 from pathlib import Path
-import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.train.TrainingStats import TrainingStats
+from src.util.atomic_file import write_text_atomically
 from src.util.tensorboard import log_scalar
 
 
@@ -356,11 +356,6 @@ def _repair_torn_jsonl_tail(path: Path) -> None:
         except ValueError:
             if index != len(lines) - 1:
                 raise ValueError('Credit telemetry contains corruption before its final record.')
-            temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-            temporary_path.write_text(
-                ''.join(f'{valid_line}\n' for valid_line in valid_lines),
-                encoding='utf-8',
-            )
-            os.replace(temporary_path, path)
+            write_text_atomically(path, ''.join(f'{valid_line}\n' for valid_line in valid_lines))
             return
         valid_lines.append(line)

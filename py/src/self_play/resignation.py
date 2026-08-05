@@ -14,6 +14,8 @@ from typing import Literal, Protocol
 from filelock import FileLock
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from src.util.atomic_file import write_text_atomically
+
 
 class ResignationTerminationReason(str, Enum):
     NATURAL = 'natural'
@@ -446,10 +448,7 @@ class ResignationManager:
         return state
 
     def _write_state(self, state: ResignationCalibrationState) -> None:
-        self._state_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = self._state_path.with_suffix('.json.tmp')
-        temporary_path.write_text(state.model_dump_json(indent=2) + '\n', encoding='utf-8')
-        temporary_path.replace(self._state_path)
+        write_text_atomically(self._state_path, state.model_dump_json(indent=2) + '\n')
 
     def _insert_completed_audit(self, audit: CompletedResignationAudit) -> bool:
         with closing(self._open_audit_database()) as audit_database, audit_database:

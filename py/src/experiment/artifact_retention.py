@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.train.TrainingArgs import ArtifactRetention
+from src.util.atomic_file import write_text_atomically
 from src.util.save_paths import CheckpointManifest, load_checkpoint_manifest
 
 
@@ -70,9 +71,7 @@ def _write_filtered_manifest(
         or earliest_replay_iteration <= iteration <= checkpoint_iteration
     )
     filtered_manifest = manifest.model_copy(update={'replay_files': replay_files})
-    temporary_path = manifest_path.with_name(f'.{manifest_path.name}.tmp')
-    temporary_path.write_text(filtered_manifest.model_dump_json(indent=2) + '\n', encoding='utf-8')
-    temporary_path.replace(manifest_path)
+    write_text_atomically(manifest_path, filtered_manifest.model_dump_json(indent=2) + '\n')
 
 
 def apply_artifact_retention(

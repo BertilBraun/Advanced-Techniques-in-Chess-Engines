@@ -6,6 +6,7 @@ from time import monotonic
 from pydantic import BaseModel, ConfigDict
 
 from src.experiment.cost_accounting import CostCurrency, estimated_cost
+from src.util.atomic_file import write_text_atomically
 
 
 class RunOutcomeStatus(str, Enum):
@@ -45,9 +46,7 @@ def write_run_outcome(
         estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
         latest_checkpoint_model_version=latest_checkpoint_model_version,
     )
-    temporary_path = path.with_name(f'.{path.name}.tmp')
-    temporary_path.write_text(
+    write_text_atomically(
+        path,
         outcome.model_dump_json(indent=2) + '\n',
-        encoding='utf-8',
     )
-    temporary_path.replace(path)

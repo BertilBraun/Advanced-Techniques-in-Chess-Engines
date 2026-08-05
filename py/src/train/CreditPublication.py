@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
-import uuid
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
@@ -11,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.experiment.run_configuration import RunManifest, configuration_sha256
 from src.train.CreditTrainingLedger import CreditTrainingProgress
+from src.util.atomic_file import write_text_atomically
 from src.util.save_paths import CheckpointManifest, load_checkpoint_manifest
 
 
@@ -28,16 +27,6 @@ def file_sha256(path: Path) -> str:
         while chunk := source.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-    with temporary_path.open('x', encoding='utf-8') as output:
-        output.write(content)
-        output.flush()
-        os.fsync(output.fileno())
-    os.replace(temporary_path, path)
 
 
 class PublishedArtifact(BaseModel):
@@ -142,7 +131,7 @@ def write_credit_publication_manifest(
         if existing != manifest:
             raise ValueError(f'Immutable credit publication already exists with different content: {path}')
     else:
-        _atomic_write(path, serialized)
+        write_text_atomically(path, serialized)
     validate_credit_publication_manifest(run_path, manifest)
     return CreditPublicationPointer(
         model_version=manifest.model_version,
