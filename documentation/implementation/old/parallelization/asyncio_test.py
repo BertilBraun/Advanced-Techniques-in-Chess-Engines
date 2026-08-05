@@ -54,7 +54,7 @@ def reset_times():
         )
 
     print(f'total time spent: {global_total_time:.5f}, total time: {time.time() - start_timing_time:.5f}')
-    print(f'total traced time: { global_total_time / (time.time() - start_timing_time):.2%}')
+    print(f'total traced time: {global_total_time / (time.time() - start_timing_time):.2%}')
     res()
 
 
