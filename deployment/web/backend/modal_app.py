@@ -28,7 +28,7 @@ image = (
         _REPOSITORY_ROOT / 'cpp',
         f'{_REMOTE_ROOT}/cpp',
         copy=True,
-        ignore=['build/**', 'libtorch*/**'],
+        ignore=['build*/**', 'libtorch*/**'],
     )
     .run_commands(
         f'cmake -S {_REMOTE_ROOT}/cpp -B {_REMOTE_ROOT}/cpp/build '
