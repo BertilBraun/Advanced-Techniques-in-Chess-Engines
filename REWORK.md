@@ -308,7 +308,7 @@ process group and records the resulting status.
 
 | ID | Task | Status |
 | --- | --- | --- |
-| R1 | Model-publication tree reset | pending |
+| R1 | Model-publication tree reset | awaiting_user_review |
 | R2 | Chess completed-game persistence and replay materialization | pending |
 | R3 | Chess RAM replay, batch construction, and DDP integration | pending |
 | R4 | Chess game-contract and configuration extraction | pending |
@@ -319,23 +319,45 @@ process group and records the resulting status.
 | R9 | Integrated validation and benchmark preparation | pending |
 | R10 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: plan review only.
+Current authorization: R1 awaiting user review; no later phase is authorized.
 
 ### R1 — Model-publication tree reset
 
+Implemented scope (revised 2026-08-05):
+
+- preserve the existing commander publication, worker pause/resume, model
+  notification, acknowledgement, and dead-worker recovery flow unchanged;
+- make `SelfPlayCpp.refresh_model()` always reset every retained tree after a
+  successful model load;
+- remove the optional reset flag so every model-load call site shares the same
+  invariant;
+- retain game state, replay data, search schedules, and cumulative statistics.
+
 Deliverables:
 
-- make model publication a coordinated boundary for active self-play workers;
-- reset every active self-play tree after the newly published model is loaded;
-- resume searches after workers acknowledge the new model generation;
-- add generation and reset telemetry for the publication boundary.
+- reset every retained self-play tree after a newly loaded model;
+- leave the existing model-publication and worker lifecycle protocol unchanged;
+- cover successful and failed refresh behavior deterministically.
 
 Review evidence:
 
-- deterministic tests publish a new model while workers own active trees;
-- every worker acknowledges the same model generation;
-- all post-publication searches start from fresh trees and use the new model;
-- a chess publication smoke test completes cleanly.
+- a successful C++ model refresh resets an existing chess search tree while
+  preserving the active game and other self-play state;
+- a failed model refresh preserves the previous model and tree;
+- credit and legacy refresh paths use the unconditional reset boundary;
+- existing pause, resume, publication, acknowledgement, and recovery tests
+  continue to pass.
+
+Validation:
+
+- `uv run ruff format` and `uv run ruff check --fix` passed on all changed
+  Python files;
+- `python -m pytest --import-mode=importlib
+  .\test\test_self_play_inference_client.py
+  .\test\test_self_play_process_commands.py .\test\test_self_play_pause.py
+  .\test\test_commander_training_cleanup.py
+  .\test\test_credit_trainer_protocol.py
+  .\test\test_credit_runtime_integration.py -q` passed 37 tests.
 
 ### R2 — Chess completed-game persistence and replay materialization
 
@@ -576,4 +598,5 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-05 | R1 | Decision | Keep the pre-R1 publication and worker-lifecycle protocol. Make tree reset an invariant of successful self-play model loading. | Reset to pre-R1 commit `a99c51d`; implement only the unconditional tree reset and focused tests. |
 | 2026-08-05 | R6 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
