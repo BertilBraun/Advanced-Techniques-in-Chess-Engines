@@ -1,6 +1,11 @@
 # Multi-game AlphaZero rework handoff
 
-Status: active implementation handoff
+Status: superseded clean-slate implementation handoff
+
+The active direction is now the `PreRework`-based integration described in
+`documentation/high-throughput-multigame-rework-plan.md`. This document remains
+historical context for the abandoned Go-first clean-slate path and must not be
+used as the current implementation sequence.
 
 Reference snapshot: `PreRework` / `f8cb82a`
 
