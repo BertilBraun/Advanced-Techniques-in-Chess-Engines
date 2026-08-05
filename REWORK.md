@@ -348,7 +348,7 @@ process group and records the resulting status.
 | ID | Task | Status |
 | --- | --- | --- |
 | R1 | Remove Python MCTS and obsolete games | accepted |
-| R2 | Credit-only training lifecycle and commander cleanup | pending |
+| R2 | Credit-only training lifecycle and commander cleanup | in_progress |
 | R3 | Chess completed-game persistence and replay materialization | pending |
 | R4 | Chess RAM replay, batch construction, and DDP integration | pending |
 | R5 | Chess game-contract and configuration extraction | pending |
@@ -360,7 +360,7 @@ process group and records the resulting status.
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 accepted; no further phase authorized.
+Current authorization: R1 accepted; R2 authorized and in progress. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 

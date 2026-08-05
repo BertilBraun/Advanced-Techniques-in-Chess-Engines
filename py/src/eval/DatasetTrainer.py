@@ -4,13 +4,12 @@ import torch
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.cluster.TrainerProcess import as_dataloader
 from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id, learning_rate
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.train.LegacyIterationReplayBuffer import LegacyIterationReplayBuffer
 from src.train.Trainer import Trainer
+from src.train.TrainingDataLoader import training_dataloader
 from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
 from src.util.save_paths import (
@@ -40,9 +39,9 @@ def train_model(
             optimizer='adamw',
             global_batch_size=TRAINING_ARGS.training.global_batch_size,
             local_batch_size=TRAINING_ARGS.training.local_batch_size,
-            sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
+            credit_training=TRAINING_ARGS.training.credit_training,
             num_workers=2,
         ),
     )
@@ -72,17 +71,17 @@ def main(dataset_paths: list[str]):
         log('Loading datasets...')
         test_dataset = SelfPlayDataset.load(dataset_paths.pop())
         test_dataset = test_dataset.deduplicate()
-        test_dataloader = as_dataloader(
+        test_dataloader = training_dataloader(
             test_dataset,
             batch_size=TRAINING_ARGS.training.global_batch_size,
             num_workers=1,
         )
 
-        train_dataset = LegacyIterationReplayBuffer(max_buffer_samples=4_000_000)
-        train_dataset.update(0, 1, [Path(p) for p in dataset_paths])
-        train_dataset.log_all_dataset_stats(run_id)
+        train_dataset = SelfPlayDataset()
+        for dataset_path in dataset_paths:
+            train_dataset += SelfPlayDataset.load_strict(Path(dataset_path))
         train_stats = train_dataset.stats
-        train_dataloader = as_dataloader(
+        train_dataloader = training_dataloader(
             train_dataset,
             batch_size=TRAINING_ARGS.training.global_batch_size,
             num_workers=1,

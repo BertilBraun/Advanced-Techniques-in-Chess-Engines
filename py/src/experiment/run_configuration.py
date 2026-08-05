@@ -5,7 +5,6 @@ import multiprocessing
 import os
 import subprocess
 import sys
-from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime
@@ -189,13 +188,6 @@ class TopologyConfiguration(BaseModel):
         return self
 
 
-class LearningRateStage(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
-    start_iteration: int = Field(ge=0)
-    learning_rate: float = Field(gt=0)
-
-
 class OptimizerStepLearningRateStage(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
@@ -281,17 +273,13 @@ class CreditTrainingConfiguration(BaseModel):
 class WorkloadConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    iterations: int | None = Field(default=None, gt=0)
-    games_per_iteration: int | None = Field(default=None, gt=0)
     games_per_replay_file: int = Field(gt=0)
     training_global_batch_size: int = Field(gt=0)
     training_local_batch_size: int = Field(gt=0)
-    training_sampling_window: int | None = Field(default=None, gt=0)
-    credit_training: CreditTrainingConfiguration | None = None
+    credit_training: CreditTrainingConfiguration
     self_play_searches_per_turn: int = Field(gt=0)
     self_play_initial_searches_per_turn: int | None = Field(default=None, gt=0)
     self_play_fast_searches_per_turn: int = Field(gt=0)
-    learning_rate_schedule: tuple[LearningRateStage, ...] | None = None
     self_play_search_warmup_iterations: int = Field(ge=0)
     outcome_value_loss_weight: float = Field(default=0.85, ge=0.0, le=1.0)
     mcts_value_loss_weight: float = Field(default=0.15, ge=0.0, le=1.0)
@@ -320,30 +308,10 @@ class WorkloadConfiguration(BaseModel):
     evaluation_searches_per_turn: int = Field(gt=0)
     teacher_evaluation_searches_per_turn: int = Field(default=600, gt=0)
     teacher_evaluation_games: int = Field(default=16, gt=0)
-    evaluation_every_iterations: int = Field(gt=0)
 
     @model_validator(mode='after')
-    def validate_learning_rate_schedule(self) -> WorkloadConfiguration:
-        if self.credit_training is not None:
-            if self.iterations is not None or self.games_per_iteration is not None:
-                raise ValueError('Credit-driven training does not accept iteration or games-per-iteration limits.')
-            if self.training_sampling_window is not None:
-                raise ValueError('Credit-driven training does not use an iteration sampling window.')
-            if self.learning_rate_schedule is not None:
-                raise ValueError('Credit-driven training uses its optimizer-step learning rate.')
-            self.credit_training.to_parameters()
-        else:
-            if self.iterations is None or self.games_per_iteration is None:
-                raise ValueError('Legacy iteration training requires iteration and per-iteration game limits.')
-            if not self.learning_rate_schedule:
-                raise ValueError('Legacy iteration training requires at least one learning-rate stage.')
-            start_iterations = tuple(stage.start_iteration for stage in self.learning_rate_schedule)
-            if start_iterations[0] != 0:
-                raise ValueError('The learning-rate schedule must start at iteration 0.')
-            if start_iterations != tuple(sorted(set(start_iterations))):
-                raise ValueError('Learning-rate stage iterations must be unique and strictly increasing.')
-            if start_iterations[-1] >= self.iterations:
-                raise ValueError('Learning-rate stages must start before the configured final iteration.')
+    def validate_workload(self) -> WorkloadConfiguration:
+        self.credit_training.to_parameters()
         if self.self_play_fast_searches_per_turn >= self.self_play_searches_per_turn:
             raise ValueError('Fast self-play searches must be fewer than full self-play searches.')
         if (
@@ -482,13 +450,9 @@ class RunConfiguration(BaseModel):
             iteration % milestone_interval != 0 for iteration in self.evaluation_protocol.historical_model_iterations
         ):
             raise ValueError('Historical model iterations must align with the retained inference-checkpoint interval.')
-        if self.workload.credit_training is not None:
-            credit_training = self.workload.credit_training
-            if (
-                credit_training.initial_replay_capacity_unique_positions
-                > credit_training.replay_capacity_unique_positions
-            ):
-                raise ValueError('Initial replay capacity must not exceed maximum replay capacity.')
+        credit_training = self.workload.credit_training
+        if credit_training.initial_replay_capacity_unique_positions > credit_training.replay_capacity_unique_positions:
+            raise ValueError('Initial replay capacity must not exceed maximum replay capacity.')
         return self
 
 
@@ -538,27 +502,6 @@ class RunManifest(BaseModel):
     open_file_soft_limit: int
     torch_version: str
     cuda_version: str | None
-
-
-@dataclass(frozen=True)
-class PiecewiseLearningRate:
-    stages: tuple[LearningRateStage, ...]
-
-    def __call__(self, iteration: int, _: OptimizerType) -> float:
-        selected_stage = self.stages[0]
-        for stage in self.stages[1:]:
-            if stage.start_iteration > iteration:
-                break
-            selected_stage = stage
-        return selected_stage.learning_rate
-
-
-@dataclass(frozen=True)
-class FixedSamplingWindow:
-    window_size: int
-
-    def __call__(self, _: int) -> int:
-        return self.window_size
 
 
 @dataclass(frozen=True)
@@ -758,16 +701,6 @@ def _self_play_node_ids_to_pause(
     return tuple(node_ids_to_pause)
 
 
-def _piecewise_learning_rate(
-    stages: tuple[LearningRateStage, ...],
-) -> Callable[[int, OptimizerType], float]:
-    return PiecewiseLearningRate(stages)
-
-
-def _fixed_sampling_window(window_size: int) -> Callable[[int], int]:
-    return FixedSamplingWindow(window_size)
-
-
 def apply_run_configuration(
     training_args: TrainingArgs,
     configuration: RunConfiguration,
@@ -777,36 +710,14 @@ def apply_run_configuration(
     retention = configuration.retention
     if retention is None:
         raise ValueError('Artifact retention must be configured for training.')
-    if workload.credit_training is None:
-        assert workload.iterations is not None
-        maximum_sampling_window = (
-            workload.training_sampling_window
-            if workload.training_sampling_window is not None
-            else max(training_args.training.sampling_window(iteration) for iteration in range(workload.iterations + 1))
-        )
-        if retention.replay_window_iterations < maximum_sampling_window:
-            raise ValueError(
-                f'Replay retention of {retention.replay_window_iterations} iterations is below '
-                f'the maximum training sampling window of {maximum_sampling_window}.'
-            )
-
     training_args.save_path = str(_resolve_source_path(configuration.output_path))
-    if workload.iterations is not None:
-        training_args.num_iterations = workload.iterations
-    if workload.games_per_iteration is not None:
-        training_args.num_games_per_iteration = workload.games_per_iteration
     training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
     training_args.training.global_batch_size = workload.training_global_batch_size
     training_args.training.local_batch_size = workload.training_local_batch_size
-    training_args.training.credit_training = (
-        workload.credit_training.to_parameters() if workload.credit_training is not None else None
-    )
-    if workload.credit_training is not None:
-        if training_args.training.num_epochs != 1:
-            raise ValueError('Credit-driven training replaces epochs with exact optimizer-step quanta.')
-        training_args.training.max_buffer_samples = workload.credit_training.replay_capacity_unique_positions
-    if workload.training_sampling_window is not None:
-        training_args.training.sampling_window = _fixed_sampling_window(workload.training_sampling_window)
+    training_args.training.credit_training = workload.credit_training.to_parameters()
+    if training_args.training.num_epochs != 1:
+        raise ValueError('Presentation-credit training replaces epochs with exact optimizer-step quanta.')
+    training_args.training.max_buffer_samples = workload.credit_training.replay_capacity_unique_positions
     training_args.self_play.mcts.num_searches_per_turn = workload.self_play_searches_per_turn
     training_args.self_play.initial_num_searches_per_turn = workload.self_play_initial_searches_per_turn
     training_args.self_play.mcts.fast_searches_proportion_of_full_searches = (
@@ -861,10 +772,8 @@ def apply_run_configuration(
     training_args.self_play.mcts.num_threads = topology.mcts_threads_per_process
     training_args.self_play.mcts.num_parallel_searches = topology.self_play_parallel_searches
     training_args.training.num_workers = topology.dataloader_workers
-    training_args.training.learning_rate = (
-        PiecewiseOptimizerStepLearningRate(workload.credit_training.learning_rate_schedule)
-        if workload.credit_training is not None
-        else _piecewise_learning_rate(workload.learning_rate_schedule)
+    training_args.training.learning_rate = PiecewiseOptimizerStepLearningRate(
+        workload.credit_training.learning_rate_schedule
     )
     training_args.cluster = ClusterParams(
         trainer_device_type=topology.trainer_device_type,
@@ -904,7 +813,6 @@ def apply_run_configuration(
         training_args.evaluation.num_searches_per_turn = workload.evaluation_searches_per_turn
         training_args.evaluation.teacher_searches_per_turn = workload.teacher_evaluation_searches_per_turn
         training_args.evaluation.teacher_evaluation_games = workload.teacher_evaluation_games
-        training_args.evaluation.every_n_iterations = workload.evaluation_every_iterations
         training_args.evaluation.max_concurrent_tasks = topology.max_concurrent_evaluation_tasks
         training_args.evaluation.parallel_searches = topology.evaluation_parallel_searches
         training_args.evaluation.use_inference_cache = topology.use_evaluation_inference_cache

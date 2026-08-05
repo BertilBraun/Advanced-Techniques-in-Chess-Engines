@@ -136,8 +136,7 @@
     "evaluation_games": 100,
     "evaluation_searches_per_turn": 64,
     "teacher_evaluation_searches_per_turn": 600,
-    "teacher_evaluation_games": 20,
-    "evaluation_every_iterations": 1
+    "teacher_evaluation_games": 20
   },
   "safety": {
     "maximum_open_file_count": 32768,

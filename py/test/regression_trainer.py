@@ -33,9 +33,9 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
             optimizer='adamw',
             global_batch_size=BATCH_SIZE,
             local_batch_size=BATCH_SIZE,
-            sampling_window=lambda _: 1,
             learning_rate=learning_rate,
             learning_rate_scheduler=lambda _, lr: lr,
+            credit_training=TRAINING_ARGS.training.credit_training,
             num_workers=2,
         ),
     )

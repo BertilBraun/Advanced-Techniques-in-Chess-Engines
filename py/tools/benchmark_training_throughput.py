@@ -11,7 +11,7 @@ import torch
 from torch.amp import GradScaler, autocast
 from torch.utils.data import default_collate
 
-from src.cluster.TrainerProcess import as_dataloader
+from src.train.TrainingDataLoader import training_dataloader
 from src.experiment.run_configuration import apply_run_configuration, load_run_configuration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS
@@ -100,7 +100,7 @@ def benchmark_training(
     )
     trainer = Trainer(model, optimizer, TRAINING_ARGS.training)
     scaler = GradScaler()
-    dataloader = as_dataloader(
+    dataloader = training_dataloader(
         dataset,
         TRAINING_ARGS.training.global_batch_size,
         num_workers=dataloader_workers,

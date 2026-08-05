@@ -14,7 +14,7 @@ import torch.distributed as distributed
 
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
-from src.cluster.CreditTrainerProcess import MaintainCreditReplayCommand, _maintain_replay, credit_quantum_request
+from src.cluster.TrainerProcess import MaintainReplayCommand, _maintain_replay, quantum_request
 from src.cluster.CommanderProcess import CommanderProcess, credit_training_progress_axis
 from src.cluster.TrainerProcess import available_tcp_port
 from src.settings import TRAINING_ARGS
@@ -268,7 +268,7 @@ def test_four_ranks_reconstruct_exact_disjoint_fifty_step_quantum(
         read_only=True,
     )
 
-    requests = tuple(credit_quantum_request(arguments, rank, global_step=1_250) for rank in range(WORLD_SIZE))
+    requests = tuple(quantum_request(arguments, rank, global_step=1_250) for rank in range(WORLD_SIZE))
     assert all(request.optimizer_steps == 50 for request in requests)
     assert all(request.global_sample_count == 51_200 for request in requests)
     assert all(request.local_batch_size == 256 for request in requests)
@@ -303,7 +303,7 @@ def test_replay_maintenance_skips_compaction_when_ingest_reaches_credit_threshol
     monkeypatch.setattr(distributed, 'broadcast', lambda tensor, src: tensor)
 
     response = _maintain_replay(
-        MaintainCreditReplayCommand(
+        MaintainReplayCommand(
             phase_id=7,
             replay_capacity_unique_positions=100_000,
             compact_below_credited_unique_samples=12_800,
@@ -517,7 +517,7 @@ def test_prepared_restart_publishes_and_commits_without_retraining(
 ) -> None:
     ledger = _prepared_ledger(tmp_path)
     commander = object.__new__(CommanderProcess)
-    commander.latest_completed_iteration = 0
+    commander.latest_completed_model_version = 0
     published_versions: list[int] = []
     pruned_versions: list[int] = []
 
@@ -546,4 +546,4 @@ def test_prepared_restart_publishes_and_commits_without_retraining(
     assert ledger.progress.completed_optimizer_steps == 1
     assert ledger.progress.completed_training_quanta == 1
     assert ledger.prepared_quantum is None
-    assert commander.latest_completed_iteration == 1
+    assert commander.latest_completed_model_version == 1

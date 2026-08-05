@@ -15,7 +15,6 @@ from src.self_play.SelfPlayDataset import (
     preserve_prebatched_samples,
 )
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.LegacyIterationReplayBuffer import LegacyIterationReplayBuffer
 from src.train.Trainer import prefetch_training_batches
 
 
@@ -181,57 +180,6 @@ def test_background_prefetch_preserves_batch_order_and_values() -> None:
     assert len(prefetched) == 2
     for actual_batch, expected_batch in zip(prefetched, (first_batch, second_batch)):
         assert_training_batches_equal(actual_batch, expected_batch)
-
-
-def test_rolling_buffer_vectorizes_shuffled_indices_across_files(tmp_path: Path) -> None:
-    samples = dataset()
-    first_dataset = SelfPlayDataset()
-    second_dataset = SelfPlayDataset()
-    for target, indices in ((first_dataset, (0, 1)), (second_dataset, (2, 3))):
-        target.encoded_states = [samples.encoded_states[index] for index in indices]
-        target.visit_counts = [samples.visit_counts[index] for index in indices]
-        target.value_targets = [samples.value_targets[index] for index in indices]
-        target.sample_metadata = [samples.sample_metadata[index] for index in indices]
-
-    first_path = tmp_path / 'memory_0' / 'first.hdf5'
-    second_path = tmp_path / 'memory_0' / 'second.hdf5'
-    assert first_dataset.save_to_path(first_path)
-    assert second_dataset.save_to_path(second_path)
-
-    rolling_buffer = LegacyIterationReplayBuffer(max_buffer_samples=10)
-    rolling_buffer.update(iteration=0, window_iter=1, files=[first_path, second_path])
-    shuffled_indices = [3, 0, 2, 1]
-    individual = [rolling_buffer[index] for index in shuffled_indices]
-    expected = TrainingBatch(
-        states=torch.stack([sample.state for sample in individual]),
-        policy_targets=torch.stack([sample.policy_target for sample in individual]),
-        final_outcomes=torch.stack([sample.final_outcome for sample in individual]),
-        mcts_root_values=torch.stack([sample.mcts_root_value for sample in individual]),
-        outcome_target_eligible=torch.stack([sample.outcome_target_eligible for sample in individual]),
-        material_result_scores=torch.stack([sample.material_result_score for sample in individual]),
-        material_target_eligible=torch.stack([sample.material_target_eligible for sample in individual]),
-        termination_reasons=torch.stack([sample.termination_reason for sample in individual]),
-        plies=torch.stack([sample.ply for sample in individual]),
-        current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
-        opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
-        occurrence_counts=torch.stack([sample.occurrence_count for sample in individual]),
-    )
-
-    batch = rolling_buffer.__getitems__(shuffled_indices)
-
-    assert_training_batches_equal(batch, expected)
-
-
-def test_rolling_buffer_replay_updates_are_idempotent(tmp_path: Path) -> None:
-    samples = dataset()
-    memory_path = tmp_path / 'memory_0' / 'samples.hdf5'
-    assert samples.save_to_path(memory_path)
-    rolling_buffer = LegacyIterationReplayBuffer(max_buffer_samples=10)
-
-    rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
-    rolling_buffer.update(iteration=0, window_iter=1, files=[memory_path])
-
-    assert len(rolling_buffer) == len(samples)
 
 
 def test_legacy_mixed_scalar_replay_is_rejected(tmp_path: Path) -> None:

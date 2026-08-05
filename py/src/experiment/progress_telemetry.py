@@ -8,25 +8,6 @@ from pydantic import BaseModel, ConfigDict
 from src.experiment.cost_accounting import CostCurrency, estimated_cost
 
 
-class IterationTelemetry(BaseModel):
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
-    iteration: int
-    games_at_wait_start: int
-    games_at_wait_end: int
-    games_generated_while_waiting: int
-    wait_seconds: float
-    games_per_wait_second: float
-    replay_samples_loaded: int
-    replay_games_loaded: int
-    training_seconds: float
-    elapsed_seconds: float
-    cost_currency: CostCurrency
-    estimated_cost: float
-    maximum_process_open_file_count: int
-    total_open_file_count: int
-
-
 class RunOutcomeStatus(str, Enum):
     COMPLETED = 'completed'
     STOPPED = 'stopped'
@@ -42,14 +23,7 @@ class RunOutcome(BaseModel):
     elapsed_seconds: float
     cost_currency: CostCurrency
     estimated_cost: float
-    latest_checkpoint_iteration: int
-
-
-def append_iteration_telemetry(path: Path, telemetry: IterationTelemetry) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('a', encoding='utf-8') as telemetry_file:
-        telemetry_file.write(telemetry.model_dump_json() + '\n')
-        telemetry_file.flush()
+    latest_checkpoint_model_version: int
 
 
 def write_run_outcome(
@@ -59,7 +33,7 @@ def write_run_outcome(
     started_at: float,
     cost_currency: CostCurrency,
     hourly_price: float,
-    latest_checkpoint_iteration: int,
+    latest_checkpoint_model_version: int,
 ) -> None:
     elapsed_seconds = monotonic() - started_at
     outcome = RunOutcome(
@@ -69,7 +43,7 @@ def write_run_outcome(
         elapsed_seconds=elapsed_seconds,
         cost_currency=cost_currency,
         estimated_cost=estimated_cost(hourly_price, elapsed_seconds),
-        latest_checkpoint_iteration=latest_checkpoint_iteration,
+        latest_checkpoint_model_version=latest_checkpoint_model_version,
     )
     temporary_path = path.with_name(f'.{path.name}.tmp')
     temporary_path.write_text(

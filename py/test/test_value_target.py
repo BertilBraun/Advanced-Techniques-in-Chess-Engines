@@ -18,6 +18,7 @@ from src.self_play.value_target import (
     TerminationReason,
     outcome_from_sample_perspective,
 )
+from src.settings import TRAINING_ARGS
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 from src.value import scalar_to_wdl
@@ -60,9 +61,9 @@ def training_parameters(
         global_batch_size=4,
         local_batch_size=4,
         optimizer='adamw',
-        sampling_window=lambda _: 1,
         learning_rate=lambda _iteration, _optimizer: 0.0,
         learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+        credit_training=TRAINING_ARGS.training.credit_training,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
         mcts_value_loss_scale=1.0,

@@ -8,11 +8,10 @@ from torch.multiprocessing import Process
 from pathlib import Path
 from time import monotonic
 
-from src.cluster.GatingProcess import GatingProcess
-from src.cluster.CreditTrainerProcess import CreditQuantumResult, CreditTrainerProcess
 from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.train.TrainingArgs import TrainingArgs
+from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
+from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -22,19 +21,15 @@ from src.util.communication import (
     resume_self_play_workers,
     self_play_model_refreshed_message,
 )
-from src.util.exceptions import log_exceptions
 from src.util.log import log, warn
 from src.util.save_paths import (
     CheckpointManifest,
     checkpoint_manifest_path,
-    get_latest_model_iteration,
     load_checkpoint_manifest,
     load_model_and_optimizer,
     save_model_and_optimizer,
 )
-from src.cluster.EvaluationProcess import run_evaluation_process
 from src.cluster.SelfPlayProcess import run_self_play_process
-from src.cluster.TrainerProcess import TrainerProcess, number_of_games_in_iteration
 from src.train.CreditTrainingLedger import (
     CreditTrainingLedger,
     CreditTrainingProgress,
@@ -52,9 +47,7 @@ from src.experiment.credit_telemetry import (
     load_last_credit_training_telemetry,
 )
 from src.util.tensorboard import TensorboardWriter
-from src.util.timing import reset_times
 from src.experiment.resource_telemetry import process_tree_open_file_counts
-from src.experiment.progress_telemetry import IterationTelemetry, append_iteration_telemetry
 from src.experiment.cost_accounting import estimated_cost
 
 
@@ -69,21 +62,42 @@ def credit_training_progress_axis(
 
 
 @dataclass(frozen=True)
-class CreditPublicationResult:
+class PublicationResult:
     manifest: CreditPublicationManifest
     publication_seconds: float
     acknowledgement_seconds: float
 
 
+@dataclass
+class TrainingLifecycle:
+    ledger: CreditTrainingLedger
+    trainer: TrainerProcess
+    evaluation_scheduler: CreditEvaluationScheduler
+    previous_progress: CreditTrainingProgress
+    previous_credited_completed_searches: int
+    credit_wait_started_at: float
+    credit_observation_started_at: float
+
+
+@dataclass(frozen=True)
+class CreditObservation:
+    replay_state: ReplayState
+    progress: CreditTrainingProgress
+    replay_capacity: int
+    loader_wait_seconds: float
+    observation_seconds: float
+    completed_at: float
+
+
+@dataclass(frozen=True)
+class CompletedQuantum:
+    result: QuantumResult
+    progress: CreditTrainingProgress
+    publication: PublicationResult
+
+
 class CommanderProcess:
-    """The CommanderProcess is the main process that manages the communication between the Trainer, SelfPlay and InferenceServer processes.
-
-    It starts the Trainer and SelfPlay processes and sends them the current iteration number.
-    Once the Trainer is finished, it receives the training stats from the Trainer.
-    It then starts the EvaluationProcess and sends the new iteration number to the Trainer and SelfPlay processes.
-
-    Once all iterations are done, it sends a STOP message to all processes and waits for them to finish.
-    """
+    """Coordinate persistent self-play, replay, training, publication, and evaluation."""
 
     def __init__(self, run: int, args: TrainingArgs, started_at: float) -> None:
         self.run_id = run
@@ -94,220 +108,218 @@ class CommanderProcess:
         self.communication.clear_all()
 
         self.self_play_processes: list[Process] = []
-        self.evaluation_processes: list[Process] = []
-
-        self.trainer_device_id = self.args.cluster.trainer_rank_zero_device_id
         self.started_at = started_at
         self.final_stop_reason: str | None = None
-        self.latest_completed_iteration = 0
+        self.latest_completed_model_version = 0
 
     def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
-        """The main loop of the CommanderProcess. The resulting generator yields after each iteration. If the Generator is not consumed, no further iterations will be trained."""
-
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
-        if self.args.training.credit_training is not None:
-            yield from self._run_credit_training()
-            return
+        yield from self._run_training_lifecycle(self.args.training.credit_training)
 
-        starting_iteration = get_latest_model_iteration(self.args.save_path)
-        self.latest_completed_iteration = starting_iteration
-        log(f'Starting training at iteration {starting_iteration}.')
-
-        self._ensure_model_exists(starting_iteration)
-        evaluation = self.args.evaluation
-        if starting_iteration == 0 and evaluation is not None and evaluation.evaluate_initial_checkpoint:
-            process = self._start_evaluation_process(starting_iteration)
-            if process is None:
-                return
-            if not self._wait_for_all_evaluations():
-                return
-
-        current_best_iteration = starting_iteration
-
-        trainer, gating = self._initialize_workers(
-            starting_iteration,
-            current_best_iteration,
-        )
-
+    def _run_training_lifecycle(
+        self,
+        parameters: CreditTrainingParams,
+    ) -> Generator[tuple[int, TrainingStats], None, None]:
+        lifecycle: TrainingLifecycle | None = None
         try:
-            with log_exceptions('Commander process'):
-                yield from self._run_iterations(
-                    trainer,
-                    gating,
-                    starting_iteration,
-                    current_best_iteration,
-                )
+            with TensorboardWriter(self.run_id, 'credit_training', postfix_pid=False):
+                lifecycle = self._initialize_and_recover(parameters)
+                while lifecycle.ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
+                    lifecycle.evaluation_scheduler.poll()
+                    stop_reason = self._stop_reason()
+                    if stop_reason is not None:
+                        self.final_stop_reason = stop_reason
+                        warn(f'Stopping training: {stop_reason}')
+                        break
+                    self._ensure_processes_are_running()
+                    observation = self._observe_replay_credits(lifecycle, parameters)
+                    if observation is None:
+                        time.sleep(1)
+                        continue
+                    completed = self._run_optimizer_quantum(lifecycle, observation)
+                    self._record_quantum_telemetry(lifecycle, observation, completed)
+                    self._advance_lifecycle(lifecycle, observation, completed.progress)
+                    yield (
+                        credit_training_progress_axis(
+                            completed.progress,
+                            self.args.training.global_batch_size,
+                        ),
+                        completed.result.training_stats,
+                    )
         finally:
             try:
-                trainer.close()
+                if lifecycle is not None:
+                    try:
+                        lifecycle.trainer.close()
+                    finally:
+                        lifecycle.evaluation_scheduler.close()
             finally:
                 self._shutdown()
 
-    def _run_credit_training(self) -> Generator[tuple[int, TrainingStats], None, None]:
-        parameters = self.args.training.credit_training
-        assert parameters is not None
+    def _initialize_and_recover(self, parameters: CreditTrainingParams) -> TrainingLifecycle:
         self._ensure_model_exists(0)
         ledger = CreditTrainingLedger(
             Path(self.args.save_path),
             parameters,
             self.args.training.global_batch_size,
         )
-        self._validate_credit_recovery_checkpoint(
-            ledger.progress.model_version,
-            Path(self.args.save_path),
+        self._validate_credit_recovery_checkpoint(ledger.progress.model_version, ledger.run_path)
+        self.latest_completed_model_version = ledger.progress.model_version
+        self._setup_connections()
+        self.communication.send_to_id('START USAGE LOGGER', node_id=0)
+        initial_manifest = create_credit_publication_manifest(
+            ledger.run_path,
+            ledger.progress,
+            self.args.training.global_batch_size,
         )
-        self.latest_completed_iteration = ledger.progress.model_version
-        trainer: CreditTrainerProcess | None = None
-        evaluation_scheduler: CreditEvaluationScheduler | None = None
+        initial_pointer = write_credit_publication_manifest(ledger.run_path, initial_manifest)
+        self._publish_credit_manifest(initial_manifest, initial_pointer)
+        self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
+        if ledger.prepared_quantum is not None:
+            self._finish_prepared_publication(ledger, ledger.prepared_quantum)
+        evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args)
+        evaluation_scheduler.offer(
+            create_credit_publication_manifest(
+                ledger.run_path,
+                ledger.progress,
+                self.args.training.global_batch_size,
+            )
+        )
+        evaluation_scheduler.poll()
+        previous_telemetry = load_last_credit_training_telemetry(ledger.run_path / 'credit-training-telemetry.jsonl')
+        started_at = monotonic()
         try:
-            with TensorboardWriter(self.run_id, 'credit_training', postfix_pid=False):
-                self._setup_connections()
-                self.communication.send_to_id('START USAGE LOGGER', node_id=0)
-                initial_manifest = create_credit_publication_manifest(
-                    Path(self.args.save_path),
-                    ledger.progress,
-                    self.args.training.global_batch_size,
-                )
-                initial_pointer = write_credit_publication_manifest(
-                    Path(self.args.save_path),
-                    initial_manifest,
-                )
-                self._publish_credit_manifest(initial_manifest, initial_pointer)
-                self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
-                prepared = ledger.prepared_quantum
-                if prepared is not None:
-                    self._finish_prepared_publication(ledger, prepared)
+            trainer = TrainerProcess(self.args, self.run_id, ledger.progress.model_version)
+        except BaseException:
+            evaluation_scheduler.close()
+            raise
+        return TrainingLifecycle(
+            ledger=ledger,
+            trainer=trainer,
+            evaluation_scheduler=evaluation_scheduler,
+            previous_progress=ledger.progress,
+            previous_credited_completed_searches=(
+                previous_telemetry.credited_completed_searches if previous_telemetry is not None else 0
+            ),
+            credit_wait_started_at=started_at,
+            credit_observation_started_at=started_at,
+        )
 
-                evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args)
-                current_publication = create_credit_publication_manifest(
-                    Path(self.args.save_path),
-                    ledger.progress,
-                    self.args.training.global_batch_size,
-                )
-                evaluation_scheduler.offer(current_publication)
-                evaluation_scheduler.poll()
-                trainer = CreditTrainerProcess(
-                    self.args,
-                    self.run_id,
-                    ledger.progress.model_version,
-                )
-                credit_wait_started_at = monotonic()
-                credit_observation_started_at = credit_wait_started_at
-                previous_quantum_progress = ledger.progress
-                previous_telemetry = load_last_credit_training_telemetry(
-                    Path(self.args.save_path) / 'credit-training-telemetry.jsonl'
-                )
-                previous_credited_completed_searches = (
-                    previous_telemetry.credited_completed_searches if previous_telemetry is not None else 0
-                )
-                while ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
-                    evaluation_scheduler.poll()
-                    stop_reason = self._stop_reason()
-                    if stop_reason is not None:
-                        self.final_stop_reason = stop_reason
-                        warn(f'Stopping credit-driven training: {stop_reason}')
-                        break
-                    self._ensure_processes_are_running()
+    def _observe_replay_credits(
+        self,
+        lifecycle: TrainingLifecycle,
+        parameters: CreditTrainingParams,
+    ) -> CreditObservation | None:
+        replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.progress.model_version)
+        replay_state = lifecycle.trainer.maintain_replay(replay_capacity, None)
+        progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
+        required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
+        if not progress.can_train(required_credits):
+            minimum_samples = int(
+                (
+                    (progress.consumed_position_credits + Decimal(required_credits)) / parameters.replay_ratio
+                ).to_integral_value(rounding=ROUND_CEILING)
+            )
+            lifecycle.trainer.maintain_replay(replay_capacity, minimum_samples)
+            return None
+        completed_at = monotonic()
+        return CreditObservation(
+            replay_state=replay_state,
+            progress=progress,
+            replay_capacity=replay_capacity,
+            loader_wait_seconds=completed_at - lifecycle.credit_wait_started_at,
+            observation_seconds=completed_at - lifecycle.credit_observation_started_at,
+            completed_at=completed_at,
+        )
 
-                    replay_capacity = parameters.replay_capacity_for_model_version(ledger.progress.model_version)
-                    replay_state = trainer.maintain_replay(
-                        replay_capacity_unique_positions=replay_capacity,
-                        compact_below_credited_unique_samples=None,
-                    )
-                    progress = ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
-                    required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
-                    if not progress.can_train(required_credits):
-                        minimum_credited_unique_samples = int(
-                            (
-                                (progress.consumed_position_credits + Decimal(required_credits))
-                                / parameters.replay_ratio
-                            ).to_integral_value(rounding=ROUND_CEILING)
-                        )
-                        replay_state = trainer.maintain_replay(
-                            replay_capacity_unique_positions=replay_capacity,
-                            compact_below_credited_unique_samples=minimum_credited_unique_samples,
-                        )
-                        time.sleep(1)
-                        continue
+    def _run_optimizer_quantum(
+        self,
+        lifecycle: TrainingLifecycle,
+        observation: CreditObservation,
+    ) -> CompletedQuantum:
+        result = self._train_quantum_with_self_play_cleanup(
+            lifecycle.trainer,
+            global_step=observation.progress.sampler_global_step,
+            model_version=observation.progress.model_version + 1,
+        )
+        prepared = lifecycle.ledger.prepare_quantum(result.checkpoint_manifest)
+        publication = self._publish_prepared_quantum(prepared)
+        progress = lifecycle.ledger.commit_prepared_quantum()
+        self._schedule_evaluation_and_prune(lifecycle.evaluation_scheduler, publication, progress)
+        return CompletedQuantum(result, progress, publication)
 
-                    credit_observation_completed_at = monotonic()
-                    loader_wait_seconds = credit_observation_completed_at - credit_wait_started_at
-                    credit_observation_seconds = credit_observation_completed_at - credit_observation_started_at
-                    result = self._train_credit_quantum_with_self_play_cleanup(
-                        trainer,
-                        global_step=progress.sampler_global_step,
-                        model_version=progress.model_version + 1,
-                    )
-                    prepared = ledger.prepare_quantum(result.checkpoint_manifest)
-                    publication = self._publish_prepared_quantum(prepared)
-                    committed = ledger.commit_prepared_quantum()
-                    evaluation_scheduler.offer(publication.manifest)
-                    evaluation_scheduler.poll()
-                    for completed_evaluation_version in evaluation_scheduler.completed_unpinned_model_versions:
-                        self._prune_nonretained_credit_checkpoint(completed_evaluation_version)
-                    self._prune_nonretained_credit_checkpoint(
-                        committed.model_version - 1,
-                        evaluation_scheduler.pinned_model_versions,
-                    )
-                    telemetry = build_credit_training_telemetry(
-                        previous_progress=previous_quantum_progress,
-                        progress=committed,
-                        previous_credited_completed_searches=previous_credited_completed_searches,
-                        credited_completed_searches=replay_state.credited_completed_searches,
-                        live_replay_positions=replay_state.live_unique_samples,
-                        replay_capacity_unique_positions=replay_capacity,
-                        optimizer_seconds=result.optimizer_seconds,
-                        decode_seconds=result.decode_seconds,
-                        loader_wait_seconds=loader_wait_seconds,
-                        credit_observation_seconds=credit_observation_seconds,
-                        replay_payload_open_count=result.payload_open_count,
-                        replay_selected_rows=result.selected_rows,
-                        replay_rows_read=result.rows_read,
-                        replay_selected_bytes=result.selected_bytes,
-                        replay_bytes_read=result.bytes_read,
-                        replay_oldest_source_model_version=replay_state.oldest_source_model_version,
-                        replay_newest_source_model_version=replay_state.newest_source_model_version,
-                        replay_weighted_mean_source_model_version_midpoint=(
-                            replay_state.weighted_mean_source_model_version_midpoint
-                        ),
-                        replay_oldest_position_age_seconds=replay_state.oldest_position_age_seconds,
-                        replay_weighted_mean_position_age_seconds=(replay_state.weighted_mean_position_age_seconds),
-                        publication_seconds=publication.publication_seconds,
-                        acknowledgement_seconds=publication.acknowledgement_seconds,
-                        global_batch_size=self.args.training.global_batch_size,
-                        evaluation_source_model_version=evaluation_scheduler.current_source_version,
-                        evaluation_status=evaluation_scheduler.current_status,
-                    )
-                    append_credit_training_telemetry(
-                        Path(self.args.save_path) / 'credit-training-telemetry.jsonl',
-                        telemetry,
-                    )
-                    log(telemetry.console_summary())
-                    telemetry.log_to_tensorboard(result.training_stats)
-                    self.latest_completed_iteration = committed.model_version
-                    previous_quantum_progress = committed
-                    previous_credited_completed_searches = replay_state.credited_completed_searches
-                    credit_wait_started_at = monotonic()
-                    credit_observation_started_at = credit_observation_completed_at
-                    yield (
-                        credit_training_progress_axis(
-                            committed,
-                            self.args.training.global_batch_size,
-                        ),
-                        result.training_stats,
-                    )
-        finally:
-            if trainer is not None:
-                trainer.close()
-            if evaluation_scheduler is not None:
-                evaluation_scheduler.close()
-            self._shutdown()
+    def _schedule_evaluation_and_prune(
+        self,
+        scheduler: CreditEvaluationScheduler,
+        publication: PublicationResult,
+        progress: CreditTrainingProgress,
+    ) -> None:
+        scheduler.offer(publication.manifest)
+        scheduler.poll()
+        for model_version in scheduler.completed_unpinned_model_versions:
+            self._prune_nonretained_credit_checkpoint(model_version)
+        self._prune_nonretained_credit_checkpoint(progress.model_version - 1, scheduler.pinned_model_versions)
+
+    def _record_quantum_telemetry(
+        self,
+        lifecycle: TrainingLifecycle,
+        observation: CreditObservation,
+        completed: CompletedQuantum,
+    ) -> None:
+        replay_state = observation.replay_state
+        result = completed.result
+        scheduler = lifecycle.evaluation_scheduler
+        telemetry = build_credit_training_telemetry(
+            previous_progress=lifecycle.previous_progress,
+            progress=completed.progress,
+            previous_credited_completed_searches=lifecycle.previous_credited_completed_searches,
+            credited_completed_searches=replay_state.credited_completed_searches,
+            live_replay_positions=replay_state.live_unique_samples,
+            replay_capacity_unique_positions=observation.replay_capacity,
+            optimizer_seconds=result.optimizer_seconds,
+            decode_seconds=result.decode_seconds,
+            loader_wait_seconds=observation.loader_wait_seconds,
+            credit_observation_seconds=observation.observation_seconds,
+            replay_payload_open_count=result.payload_open_count,
+            replay_selected_rows=result.selected_rows,
+            replay_rows_read=result.rows_read,
+            replay_selected_bytes=result.selected_bytes,
+            replay_bytes_read=result.bytes_read,
+            replay_oldest_source_model_version=replay_state.oldest_source_model_version,
+            replay_newest_source_model_version=replay_state.newest_source_model_version,
+            replay_weighted_mean_source_model_version_midpoint=replay_state.weighted_mean_source_model_version_midpoint,
+            replay_oldest_position_age_seconds=replay_state.oldest_position_age_seconds,
+            replay_weighted_mean_position_age_seconds=replay_state.weighted_mean_position_age_seconds,
+            publication_seconds=completed.publication.publication_seconds,
+            acknowledgement_seconds=completed.publication.acknowledgement_seconds,
+            global_batch_size=self.args.training.global_batch_size,
+            evaluation_source_model_version=scheduler.current_source_version,
+            evaluation_status=scheduler.current_status,
+        )
+        append_credit_training_telemetry(
+            Path(self.args.save_path) / 'credit-training-telemetry.jsonl',
+            telemetry,
+        )
+        log(telemetry.console_summary())
+        telemetry.log_to_tensorboard(result.training_stats)
+
+    def _advance_lifecycle(
+        self,
+        lifecycle: TrainingLifecycle,
+        observation: CreditObservation,
+        progress: CreditTrainingProgress,
+    ) -> None:
+        self.latest_completed_model_version = progress.model_version
+        lifecycle.previous_progress = progress
+        lifecycle.previous_credited_completed_searches = observation.replay_state.credited_completed_searches
+        lifecycle.credit_wait_started_at = monotonic()
+        lifecycle.credit_observation_started_at = observation.completed_at
 
     def _finish_prepared_publication(
         self,
         ledger: CreditTrainingLedger,
         prepared: PreparedTrainingQuantum,
-    ) -> CreditPublicationResult:
+    ) -> PublicationResult:
         self._validate_credit_recovery_checkpoint(
             prepared.prepared_progress.model_version,
             ledger.run_path,
@@ -319,7 +331,7 @@ class CommanderProcess:
         publication = self._publish_prepared_quantum(prepared)
         committed = ledger.commit_prepared_quantum()
         self._prune_nonretained_credit_checkpoint(committed.model_version - 1)
-        self.latest_completed_iteration = committed.model_version
+        self.latest_completed_model_version = committed.model_version
         return publication
 
     def _validate_credit_recovery_checkpoint(
@@ -334,7 +346,7 @@ class CommanderProcess:
     def _publish_prepared_quantum(
         self,
         prepared: PreparedTrainingQuantum,
-    ) -> CreditPublicationResult:
+    ) -> PublicationResult:
         started_at = monotonic()
         manifest = create_credit_publication_manifest(
             Path(self.args.save_path),
@@ -344,7 +356,7 @@ class CommanderProcess:
         pointer = write_credit_publication_manifest(Path(self.args.save_path), manifest)
         publication_seconds = monotonic() - started_at
         acknowledgement_seconds = self._publish_credit_manifest(manifest, pointer)
-        return CreditPublicationResult(
+        return PublicationResult(
             manifest=manifest,
             publication_seconds=publication_seconds,
             acknowledgement_seconds=acknowledgement_seconds,
@@ -416,7 +428,6 @@ class CommanderProcess:
         if model_version in pinned_model_versions:
             return
         parameters = self.args.training.credit_training
-        assert parameters is not None
         optimizer_step = model_version * parameters.optimizer_steps_per_quantum
         if optimizer_step % parameters.retained_checkpoint_interval_steps == 0:
             return
@@ -434,95 +445,12 @@ class CommanderProcess:
             if path.exists():
                 path.unlink()
 
-    def _initialize_workers(
-        self,
-        starting_iteration: int,
-        current_best_iteration: int,
-    ) -> tuple[TrainerProcess, GatingProcess]:
-        try:
-            log('Setting up connections...')
-            self._setup_connections()
-            trainer = TrainerProcess(self.args, self.run_id, starting_iteration)
-            gating = GatingProcess(self.args, self.run_id, self.trainer_device_id)
-            log('Connections set up.')
-
-            self.communication.send_to_id('START USAGE LOGGER', node_id=0)
-            self.communication.boardcast(f'LOAD MODEL: {current_best_iteration}')
-            self.communication.boardcast(f'START AT ITERATION: {starting_iteration}')
-            return trainer, gating
-        except Exception:
-            self._shutdown()
-            raise
-
-    def _run_iterations(
+    def _train_quantum_with_self_play_cleanup(
         self,
         trainer: TrainerProcess,
-        gating: GatingProcess,
-        starting_iteration: int,
-        current_best_iteration: int,
-    ) -> Generator[tuple[int, TrainingStats], None, None]:
-        for iteration in range(starting_iteration, self.args.num_iterations):
-            stop_reason = self._stop_reason()
-            if stop_reason is not None:
-                self.final_stop_reason = stop_reason
-                warn(f'Stopping before iteration {iteration}: {stop_reason}')
-                break
-
-            self._ensure_processes_are_running()
-            log(f'Starting iteration {iteration}.')
-            self.communication.boardcast(f'START AT ITERATION: {iteration}')
-
-            games_at_wait_start = number_of_games_in_iteration(
-                iteration,
-                self.args.save_path,
-            )
-            wait_started_at = monotonic()
-            if not trainer.wait_for_enough_training_samples(
-                iteration,
-                self._stop_reason,
-            ):
-                stop_reason = self._stop_reason()
-                self.final_stop_reason = stop_reason
-                warn(f'Stopping while waiting for iteration {iteration}: {stop_reason}')
-                break
-            wait_finished_at = monotonic()
-            games_at_wait_end = number_of_games_in_iteration(
-                iteration,
-                self.args.save_path,
-            )
-            trainer.load_all_memories_to_train_on_for_iteration(iteration)
-
-            self._reap_evaluation_processes()
-            training_started_at = monotonic()
-            training_result = self._train_with_self_play_cleanup(trainer, iteration)
-            training_finished_at = monotonic()
-            self.latest_completed_iteration = iteration + 1
-            self._write_iteration_telemetry(
-                iteration=iteration,
-                games_at_wait_start=games_at_wait_start,
-                games_at_wait_end=games_at_wait_end,
-                wait_seconds=wait_finished_at - wait_started_at,
-                replay_samples_loaded=trainer.replay_stats.num_samples,
-                replay_games_loaded=trainer.replay_stats.num_games,
-                training_seconds=training_finished_at - training_started_at,
-            )
-            yield iteration, training_result
-            log(f'Training finished for iteration {iteration}')
-            reset_times()
-
-            current_best_iteration = gating.run(iteration, current_best_iteration)
-
-            if self._should_evaluate(iteration + 1):
-                process = self._start_evaluation_process(iteration + 1)
-                if process is None:
-                    break
-                log(f'Started evaluation process for iteration {iteration + 1}.')
-
-    def _train_with_self_play_cleanup(
-        self,
-        trainer: TrainerProcess,
-        iteration: int,
-    ) -> TrainingStats:
+        global_step: int,
+        model_version: int,
+    ) -> QuantumResult:
         node_ids = self.args.cluster.self_play_node_ids_to_pause_during_training
         primary_error: BaseException | None = None
         try:
@@ -533,7 +461,7 @@ class CommanderProcess:
                     timeout_seconds=120,
                 )
                 log('Paused self-play workers before training:', node_ids)
-            return trainer.train(iteration)
+            return trainer.train_quantum(global_step=global_step, model_version=model_version)
         except BaseException as error:
             primary_error = error
             raise
@@ -551,40 +479,6 @@ class CommanderProcess:
                         raise
                     warn(f'Failed to resume self-play while handling {type(primary_error).__name__}: {resume_error}')
 
-    def _train_credit_quantum_with_self_play_cleanup(
-        self,
-        trainer: CreditTrainerProcess,
-        global_step: int,
-        model_version: int,
-    ) -> CreditQuantumResult:
-        node_ids = self.args.cluster.self_play_node_ids_to_pause_during_training
-        primary_error: BaseException | None = None
-        try:
-            if node_ids:
-                pause_self_play_workers(
-                    self.communication,
-                    node_ids,
-                    timeout_seconds=120,
-                )
-                log('Paused self-play workers before credit training:', node_ids)
-            return trainer.train_quantum(global_step=global_step, model_version=model_version)
-        except BaseException as error:
-            primary_error = error
-            raise
-        finally:
-            if node_ids:
-                try:
-                    resume_self_play_workers(
-                        self.communication,
-                        node_ids,
-                        timeout_seconds=120,
-                    )
-                    log('Resumed self-play workers after credit training:', node_ids)
-                except BaseException as resume_error:
-                    if primary_error is None:
-                        raise
-                    warn(f'Failed to resume self-play while handling {type(primary_error).__name__}: {resume_error}')
-
     def _shutdown(self) -> None:
         log('Training complete. Sending STOP to all processes.')
         self.communication.boardcast('STOP')
@@ -596,8 +490,6 @@ class CommanderProcess:
                 warn(f'Force-terminating self-play process {process.pid} after graceful shutdown timeout.')
                 process.terminate()
                 process.join(timeout=10)
-
-        self._wait_for_all_evaluations()
 
     def _stop_reason(self) -> str | None:
         limits = self.args.run_limits
@@ -630,87 +522,6 @@ class CommanderProcess:
         if free_disk_gib <= limits.minimum_free_disk_gib:
             return f'free disk {free_disk_gib:.1f} GiB reached {limits.minimum_free_disk_gib:.1f} GiB minimum'
         return None
-
-    def _write_iteration_telemetry(
-        self,
-        iteration: int,
-        games_at_wait_start: int,
-        games_at_wait_end: int,
-        wait_seconds: float,
-        replay_samples_loaded: int,
-        replay_games_loaded: int,
-        training_seconds: float,
-    ) -> None:
-        elapsed_seconds = monotonic() - self.started_at
-        games_generated = games_at_wait_end - games_at_wait_start
-        maximum_process_open_file_count, total_open_file_count = process_tree_open_file_counts(psutil.Process())
-        telemetry = IterationTelemetry(
-            iteration=iteration,
-            games_at_wait_start=games_at_wait_start,
-            games_at_wait_end=games_at_wait_end,
-            games_generated_while_waiting=games_generated,
-            wait_seconds=wait_seconds,
-            games_per_wait_second=games_generated / wait_seconds if wait_seconds > 0 else 0,
-            replay_samples_loaded=replay_samples_loaded,
-            replay_games_loaded=replay_games_loaded,
-            training_seconds=training_seconds,
-            elapsed_seconds=elapsed_seconds,
-            cost_currency=self.args.run_limits.cost_currency,
-            estimated_cost=estimated_cost(self.args.run_limits.hourly_price, elapsed_seconds),
-            maximum_process_open_file_count=maximum_process_open_file_count,
-            total_open_file_count=total_open_file_count,
-        )
-        append_iteration_telemetry(
-            Path(self.args.save_path) / 'iteration-telemetry.jsonl',
-            telemetry,
-        )
-
-    def _should_evaluate(self, iteration: int) -> bool:
-        evaluation = self.args.evaluation
-        return evaluation is not None and iteration % evaluation.every_n_iterations == 0
-
-    def _start_evaluation_process(self, iteration: int) -> Process | None:
-        """Starts an EvaluationProcess for the given iteration and returns the process."""
-        self._reap_evaluation_processes()
-        while len(self.evaluation_processes) >= self.args.cluster.max_concurrent_evaluations:
-            if not self._wait_for_all_evaluations():
-                return None
-
-        process = Process(
-            target=run_evaluation_process,
-            args=(self.run_id, self.args, iteration),
-        )
-        process.start()
-        self.evaluation_processes.append(process)
-        return process
-
-    def _reap_evaluation_processes(self) -> None:
-        active_processes: list[Process] = []
-        for process in self.evaluation_processes:
-            if process.is_alive():
-                active_processes.append(process)
-            else:
-                process.join()
-                if process.exitcode != 0:
-                    raise RuntimeError(f'Evaluation process {process.pid} exited with code {process.exitcode}.')
-        self.evaluation_processes = active_processes
-
-    def _wait_for_all_evaluations(self) -> bool:
-        while self.evaluation_processes:
-            stop_reason = self._stop_reason()
-            if stop_reason is not None:
-                self.final_stop_reason = stop_reason
-                warn(f'Stopping evaluation: {stop_reason}')
-                for process in self.evaluation_processes:
-                    process.terminate()
-                    process.join(timeout=10)
-                self.evaluation_processes = []
-                return False
-
-            for process in self.evaluation_processes:
-                process.join(timeout=1)
-            self._reap_evaluation_processes()
-        return True
 
     def _setup_connections(self) -> None:
         for node_id, device_id in enumerate(self.args.cluster.self_play_device_ids):

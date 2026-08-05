@@ -7,7 +7,7 @@ from src.settings import TRAINING_ARGS
 from src.eval.GameManager import GameManager
 from src.eval.HumanPlayer import HumanPlayer
 from src.eval.AlphaZeroBot import AlphaZeroBot
-from src.util.save_paths import get_latest_model_iteration, model_save_path
+from src.util.save_paths import get_latest_model_version, model_save_path
 
 HUMAN_PLAY = True
 MAX_TIME_TO_THINK = 1.0
@@ -15,7 +15,7 @@ NETWORK_ONLY = False
 
 STOCKFISH_SKILL_LEVEL = 4  # Stockfish skill level, can be adjusted for difficulty
 
-MODEL_PATH = str(model_save_path(get_latest_model_iteration(TRAINING_ARGS.save_path), TRAINING_ARGS.save_path))
+MODEL_PATH = str(model_save_path(get_latest_model_version(TRAINING_ARGS.save_path), TRAINING_ARGS.save_path))
 MODEL_PATH = R'/mnt/c/Users/berti/OneDrive/Desktop/zip9/training_data/chess/best_model.pt'
 
 

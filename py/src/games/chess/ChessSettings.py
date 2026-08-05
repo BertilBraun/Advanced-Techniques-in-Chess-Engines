@@ -1,8 +1,10 @@
 import os
+from decimal import Decimal
+
 from src.train.TrainingArgs import (
     ClusterParams,
+    CreditTrainingParams,
     EvaluationParams,
-    GatingParams,
     MCTSParams,
     NetworkParams,
     SEPlacement,
@@ -48,9 +50,17 @@ training = TrainingParams(
     optimizer='adamw',  # 'sgd',
     global_batch_size=1024,
     local_batch_size=1024,
-    sampling_window=sampling_window,
     learning_rate=learning_rate,
     learning_rate_scheduler=learning_rate_scheduler,
+    credit_training=CreditTrainingParams(
+        replay_ratio=Decimal(8),
+        optimizer_steps_per_quantum=500,
+        maximum_optimizer_steps=500_000,
+        initial_replay_capacity_unique_positions=200_000,
+        maximum_replay_capacity_unique_positions=2_500_000,
+        replay_capacity_ramp_model_versions=200,
+        retained_checkpoint_interval_steps=1_000,
+    ),
     num_workers=16,
 )
 evaluation = EvaluationParams(
@@ -80,16 +90,6 @@ evaluation = EvaluationParams(
     evaluate_random=True,
 )
 
-if USE_GATING := False:
-    gating = GatingParams(
-        num_games=100,
-        num_searches_per_turn=64,
-        ignore_draws=True,
-        gating_threshold=0.5,
-    )
-else:
-    gating = None
-
 NUM_SELF_PLAYERS = 1
 NUM_THREADS = 1
 PARALLEL_GAMES = 2
@@ -106,9 +106,7 @@ if not USE_GPU:
 
 
 TRAINING_ARGS = TrainingArgs(
-    num_iterations=300,
     save_path=SAVE_PATH + '/chess',
-    num_games_per_iteration=5000,
     network=network,
     self_play=SelfPlayParams(
         num_parallel_games=PARALLEL_GAMES,
@@ -148,7 +146,6 @@ TRAINING_ARGS = TrainingArgs(
     run_limits=DEFAULT_RUNTIME_LIMITS,
     artifact_retention=DEFAULT_ARTIFACT_RETENTION,
     evaluation=evaluation,
-    gating=gating,
     random_seed=0,
     self_play_search_warmup_iterations=15,
     self_play_endgame_shortcut_fade_iterations=50,

@@ -8,6 +8,7 @@ from torch.nn.parallel import DistributedDataParallel
 from src.Network import Network
 from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
+from src.settings import TRAINING_ARGS
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import TrainingParams
 
@@ -50,9 +51,9 @@ def masked_value_gradient_rank(
             global_batch_size=4,
             local_batch_size=2,
             optimizer='sgd',
-            sampling_window=lambda _: 1,
             learning_rate=lambda _iteration, _optimizer: 0.0,
             learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+            credit_training=TRAINING_ARGS.training.credit_training,
             policy_loss_weight=0.0,
             value_loss_weight=1.0,
             outcome_value_loss_weight=0.85,

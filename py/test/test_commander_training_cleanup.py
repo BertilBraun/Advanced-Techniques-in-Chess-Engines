@@ -1,17 +1,22 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from decimal import Decimal
+from pathlib import Path
+import sys
+from types import ModuleType
 from typing import cast
 
 import pytest
 
-
-pytest.importorskip('GPUtil')
+sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
 import src.cluster.CommanderProcess as commander_module
-from src.cluster.CommanderProcess import CommanderProcess
-from src.cluster.CreditTrainerProcess import CreditQuantumResult, CreditTrainerProcess
-from src.cluster.TrainerProcess import TrainerProcess
-from src.train.TrainingArgs import TrainingArgs
-from src.train.TrainingStats import TrainingStats
+from src.cluster.CommanderProcess import CommanderProcess, TrainingLifecycle
+from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
+from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
+from src.train.CreditTrainingLedger import CreditTrainingLedger
+from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
 
 
 @dataclass(frozen=True)
@@ -22,24 +27,19 @@ class _ClusterArguments:
 @dataclass(frozen=True)
 class _TrainingArguments:
     cluster: _ClusterArguments
+    training: _TrainingConfiguration
+
+
+@dataclass(frozen=True)
+class _TrainingConfiguration:
+    global_batch_size: int
 
 
 class _Trainer:
-    def __init__(self, result: TrainingStats | BaseException) -> None:
+    def __init__(self, result: QuantumResult | BaseException) -> None:
         self.result = result
 
-    def train(self, iteration: int) -> TrainingStats:
-        assert iteration == 3
-        if isinstance(self.result, BaseException):
-            raise self.result
-        return self.result
-
-
-class _CreditTrainer:
-    def __init__(self, result: CreditQuantumResult | BaseException) -> None:
-        self.result = result
-
-    def train_quantum(self, global_step: int, model_version: int) -> CreditQuantumResult:
+    def train_quantum(self, global_step: int, model_version: int) -> QuantumResult:
         assert global_step == 1_000
         assert model_version == 11
         if isinstance(self.result, BaseException):
@@ -47,63 +47,87 @@ class _CreditTrainer:
         return self.result
 
 
+class _ReplayTrainer:
+    def __init__(self, credited_unique_samples: int) -> None:
+        self.credited_unique_samples = credited_unique_samples
+        self.calls: list[tuple[int, int | None]] = []
+
+    def maintain_replay(self, capacity: int, minimum_samples: int | None) -> ReplayState:
+        self.calls.append((capacity, minimum_samples))
+        return ReplayState(
+            credited_unique_samples=self.credited_unique_samples,
+            credited_completed_searches=17,
+            live_unique_samples=self.credited_unique_samples,
+            compacted_container=False,
+            oldest_source_model_version=None,
+            newest_source_model_version=None,
+            weighted_mean_source_model_version_midpoint=None,
+            oldest_position_age_seconds=None,
+            weighted_mean_position_age_seconds=None,
+        )
+
+
 def commander() -> CommanderProcess:
     result = CommanderProcess.__new__(CommanderProcess)
     result.args = cast(
         TrainingArgs,
-        _TrainingArguments(cluster=_ClusterArguments((1, 4))),
+        _TrainingArguments(
+            cluster=_ClusterArguments((1, 4)),
+            training=_TrainingConfiguration(global_batch_size=1),
+        ),
     )
     result.communication = cast(commander_module.Communication, object())
     return result
 
 
-def test_commander_resumes_paused_workers_after_distributed_training_success(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-    expected_stats = cast(TrainingStats, object())
-
-    def pause(*_: object, **__: object) -> None:
-        calls.append('pause')
-
-    def resume(*_: object, **__: object) -> None:
-        calls.append('resume')
-
-    monkeypatch.setattr(commander_module, 'pause_self_play_workers', pause)
-    monkeypatch.setattr(commander_module, 'resume_self_play_workers', resume)
-
-    result = commander()._train_with_self_play_cleanup(
-        cast(TrainerProcess, _Trainer(expected_stats)),
-        iteration=3,
+def _parameters() -> CreditTrainingParams:
+    return CreditTrainingParams(
+        replay_ratio=Decimal(4),
+        optimizer_steps_per_quantum=1,
+        maximum_optimizer_steps=10,
+        initial_replay_capacity_unique_positions=10,
+        maximum_replay_capacity_unique_positions=10,
+        replay_capacity_ramp_model_versions=1,
+        retained_checkpoint_interval_steps=1,
     )
 
-    assert result is expected_stats
-    assert calls == ['pause', 'resume']
+
+def _lifecycle(tmp_path: Path, trainer: _ReplayTrainer) -> TrainingLifecycle:
+    ledger = CreditTrainingLedger(tmp_path, _parameters(), global_batch_size=1)
+    return TrainingLifecycle(
+        ledger=ledger,
+        trainer=cast(TrainerProcess, trainer),
+        evaluation_scheduler=cast(CreditEvaluationScheduler, object()),
+        previous_progress=ledger.progress,
+        previous_credited_completed_searches=0,
+        credit_wait_started_at=0,
+        credit_observation_started_at=0,
+    )
 
 
-def test_commander_resumes_workers_after_distributed_training_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-    training_error = RuntimeError('rank failed')
+def test_commander_waits_and_requests_compaction_until_enough_credits(tmp_path: Path) -> None:
+    replay_trainer = _ReplayTrainer(credited_unique_samples=0)
 
-    def pause(*_: object, **__: object) -> None:
-        calls.append('pause')
+    observation = commander()._observe_replay_credits(
+        _lifecycle(tmp_path, replay_trainer),
+        _parameters(),
+    )
 
-    def resume(*_: object, **__: object) -> None:
-        calls.append('resume')
+    assert observation is None
+    assert replay_trainer.calls == [(10, None), (10, 1)]
 
-    monkeypatch.setattr(commander_module, 'pause_self_play_workers', pause)
-    monkeypatch.setattr(commander_module, 'resume_self_play_workers', resume)
 
-    with pytest.raises(RuntimeError, match='rank failed') as raised:
-        commander()._train_with_self_play_cleanup(
-            cast(TrainerProcess, _Trainer(training_error)),
-            iteration=3,
-        )
+def test_commander_observes_enough_credits_for_exactly_one_quantum(tmp_path: Path) -> None:
+    replay_trainer = _ReplayTrainer(credited_unique_samples=1)
 
-    assert raised.value is training_error
-    assert calls == ['pause', 'resume']
+    observation = commander()._observe_replay_credits(
+        _lifecycle(tmp_path, replay_trainer),
+        _parameters(),
+    )
+
+    assert observation is not None
+    assert observation.progress.can_train(4)
+    assert replay_trainer.calls == [(10, None)]
 
 
 def test_commander_attempts_resume_when_pause_acknowledgement_fails(
@@ -123,9 +147,10 @@ def test_commander_attempts_resume_when_pause_acknowledgement_fails(
     monkeypatch.setattr(commander_module, 'resume_self_play_workers', resume)
 
     with pytest.raises(RuntimeError, match='pause timeout') as raised:
-        commander()._train_with_self_play_cleanup(
-            cast(TrainerProcess, _Trainer(cast(TrainingStats, object()))),
-            iteration=3,
+        commander()._train_quantum_with_self_play_cleanup(
+            cast(TrainerProcess, _Trainer(cast(QuantumResult, object()))),
+            global_step=1_000,
+            model_version=11,
         )
 
     assert raised.value is pause_error
@@ -133,12 +158,12 @@ def test_commander_attempts_resume_when_pause_acknowledgement_fails(
 
 
 @pytest.mark.parametrize('fails', (False, True))
-def test_credit_training_quantum_resumes_paused_workers(
+def test_training_quantum_resumes_paused_workers(
     monkeypatch: pytest.MonkeyPatch,
     fails: bool,
 ) -> None:
     calls: list[str] = []
-    expected_result = cast(CreditQuantumResult, object())
+    expected_result = cast(QuantumResult, object())
     training_error = RuntimeError('credit rank failed')
 
     def pause(*_: object, **__: object) -> None:
@@ -150,19 +175,19 @@ def test_credit_training_quantum_resumes_paused_workers(
     monkeypatch.setattr(commander_module, 'pause_self_play_workers', pause)
     monkeypatch.setattr(commander_module, 'resume_self_play_workers', resume)
     trainer = cast(
-        CreditTrainerProcess,
-        _CreditTrainer(training_error if fails else expected_result),
+        TrainerProcess,
+        _Trainer(training_error if fails else expected_result),
     )
 
     if fails:
         with pytest.raises(RuntimeError, match='credit rank failed'):
-            commander()._train_credit_quantum_with_self_play_cleanup(
+            commander()._train_quantum_with_self_play_cleanup(
                 trainer,
                 global_step=1_000,
                 model_version=11,
             )
     else:
-        result = commander()._train_credit_quantum_with_self_play_cleanup(
+        result = commander()._train_quantum_with_self_play_cleanup(
             trainer,
             global_step=1_000,
             model_version=11,

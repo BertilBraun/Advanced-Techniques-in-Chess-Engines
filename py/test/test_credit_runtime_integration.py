@@ -59,7 +59,7 @@ from src.util.communication import (
 from src.util.save_paths import CheckpointManifest
 
 
-CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-continuation-4x4070-pilot.json'
+CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-clean-credit-4x4070-v13.json'
 GLOBAL_BATCH_SIZE = 4
 WORLD_SIZE = 4
 OPTIMIZER_STEPS_PER_QUANTUM = 50

@@ -122,8 +122,7 @@
     },
     "random_seed": 20260725,
     "evaluation_games": 100,
-    "evaluation_searches_per_turn": 64,
-    "evaluation_every_iterations": 1
+    "evaluation_searches_per_turn": 64
   },
   "safety": {
     "maximum_open_file_count": 32768,

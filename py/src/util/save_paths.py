@@ -263,13 +263,14 @@ def save_model_and_optimizer(
     temporary_manifest_path.replace(manifest_path)
 
 
-def get_latest_model_iteration(save_folder: str | PathLike) -> int:
-    from src.settings import TRAINING_ARGS
-
-    max_iteration = TRAINING_ARGS.num_iterations
-    while max_iteration >= 0 and not checkpoint_manifest_path(max_iteration, save_folder).exists():
-        max_iteration -= 1
-    if max_iteration >= 0:
-        load_checkpoint_manifest(max_iteration, save_folder)
-        return max_iteration
-    return 0
+def get_latest_model_version(save_folder: str | PathLike) -> int:
+    versions = tuple(
+        int(path.stem.removeprefix('checkpoint_'))
+        for path in Path(save_folder).glob('checkpoint_*.json')
+        if path.stem.removeprefix('checkpoint_').isdigit()
+    )
+    if not versions:
+        return 0
+    latest_version = max(versions)
+    load_checkpoint_manifest(latest_version, save_folder)
+    return latest_version

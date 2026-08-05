@@ -16,7 +16,6 @@ from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
     Communication,
     LATEST_SELF_PLAY_MODEL_VERSION,
-    refresh_self_play_model_message,
     self_play_model_refreshed_message,
 )
 from src.train.CreditPublication import (
@@ -69,14 +68,13 @@ class _FakeCreditTraining:
 
 @dataclass(frozen=True)
 class _FakeTraining:
-    credit_training: _FakeCreditTraining | None
+    credit_training: _FakeCreditTraining
 
 
 @dataclass(frozen=True)
 class _FakeTrainingArguments:
-    num_iterations: int
     save_path: str
-    training: _FakeTraining = _FakeTraining(None)
+    training: _FakeTraining
 
 
 def _credit_publication(model_version: int) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
@@ -115,36 +113,6 @@ def _initialize_credit_refresh_state(process: SelfPlayProcess) -> None:
     process.loaded_credit_publication_pointer = None
 
 
-def test_pure_refresh_command_preserves_replay_and_discards_stale_roots(
-    tmp_path: Path,
-) -> None:
-    process = object.__new__(SelfPlayProcess)
-    process.args = _FakeTrainingArguments(num_iterations=12, save_path=str(tmp_path))
-    process.node_id = 3
-    process.communication = Communication(str(tmp_path / 'communication'))
-    process.self_play = _FakeSelfPlay()
-    previous_dataset = process.self_play.dataset
-    previous_roots = process.self_play.roots
-    previous_schedule = process.self_play.search_schedule_state
-
-    process.communication.boardcast(refresh_self_play_model_message(8))
-    updated_version = process._refresh_model_if_requested(7)
-
-    assert updated_version == 8
-    assert process.self_play.refreshes == [
-        (8, tmp_path / 'model_8.jit.pt'),
-    ]
-    assert process.self_play.dataset is previous_dataset
-    assert previous_roots == [10, 11]
-    assert process.self_play.roots == []
-    assert process.self_play.completed_searches == 37
-    assert process.self_play.search_schedule_state is previous_schedule
-    assert process.communication.try_receive_from_id(
-        self_play_model_refreshed_message(8),
-        process.node_id,
-    )
-
-
 def test_replay_flush_records_only_new_completed_searches(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -157,7 +125,10 @@ def test_replay_flush_records_only_new_completed_searches(
         game_model_version_ranges=[(3, 4)],
     )
     process = object.__new__(SelfPlayProcess)
-    process.args = _FakeTrainingArguments(num_iterations=12, save_path=str(tmp_path))
+    process.args = _FakeTrainingArguments(
+        save_path=str(tmp_path),
+        training=_FakeTraining(_FakeCreditTraining(500_000, 50)),
+    )
     process.node_id = 2
     process.self_play = _FakeSelfPlay(dataset=dataset, completed_searches=37)
     process.last_flushed_completed_searches = 10
@@ -202,7 +173,6 @@ def test_credit_mode_continuous_command_has_no_iteration_game_cap(
 ) -> None:
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
-        num_iterations=12,
         save_path=str(tmp_path),
         training=_FakeTraining(
             _FakeCreditTraining(
@@ -227,7 +197,6 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
 ) -> None:
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
-        num_iterations=12,
         save_path=str(tmp_path),
         training=_FakeTraining(
             _FakeCreditTraining(
@@ -255,8 +224,6 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
         load_publication,
     )
 
-    process._update_search_schedule_if_requested()
-    assert process.self_play.search_schedule_state is None
     updated_version = process._refresh_model_if_requested(-1)
 
     assert updated_version == 9_999
@@ -277,7 +244,6 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
 ) -> None:
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
-        num_iterations=12,
         save_path=str(tmp_path),
         training=_FakeTraining(
             _FakeCreditTraining(
@@ -336,7 +302,6 @@ def test_credit_mode_rejects_invalid_published_model_version(
 ) -> None:
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
-        num_iterations=12,
         save_path=str(tmp_path),
         training=_FakeTraining(
             _FakeCreditTraining(

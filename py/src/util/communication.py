@@ -18,22 +18,10 @@ START_CONTINUOUS_SELF_PLAY = 'START CONTINUOUS SELF PLAY'
 LATEST_SELF_PLAY_MODEL_VERSION = 'LATEST SELF PLAY MODEL VERSION'
 
 
-def refresh_self_play_model_message(model_version: int) -> str:
-    if model_version < 0:
-        raise ValueError('Model version must be nonnegative.')
-    return f'REFRESH SELF PLAY MODEL: {model_version}'
-
-
 def self_play_model_refreshed_message(model_version: int) -> str:
     if model_version < 0:
         raise ValueError('Model version must be nonnegative.')
     return f'SELF_PLAY_MODEL_REFRESHED_{model_version}'
-
-
-def update_self_play_search_schedule_message(schedule_version: int) -> str:
-    if schedule_version < 0:
-        raise ValueError('Search schedule version must be nonnegative.')
-    return f'UPDATE SELF PLAY SEARCH SCHEDULE: {schedule_version}'
 
 
 class Communication:

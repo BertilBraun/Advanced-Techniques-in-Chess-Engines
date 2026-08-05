@@ -291,15 +291,6 @@ class TrainingParams:
     optimizer: OptimizerType
     """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
 
-    sampling_window: Callable[[int], int]
-    """This is a function that returns the sampling window to use for the self-play data. The sampling window is the number of most recent games to sample from to train with. This is used to phase out old data that is no longer useful to train with. The function should take the current iteration as input and return the sampling window to use for that iteration.
-    Example:
-    def sampling_window(current_iteration: int) -> int:
-        if current_iteration < 5:
-            return 4
-        return 4 + (current_iteration - 5) // 2
-    """
-
     learning_rate: Callable[[int, OptimizerType], float]
     """This is a function that returns the learning rate to use for the training. The function should take the current iteration as input and return the learning rate to use for that iteration.
     Example:
@@ -318,6 +309,9 @@ class TrainingParams:
         min_lr = base_lr / 10
         return lerp(min_lr, base_lr, batch_percentage)
     """
+
+    credit_training: CreditTrainingParams
+    """Required persistent presentation-credit training schedule."""
 
     max_buffer_samples: int = 2_500_000
     """This is the maximum size of the training buffer to use for the training. This is used to limit the size of the training buffer to prevent memory issues. The higher the value the more stable the training but the slower the training. Typically 1_000_000-10_000_000 for training"""
@@ -343,9 +337,6 @@ class TrainingParams:
     num_workers: int = 2
     """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
 
-    credit_training: CreditTrainingParams | None = None
-    """Persistent sample-credit schedule used by clean replay-driven training runs."""
-
     def __post_init__(self) -> None:
         if self.outcome_value_loss_weight < 0.0 or self.mcts_value_loss_weight < 0.0:
             raise ValueError('Value-objective component weights cannot be negative.')
@@ -357,9 +348,8 @@ class TrainingParams:
             raise ValueError('MCTS value-target warmup steps cannot be negative.')
         if self.duplicate_multiplicity_weight_cap is not None and self.duplicate_multiplicity_weight_cap < 1.0:
             raise ValueError('Duplicate multiplicity weight cap must be at least one.')
-        if self.credit_training is not None:
-            self.credit_training.presentation_credits_per_quantum(self.global_batch_size)
-            self.credit_training.unique_samples_per_quantum(self.global_batch_size)
+        self.credit_training.presentation_credits_per_quantum(self.global_batch_size)
+        self.credit_training.unique_samples_per_quantum(self.global_batch_size)
 
 
 @dataclass
@@ -412,30 +402,9 @@ class EvaluationParams:
 
 
 @dataclass
-class GatingParams:
-    num_games: int = 100
-    """This is the number of games to play for the gating. The more games the more accurate the gating but the longer the gating. Typically 100-1000 for gating"""
-
-    num_searches_per_turn: int = 100
-    """This is the number of searches to run the MCTS algorithm in the gating. This is used to evaluate the model against itself to see how well it is doing. The higher the number the more accurate the evaluation but the slower the evaluation. Typically 32-800 for gating"""
-
-    ignore_draws: bool = True
-    """This is a flag to indicate whether draws should be ignored in the gating. If this is set to True, the gating score will be calculated as wins / (wins + losses) instead of (wins + draws * 0.5) / num_games. This is used to ignore draws in the gating, as they are not relevant for the gating. Typically True for gating."""
-
-    gating_threshold: float = 0.55
-    """This is the threshold to use for the gating. If the model's win rate is above this threshold, it is considered to be better than the current model. The higher the threshold the more strict the gating is. Typically 0.50-0.55 for gating."""
-
-
-@dataclass
 class TrainingArgs:
     save_path: str
     """This is the path to save the model, datasamples, training logs, etc. to after each iteration"""
-
-    num_iterations: int
-    """This is the number of iterations to run first self-play then train"""
-
-    num_games_per_iteration: int
-    """This is the number of self-play games to run per iteration. I.e. the number of games to play and collect data for to train with"""
 
     network: NetworkParams
     self_play: SelfPlayParams
@@ -447,7 +416,5 @@ class TrainingArgs:
     self_play_search_warmup_iterations: int
     self_play_endgame_shortcut_fade_iterations: int = 0
     evaluation: EvaluationParams | None = None
-    gating: GatingParams | None = None
-
     on_startup: Callable[[], None] | None = None
     """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

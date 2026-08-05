@@ -111,8 +111,6 @@ class CreditEvaluationScheduler:
         args: TrainingArgs,
     ) -> None:
         parameters = args.training.credit_training
-        if parameters is None:
-            raise ValueError('Credit evaluation scheduling requires credit-driven training.')
 
         self.run_id = run_id
         self.args = args
@@ -484,7 +482,7 @@ def credit_evaluation_arguments(
 ) -> TrainingArgs:
     parameters = args.training.credit_training
     evaluation = args.evaluation
-    if parameters is None or evaluation is None:
+    if evaluation is None:
         return args
     if completed_optimizer_steps % parameters.evaluation_interval_optimizer_steps:
         raise ValueError('Credit evaluation must use a complete evaluation-checkpoint boundary.')

@@ -113,7 +113,7 @@ if __name__ == '__main__':
             run_started_at,
             run_configuration.budget.currency,
             run_configuration.budget.hourly_price,
-            commander.latest_completed_iteration,
+            commander.latest_completed_model_version,
         )
         raise
     finally:
@@ -128,7 +128,7 @@ if __name__ == '__main__':
         run_started_at,
         run_configuration.budget.currency,
         run_configuration.budget.hourly_price,
-        commander.latest_completed_iteration,
+        commander.latest_completed_model_version,
     )
 
     log('Training finished')
