@@ -1,7 +1,8 @@
 # Public web play
 
-The web-play deployment consists of a static Vite client in `deployment/web/`
-and a typed FastAPI service in `deployment/web/backend/`. The API is
+The web-play deployment consists of a static Vite client in
+`deployment/web/frontend/` and a typed FastAPI service in
+`deployment/web/backend/`. The API is
 authoritative for FEN and move validation. The browser sends the starting FEN
 and complete UCI history on every turn, so a request can recover after Modal has
 scaled the only container to zero. The client stores the last authoritative
@@ -68,8 +69,8 @@ configuration adds the repository root only after pytest has initialized.
 
 ## Local browser client
 
-From `deployment/web/`, copy `.env.example` to `.env.local` if the API is not on
-the documented local URL, then run:
+From `deployment/web/frontend/`, copy `.env.example` to `.env.local` if the API
+is not on the documented local URL, then run:
 
 ```powershell
 npm install
@@ -77,7 +78,7 @@ npm run dev
 ```
 
 Use `npm run build` for the static production bundle in
-`deployment/web/dist/`. Host that directory on any static host and set
+`deployment/web/frontend/dist/`. Host that directory on any static host and set
 `VITE_API_BASE_URL` at build time to the deployed Modal API URL.
 
 ## Modal deployment
@@ -128,7 +129,7 @@ After Modal prints the endpoint URL, build the client with that exact origin:
 
 ```powershell
 $env:VITE_API_BASE_URL='https://your-workspace--chess-model-web-play-web.modal.run'
-Set-Location .\deployment\web
+Set-Location .\deployment\web\frontend
 npm run build
 ```
 

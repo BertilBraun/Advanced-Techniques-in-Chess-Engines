@@ -46,7 +46,7 @@ image = (
         _REPOSITORY_ROOT / 'deployment',
         f'{_REMOTE_ROOT}/deployment',
         copy=True,
-        ignore=['web/node_modules/**', 'web/dist/**', '**/__pycache__/**'],
+        ignore=['web/frontend/**', '**/__pycache__/**'],
     )
     .env({'PYTHONPATH': f'{_REMOTE_ROOT}:{_REMOTE_ROOT}/py'})
 )

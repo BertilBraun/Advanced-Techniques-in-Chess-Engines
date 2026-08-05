@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - "deployment/web/**"
+      - "deployment/web/frontend/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -29,19 +29,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: deployment/web/package-lock.json
+          cache-dependency-path: deployment/web/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
-        working-directory: deployment/web
+        working-directory: deployment/web/frontend
 
       - name: Test
         run: npm test
-        working-directory: deployment/web
+        working-directory: deployment/web/frontend
 
       - name: Build
         run: npm run build
-        working-directory: deployment/web
+        working-directory: deployment/web/frontend
         env:
           VITE_API_BASE_URL: https://bertil-braun-private--chess-model-web-play-chesswebplay-web.modal.run
 
@@ -51,7 +51,7 @@ jobs:
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: deployment/web/dist
+          path: deployment/web/frontend/dist
 
   deploy:
     environment:
