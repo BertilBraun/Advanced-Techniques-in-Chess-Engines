@@ -371,13 +371,14 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | in_progress |
+| R8 | Go pipeline integration | awaiting_user_review |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8. R1 through R7 are accepted.
+Current authorization: R8 implementation is complete and awaiting user review.
+R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -736,6 +737,9 @@ task.
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
 | 2026-08-05 | R8 | Design decision | A Go game terminated by the maximum-move safety bound has no result target and produces no eligible replay samples or credits; its completed-game record remains archived for telemetry and recovery. | Use R7's explicit terminal-without-value contract rather than inventing a training label. |
+| 2026-08-06 | R8 | Contract adjustment | Chess's compile-time inference dimensions prevented resolved 7x7 and 9x9 Go experiments from sharing the direct-inference artifact boundary. | Make inference artifacts carry explicit channel, row, column, action, and outcome dimensions; validate resolved Go configuration against the selected native template before starting self-play. |
+| 2026-08-06 | R8 | Design change | Go exposed shared search-tree and replay-sampling mechanics alongside genuinely different state, action, target, augmentation, model, and loss semantics. | Instantiate one typed native game-search template for chess, Go 7x7, and Go 9x9; share packed storage, deterministic rank sampling, credit, publication, and recovery infrastructure while retaining concrete per-game Python contracts. |
+| 2026-08-06 | R8 | Scope boundary | Go evaluation requires the external engine adapter, opponent ladders, and elapsed scheduling assigned to R9. | Keep the typed Go evaluation configuration in R8, but do not execute Go evaluation until R9 is authorized. Existing chess evaluation remains unchanged. |
 | 2026-08-06 | R3/R4 | Design change | The disk replay and its reanalysis sidecars were replaced together by completed-game archives and RAM snapshots; the reanalysis settings were removed rather than left inert in the new ownership model. | Review with the combined R3/R4 implementation; any future reanalysis design must use completed-game or snapshot ownership explicitly. |
 | 2026-08-06 | R3/R4 | Design change | Archive frame headers retain identity, credit totals, and eligible-sample counts so restart scans metadata but materializes only the newest capacity-sized tail. Memory mapping is deferred because the current object replay would require a second packed columnar representation and 10 GB across four ranks is acceptable. | Reconsider shared read-only memory only if target-hardware measurements show RAM or DDP snapshot publication is limiting. |
 | 2026-08-06 | R6 | Design change | R6 establishes the packed-plane representation needed by Go before implementing Go: tested fixed-size C++ bitboards, one explicit cross-language layout, a contiguous Python packed value type, and a behavior-preserving chess integration. | Share storage mechanics and fixtures, not chess/Go plane semantics; prohibit per-plane Python objects and review projected replay memory before acceptance. |
