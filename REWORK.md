@@ -349,8 +349,8 @@ process group and records the resulting status.
 | --- | --- | --- |
 | R1 | Remove Python MCTS and obsolete games | accepted |
 | R2 | Credit-only training lifecycle and commander cleanup | accepted |
-| R3 | Chess completed-game persistence and replay materialization | in_progress |
-| R4 | Chess RAM replay, batch construction, and DDP integration | in_progress |
+| R3 | Chess completed-game persistence and replay materialization | awaiting_user_review |
+| R4 | Chess RAM replay, batch construction, and DDP integration | awaiting_user_review |
 | R5 | Chess game-contract and configuration extraction | pending |
 | R6 | Shared bitboard and chess packed-plane integration | pending |
 | R7 | Native Go game implementation | pending |
@@ -360,7 +360,7 @@ process group and records the resulting status.
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 and R2 accepted. R3 and R4 are authorized and in progress as one implementation unit.
+Current authorization: R1 and R2 accepted. R3 and R4 are awaiting user review. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -698,3 +698,4 @@ task.
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
 | 2026-08-05 | R8 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
+| 2026-08-06 | R3/R4 | Design change | The disk replay and its reanalysis sidecars were replaced together by completed-game archives and RAM snapshots; the reanalysis settings were removed rather than left inert in the new ownership model. | Review with the combined R3/R4 implementation; any future reanalysis design must use completed-game or snapshot ownership explicitly. |
