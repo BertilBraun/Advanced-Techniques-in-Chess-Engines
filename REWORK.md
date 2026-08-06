@@ -370,14 +370,14 @@ process group and records the resulting status.
 | R4 | Chess RAM replay, batch construction, and DDP integration | accepted |
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
-| R7 | Native Go game implementation | awaiting_user_review |
+| R7 | Native Go game implementation | accepted |
 | R8 | Go pipeline integration | pending |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R7 only. R1 through R6 are accepted. R7 awaits user review. No later phase is authorized.
+Current authorization: no implementation phase. R1 through R7 are accepted. R8 is not authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -740,3 +740,4 @@ task.
 | 2026-08-06 | R3/R4 | Design change | Archive frame headers retain identity, credit totals, and eligible-sample counts so restart scans metadata but materializes only the newest capacity-sized tail. Memory mapping is deferred because the current object replay would require a second packed columnar representation and 10 GB across four ranks is acceptable. | Reconsider shared read-only memory only if target-hardware measurements show RAM or DDP snapshot publication is limiting. |
 | 2026-08-06 | R6 | Design change | R6 establishes the packed-plane representation needed by Go before implementing Go: tested fixed-size C++ bitboards, one explicit cross-language layout, a contiguous Python packed value type, and a behavior-preserving chess integration. | Share storage mechanics and fixtures, not chess/Go plane semantics; prohibit per-plane Python objects and review projected replay memory before acceptance. |
 | 2026-08-06 | R7 | Contract adjustment | Go can terminate at the maximum-move safety bound without a game value, while the chess contract previously exposed only a required terminal result. | Add an optional `terminalValue` contract operation; chess returns its existing result for terminal positions and no value for ongoing positions, while maximum-move Go returns no value. |
+| 2026-08-06 | Post-R7 | Design cleanup | Chess board state, action encoding, input encoding, and replay history remained at the native source root after the game-specific directories were introduced. | Consolidate their authoritative implementations as `ChessBoard`, `ChessAction`, `ChessEncoding`, and `ChessHistory` units under `cpp/src/games/chess`; keep R8 pending. |

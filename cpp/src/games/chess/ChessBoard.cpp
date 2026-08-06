@@ -1,4 +1,4 @@
-#include "Board.h"
+#include "games/chess/ChessBoard.hpp"
 
 #include "bitboard.h"
 #include "movegen.h"

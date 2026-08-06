@@ -1,9 +1,9 @@
 #include "common.hpp"
 
-#include "BoardEncoding.hpp"
 #include "InteractiveEngine.hpp"
 #include "MCTS/MCTS.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/go/GoBindings.hpp"
 

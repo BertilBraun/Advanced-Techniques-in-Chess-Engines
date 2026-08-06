@@ -1,4 +1,4 @@
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 namespace defines {
 const std::vector<std::pair<int, int>> DIRECTIONS = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},

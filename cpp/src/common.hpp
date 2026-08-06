@@ -112,7 +112,7 @@ static inline constexpr std::array PIECE_TYPES = {PieceType::PAWN,   PieceType::
                                                   PieceType::BISHOP, PieceType::ROOK,
                                                   PieceType::QUEEN,  PieceType::KING};
 
-#include "Board.h"
+#include "games/chess/ChessBoard.hpp"
 
 #ifdef _WIN32
 #pragma warning(push, 0)

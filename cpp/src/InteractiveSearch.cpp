@@ -1,7 +1,7 @@
 #include "InteractiveSearch.hpp"
 
 #include "InferenceResultProcessing.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 namespace {
 constexpr std::size_t ENCODED_BOARD_SIZE = BOARD_C * BOARD_LEN * BOARD_LEN;
@@ -154,9 +154,9 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
             const EvalNodeIndex leafIndex = pending.leaves[processed];
             EvalSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
-            const InferenceResult inferenceResult = processInferenceResult(
-                policyData + processed * ACTION_SIZE, outcomeData + processed * WDL_OUTPUT_SIZE,
-                leaf.board);
+            const InferenceResult inferenceResult =
+                processInferenceResult(policyData + processed * ACTION_SIZE,
+                                       outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)

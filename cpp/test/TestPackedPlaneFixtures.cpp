@@ -1,4 +1,4 @@
-#include "BoardEncoding.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 #include <fstream>
 #include <iostream>

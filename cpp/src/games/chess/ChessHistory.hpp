@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Board.h"
+#include "games/chess/ChessBoard.hpp"
 
 [[nodiscard]] Move findLegalMove(const Board &board, const std::string &moveUci);
 

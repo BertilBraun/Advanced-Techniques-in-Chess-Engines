@@ -1,8 +1,8 @@
 #pragma once
 
-#include "BoardEncoding.hpp"
 #include "InferenceClientTypes.hpp"
 #include "InferenceModel.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>

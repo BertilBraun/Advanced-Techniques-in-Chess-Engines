@@ -1,4 +1,4 @@
-#include "GameHistory.hpp"
+#include "games/chess/ChessHistory.hpp"
 
 #include "common.hpp"
 

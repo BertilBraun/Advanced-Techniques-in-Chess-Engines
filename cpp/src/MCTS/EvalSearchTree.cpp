@@ -1,6 +1,6 @@
 #include "EvalSearchTree.hpp"
 
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 namespace {
 constexpr std::uint32_t VIRTUAL_LOSS_DELTA = 1;

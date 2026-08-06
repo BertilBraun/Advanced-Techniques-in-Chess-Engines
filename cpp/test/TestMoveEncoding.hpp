@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 static void testMoveEncoding() {
     for (int _ : range(100)) {
@@ -38,11 +38,13 @@ static void testMoveEncoding() {
                 std::cerr << "Missmatch of decoded moves in Board: " << board.fen() << std::endl;
                 std::cerr << "Valid moves:\n";
                 for (const auto &move : moves) {
-                    std::cerr << "  " << toString(move) << " (" << encodeMove(move, &board) << ")\n";
+                    std::cerr << "  " << toString(move) << " (" << encodeMove(move, &board)
+                              << ")\n";
                 }
                 std::cerr << "Decoded moves:\n";
                 for (const auto &decoded : decodedMoves) {
-                    std::cerr << "  " << toString(decoded) << " (" << encodeMove(decoded, &board) << ")\n";
+                    std::cerr << "  " << toString(decoded) << " (" << encodeMove(decoded, &board)
+                              << ")\n";
                 }
             }
 

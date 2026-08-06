@@ -1,4 +1,4 @@
-#include "BoardEncoding.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 #include <span>
 
@@ -105,18 +105,16 @@ torch::Tensor toTensor(const CompressedEncodedBoard &compressed) {
 void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, int8 *destination) {
     assert(destination != nullptr);
     serialize_binary_planes<BOARD_LEN, BINARY_C>(
-        compressed.bits,
-        std::span<int8>(destination, CHESS_PACKED_BINARY_BYTES));
-    std::memcpy(
-        destination + CHESS_PACKED_BINARY_BYTES,
-        compressed.scal.data(),
-        compressed.scal.size() * sizeof(int8));
+        compressed.bits, std::span<int8>(destination, CHESS_PACKED_BINARY_BYTES));
+    std::memcpy(destination + CHESS_PACKED_BINARY_BYTES, compressed.scal.data(),
+                compressed.scal.size() * sizeof(int8));
 }
 
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination) {
     assert(destination != nullptr);
 
-    for (std::size_t channelIndex = 0; channelIndex < static_cast<std::size_t>(BINARY_C); ++channelIndex) {
+    for (std::size_t channelIndex = 0; channelIndex < static_cast<std::size_t>(BINARY_C);
+         ++channelIndex) {
         const uint64 bits = compressed.bits[channelIndex].word(0);
         int8 *planeDestination = destination + static_cast<std::ptrdiff_t>(channelIndex) * 64;
 
@@ -133,7 +131,8 @@ void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destina
         }
     }
 
-    for (std::size_t scalarIndex = 0; scalarIndex < static_cast<std::size_t>(SCALAR_C); ++scalarIndex) {
+    for (std::size_t scalarIndex = 0; scalarIndex < static_cast<std::size_t>(SCALAR_C);
+         ++scalarIndex) {
         int8 *scalarDestination =
             destination + static_cast<std::ptrdiff_t>(BINARY_C + scalarIndex) * 64;
         std::memset(scalarDestination, compressed.scal[scalarIndex], 64);

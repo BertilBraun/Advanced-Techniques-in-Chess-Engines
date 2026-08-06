@@ -1,8 +1,8 @@
 #include "InferenceClient.hpp"
 
-#include "BoardEncoding.hpp"
 #include "InferenceModel.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)

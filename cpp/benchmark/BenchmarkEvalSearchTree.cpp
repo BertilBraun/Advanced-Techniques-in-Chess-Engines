@@ -10,9 +10,9 @@
 #include <unistd.h>
 #endif
 
-#include "BoardEncoding.hpp"
 #include "MCTS/EvalMCTSNode.h"
 #include "MCTS/EvalSearchTree.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 namespace {
 struct BenchmarkResult {

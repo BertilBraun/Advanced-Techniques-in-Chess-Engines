@@ -4,9 +4,9 @@
 #include <stdexcept>
 #include <string>
 
-#include "BoardEncoding.hpp"
-#include "GameHistory.hpp"
 #include "MCTS/EvalSearchTree.hpp"
+#include "games/chess/ChessEncoding.hpp"
+#include "games/chess/ChessHistory.hpp"
 
 namespace {
 void require(const bool condition, const std::string &message) {

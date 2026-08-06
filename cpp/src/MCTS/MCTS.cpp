@@ -1,8 +1,8 @@
 #include "MCTS.hpp"
 
-#include "../BoardEncoding.hpp"
 #include "DirectSelfPlaySearch.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 #include <numeric>

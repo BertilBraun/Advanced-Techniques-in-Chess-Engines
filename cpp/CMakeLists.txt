@@ -202,8 +202,8 @@ add_test(NAME BitBoardTest COMMAND BitBoardTest)
 add_executable(
         PackedPlaneFixtureTest
         test/TestPackedPlaneFixtures.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -218,7 +218,7 @@ add_test(NAME PackedPlaneFixtureTest COMMAND PackedPlaneFixtureTest)
 add_executable(
         BoardLegalMovesCacheTest
         test/TestBoardLegalMovesCache.cpp
-        src/Board.cpp
+        src/games/chess/ChessBoard.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -232,8 +232,8 @@ add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
 add_executable(
         EvalMCTSNodeChildrenTest
         test/TestEvalMCTSNodeChildren.cpp
-        src/Board.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -247,10 +247,10 @@ add_test(NAME EvalMCTSNodeChildrenTest COMMAND EvalMCTSNodeChildrenTest)
 add_executable(
         EvalSearchTreeTest
         test/TestEvalSearchTree.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
-        src/GameHistory.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessHistory.cpp
+        src/games/chess/ChessAction.cpp
         src/MCTS/EvalSearchTree.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -265,9 +265,9 @@ add_test(NAME EvalSearchTreeTest COMMAND EvalSearchTreeTest)
 add_executable(
         EvalSearchTreeBenchmark
         benchmark/BenchmarkEvalSearchTree.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessAction.cpp
         src/MCTS/EvalSearchTree.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -281,10 +281,10 @@ target_link_libraries(EvalSearchTreeBenchmark PRIVATE "${TORCH_LIBRARIES}")
 add_executable(
         ChessGameContractTest
         test/TestChessGameContract.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
-        src/GameHistory.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessHistory.cpp
+        src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -302,8 +302,8 @@ add_test(NAME GoGameContractTest COMMAND GoGameContractTest)
 add_executable(
         GameHistoryTest
         test/TestGameHistory.cpp
-        src/Board.cpp
-        src/GameHistory.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessHistory.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -317,9 +317,9 @@ add_test(NAME GameHistoryTest COMMAND GameHistoryTest)
 add_executable(
         SearchTreeArenaTest
         test/TestSearchTreeArena.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessAction.cpp
         src/MCTS/SearchTree.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -334,9 +334,9 @@ add_test(NAME SearchTreeArenaTest COMMAND SearchTreeArenaTest)
 add_executable(
         MovePolicyProcessingTest
         test/TestMovePolicyProcessing.cpp
-        src/Board.cpp
+        src/games/chess/ChessBoard.cpp
         src/InferenceResultProcessing.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -350,8 +350,8 @@ add_test(NAME MovePolicyProcessingTest COMMAND MovePolicyProcessingTest)
 add_executable(
         DirectBoardEncodingTest
         test/TestDirectBoardEncoding.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -374,14 +374,14 @@ add_test(NAME DirectInferencePipelineTest COMMAND DirectInferencePipelineTest)
 add_executable(
         DirectSelfPlaySearchTest
         test/TestDirectSelfPlaySearch.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
         src/InferenceResultProcessing.cpp
         src/MCTS/DirectSelfPlaySearch.cpp
         src/MCTS/MCTS.cpp
         src/MCTS/SearchTree.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessAction.cpp
         src/InferenceClient.cpp
         src/util/Log.cpp
         src/util/ThreadPool.cpp
@@ -399,11 +399,11 @@ add_test(NAME DirectSelfPlaySearchTest COMMAND DirectSelfPlaySearchTest)
 add_executable(
         DirectInferenceBenchmark
         benchmark/DirectInferenceBenchmark.cpp
-        src/Board.cpp
-        src/BoardEncoding.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
         src/InferenceResultProcessing.cpp
-        src/MoveEncoding.cpp
+        src/games/chess/ChessAction.cpp
         src/InferenceClient.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"

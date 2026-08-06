@@ -1,8 +1,8 @@
-#include "Board.h"
-#include "BoardEncoding.hpp"
 #include "DirectInference.hpp"
-#include "InferenceResultProcessing.hpp"
 #include "InferenceClient.hpp"
+#include "InferenceResultProcessing.hpp"
+#include "games/chess/ChessBoard.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 #include <barrier>
 #include <nlohmann/json.hpp>
@@ -305,9 +305,8 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
 
 template <typename Client>
 nlohmann::json runClient(const Arguments &arguments, const std::vector<Board> &boards) {
-    const InferenceClientParams parameters(0, arguments.modelPath,
-                                           static_cast<int>(arguments.batchSize), 0,
-                                           arguments.device);
+    const InferenceClientParams parameters(
+        0, arguments.modelPath, static_cast<int>(arguments.batchSize), 0, arguments.device);
     Client client(parameters);
     double checksum = 0.0;
     std::vector<const Board *> warmupBatch;

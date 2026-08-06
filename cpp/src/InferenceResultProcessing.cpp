@@ -1,6 +1,6 @@
 #include "InferenceResultProcessing.hpp"
 
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 InferenceResult processInferenceResult(const float *policyData, const float *outcomeData,
                                        const Board &board) {

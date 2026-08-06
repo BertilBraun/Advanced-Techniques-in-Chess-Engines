@@ -1,6 +1,6 @@
 #include "SearchTree.hpp"
 
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 namespace {
 constexpr uint32 VIRTUAL_LOSS_DELTA = 1;
@@ -429,8 +429,9 @@ std::vector<MCTSChild> SearchTree::rootChildren() const {
     snapshots.reserve(root.children.size());
     for (const Child &rootChild : root.children) {
         snapshots.push_back({toString(rootChild.move), encodeMove(rootChild.move, &root.board),
-                             rootChild.raw_policy, rootChild.policy, rootChild.number_of_visits, rootChild.result_sum,
-                             rootChild.virtual_loss, rootChild.node_index != INVALID_NODE_INDEX});
+                             rootChild.raw_policy, rootChild.policy, rootChild.number_of_visits,
+                             rootChild.result_sum, rootChild.virtual_loss,
+                             rootChild.node_index != INVALID_NODE_INDEX});
     }
     return snapshots;
 }

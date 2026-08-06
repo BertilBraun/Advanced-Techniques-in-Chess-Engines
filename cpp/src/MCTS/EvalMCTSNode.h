@@ -4,7 +4,7 @@
 
 #include "common.hpp"
 
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 #include "MCTS.hpp"
 
@@ -33,9 +33,9 @@ public:
     }
 
     static std::shared_ptr<EvalMCTSNode> createRoot(Board board) {
-        return std::shared_ptr<EvalMCTSNode>(new EvalMCTSNode{
-            std::make_unique<Board>(std::move(board)), 1.0f, Move::null(),
-            std::weak_ptr<EvalMCTSNode>()});
+        return std::shared_ptr<EvalMCTSNode>(
+            new EvalMCTSNode{std::make_unique<Board>(std::move(board)), 1.0f, Move::null(),
+                             std::weak_ptr<EvalMCTSNode>()});
     }
 
     /* ──────────────────  status helpers (thread‑safe) ───────────────── */
@@ -182,9 +182,7 @@ inline bool EvalMCTSNode::tryBeginEvaluation() {
     return !evaluationInProgress.test_and_set(std::memory_order_acquire);
 }
 
-inline void EvalMCTSNode::endEvaluation() {
-    evaluationInProgress.clear(std::memory_order_release);
-}
+inline void EvalMCTSNode::endEvaluation() { evaluationInProgress.clear(std::memory_order_release); }
 
 inline void EvalMCTSNode::addVirtualLoss() {
     for (auto n = shared_from_this(); n; n = n->parent.lock()) {

@@ -1,7 +1,7 @@
 #include "DirectSelfPlaySearch.hpp"
 
 #include "../InferenceResultProcessing.hpp"
-#include "../MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 namespace {

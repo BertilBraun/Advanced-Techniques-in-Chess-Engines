@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "BoardEncoding.hpp"
 #include "MCTS/SearchTree.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 namespace {
 void require(const bool condition, const std::string &message) {

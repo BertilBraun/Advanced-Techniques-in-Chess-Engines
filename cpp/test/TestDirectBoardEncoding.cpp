@@ -1,4 +1,4 @@
-#include "BoardEncoding.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 int main() {
     Bitboards::init();

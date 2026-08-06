@@ -1,5 +1,5 @@
 #include "InferenceResultProcessing.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
 
 #include "bitboard.h"
 #include "position.h"

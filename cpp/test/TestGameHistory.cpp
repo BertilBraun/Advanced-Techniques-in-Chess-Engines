@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "GameHistory.hpp"
+#include "games/chess/ChessHistory.hpp"
 
 namespace {
 void require(const bool condition, const std::string &message) {
@@ -32,9 +32,7 @@ void testReplayPreservesRepetition() {
     require(board.isGameOver(), "third occurrence was not terminal");
 }
 
-void testReplayRejectsInvalidMoves() {
-    requireInvalidHistory({"e2e5"});
-}
+void testReplayRejectsInvalidMoves() { requireInvalidHistory({"e2e5"}); }
 } // namespace
 
 int main() {

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "BoardEncoding.hpp"
 #include "InferenceClientTypes.hpp"
 #include "common.hpp"
+#include "games/chess/ChessEncoding.hpp"
 
 namespace inference_model_detail {
 template <typename NamedTensorList>

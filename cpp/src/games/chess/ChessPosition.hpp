@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Board.h"
-#include "GameHistory.hpp"
+#include "games/chess/ChessBoard.hpp"
+#include "games/chess/ChessHistory.hpp"
 
 using ChessPosition = Board;
 
