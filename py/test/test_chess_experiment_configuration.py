@@ -8,6 +8,8 @@ from pydantic import ValidationError
 
 from src.experiment.chess_experiment import (
     ChessExperimentConfiguration,
+    GoExperimentConfiguration,
+    load_experiment_configuration,
     load_chess_experiment_configuration,
     validate_experiment_queue,
     write_resolved_chess_experiment,
@@ -23,7 +25,7 @@ def test_default_chess_experiment_loads_canonical_runtime_configuration() -> Non
     configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
 
     assert isinstance(configuration, ChessExperimentConfiguration)
-    assert configuration.chess.game == 'chess'
+    assert configuration.game == 'chess'
     assert configuration.training.network.hidden_size == 112
     assert configuration.training.self_play.search.c_param == pytest.approx(1.5)
     assert configuration.training.topology.trainer.ddp_device_ids == (0,)
@@ -48,6 +50,54 @@ def test_experiment_queue_validation_loads_multiple_experiments() -> None:
 
     assert len(configurations) == 2
     assert configurations[0] == configurations[1]
+
+
+@pytest.mark.parametrize(
+    ('path', 'board_size', 'action_count'),
+    (
+        (Path('configs/go-7x7-default-experiment.yaml'), 7, 50),
+        (Path('configs/go-9x9-default-experiment.yaml'), 9, 82),
+    ),
+)
+def test_go_experiments_resolve_deterministically(path: Path, board_size: int, action_count: int) -> None:
+    configuration = load_experiment_configuration(path)
+
+    assert isinstance(configuration, GoExperimentConfiguration)
+    assert configuration.go.representation.board_size == board_size
+    assert configuration.go.representation.action_count == action_count
+    assert load_experiment_configuration(path) == configuration
+
+
+def test_queue_validation_supports_both_games() -> None:
+    configurations = validate_experiment_queue(
+        (
+            DEFAULT_EXPERIMENT_PATH,
+            Path('configs/go-7x7-default-experiment.yaml'),
+            Path('configs/go-9x9-default-experiment.yaml'),
+        )
+    )
+
+    assert tuple(configuration.game for configuration in configurations) == ('chess', 'go', 'go')
+
+
+@pytest.mark.parametrize(
+    ('field_path', 'value', 'message'),
+    (
+        (('go', 'representation', 'board_size'), 8, 'Input should be 7 or 9'),
+        (('go', 'rules', 'maximum_moves'), 10, 'twice the board point count'),
+        (('go', 'objective', 'root_value_loss_weight'), 0.5, 'must sum to 1'),
+        (('training', 'self_play', 'maximum_game_plies'), 200, 'equal the rules maximum moves'),
+    ),
+)
+def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], value: JsonValue, message: str) -> None:
+    candidate = yaml.safe_load(Path('configs/go-7x7-default-experiment.yaml').read_text(encoding='utf-8'))
+    owner = candidate
+    for segment in field_path[:-1]:
+        owner = owner[segment]
+    owner[field_path[-1]] = value
+
+    with pytest.raises(ValidationError, match=message):
+        GoExperimentConfiguration.model_validate(candidate)
 
 
 def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> None:

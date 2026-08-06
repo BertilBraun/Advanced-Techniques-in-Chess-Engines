@@ -1,3 +1,4 @@
+game: chess
 run:
   run_name: chess-default
   tensorboard_run_directory: chess-default
@@ -150,7 +151,6 @@ training:
     resource_telemetry_interval_seconds: 5.0
   random_seed: 0
 chess:
-  game: chess
   rules:
     variant: standard
     chess960: false

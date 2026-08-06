@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | pending |
+| R8 | Go pipeline integration | in_progress |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: no implementation phase. R1 through R7 are accepted. R8 is not authorized.
+Current authorization: R8. R1 through R7 are accepted.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -735,7 +735,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
-| 2026-08-05 | R8 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
+| 2026-08-05 | R8 | Design decision | A Go game terminated by the maximum-move safety bound has no result target and produces no eligible replay samples or credits; its completed-game record remains archived for telemetry and recovery. | Use R7's explicit terminal-without-value contract rather than inventing a training label. |
 | 2026-08-06 | R3/R4 | Design change | The disk replay and its reanalysis sidecars were replaced together by completed-game archives and RAM snapshots; the reanalysis settings were removed rather than left inert in the new ownership model. | Review with the combined R3/R4 implementation; any future reanalysis design must use completed-game or snapshot ownership explicitly. |
 | 2026-08-06 | R3/R4 | Design change | Archive frame headers retain identity, credit totals, and eligible-sample counts so restart scans metadata but materializes only the newest capacity-sized tail. Memory mapping is deferred because the current object replay would require a second packed columnar representation and 10 GB across four ranks is acceptable. | Reconsider shared read-only memory only if target-hardware measurements show RAM or DDP snapshot publication is limiting. |
 | 2026-08-06 | R6 | Design change | R6 establishes the packed-plane representation needed by Go before implementing Go: tested fixed-size C++ bitboards, one explicit cross-language layout, a contiguous Python packed value type, and a behavior-preserving chess integration. | Share storage mechanics and fixtures, not chess/Go plane semantics; prohibit per-plane Python objects and review projected replay memory before acceptance. |
