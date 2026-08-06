@@ -6,7 +6,7 @@ import os
 import random
 import resource
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -151,8 +151,8 @@ def parse_arguments() -> Arguments:
         '--iteration',
         type=int,
         default=max(
-            TRAINING_ARGS.self_play_search_warmup_model_versions,
-            TRAINING_ARGS.self_play_endgame_shortcut_fade_model_versions,
+            TRAINING_ARGS.self_play.search_warmup_model_versions,
+            TRAINING_ARGS.self_play.endgame_shortcut_fade_model_versions,
         ),
     )
     parser.add_argument('--ready-file', type=Path)
@@ -235,22 +235,24 @@ def seed_python_libraries(seed: int, device: int) -> None:
 
 
 def create_self_play(arguments: Arguments) -> SelfPlay:
-    mcts = replace(
-        TRAINING_ARGS.self_play.mcts,
-        num_searches_per_turn=arguments.searches,
-        num_parallel_searches=arguments.parallel_searches,
-        num_threads=arguments.threads,
+    search = TRAINING_ARGS.self_play.search.validated_copy(
+        update={
+            'num_searches_per_turn': arguments.searches,
+            'num_parallel_searches': arguments.parallel_searches,
+            'num_threads': arguments.threads,
+        }
     )
-    self_play_configuration = replace(
-        TRAINING_ARGS.self_play,
-        mcts=mcts,
-        num_parallel_games=arguments.games,
-        inference_cache_capacity=arguments.cache_capacity,
+    self_play_configuration = TRAINING_ARGS.self_play.validated_copy(update={'search': search.model_dump(mode='json')})
+    self_play_topology = TRAINING_ARGS.topology.self_play.validated_copy(
+        update={'parallel_games_per_process': arguments.games}
     )
-    configuration = replace(
-        TRAINING_ARGS,
-        random_seed=arguments.seed,
-        self_play=self_play_configuration,
+    topology = TRAINING_ARGS.topology.validated_copy(update={'self_play': self_play_topology.model_dump(mode='json')})
+    configuration = TRAINING_ARGS.validated_copy(
+        update={
+            'random_seed': arguments.seed,
+            'self_play': self_play_configuration.model_dump(mode='json'),
+            'topology': topology.model_dump(mode='json'),
+        }
     )
 
     publisher = BenchmarkCompletedGamePublisher(Path(configuration.save_path), arguments.seed)
@@ -260,7 +262,7 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
     fast_searches = (
         arguments.fast_searches
         if arguments.fast_searches is not None
-        else int(arguments.searches * configuration.self_play.mcts.fast_searches_proportion_of_full_searches)
+        else int(arguments.searches * configuration.self_play.search.fast_searches_proportion_of_full_searches)
     )
     if fast_searches <= arguments.parallel_searches:
         raise ValueError(
@@ -278,10 +280,10 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             arguments.parallel_searches,
             arguments.searches,
             fast_searches,
-            configuration.self_play.mcts.c_param,
-            configuration.self_play.mcts.dirichlet_alpha,
-            configuration.self_play.mcts.dirichlet_epsilon,
-            configuration.self_play.mcts.min_visit_count,
+            configuration.self_play.search.c_param,
+            configuration.self_play.search.dirichlet_alpha,
+            configuration.self_play.search.dirichlet_epsilon,
+            configuration.self_play.search.min_visit_count,
             arguments.threads,
         ),
         use_inference_cache=arguments.use_inference_cache,

@@ -1,5 +1,4 @@
 import random
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -19,10 +18,9 @@ def test_prepare_dataset_records_source_and_hash(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(prepare_chess_evaluation_dataset, 'SOURCE_ROOT', tmp_path)
     monkeypatch.setattr(prepare_chess_evaluation_dataset, 'ensure_evaluation_dataset_exists', create_dataset)
-    evaluation = replace(configuration.chess.evaluation, dataset_path='memory.hdf5')
-    configuration = configuration.model_copy(
-        update={'chess': configuration.chess.model_copy(update={'evaluation': evaluation})}
-    )
+    evaluation = configuration.chess.evaluation.validated_copy(update={'dataset_path': 'memory.hdf5'})
+    chess = configuration.chess.validated_copy(update={'evaluation': evaluation.model_dump(mode='json')})
+    configuration = configuration.validated_copy(update={'chess': chess.model_dump(mode='json')})
 
     manifest = prepare_chess_evaluation_dataset.prepare_dataset(configuration, manifest_path)
 

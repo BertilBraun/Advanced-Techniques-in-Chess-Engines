@@ -4,6 +4,6 @@ from src.settings import (
 )
 
 
-training = TRAINING_ARGS.training
+training = TRAINING_ARGS.trainer
 evaluation = CHESS_EXPERIMENT.chess.evaluation
 network = TRAINING_ARGS.network

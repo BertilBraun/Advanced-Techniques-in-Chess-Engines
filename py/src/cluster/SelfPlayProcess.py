@@ -45,7 +45,7 @@ def run_self_play_process(
             run,
             'self_play',
             postfix_pid=False,
-            enabled=node_id < args.cluster.self_play_tensorboard_processes,
+            enabled=node_id < args.topology.self_play.tensorboard_processes,
         ),
     ):
         self_play_process.run()
@@ -151,7 +151,7 @@ class SelfPlayProcess:
         return model_version
 
     def _maximum_model_version(self) -> int:
-        parameters = self.args.training.credit_training
+        parameters = self.args.lifecycle.credit
         return parameters.maximum_optimizer_steps // parameters.optimizer_steps_per_quantum
 
     def _continuous_self_play_state(self, current_model_version: int) -> bool | None:

@@ -96,7 +96,7 @@ def main() -> None:
         if len(arguments.device_ids) > 1
         else logit_model
     )
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.training, training_model=training_model)
+    trainer = Trainer(model, optimizer, TRAINING_ARGS.trainer, training_model=training_model)
     scaler = GradScaler()
 
     batch_size = arguments.batch_size

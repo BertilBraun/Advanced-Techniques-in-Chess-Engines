@@ -21,16 +21,19 @@ from src.eval.evaluation_types import EvaluationModel, EvaluationMove, PairedEva
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
 from src.self_play.visit_policy import action_probabilities
 from src.settings import CurrentBoard
-from src.train.TrainingArgs import DirectSelfPlayParams, TrainingArgs
+from src.train.TrainingArgs import (
+    CachedInferenceParams,
+    DirectInferenceParams,
+    TrainingArgs,
+    UncachedInferenceParams,
+)
 
 
 @dataclass(frozen=True)
 class _EvaluationSettings:
-    inference_cache_capacity: int
-    use_inference_cache: bool = True
+    inference: CachedInferenceParams | UncachedInferenceParams | DirectInferenceParams
     mcts_threads: int = 1
     parallel_searches: int = 1
-    direct_inference: DirectSelfPlayParams | None = None
     maximum_game_plies: int | None = 200
     stockfish_binary_path: str | None = None
     stockfish_hash_mib: int = 128
@@ -192,9 +195,8 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
         _EvaluationTrainingArguments(
             save_path=str(tmp_path),
             evaluation=_EvaluationSettings(
-                inference_cache_capacity=0,
-                use_inference_cache=False,
-                direct_inference=DirectSelfPlayParams(
+                inference=DirectInferenceParams(
+                    mode='direct',
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
@@ -222,14 +224,13 @@ def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference_cache_capacity=0,
-                use_inference_cache=False,
-                parallel_searches=1,
-                direct_inference=DirectSelfPlayParams(
+                inference=DirectInferenceParams(
+                    mode='direct',
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
                 ),
+                parallel_searches=1,
             ),
         ),
     )
@@ -298,8 +299,7 @@ def test_policy_evaluation_uses_non_cached_inference_client(
         _EvaluationTrainingArguments(
             save_path='training-output',
             evaluation=_EvaluationSettings(
-                inference_cache_capacity=0,
-                use_inference_cache=False,
+                inference=UncachedInferenceParams(mode='uncached'),
             ),
             network='network-settings',
         ),
@@ -343,7 +343,7 @@ def test_skill_level_stockfish_uses_configured_hash(
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference_cache_capacity=50_000,
+                inference=CachedInferenceParams(mode='cached', capacity=50_000),
                 stockfish_binary_path='/stockfish',
                 stockfish_hash_mib=64,
             ),
@@ -405,7 +405,7 @@ def test_skill_level_stockfish_restarts_after_engine_error(
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference_cache_capacity=0,
+                inference=UncachedInferenceParams(mode='uncached'),
                 stockfish_binary_path='/stockfish',
                 stockfish_hash_mib=64,
             ),

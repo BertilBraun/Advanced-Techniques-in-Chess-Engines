@@ -83,9 +83,9 @@ if __name__ == '__main__':
     resource_telemetry = start_resource_telemetry(
         output_path=Path(TRAINING_ARGS.save_path),
         started_at=run_started_at,
-        cost_currency=TRAINING_ARGS.run_limits.cost_currency,
-        hourly_price=TRAINING_ARGS.run_limits.hourly_price,
-        interval_seconds=TRAINING_ARGS.run_limits.resource_telemetry_interval_seconds,
+        cost_currency=TRAINING_ARGS.limits.cost_currency,
+        hourly_price=TRAINING_ARGS.limits.hourly_price,
+        interval_seconds=TRAINING_ARGS.limits.resource_telemetry_interval_seconds,
     )
 
     gpu_usage_logger = start_gpu_usage_logger(run)
@@ -111,8 +111,8 @@ if __name__ == '__main__':
             RunOutcomeStatus.FAILED,
             str(error),
             run_started_at,
-            TRAINING_ARGS.run_limits.cost_currency,
-            TRAINING_ARGS.run_limits.hourly_price,
+            TRAINING_ARGS.limits.cost_currency,
+            TRAINING_ARGS.limits.hourly_price,
             commander.latest_completed_model_version,
         )
         raise
@@ -126,8 +126,8 @@ if __name__ == '__main__':
         outcome_status,
         commander.final_stop_reason,
         run_started_at,
-        TRAINING_ARGS.run_limits.cost_currency,
-        TRAINING_ARGS.run_limits.hourly_price,
+        TRAINING_ARGS.limits.cost_currency,
+        TRAINING_ARGS.limits.hourly_price,
         commander.latest_completed_model_version,
     )
 

@@ -1,4 +1,3 @@
-from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,20 +25,24 @@ def _credit_training_arguments() -> TrainingArgs:
         replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
-    training = replace(
-        TRAINING_ARGS.training,
-        global_batch_size=1_024,
-        local_batch_size=256,
-        credit_training=parameters,
+    trainer = TRAINING_ARGS.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 256})
+    trainer_topology = TRAINING_ARGS.topology.trainer.validated_copy(
+        update={
+            'device_type': 'cuda',
+            'process_group_backend': 'nccl',
+            'rank_zero_device_id': 0,
+            'ddp_device_ids': [0, 1, 2, 3],
+        }
     )
-    cluster = replace(
-        TRAINING_ARGS.cluster,
-        trainer_device_type='cpu',
-        trainer_process_group_backend='gloo',
-        trainer_rank_zero_device_id=0,
-        trainer_ddp_device_ids=(0, 1, 2, 3),
+    topology = TRAINING_ARGS.topology.validated_copy(update={'trainer': trainer_topology.model_dump(mode='json')})
+    lifecycle = TRAINING_ARGS.lifecycle.validated_copy(update={'credit': parameters.model_dump(mode='json')})
+    return TRAINING_ARGS.validated_copy(
+        update={
+            'trainer': trainer.model_dump(mode='json'),
+            'topology': topology.model_dump(mode='json'),
+            'lifecycle': lifecycle.model_dump(mode='json'),
+        }
     )
-    return replace(TRAINING_ARGS, training=training, cluster=cluster)
 
 
 def test_credit_progress_axis_is_trained_position_presentations() -> None:
@@ -72,10 +75,10 @@ def test_model_acknowledgement_rejects_wrong_immutable_jit_hash(tmp_path: Path) 
 
 def test_transient_evaluation_checkpoint_keeps_only_jit_artifact(tmp_path: Path) -> None:
     arguments = _credit_training_arguments()
-    arguments = replace(
-        arguments,
-        save_path=str(tmp_path),
-        evaluation_schedule=replace(arguments.evaluation_schedule, interval_optimizer_steps=500),
+    schedule = arguments.lifecycle.evaluation.validated_copy(update={'interval_optimizer_steps': 500})
+    lifecycle = arguments.lifecycle.validated_copy(update={'evaluation': schedule.model_dump(mode='json')})
+    arguments = arguments.validated_copy(
+        update={'save_path': str(tmp_path), 'lifecycle': lifecycle.model_dump(mode='json')}
     )
     manifest = CheckpointManifest(
         iteration=10,

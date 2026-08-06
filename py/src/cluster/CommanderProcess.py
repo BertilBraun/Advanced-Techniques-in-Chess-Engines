@@ -120,7 +120,7 @@ class CommanderProcess:
 
     def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
-        yield from self._run_training_lifecycle(self.args.training.credit_training)
+        yield from self._run_training_lifecycle(self.args.lifecycle.credit)
 
     def _run_training_lifecycle(
         self,
@@ -148,7 +148,7 @@ class CommanderProcess:
                     yield (
                         credit_training_progress_axis(
                             completed.progress,
-                            self.args.training.global_batch_size,
+                            self.args.trainer.global_batch_size,
                         ),
                         completed.result.training_stats,
                     )
@@ -167,7 +167,7 @@ class CommanderProcess:
         ledger = CreditTrainingLedger(
             Path(self.args.save_path),
             parameters,
-            self.args.training.global_batch_size,
+            self.args.trainer.global_batch_size,
         )
         self._validate_credit_recovery_checkpoint(ledger.progress.model_version, ledger.run_path)
         self.latest_completed_model_version = ledger.progress.model_version
@@ -176,7 +176,7 @@ class CommanderProcess:
         initial_manifest = create_credit_publication_manifest(
             ledger.run_path,
             ledger.progress,
-            self.args.training.global_batch_size,
+            self.args.trainer.global_batch_size,
         )
         initial_pointer = write_credit_publication_manifest(ledger.run_path, initial_manifest)
         self._publish_credit_manifest(initial_manifest, initial_pointer)
@@ -188,7 +188,7 @@ class CommanderProcess:
             create_credit_publication_manifest(
                 ledger.run_path,
                 ledger.progress,
-                self.args.training.global_batch_size,
+                self.args.trainer.global_batch_size,
             )
         )
         evaluation_scheduler.poll()
@@ -219,7 +219,7 @@ class CommanderProcess:
         replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.progress.model_version)
         replay_state = lifecycle.trainer.maintain_replay(replay_capacity)
         progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
-        required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
+        required_credits = parameters.presentation_credits_per_quantum(self.args.trainer.global_batch_size)
         if not progress.can_train(required_credits):
             return None
         completed_at = monotonic()
@@ -295,7 +295,7 @@ class CommanderProcess:
             replay_weighted_mean_position_age_seconds=replay_state.weighted_mean_position_age_seconds,
             publication_seconds=completed.publication.publication_seconds,
             acknowledgement_seconds=completed.publication.acknowledgement_seconds,
-            global_batch_size=self.args.training.global_batch_size,
+            global_batch_size=self.args.trainer.global_batch_size,
             evaluation_source_model_version=scheduler.current_source_version,
             evaluation_status=scheduler.current_status,
         )
@@ -354,7 +354,7 @@ class CommanderProcess:
         manifest = create_credit_publication_manifest(
             Path(self.args.save_path),
             prepared.prepared_progress,
-            self.args.training.global_batch_size,
+            self.args.trainer.global_batch_size,
         )
         pointer = write_credit_publication_manifest(Path(self.args.save_path), manifest)
         publication_seconds = monotonic() - started_at
@@ -430,7 +430,7 @@ class CommanderProcess:
             return
         if model_version in pinned_model_versions:
             return
-        parameters = self.args.training.credit_training
+        parameters = self.args.lifecycle.credit
         optimizer_step = model_version * parameters.optimizer_steps_per_quantum
         if optimizer_step % parameters.retained_checkpoint_interval_steps == 0:
             return
@@ -439,7 +439,7 @@ class CommanderProcess:
         if not manifest_path.exists():
             return
         checkpoint = CheckpointManifest.model_validate_json(manifest_path.read_text(encoding='utf-8'))
-        transient_evaluation_checkpoint = optimizer_step % self.args.evaluation_schedule.interval_optimizer_steps == 0
+        transient_evaluation_checkpoint = optimizer_step % self.args.lifecycle.evaluation.interval_optimizer_steps == 0
         file_names = [checkpoint.model_path, checkpoint.optimizer_path]
         if not transient_evaluation_checkpoint:
             file_names.append(checkpoint.jit_model_path)
@@ -454,7 +454,7 @@ class CommanderProcess:
         global_step: int,
         model_version: int,
     ) -> QuantumResult:
-        node_ids = self.args.cluster.self_play_node_ids_to_pause_during_training
+        node_ids = self.args.topology.self_play.node_ids_to_pause_during_training
         primary_error: BaseException | None = None
         try:
             if node_ids:
@@ -495,7 +495,7 @@ class CommanderProcess:
                 process.join(timeout=10)
 
     def _stop_reason(self) -> str | None:
-        limits = self.args.run_limits
+        limits = self.args.limits
         elapsed_seconds = monotonic() - self.started_at
         if elapsed_seconds >= limits.maximum_wall_time_seconds:
             return (
@@ -527,7 +527,7 @@ class CommanderProcess:
         return None
 
     def _setup_connections(self) -> None:
-        for node_id, device_id in enumerate(self.args.cluster.self_play_device_ids):
+        for node_id, device_id in enumerate(self.args.topology.self_play.device_ids):
             self.self_play_processes.append(self._start_self_play_process(node_id, device_id))
 
         log(f'Started {len(self.self_play_processes)} SelfPlay processes on {torch.cuda.device_count()} devices.')
@@ -546,7 +546,7 @@ class CommanderProcess:
             # 15 minutes since we check in after every move was played, so not very long timeouts required
             if self._ensure_process_is_running(process, f'SELF PLAY {i}', timeout=15 * 60):
                 # if the process is not alive, restart it
-                device_id = self.args.cluster.self_play_device_ids[i]
+                device_id = self.args.topology.self_play.device_ids[i]
                 self.self_play_processes[i] = self._start_self_play_process(i, device_id)
 
     def _ensure_process_is_running(self, process: Process, name: str, timeout: int) -> bool:
@@ -566,21 +566,21 @@ class CommanderProcess:
                 starting_model_version,
                 self.args.network,
                 torch.device(
-                    self.args.cluster.trainer_device_type,
-                    self.args.cluster.trainer_rank_zero_device_id,
+                    self.args.topology.trainer.device_type,
+                    self.args.topology.trainer.rank_zero_device_id,
                 ),
                 self.args.save_path,
-                self.args.training.optimizer,
+                self.args.trainer.optimizer,
             )
             return
         model, optimizer = load_model_and_optimizer(
             starting_model_version,
             self.args.network,
             torch.device(
-                self.args.cluster.trainer_device_type,
-                self.args.cluster.trainer_rank_zero_device_id,
+                self.args.topology.trainer.device_type,
+                self.args.topology.trainer.rank_zero_device_id,
             ),
             self.args.save_path,
-            self.args.training.optimizer,
+            self.args.trainer.optimizer,
         )
         save_model_and_optimizer(model, optimizer, starting_model_version, self.args.save_path)

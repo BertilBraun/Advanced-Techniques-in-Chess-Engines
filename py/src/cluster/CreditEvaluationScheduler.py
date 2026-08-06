@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from dataclasses import replace
 from enum import Enum
 from pathlib import Path
 from typing import Protocol
@@ -101,7 +100,7 @@ class CreditEvaluationScheduler:
         args: TrainingArgs,
         evaluation_args: EvaluationParams,
     ) -> None:
-        parameters = args.evaluation_schedule
+        parameters = args.lifecycle.evaluation
 
         self.run_id = run_id
         self.args = args
@@ -469,24 +468,26 @@ def credit_evaluation_arguments(
     evaluation: EvaluationParams,
     completed_optimizer_steps: int,
 ) -> tuple[TrainingArgs, EvaluationParams]:
-    parameters = args.training.credit_training
-    schedule = args.evaluation_schedule
+    parameters = args.lifecycle.credit
+    schedule = args.lifecycle.evaluation
     if completed_optimizer_steps % schedule.interval_optimizer_steps:
         raise ValueError('Credit evaluation must use a complete evaluation-checkpoint boundary.')
     versions_per_evaluation = schedule.interval_optimizer_steps // parameters.optimizer_steps_per_quantum
-    translated_evaluation = replace(
-        evaluation,
-        previous_model_offsets=tuple(offset * versions_per_evaluation for offset in evaluation.previous_model_offsets),
-        historical_model_versions=tuple(
-            checkpoint_ordinal * versions_per_evaluation for checkpoint_ordinal in evaluation.historical_model_versions
-        ),
-        every_n_model_versions=versions_per_evaluation,
+    translated_evaluation = evaluation.validated_copy(
+        update={
+            'previous_model_offsets': [
+                offset * versions_per_evaluation for offset in evaluation.previous_model_offsets
+            ],
+            'historical_model_versions': [
+                checkpoint_ordinal * versions_per_evaluation
+                for checkpoint_ordinal in evaluation.historical_model_versions
+            ],
+            'every_n_model_versions': versions_per_evaluation,
+        }
     )
-    translated_args = replace(
-        args,
-        artifact_retention=replace(
-            args.artifact_retention,
-            milestone_inference_interval=versions_per_evaluation,
-        ),
+    retention = args.lifecycle.inference_retention.validated_copy(
+        update={'milestone_interval': versions_per_evaluation}
     )
+    lifecycle = args.lifecycle.validated_copy(update={'inference_retention': retention.model_dump(mode='json')})
+    translated_args = args.validated_copy(update={'lifecycle': lifecycle.model_dump(mode='json')})
     return translated_args, translated_evaluation

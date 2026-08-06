@@ -98,7 +98,7 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(
     try:
         device = torch.device('cpu')
         model = create_model(TRAINING_ARGS.network, device)
-        optimizer = create_optimizer(model, TRAINING_ARGS.training.optimizer)
+        optimizer = create_optimizer(model, TRAINING_ARGS.trainer.optimizer)
         wrapped_model = _wrap_distributed_model(model, device)
 
         assert any(key.startswith('module.') for key in wrapped_model.state_dict())
@@ -125,7 +125,7 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(
             TRAINING_ARGS.network,
             device,
             tmp_path,
-            TRAINING_ARGS.training.optimizer,
+            TRAINING_ARGS.trainer.optimizer,
         )
     finally:
         distributed.destroy_process_group()

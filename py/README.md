@@ -64,7 +64,7 @@ Optional dependencies for evaluation:
 3. **Start Training**:
 
     ```bash
-    python train.py --run-config configs/chess-clean-credit-4x4070-v13.json \
+    python train.py --run-config configs/chess-default-experiment.yaml \
       --expected-source-revision <git-revision> \
       --approval-file <approval.json>
     ```

@@ -65,13 +65,13 @@ class _FakeCreditTraining:
 
 @dataclass(frozen=True)
 class _FakeTraining:
-    credit_training: _FakeCreditTraining
+    credit: _FakeCreditTraining
 
 
 @dataclass(frozen=True)
 class _FakeTrainingArguments:
     save_path: str
-    training: _FakeTraining
+    lifecycle: _FakeTraining
 
 
 def _credit_publication(model_version: int) -> tuple[CreditPublicationPointer, CreditPublicationManifest]:
@@ -116,7 +116,7 @@ def test_credit_mode_continuous_command_has_no_iteration_game_cap(
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
         save_path=str(tmp_path),
-        training=_FakeTraining(
+        lifecycle=_FakeTraining(
             _FakeCreditTraining(
                 maximum_optimizer_steps=500_000,
                 optimizer_steps_per_quantum=50,
@@ -140,7 +140,7 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
         save_path=str(tmp_path),
-        training=_FakeTraining(
+        lifecycle=_FakeTraining(
             _FakeCreditTraining(
                 maximum_optimizer_steps=500_000,
                 optimizer_steps_per_quantum=50,
@@ -187,7 +187,7 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
         save_path=str(tmp_path),
-        training=_FakeTraining(
+        lifecycle=_FakeTraining(
             _FakeCreditTraining(
                 maximum_optimizer_steps=500_000,
                 optimizer_steps_per_quantum=50,
@@ -245,7 +245,7 @@ def test_credit_mode_rejects_invalid_published_model_version(
     process = object.__new__(SelfPlayProcess)
     process.args = _FakeTrainingArguments(
         save_path=str(tmp_path),
-        training=_FakeTraining(
+        lifecycle=_FakeTraining(
             _FakeCreditTraining(
                 maximum_optimizer_steps=500_000,
                 optimizer_steps_per_quantum=50,

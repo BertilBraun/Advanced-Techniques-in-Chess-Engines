@@ -14,7 +14,7 @@ from src.settings import log_scalar, TensorboardWriter
 from src.settings_common import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.train.TrainingArgs import EvaluationParams, TrainingArgs
+from src.train.TrainingArgs import DirectInferenceParams, EvaluationParams, TrainingArgs
 from src.util.save_paths import inference_model_path, model_save_path
 from src.util.tensorboard import log_scalars
 from src.experiment.evaluation_protocol import (
@@ -117,27 +117,28 @@ def _model_engine_condition(
     identifier: str,
 ) -> EngineCondition:
     evaluation = model_evaluation.evaluation_args
-    direct_inference = evaluation.direct_inference
-    settings = (
-        (
-            EngineSetting(name='InferenceScheduler', value='direct_multi_tree'),
-            EngineSetting(name='InferenceWorkers', value=str(direct_inference.inference_workers)),
-            EngineSetting(name='InferenceBatchSize', value=str(direct_inference.inference_batch_size)),
-            EngineSetting(
-                name='OutstandingBatchesPerWorker',
-                value=str(direct_inference.outstanding_batches_per_worker),
-            ),
-            EngineSetting(name='ParallelSearchesPerTree', value=str(evaluation.parallel_searches)),
-        )
-        if direct_inference is not None
-        else ()
-    )
+    match evaluation.inference:
+        case DirectInferenceParams() as direct_inference:
+            settings = (
+                EngineSetting(name='InferenceScheduler', value='direct_multi_tree'),
+                EngineSetting(name='InferenceWorkers', value=str(direct_inference.inference_workers)),
+                EngineSetting(name='InferenceBatchSize', value=str(direct_inference.inference_batch_size)),
+                EngineSetting(
+                    name='OutstandingBatchesPerWorker',
+                    value=str(direct_inference.outstanding_batches_per_worker),
+                ),
+                EngineSetting(name='ParallelSearchesPerTree', value=str(evaluation.parallel_searches)),
+            )
+            threads = 1
+        case _:
+            settings = ()
+            threads = evaluation.mcts_threads
     return EngineCondition(
         artifact_sha256=artifact_sha256,
         identifier=identifier,
         search_limit_name='mcts_root_visits',
         search_limit_value=model_evaluation.num_searches_per_turn,
-        threads=1 if direct_inference is not None else evaluation.mcts_threads,
+        threads=threads,
         settings=settings,
     )
 
@@ -508,7 +509,7 @@ class EvaluationProcess:
             game_limit: int | None = None,
         ) -> tuple[ModelEvaluation, int]:
             nonlocal evaluation_task_index
-            device_cycle = self.args.cluster.evaluation_device_cycle
+            device_cycle = self.args.topology.evaluation.device_cycle
             physical_device_id = evaluation_device_for_task(device_cycle, evaluation_task_index) if USE_GPU else 0
             evaluation_task_index += 1
             if game_limit is not None and game_limit % 2:
@@ -637,7 +638,7 @@ class EvaluationProcess:
                 else select_historical_model_versions(
                     iteration,
                     self.eval_args.historical_model_versions,
-                    self.args.artifact_retention.milestone_inference_interval,
+                    self.args.lifecycle.inference_retention.milestone_interval,
                     self.eval_args.historical_model_rotation_period,
                     self.eval_args.every_n_model_versions,
                 )

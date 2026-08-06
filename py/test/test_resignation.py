@@ -122,7 +122,7 @@ def test_post_cutoff_audit_positions_cannot_enter_ordinary_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = object.__new__(SelfPlay)
-    client.args = SimpleNamespace(mcts=SimpleNamespace(playout_cap_randomization=1.0))
+    client.args = SimpleNamespace(search=SimpleNamespace(playout_cap_randomization=1.0))
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=-0.97)
     game.resignation_trigger_ply = 80
     monkeypatch.setattr('src.self_play.SelfPlay.random.random', lambda: 0.0)

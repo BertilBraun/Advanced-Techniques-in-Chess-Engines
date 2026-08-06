@@ -113,7 +113,7 @@ def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path
     self_play = object.__new__(SelfPlay)
     self_play.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=30,
-        mcts=SimpleNamespace(min_visit_count=0),
+        search=SimpleNamespace(min_visit_count=0),
     )
     self_play.completed_game_publisher = publisher
     self_play.dataset = SelfPlayDataset()

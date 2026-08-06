@@ -90,7 +90,7 @@ def _open_file_soft_limit() -> int:
 
 def _validate_hardware(experiment: ChessExperimentConfiguration, hardware: ResolvedHardware) -> None:
     requested = experiment.run.hardware
-    cluster = experiment.training.cluster
+    topology = experiment.training.topology
     if hardware.visible_gpu_count != requested.gpu_count:
         raise ValueError(f'Expected {requested.gpu_count} visible GPUs, found {hardware.visible_gpu_count}.')
     if any(requested.gpu_model.casefold() not in gpu_name.casefold() for gpu_name in hardware.visible_gpu_names):
@@ -101,8 +101,8 @@ def _validate_hardware(experiment: ChessExperimentConfiguration, hardware: Resol
         raise ValueError('Host has less RAM than requested.')
     if hardware.free_disk_gib < requested.minimum_disk_gib:
         raise ValueError('Host has less free disk than requested.')
-    device_ids = cluster.trainer_ddp_device_ids + cluster.evaluation_device_cycle + cluster.self_play_device_ids
-    if cluster.trainer_device_type == 'cuda' and any(device_id >= requested.gpu_count for device_id in device_ids):
+    device_ids = topology.trainer.ddp_device_ids + topology.evaluation.device_cycle + topology.self_play.device_ids
+    if topology.trainer.device_type == 'cuda' and any(device_id >= requested.gpu_count for device_id in device_ids):
         raise ValueError('Configured CUDA device ID is outside the requested GPU range.')
 
 
@@ -112,7 +112,7 @@ def _validate_approval(
     source_revision: str,
 ) -> None:
     run = experiment.run
-    limits = experiment.training.run_limits
+    limits = experiment.training.limits
     if not run.requires_explicit_approval:
         raise ValueError('Training configurations must require explicit approval.')
     expected = (
@@ -177,7 +177,7 @@ def prepare_chess_training_run(
     open_file_soft_limit = _open_file_soft_limit()
     if open_file_soft_limit < run.environment.minimum_open_file_soft_limit:
         raise ValueError('Open-file soft limit is below the experiment requirement.')
-    if training.run_limits.maximum_open_file_count >= open_file_soft_limit:
+    if training.limits.maximum_open_file_count >= open_file_soft_limit:
         raise ValueError('Open-file safety stop must be lower than the process soft limit.')
 
     opening_suite_path = _resolve_source_path(evaluation.opening_suite_path) if evaluation.opening_suite_path else None
@@ -196,8 +196,8 @@ def prepare_chess_training_run(
     output_path = Path(training.save_path)
     manifest_path = output_path / 'run_manifest.json'
     initial_checkpoint_path = model_save_path(0, output_path)
-    optimizer_type = training.training.optimizer
-    device = torch.device(training.cluster.trainer_device_type, training.cluster.trainer_rank_zero_device_id)
+    optimizer_type = training.trainer.optimizer
+    device = torch.device(training.topology.trainer.device_type, training.topology.trainer.rank_zero_device_id)
     match run.resume:
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)

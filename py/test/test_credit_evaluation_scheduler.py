@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -20,7 +19,7 @@ from src.train.CreditPublication import (
     file_sha256,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs
+from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs, UncachedInferenceParams
 
 
 EvaluationTarget = Callable[[int, TrainingArgs, EvaluationParams, int, int | None], None]
@@ -78,24 +77,28 @@ def _arguments(
         replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
-    training = replace(
-        TRAINING_ARGS.training,
-        global_batch_size=1_024,
-        local_batch_size=256,
-        credit_training=parameters,
+    trainer = TRAINING_ARGS.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 1_024})
+    schedule = TRAINING_ARGS.lifecycle.evaluation.validated_copy(
+        update={
+            'interval_optimizer_steps': 1_000,
+            'full_interval_optimizer_steps': 2_000,
+            'timeout_seconds': 60,
+            'maximum_attempts': maximum_attempts,
+            'retry_backoff_seconds': retry_backoff_seconds,
+        }
     )
-    return replace(
-        TRAINING_ARGS,
-        save_path=str(run_path),
-        training=training,
-        evaluation_schedule=replace(
-            TRAINING_ARGS.evaluation_schedule,
-            interval_optimizer_steps=1_000,
-            full_interval_optimizer_steps=2_000,
-            timeout_seconds=60,
-            maximum_attempts=maximum_attempts,
-            retry_backoff_seconds=retry_backoff_seconds,
-        ),
+    lifecycle = TRAINING_ARGS.lifecycle.validated_copy(
+        update={
+            'credit': parameters.model_dump(mode='json'),
+            'evaluation': schedule.model_dump(mode='json'),
+        }
+    )
+    return TRAINING_ARGS.validated_copy(
+        update={
+            'save_path': str(run_path),
+            'trainer': trainer.model_dump(mode='json'),
+            'lifecycle': lifecycle.model_dump(mode='json'),
+        }
     )
 
 
@@ -104,10 +107,8 @@ def _evaluation() -> EvaluationParams:
         num_searches_per_turn=64,
         num_games=2,
         every_n_model_versions=1,
-        evaluate_initial_checkpoint=False,
         max_concurrent_tasks=1,
-        inference_cache_capacity=0,
-        use_inference_cache=False,
+        inference=UncachedInferenceParams(mode='uncached'),
         dataset_path=None,
         reference_model_path=None,
         opening_suite_path=None,
@@ -313,4 +314,4 @@ def test_credit_evaluation_offsets_are_evaluation_checkpoint_ordinals(tmp_path: 
     assert evaluation.previous_model_offsets == (20, 40)
     assert evaluation.historical_model_versions == (20, 40, 60)
     assert evaluation.every_n_model_versions == 20
-    assert translated.artifact_retention.milestone_inference_interval == 20
+    assert translated.lifecycle.inference_retention.milestone_interval == 20

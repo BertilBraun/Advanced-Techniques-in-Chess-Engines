@@ -79,25 +79,24 @@ class ChessExperimentConfiguration(FrozenModel):
     @model_validator(mode='after')
     def validate_experiment(self) -> ChessExperimentConfiguration:
         training = self.training
-        world_size = len(training.cluster.trainer_ddp_device_ids)
-        expected_global_batch_size = training.training.local_batch_size * world_size
-        if training.training.global_batch_size != expected_global_batch_size:
+        world_size = len(training.topology.trainer.ddp_device_ids)
+        expected_global_batch_size = training.trainer.local_batch_size * world_size
+        if training.trainer.global_batch_size != expected_global_batch_size:
             raise ValueError(
-                f'Global training batch size {training.training.global_batch_size} must equal '
-                f'local batch size {training.training.local_batch_size} times world size {world_size}.'
+                f'Global training batch size {training.trainer.global_batch_size} must equal '
+                f'local batch size {training.trainer.local_batch_size} times world size {world_size}.'
             )
-        training.evaluation_schedule.validate_for_optimizer_quantum(
-            training.training.credit_training.optimizer_steps_per_quantum
+        training.lifecycle.evaluation.validate_for_optimizer_quantum(
+            training.lifecycle.credit.optimizer_steps_per_quantum
         )
         evaluation = self.chess.evaluation
-        retention = training.artifact_retention
+        retention = training.lifecycle.inference_retention
         if evaluation.previous_model_offsets and (
-            max(evaluation.previous_model_offsets) >= retention.recent_inference_checkpoint_count
+            max(evaluation.previous_model_offsets) >= retention.recent_checkpoint_count
         ):
             raise ValueError('Recent inference-checkpoint retention must exceed every previous-model offset.')
         if any(
-            model_version % retention.milestone_inference_interval != 0
-            for model_version in evaluation.historical_model_versions
+            model_version % retention.milestone_interval != 0 for model_version in evaluation.historical_model_versions
         ):
             raise ValueError('Historical model versions must align with retained milestone checkpoints.')
         return self

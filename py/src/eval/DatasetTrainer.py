@@ -1,7 +1,6 @@
 import os
 import sys
 import torch
-from dataclasses import replace
 from pathlib import Path
 from torch.utils.data import DataLoader
 
@@ -34,7 +33,7 @@ def train_model(
     trainer = Trainer(
         model,
         optimizer,
-        replace(TRAINING_ARGS.training, num_workers=2),
+        TRAINING_ARGS.trainer,
     )
 
     log(
@@ -64,7 +63,7 @@ def main(dataset_paths: list[str]):
         test_dataset = test_dataset.deduplicate()
         test_dataloader = training_dataloader(
             test_dataset,
-            batch_size=TRAINING_ARGS.training.global_batch_size,
+            batch_size=TRAINING_ARGS.trainer.global_batch_size,
             num_workers=1,
         )
 
@@ -74,14 +73,14 @@ def main(dataset_paths: list[str]):
         train_stats = train_dataset.stats
         train_dataloader = training_dataloader(
             train_dataset,
-            batch_size=TRAINING_ARGS.training.global_batch_size,
+            batch_size=TRAINING_ARGS.trainer.global_batch_size,
             num_workers=1,
         )
 
         log('Creating model...')
         # Instantiate the model
         model = create_model(TRAINING_ARGS.network, device=device)
-        optimizer = create_optimizer(model, TRAINING_ARGS.training.optimizer)
+        optimizer = create_optimizer(model, TRAINING_ARGS.trainer.optimizer)
 
         # Train the model
         log('Starting training...')
@@ -100,7 +99,7 @@ def main(dataset_paths: list[str]):
                     TRAINING_ARGS.network,
                     device,
                     save_folder,
-                    TRAINING_ARGS.training.optimizer,
+                    TRAINING_ARGS.trainer.optimizer,
                 )
                 log(f'Loaded model_{pre_iter}.pt')
                 break

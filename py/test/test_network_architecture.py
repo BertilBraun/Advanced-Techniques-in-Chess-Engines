@@ -43,10 +43,14 @@ def test_squeeze_excitation_uses_reduction_sixteen() -> None:
 
 
 def test_squeeze_excitation_placement_modes() -> None:
-    disabled = Network(NetworkParams(4, 16, SEPlacement.DISABLED), torch.device('cpu'))
-    every_block = Network(NetworkParams(4, 16, SEPlacement.EVERY_BLOCK), torch.device('cpu'))
+    disabled = Network(
+        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.DISABLED), torch.device('cpu')
+    )
+    every_block = Network(
+        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_BLOCK), torch.device('cpu')
+    )
     every_second_block = Network(
-        NetworkParams(4, 16, SEPlacement.EVERY_SECOND_BLOCK),
+        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_SECOND_BLOCK),
         torch.device('cpu'),
     )
 

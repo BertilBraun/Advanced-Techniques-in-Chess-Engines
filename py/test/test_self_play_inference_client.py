@@ -1,7 +1,7 @@
 import copy
 from pathlib import Path
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import ModuleType
 from types import SimpleNamespace
 
@@ -10,7 +10,7 @@ import pytest
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
 from src.self_play.chess_completed_game import ChessCompletedGamePublisher
 from src.settings import TRAINING_ARGS
-from src.train.TrainingArgs import DirectSelfPlayParams
+from src.train.TrainingArgs import DirectInferenceParams, UncachedInferenceParams
 
 
 @pytest.mark.parametrize(
@@ -140,18 +140,17 @@ def test_self_play_constructs_selected_inference_client(
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    self_play_args = replace(
-        TRAINING_ARGS.self_play,
-        use_inference_cache=False,
-        inference_cache_capacity=0,
-        initial_num_searches_per_turn=100,
-        mcts=replace(TRAINING_ARGS.self_play.mcts, num_searches_per_turn=600),
+    search = TRAINING_ARGS.self_play.search.validated_copy(update={'num_searches_per_turn': 600})
+    self_play_args = TRAINING_ARGS.self_play.validated_copy(
+        update={
+            'inference': UncachedInferenceParams(mode='uncached').model_dump(mode='json'),
+            'initial_num_searches_per_turn': 100,
+            'search': search.model_dump(mode='json'),
+            'search_warmup_model_versions': 100,
+        }
     )
-    training_args = replace(
-        TRAINING_ARGS,
-        self_play=self_play_args,
-        self_play_search_warmup_model_versions=100,
-        save_path=str(tmp_path),
+    training_args = TRAINING_ARGS.validated_copy(
+        update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
     )
     self_play = SelfPlay(
         device_id=0,
@@ -179,17 +178,18 @@ def test_self_play_constructs_direct_inference_pipeline(
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    self_play_args = replace(
-        TRAINING_ARGS.self_play,
-        use_inference_cache=False,
-        inference_cache_capacity=0,
-        direct_inference=DirectSelfPlayParams(
-            inference_workers=2,
-            inference_batch_size=64,
-            outstanding_batches_per_worker=1,
-        ),
+    direct_inference = DirectInferenceParams(
+        mode='direct',
+        inference_workers=2,
+        inference_batch_size=64,
+        outstanding_batches_per_worker=1,
     )
-    training_args = replace(TRAINING_ARGS, self_play=self_play_args, save_path=str(tmp_path))
+    self_play_args = TRAINING_ARGS.self_play.validated_copy(
+        update={'inference': direct_inference.model_dump(mode='json')}
+    )
+    training_args = TRAINING_ARGS.validated_copy(
+        update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
+    )
     self_play = SelfPlay(
         device_id=0,
         args=training_args,
@@ -207,8 +207,8 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     events: list[str] = []
     self_play = object.__new__(SelfPlay)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
-    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_model_versions
+    self_play.search_warmup_iterations = TRAINING_ARGS.self_play.search_warmup_model_versions
+    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play.endgame_shortcut_fade_model_versions
     self_play.dataset = [object()]
     self_play.iteration = 0
     self_play.model_version = 0
@@ -237,8 +237,8 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
     self_play = object.__new__(SelfPlay)
     self_play.args = copy.deepcopy(TRAINING_ARGS.self_play)
-    self_play.search_warmup_iterations = TRAINING_ARGS.self_play_search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play_endgame_shortcut_fade_model_versions
+    self_play.search_warmup_iterations = TRAINING_ARGS.self_play.search_warmup_model_versions
+    self_play.endgame_shortcut_fade_iterations = TRAINING_ARGS.self_play.endgame_shortcut_fade_model_versions
     self_play.iteration = 0
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]

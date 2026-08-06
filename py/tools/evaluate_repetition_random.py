@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -71,10 +71,9 @@ def main() -> None:
     torch.manual_seed(arguments.seed)
 
     experiment = load_chess_experiment_configuration(arguments.run_configuration)
-    training_arguments = replace(experiment.training, save_path=str(arguments.save_path.resolve()))
-    evaluation_arguments = replace(
-        experiment.chess.evaluation,
-        opening_suite_path=str(arguments.opening_suite.resolve()),
+    training_arguments = experiment.training.validated_copy(update={'save_path': str(arguments.save_path.resolve())})
+    evaluation_arguments = experiment.chess.evaluation.validated_copy(
+        update={'opening_suite_path': str(arguments.opening_suite.resolve())}
     )
 
     evaluator = ModelEvaluation(

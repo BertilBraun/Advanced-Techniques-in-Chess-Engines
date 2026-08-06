@@ -26,13 +26,12 @@ def train_model(model: Network, dataloader: DataLoader, num_epochs: int, iterati
             local_batch_size=BATCH_SIZE,
             learning_rate=ModelVersionLearningRate(
                 stages=(
-                    ModelVersionLearningRateStage(0, 0.2),
-                    ModelVersionLearningRateStage(8, 0.02),
-                    ModelVersionLearningRateStage(12, 0.002),
+                    ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.2),
+                    ModelVersionLearningRateStage(start_model_version=8, learning_rate=0.02),
+                    ModelVersionLearningRateStage(start_model_version=12, learning_rate=0.002),
                 ),
                 optimizer_steps_per_model_version=1,
             ),
-            credit_training=TRAINING_ARGS.training.credit_training,
             num_workers=2,
         ),
     )
@@ -83,7 +82,7 @@ def main(dataset_path: str):
         dataset.load_from_files([train_dataset_path])
 
         for iter in range(NUM_EPOCHS):
-            train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=TRAINING_ARGS.training.num_workers)
+            train_dataloader = dataset.as_dataloader(BATCH_SIZE, num_workers=2)
 
             train_model(model, train_dataloader, num_epochs=1, iteration=iter)
 

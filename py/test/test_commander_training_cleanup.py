@@ -21,13 +21,18 @@ from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
 
 @dataclass(frozen=True)
 class _ClusterArguments:
-    self_play_node_ids_to_pause_during_training: tuple[int, ...]
+    node_ids_to_pause_during_training: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class _TrainingArguments:
-    cluster: _ClusterArguments
-    training: _TrainingConfiguration
+    topology: _TopologyArguments
+    trainer: _TrainingConfiguration
+
+
+@dataclass(frozen=True)
+class _TopologyArguments:
+    self_play: _ClusterArguments
 
 
 @dataclass(frozen=True)
@@ -74,8 +79,8 @@ def commander() -> CommanderProcess:
     result.args = cast(
         TrainingArgs,
         _TrainingArguments(
-            cluster=_ClusterArguments((1, 4)),
-            training=_TrainingConfiguration(global_batch_size=1),
+            topology=_TopologyArguments(self_play=_ClusterArguments((1, 4))),
+            trainer=_TrainingConfiguration(global_batch_size=1),
         ),
     )
     result.communication = cast(commander_module.Communication, object())

@@ -175,7 +175,7 @@ compiler, and the required NVIDIA driver and CUDA toolkit.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/setup_remote.sh \
   | bash -s -- bash -c 'python py/train.py \
-      --run-config py/configs/chess-clean-credit-4x4070-v13.json \
+      --run-config py/configs/chess-default-experiment.yaml \
       --expected-source-revision "$ENGINE_SOURCE_REVISION" \
       --approval-file /data/run-approval.json'
 ```

@@ -24,7 +24,7 @@ from src.train.ChessReplay import (
     training_batch_loader,
 )
 from src.train.Trainer import Trainer, _LogitForward
-from src.train.TrainingArgs import ClusterParams, TrainingArgs, TrainingParams
+from src.train.TrainingArgs import TrainerTopologyParams, TrainingArgs, TrainingParams
 from src.train.TrainingStats import TrainingStats
 from src.util.log import configure_logging, log
 from src.util.profiler import start_cpu_usage_logger
@@ -67,30 +67,30 @@ def is_rank_zero(rank: int) -> bool:
 
 
 def validate_distributed_training_configuration(
-    cluster: ClusterParams,
+    cluster: TrainerTopologyParams,
     training: TrainingParams,
     cuda_device_count: int,
 ) -> None:
-    device_ids = cluster.trainer_ddp_device_ids
+    device_ids = cluster.ddp_device_ids
     if not device_ids:
         raise ValueError('At least one DDP trainer device must be configured.')
     if any(device_id < 0 for device_id in device_ids):
         raise ValueError('DDP trainer device IDs cannot be negative.')
     if len(set(device_ids)) != len(device_ids):
         raise ValueError('DDP trainer device IDs must be unique.')
-    if device_ids[0] != cluster.trainer_rank_zero_device_id:
+    if device_ids[0] != cluster.rank_zero_device_id:
         raise ValueError('The rank-zero trainer device must be first in the DDP device list.')
     if training.global_batch_size != training.local_batch_size * len(device_ids):
         raise ValueError('Global batch size must equal local batch size times DDP world size.')
-    if cluster.trainer_process_group_backend == 'nccl' and cluster.trainer_device_type != 'cuda':
+    if cluster.process_group_backend == 'nccl' and cluster.device_type != 'cuda':
         raise ValueError('NCCL can only be used with CUDA trainer devices.')
-    match cluster.trainer_device_type:
+    match cluster.device_type:
         case 'cuda':
             invalid_device_ids = tuple(device_id for device_id in device_ids if device_id >= cuda_device_count)
             if invalid_device_ids:
                 raise ValueError(f'DDP trainer devices {invalid_device_ids} are outside the visible CUDA range.')
         case 'cpu':
-            if cluster.trainer_process_group_backend != 'gloo':
+            if cluster.process_group_backend != 'gloo':
                 raise ValueError('CPU distributed training requires the Gloo backend.')
 
 
@@ -110,14 +110,14 @@ def _load_rank_model_and_optimizer(
         args.network,
         device,
         args.save_path,
-        args.training.optimizer,
+        args.trainer.optimizer,
     )
 
 
 def _training_device(args: TrainingArgs, rank: int) -> torch.device:
-    if args.cluster.trainer_device_type == 'cpu':
+    if args.topology.trainer.device_type == 'cpu':
         return torch.device('cpu')
-    assert rank < len(args.cluster.trainer_ddp_device_ids)
+    assert rank < len(args.topology.trainer.ddp_device_ids)
     torch.cuda.set_device(0)
     return torch.device('cuda', 0)
 
@@ -246,13 +246,13 @@ class TrainerProcess:
         run_id: int,
         starting_model_version: int,
     ) -> None:
-        parameters = args.training.credit_training
+        parameters = args.lifecycle.credit
         validate_distributed_training_configuration(
-            args.cluster,
-            args.training,
+            args.topology.trainer,
+            args.trainer,
             torch.cuda.device_count(),
         )
-        if len(args.cluster.trainer_ddp_device_ids) != 4:
+        if len(args.topology.trainer.ddp_device_ids) != 4:
             raise ValueError('Credit-driven production training requires exactly four DDP ranks.')
         if parameters.maximum_optimizer_steps != 500_000:
             raise ValueError('Credit-driven production training requires a 500,000 optimizer-step limit.')
@@ -260,7 +260,7 @@ class TrainerProcess:
             raise ValueError('Credit-driven production training requires retained checkpoints every 1,000 steps.')
         self.args = args
         self.run_id = run_id
-        self.world_size = len(args.cluster.trainer_ddp_device_ids)
+        self.world_size = len(args.topology.trainer.ddp_device_ids)
         self._phase_id = 0
         self._context = multiprocessing.get_context('spawn')
         self._connections: list[Connection] = []
@@ -351,7 +351,7 @@ class TrainerProcess:
             raise RuntimeError('Rank zero did not return credit-quantum replay statistics.')
         if rank_zero.checkpoint_manifest is None:
             raise RuntimeError('Rank zero did not return the prepared checkpoint manifest.')
-        expected_global_step = global_step + self.args.training.credit_training.optimizer_steps_per_quantum
+        expected_global_step = global_step + self.args.lifecycle.credit.optimizer_steps_per_quantum
         if any(
             not isinstance(response, RankQuantumComplete)
             or response.global_step != expected_global_step
@@ -377,7 +377,7 @@ class TrainerProcess:
     def _start_workers(self, starting_model_version: int) -> None:
         initialization_method = f'tcp://127.0.0.1:{available_tcp_port()}'
         for rank in range(self.world_size):
-            physical_device_id = self.args.cluster.trainer_ddp_device_ids[rank]
+            physical_device_id = self.args.topology.trainer.ddp_device_ids[rank]
             parent_connection, child_connection = self._context.Pipe(duplex=True)
             process = self._context.Process(
                 target=run_trainer_rank,
@@ -545,13 +545,13 @@ def _train_quantum(
     training_model: DistributedDataParallel,
     replay_snapshot: ChessReplaySnapshot,
 ) -> RankQuantumComplete:
-    parameters = args.training.credit_training
+    parameters = args.lifecycle.credit
     batches = training_batch_loader(
         replay_snapshot,
         global_step=command.global_step,
         optimizer_steps=parameters.optimizer_steps_per_quantum,
-        global_batch_size=args.training.global_batch_size,
-        world_size=len(args.cluster.trainer_ddp_device_ids),
+        global_batch_size=args.trainer.global_batch_size,
+        world_size=len(args.topology.trainer.ddp_device_ids),
         rank=rank,
         pin_memory=model.device.type == 'cuda',
     )
@@ -563,7 +563,7 @@ def _train_quantum(
     trainer = Trainer(
         model,
         optimizer,
-        args.training,
+        args.trainer,
         training_model=training_model,
         rank=rank,
     )
@@ -619,8 +619,8 @@ def _train_quantum(
         decode_seconds=float(decode_seconds.item()) if is_rank_zero(rank) else None,
         transfer_seconds=float(transfer_seconds.item()) if is_rank_zero(rank) else None,
         payload_open_count=0 if is_rank_zero(rank) else None,
-        selected_rows=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,
-        rows_read=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,
+        selected_rows=selected_rows * len(args.topology.trainer.ddp_device_ids) if is_rank_zero(rank) else None,
+        rows_read=selected_rows * len(args.topology.trainer.ddp_device_ids) if is_rank_zero(rank) else None,
         selected_bytes=0 if is_rank_zero(rank) else None,
         bytes_read=0 if is_rank_zero(rank) else None,
         checkpoint_manifest=str(manifest.resolve()) if manifest is not None else None,
@@ -637,7 +637,7 @@ def run_trainer_rank(
 ) -> None:
     configure_logging(enabled=is_rank_zero(rank))
     current_phase_id: int | None = None
-    parameters = args.training.credit_training
+    parameters = args.lifecycle.credit
     replay_maintainer = (
         ChessReplayMaintainer(
             Path(args.save_path),
@@ -652,18 +652,18 @@ def run_trainer_rank(
     process_group_initialized = False
     normal_shutdown = False
     try:
-        trainer_cpu_threads = args.cluster.trainer_cpu_threads
+        trainer_cpu_threads = args.topology.trainer.cpu_threads
         torch.set_num_threads(trainer_cpu_threads)
-        torch.set_num_interop_threads(args.cluster.trainer_interop_threads)
+        torch.set_num_interop_threads(args.topology.trainer.interop_threads)
         os.environ['OMP_NUM_THREADS'] = str(trainer_cpu_threads)
         os.environ['MKL_NUM_THREADS'] = str(trainer_cpu_threads)
         os.environ['OPENBLAS_NUM_THREADS'] = str(trainer_cpu_threads)
         device = _training_device(args, rank)
         distributed.init_process_group(
-            backend=args.cluster.trainer_process_group_backend,
+            backend=args.topology.trainer.process_group_backend,
             init_method=initialization_method,
             rank=rank,
-            world_size=len(args.cluster.trainer_ddp_device_ids),
+            world_size=len(args.topology.trainer.ddp_device_ids),
             timeout=PROCESS_GROUP_TIMEOUT,
         )
         process_group_initialized = True

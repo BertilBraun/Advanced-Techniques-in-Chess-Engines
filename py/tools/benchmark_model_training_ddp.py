@@ -19,7 +19,7 @@ from torch.nn.parallel import DistributedDataParallel
 from src.Network import Network
 from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
-from src.settings import CurrentGame, TRAINING_ARGS
+from src.settings import CurrentGame
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import (
     ModelVersionLearningRate,
@@ -149,10 +149,9 @@ def production_training_parameters(global_batch_size: int, local_batch_size: int
         local_batch_size=local_batch_size,
         optimizer='adamw',
         learning_rate=ModelVersionLearningRate(
-            stages=(ModelVersionLearningRateStage(0, 0.0035),),
+            stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.0035),),
             optimizer_steps_per_model_version=1,
         ),
-        credit_training=TRAINING_ARGS.training.credit_training,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
         mcts_value_target_warmup_optimizer_steps=50_000,

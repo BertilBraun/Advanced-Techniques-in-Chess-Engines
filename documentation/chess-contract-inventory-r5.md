@@ -20,7 +20,7 @@ their canonical owner after extraction, and the converted call sites.
 | --- | --- | --- |
 | Chess action-space size, representation dimensions, canonical board encoding, and move encode/decode are owned by one chess state contract. | `py/src/games/chess/contract.py` | `py/src/Encoding.py`, `py/src/Network.py`, `py/src/cluster/InferenceClient.py`, `py/src/cluster/NonCachingInferenceClient.py`, `py/src/self_play/SelfPlay.py`, `py/src/train/ChessReplay.py`, `py/src/eval/ModelEvaluation.py` |
 | The default research runtime is a chess experiment resolved from one YAML file instead of static Python constants. | `py/src/experiment/chess_experiment.py` + `py/configs/chess-default-experiment.yaml` | `py/src/settings.py`, `py/src/games/chess/ChessSettings.py`, `py/train.py` |
-| Shared network, self-play, training, cluster, limits, retention, and scheduling settings form one canonical immutable `TrainingArgs` hierarchy embedded directly in the experiment. | `py/src/train/TrainingArgs.py` | `py/src/experiment/chess_experiment.py`, `py/src/settings.py`, `py/train.py`, cluster and trainer entry points |
+| Shared network, self-play, trainer, topology, lifecycle, limits, retention, and scheduling settings form one canonical immutable `TrainingArgs` hierarchy of validated `FrozenModel` types embedded directly in the experiment. | `py/src/train/TrainingArgs.py` | `py/src/experiment/chess_experiment.py`, `py/src/settings.py`, `py/train.py`, cluster and trainer entry points |
 | Network architecture has one canonical immutable `NetworkParams` type at configuration and runtime boundaries. | `py/src/train/TrainingArgs.py` | `py/src/experiment/chess_experiment.py`, `py/src/Network.py` |
 | Chess network shape, self-play temperature schedule, self-play root noise, and retained-tree discounting are shared runtime component settings selected by the chess experiment. | `py/src/train/TrainingArgs.py` | `py/src/settings.py`, `py/train.py` |
 | Evaluation scheduling is shared; chess match budgets, openings, fixed dataset, model ladder, random opponent, and Stockfish settings are passed separately as chess-owned evaluation configuration. | `py/src/experiment/chess_experiment.py` | `py/src/eval/ModelEvaluation.py`, `py/src/cluster/EvaluationProcess.py`, `py/src/cluster/CreditEvaluationScheduler.py` |
@@ -49,3 +49,11 @@ dataset preparation, benchmarks, approval, resolved manifests, and publication
 provenance now consume the YAML experiment and its canonical component types
 directly. Tool-specific overrides create immutable replacements and do not
 mutate shared settings.
+
+The configuration audit removed unused worker count, initial-evaluation,
+top-level evaluation-concurrency, and disconnected general artifact-retention
+settings. Inference caching was not removed: native MCTS, Python self-play and
+evaluation, benchmarks, and the interactive engine still have active cached
+and non-cached implementations. Configuration now represents cached,
+uncached, and direct inference as a validated discriminated union instead of a
+cache boolean plus unrelated nullable fields.

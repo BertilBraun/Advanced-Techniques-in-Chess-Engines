@@ -59,7 +59,7 @@ if __name__ == '__main__':
     print(f'Number of iterations: {num_iterations}')
 
     network = create_model(TRAINING_ARGS.network, torch.device('cpu'))
-    optimizer = create_optimizer(network, TRAINING_ARGS.training.optimizer)
+    optimizer = create_optimizer(network, TRAINING_ARGS.trainer.optimizer)
     save_model_and_optimizer(network, optimizer, 0, TRAINING_ARGS.save_path)
 
     print('Python:', '=' * 20)

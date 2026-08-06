@@ -53,7 +53,7 @@ from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CurrentBoard, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import CachedInferenceParams, DirectInferenceParams, TrainingArgs, UncachedInferenceParams
 from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
@@ -195,8 +195,9 @@ class SelfPlay:
     ) -> None:
         self.device_id = device_id
         self.args = args.self_play
-        self.search_warmup_iterations = args.self_play_search_warmup_model_versions
-        self.endgame_shortcut_fade_iterations = args.self_play_endgame_shortcut_fade_model_versions
+        self.search_warmup_iterations = self.args.search_warmup_model_versions
+        self.endgame_shortcut_fade_iterations = self.args.endgame_shortcut_fade_model_versions
+        self.num_parallel_games = args.topology.self_play.parallel_games_per_process
         self.save_path = args.save_path
         self.completed_game_publisher = completed_game_publisher
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
@@ -208,7 +209,7 @@ class SelfPlay:
         self.model_refresh_acknowledgements: list[int] = []
         self.search_schedule_state: SearchScheduleState | None = None
         self.dataset = SelfPlayDataset()
-        self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.args.num_parallel_games)]
+        self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.num_parallel_games)]
 
         self.mcts: MCTS | None = None  # MCTS instance for self-play, initialized in update_iteration
         self.num_searches_per_turn = 0
@@ -280,8 +281,8 @@ class SelfPlay:
             raise ValueError('Search schedule version must be nonnegative.')
         num_full_searches = int(
             lerp(
-                self.args.initial_num_searches_per_turn or self.args.mcts.num_searches_per_turn / 2,
-                self.args.mcts.num_searches_per_turn,
+                self.args.initial_num_searches_per_turn or self.args.search.num_searches_per_turn / 2,
+                self.args.search.num_searches_per_turn,
                 curriculum_progress(
                     schedule_version,
                     self.search_warmup_iterations,
@@ -290,9 +291,9 @@ class SelfPlay:
         )
         return SearchScheduleState(
             schedule_version=schedule_version,
-            num_parallel_searches=self.args.mcts.num_parallel_searches,
+            num_parallel_searches=self.args.search.num_parallel_searches,
             num_full_searches=num_full_searches,
-            num_fast_searches=int(num_full_searches * self.args.mcts.fast_searches_proportion_of_full_searches),
+            num_fast_searches=int(num_full_searches * self.args.search.fast_searches_proportion_of_full_searches),
             endgame_shortcut_strength=curriculum_fade(
                 schedule_version,
                 self.endgame_shortcut_fade_iterations,
@@ -300,7 +301,7 @@ class SelfPlay:
         )
 
     def update_search_schedule(self, schedule: SearchScheduleState) -> None:
-        if schedule.num_full_searches <= self.args.mcts.num_parallel_searches:
+        if schedule.num_full_searches <= self.args.search.num_parallel_searches:
             raise ValueError('Full-search budget must exceed the parallel-search count.')
         if schedule.num_fast_searches <= 0:
             raise ValueError('Fast-search budget must be positive.')
@@ -328,14 +329,14 @@ class SelfPlay:
         from AlphaZeroCpp import MCTSParams
 
         return MCTSParams(
-            num_parallel_searches=self.args.mcts.num_parallel_searches,
+            num_parallel_searches=self.args.search.num_parallel_searches,
             num_full_searches=schedule.num_full_searches,
             num_fast_searches=schedule.num_fast_searches,
-            dirichlet_alpha=self.args.mcts.dirichlet_alpha,
-            dirichlet_epsilon=self.args.mcts.dirichlet_epsilon,
-            c_param=self.args.mcts.c_param,
-            min_visit_count=self.args.mcts.min_visit_count,
-            num_threads=self.args.mcts.num_threads,
+            dirichlet_alpha=self.args.search.dirichlet_alpha,
+            dirichlet_epsilon=self.args.search.dirichlet_epsilon,
+            c_param=self.args.search.c_param,
+            min_visit_count=self.args.search.min_visit_count,
+            num_threads=self.args.search.num_threads,
         )
 
     def refresh_model(
@@ -353,26 +354,38 @@ class SelfPlay:
         if self.mcts is None:
             from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
 
+            inference = self.args.inference
+            match inference:
+                case CachedInferenceParams(capacity=cache_capacity):
+                    use_cache = True
+                    direct_inference_params = None
+                case UncachedInferenceParams():
+                    cache_capacity = 0
+                    use_cache = False
+                    direct_inference_params = None
+                case DirectInferenceParams(
+                    inference_workers=workers,
+                    inference_batch_size=batch_size,
+                    outstanding_batches_per_worker=outstanding_batches,
+                ):
+                    cache_capacity = 0
+                    use_cache = False
+                    direct_inference_params = DirectSelfPlayInferenceParams(
+                        workers,
+                        batch_size,
+                        outstanding_batches,
+                    )
             client_args = InferenceClientParams(
                 self.device_id,
                 currentModelPath=str(model_path),
                 maxBatchSize=256,  # TODO: adjust based on the model size and available memory
                 microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
-                cacheCapacity=self.args.inference_cache_capacity,
-            )
-            direct_inference_params = (
-                DirectSelfPlayInferenceParams(
-                    self.args.direct_inference.inference_workers,
-                    self.args.direct_inference.inference_batch_size,
-                    self.args.direct_inference.outstanding_batches_per_worker,
-                )
-                if self.args.direct_inference is not None
-                else None
+                cacheCapacity=cache_capacity,
             )
             self.mcts = MCTS(
                 client_args,
                 self._native_mcts_params(schedule),
-                use_inference_cache=self.args.use_inference_cache,
+                use_inference_cache=use_cache,
                 direct_inference_params=direct_inference_params,
                 initial_model_version=model_version,
             )
@@ -421,7 +434,7 @@ class SelfPlay:
                 # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
                 # NOTE: Disabled for now - think about whether to re-enable this (probably not necessary for amateur games)
                 # Instead - if we should run a full search, discount the visits
-                spg.already_expanded_node.discount(self.args.mcts.percentage_of_node_visits_to_keep)
+                spg.already_expanded_node.discount(self.args.search.percentage_of_node_visits_to_keep)
 
             boards.append(MCTSBoard(spg.already_expanded_node, should_run_full_search))
 
@@ -641,7 +654,7 @@ class SelfPlay:
         return (
             not force_fast_endgame_playout
             and game.resignation_trigger_ply is None
-            and random.random() < self.args.mcts.playout_cap_randomization
+            and random.random() < self.args.search.playout_cap_randomization
         )
 
     def _should_terminate_low_material_game(self, game: SelfPlayGame) -> bool:
@@ -794,7 +807,7 @@ class SelfPlay:
             )
             is_false_non_loss = is_natural_trigger and recovered_outcome >= 0.0
             continuation_plies = len(spg.played_moves) - audit_trigger.ply if audit_trigger is not None else 0
-            fast_searches = int(self.num_searches_per_turn * self.args.mcts.fast_searches_proportion_of_full_searches)
+            fast_searches = int(self.num_searches_per_turn * self.args.search.fast_searches_proportion_of_full_searches)
             self.dataset.stats += SelfPlayDatasetStats(
                 resignation_audit_games_completed=1,
                 resignation_audit_natural_triggers=int(is_natural_trigger),
@@ -867,7 +880,7 @@ class SelfPlay:
                     )
                 ),
                 search_budget=memory.search_budget,
-                minimum_visit_count=self.args.mcts.min_visit_count,
+                minimum_visit_count=self.args.search.min_visit_count,
                 sample_eligible=memory.sample_eligible,
             )
             for memory in spg.memory
@@ -896,9 +909,9 @@ class SelfPlay:
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more
         visit_counts = [
-            (move, count - self.args.mcts.min_visit_count)
+            (move, count - self.args.search.min_visit_count)
             for move, count in visit_counts
-            if count > self.args.mcts.min_visit_count
+            if count > self.args.search.min_visit_count
         ]
 
         return visit_counts

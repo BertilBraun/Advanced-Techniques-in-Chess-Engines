@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 from pathlib import Path
 import subprocess
 import time
@@ -70,10 +69,11 @@ def main() -> None:
         raise ValueError(f'Evaluation benchmark output already exists: {arguments.output_path}')
 
     experiment = load_chess_experiment_configuration(arguments.run_config)
-    training_arguments = replace(experiment.training, save_path=str(arguments.model_directory.resolve()))
-    evaluation_arguments = replace(
-        experiment.chess.evaluation,
-        raw_results_path=str(arguments.raw_results_directory.resolve()),
+    training_arguments = experiment.training.validated_copy(
+        update={'save_path': str(arguments.model_directory.resolve())}
+    )
+    evaluation_arguments = experiment.chess.evaluation.validated_copy(
+        update={'raw_results_path': str(arguments.raw_results_directory.resolve())}
     )
 
     started_at = time.perf_counter()

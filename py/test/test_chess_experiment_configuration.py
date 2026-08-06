@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from dataclasses import FrozenInstanceError
 from pydantic import ValidationError
 
 from src.experiment.chess_experiment import (
@@ -14,6 +13,7 @@ from src.experiment.chess_experiment import (
     write_resolved_chess_experiment,
 )
 from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
+from src.util.frozen_model import JsonValue
 
 
 DEFAULT_EXPERIMENT_PATH = Path('configs/chess-default-experiment.yaml')
@@ -25,10 +25,10 @@ def test_default_chess_experiment_loads_canonical_runtime_configuration() -> Non
     assert isinstance(configuration, ChessExperimentConfiguration)
     assert configuration.chess.game == 'chess'
     assert configuration.training.network.hidden_size == 112
-    assert configuration.training.self_play.mcts.c_param == pytest.approx(1.5)
-    assert configuration.training.cluster.trainer_ddp_device_ids == (0,)
-    assert configuration.training.self_play.mcts.num_parallel_searches == 2
-    assert configuration.chess.evaluation.inference_cache_capacity == 50_000
+    assert configuration.training.self_play.search.c_param == pytest.approx(1.5)
+    assert configuration.training.topology.trainer.ddp_device_ids == (0,)
+    assert configuration.training.self_play.search.num_parallel_searches == 2
+    assert configuration.chess.evaluation.inference.capacity == 50_000
     assert configuration.chess.evaluation.dataset_path is not None
     assert configuration.chess.evaluation.dataset_path.endswith('memory_0_chess_database.hdf5')
     assert configuration.chess.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
@@ -81,5 +81,36 @@ def test_network_rejects_unknown_parameters() -> None:
 def test_training_configuration_is_frozen() -> None:
     configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
 
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError, match='frozen'):
         configuration.training.save_path = 'different-path'
+
+
+def test_validated_copy_reruns_field_validation() -> None:
+    configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
+
+    with pytest.raises(ValidationError, match='greater than 0'):
+        configuration.training.trainer.validated_copy(update={'global_batch_size': 0})
+
+
+@pytest.mark.parametrize(
+    ('owner_path', 'field_name', 'value'),
+    (
+        (('training', 'trainer'), 'num_workers', 2),
+        (('training', 'topology'), 'max_concurrent_evaluations', 1),
+        (('chess', 'evaluation'), 'evaluate_initial_checkpoint', True),
+        (('training', 'self_play'), 'use_inference_cache', True),
+    ),
+)
+def test_removed_configuration_fields_are_rejected(
+    owner_path: tuple[str, ...],
+    field_name: str,
+    value: JsonValue,
+) -> None:
+    candidate = yaml.safe_load(DEFAULT_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    owner = candidate
+    for segment in owner_path:
+        owner = owner[segment]
+    owner[field_name] = value
+
+    with pytest.raises(ValidationError, match=field_name):
+        ChessExperimentConfiguration.model_validate(candidate)

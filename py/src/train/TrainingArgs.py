@@ -1,58 +1,49 @@
-from dataclasses import field
+from __future__ import annotations
+
 from decimal import Decimal
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import ConfigDict
-from pydantic.dataclasses import dataclass as pydantic_dataclass
+from pydantic import Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
 from src.self_play.resignation import ResignationParams
+from src.util.frozen_model import FrozenModel
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class MCTSParams:
-    """This class contains the arguments for the MCTS algorithm."""
-
-    num_searches_per_turn: int
-    """This is the maximum number of searches to run the MCTS algorithm in self-play. 
-    I.e. the number of times that a node is expanded and evaluated in the MCTS algorithm to get the next move to play.
-    I.e. we continue to play the game util one of the players wins or the game is a draw. At each move we run the MCTS algorithm to get the next move to play for the current player. Here we run the MCTS algorithm num_searches times to get the next move to play.
-    """
-
-    fast_searches_proportion_of_full_searches: float
-    """This is the proportion of searches that a fast search should take compared to a full search. I.e. if this is 0.5, then a fast search will take half the time of a full search. This is used to speed up the MCTS algorithm by using a fast search for certain moves, e.g. when the game is in a late stage - these fast searched moves will not be used as training data, but will speed up the game generation, allowing to play more games in the same time. Typically 1/2 - 1/10."""
-
-    playout_cap_randomization: float
-    """This is the proportion of searches that should be searched completely, i.e. with a full search. This is used to complete games faster, as a good proportion of the moves can be searched quickly, and only moves which are selected for full searches will be searched with the full MCTS budget and therefore also added as training data. For fast searches, the complete Search Tree is reused and no new noise is added. For full searches, the node is also reused, but discouted by `percentage_of_node_visits_to_keep` and new noise is added to the root node. Typically 0.1-0.5."""
-
-    num_parallel_searches: int
-    """This is the number of parallel strands which should parallelize the MCTS algorithm. Higher values enable more parallelism and thus faster search. However, it also increases the exploration of the search tree. Values between 1 and 16 seem sensible."""
-
-    dirichlet_epsilon: float
-    """This is the epsilon value to use for the dirichlet noise to add to the root node in self-play to encourage exploration. I.e. the percentage of the resulting policy, that should be the dirichlet noise. The rest is the policy from the neural network. lerp(policy, dirichlet_noise, factor=dirichlet_epsilon)"""
-
-    dirichlet_alpha: float
-    """Return the Dirichlet alpha used to encourage root exploration for a model version."""
-
-    c_param: float
-    """This is the c parameter to use for the UCB1 formula in the MCTS algorithm in self-play. It is used to balance exploration and exploitation in the MCTS algorithm. Values between 1 and 6 seem sensible. The higher the value the more exploration is favored over exploitation."""
-
-    num_threads: int
-    """The number of parallel search threads on the Cpp side"""
-
-    percentage_of_node_visits_to_keep: float
-    """Factor by which the visits and result score of a reused Tree Node should be discounted by. In range [0..1]"""
-
-    min_visit_count: int = 0
-    """The minimum number of visits that each root child should recieve. Typically this value is < 5 or in proportion to the num_searches_per_turn. This is used to ensure that the MCTS algorithm has explored the search tree enough to make a good decision. If the number of visits is too low, the MCTS algorithm might not explore enough to learn the best moves to play."""
+class MCTSParams(FrozenModel):
+    num_searches_per_turn: int = Field(gt=0)
+    fast_searches_proportion_of_full_searches: float = Field(gt=0.0, le=1.0)
+    playout_cap_randomization: float = Field(ge=0.0, le=1.0)
+    num_parallel_searches: int = Field(gt=0)
+    dirichlet_epsilon: float = Field(ge=0.0, le=1.0)
+    dirichlet_alpha: float = Field(gt=0.0)
+    c_param: float = Field(gt=0.0)
+    num_threads: int = Field(gt=0)
+    percentage_of_node_visits_to_keep: float = Field(ge=0.0, le=1.0)
+    min_visit_count: int = Field(default=0, ge=0)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class DirectSelfPlayParams:
-    inference_workers: int
-    inference_batch_size: int
-    outstanding_batches_per_worker: int
+class CachedInferenceParams(FrozenModel):
+    mode: Literal['cached']
+    capacity: int = Field(gt=0)
+
+
+class UncachedInferenceParams(FrozenModel):
+    mode: Literal['uncached']
+
+
+class DirectInferenceParams(FrozenModel):
+    mode: Literal['direct']
+    inference_workers: int = Field(gt=0)
+    inference_batch_size: int = Field(gt=0)
+    outstanding_batches_per_worker: int = Field(ge=1, le=2)
+
+
+InferenceParams = Annotated[
+    CachedInferenceParams | UncachedInferenceParams | DirectInferenceParams,
+    Field(discriminator='mode'),
+]
 
 
 class SEPlacement(str, Enum):
@@ -68,163 +59,111 @@ class SEPlacement(str, Enum):
         return block_index % 2 == 1
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class NetworkParams:
-    num_layers: int
-    """This is the number of layers to use for the neural network"""
-
-    hidden_size: int
-    """Dimension of the neural network hidden layers."""
-
+class NetworkParams(FrozenModel):
+    num_layers: int = Field(gt=0)
+    hidden_size: int = Field(gt=0)
     se_placement: SEPlacement = SEPlacement.DISABLED
-    """Controls whether squeeze-and-excitation is disabled, used in every block, or used in blocks 2, 4, 6, and so on."""
-
-    num_policy_channels: int = 4
-    num_value_channels: int = 2
-    value_fc_size: int = 48
-
-    def __post_init__(self) -> None:
-        if self.num_layers <= 0:
-            raise ValueError('Network layer count must be positive.')
-        if self.hidden_size <= 0:
-            raise ValueError('Network hidden size must be positive.')
-        if self.num_policy_channels <= 0:
-            raise ValueError('Network policy channel count must be positive.')
-        if self.num_value_channels <= 0:
-            raise ValueError('Network value channel count must be positive.')
-        if self.value_fc_size <= 0:
-            raise ValueError('Network value fully-connected size must be positive.')
+    num_policy_channels: int = Field(default=4, gt=0)
+    num_value_channels: int = Field(default=2, gt=0)
+    value_fc_size: int = Field(default=48, gt=0)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class SelfPlayParams:
-    mcts: MCTSParams
+class SelfPlayParams(FrozenModel):
+    search: MCTSParams
+    inference: InferenceParams
+    num_moves_after_which_to_play_greedy: int = Field(gt=0)
+    maximum_game_plies: int | None = Field(default=None, gt=0)
+    maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
+    maximum_game_plies_hold_until_model_version: int = Field(default=0, ge=0)
+    final_maximum_game_plies: int | None = Field(default=None, gt=0)
+    endgame_continuation_start_plies: int | None = Field(default=None, ge=0)
+    low_material_termination_minimum_plies: int = Field(default=0, ge=0)
+    low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
+    low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
+    starting_temperature: float = Field(default=1.25, gt=0.0)
+    final_temperature: float = Field(default=0.1, gt=0.0)
+    resignation: ResignationParams = ResignationParams()
+    disagreement_prefix_start_probability: float = Field(default=0.15, ge=0.0, le=1.0)
+    disagreement_prefix_maximum_ply: int = Field(default=10, ge=0)
+    disagreement_prefix_archive_capacity: int = Field(default=2_000, gt=0)
+    disagreement_prefix_weight_smoothing: float = Field(default=0.05, gt=0.0)
+    disagreement_prefix_weight_cap: float = Field(default=4.0, ge=1.0)
+    initial_num_searches_per_turn: int | None = Field(default=None, gt=0)
+    search_warmup_model_versions: int = Field(default=0, ge=0)
+    endgame_shortcut_fade_model_versions: int = Field(default=0, ge=0)
 
-    num_parallel_games: int
-    """This is the number of games to run in parallel for self-play."""
-
-    inference_cache_capacity: int
-    """Maximum cached neural-network evaluations in each self-play process."""
-
-    use_inference_cache: bool
-    """Whether self-play constructs the cached or non-cached C++ inference client."""
-
-    num_moves_after_which_to_play_greedy: int
-    """After this many moves, the self-play search will play greedily, i.e. it will choose the move with the highest probability according to the policy. Before this number of moves, the self-play search will play according to the temperature, i.e. it will choose moves with a probability distribution that is a mix of the policy and the dirichlet noise. This is to keep the exploration high in the beginning of the game and then play out as well as possible to reduce noise in the backpropagated final game results."""
-
-    maximum_game_plies: int | None = None
-    """Maximum self-play game length while the model-version limit is active."""
-
-    maximum_game_plies_until_model_version: int = 0
-    """Iteration at which the game-length schedule reaches its final value."""
-
-    maximum_game_plies_hold_until_model_version: int = 0
-    """Iteration before which the initial game-length cap remains fixed."""
-
-    final_maximum_game_plies: int | None = None
-    """Maximum self-play game length after the scheduled interpolation, or None to disable the cap."""
-
-    endgame_continuation_start_plies: int | None = None
-    """Ply at which self-play switches to fast searches until the maximum game length."""
-
-    low_material_termination_minimum_plies: int = 0
-    """Earliest ply at which the one-shot low-material termination rule may be evaluated."""
-
-    low_material_termination_piece_threshold_per_player: int = 0
-    """Terminate eligibility requires either player to have fewer pieces than this threshold."""
-
-    low_material_termination_probability: float = 0.0
-    """Probability of terminating the first eligible low-material position with a material result."""
-
-    starting_temperature: float = 1.25
-    """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation. This value is linearly interpolated to the final_temperature over the first num_moves_after_which_to_play_greedy moves."""
-
-    final_temperature: float = 0.1
-    """This is the final temperature to use for in self-play to sample new moves from the policy after num_moves_after_which_to_play_greedy moves. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. See ``starting_temperature`` for more details."""
-
-    resignation: ResignationParams = field(default_factory=ResignationParams)
-    """Audit and production-resignation configuration. Both paths are disabled by default."""
-
-    direct_inference: DirectSelfPlayParams | None = None
-    """Direct reusable inference pipeline configuration, or None for the general cached client."""
-    disagreement_prefix_start_probability: float = 0.15
-    disagreement_prefix_maximum_ply: int = 10
-    disagreement_prefix_archive_capacity: int = 2_000
-    disagreement_prefix_weight_smoothing: float = 0.05
-    disagreement_prefix_weight_cap: float = 4.0
-    initial_num_searches_per_turn: int | None = None
+    @model_validator(mode='after')
+    def validate_temperatures(self) -> SelfPlayParams:
+        if self.final_temperature > self.starting_temperature:
+            raise ValueError('Final self-play temperature cannot exceed the starting temperature.')
+        return self
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class ClusterParams:
-    trainer_device_type: Literal['cuda', 'cpu']
-    """Device type used by every distributed trainer rank."""
+class TrainerTopologyParams(FrozenModel):
+    device_type: Literal['cuda', 'cpu']
+    process_group_backend: Literal['nccl', 'gloo']
+    rank_zero_device_id: int = Field(ge=0)
+    ddp_device_ids: tuple[int, ...] = Field(min_length=1)
+    cpu_threads: int = Field(gt=0)
+    interop_threads: int = Field(gt=0)
 
-    trainer_process_group_backend: Literal['nccl', 'gloo']
-    """Process-group backend used by the distributed trainer."""
-
-    trainer_rank_zero_device_id: int
-    """Device owned by rank zero and used for trainer side effects."""
-
-    trainer_ddp_device_ids: tuple[int, ...]
-    """One explicit device ID per persistent distributed trainer rank."""
-
-    evaluation_device_cycle: tuple[int, ...]
-    """CUDA devices assigned cyclically to evaluation tasks."""
-
-    self_play_device_ids: tuple[int, ...]
-    """One CUDA device ID per self-play process."""
-
-    self_play_tensorboard_processes: int
-    """Number of self-play processes that emit representative TensorBoard metrics."""
-
-    trainer_cpu_threads: int
-    """CPU threads reserved for PyTorch training operations."""
-
-    trainer_interop_threads: int
-    """CPU threads reserved for PyTorch inter-operation parallelism."""
-
-    self_play_node_ids_to_pause_during_training: tuple[int, ...]
-    """Self-play process node IDs paused during optimizer training."""
-
-    max_concurrent_evaluations: int
-    """Maximum number of top-level evaluation processes."""
+    @model_validator(mode='after')
+    def validate_devices(self) -> TrainerTopologyParams:
+        if self.ddp_device_ids[0] != self.rank_zero_device_id:
+            raise ValueError('Rank-zero trainer device must be first in the DDP device list.')
+        if len(set(self.ddp_device_ids)) != len(self.ddp_device_ids):
+            raise ValueError('Trainer DDP device IDs must be unique.')
+        if self.process_group_backend == 'nccl' and self.device_type != 'cuda':
+            raise ValueError('NCCL requires CUDA training.')
+        if self.device_type == 'cpu' and (self.process_group_backend != 'gloo' or self.ddp_device_ids != (0,)):
+            raise ValueError('CPU training requires Gloo on logical device zero.')
+        return self
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class RuntimeLimits:
+class SelfPlayTopologyParams(FrozenModel):
+    device_ids: tuple[int, ...] = Field(min_length=1)
+    parallel_games_per_process: int = Field(gt=0)
+    tensorboard_processes: int = Field(gt=0)
+    node_ids_to_pause_during_training: tuple[int, ...]
+
+
+class EvaluationTopologyParams(FrozenModel):
+    device_cycle: tuple[int, ...] = Field(min_length=1)
+
+
+class TopologyParams(FrozenModel):
+    trainer: TrainerTopologyParams
+    self_play: SelfPlayTopologyParams
+    evaluation: EvaluationTopologyParams
+
+
+class RuntimeLimits(FrozenModel):
     cost_currency: CostCurrency
-    hourly_price: float
-    maximum_cost: float | None
-    maximum_wall_time_seconds: float
-    maximum_open_file_count: int
-    maximum_host_ram_percent: float
-    minimum_free_disk_gib: float
-    resource_telemetry_interval_seconds: float
+    hourly_price: float = Field(ge=0.0)
+    maximum_cost: float | None = Field(default=None, gt=0.0)
+    maximum_wall_time_seconds: float = Field(gt=0.0)
+    maximum_open_file_count: int = Field(gt=0)
+    maximum_host_ram_percent: float = Field(gt=0.0, le=100.0)
+    minimum_free_disk_gib: float = Field(ge=0.0)
+    resource_telemetry_interval_seconds: float = Field(gt=0.0)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class ArtifactRetention:
-    checkpoint_count: int
-    replay_window_model_versions: int
-    recent_inference_checkpoint_count: int
-    milestone_inference_interval: int
+class InferenceRetentionParams(FrozenModel):
+    recent_checkpoint_count: int = Field(gt=0)
+    milestone_interval: int = Field(gt=0)
 
 
 OptimizerType = Literal['adamw', 'sgd']
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class EvaluationScheduleParams:
-    interval_optimizer_steps: int
-    full_interval_optimizer_steps: int
-    timeout_seconds: float
-    maximum_attempts: int
-    retry_backoff_seconds: float
+class EvaluationScheduleParams(FrozenModel):
+    interval_optimizer_steps: int = Field(gt=0)
+    full_interval_optimizer_steps: int = Field(gt=0)
+    timeout_seconds: float = Field(gt=0.0)
+    maximum_attempts: int = Field(gt=0)
+    retry_backoff_seconds: float = Field(ge=0.0)
 
     def validate_for_optimizer_quantum(self, optimizer_steps_per_quantum: int) -> None:
-        if self.interval_optimizer_steps <= 0:
-            raise ValueError('Evaluation interval must be positive.')
         if self.interval_optimizer_steps % optimizer_steps_per_quantum:
             raise ValueError('Evaluation interval must align with training quanta.')
         if (
@@ -232,43 +171,26 @@ class EvaluationScheduleParams:
             or self.full_interval_optimizer_steps % self.interval_optimizer_steps
         ):
             raise ValueError('Full evaluation interval must be a multiple of the inspection interval.')
-        if self.timeout_seconds <= 0:
-            raise ValueError('Evaluation timeout must be positive.')
-        if self.maximum_attempts <= 0:
-            raise ValueError('Evaluation maximum attempts must be positive.')
-        if self.retry_backoff_seconds < 0:
-            raise ValueError('Evaluation retry backoff cannot be negative.')
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class CreditTrainingParams:
-    replay_ratio: Decimal
-    optimizer_steps_per_quantum: int
-    maximum_optimizer_steps: int
-    initial_replay_capacity_unique_positions: int
-    maximum_replay_capacity_unique_positions: int
-    replay_capacity_ramp_model_versions: int
-    retained_checkpoint_interval_steps: int
+class CreditTrainingParams(FrozenModel):
+    replay_ratio: Decimal = Field(gt=0)
+    optimizer_steps_per_quantum: int = Field(gt=0)
+    maximum_optimizer_steps: int = Field(gt=0)
+    initial_replay_capacity_unique_positions: int = Field(gt=0)
+    maximum_replay_capacity_unique_positions: int = Field(gt=0)
+    replay_capacity_ramp_model_versions: int = Field(gt=0)
+    retained_checkpoint_interval_steps: int = Field(gt=0)
 
-    def __post_init__(self) -> None:
-        if self.replay_ratio <= 0:
-            raise ValueError('Replay ratio must be positive.')
-        if self.optimizer_steps_per_quantum <= 0:
-            raise ValueError('Optimizer steps per quantum must be positive.')
-        if self.maximum_optimizer_steps <= 0:
-            raise ValueError('Maximum optimizer steps must be positive.')
+    @model_validator(mode='after')
+    def validate_schedule(self) -> CreditTrainingParams:
         if self.maximum_optimizer_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Maximum optimizer steps must contain complete training quanta.')
-        if self.initial_replay_capacity_unique_positions <= 0:
-            raise ValueError('Initial replay capacity must be positive.')
         if self.maximum_replay_capacity_unique_positions < self.initial_replay_capacity_unique_positions:
             raise ValueError('Maximum replay capacity must not be smaller than its initial capacity.')
-        if self.replay_capacity_ramp_model_versions <= 0:
-            raise ValueError('Replay capacity ramp model versions must be positive.')
-        if self.retained_checkpoint_interval_steps <= 0:
-            raise ValueError('Retained checkpoint interval must be positive.')
         if self.retained_checkpoint_interval_steps % self.optimizer_steps_per_quantum:
             raise ValueError('Retained checkpoint interval must align with training quanta.')
+        return self
 
     def presentation_credits_per_quantum(self, global_batch_size: int) -> int:
         if global_batch_size <= 0:
@@ -291,29 +213,21 @@ class CreditTrainingParams:
         return int(required_samples)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class ModelVersionLearningRateStage:
-    start_model_version: int
-    learning_rate: float
-
-    def __post_init__(self) -> None:
-        if self.start_model_version < 0:
-            raise ValueError('Learning-rate model version cannot be negative.')
-        if self.learning_rate <= 0.0:
-            raise ValueError('Learning rate must be positive.')
+class ModelVersionLearningRateStage(FrozenModel):
+    start_model_version: int = Field(ge=0)
+    learning_rate: float = Field(gt=0.0)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class ModelVersionLearningRate:
-    stages: tuple[ModelVersionLearningRateStage, ...]
-    optimizer_steps_per_model_version: int
+class ModelVersionLearningRate(FrozenModel):
+    stages: tuple[ModelVersionLearningRateStage, ...] = Field(min_length=1)
+    optimizer_steps_per_model_version: int = Field(gt=0)
 
-    def __post_init__(self) -> None:
+    @model_validator(mode='after')
+    def validate_stages(self) -> ModelVersionLearningRate:
         model_versions = tuple(stage.start_model_version for stage in self.stages)
-        if not self.stages or model_versions[0] != 0 or tuple(sorted(set(model_versions))) != model_versions:
+        if model_versions[0] != 0 or tuple(sorted(set(model_versions))) != model_versions:
             raise ValueError('Learning-rate stages must start at model version zero and increase uniquely.')
-        if self.optimizer_steps_per_model_version <= 0:
-            raise ValueError('Optimizer steps per model version must be positive.')
+        return self
 
     def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
         model_version = optimizer_step // self.optimizer_steps_per_model_version
@@ -325,117 +239,78 @@ class ModelVersionLearningRate:
         return selected_stage.learning_rate
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class TrainingParams:
-    global_batch_size: int
-    """Number of unique replay samples consumed by one optimizer step across all ranks."""
-
-    local_batch_size: int
-    """Number of replay samples consumed by one rank in one optimizer step."""
-
+class TrainingParams(FrozenModel):
+    global_batch_size: int = Field(gt=0)
+    local_batch_size: int = Field(gt=0)
     optimizer: OptimizerType
-    """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
-
     learning_rate: ModelVersionLearningRate
-    """Piecewise learning rate selected by published model version."""
+    max_grad_norm: float = Field(default=0.5, gt=0.0)
+    value_loss_weight: float = Field(default=0.5, ge=0.0)
+    outcome_value_loss_weight: float = Field(default=0.85, ge=0.0)
+    mcts_value_loss_weight: float = Field(default=0.15, ge=0.0)
+    mcts_value_target_warmup_optimizer_steps: int = Field(default=0, ge=0)
+    duplicate_multiplicity_weight_cap: float | None = Field(default=4.0, ge=1.0)
+    policy_loss_weight: float = Field(default=1.0, ge=0.0)
 
-    credit_training: CreditTrainingParams
-    """Required persistent presentation-credit training schedule."""
-
-    max_grad_norm: float = 0.5
-    """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
-
-    value_loss_weight: float = 0.5
-    """Overall weight applied to the unified soft-WDL value objective."""
-    outcome_value_loss_weight: float = 0.85
-    """Final-result share of the blended scalar value target."""
-    mcts_value_loss_weight: float = 0.15
-    """Maximum MCTS-root share of the blended scalar value target."""
-    mcts_value_target_warmup_optimizer_steps: int = 0
-    """Optimizer steps over which the MCTS share increases from zero to its maximum."""
-    duplicate_multiplicity_weight_cap: float | None = 4.0
-    """Optional cap on square-root multiplicity weights, or None for no cap."""
-    policy_loss_weight: float = 1.0
-    """This is the weight to use for the policy loss in the training. The policy loss is the cross-entropy loss between the predicted policy and the actual policy. The higher the weight the more important the policy loss is in the training. Typically 1.0-2.0 for training"""
-
-    num_workers: int = 2
-    """This is the number of workers to use for the dataloader to load the self-play data. The higher the number the faster the data is loaded but the more memory is used. Typically 0-4 for training. From experience with this project, 0 seems to work best mostly."""
-
-    def __post_init__(self) -> None:
-        if self.outcome_value_loss_weight < 0.0 or self.mcts_value_loss_weight < 0.0:
-            raise ValueError('Value-objective component weights cannot be negative.')
+    @model_validator(mode='after')
+    def validate_value_weights(self) -> TrainingParams:
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
-        if self.mcts_value_target_warmup_optimizer_steps < 0:
-            raise ValueError('MCTS value-target warmup steps cannot be negative.')
-        if self.duplicate_multiplicity_weight_cap is not None and self.duplicate_multiplicity_weight_cap < 1.0:
-            raise ValueError('Duplicate multiplicity weight cap must be at least one.')
-        self.credit_training.presentation_credits_per_quantum(self.global_batch_size)
-        self.credit_training.unique_samples_per_quantum(self.global_batch_size)
+        return self
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class EvaluationParams:
-    num_searches_per_turn: int
-    """This is the number of searches to run the MCTS algorithm in the evaluation. This is used to evaluate the model against itself to see how well it is doing. The higher the number the more accurate the evaluation but the slower the evaluation. Typically 20-50 for evaluation"""
+class TrainingLifecycleParams(FrozenModel):
+    credit: CreditTrainingParams
+    evaluation: EvaluationScheduleParams
+    inference_retention: InferenceRetentionParams
 
-    num_games: int
-    """This is the number of games to play for the evaluation. The more games the more accurate the evaluation but the longer the evaluation. Typically 32-256 for evaluation"""
 
-    every_n_model_versions: int
-    """This is the number of iterations between each evaluation. The higher the number the less often the evaluation is run. Typically 2-10 for evaluation"""
-
-    evaluate_initial_checkpoint: bool
-    """Whether to evaluate model 0 before self-play starts."""
-
-    max_concurrent_tasks: int
-    """Maximum number of evaluation tasks running inside one evaluation process."""
-
-    inference_cache_capacity: int
-    """Maximum cached positions in each evaluation inference client."""
-
-    use_inference_cache: bool
-    """Whether evaluation search constructs the cached or non-cached C++ inference client."""
-
+class EvaluationParams(FrozenModel):
+    num_searches_per_turn: int = Field(gt=0)
+    num_games: int = Field(gt=0)
+    every_n_model_versions: int = Field(gt=0)
+    max_concurrent_tasks: int = Field(gt=0)
+    inference: InferenceParams
     dataset_path: str | None
-    """This is the path to the dataset to use for the evaluation. The dataset should contain self-play data to evaluate the model against. The more data the more accurate the evaluation but the longer the evaluation. Typically a few hundred to a few thousand games for evaluation"""
-
     reference_model_path: str | None
     opening_suite_path: str | None
     raw_results_path: str | None
-    maximum_game_plies: int | None
-    bootstrap_seed: int
-    bootstrap_samples: int
-    mcts_threads: int
+    maximum_game_plies: int | None = Field(default=None, gt=0)
+    bootstrap_seed: int = Field(ge=0)
+    bootstrap_samples: int = Field(gt=0)
+    mcts_threads: int = Field(gt=0)
     previous_model_offsets: tuple[int, ...]
     historical_model_versions: tuple[int, ...]
-    historical_model_rotation_period: int
+    historical_model_rotation_period: int = Field(gt=0)
     stockfish_skill_levels: tuple[int, ...]
     stockfish_binary_path: str | None
-    stockfish_nodes_per_move: int
-    stockfish_threads: int
-    stockfish_hash_mib: int
+    stockfish_nodes_per_move: int = Field(gt=0)
+    stockfish_threads: int = Field(gt=0)
+    stockfish_hash_mib: int = Field(gt=0)
     evaluate_random: bool
-    search_exploration_constant: float = 1.0
-    parallel_searches: int = 1
-    direct_inference: DirectSelfPlayParams | None = None
-    """Direct reusable inference pipeline configuration, or None for the general evaluation client."""
-    teacher_searches_per_turn: int = 600
-    teacher_evaluation_games: int = 16
+    search_exploration_constant: float = Field(default=1.0, gt=0.0)
+    parallel_searches: int = Field(default=1, gt=0)
+    teacher_searches_per_turn: int = Field(default=600, gt=0)
+    teacher_evaluation_games: int = Field(default=16, gt=0)
 
 
-@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
-class TrainingArgs:
+class TrainingArgs(FrozenModel):
     save_path: str
-    """Path for model generations, replay, telemetry, and evaluation artifacts."""
-
     network: NetworkParams
     self_play: SelfPlayParams
-    training: TrainingParams
-    cluster: ClusterParams
-    run_limits: RuntimeLimits
-    artifact_retention: ArtifactRetention
-    evaluation_schedule: EvaluationScheduleParams
+    trainer: TrainingParams
+    topology: TopologyParams
+    lifecycle: TrainingLifecycleParams
+    limits: RuntimeLimits
     random_seed: int
-    self_play_search_warmup_model_versions: int
-    self_play_endgame_shortcut_fade_model_versions: int = 0
+
+    @model_validator(mode='after')
+    def validate_training(self) -> TrainingArgs:
+        world_size = len(self.topology.trainer.ddp_device_ids)
+        if self.trainer.global_batch_size != self.trainer.local_batch_size * world_size:
+            raise ValueError('Global batch size must equal local batch size times trainer world size.')
+        credit = self.lifecycle.credit
+        credit.presentation_credits_per_quantum(self.trainer.global_batch_size)
+        credit.unique_samples_per_quantum(self.trainer.global_batch_size)
+        self.lifecycle.evaluation.validate_for_optimizer_quantum(credit.optimizer_steps_per_quantum)
+        return self
