@@ -332,6 +332,23 @@ target_link_libraries(SearchTreeArenaTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME SearchTreeArenaTest COMMAND SearchTreeArenaTest)
 
 add_executable(
+        GameSearchTreeTest
+        test/TestGameSearchTree.cpp
+        src/games/chess/ChessBoard.cpp
+        src/games/chess/ChessEncoding.cpp
+        src/games/chess/ChessHistory.cpp
+        src/games/chess/ChessAction.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(GameSearchTreeTest PRIVATE src)
+target_link_libraries(GameSearchTreeTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME GameSearchTreeTest COMMAND GameSearchTreeTest)
+
+add_executable(
         MovePolicyProcessingTest
         test/TestMovePolicyProcessing.cpp
         src/games/chess/ChessBoard.cpp

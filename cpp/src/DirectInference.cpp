@@ -26,13 +26,18 @@ torch::Dtype dtypeForDevice(const torch::Device &device) {
 DirectInferenceRunner::DirectInferenceRunner(const std::string &modelPath,
                                              const InferenceDevice device, const int deviceId,
                                              const size_t maximumBatchSize,
-                                             const bool useDedicatedCudaStream)
+                                             const bool useDedicatedCudaStream,
+                                             const InferenceDimensions dimensions)
     : m_device(resolveDevice(device, deviceId)), m_torchDtype(dtypeForDevice(m_device)),
-      m_maximumBatchSize(maximumBatchSize),
+      m_maximumBatchSize(maximumBatchSize), m_dimensions(dimensions),
       m_model(std::make_unique<torch::jit::script::Module>(
           loadInferenceModel(modelPath, m_device, m_torchDtype))) {
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum direct inference batch size must be positive");
+    }
+    if (dimensions.channels <= 0 || dimensions.rows <= 0 || dimensions.columns <= 0 ||
+        dimensions.actions <= 0 || dimensions.outcomes <= 0) {
+        throw std::invalid_argument("Inference dimensions must be positive");
     }
 #ifdef USE_CUDA
     if (m_device.is_cuda() && useDedicatedCudaStream) {
@@ -43,22 +48,24 @@ DirectInferenceRunner::DirectInferenceRunner(const std::string &modelPath,
         throw std::runtime_error("Dedicated CUDA streams require a CUDA-enabled native build");
     }
 #endif
-    m_deviceInput =
-        torch::empty({static_cast<int64_t>(maximumBatchSize), BOARD_C, BOARD_LEN, BOARD_LEN},
-                     torch::TensorOptions().device(m_device).dtype(m_torchDtype));
+    m_deviceInput = torch::empty({static_cast<int64_t>(maximumBatchSize), dimensions.channels,
+                                  dimensions.rows, dimensions.columns},
+                                 torch::TensorOptions().device(m_device).dtype(m_torchDtype));
 }
 
 torch::Tensor DirectInferenceRunner::createInputBuffer() const {
     return torch::empty(
-        {static_cast<int64_t>(m_maximumBatchSize), BOARD_C, BOARD_LEN, BOARD_LEN},
+        {static_cast<int64_t>(m_maximumBatchSize), m_dimensions.channels, m_dimensions.rows,
+         m_dimensions.columns},
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kInt8).pinned_memory(usesCuda()));
 }
 
 DirectInferenceOutput DirectInferenceRunner::createOutputBuffer() const {
     const torch::TensorOptions options =
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32).pinned_memory(usesCuda());
-    return {torch::empty({static_cast<int64_t>(m_maximumBatchSize), ACTION_SIZE}, options),
-            torch::empty({static_cast<int64_t>(m_maximumBatchSize), 3}, options)};
+    return {
+        torch::empty({static_cast<int64_t>(m_maximumBatchSize), m_dimensions.actions}, options),
+        torch::empty({static_cast<int64_t>(m_maximumBatchSize), m_dimensions.outcomes}, options)};
 }
 
 void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
@@ -68,16 +75,17 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
     }
     if (encodedBoards.device().is_cuda() || encodedBoards.scalar_type() != torch::kInt8 ||
         encodedBoards.dim() != 4 || encodedBoards.size(0) < static_cast<int64_t>(batchSize) ||
-        encodedBoards.size(1) != BOARD_C || encodedBoards.size(2) != BOARD_LEN ||
-        encodedBoards.size(3) != BOARD_LEN) {
+        encodedBoards.size(1) != m_dimensions.channels ||
+        encodedBoards.size(2) != m_dimensions.rows ||
+        encodedBoards.size(3) != m_dimensions.columns) {
         throw std::invalid_argument("Direct inference input must be a CPU int8 board batch");
     }
     if (output.policies.device().is_cuda() || output.policies.scalar_type() != torch::kFloat32 ||
         output.policies.dim() != 2 || output.policies.size(0) < static_cast<int64_t>(batchSize) ||
-        output.policies.size(1) != ACTION_SIZE || output.outcomes.device().is_cuda() ||
+        output.policies.size(1) != m_dimensions.actions || output.outcomes.device().is_cuda() ||
         output.outcomes.scalar_type() != torch::kFloat32 || output.outcomes.dim() != 2 ||
         output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
-        output.outcomes.size(1) != static_cast<int64_t>(WDL_OUTPUT_SIZE)) {
+        output.outcomes.size(1) != m_dimensions.outcomes) {
         throw std::invalid_argument("Direct inference output buffers have invalid shapes or types");
     }
 
@@ -112,10 +120,10 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
 PreparedInferenceModel
 DirectInferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
     const torch::Tensor validationInput =
-        torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
+        torch::zeros({1, m_dimensions.channels, m_dimensions.rows, m_dimensions.columns},
                      torch::TensorOptions().device(m_device).dtype(m_torchDtype));
-    return prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype,
-                                       validationInput);
+    return prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput,
+                                       m_dimensions.actions, m_dimensions.outcomes);
 }
 
 void DirectInferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
@@ -126,8 +134,9 @@ DirectInferencePipeline::DirectInferencePipeline(const std::string &modelPath,
                                                  const InferenceDevice device, const int deviceId,
                                                  const size_t maximumBatchSize,
                                                  const size_t slotCount,
-                                                 const bool useDedicatedCudaStream)
-    : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream) {
+                                                 const bool useDedicatedCudaStream,
+                                                 const InferenceDimensions dimensions)
+    : m_runner(modelPath, device, deviceId, maximumBatchSize, useDedicatedCudaStream, dimensions) {
     if (slotCount < 2) {
         throw std::invalid_argument("Direct inference pipeline requires at least two slots");
     }

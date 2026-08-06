@@ -14,10 +14,24 @@ struct DirectInferenceOutput {
     torch::Tensor outcomes;
 };
 
+struct InferenceDimensions {
+    int channels;
+    int rows;
+    int columns;
+    int actions;
+    int outcomes;
+
+    [[nodiscard]] bool operator==(const InferenceDimensions &) const noexcept = default;
+};
+
+inline constexpr InferenceDimensions CHESS_INFERENCE_DIMENSIONS{
+    BOARD_C, BOARD_LEN, BOARD_LEN, ACTION_SIZE, static_cast<int>(WDL_OUTPUT_SIZE)};
+
 class DirectInferenceRunner {
 public:
     DirectInferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
-                          size_t maximumBatchSize, bool useDedicatedCudaStream);
+                          size_t maximumBatchSize, bool useDedicatedCudaStream,
+                          InferenceDimensions dimensions = CHESS_INFERENCE_DIMENSIONS);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] DirectInferenceOutput createOutputBuffer() const;
@@ -33,6 +47,7 @@ private:
     const torch::Device m_device;
     const torch::Dtype m_torchDtype;
     const size_t m_maximumBatchSize;
+    const InferenceDimensions m_dimensions;
     PreparedInferenceModel m_model;
     torch::Tensor m_deviceInput;
     std::vector<torch::jit::IValue> m_modelInputs{1};
@@ -50,7 +65,8 @@ public:
     };
 
     DirectInferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
-                            size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream);
+                            size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
+                            InferenceDimensions dimensions = CHESS_INFERENCE_DIMENSIONS);
     ~DirectInferencePipeline();
 
     DirectInferencePipeline(const DirectInferencePipeline &) = delete;

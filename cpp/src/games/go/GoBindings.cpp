@@ -1,5 +1,6 @@
 #include "games/go/GoBindings.hpp"
 
+#include "MCTS/GameSearch.hpp"
 #include "games/go/GoGameContract.hpp"
 
 #include <array>
@@ -61,6 +62,60 @@ restore_position(const std::vector<std::vector<int>> &black_history,
     }
     return GoPosition<BoardSize, HistoryLength>::restore(history, player, typed_ko,
                                                          consecutive_passes, move_number, rules);
+}
+
+template <std::size_t BoardSize>
+void bind_go_search(py::module_ &module, const char *rootName, const char *searchName) {
+    using Contract = GoGameContract<BoardSize, 8>;
+    using Root = GameSearchRoot<Contract>;
+    using Search = BatchedGameSearch<Contract>;
+    constexpr InferenceDimensions dimensions{
+        GoRepresentationDimensions<BoardSize, 8>::channel_count,
+        GoRepresentationDimensions<BoardSize, 8>::board_length,
+        GoRepresentationDimensions<BoardSize, 8>::board_length,
+        GoRepresentationDimensions<BoardSize, 8>::action_count,
+        static_cast<int>(WDL_OUTPUT_SIZE),
+    };
+
+    py::class_<Root>(module, rootName)
+        .def_property_readonly("position", &Root::position)
+        .def_property_readonly("is_terminal", &Root::isTerminal)
+        .def_property_readonly("visits", &Root::visits)
+        .def_property_readonly("live_nodes", &Root::liveNodeCount)
+        .def_property_readonly("children",
+                               [](const Root &root) {
+                                   std::vector<std::pair<int, std::uint32_t>> children;
+                                   for (const auto &edge : root.tree().root().children) {
+                                       children.emplace_back(
+                                           Contract::actionId(edge.action, root.position()),
+                                           edge.visits);
+                                   }
+                                   return children;
+                               })
+        .def("play", &Root::play, py::arg("action_id"));
+
+    py::class_<Search>(module, searchName)
+        .def(py::init<const std::string &, InferenceDevice, int, std::size_t, InferenceDimensions,
+                      float, std::size_t, std::uint64_t>(),
+             py::arg("model_path"), py::arg("device"), py::arg("device_id"),
+             py::arg("maximum_batch_size"), py::arg("dimensions"), py::arg("exploration_constant"),
+             py::arg("tree_capacity"), py::arg("model_generation"))
+        .def_static("inference_dimensions", []() { return dimensions; })
+        .def(
+            "new_root",
+            [](Search &search, const GoRules rules) {
+                return search.newRoot(Contract::initialPosition(rules));
+            },
+            py::arg("rules"))
+        .def(
+            "search",
+            [](Search &search, std::vector<Root> roots, const std::uint32_t simulations) {
+                return search.search(roots, simulations);
+            },
+            py::arg("roots"), py::arg("simulations"), py::call_guard<py::gil_scoped_release>())
+        .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
+             py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
+        .def_property_readonly("model_generation", &Search::modelGeneration);
 }
 
 template <std::size_t BoardSize, std::size_t HistoryLength>
@@ -167,6 +222,21 @@ void bind_position(py::module_ &module, const char *name) {
 } // namespace
 
 void bind_go_game(py::module_ &module) {
+    py::class_<InferenceDimensions>(module, "InferenceDimensions")
+        .def(py::init<int, int, int, int, int>(), py::arg("channels"), py::arg("rows"),
+             py::arg("columns"), py::arg("actions"), py::arg("outcomes"))
+        .def_readonly("channels", &InferenceDimensions::channels)
+        .def_readonly("rows", &InferenceDimensions::rows)
+        .def_readonly("columns", &InferenceDimensions::columns)
+        .def_readonly("actions", &InferenceDimensions::actions)
+        .def_readonly("outcomes", &InferenceDimensions::outcomes)
+        .def(py::self == py::self);
+    py::class_<GameSearchVisit>(module, "GameSearchVisit")
+        .def_readonly("action_id", &GameSearchVisit::action_id)
+        .def_readonly("visit_count", &GameSearchVisit::visit_count);
+    py::class_<GameSearchResult>(module, "GameSearchResult")
+        .def_readonly("root_value", &GameSearchResult::root_value)
+        .def_readonly("visits", &GameSearchResult::visits);
     py::enum_<GoPlayer>(module, "GoPlayer")
         .value("BLACK", GoPlayer::black)
         .value("WHITE", GoPlayer::white);
@@ -200,4 +270,6 @@ void bind_go_game(py::module_ &module) {
         .def(py::self == py::self);
     bind_position<7, 8>(module, "GoPosition7");
     bind_position<9, 8>(module, "GoPosition9");
+    bind_go_search<7>(module, "GoSearchRoot7", "GoBatchedSearch7");
+    bind_go_search<9>(module, "GoSearchRoot9", "GoBatchedSearch9");
 }

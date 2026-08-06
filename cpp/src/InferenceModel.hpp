@@ -71,7 +71,8 @@ using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
 [[nodiscard]] inline PreparedInferenceModel
 prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::string &modelPath,
                             const torch::Device &device, const torch::Dtype dataType,
-                            const torch::Tensor &validationInput) {
+                            const torch::Tensor &validationInput, const int actionCount,
+                            const int outcomeCount) {
     auto updatedModel = std::make_unique<torch::jit::script::Module>(
         loadInferenceModel(modelPath, device, dataType));
     const auto currentParameters = model.named_parameters();
@@ -92,9 +93,8 @@ prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::
     }
     const torch::Tensor policy = outputTuple->elements()[0].toTensor();
     const torch::Tensor outcome = outputTuple->elements()[1].toTensor();
-    if (policy.dim() != 2 || policy.size(0) != 1 || policy.size(1) != ACTION_SIZE ||
-        outcome.dim() != 2 || outcome.size(0) != 1 ||
-        outcome.size(1) != static_cast<int64_t>(WDL_OUTPUT_SIZE) ||
+    if (policy.dim() != 2 || policy.size(0) != 1 || policy.size(1) != actionCount ||
+        outcome.dim() != 2 || outcome.size(0) != 1 || outcome.size(1) != outcomeCount ||
         !torch::isfinite(policy).all().item<bool>() ||
         !torch::isfinite(outcome).all().item<bool>() || (policy < 0).any().item<bool>() ||
         (outcome < 0).any().item<bool>() || std::abs(policy.sum().item<float>() - 1.0F) > 1e-2F ||

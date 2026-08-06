@@ -125,7 +125,8 @@ void InferenceClient::refreshModel(const std::string &modelPath) {
         torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
                      torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     PreparedInferenceModel updatedModel =
-        prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput);
+        prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput,
+                                    ACTION_SIZE, static_cast<int>(WDL_OUTPUT_SIZE));
     commitInferenceModelUpdate(m_model, std::move(updatedModel));
 }
 
