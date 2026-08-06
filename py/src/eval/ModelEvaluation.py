@@ -137,10 +137,8 @@ class ModelEvaluation:
                 str(inference_path),
                 inference.inference_batch_size,
                 500,
-                0,
             ),
             self.mcts_args,
-            use_inference_cache=False,
             direct_inference_params=direct_parameters,
         )
 

@@ -34,7 +34,6 @@ __all__ = [
     'new_eval_root',
     'new_root',
     'test_eval_mcts_speed_cpp',
-    'test_inference_speed_cpp',
     'test_mcts_speed_cpp',
 ]
 
@@ -193,7 +192,6 @@ class FunctionTimeInfo:
     def total(self) -> float: ...
 
 class InferenceClientParams:
-    cacheCapacity: int
     currentModelPath: str
     device_id: int
     maxBatchSize: int
@@ -204,7 +202,6 @@ class InferenceClientParams:
         currentModelPath: str,
         maxBatchSize: int,
         microsecondsTimeoutInferenceThread: int,
-        cacheCapacity: int,
         device: InferenceDevice = InferenceDevice.AUTO,
     ) -> None: ...
     @property
@@ -221,18 +218,6 @@ class InferenceStatistics:
     @property
     def averageNumberOfPositionsInInferenceCall(self) -> float: ...
     @property
-    def cacheHits(self) -> int: ...
-    @property
-    def cacheHitRate(self) -> float: ...
-    @property
-    def cacheCapacity(self) -> int: ...
-    @property
-    def cacheEvictions(self) -> int: ...
-    @property
-    def cacheFingerprintCollisions(self) -> int: ...
-    @property
-    def cacheSizeMB(self) -> int: ...
-    @property
     def evaluations(self) -> int: ...
     @property
     def modelBatchSizeHistogram(self) -> list[int]: ...
@@ -240,17 +225,12 @@ class InferenceStatistics:
     def modelInferenceCalls(self) -> int: ...
     @property
     def modelInferencePositions(self) -> int: ...
-    @property
-    def nnOutputValueDistribution(self) -> list[float]: ...
-    @property
-    def uniquePositions(self) -> int: ...
 
 class MCTS:
     def __init__(
         self,
         client_args: InferenceClientParams,
         mcts_args: MCTSParams,
-        use_inference_cache: bool = True,
         direct_inference_params: DirectSelfPlayInferenceParams | None = None,
         initial_model_version: int = 0,
     ) -> None: ...
@@ -449,13 +429,6 @@ def test_eval_mcts_speed_cpp(
     """
     Test the Eval MCTS search speed.
     Runs Eval MCTS search on a specified number of boards for a given number of iterations.
-    Prints the average time taken per iteration and per board.
-    """
-
-def test_inference_speed_cpp(numBoards: int = 100, numIterations: int = 10) -> None:
-    """
-    Test the inference speed of the InferenceClient.
-    Runs inference on a specified number of boards for a given number of iterations.
     Prints the average time taken per iteration and per board.
     """
 

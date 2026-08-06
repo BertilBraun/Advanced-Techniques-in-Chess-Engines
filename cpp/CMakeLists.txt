@@ -191,10 +191,6 @@ endif ()
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 
-add_executable(ShardedCacheTest test/TestShardedCache.cpp)
-target_include_directories(ShardedCacheTest PRIVATE src)
-add_test(NAME ShardedCacheTest COMMAND ShardedCacheTest)
-
 add_executable(BlockingQueueTest test/TestBlockingQueue.cpp)
 target_include_directories(BlockingQueueTest PRIVATE src)
 add_test(NAME BlockingQueueTest COMMAND BlockingQueueTest)
@@ -357,7 +353,6 @@ add_executable(
         src/Board.cpp
         src/BoardEncoding.cpp
         src/DirectInference.cpp
-        src/InferenceClient.cpp
         src/InferenceResultProcessing.cpp
         src/MCTS/DirectSelfPlaySearch.cpp
         src/MCTS/MCTS.cpp
@@ -383,7 +378,6 @@ add_executable(
         src/Board.cpp
         src/BoardEncoding.cpp
         src/DirectInference.cpp
-        src/InferenceClient.cpp
         src/InferenceResultProcessing.cpp
         src/MoveEncoding.cpp
         src/NonCachingInferenceClient.cpp

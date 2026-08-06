@@ -10,7 +10,7 @@ build_directory=${BUILD_DIRECTORY:-"${source_root}/cpp/build"}
 if [[ "$#" -lt 1 ]]; then
     echo "Usage: $0 MODEL_PATH [SOURCE_ROOT]"
     echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, MCTS_THREADS_PER_PROCESS, PARALLEL_GAMES_PER_PROCESS"
-    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, FAST_SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, CACHE_CAPACITY, USE_INFERENCE_CACHE, SEED_BASE"
+    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, FAST_SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, SEED_BASE"
     echo "Affinity override: PIN_WORKERS_TO_CPUS=0|1"
     exit 1
 fi
@@ -28,8 +28,6 @@ fast_searches_per_ply=${FAST_SEARCHES_PER_PLY:-0}
 parallel_searches=${PARALLEL_SEARCHES:-4}
 maximum_batch_size=${MAXIMUM_BATCH_SIZE:-256}
 inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
-cache_capacity=${CACHE_CAPACITY:-1500000}
-use_inference_cache=${USE_INFERENCE_CACHE:-1}
 direct_inference_workers=${DIRECT_INFERENCE_WORKERS:-0}
 direct_inference_batch_size=${DIRECT_INFERENCE_BATCH_SIZE:-64}
 direct_outstanding_batches_per_worker=${DIRECT_OUTSTANDING_BATCHES_PER_WORKER:-2}
@@ -67,7 +65,6 @@ require_nonnegative_integer FAST_SEARCHES_PER_PLY "${fast_searches_per_ply}"
 require_positive_integer PARALLEL_SEARCHES "${parallel_searches}"
 require_positive_integer MAXIMUM_BATCH_SIZE "${maximum_batch_size}"
 require_positive_integer INFERENCE_TIMEOUT_MICROSECONDS "${inference_timeout_microseconds}"
-require_positive_integer CACHE_CAPACITY "${cache_capacity}"
 require_nonnegative_integer SEED_BASE "${seed_base}"
 require_nonnegative_integer DIRECT_INFERENCE_WORKERS "${direct_inference_workers}"
 require_positive_integer DIRECT_INFERENCE_BATCH_SIZE "${direct_inference_batch_size}"
@@ -81,16 +78,8 @@ if [[ "${pin_workers_to_cpus}" != "0" && "${pin_workers_to_cpus}" != "1" ]]; the
     echo "PIN_WORKERS_TO_CPUS must be 0 or 1, found: ${pin_workers_to_cpus}"
     exit 1
 fi
-if [[ "${use_inference_cache}" != "0" && "${use_inference_cache}" != "1" ]]; then
-    echo "USE_INFERENCE_CACHE must be 0 or 1, found: ${use_inference_cache}"
-    exit 1
-fi
 if [[ "${direct_outstanding_batches_per_worker}" -gt 2 ]]; then
     echo "DIRECT_OUTSTANDING_BATCHES_PER_WORKER must be 1 or 2"
-    exit 1
-fi
-if [[ "${direct_inference_workers}" -gt 0 && "${use_inference_cache}" -eq 1 ]]; then
-    echo "Direct self-play inference does not support USE_INFERENCE_CACHE=1"
     exit 1
 fi
 if [[ "${fast_searches_per_ply}" -gt 0 ]] && {
@@ -272,9 +261,9 @@ fi
 
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 topology_name="g${gpu_count}-pg${processes_per_gpu}-t${mcts_threads_per_process}-games${parallel_games_per_process}"
-workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}-cache${cache_capacity}"
-if [[ "${use_inference_cache}" -eq 1 ]]; then
-    inference_client_name=cached
+workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}"
+if [[ "${direct_inference_workers}" -gt 0 ]]; then
+    inference_client_name=direct
 else
     inference_client_name=uncached
 fi
@@ -321,8 +310,6 @@ jq -n \
     --argjson parallel_searches "${parallel_searches}" \
     --argjson maximum_batch_size "${maximum_batch_size}" \
     --argjson inference_timeout_microseconds "${inference_timeout_microseconds}" \
-    --argjson cache_capacity "${cache_capacity}" \
-    --argjson use_inference_cache "${use_inference_cache}" \
     --argjson direct_inference_workers "${direct_inference_workers}" \
     --argjson direct_inference_batch_size "${direct_inference_batch_size}" \
     --argjson direct_outstanding_batches_per_worker "${direct_outstanding_batches_per_worker}" \
@@ -376,8 +363,6 @@ jq -n \
             parallel_searches: $parallel_searches,
             maximum_batch_size: $maximum_batch_size,
             inference_timeout_microseconds: $inference_timeout_microseconds,
-            cache_capacity_per_process: $cache_capacity,
-            use_inference_cache: ($use_inference_cache == 1),
             direct_inference_workers: $direct_inference_workers,
             direct_inference_batch_size: $direct_inference_batch_size,
             direct_outstanding_batches_per_worker: $direct_outstanding_batches_per_worker,
@@ -406,14 +391,10 @@ for ((device = 0; device < gpu_count; device++)); do
             --threads "${mcts_threads_per_process}"
             --maximum-batch-size "${maximum_batch_size}"
             --inference-timeout-microseconds "${inference_timeout_microseconds}"
-            --cache-capacity "${cache_capacity}"
             --seed "${worker_seed}"
             --ready-file "${output_directory}/ready-${process_index}"
             --start-barrier "${start_barrier}"
         )
-        if [[ "${use_inference_cache}" -eq 0 ]]; then
-            worker_command+=(--no-inference-cache)
-        fi
         if [[ "${direct_inference_workers}" -gt 0 ]]; then
             worker_command+=(
                 --direct-inference-workers "${direct_inference_workers}"
@@ -544,7 +525,6 @@ jq -s \
         | ($workers | map(.inference_model_calls) | add) as $model_calls
         | ($workers | map(.inference_model_positions) | add) as $model_positions
         | ($workers | map(.inference_evaluations) | add) as $evaluations
-        | ($workers | map(.inference_cache_hits) | add) as $cache_hits
         | {
             manifest: $manifest[0],
             measurement: {
@@ -569,10 +549,6 @@ jq -s \
             },
             inference: {
                 evaluations: $evaluations,
-                cache_hits: $cache_hits,
-                cache_hit_rate_percent: (
-                    if $evaluations == 0 then 0 else 100 * $cache_hits / $evaluations end
-                ),
                 model_calls: $model_calls,
                 model_positions: $model_positions,
                 average_batch_size: (
@@ -585,14 +561,6 @@ jq -s \
                         batch_size: .[0].batch_size,
                         calls: (map(.calls) | add)
                     })
-                ),
-                unique_positions: ($workers | map(.inference_unique_positions) | add),
-                cache_size_mib_at_end: ($workers | map(.inference_cache_size_mib) | add),
-                cache_evictions: ($workers | map(.inference_cache_evictions) | add),
-                fingerprint_collisions: (
-                    $workers
-                    | map(.inference_cache_fingerprint_collisions)
-                    | add
                 )
             },
             resources: (

@@ -56,7 +56,7 @@ from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
-from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
+from src.util.tensorboard import is_tensorboard_writer_active, log_scalar
 from src.util.timing import timeit
 
 
@@ -229,7 +229,6 @@ class SelfPlay:
         if self.mcts is None:
             return None
         inference_stats, time_info = self.mcts.get_inference_statistics()
-        log_scalar('inference/cache_hit_rate', inference_stats.cacheHitRate, tensorboard_step)
         log_scalar(
             'self_play/disagreement_prefix_archive_size',
             len(self.disagreement_prefix_archive),
@@ -238,20 +237,6 @@ class SelfPlay:
         log_scalar(
             'self_play/disagreement_prefix_games_started',
             self.disagreement_prefix_games_started,
-            tensorboard_step,
-        )
-        log_scalar('inference/unique_positions', inference_stats.uniquePositions, tensorboard_step)
-        log_scalar('inference/cache_size_mb', inference_stats.cacheSizeMB, tensorboard_step)
-        log_scalar('inference/cache_capacity', inference_stats.cacheCapacity, tensorboard_step)
-        log_scalar('inference/cache_evictions', inference_stats.cacheEvictions, tensorboard_step)
-        log_scalar(
-            'inference/cache_fingerprint_collisions',
-            inference_stats.cacheFingerprintCollisions,
-            tensorboard_step,
-        )
-        log_histogram(
-            'inference/nn_output_value_distribution',
-            np.array(inference_stats.nnOutputValueDistribution),
             tensorboard_step,
         )
         log_scalar(
@@ -365,12 +350,10 @@ class SelfPlay:
                 currentModelPath=str(model_path),
                 maxBatchSize=inference.inference_batch_size,
                 microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
-                cacheCapacity=0,
             )
             self.mcts = MCTS(
                 client_args,
                 self._native_mcts_params(schedule),
-                use_inference_cache=False,
                 direct_inference_params=direct_inference_params,
                 initial_model_version=model_version,
             )

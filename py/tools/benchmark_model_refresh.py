@@ -8,7 +8,6 @@ import subprocess
 import threading
 import time
 from dataclasses import asdict, dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import torch
@@ -27,17 +26,10 @@ INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 BYTES_PER_MIB = 2**20
 
 
-class InferenceMode(StrEnum):
-    DIRECT = 'direct'
-    QUEUED_CACHED = 'queued-cached'
-    QUEUED_NONCACHED = 'queued-noncached'
-
-
 @dataclass(frozen=True)
 class Arguments:
     model_path: Path
     output_path: Path
-    inference_mode: InferenceMode
     device_id: int
     measured_refreshes: int
     warmup_refreshes: int
@@ -136,9 +128,6 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(description='Benchmark transactional in-place self-play model refresh.')
     parser.add_argument('--model-path', type=Path, required=True)
     parser.add_argument('--output-path', type=Path, required=True)
-    parser.add_argument(
-        '--inference-mode', type=InferenceMode, choices=tuple(InferenceMode), default=InferenceMode.DIRECT
-    )
     parser.add_argument('--device-id', type=int, default=0)
     parser.add_argument('--measured-refreshes', type=int, default=20)
     parser.add_argument('--warmup-refreshes', type=int, default=2)
@@ -156,7 +145,6 @@ def parse_arguments() -> Arguments:
     arguments = Arguments(
         model_path=namespace.model_path,
         output_path=namespace.output_path,
-        inference_mode=namespace.inference_mode,
         device_id=namespace.device_id,
         measured_refreshes=namespace.measured_refreshes,
         warmup_refreshes=namespace.warmup_refreshes,
@@ -226,7 +214,6 @@ def create_search(arguments: Arguments) -> MCTS:
         currentModelPath=str(arguments.model_path),
         maxBatchSize=256,
         microsecondsTimeoutInferenceThread=500,
-        cacheCapacity=4096,
     )
     search_parameters = MCTSParams(
         num_parallel_searches=arguments.parallel_searches,
@@ -238,19 +225,14 @@ def create_search(arguments: Arguments) -> MCTS:
         min_visit_count=0,
         num_threads=arguments.threads,
     )
-    direct_parameters = (
-        DirectSelfPlayInferenceParams(
-            arguments.direct_workers,
-            arguments.direct_batch_size,
-            arguments.direct_outstanding_batches,
-        )
-        if arguments.inference_mode is InferenceMode.DIRECT
-        else None
+    direct_parameters = DirectSelfPlayInferenceParams(
+        arguments.direct_workers,
+        arguments.direct_batch_size,
+        arguments.direct_outstanding_batches,
     )
     return MCTS(
         client_parameters,
         search_parameters,
-        use_inference_cache=arguments.inference_mode is InferenceMode.QUEUED_CACHED,
         direct_inference_params=direct_parameters,
         initial_model_version=0,
     )
@@ -339,7 +321,7 @@ def benchmark(arguments: Arguments) -> RefreshBenchmarkResult:
         model_path=str(arguments.model_path.resolve()),
         model_sha256=file_sha256(arguments.model_path),
         device_name=torch.cuda.get_device_name(device),
-        inference_mode=str(arguments.inference_mode),
+        inference_mode='direct',
         measured_refreshes=arguments.measured_refreshes,
         warmup_refreshes=arguments.warmup_refreshes,
         roots=arguments.roots,

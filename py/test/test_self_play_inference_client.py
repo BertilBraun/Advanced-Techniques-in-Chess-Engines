@@ -44,7 +44,6 @@ class _FakeInferenceClientParams:
     currentModelPath: str
     maxBatchSize: int
     microsecondsTimeoutInferenceThread: int
-    cacheCapacity: int
 
 
 @dataclass(frozen=True)
@@ -67,20 +66,17 @@ class _FakeDirectSelfPlayInferenceParams:
 
 
 class _FakeMcts:
-    use_inference_cache: bool | None = None
     direct_inference_params: _FakeDirectSelfPlayInferenceParams | None = None
 
     def __init__(
         self,
         client_args: _FakeInferenceClientParams,
         mcts_args: _FakeMctsParams,
-        use_inference_cache: bool,
         direct_inference_params: _FakeDirectSelfPlayInferenceParams | None,
         initial_model_version: int,
     ) -> None:
-        assert client_args.cacheCapacity == 0
+        assert client_args.maxBatchSize == 64
         assert mcts_args.num_full_searches > mcts_args.num_parallel_searches
-        _FakeMcts.use_inference_cache = use_inference_cache
         _FakeMcts.direct_inference_params = direct_inference_params
         assert initial_model_version >= 0
         self.arena_capacity = (
@@ -95,13 +91,6 @@ class _LifecycleMcts:
 
     def get_inference_statistics(self) -> tuple[SimpleNamespace, SimpleNamespace]:
         inference_statistics = SimpleNamespace(
-            cacheHitRate=0.0,
-            uniquePositions=0,
-            cacheSizeMB=0,
-            cacheCapacity=0,
-            cacheEvictions=0,
-            cacheFingerprintCollisions=0,
-            nnOutputValueDistribution=[],
             averageNumberOfPositionsInInferenceCall=0.0,
         )
         return inference_statistics, SimpleNamespace(functionTimes=[])
@@ -159,7 +148,6 @@ def test_self_play_constructs_direct_inference_client_during_search_warmup(
 
     self_play._set_mcts(iteration=50)
 
-    assert _FakeMcts.use_inference_cache is False
     assert _FakeMcts.direct_inference_params == _FakeDirectSelfPlayInferenceParams(2, 64, 2)
     assert self_play.search_schedule(0).num_full_searches == 100
     assert self_play.search_schedule(1).num_full_searches == 105

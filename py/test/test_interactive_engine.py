@@ -70,7 +70,6 @@ def engine(model_path: Path) -> InteractiveEngine:
             exploration_constant=1.0,
             maximum_batch_size=2,
             outstanding_batches_per_worker=2,
-            batch_collection_timeout_microseconds=50,
             inference_target=InferenceTarget.CPU,
         )
     )

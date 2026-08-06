@@ -45,11 +45,6 @@ class BenchmarkResult:
     peak_gpu_memory_mib: float | None
     terminal_roots: int
     inference_evaluations: int
-    inference_cache_hits: int
-    inference_cache_hit_rate_percent: float
-    inference_unique_positions: int
-    inference_cache_size_mib: int
-    inference_cache_fingerprint_collisions: int
     inference_model_calls: int
     inference_model_positions: int
     inference_average_batch_size: float
@@ -69,7 +64,6 @@ class Arguments:
     threads: int
     maximum_batch_size: int
     inference_timeout_microseconds: int
-    cache_capacity: int
     gpu_sampling_interval_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
@@ -182,7 +176,6 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             str(args.model),
             args.maximum_batch_size,
             args.inference_timeout_microseconds,
-            args.cache_capacity,
         ),
         MCTSParams(
             args.parallel_searches,
@@ -229,7 +222,6 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
 
     inference_statistics, _ = mcts.get_inference_statistics()
     measurement_evaluations = inference_statistics.evaluations - warmup_inference_statistics.evaluations
-    measurement_cache_hits = inference_statistics.cacheHits - warmup_inference_statistics.cacheHits
     measurement_model_calls = inference_statistics.modelInferenceCalls - warmup_inference_statistics.modelInferenceCalls
     measurement_model_positions = (
         inference_statistics.modelInferencePositions - warmup_inference_statistics.modelInferencePositions
@@ -264,15 +256,6 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         peak_gpu_memory_mib=(max(sample.memory_mib for sample in gpu_samples) if gpu_samples else None),
         terminal_roots=measurement_result.terminal_roots,
         inference_evaluations=measurement_evaluations,
-        inference_cache_hits=measurement_cache_hits,
-        inference_cache_hit_rate_percent=(
-            100 * measurement_cache_hits / measurement_evaluations if measurement_evaluations else 0.0
-        ),
-        inference_unique_positions=inference_statistics.uniquePositions,
-        inference_cache_size_mib=inference_statistics.cacheSizeMB,
-        inference_cache_fingerprint_collisions=(
-            inference_statistics.cacheFingerprintCollisions - warmup_inference_statistics.cacheFingerprintCollisions
-        ),
         inference_model_calls=measurement_model_calls,
         inference_model_positions=measurement_model_positions,
         inference_average_batch_size=(
@@ -295,7 +278,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--threads', type=int, default=3)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
-    parser.add_argument('--cache-capacity', type=int, default=100_000)
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
@@ -312,7 +294,6 @@ def parse_arguments() -> Arguments:
         threads=namespace.threads,
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
-        cache_capacity=namespace.cache_capacity,
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,

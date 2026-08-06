@@ -4,7 +4,7 @@
 
 #include "EvalMCTSNode.h"
 
-#include "../InferenceClient.hpp"
+#include "../NonCachingInferenceClient.hpp"
 #include "util/ThreadPool.h"
 
 struct EvalMCTSParams {
@@ -45,7 +45,7 @@ public:
                     oneBoard[0] = &leaf->board(); // reuse small buffer
 
                     /* 2) immediate single-board inference
-                           (merged into a large batch inside InferenceClient) */
+                           (merged into a large batch inside NonCachingInferenceClient) */
                     auto nnOut = m_client.inferenceBatch(oneBoard);
                     const InferenceResult &inferenceResult = nnOut[0];
 
@@ -74,7 +74,7 @@ public:
     }
 
 private:
-    InferenceClient m_client;
+    NonCachingInferenceClient m_client;
     EvalMCTSParams m_args;
     ThreadPool m_threadPool;
 

@@ -1,7 +1,6 @@
 #include "Board.h"
 #include "BoardEncoding.hpp"
 #include "DirectInference.hpp"
-#include "InferenceClient.hpp"
 #include "InferenceResultProcessing.hpp"
 #include "NonCachingInferenceClient.hpp"
 
@@ -305,10 +304,9 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
 }
 
 template <typename Client>
-nlohmann::json runClient(const Arguments &arguments, const std::vector<Board> &boards,
-                         const size_t cacheCapacity) {
+nlohmann::json runClient(const Arguments &arguments, const std::vector<Board> &boards) {
     const InferenceClientParams parameters(0, arguments.modelPath,
-                                           static_cast<int>(arguments.batchSize), 0, cacheCapacity,
+                                           static_cast<int>(arguments.batchSize), 0,
                                            arguments.device);
     Client client(parameters);
     double checksum = 0.0;
@@ -370,14 +368,12 @@ int main(const int argumentCount, char **argumentValues) {
             result = runReplicas(arguments, encodings);
         } else if (arguments.mode == "processed_replicas") {
             result = runProcessedReplicas(arguments, boards, encodings);
-        } else if (arguments.mode == "cached") {
-            result = runClient<InferenceClient>(arguments, boards, positions * 2);
         } else if (arguments.mode == "noncached") {
-            result = runClient<NonCachingInferenceClient>(arguments, boards, 0);
+            result = runClient<NonCachingInferenceClient>(arguments, boards);
         } else {
             throw std::invalid_argument(
                 "Mode must be direct, processed_direct, pipeline, replicas, processed_replicas, "
-                "cached, or noncached");
+                "or noncached");
         }
 
         const double elapsedSeconds = result.at("elapsed_seconds").get<double>();

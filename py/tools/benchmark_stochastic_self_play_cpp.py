@@ -39,8 +39,6 @@ class Arguments:
     threads: int
     maximum_batch_size: int
     inference_timeout_microseconds: int
-    cache_capacity: int
-    use_inference_cache: bool
     direct_inference_workers: int
     direct_inference_batch_size: int
     direct_outstanding_batches_per_worker: int
@@ -61,7 +59,6 @@ class BenchmarkResult:
     process_id: int
     device_id: int
     seed: int
-    use_inference_cache: bool
     direct_inference_workers: int
     direct_inference_batch_size: int
     direct_outstanding_batches_per_worker: int
@@ -90,12 +87,6 @@ class BenchmarkResult:
     process_cpu_percent: float
     peak_rss_mib: float
     inference_evaluations: int
-    inference_cache_hits: int
-    inference_cache_hit_rate_percent: float
-    inference_unique_positions: int
-    inference_cache_size_mib: int
-    inference_cache_evictions: int
-    inference_cache_fingerprint_collisions: int
     inference_model_calls: int
     inference_model_positions: int
     inference_average_batch_size: float
@@ -141,8 +132,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--threads', type=int, default=3)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
     parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
-    parser.add_argument('--cache-capacity', type=int, default=1_500_000)
-    parser.add_argument('--no-inference-cache', action='store_false', dest='use_inference_cache')
     parser.add_argument('--direct-inference-workers', type=int, default=0)
     parser.add_argument('--direct-inference-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches-per-worker', type=int, default=2)
@@ -171,8 +160,6 @@ def parse_arguments() -> Arguments:
         threads=namespace.threads,
         maximum_batch_size=namespace.maximum_batch_size,
         inference_timeout_microseconds=namespace.inference_timeout_microseconds,
-        cache_capacity=namespace.cache_capacity,
-        use_inference_cache=namespace.use_inference_cache,
         direct_inference_workers=namespace.direct_inference_workers,
         direct_inference_batch_size=namespace.direct_inference_batch_size,
         direct_outstanding_batches_per_worker=namespace.direct_outstanding_batches_per_worker,
@@ -195,7 +182,6 @@ def validate_arguments(arguments: Arguments) -> None:
         ('threads', arguments.threads),
         ('maximum batch size', arguments.maximum_batch_size),
         ('inference timeout', arguments.inference_timeout_microseconds),
-        ('cache capacity', arguments.cache_capacity),
     )
     for name, value in positive_integers:
         if value < 1:
@@ -210,8 +196,6 @@ def validate_arguments(arguments: Arguments) -> None:
         raise ValueError('direct inference batch size must be positive.')
     if arguments.direct_outstanding_batches_per_worker not in (1, 2):
         raise ValueError('direct outstanding batches per worker must be 1 or 2.')
-    if arguments.direct_inference_workers > 0 and arguments.use_inference_cache:
-        raise ValueError('direct self-play inference does not support the inference cache.')
     if arguments.duration_seconds is not None and arguments.duration_seconds <= 0:
         raise ValueError(f'duration must be positive, found {arguments.duration_seconds}.')
     if arguments.steps is not None and arguments.steps < 1:
@@ -274,7 +258,6 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             str(arguments.model.resolve()),
             arguments.maximum_batch_size,
             arguments.inference_timeout_microseconds,
-            arguments.cache_capacity,
         ),
         MCTSParams(
             arguments.parallel_searches,
@@ -286,7 +269,6 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             configuration.self_play.search.min_visit_count,
             arguments.threads,
         ),
-        use_inference_cache=arguments.use_inference_cache,
         direct_inference_params=(
             DirectSelfPlayInferenceParams(
                 arguments.direct_inference_workers,
@@ -349,7 +331,6 @@ def build_result(
     retained_samples = generated_samples
 
     evaluations = difference(final_statistics.evaluations, initial_statistics.evaluations)
-    cache_hits = difference(final_statistics.cacheHits, initial_statistics.cacheHits)
     model_calls = difference(final_statistics.modelInferenceCalls, initial_statistics.modelInferenceCalls)
     model_positions = difference(
         final_statistics.modelInferencePositions,
@@ -377,7 +358,6 @@ def build_result(
         process_id=os.getpid(),
         device_id=arguments.device,
         seed=arguments.seed,
-        use_inference_cache=arguments.use_inference_cache,
         direct_inference_workers=arguments.direct_inference_workers,
         direct_inference_batch_size=arguments.direct_inference_batch_size,
         direct_outstanding_batches_per_worker=arguments.direct_outstanding_batches_per_worker,
@@ -389,7 +369,7 @@ def build_result(
         target_fast_searches_per_ply=(
             arguments.fast_searches
             if arguments.fast_searches is not None
-            else int(arguments.searches * self_play.args.mcts.fast_searches_proportion_of_full_searches)
+            else int(arguments.searches * self_play.args.search.fast_searches_proportion_of_full_searches)
         ),
         parallel_searches=arguments.parallel_searches,
         mcts_threads=arguments.threads,
@@ -410,18 +390,6 @@ def build_result(
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         inference_evaluations=evaluations,
-        inference_cache_hits=cache_hits,
-        inference_cache_hit_rate_percent=100 * cache_hits / evaluations if evaluations else 0.0,
-        inference_unique_positions=final_statistics.uniquePositions,
-        inference_cache_size_mib=final_statistics.cacheSizeMB,
-        inference_cache_evictions=difference(
-            final_statistics.cacheEvictions,
-            initial_statistics.cacheEvictions,
-        ),
-        inference_cache_fingerprint_collisions=difference(
-            final_statistics.cacheFingerprintCollisions,
-            initial_statistics.cacheFingerprintCollisions,
-        ),
         inference_model_calls=model_calls,
         inference_model_positions=model_positions,
         inference_average_batch_size=model_positions / model_calls if model_calls else 0.0,

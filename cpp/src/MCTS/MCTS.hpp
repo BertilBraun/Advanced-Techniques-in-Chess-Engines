@@ -4,11 +4,9 @@
 
 #include "SearchTree.hpp"
 
-#include "../InferenceClient.hpp"
 #include "../NonCachingInferenceClient.hpp"
 #include "util/ThreadPool.h"
 #include <shared_mutex>
-#include <variant>
 
 class DirectSelfPlaySearch;
 
@@ -73,7 +71,6 @@ struct MCTSBoard {
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-         bool useInferenceCache = true,
          std::optional<DirectSelfPlayInferenceParams> directInferenceParams = std::nullopt,
          uint64 initialModelVersion = 0);
     ~MCTS();
@@ -93,10 +90,7 @@ public:
     [[nodiscard]] std::vector<std::uintptr_t> directWorkerIdentityTokens() const;
 
 private:
-    using InferenceClientVariant = std::variant<std::monostate, std::unique_ptr<InferenceClient>,
-                                                std::unique_ptr<NonCachingInferenceClient>>;
-
-    InferenceClientVariant m_client;
+    std::unique_ptr<NonCachingInferenceClient> m_client;
     InferenceClientParams m_clientArgs;
     MCTSParams m_args;
     ThreadPool m_threadPool;

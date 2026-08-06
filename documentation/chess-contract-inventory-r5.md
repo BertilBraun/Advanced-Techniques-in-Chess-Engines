@@ -53,5 +53,6 @@ mutate shared settings.
 The configuration audit removed unused worker count, initial-evaluation,
 top-level evaluation-concurrency, disconnected general artifact-retention, and
 inference-cache settings. Chess self-play and MCTS evaluation use the measured
-direct prepared-batch inference path. Legacy cache implementations remain
-outside experiment configuration for benchmark and native API cleanup review.
+direct prepared-batch inference path. The retired Python and C++ cached clients,
+cache containers, bindings, statistics, diagnostics, and cache-only benchmarks
+were removed; the queued fallback performs no caching.

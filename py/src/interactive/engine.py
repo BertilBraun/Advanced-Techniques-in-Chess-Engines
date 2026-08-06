@@ -26,8 +26,6 @@ from src.interactive.configuration import InferenceTarget, InteractiveEngineConf
 @dataclass(frozen=True)
 class InferenceMetrics:
     evaluations: int
-    cache_hits: int
-    cache_hit_rate_percent: float
     model_calls: int
     model_positions: int
     average_model_batch_size: float
@@ -52,8 +50,7 @@ class InteractiveEngine:
             device_id=configuration.device_id,
             currentModelPath=configuration.model_path,
             maxBatchSize=batch_size,
-            microsecondsTimeoutInferenceThread=configuration.batch_collection_timeout_microseconds,
-            cacheCapacity=0,
+            microsecondsTimeoutInferenceThread=0,
             device=target_mapping[configuration.inference_target],
         )
         self._bound_engine = BoundInteractiveEngine(
@@ -73,8 +70,6 @@ class InteractiveEngine:
         statistics = self._bound_engine.get_inference_statistics()
         return InferenceMetrics(
             evaluations=statistics.evaluations,
-            cache_hits=statistics.cacheHits,
-            cache_hit_rate_percent=statistics.cacheHitRate,
             model_calls=statistics.modelInferenceCalls,
             model_positions=statistics.modelInferencePositions,
             average_model_batch_size=statistics.averageNumberOfPositionsInInferenceCall,

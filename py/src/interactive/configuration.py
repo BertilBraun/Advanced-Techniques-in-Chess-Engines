@@ -20,7 +20,6 @@ class InteractiveEngineConfiguration:
     inference_workers: int = 2
     outstanding_batches_per_worker: int = 2
     maximum_batch_size: int | None = None
-    batch_collection_timeout_microseconds: int = 500
     inference_target: InferenceTarget = InferenceTarget.AUTO
 
     def __post_init__(self) -> None:
@@ -36,8 +35,6 @@ class InteractiveEngineConfiguration:
             raise ValueError('outstanding_batches_per_worker must be in [1, 2].')
         if self.maximum_batch_size is not None and self.maximum_batch_size < 1:
             raise ValueError('maximum_batch_size must be positive when supplied.')
-        if self.batch_collection_timeout_microseconds < 0:
-            raise ValueError('batch_collection_timeout_microseconds must not be negative.')
 
     @property
     def resolved_batch_size(self) -> int:

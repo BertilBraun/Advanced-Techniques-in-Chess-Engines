@@ -56,7 +56,6 @@ class _FakeInferenceClientParameters:
     model_path: str
     maximum_batch_size: int
     timeout_microseconds: int
-    cache_capacity: int
 
 
 @dataclass(frozen=True)
@@ -141,20 +140,18 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     current_model_path.touch()
     opponent_model_path.touch()
 
-    inference_clients: list[tuple[int, bool, _FakeDirectInferenceParameters | None]] = []
+    inference_clients: list[_FakeDirectInferenceParameters | None] = []
 
     class FakeMcts:
         def __init__(
             self,
             inference_parameters: _FakeInferenceClientParameters,
             mcts_parameters: str,
-            use_inference_cache: bool,
             direct_inference_params: _FakeDirectInferenceParameters | None,
         ) -> None:
             assert mcts_parameters == 'mcts-parameters'
-            inference_clients.append(
-                (inference_parameters.cache_capacity, use_inference_cache, direct_inference_params)
-            )
+            assert inference_parameters.maximum_batch_size == 64
+            inference_clients.append(direct_inference_params)
 
     def fake_paired_match(
         *,
@@ -208,8 +205,8 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     expected_direct_parameters = _FakeDirectInferenceParameters(1, 64, 1)
     assert inference_clients == [
-        (0, False, expected_direct_parameters),
-        (0, False, expected_direct_parameters),
+        expected_direct_parameters,
+        expected_direct_parameters,
     ]
 
 

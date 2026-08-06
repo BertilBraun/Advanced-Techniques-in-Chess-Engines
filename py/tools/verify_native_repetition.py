@@ -66,7 +66,7 @@ def main() -> None:
         board_before_third_occurrence.push_uci(move)
 
     mcts = MCTS(
-        InferenceClientParams(args.device, str(args.model), 16, 500, 10_000),
+        InferenceClientParams(args.device, str(args.model), 16, 500),
         MCTSParams(1, 8, 8, 1.0, 0.3, 0.0, 0, 1),
     )
     blind_parent = mcts.new_root(board_before_third_occurrence.fen())

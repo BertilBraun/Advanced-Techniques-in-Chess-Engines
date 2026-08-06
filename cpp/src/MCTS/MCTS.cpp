@@ -130,20 +130,14 @@ DirectSelfPlayInferenceParams::DirectSelfPlayInferenceParams(const int inference
 }
 
 MCTS::MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-           const bool useInferenceCache,
            std::optional<DirectSelfPlayInferenceParams> directInferenceParams,
            const uint64 initialModelVersion)
     : m_clientArgs(clientArgs), m_args(mctsArgs), m_threadPool(mctsArgs.num_threads),
       m_arenaCapacity(mctsArgs.arenaCapacity()), m_modelVersion(initialModelVersion),
       m_directInferenceParams(std::move(directInferenceParams)) {
     if (m_directInferenceParams.has_value()) {
-        if (useInferenceCache) {
-            throw std::invalid_argument("Direct self-play inference does not support caching");
-        }
         m_directSearch =
             std::make_unique<DirectSelfPlaySearch>(m_clientArgs, m_args, *m_directInferenceParams);
-    } else if (useInferenceCache) {
-        m_client = std::make_unique<InferenceClient>(m_clientArgs);
     } else {
         m_client = std::make_unique<NonCachingInferenceClient>(m_clientArgs);
     }
@@ -298,19 +292,9 @@ MCTSResults MCTS::search(const std::vector<MCTSBoard> &boards, const bool collec
 
 std::pair<InferenceStatistics, TimeInfo> MCTS::getInferenceStatistics() {
     const std::shared_lock operationLock(m_operationMutex);
-    const InferenceStatistics statistics =
-        m_directSearch != nullptr
-            ? m_directSearch->inferenceStatistics()
-            : std::visit(
-                  [](auto &client) -> InferenceStatistics {
-                      using Client = std::decay_t<decltype(client)>;
-                      if constexpr (std::same_as<Client, std::monostate>) {
-                          throw std::logic_error("MCTS inference is not configured");
-                      } else {
-                          return client->getStatistics();
-                      }
-                  },
-                  m_client);
+    const InferenceStatistics statistics = m_directSearch != nullptr
+                                               ? m_directSearch->inferenceStatistics()
+                                               : m_client->getStatistics();
     return {statistics, resetTimes()};
 }
 
@@ -322,14 +306,7 @@ void MCTS::refreshModel(const uint64 modelVersion, const std::string &modelPath)
     if (m_directSearch != nullptr) {
         m_directSearch->refreshModel(modelPath);
     } else {
-        std::visit(
-            [&modelPath](auto &client) {
-                using Client = std::decay_t<decltype(client)>;
-                if constexpr (!std::same_as<Client, std::monostate>) {
-                    client->refreshModel(modelPath);
-                }
-            },
-            m_client);
+        m_client->refreshModel(modelPath);
     }
     m_clientArgs.currentModelPath = modelPath;
     m_modelVersion = modelVersion;
@@ -365,16 +342,7 @@ MCTS::inferenceBatchUnlocked(const std::vector<const Board *> &boards) {
         }
         return results;
     }
-    return std::visit(
-        [&boards](auto &client) -> std::vector<InferenceResult> {
-            using Client = std::decay_t<decltype(client)>;
-            if constexpr (std::same_as<Client, std::monostate>) {
-                throw std::logic_error("MCTS inference is not configured");
-            } else {
-                return client->inferenceBatch(boards);
-            }
-        },
-        m_client);
+    return m_client->inferenceBatch(boards);
 }
 
 std::vector<std::uintptr_t> MCTS::directWorkerIdentityTokens() const {

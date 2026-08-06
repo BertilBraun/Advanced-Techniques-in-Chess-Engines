@@ -37,14 +37,13 @@ float inferenceValue(MCTS &search) {
     return search.inferenceBatch(boards).front().value();
 }
 
-void requireRefreshSemantics(const bool useInferenceCache,
-                             const std::filesystem::path &initialModel,
+void requireRefreshSemantics(const std::filesystem::path &initialModel,
                              const std::filesystem::path &updatedModel,
                              const std::filesystem::path &invalidModel) {
     const InferenceClientParams clientParameters(0, initialModel.string(), 4, 0,
-                                                 useInferenceCache ? 16 : 0, InferenceDevice::Cpu);
+                                                 InferenceDevice::Cpu);
     const MCTSParams searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0, 1);
-    MCTS search(clientParameters, searchParameters, useInferenceCache, std::nullopt, 4);
+    MCTS search(clientParameters, searchParameters, std::nullopt, 4);
     require(std::abs(inferenceValue(search)) < 0.001F,
             "queued client initial model returned the wrong value");
     search.refreshModel(5, updatedModel.string());
@@ -75,11 +74,11 @@ int main() {
     const std::filesystem::path invalidModelPath =
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, false);
     try {
-        const InferenceClientParams clientParameters(0, modelPath.string(), 4, 0, 0,
+        const InferenceClientParams clientParameters(0, modelPath.string(), 4, 0,
                                                      InferenceDevice::Cpu);
         const MCTSParams searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0, 1);
         const DirectSelfPlayInferenceParams directParameters(2, 4, 1);
-        MCTS search(clientParameters, searchParameters, false, directParameters, 7);
+        MCTS search(clientParameters, searchParameters, directParameters, 7);
         const std::vector<std::uintptr_t> workerIdentities = search.directWorkerIdentityTokens();
         require(workerIdentities.size() == 2, "direct search created the wrong worker count");
         require(search.modelVersion() == 7, "direct search lost its initial model version");
@@ -191,8 +190,7 @@ int main() {
         require(search.directWorkerIdentityTokens() == workerIdentities,
                 "schedule update reconstructed direct inference workers");
 
-        requireRefreshSemantics(false, modelPath, updatedModelPath, invalidModelPath);
-        requireRefreshSemantics(true, modelPath, updatedModelPath, invalidModelPath);
+        requireRefreshSemantics(modelPath, updatedModelPath, invalidModelPath);
     } catch (...) {
         std::filesystem::remove(modelPath);
         std::filesystem::remove(updatedModelPath);

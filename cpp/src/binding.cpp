@@ -2,7 +2,6 @@
 
 #include "BoardEncoding.hpp"
 #include "ChessGameContract.hpp"
-#include "InferenceClient.hpp"
 #include "InteractiveEngine.hpp"
 #include "MCTS/MCTS.hpp"
 #include "MoveEncoding.hpp"
@@ -50,43 +49,13 @@ std::vector<const Board *> newBoards(const int numBoards) {
     return boards;
 }
 
-void testInferenceSpeed(int numBoards, int numIterations) {
-    const InferenceClientParams params(0, "training_data/chess/model_0.pt", numBoards, 100, 100000);
-
-    InferenceClient client(params);
-
-    float totalTime = 0.0f;
-    for (int i = 0; i < numIterations; ++i) {
-        std::vector<const Board *> boards = newBoards(numBoards);
-
-        auto start = std::chrono::high_resolution_clock::now();
-        std::vector<InferenceResult> results = client.inferenceBatch(boards);
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<float> duration = end - start;
-        totalTime += duration.count();
-        std::cout << "Iteration " << i + 1 << ": Inference time: " << duration.count()
-                  << " seconds\n";
-        for (const Board *board : boards) {
-            delete board; // Clean up the boards
-        }
-    }
-
-    std::cout << "Total time: " << totalTime << " seconds\n";
-    std::cout << "Average time per iteration: " << (totalTime / numIterations) << " seconds\n";
-    std::cout << "Average time per board: " << (totalTime / (numIterations * numBoards))
-              << " seconds\n";
-    std::cout << std::endl;
-
-    resetTimes();
-}
-
 void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
                    int numParallelSearches, int numThreads) {
     const MCTSParams mctsParams(numParallelSearches, numSearchesPerTurn, numSearchesPerTurn, 1.0,
                                 0.3, 0.0, 0, numThreads);
 
     const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100, 100000);
+                                                numBoards * numParallelSearches, 100);
 
     MCTS mcts(inferenceParams, mctsParams);
 
@@ -121,7 +90,7 @@ void testEvalMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
     const EvalMCTSParams mctsParams(1.0, numThreads);
 
     const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100, 100000);
+                                                numBoards * numParallelSearches, 100);
 
     EvalMCTS mcts(inferenceParams, mctsParams);
 
@@ -255,15 +224,6 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         py::arg("fen"),
         R"pbdoc(Encode a FEN into the canonical compressed binary and scalar planes.)pbdoc");
 
-    m.def("test_inference_speed_cpp", &testInferenceSpeed,
-          "Test the inference speed of the InferenceClient", py::arg("numBoards") = 100,
-          py::arg("numIterations") = 10,
-          R"pbdoc(
-            Test the inference speed of the InferenceClient.
-            Runs inference on a specified number of boards for a given number of iterations.
-            Prints the average time taken per iteration and per board.
-          )pbdoc");
-
     m.def("test_mcts_speed_cpp", &testMCTSSpeed, "Test the MCTS search speed",
           py::arg("numBoards") = 100, py::arg("numIterations") = 10,
           py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
@@ -306,13 +266,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         .value("CUDA", InferenceDevice::Cuda);
 
     py::class_<InferenceClientParams>(m, "InferenceClientParams")
-        .def(py::init<int, std::string, int, int, size_t>(), py::arg("device_id"),
+        .def(py::init<int, std::string, int, int>(), py::arg("device_id"),
              py::arg("currentModelPath"), py::arg("maxBatchSize"),
-             py::arg("microsecondsTimeoutInferenceThread"), py::arg("cacheCapacity"))
-        .def(py::init<int, std::string, int, int, size_t, InferenceDevice>(), py::arg("device_id"),
+             py::arg("microsecondsTimeoutInferenceThread"))
+        .def(py::init<int, std::string, int, int, InferenceDevice>(), py::arg("device_id"),
              py::arg("currentModelPath"), py::arg("maxBatchSize"),
-             py::arg("microsecondsTimeoutInferenceThread"), py::arg("cacheCapacity"),
-             py::arg("device"))
+             py::arg("microsecondsTimeoutInferenceThread"), py::arg("device"))
         .def_readwrite("device_id", &InferenceClientParams::device_id)
         .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
         .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize)
@@ -322,22 +281,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                 Timeout for the inference thread in microseconds.
                 Default is 500 microseconds.
             )pbdoc")
-        .def_readwrite("cacheCapacity", &InferenceClientParams::cacheCapacity)
         .def_readwrite("device", &InferenceClientParams::device);
 
     // --- (2.3) InferenceStatistics ---
     py::class_<InferenceStatistics>(m, "InferenceStatistics")
         .def(py::init<>())
-        .def_readonly("cacheHitRate", &InferenceStatistics::cacheHitRate)
         .def_readonly("evaluations", &InferenceStatistics::evaluations)
-        .def_readonly("cacheHits", &InferenceStatistics::cacheHits)
-        .def_readonly("uniquePositions", &InferenceStatistics::uniquePositions)
-        .def_readonly("cacheSizeMB", &InferenceStatistics::cacheSizeMB)
-        .def_readonly("cacheCapacity", &InferenceStatistics::cacheCapacity)
-        .def_readonly("cacheEvictions", &InferenceStatistics::cacheEvictions)
-        .def_readonly("cacheFingerprintCollisions",
-                      &InferenceStatistics::cacheFingerprintCollisions)
-        .def_readonly("nnOutputValueDistribution", &InferenceStatistics::nnOutputValueDistribution)
         .def_readonly("modelInferenceCalls", &InferenceStatistics::modelInferenceCalls)
         .def_readonly("modelInferencePositions", &InferenceStatistics::modelInferencePositions)
         .def_readonly("modelBatchSizeHistogram", &InferenceStatistics::modelBatchSizeHistogram)
@@ -396,9 +345,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
-        .def(py::init<const InferenceClientParams &, const MCTSParams &, bool,
+        .def(py::init<const InferenceClientParams &, const MCTSParams &,
                       std::optional<DirectSelfPlayInferenceParams>, uint64>(),
-             py::arg("client_args"), py::arg("mcts_args"), py::arg("use_inference_cache") = true,
+             py::arg("client_args"), py::arg("mcts_args"),
              py::arg("direct_inference_params") = std::nullopt,
              py::arg("initial_model_version") = 0)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
