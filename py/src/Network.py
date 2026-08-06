@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import torch
 
 from torch import nn, Tensor
@@ -6,6 +8,27 @@ from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.value_target import FinalOutcome
 from src.train.TrainingArgs import NetworkParams
 from src.util.log import log
+
+
+@dataclass(frozen=True)
+class NetworkDimensions:
+    channels: int
+    rows: int
+    columns: int
+    actions: int
+    outcomes: int = len(FinalOutcome)
+
+    def __post_init__(self) -> None:
+        if min(self.channels, self.rows, self.columns, self.actions, self.outcomes) <= 0:
+            raise ValueError('Network dimensions must be positive.')
+
+
+CHESS_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_STATE_CONTRACT.representation.channels,
+    rows=CHESS_STATE_CONTRACT.representation.rows,
+    columns=CHESS_STATE_CONTRACT.representation.columns,
+    actions=CHESS_STATE_CONTRACT.action_size,
+)
 
 
 class Network(nn.Module):
@@ -19,16 +42,22 @@ class Network(nn.Module):
     The output of the network is a policy over all possible moves and a value for the current board state.
     """
 
-    def __init__(self, args: NetworkParams, device: torch.device) -> None:
+    def __init__(
+        self,
+        args: NetworkParams,
+        device: torch.device,
+        dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+    ) -> None:
         super().__init__()
 
         self.device = device
         self.network_args = args
+        self.dimensions = dimensions
 
-        encoding_channels = CHESS_STATE_CONTRACT.representation.channels
-        row_count = CHESS_STATE_CONTRACT.representation.rows
-        column_count = CHESS_STATE_CONTRACT.representation.columns
-        action_size = CHESS_STATE_CONTRACT.action_size
+        encoding_channels = dimensions.channels
+        row_count = dimensions.rows
+        column_count = dimensions.columns
+        action_size = dimensions.actions
 
         self.startBlock = nn.Sequential(
             nn.Conv2d(encoding_channels, args.hidden_size, kernel_size=3, padding='same', bias=False),
@@ -61,7 +90,7 @@ class Network(nn.Module):
             nn.Flatten(),
             nn.Linear(args.num_value_channels * row_count * column_count, args.value_fc_size),
             nn.ReLU(inplace=True),
-            nn.Linear(args.value_fc_size, len(FinalOutcome)),
+            nn.Linear(args.value_fc_size, dimensions.outcomes),
         )
 
         # init weights

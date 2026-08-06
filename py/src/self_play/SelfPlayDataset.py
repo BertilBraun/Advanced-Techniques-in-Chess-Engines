@@ -139,10 +139,10 @@ class ReplaySampleMetadata:
     def __post_init__(self) -> None:
         if self.ply < 0:
             raise ValueError('Sample ply must be nonnegative.')
-        if not 0 <= self.current_player_piece_count <= 16:
-            raise ValueError('Current-player piece count must be in [0, 16].')
-        if not 0 <= self.opponent_piece_count <= 16:
-            raise ValueError('Opponent piece count must be in [0, 16].')
+        if not 0 <= self.current_player_piece_count <= 127:
+            raise ValueError('Current-player piece count must fit a signed int8.')
+        if not 0 <= self.opponent_piece_count <= 127:
+            raise ValueError('Opponent piece count must fit a signed int8.')
         if self.occurrence_count <= 0:
             raise ValueError('Replay occurrence count must be positive.')
         if self.moves_uci and self.starting_fen is None:

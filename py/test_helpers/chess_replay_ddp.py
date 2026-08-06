@@ -47,6 +47,9 @@ def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
         frozen_at_seconds=2.0,
         evicted_samples=4,
         estimated_sample_bytes=1_024,
+        encoded_state_value_overhead_bytes=0,
+        projected_capacity_bytes=1_024,
+        projected_review_capacity_bytes=1_024,
     )
     metrics = ChessReplayMetrics(
         credited_samples=12,
@@ -59,6 +62,9 @@ def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
         oldest_sample_age_seconds=1.0,
         mean_sample_age_seconds=1.0,
         estimated_sample_bytes=1_024,
+        encoded_state_value_overhead_bytes=0,
+        projected_capacity_bytes=1_024,
+        projected_review_capacity_bytes=1_024,
     )
     return snapshot, metrics
 

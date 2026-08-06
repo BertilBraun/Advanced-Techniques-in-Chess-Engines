@@ -219,7 +219,7 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     # Create a copy of the model, then set that to eval mode, fuse it, and save it as a JIT script
-    fused_model = Network(model.network_args, model.device)
+    fused_model = Network(model.network_args, model.device, model.dimensions)
     fused_model.load_state_dict(model.state_dict())
     fused_model.eval()
     fused_model.fuse_model()
