@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.SelfPlayDataset import (
     ReplaySchemaVersionError,
     ReplaySampleMetadata,
@@ -47,7 +48,7 @@ def assert_training_batches_equal(actual: TrainingBatch, expected: TrainingBatch
     torch.testing.assert_close(actual.occurrence_counts, expected.occurrence_counts)
 
 
-def encoded_state(seed: int) -> bytes:
+def encoded_state(seed: int):
     generator = np.random.default_rng(seed)
     state = np.zeros((C, H, W), dtype=np.int8)
     state[list(BINARY_CHANNELS)] = generator.integers(
@@ -147,7 +148,9 @@ def test_dataset_bulk_load_matches_legacy_row_iteration(tmp_path: Path) -> None:
     assert samples.save_to_path(memory_path)
 
     with h5py.File(memory_path, 'r') as file:
-        expected_states = [bytes(state) for state in file['states']]
+        expected_states = [
+            CHESS_STATE_CONTRACT.representation.packed_planes.value(state.tobytes()) for state in file['states']
+        ]
         expected_visit_counts = [visit_count[visit_count[:, 1] > 0] for visit_count in file['visit_counts']]
         expected_final_outcomes = [int(outcome) for outcome in file['final_outcomes']]
         expected_mcts_root_values = [float(value) for value in file['mcts_root_values']]
@@ -186,7 +189,10 @@ def test_background_prefetch_preserves_batch_order_and_values() -> None:
 def test_legacy_mixed_scalar_replay_is_rejected(tmp_path: Path) -> None:
     legacy_path = tmp_path / 'legacy.hdf5'
     with h5py.File(legacy_path, 'w') as file:
-        file.create_dataset('states', data=np.asarray((encoded_state(0),)))
+        file.create_dataset(
+            'states',
+            data=np.frombuffer(encoded_state(0).payload, dtype=np.uint8).reshape(1, -1),
+        )
         file.create_dataset('visit_counts', data=np.asarray(((((0, 1),)),)))
         file.create_dataset('value_targets', data=np.asarray((0.25,), dtype=np.float32))
 

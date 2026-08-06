@@ -3,6 +3,7 @@ from __future__ import annotations
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.ChessGame import ChessGame
 from src.games.contracts import GameStateContract, RepresentationDimensions
+from src.packed_planes import PackedPlaneLayout
 
 
 _GAME = ChessGame()
@@ -17,6 +18,11 @@ CHESS_STATE_CONTRACT = GameStateContract[ChessBoard, ChessMove](
         columns=_GAME.representation_shape[2],
         binary_channels=_GAME.binary_channels,
         scalar_channels=_GAME.scalar_channels,
+        packed_planes=PackedPlaneLayout(
+            board_size=_GAME.representation_shape[1],
+            binary_plane_count=len(_GAME.binary_channels),
+            scalar_count=len(_GAME.scalar_channels),
+        ),
     ),
     create_initial_board=_GAME.get_initial_board,
     canonical_board=_GAME.get_canonical_board,

@@ -14,6 +14,8 @@ from typing import Any
 from torch.utils.data import Dataset
 
 from src.Encoding import decode_board_state, decode_board_states, encode_board_state
+from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.packed_planes import PackedPlanePayload
 from src.self_play.visit_policy import action_probabilities
 from src.settings import CurrentGame, USE_GPU
 from src.util import random_id
@@ -159,11 +161,11 @@ class DuplicateAggregationDiagnostics:
         return self.raw_sample_count / self.unique_sample_count if self.unique_sample_count else 0.0
 
 
-ReplayAggregationKey = tuple[bytes, FinalOutcome, TerminationReason, bool, bool]
+ReplayAggregationKey = tuple[PackedPlanePayload, FinalOutcome, TerminationReason, bool, bool]
 
 
 def replay_aggregation_key(
-    state: bytes,
+    state: PackedPlanePayload,
     value_target: ReplayValueTarget,
 ) -> ReplayAggregationKey:
     return (
@@ -186,7 +188,7 @@ def chess_sample_metadata(state: npt.NDArray[np.int8], ply: int) -> ReplaySample
 
 
 def training_batch_from_raw_samples(
-    encoded_states: Sequence[bytes],
+    encoded_states: Sequence[PackedPlanePayload],
     visit_counts: Sequence[npt.NDArray[np.uint16]],
     value_targets: Sequence[ReplayValueTarget],
     sample_metadata: Sequence[ReplaySampleMetadata],
@@ -268,7 +270,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
     """
 
     def __init__(self) -> None:
-        self.encoded_states: list[bytes] = []
+        self.encoded_states: list[PackedPlanePayload] = []
         self.visit_counts: list[npt.NDArray[np.uint16]] = []
         self.value_targets: list[ReplayValueTarget] = []
         self.sample_metadata: list[ReplaySampleMetadata] = []
@@ -336,7 +338,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
     def raw_sample(
         self,
         idx: int,
-    ) -> tuple[bytes, npt.NDArray[np.uint16], ReplayValueTarget, ReplaySampleMetadata]:
+    ) -> tuple[PackedPlanePayload, npt.NDArray[np.uint16], ReplayValueTarget, ReplaySampleMetadata]:
         return (
             self.encoded_states[idx],
             self.visit_counts[idx],
@@ -571,7 +573,15 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             if len(stored_lengths) != 1:
                 raise ValueError(f'Replay {file_path} has inconsistent sample-column lengths.')
 
-            dataset.encoded_states = stored_states.tolist()
+            if stored_states.ndim == 2 and stored_states.dtype == np.uint8:
+                dataset.encoded_states = [
+                    CHESS_STATE_CONTRACT.representation.packed_planes.value(row.tobytes()) for row in stored_states
+                ]
+            else:
+                dataset.encoded_states = [
+                    CHESS_STATE_CONTRACT.representation.packed_planes.value(bytes(state))
+                    for state in stored_states.tolist()
+                ]
             dataset.visit_counts = [
                 visit_count[visit_count[:, 1] > 0].astype(np.uint16, copy=False) for visit_count in stored_visit_counts
             ]
@@ -714,7 +724,12 @@ class SelfPlayDataset(Dataset[TrainingSample]):
         # write a h5py file with states, policy targets and value targets in it
         try:
             with h5py.File(tmp_file_path, 'w') as file:
-                file.create_dataset('states', data=np.array(self.encoded_states))
+                payload_bytes = CHESS_STATE_CONTRACT.representation.packed_planes.payload_bytes
+                packed_states = np.frombuffer(
+                    b''.join(state.payload for state in self.encoded_states),
+                    dtype=np.uint8,
+                ).reshape(len(self.encoded_states), payload_bytes)
+                file.create_dataset('states', data=packed_states)
                 max_visit_num = max(len(visit_count) for visit_count in self.visit_counts)
                 # padd all visit counts to the same length
                 padded_visit_counts = np.zeros((len(self.visit_counts), max_visit_num, 2), dtype=np.int32)

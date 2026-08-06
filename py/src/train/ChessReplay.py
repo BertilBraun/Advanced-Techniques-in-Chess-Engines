@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 from collections import deque
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ import torch
 
 from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.packed_planes import PackedPlanePayload
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
@@ -29,6 +31,7 @@ CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x03\n'
 _FRAME_HEADER = struct.Struct('>QQQQQQQQ32s')
 _ARCHIVE_FILE_PATTERN = 'model-generation-*.games'
 _MAXIMUM_PACKED_VISIT_VALUE = int(np.iinfo(np.uint16).max)
+_PACKED_REPLAY_REVIEW_CAPACITY = 2_500_000
 
 
 def pack_chess_visits(visits: Sequence[tuple[int, int]]) -> npt.NDArray[np.uint16]:
@@ -47,9 +50,30 @@ def pack_chess_visits(visits: Sequence[tuple[int, int]]) -> npt.NDArray[np.uint1
     return packed
 
 
+def _estimated_sample_bytes(sample: ChessReplaySample) -> int:
+    return sample.encoded_state.memory_bytes() + sample.visits.nbytes + sys.getsizeof(sample)
+
+
+def _encoded_state_value_overhead_bytes(samples: Sequence[ChessReplaySample]) -> int:
+    if not samples:
+        return CHESS_STATE_CONTRACT.representation.packed_planes.empty_value().memory_bytes()
+    payload_bytes = CHESS_STATE_CONTRACT.representation.packed_planes.payload_bytes
+    return max(0, int(np.mean(tuple(sample.encoded_state.memory_bytes() - payload_bytes for sample in samples))))
+
+
+def _projected_capacity_bytes(samples: Sequence[ChessReplaySample], capacity: int) -> int:
+    if capacity < 0:
+        raise ValueError('Replay capacity must be nonnegative.')
+    if not samples:
+        empty_state = CHESS_STATE_CONTRACT.representation.packed_planes.empty_value()
+        per_sample_bytes = empty_state.memory_bytes() + sys.getsizeof(np.zeros((1, 2), dtype=np.uint16))
+        return per_sample_bytes * capacity
+    return int(round(np.mean(tuple(_estimated_sample_bytes(sample) for sample in samples)) * capacity))
+
+
 @dataclass(frozen=True, eq=False)
 class ChessReplaySample:
-    encoded_state: bytes
+    encoded_state: PackedPlanePayload
     visits: npt.NDArray[np.uint16]
     value_target: ReplayValueTarget
     metadata: ReplaySampleMetadata
@@ -86,6 +110,9 @@ class ChessReplaySnapshot:
     frozen_at_seconds: float
     evicted_samples: int
     estimated_sample_bytes: int
+    encoded_state_value_overhead_bytes: int
+    projected_capacity_bytes: int
+    projected_review_capacity_bytes: int
 
     def rank_indices(
         self,
@@ -183,6 +210,9 @@ class ChessReplayMetrics:
     oldest_sample_age_seconds: float | None
     mean_sample_age_seconds: float | None
     estimated_sample_bytes: int
+    encoded_state_value_overhead_bytes: int
+    projected_capacity_bytes: int
+    projected_review_capacity_bytes: int
 
 
 @dataclass(frozen=True)
@@ -271,14 +301,17 @@ class ChessReplay:
             sampler_seed=self.sampler_seed,
             frozen_at_seconds=time.time(),
             evicted_samples=self._evicted_samples,
-            estimated_sample_bytes=sum(len(sample.encoded_state) + sample.visits.nbytes + 64 for sample in samples),
+            estimated_sample_bytes=sum(_estimated_sample_bytes(sample) for sample in samples),
+            encoded_state_value_overhead_bytes=_encoded_state_value_overhead_bytes(samples),
+            projected_capacity_bytes=_projected_capacity_bytes(samples, self.capacity),
+            projected_review_capacity_bytes=_projected_capacity_bytes(samples, _PACKED_REPLAY_REVIEW_CAPACITY),
         )
 
     def metrics(self, measured_at_seconds: float) -> ChessReplayMetrics:
         samples = tuple(self._samples)
         generations = tuple(sample.source_model_generation for sample in samples)
         ages = tuple(max(0.0, measured_at_seconds - sample.source_created_at_seconds) for sample in samples)
-        estimated_sample_bytes = sum(len(sample.encoded_state) + sample.visits.nbytes + 64 for sample in samples)
+        estimated_sample_bytes = sum(_estimated_sample_bytes(sample) for sample in samples)
         return ChessReplayMetrics(
             credited_samples=self._credited_samples,
             credited_completed_searches=self._credited_completed_searches,
@@ -290,6 +323,9 @@ class ChessReplay:
             oldest_sample_age_seconds=max(ages) if ages else None,
             mean_sample_age_seconds=float(np.mean(ages)) if ages else None,
             estimated_sample_bytes=estimated_sample_bytes,
+            encoded_state_value_overhead_bytes=_encoded_state_value_overhead_bytes(samples),
+            projected_capacity_bytes=_projected_capacity_bytes(samples, self.capacity),
+            projected_review_capacity_bytes=_projected_capacity_bytes(samples, _PACKED_REPLAY_REVIEW_CAPACITY),
         )
 
     def _evict_to_capacity(self) -> None:

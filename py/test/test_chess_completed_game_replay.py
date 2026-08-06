@@ -317,7 +317,12 @@ def test_fifo_phase_capacity_and_deterministic_nonoverlapping_rank_sampling(tmp_
 
     assert replay.phase is ReplayPhase.FROZEN
     assert len(snapshot.samples) == 6
-    assert replay.metrics(snapshot.frozen_at_seconds).evicted_samples == 2
+    metrics = replay.metrics(snapshot.frozen_at_seconds)
+    assert metrics.evicted_samples == 2
+    assert snapshot.encoded_state_value_overhead_bytes > 0
+    assert snapshot.projected_review_capacity_bytes >= snapshot.projected_capacity_bytes
+    assert metrics.encoded_state_value_overhead_bytes == snapshot.encoded_state_value_overhead_bytes
+    assert metrics.projected_review_capacity_bytes == snapshot.projected_review_capacity_bytes
     with pytest.raises(RuntimeError, match='ingestion phase'):
         replay.ingest_game(completed_game(publisher))
     ranks = tuple(

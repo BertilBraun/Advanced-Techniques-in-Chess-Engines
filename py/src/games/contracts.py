@@ -8,6 +8,7 @@ import numpy as np
 import numpy.typing as npt
 
 from src.games.Board import Board
+from src.packed_planes import PackedPlaneLayout
 
 
 MoveT = TypeVar('MoveT')
@@ -21,6 +22,7 @@ class RepresentationDimensions:
     columns: int
     binary_channels: tuple[int, ...]
     scalar_channels: tuple[int, ...]
+    packed_planes: PackedPlaneLayout
 
 
 @dataclass(frozen=True)
