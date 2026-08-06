@@ -71,7 +71,6 @@ def engine(model_path: Path) -> InteractiveEngine:
             maximum_batch_size=2,
             outstanding_batches_per_worker=2,
             batch_collection_timeout_microseconds=50,
-            cache_capacity=10_000,
             inference_target=InferenceTarget.CPU,
         )
     )

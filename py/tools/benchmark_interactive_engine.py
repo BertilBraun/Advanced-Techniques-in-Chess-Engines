@@ -156,7 +156,6 @@ class ParsedArguments(BaseModel):
     search_limits: tuple[int, ...]
     reference_searches: int
     c_param: float
-    cache_capacity: int
     source_revision: str | None
 
 
@@ -193,7 +192,6 @@ def parse_arguments() -> ParsedArguments:
     parser.add_argument('--search-limits', type=_parse_integer_list, default=(256, 1024))
     parser.add_argument('--reference-searches', type=int, default=4096)
     parser.add_argument('--c-param', type=float, default=1.0)
-    parser.add_argument('--cache-capacity', type=int, default=250_000)
     parser.add_argument(
         '--source-revision',
         help='Source revision for exported source trees without Git metadata.',
@@ -213,7 +211,6 @@ def parse_arguments() -> ParsedArguments:
         search_limits=namespace.search_limits,
         reference_searches=namespace.reference_searches,
         c_param=namespace.c_param,
-        cache_capacity=namespace.cache_capacity,
         source_revision=namespace.source_revision,
     )
 
@@ -415,7 +412,6 @@ def _engine(arguments: ParsedArguments, configuration: BenchmarkConfiguration) -
             maximum_batch_size=configuration.inference_batch_size,
             inference_workers=configuration.inference_workers,
             outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
-            cache_capacity=arguments.cache_capacity,
             inference_target=configuration.inference_target,
         )
     )

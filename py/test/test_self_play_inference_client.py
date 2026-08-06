@@ -10,7 +10,7 @@ import pytest
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
 from src.self_play.chess_completed_game import ChessCompletedGamePublisher
 from src.settings import TRAINING_ARGS
-from src.train.TrainingArgs import DirectInferenceParams, UncachedInferenceParams
+from src.train.TrainingArgs import DirectInferenceParams
 
 
 @pytest.mark.parametrize(
@@ -129,7 +129,7 @@ class _LifecycleRoot:
         self.events.append('release_root')
 
 
-def test_self_play_constructs_selected_inference_client(
+def test_self_play_constructs_direct_inference_client_during_search_warmup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -143,7 +143,6 @@ def test_self_play_constructs_selected_inference_client(
     search = TRAINING_ARGS.self_play.search.validated_copy(update={'num_searches_per_turn': 600})
     self_play_args = TRAINING_ARGS.self_play.validated_copy(
         update={
-            'inference': UncachedInferenceParams(mode='uncached').model_dump(mode='json'),
             'initial_num_searches_per_turn': 100,
             'search': search.model_dump(mode='json'),
             'search_warmup_model_versions': 100,
@@ -161,7 +160,7 @@ def test_self_play_constructs_selected_inference_client(
     self_play._set_mcts(iteration=50)
 
     assert _FakeMcts.use_inference_cache is False
-    assert _FakeMcts.direct_inference_params is None
+    assert _FakeMcts.direct_inference_params == _FakeDirectSelfPlayInferenceParams(2, 64, 2)
     assert self_play.search_schedule(0).num_full_searches == 100
     assert self_play.search_schedule(1).num_full_searches == 105
     assert self_play.search_schedule(100).num_full_searches == 600
@@ -179,7 +178,6 @@ def test_self_play_constructs_direct_inference_pipeline(
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
     direct_inference = DirectInferenceParams(
-        mode='direct',
         inference_workers=2,
         inference_batch_size=64,
         outstanding_batches_per_worker=1,

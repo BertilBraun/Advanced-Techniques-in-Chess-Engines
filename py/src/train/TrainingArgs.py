@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -24,26 +24,10 @@ class MCTSParams(FrozenModel):
     min_visit_count: int = Field(default=0, ge=0)
 
 
-class CachedInferenceParams(FrozenModel):
-    mode: Literal['cached']
-    capacity: int = Field(gt=0)
-
-
-class UncachedInferenceParams(FrozenModel):
-    mode: Literal['uncached']
-
-
 class DirectInferenceParams(FrozenModel):
-    mode: Literal['direct']
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
-
-
-InferenceParams = Annotated[
-    CachedInferenceParams | UncachedInferenceParams | DirectInferenceParams,
-    Field(discriminator='mode'),
-]
 
 
 class SEPlacement(str, Enum):
@@ -70,7 +54,7 @@ class NetworkParams(FrozenModel):
 
 class SelfPlayParams(FrozenModel):
     search: MCTSParams
-    inference: InferenceParams
+    inference: DirectInferenceParams
     num_moves_after_which_to_play_greedy: int = Field(gt=0)
     maximum_game_plies: int | None = Field(default=None, gt=0)
     maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
@@ -270,7 +254,7 @@ class EvaluationParams(FrozenModel):
     num_games: int = Field(gt=0)
     every_n_model_versions: int = Field(gt=0)
     max_concurrent_tasks: int = Field(gt=0)
-    inference: InferenceParams
+    inference: DirectInferenceParams
     dataset_path: str | None
     reference_model_path: str | None
     opening_suite_path: str | None

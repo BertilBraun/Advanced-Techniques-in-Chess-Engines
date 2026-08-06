@@ -53,7 +53,7 @@ from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CurrentBoard, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
-from src.train.TrainingArgs import CachedInferenceParams, DirectInferenceParams, TrainingArgs, UncachedInferenceParams
+from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
@@ -355,37 +355,22 @@ class SelfPlay:
             from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
 
             inference = self.args.inference
-            match inference:
-                case CachedInferenceParams(capacity=cache_capacity):
-                    use_cache = True
-                    direct_inference_params = None
-                case UncachedInferenceParams():
-                    cache_capacity = 0
-                    use_cache = False
-                    direct_inference_params = None
-                case DirectInferenceParams(
-                    inference_workers=workers,
-                    inference_batch_size=batch_size,
-                    outstanding_batches_per_worker=outstanding_batches,
-                ):
-                    cache_capacity = 0
-                    use_cache = False
-                    direct_inference_params = DirectSelfPlayInferenceParams(
-                        workers,
-                        batch_size,
-                        outstanding_batches,
-                    )
+            direct_inference_params = DirectSelfPlayInferenceParams(
+                inference.inference_workers,
+                inference.inference_batch_size,
+                inference.outstanding_batches_per_worker,
+            )
             client_args = InferenceClientParams(
                 self.device_id,
                 currentModelPath=str(model_path),
-                maxBatchSize=256,  # TODO: adjust based on the model size and available memory
+                maxBatchSize=inference.inference_batch_size,
                 microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
-                cacheCapacity=cache_capacity,
+                cacheCapacity=0,
             )
             self.mcts = MCTS(
                 client_args,
                 self._native_mcts_params(schedule),
-                use_inference_cache=use_cache,
+                use_inference_cache=False,
                 direct_inference_params=direct_inference_params,
                 initial_model_version=model_version,
             )

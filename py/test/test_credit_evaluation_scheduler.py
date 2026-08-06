@@ -19,7 +19,7 @@ from src.train.CreditPublication import (
     file_sha256,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs, UncachedInferenceParams
+from src.train.TrainingArgs import CreditTrainingParams, DirectInferenceParams, EvaluationParams, TrainingArgs
 
 
 EvaluationTarget = Callable[[int, TrainingArgs, EvaluationParams, int, int | None], None]
@@ -108,7 +108,11 @@ def _evaluation() -> EvaluationParams:
         num_games=2,
         every_n_model_versions=1,
         max_concurrent_tasks=1,
-        inference=UncachedInferenceParams(mode='uncached'),
+        inference=DirectInferenceParams(
+            inference_workers=1,
+            inference_batch_size=64,
+            outstanding_batches_per_worker=1,
+        ),
         dataset_path=None,
         reference_model_path=None,
         opening_suite_path=None,

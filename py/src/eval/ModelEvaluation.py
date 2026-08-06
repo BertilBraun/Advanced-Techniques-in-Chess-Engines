@@ -29,13 +29,9 @@ from src.eval.evaluation_types import (
 from src.eval.paired_match import play_paired_models
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import (
-    CachedInferenceParams,
-    DirectInferenceParams,
     EvaluationParams,
     TrainingArgs,
-    UncachedInferenceParams,
 )
-from src.cluster.InferenceClient import InferenceClient
 from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
@@ -49,7 +45,7 @@ from src.experiment.evaluation_protocol import (
 )
 
 
-def policy_evaluator(current_model: InferenceClient | NonCachingInferenceClient) -> EvaluationModel:
+def policy_evaluator(current_model: NonCachingInferenceClient) -> EvaluationModel:
     def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
         results = current_model.inference_batch(boards)
         policies = []
@@ -130,36 +126,21 @@ class ModelEvaluation:
         from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
 
         inference = self.evaluation_args.inference
-        match inference:
-            case CachedInferenceParams(capacity=capacity):
-                cache_capacity = capacity
-                maximum_batch_size = 16
-                use_cache = True
-                direct_parameters = None
-            case UncachedInferenceParams():
-                cache_capacity = 0
-                maximum_batch_size = 16
-                use_cache = False
-                direct_parameters = None
-            case DirectInferenceParams(
-                inference_workers=workers,
-                inference_batch_size=batch_size,
-                outstanding_batches_per_worker=outstanding_batches,
-            ):
-                cache_capacity = 0
-                maximum_batch_size = batch_size
-                use_cache = False
-                direct_parameters = DirectSelfPlayInferenceParams(workers, batch_size, outstanding_batches)
+        direct_parameters = DirectSelfPlayInferenceParams(
+            inference.inference_workers,
+            inference.inference_batch_size,
+            inference.outstanding_batches_per_worker,
+        )
         return MCTS(
             InferenceClientParams(
                 self.device_id,
                 str(inference_path),
-                maximum_batch_size,
+                inference.inference_batch_size,
                 500,
-                cache_capacity,
+                0,
             ),
             self.mcts_args,
-            use_inference_cache=use_cache,
+            use_inference_cache=False,
             direct_inference_params=direct_parameters,
         )
 
@@ -269,12 +250,7 @@ class ModelEvaluation:
 
     def play_policy_vs_random(self) -> Results:
         evaluation = self.evaluation_args
-        match evaluation.inference:
-            case CachedInferenceParams():
-                inference_client_type = InferenceClient
-            case UncachedInferenceParams() | DirectInferenceParams():
-                inference_client_type = NonCachingInferenceClient
-        current_model = inference_client_type(self.device_id, self.args.network, self.args.save_path)
+        current_model = NonCachingInferenceClient(self.device_id, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         policy_model = policy_evaluator(current_model)

@@ -51,9 +51,7 @@ directly. Tool-specific overrides create immutable replacements and do not
 mutate shared settings.
 
 The configuration audit removed unused worker count, initial-evaluation,
-top-level evaluation-concurrency, and disconnected general artifact-retention
-settings. Inference caching was not removed: native MCTS, Python self-play and
-evaluation, benchmarks, and the interactive engine still have active cached
-and non-cached implementations. Configuration now represents cached,
-uncached, and direct inference as a validated discriminated union instead of a
-cache boolean plus unrelated nullable fields.
+top-level evaluation-concurrency, disconnected general artifact-retention, and
+inference-cache settings. Chess self-play and MCTS evaluation use the measured
+direct prepared-batch inference path. Legacy cache implementations remain
+outside experiment configuration for benchmark and native API cleanup review.

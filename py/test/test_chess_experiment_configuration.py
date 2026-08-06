@@ -28,7 +28,12 @@ def test_default_chess_experiment_loads_canonical_runtime_configuration() -> Non
     assert configuration.training.self_play.search.c_param == pytest.approx(1.5)
     assert configuration.training.topology.trainer.ddp_device_ids == (0,)
     assert configuration.training.self_play.search.num_parallel_searches == 2
-    assert configuration.chess.evaluation.inference.capacity == 50_000
+    assert configuration.training.self_play.inference.inference_workers == 2
+    assert configuration.training.self_play.inference.inference_batch_size == 64
+    assert configuration.training.self_play.inference.outstanding_batches_per_worker == 2
+    assert configuration.chess.evaluation.inference.inference_workers == 1
+    assert configuration.chess.evaluation.inference.inference_batch_size == 64
+    assert configuration.chess.evaluation.inference.outstanding_batches_per_worker == 1
     assert configuration.chess.evaluation.dataset_path is not None
     assert configuration.chess.evaluation.dataset_path.endswith('memory_0_chess_database.hdf5')
     assert configuration.chess.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
@@ -99,6 +104,9 @@ def test_validated_copy_reruns_field_validation() -> None:
         (('training', 'topology'), 'max_concurrent_evaluations', 1),
         (('chess', 'evaluation'), 'evaluate_initial_checkpoint', True),
         (('training', 'self_play'), 'use_inference_cache', True),
+        (('training', 'self_play'), 'inference_cache_capacity', 250_000),
+        (('training', 'self_play', 'inference'), 'mode', 'cached'),
+        (('training', 'self_play', 'inference'), 'capacity', 250_000),
     ),
 )
 def test_removed_configuration_fields_are_rejected(

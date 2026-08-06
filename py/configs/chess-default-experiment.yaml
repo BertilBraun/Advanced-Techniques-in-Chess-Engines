@@ -44,8 +44,9 @@ training:
       percentage_of_node_visits_to_keep: 0.6
       min_visit_count: 0
     inference:
-      mode: cached
-      capacity: 250000
+      inference_workers: 2
+      inference_batch_size: 64
+      outstanding_batches_per_worker: 2
     num_moves_after_which_to_play_greedy: 50
     maximum_game_plies:
     maximum_game_plies_until_model_version: 0
@@ -167,8 +168,9 @@ chess:
     every_n_model_versions: 1
     max_concurrent_tasks: 1
     inference:
-      mode: cached
-      capacity: 50000
+      inference_workers: 1
+      inference_batch_size: 64
+      outstanding_batches_per_worker: 1
     dataset_path: py/reference/memory_0_chess_database.hdf5
     reference_model_path:
     opening_suite_path: py/reference/main-monitoring-openings-50.tsv

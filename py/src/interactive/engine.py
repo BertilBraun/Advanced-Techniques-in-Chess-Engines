@@ -53,7 +53,7 @@ class InteractiveEngine:
             currentModelPath=configuration.model_path,
             maxBatchSize=batch_size,
             microsecondsTimeoutInferenceThread=configuration.batch_collection_timeout_microseconds,
-            cacheCapacity=configuration.cache_capacity,
+            cacheCapacity=0,
             device=target_mapping[configuration.inference_target],
         )
         self._bound_engine = BoundInteractiveEngine(
