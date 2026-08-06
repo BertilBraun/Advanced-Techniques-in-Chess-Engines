@@ -32,7 +32,7 @@ from src.train.TrainingArgs import (
     EvaluationParams,
     TrainingArgs,
 )
-from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
+from src.cluster.InferenceClient import InferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.visit_policy import action_probabilities
@@ -45,7 +45,7 @@ from src.experiment.evaluation_protocol import (
 )
 
 
-def policy_evaluator(current_model: NonCachingInferenceClient) -> EvaluationModel:
+def policy_evaluator(current_model: InferenceClient) -> EvaluationModel:
     def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
         results = current_model.inference_batch(boards)
         policies = []
@@ -248,7 +248,7 @@ class ModelEvaluation:
 
     def play_policy_vs_random(self) -> Results:
         evaluation = self.evaluation_args
-        current_model = NonCachingInferenceClient(self.device_id, self.args.network, self.args.save_path)
+        current_model = InferenceClient(self.device_id, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
 
         policy_model = policy_evaluator(current_model)

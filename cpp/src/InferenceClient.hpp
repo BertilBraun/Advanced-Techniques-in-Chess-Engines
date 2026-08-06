@@ -9,12 +9,12 @@
 #include <shared_mutex>
 
 /**
- * @brief Asynchronous inference client with no cache allocation or cache operations.
+ * @brief Asynchronous inference client that prepares and resolves queued model batches.
  */
-class NonCachingInferenceClient {
+class InferenceClient {
 public:
-    explicit NonCachingInferenceClient(const InferenceClientParams &args);
-    ~NonCachingInferenceClient();
+    explicit InferenceClient(const InferenceClientParams &args);
+    ~InferenceClient();
 
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatch(const std::vector<const Board *> &boards);

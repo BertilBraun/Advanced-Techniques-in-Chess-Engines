@@ -2,7 +2,7 @@
 #include "BoardEncoding.hpp"
 #include "DirectInference.hpp"
 #include "InferenceResultProcessing.hpp"
-#include "NonCachingInferenceClient.hpp"
+#include "InferenceClient.hpp"
 
 #include <barrier>
 #include <nlohmann/json.hpp>
@@ -368,12 +368,12 @@ int main(const int argumentCount, char **argumentValues) {
             result = runReplicas(arguments, encodings);
         } else if (arguments.mode == "processed_replicas") {
             result = runProcessedReplicas(arguments, boards, encodings);
-        } else if (arguments.mode == "noncached") {
-            result = runClient<NonCachingInferenceClient>(arguments, boards);
+        } else if (arguments.mode == "client") {
+            result = runClient<InferenceClient>(arguments, boards);
         } else {
             throw std::invalid_argument(
                 "Mode must be direct, processed_direct, pipeline, replicas, processed_replicas, "
-                "or noncached");
+                "or client");
         }
 
         const double elapsedSeconds = result.at("elapsed_seconds").get<double>();

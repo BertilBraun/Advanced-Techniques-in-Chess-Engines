@@ -5,7 +5,7 @@ from os import PathLike
 import pytest
 import torch
 
-from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
+from src.cluster.InferenceClient import InferenceClient
 from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import NetworkParams
 
@@ -39,8 +39,8 @@ class _FakeModel:
         self.preparation_steps.append('fuse_model')
 
 
-def _client(model: _FakeModel) -> NonCachingInferenceClient:
-    client = object.__new__(NonCachingInferenceClient)
+def _client(model: _FakeModel) -> InferenceClient:
+    client = object.__new__(InferenceClient)
     client.network_args = TRAINING_ARGS.network
     client.save_path = '.'
     client.model = model
@@ -65,7 +65,7 @@ def test_python_inference_refresh_prepares_before_transactional_swap(
         assert client.model is previous_model
         return updated_model
 
-    monkeypatch.setattr('src.cluster.NonCachingInferenceClient.load_model', load_updated_model)
+    monkeypatch.setattr('src.cluster.InferenceClient.load_model', load_updated_model)
 
     client.refresh_model(4, 'updated.pt')
 
@@ -90,8 +90,8 @@ def test_python_inference_refresh_failure_preserves_previous_model(
         attempts += 1
         raise RuntimeError('broken checkpoint')
 
-    monkeypatch.setattr('src.cluster.NonCachingInferenceClient.load_model', fail_load)
-    monkeypatch.setattr('src.cluster.NonCachingInferenceClient.sleep', lambda _seconds: None)
+    monkeypatch.setattr('src.cluster.InferenceClient.load_model', fail_load)
+    monkeypatch.setattr('src.cluster.InferenceClient.sleep', lambda _seconds: None)
 
     with pytest.raises(RuntimeError, match='Failed to load model after 5 retries'):
         client.refresh_model(4, 'broken.pt')

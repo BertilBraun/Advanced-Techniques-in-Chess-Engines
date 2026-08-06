@@ -11,14 +11,14 @@ their canonical owner after extraction, and the converted call sites.
 | Chess child transitions clone immutable search positions and apply one legal move. | `cpp/src/ChessGameContract.hpp` | `cpp/test/TestChessGameContract.cpp` |
 | Terminal detection and terminal value use chess checkmate/stalemate semantics from `Board`. | `cpp/src/ChessGameContract.hpp` | `cpp/src/MCTS/DirectSelfPlaySearch.cpp`, `cpp/src/MCTS/MCTS.cpp`, `cpp/test/TestChessGameContract.cpp` |
 | Action mapping is the dense chess move encoding already implemented by `MoveEncoding`. | `cpp/src/ChessGameContract.hpp` | `cpp/src/binding.cpp`, `cpp/src/MCTS/DirectSelfPlaySearch.cpp`, `cpp/src/MCTS/MCTS.cpp`, `cpp/test/TestChessGameContract.cpp` |
-| Input encoding is the 8x8, 29-channel chess tensor with compressed binary and scalar planes. | `cpp/src/ChessGameContract.hpp` | `cpp/src/binding.cpp`, `cpp/src/MCTS/DirectSelfPlaySearch.cpp`, `cpp/src/NonCachingInferenceClient.cpp`, `cpp/test/TestChessGameContract.cpp` |
+| Input encoding is the 8x8, 29-channel chess tensor with compressed binary and scalar planes. | `cpp/src/ChessGameContract.hpp` | `cpp/src/binding.cpp`, `cpp/src/MCTS/DirectSelfPlaySearch.cpp`, `cpp/src/InferenceClient.cpp`, `cpp/test/TestChessGameContract.cpp` |
 | Representation dimensions are fixed for chess and must remain consistent with move/action counts. | `cpp/src/ChessGameContract.hpp` | `cpp/test/TestChessGameContract.cpp` |
 
 ## Python
 
 | Assumption | Canonical owner | Converted call sites |
 | --- | --- | --- |
-| Chess action-space size, representation dimensions, canonical board encoding, and move encode/decode are owned by one chess state contract. | `py/src/games/chess/contract.py` | `py/src/Encoding.py`, `py/src/Network.py`, `py/src/cluster/InferenceClient.py`, `py/src/cluster/NonCachingInferenceClient.py`, `py/src/self_play/SelfPlay.py`, `py/src/train/ChessReplay.py`, `py/src/eval/ModelEvaluation.py` |
+| Chess action-space size, representation dimensions, canonical board encoding, and move encode/decode are owned by one chess state contract. | `py/src/games/chess/contract.py` | `py/src/Encoding.py`, `py/src/Network.py`, `py/src/cluster/InferenceClient.py`, `py/src/self_play/SelfPlay.py`, `py/src/train/ChessReplay.py`, `py/src/eval/ModelEvaluation.py` |
 | The default research runtime is a chess experiment resolved from one YAML file instead of static Python constants. | `py/src/experiment/chess_experiment.py` + `py/configs/chess-default-experiment.yaml` | `py/src/settings.py`, `py/src/games/chess/ChessSettings.py`, `py/train.py` |
 | Shared network, self-play, trainer, topology, lifecycle, limits, retention, and scheduling settings form one canonical immutable `TrainingArgs` hierarchy of validated `FrozenModel` types embedded directly in the experiment. | `py/src/train/TrainingArgs.py` | `py/src/experiment/chess_experiment.py`, `py/src/settings.py`, `py/train.py`, cluster and trainer entry points |
 | Network architecture has one canonical immutable `NetworkParams` type at configuration and runtime boundaries. | `py/src/train/TrainingArgs.py` | `py/src/experiment/chess_experiment.py`, `py/src/Network.py` |

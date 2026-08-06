@@ -358,7 +358,7 @@ add_executable(
         src/MCTS/MCTS.cpp
         src/MCTS/SearchTree.cpp
         src/MoveEncoding.cpp
-        src/NonCachingInferenceClient.cpp
+        src/InferenceClient.cpp
         src/util/Log.cpp
         src/util/ThreadPool.cpp
         src/util/TimeItGuard.cpp
@@ -380,7 +380,7 @@ add_executable(
         src/DirectInference.cpp
         src/InferenceResultProcessing.cpp
         src/MoveEncoding.cpp
-        src/NonCachingInferenceClient.cpp
+        src/InferenceClient.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"

@@ -18,8 +18,8 @@ from src.util.timing import timeit
 from src.value import wdl_to_scalar
 
 
-class NonCachingInferenceClient:
-    """Runs each requested board directly through the model without cache bookkeeping."""
+class InferenceClient:
+    """Runs each requested board directly through the model."""
 
     def __init__(self, device_id: int, network_args: NetworkParams, save_path: str) -> None:
         self.network_args = network_args

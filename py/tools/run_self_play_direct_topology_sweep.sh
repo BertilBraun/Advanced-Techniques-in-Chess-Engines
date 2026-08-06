@@ -35,8 +35,6 @@ run_case() {
         PARALLEL_SEARCHES="${parallel_searches}" \
         MAXIMUM_BATCH_SIZE=256 \
         INFERENCE_TIMEOUT_MICROSECONDS=500 \
-        CACHE_CAPACITY=1 \
-        USE_INFERENCE_CACHE=0 \
         DIRECT_INFERENCE_WORKERS="${direct_workers}" \
         DIRECT_INFERENCE_BATCH_SIZE="${direct_batch_size}" \
         DIRECT_OUTSTANDING_BATCHES_PER_WORKER="${outstanding_batches}" \

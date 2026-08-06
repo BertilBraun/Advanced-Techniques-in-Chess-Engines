@@ -4,7 +4,7 @@
 
 #include "SearchTree.hpp"
 
-#include "../NonCachingInferenceClient.hpp"
+#include "../InferenceClient.hpp"
 #include "util/ThreadPool.h"
 #include <shared_mutex>
 
@@ -90,7 +90,7 @@ public:
     [[nodiscard]] std::vector<std::uintptr_t> directWorkerIdentityTokens() const;
 
 private:
-    std::unique_ptr<NonCachingInferenceClient> m_client;
+    std::unique_ptr<InferenceClient> m_client;
     InferenceClientParams m_clientArgs;
     MCTSParams m_args;
     ThreadPool m_threadPool;

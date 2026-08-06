@@ -243,13 +243,13 @@ def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
     }
 
 
-def test_policy_evaluation_uses_non_cached_inference_client(
+def test_policy_evaluation_uses_inference_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     created_clients: list[tuple[int, str, str]] = []
     updated_iterations: list[int] = []
 
-    class FakeNonCachingInferenceClient:
+    class FakeInferenceClient:
         def __init__(self, device_id: int, network_args: str, save_path: str) -> None:
             created_clients.append((device_id, network_args, save_path))
 
@@ -277,8 +277,8 @@ def test_policy_evaluation_uses_non_cached_inference_client(
 
     monkeypatch.setattr(
         evaluation_module,
-        'NonCachingInferenceClient',
-        FakeNonCachingInferenceClient,
+        'InferenceClient',
+        FakeInferenceClient,
     )
     monkeypatch.setattr(evaluation_module, 'play_paired_models', finish_without_games)
 

@@ -18,16 +18,14 @@ from pydantic import BaseModel, ConfigDict
 class BenchmarkMode(str, Enum):
     DIRECT = 'direct'
     PIPELINE = 'pipeline'
-    CACHED = 'cached'
-    NONCACHED = 'noncached'
+    CLIENT = 'client'
     REPLICAS = 'replicas'
 
 
 class Comparison(str, Enum):
     DIRECT = 'direct'
     PIPELINE = 'pipeline'
-    CACHED = 'cached'
-    NONCACHED = 'noncached'
+    CLIENT = 'client'
     REPLICAS = 'replicas'
     DIRECT_COMBINED_BATCH = 'direct_combined_batch'
 
@@ -261,8 +259,7 @@ def configurations(
     values = [
         (Comparison.DIRECT, BenchmarkMode.DIRECT, 1, batch_size),
         (Comparison.PIPELINE, BenchmarkMode.PIPELINE, 1, batch_size),
-        (Comparison.CACHED, BenchmarkMode.CACHED, 1, batch_size),
-        (Comparison.NONCACHED, BenchmarkMode.NONCACHED, 1, batch_size),
+        (Comparison.CLIENT, BenchmarkMode.CLIENT, 1, batch_size),
     ]
     values.extend((Comparison.REPLICAS, BenchmarkMode.REPLICAS, workers, batch_size) for workers in worker_counts)
     values.extend(

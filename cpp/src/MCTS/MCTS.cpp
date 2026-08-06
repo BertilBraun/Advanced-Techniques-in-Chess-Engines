@@ -139,7 +139,7 @@ MCTS::MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
         m_directSearch =
             std::make_unique<DirectSelfPlaySearch>(m_clientArgs, m_args, *m_directInferenceParams);
     } else {
-        m_client = std::make_unique<NonCachingInferenceClient>(m_clientArgs);
+        m_client = std::make_unique<InferenceClient>(m_clientArgs);
     }
 }
 

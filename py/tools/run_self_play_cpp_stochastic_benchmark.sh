@@ -265,7 +265,7 @@ workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_sear
 if [[ "${direct_inference_workers}" -gt 0 ]]; then
     inference_client_name=direct
 else
-    inference_client_name=uncached
+    inference_client_name=client
 fi
 workload_name="${workload_name}-${inference_client_name}"
 output_directory="${output_root}/self-play-cpp-stochastic-${topology_name}-${workload_name}-duration${measurement_duration_seconds}s-timeout${inference_timeout_microseconds}us-affinity${affinity_mode}-${run_timestamp}"

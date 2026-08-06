@@ -1,11 +1,11 @@
-#include "NonCachingInferenceClient.hpp"
+#include "InferenceClient.hpp"
 
 #include "BoardEncoding.hpp"
 #include "ChessGameContract.hpp"
 #include "InferenceModel.hpp"
 #include "MoveEncoding.hpp"
 
-NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams &args)
+InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32),
       m_modelBatchSizeHistogram(static_cast<size_t>(args.maxBatchSize) + 1), m_params(args) {
     const bool useCuda = args.device == InferenceDevice::Cuda ||
@@ -23,12 +23,12 @@ NonCachingInferenceClient::NonCachingInferenceClient(const InferenceClientParams
     m_model = std::make_unique<torch::jit::script::Module>(
         loadInferenceModel(args.currentModelPath, m_device, m_torchDtype));
 
-    m_prepareThread = std::thread(&NonCachingInferenceClient::prepareWorker, this);
-    m_modelThread = std::thread(&NonCachingInferenceClient::modelWorker, this);
-    m_resolveThread = std::thread(&NonCachingInferenceClient::resolveWorker, this);
+    m_prepareThread = std::thread(&InferenceClient::prepareWorker, this);
+    m_modelThread = std::thread(&InferenceClient::modelWorker, this);
+    m_resolveThread = std::thread(&InferenceClient::resolveWorker, this);
 }
 
-NonCachingInferenceClient::~NonCachingInferenceClient() {
+InferenceClient::~InferenceClient() {
     m_requestQueue.close();
     if (m_prepareThread.joinable()) {
         m_prepareThread.join();
@@ -42,8 +42,8 @@ NonCachingInferenceClient::~NonCachingInferenceClient() {
 }
 
 std::vector<InferenceResult>
-NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
-    TIMEIT("NonCachingInferenceClient::inferenceBatch");
+InferenceClient::inferenceBatch(const std::vector<const Board *> &boards) {
+    TIMEIT("InferenceClient::inferenceBatch");
     const std::shared_lock refreshLock(m_refreshMutex);
     if (boards.empty()) {
         return {};
@@ -101,7 +101,7 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
     return results;
 }
 
-InferenceStatistics NonCachingInferenceClient::getStatistics() {
+InferenceStatistics InferenceClient::getStatistics() {
     const std::shared_lock refreshLock(m_refreshMutex);
     InferenceStatistics statistics;
     statistics.evaluations = m_totalEvals.load(std::memory_order_relaxed);
@@ -119,7 +119,7 @@ InferenceStatistics NonCachingInferenceClient::getStatistics() {
     return statistics;
 }
 
-void NonCachingInferenceClient::refreshModel(const std::string &modelPath) {
+void InferenceClient::refreshModel(const std::string &modelPath) {
     const std::unique_lock refreshLock(m_refreshMutex);
     const torch::Tensor validationInput =
         torch::zeros({1, BOARD_C, BOARD_LEN, BOARD_LEN},
@@ -129,7 +129,7 @@ void NonCachingInferenceClient::refreshModel(const std::string &modelPath) {
     commitInferenceModelUpdate(m_model, std::move(updatedModel));
 }
 
-void NonCachingInferenceClient::prepareWorker() {
+void InferenceClient::prepareWorker() {
     while (true) {
         std::optional<std::vector<InferenceRequest>> requests = m_requestQueue.popBatch(
             static_cast<size_t>(m_params.maxBatchSize), [this](const InferenceRequest &request) {
@@ -169,7 +169,7 @@ void NonCachingInferenceClient::prepareWorker() {
     m_preparedQueue.close();
 }
 
-void NonCachingInferenceClient::modelWorker() {
+void InferenceClient::modelWorker() {
     while (std::optional<PreparedBatch> preparedBatch = m_preparedQueue.pop()) {
         CompletedBatch completedBatch{std::move(preparedBatch->promises), {}, {}, nullptr};
         try {
@@ -185,7 +185,7 @@ void NonCachingInferenceClient::modelWorker() {
     m_completedQueue.close();
 }
 
-void NonCachingInferenceClient::resolveWorker() {
+void InferenceClient::resolveWorker() {
     while (std::optional<CompletedBatch> completedBatch = m_completedQueue.pop()) {
         if (completedBatch->exception != nullptr) {
             for (std::promise<ModelInferenceResult> &promise : completedBatch->promises) {
@@ -228,7 +228,7 @@ void NonCachingInferenceClient::resolveWorker() {
 }
 
 std::pair<torch::Tensor, torch::Tensor>
-NonCachingInferenceClient::modelInference(const torch::Tensor &inputTensor) {
+InferenceClient::modelInference(const torch::Tensor &inputTensor) {
     torch::NoGradGuard noGrad;
     assert(inputTensor.dim() == 4);
     const size_t batchSize = static_cast<size_t>(inputTensor.size(0));
