@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 import torch
 from torch.utils.data import DataLoader
 
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.Network import Network
 from src.eval.evaluation_types import (
     Results,
@@ -33,7 +34,7 @@ from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.visit_policy import action_probabilities
-from src.settings import USE_GPU, PLAY_C_PARAM, CurrentBoard, CurrentGame
+from src.settings import USE_GPU, CurrentBoard
 from src.util.save_paths import inference_model_path, load_model, model_save_path
 from src.experiment.evaluation_protocol import (
     GameRecord,
@@ -47,7 +48,7 @@ def policy_evaluator(current_model: InferenceClient | NonCachingInferenceClient)
         results = current_model.inference_batch(boards)
         policies = []
         for board, (visit_counts, _) in zip(boards, results):
-            policy = np.zeros(CurrentGame.action_size, dtype=np.float32)
+            policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
             for move, score in visit_counts:
                 policy[move] = score
             assert policy.sum() >= 0, f'Policy for board {board} has negative sum: {policy.sum()}'
@@ -60,6 +61,15 @@ def policy_evaluator(current_model: InferenceClient | NonCachingInferenceClient)
 def history_aware_root(board: CurrentBoard, mcts: MCTS) -> MCTSRoot:
     history = bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES)
     return mcts.new_root_with_history(history.starting_fen, history.moves_uci)
+
+
+def _encoded_policy_for_moves(boards: list[CurrentBoard], moves: list[chess.Move]) -> list[np.ndarray]:
+    policies: list[np.ndarray] = []
+    for board, move in zip(boards, moves):
+        policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
+        policy[CHESS_STATE_CONTRACT.encode_move(move, board)] = 1.0
+        policies.append(policy)
+    return policies
 
 
 class ModelEvaluation:
@@ -99,7 +109,7 @@ class ModelEvaluation:
 
         return MCTSParams(
             num_parallel_searches=self.args.evaluation.parallel_searches,
-            c_param=PLAY_C_PARAM,
+            c_param=self.args.evaluation.search_exploration_constant,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
@@ -209,11 +219,8 @@ class ModelEvaluation:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
 
         def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            def get_random_policy(board: CurrentBoard) -> EvaluationMove:
-                policy = CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
-                return EvaluationMove(policy)
-
-            return [get_random_policy(board) for board in boards]
+            random_moves = [random.choice(board.get_valid_moves()) for board in boards]
+            return [EvaluationMove(policy) for policy in _encoded_policy_for_moves(boards, random_moves)]
 
         return self.play_vs_evaluation_model(random_evaluator, 'random')
 
@@ -261,11 +268,8 @@ class ModelEvaluation:
             return [EvaluationMove(policy) for policy in policy_model(boards)]
 
         def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            def get_random_policy(board: CurrentBoard) -> EvaluationMove:
-                policy = CurrentGame.encode_moves([random.choice(board.get_valid_moves())], board)
-                return EvaluationMove(policy)
-
-            return [get_random_policy(board) for board in boards]
+            random_moves = [random.choice(board.get_valid_moves()) for board in boards]
+            return [EvaluationMove(policy) for policy in _encoded_policy_for_moves(boards, random_moves)]
 
         results, _ = play_paired_models(
             iteration=self.iteration,
@@ -293,7 +297,7 @@ class ModelEvaluation:
                     engine.close()
                     engine = self._open_skill_level_stockfish(level)
                     move = self._play_skill_level_stockfish(engine, board, level)
-                decisions.append(EvaluationMove(CurrentGame.encode_moves([move], board)))
+                decisions.append(EvaluationMove(_encoded_policy_for_moves([board], [move])[0]))
             return decisions
 
         try:
@@ -340,7 +344,7 @@ class ModelEvaluation:
                     if result.move is None:
                         raise ValueError('Stockfish did not return a move.')
                     move = normalize_move_for_action_space(result.move, board)
-                    decisions.append(EvaluationMove(CurrentGame.encode_moves([move], board)))
+                    decisions.append(EvaluationMove(_encoded_policy_for_moves([board], [move])[0]))
                 return decisions
 
             results, records = self.play_vs_evaluation_model_paired(

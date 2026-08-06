@@ -42,9 +42,12 @@ if __name__ == '__main__':
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
     from src.util.tensorboard import configure_tensorboard_run_directory
+    from src.experiment.chess_experiment import (
+        build_chess_training_args,
+        load_chess_experiment_configuration,
+        write_resolved_chess_experiment,
+    )
     from src.experiment.run_configuration import (
-        apply_run_configuration,
-        load_run_configuration,
         prepare_training_run,
     )
     from src.experiment.resource_telemetry import start_resource_telemetry
@@ -53,8 +56,10 @@ if __name__ == '__main__':
         write_run_outcome,
     )
 
-    run_configuration = load_run_configuration(command_line_arguments.run_config)
-    apply_run_configuration(TRAINING_ARGS, run_configuration)
+    chess_experiment = load_chess_experiment_configuration(command_line_arguments.run_config)
+    resolved_training_args = build_chess_training_args(chess_experiment)
+    TRAINING_ARGS.__dict__.update(resolved_training_args.__dict__)
+    run_configuration = chess_experiment.run
     configure_tensorboard_run_directory(run_configuration.tensorboard_run_directory)
 
     random.seed(TRAINING_ARGS.random_seed)
@@ -77,6 +82,7 @@ if __name__ == '__main__':
         command_line_arguments.expected_source_revision,
         command_line_arguments.approval_file,
     )
+    write_resolved_chess_experiment(Path(TRAINING_ARGS.save_path) / 'resolved-chess-experiment.json', chess_experiment)
     log('Resolved run manifest:')
     log(manifest.model_dump(), use_pprint=True)
 

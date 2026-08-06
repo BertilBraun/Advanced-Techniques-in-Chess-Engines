@@ -1,6 +1,7 @@
 #include "common.hpp"
 
 #include "BoardEncoding.hpp"
+#include "ChessGameContract.hpp"
 #include "InferenceClient.hpp"
 #include "InteractiveEngine.hpp"
 #include "MCTS/MCTS.hpp"
@@ -238,7 +239,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         "new_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci,
            const uint32 arenaCapacity) {
-            return MCTSRoot::create(replayMoves(startingFen, movesUci), arenaCapacity);
+            return MCTSRoot::create(ChessGameContract::replayPosition(startingFen, movesUci), arenaCapacity);
         },
         py::arg("starting_fen"), py::arg("moves_uci"), py::arg("arena_capacity"),
         R"pbdoc(Create a fixed-capacity MCTS root by replaying bounded UCI history.)pbdoc");
@@ -248,7 +249,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         [](const std::string &fen)
             -> std::pair<std::array<uint64, BINARY_C>, std::array<int8, SCALAR_C>> {
             const Board board(fen);
-            const CompressedEncodedBoard encoded = encodeBoard(&board);
+            const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
             return {encoded.bits, encoded.scal};
         },
         py::arg("fen"),
@@ -409,7 +410,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             "new_root_with_history",
             [](const MCTS &self, const std::string &startingFen,
                const std::vector<std::string> &movesUci) {
-                return self.newRoot(replayMoves(startingFen, movesUci));
+                return self.newRoot(ChessGameContract::replayPosition(startingFen, movesUci));
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
@@ -510,7 +511,7 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.def(
         "new_eval_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
-            return EvalMCTSNode::createRoot(replayMoves(startingFen, movesUci));
+            return EvalMCTSNode::createRoot(ChessGameContract::replayPosition(startingFen, movesUci));
         },
         py::arg("starting_fen"), py::arg("moves_uci"),
         R"pbdoc(Create an evaluation MCTS root by replaying a bounded UCI move history.)pbdoc");

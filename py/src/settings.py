@@ -1,2 +1,27 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
 from src.settings_common import *
-from src.games.chess.ChessSettings import *
+from src.experiment.chess_experiment import build_chess_training_args, load_chess_experiment_configuration
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.ChessGame import ChessGame, ChessMove
+from src.games.chess.ChessVisuals import ChessVisuals
+
+
+DEFAULT_CHESS_EXPERIMENT_PATH = Path(__file__).resolve().parents[1] / 'configs' / 'chess-default-experiment.yaml'
+
+
+def _default_experiment_path() -> Path:
+    configured_path = os.environ.get('ALPHAZERO_EXPERIMENT_PATH')
+    return Path(configured_path) if configured_path is not None else DEFAULT_CHESS_EXPERIMENT_PATH
+
+
+CurrentGameMove = ChessMove
+CurrentGame = ChessGame()
+CurrentBoard = ChessBoard
+CurrentGameVisuals = ChessVisuals()
+
+CHESS_EXPERIMENT = load_chess_experiment_configuration(_default_experiment_path())
+TRAINING_ARGS = build_chess_training_args(CHESS_EXPERIMENT)

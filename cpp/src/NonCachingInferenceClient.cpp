@@ -1,6 +1,7 @@
 #include "NonCachingInferenceClient.hpp"
 
 #include "BoardEncoding.hpp"
+#include "ChessGameContract.hpp"
 #include "InferenceModel.hpp"
 #include "MoveEncoding.hpp"
 
@@ -57,7 +58,7 @@ NonCachingInferenceClient::inferenceBatch(const std::vector<const Board *> &boar
     const std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
     for (const Board *board : boards) {
         InferenceRequest request;
-        request.boardTensor = toTensor(encodeBoard(board));
+        request.boardTensor = toTensor(ChessGameContract::encodeInput(*board));
         request.enqueuedAt = enqueuedAt;
         futures.push_back(request.promise.get_future());
         requests.push_back(std::move(request));

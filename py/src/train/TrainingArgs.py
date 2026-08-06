@@ -3,6 +3,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Callable, Literal
 
+from pydantic import ConfigDict
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+
 from src.experiment.cost_accounting import CostCurrency
 from src.self_play.resignation import ResignationParams
 
@@ -65,7 +68,7 @@ class SEPlacement(str, Enum):
         return block_index % 2 == 1
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class NetworkParams:
     num_layers: int
     """This is the number of layers to use for the neural network"""
@@ -79,6 +82,18 @@ class NetworkParams:
     num_policy_channels: int = 4
     num_value_channels: int = 2
     value_fc_size: int = 48
+
+    def __post_init__(self) -> None:
+        if self.num_layers <= 0:
+            raise ValueError('Network layer count must be positive.')
+        if self.hidden_size <= 0:
+            raise ValueError('Network hidden size must be positive.')
+        if self.num_policy_channels <= 0:
+            raise ValueError('Network policy channel count must be positive.')
+        if self.num_value_channels <= 0:
+            raise ValueError('Network value channel count must be positive.')
+        if self.value_fc_size <= 0:
+            raise ValueError('Network value fully-connected size must be positive.')
 
 
 @dataclass
@@ -392,6 +407,7 @@ class EvaluationParams:
     stockfish_threads: int
     stockfish_hash_mib: int
     evaluate_random: bool
+    search_exploration_constant: float = 1.0
     parallel_searches: int = 1
     direct_inference: DirectSelfPlayParams | None = None
     """Direct reusable inference pipeline configuration, or None for the general evaluation client."""

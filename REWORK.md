@@ -351,7 +351,7 @@ process group and records the resulting status.
 | R2 | Credit-only training lifecycle and commander cleanup | accepted |
 | R3 | Chess completed-game persistence and replay materialization | accepted |
 | R4 | Chess RAM replay, batch construction, and DDP integration | accepted |
-| R5 | Chess game-contract and configuration extraction | pending |
+| R5 | Chess game-contract and configuration extraction | in_progress |
 | R6 | Shared bitboard and chess packed-plane integration | pending |
 | R7 | Native Go game implementation | pending |
 | R8 | Go pipeline integration | pending |
@@ -360,7 +360,7 @@ process group and records the resulting status.
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 through R4 accepted. No later phase is authorized.
+Current authorization: R5 only. R1 through R4 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 

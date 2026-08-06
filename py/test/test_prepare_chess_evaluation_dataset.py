@@ -12,12 +12,12 @@ def test_prepare_dataset_records_source_and_hash(monkeypatch: pytest.MonkeyPatch
     dataset_path = tmp_path / 'memory.hdf5'
     manifest_path = tmp_path / 'manifest.json'
 
-    def create_dataset(requested_path: str) -> None:
-        assert Path(requested_path) == dataset_path
-        Path(requested_path).write_bytes(str(random.random()).encode('ascii'))
+    def create_dataset(requested_path: Path) -> None:
+        assert requested_path == dataset_path
+        requested_path.write_bytes(str(random.random()).encode('ascii'))
 
     monkeypatch.setattr(prepare_chess_evaluation_dataset, 'SOURCE_ROOT', tmp_path)
-    monkeypatch.setattr(prepare_chess_evaluation_dataset, 'ensure_eval_dataset_exists', create_dataset)
+    monkeypatch.setattr(prepare_chess_evaluation_dataset, 'ensure_evaluation_dataset_exists', create_dataset)
     configuration = configuration.model_copy(
         update={
             'evaluation': configuration.evaluation.model_copy(

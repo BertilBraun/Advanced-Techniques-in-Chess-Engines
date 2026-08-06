@@ -8,8 +8,9 @@ import numpy as np
 import torch
 
 from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.Network import Network
-from src.settings import USE_GPU, CurrentBoard, CurrentGame
+from src.settings import USE_GPU, CurrentBoard
 from src.train.TrainingArgs import NetworkParams
 from src.util.log import error, warn
 from src.util.save_paths import load_model, model_save_path
@@ -60,7 +61,7 @@ class NonCachingInferenceClient:
         if not boards:
             return []
 
-        encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
+        encoded_boards = [CHESS_STATE_CONTRACT.canonical_board(board) for board in boards]
         results = self._model_inference(encoded_boards)
         return [
             (filter_policy_then_get_moves_and_probabilities(policy, board), value)
@@ -74,7 +75,10 @@ class NonCachingInferenceClient:
             if not self.warning_shown:
                 self.warning_shown = True
                 error('Model not loaded')
-            return [(np.full((CurrentGame.action_size,), 1 / CurrentGame.action_size), 0.0) for _ in boards]
+            return [
+                (np.full((CHESS_STATE_CONTRACT.action_size,), 1 / CHESS_STATE_CONTRACT.action_size), 0.0)
+                for _ in boards
+            ]
 
         input_tensor = torch.from_numpy(np.array(boards)).to(
             dtype=self.dtype,

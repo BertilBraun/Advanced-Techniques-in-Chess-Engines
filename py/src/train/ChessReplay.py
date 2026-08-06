@@ -16,12 +16,12 @@ import numpy.typing as npt
 import torch
 
 from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
 from src.self_play.chess_completed_game import ChessCompletedGame, ChessGameIdentity, completed_game_from_path
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
-from src.settings import CurrentGame
 from src.util.atomic_file import fsync_directory, write_bytes_atomically
 
 
@@ -539,12 +539,14 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
     for ply in range(len(game.moves_uci) + 1):
         observation = observations_by_ply.get(ply)
         if observation is not None:
-            legal_actions = tuple(sorted(CurrentGame.encode_move(move, board) for move in board.get_valid_moves()))
+            legal_actions = tuple(
+                sorted(CHESS_STATE_CONTRACT.encode_move(move, board) for move in board.get_valid_moves())
+            )
             if legal_actions != observation.legal_action_ids:
                 raise ValueError(f'Completed-game legal actions disagree at ply {ply}.')
             if ply < len(game.moves_uci):
                 selected_move = chess.Move.from_uci(game.moves_uci[ply])
-                if CurrentGame.encode_move(selected_move, board) != observation.selected_action_id:
+                if CHESS_STATE_CONTRACT.encode_move(selected_move, board) != observation.selected_action_id:
                     raise ValueError(f'Completed-game selected action disagrees at ply {ply}.')
             if observation.sample_eligible:
                 visits = tuple(
@@ -554,8 +556,8 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
                 )
                 if not visits:
                     raise ValueError(f'Eligible chess observation has no visits after filtering at ply {ply}.')
-                canonical_state = CurrentGame.get_canonical_board(board).astype(np.int8, copy=False)
-                current_piece_count, opponent_piece_count = CurrentGame.replay_piece_counts(canonical_state)
+                canonical_state = CHESS_STATE_CONTRACT.canonical_board(board).astype(np.int8, copy=False)
+                current_piece_count, opponent_piece_count = CHESS_STATE_CONTRACT.replay_piece_counts(canonical_state)
                 final_score = outcome_from_sample_perspective(
                     game.final_score,
                     final_current_player=game.final_current_player,
@@ -607,9 +609,17 @@ def build_chess_training_batch(
 ) -> TrainingBatch:
     samples = tuple(snapshot.samples[index] for index in sample_indices)
     batch_size = len(samples)
-    states = np.empty((batch_size, *CurrentGame.representation_shape), dtype=np.float32)
+    states = np.empty(
+        (
+            batch_size,
+            CHESS_STATE_CONTRACT.representation.channels,
+            CHESS_STATE_CONTRACT.representation.rows,
+            CHESS_STATE_CONTRACT.representation.columns,
+        ),
+        dtype=np.float32,
+    )
     decode_board_states_into(tuple(sample.encoded_state for sample in samples), states)
-    policies = np.zeros((batch_size, CurrentGame.action_size), dtype=np.float32)
+    policies = np.zeros((batch_size, CHESS_STATE_CONTRACT.action_size), dtype=np.float32)
     for row, sample in enumerate(samples):
         actions = sample.visits[:, 0].astype(np.int64, copy=False)
         counts = sample.visits[:, 1].astype(np.float32, copy=False)

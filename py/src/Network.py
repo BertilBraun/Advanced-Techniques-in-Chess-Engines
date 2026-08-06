@@ -2,7 +2,7 @@ import torch
 
 from torch import nn, Tensor
 
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.value_target import FinalOutcome
 from src.train.TrainingArgs import NetworkParams
 from src.util.log import log
@@ -24,8 +24,10 @@ class Network(nn.Module):
 
         self.device = device
 
-        encoding_channels, row_count, column_count = CurrentGame.representation_shape
-        action_size = CurrentGame.action_size
+        encoding_channels = CHESS_STATE_CONTRACT.representation.channels
+        row_count = CHESS_STATE_CONTRACT.representation.rows
+        column_count = CHESS_STATE_CONTRACT.representation.columns
+        action_size = CHESS_STATE_CONTRACT.action_size
 
         self.startBlock = nn.Sequential(
             nn.Conv2d(encoding_channels, args.hidden_size, kernel_size=3, padding='same', bias=False),

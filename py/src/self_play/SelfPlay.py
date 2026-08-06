@@ -25,6 +25,7 @@ import chess
 import numpy as np
 
 from src.games.Board import Player
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.chess_completed_game import (
     ChessCompletedGame,
@@ -50,7 +51,7 @@ from src.util import lerp
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
-from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
+from src.settings import CurrentBoard, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
@@ -104,7 +105,7 @@ class SelfPlayGame:
         resignation_threshold: float | None = None,
         identity: ChessGameIdentity | None = None,
     ) -> None:
-        self.board = CurrentGame.get_initial_board()
+        self.board = CHESS_STATE_CONTRACT.create_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
         self.played_moves: list[CurrentGameMove] = []
         self.encoded_moves: list[int] = []
@@ -134,7 +135,7 @@ class SelfPlayGame:
 
     def expand(self, move: CurrentGameMove) -> SelfPlayGame:
         new_game = self.copy()
-        new_game.encoded_moves.append(CurrentGame.encode_move(move, new_game.board))
+        new_game.encoded_moves.append(CHESS_STATE_CONTRACT.encode_move(move, new_game.board))
         new_game.board.make_move(move)
         new_game.played_moves.append(move)
         return new_game
@@ -699,7 +700,7 @@ class SelfPlay:
             temperature = lerp(self.args.starting_temperature, self.args.final_temperature, game_progress)
             child_index = _sample_from_probabilities(children_probabilities, temperature)
 
-        move = CurrentGame.decode_move(children_encoded_moves[child_index], current.board)
+        move = CHESS_STATE_CONTRACT.decode_move(children_encoded_moves[child_index], current.board)
         new_spg = current.expand(move)
         new_spg.already_expanded_node = root.make_new_root(child_index)
 
@@ -846,7 +847,9 @@ class SelfPlay:
                 ply=memory.ply,
                 model_generation=memory.model_generation,
                 legal_action_ids=tuple(
-                    sorted(CurrentGame.encode_move(move, memory.board) for move in memory.board.get_valid_moves())
+                    sorted(
+                        CHESS_STATE_CONTRACT.encode_move(move, memory.board) for move in memory.board.get_valid_moves()
+                    )
                 ),
                 visits=tuple(
                     SparseSearchVisit(action_id=action_id, visit_count=visit_count)
@@ -902,9 +905,9 @@ class SelfPlay:
 
     def _log_game(self, spg: SelfPlayGame, result: float) -> None:
         moves: list[str] = []
-        board = CurrentGame.get_initial_board()
+        board = CHESS_STATE_CONTRACT.create_initial_board()
         for move in spg.played_moves:
-            encoded_move = CurrentGame.encode_move(move, board)
+            encoded_move = CHESS_STATE_CONTRACT.encode_move(move, board)
             moves.append(str(encoded_move))
             board.make_move(move)
 
@@ -979,6 +982,6 @@ def new_game_from_encoded_prefix(
         resignation_threshold=resignation_threshold,
     )
     for encoded_move in encoded_moves:
-        move = CurrentGame.decode_move(encoded_move, game.board)
+        move = CHESS_STATE_CONTRACT.decode_move(encoded_move, game.board)
         game = game.expand(move)
     return game

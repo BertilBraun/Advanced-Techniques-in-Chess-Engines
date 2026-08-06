@@ -9,9 +9,10 @@ from sys import getsizeof
 from typing import TypeVar
 
 from src.Encoding import MoveScore, filter_policy_then_get_moves_and_probabilities
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.Network import Network
 from src.train.TrainingArgs import NetworkParams
-from src.settings import USE_GPU, CurrentBoard, CurrentGame, log_histogram, log_scalar
+from src.settings import USE_GPU, CurrentBoard, log_histogram, log_scalar
 from src.util.ZobristHasherNumpy import ZobristHasherNumpy
 from src.util.log import LogLevel, error, log, warn
 from src.util.timing import timeit
@@ -41,7 +42,9 @@ class InferenceClient:
         self.total_hits = 0
         self.total_evals = 0
 
-        channels, rows, cols = CurrentGame.representation_shape
+        channels = CHESS_STATE_CONTRACT.representation.channels
+        rows = CHESS_STATE_CONTRACT.representation.rows
+        cols = CHESS_STATE_CONTRACT.representation.columns
         self.hasher = ZobristHasherNumpy(channels, rows, cols)
 
     def _prepare_model(self, model_path: str | PathLike[str]) -> Network:
@@ -101,7 +104,7 @@ class InferenceClient:
         if not boards:
             return []
 
-        encoded_boards = [CurrentGame.get_canonical_board(board) for board in boards]
+        encoded_boards = [CHESS_STATE_CONTRACT.canonical_board(board) for board in boards]
         board_hashes = self.hasher.zobrist_hash_boards(np.array(encoded_boards))
 
         boards_to_infer: list[np.ndarray] = []
@@ -140,7 +143,10 @@ class InferenceClient:
             if not hasattr(self, 'WARNING_SHOWN'):
                 self.WARNING_SHOWN = True
                 error('Model not loaded')
-            return [(np.full((CurrentGame.action_size,), 1 / CurrentGame.action_size), 0.0) for _ in boards]
+            return [
+                (np.full((CHESS_STATE_CONTRACT.action_size,), 1 / CHESS_STATE_CONTRACT.action_size), 0.0)
+                for _ in boards
+            ]
 
         input_tensor = torch.from_numpy(np.array(boards)).to(dtype=self.dtype, device=self.device, non_blocking=True)
 

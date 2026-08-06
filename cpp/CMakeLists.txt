@@ -263,6 +263,23 @@ target_include_directories(EvalSearchTreeBenchmark PRIVATE src)
 target_link_libraries(EvalSearchTreeBenchmark PRIVATE "${TORCH_LIBRARIES}")
 
 add_executable(
+        ChessGameContractTest
+        test/TestChessGameContract.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        src/GameHistory.cpp
+        src/MoveEncoding.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(ChessGameContractTest PRIVATE src)
+target_link_libraries(ChessGameContractTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME ChessGameContractTest COMMAND ChessGameContractTest)
+
+add_executable(
         GameHistoryTest
         test/TestGameHistory.cpp
         src/Board.cpp

@@ -1,6 +1,7 @@
 #include "MCTS.hpp"
 
 #include "../BoardEncoding.hpp"
+#include "../ChessGameContract.hpp"
 #include "DirectSelfPlaySearch.hpp"
 #include "MoveEncoding.hpp"
 
@@ -44,7 +45,7 @@ MCTSResult gatherResult(const MCTSRoot &root) {
     VisitCounts visitCounts;
     visitCounts.reserve(rootNode.children.size());
     for (const Child &child : rootNode.children) {
-        visitCounts.emplace_back(encodeMove(child.move, &rootNode.board),
+        visitCounts.emplace_back(ChessGameContract::actionId(child.move, rootNode.board),
                                  static_cast<int>(child.number_of_visits));
     }
 
@@ -445,7 +446,8 @@ std::optional<NodeIndex> MCTS::getBestChildOrBackPropagate(MCTSRoot &root,
     }
 
     if (tree.node(selectedIndex).isTerminal()) {
-        tree.backPropagate(selectedIndex, getBoardResultScore(tree.node(selectedIndex).board));
+        tree.backPropagate(selectedIndex,
+                           ChessGameContract::terminalResult(tree.node(selectedIndex).board));
         return std::nullopt;
     }
     return selectedIndex;

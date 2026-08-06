@@ -1,5 +1,6 @@
 #include "DirectSelfPlaySearch.hpp"
 
+#include "../ChessGameContract.hpp"
 #include "../InferenceResultProcessing.hpp"
 #include "../MoveEncoding.hpp"
 
@@ -28,7 +29,7 @@ MCTSResult gatherDirectResult(const MCTSRoot &root) {
     VisitCounts visitCounts;
     visitCounts.reserve(rootNode.children.size());
     for (const Child &child : rootNode.children) {
-        visitCounts.emplace_back(encodeMove(child.move, &rootNode.board),
+        visitCounts.emplace_back(ChessGameContract::actionId(child.move, rootNode.board),
                                  static_cast<int>(child.number_of_visits));
     }
     return {root.resultSum() / static_cast<float>(root.visits()), visitCounts, root};
@@ -146,7 +147,8 @@ std::optional<NodeIndex> DirectSelfPlaySearch::selectLeaf(MCTSRoot &root) const 
         selectedIndex = tree.materializeChild(selectedIndex, childIndex);
     }
     if (tree.node(selectedIndex).isTerminal()) {
-        tree.backPropagate(selectedIndex, getBoardResultScore(tree.node(selectedIndex).board));
+        tree.backPropagate(selectedIndex,
+                           ChessGameContract::terminalResult(tree.node(selectedIndex).board));
         return std::nullopt;
     }
     return selectedIndex;
@@ -312,7 +314,8 @@ MCTSResults DirectSelfPlaySearch::search(const std::vector<MCTSBoard> &boards,
                         if (!task.root.isExpanded()) {
                             if (task.root.isTerminal()) {
                                 task.root.tree().backPropagate(
-                                    task.root.rootIndex(), getBoardResultScore(task.root.board()));
+                                    task.root.rootIndex(),
+                                    ChessGameContract::terminalResult(task.root.board()));
                                 ++completedSearches;
                                 continue;
                             }
@@ -331,8 +334,9 @@ MCTSResults DirectSelfPlaySearch::search(const std::vector<MCTSBoard> &boards,
                                 std::chrono::steady_clock::now() - selectionStartedAt)
                                 .count());
                         const auto encodingStartedAt = std::chrono::steady_clock::now();
-                        encodeBoardInto(task.root.tree().node(*selected).board,
-                                        writable.data + leaves.size() * ENCODED_BOARD_SIZE);
+                        ChessGameContract::encodeInputInto(
+                            task.root.tree().node(*selected).board,
+                            writable.data + leaves.size() * ENCODED_BOARD_SIZE);
                         m_encodingNanoseconds += static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 std::chrono::steady_clock::now() - encodingStartedAt)
@@ -405,7 +409,7 @@ MCTSResults DirectSelfPlaySearch::search(const std::vector<MCTSBoard> &boards,
 InferenceResult DirectSelfPlaySearch::evaluate(const Board &board) {
     DirectInferencePipeline &worker = *m_workers.front();
     const DirectInferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
-    encodeBoardInto(board, writable.data);
+    ChessGameContract::encodeInputInto(board, writable.data);
     worker.submit(writable.slotIndex, 1);
     bool outputReady = false;
     try {

@@ -4,7 +4,7 @@ import time
 from enum import Enum
 from pprint import pprint
 
-from src.settings import LOG_FOLDER
+from src.settings_common import LOG_FOLDER
 
 
 def datetime_str() -> str:

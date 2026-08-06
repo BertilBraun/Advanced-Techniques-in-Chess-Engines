@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.experiment.run_configuration import RunConfiguration, load_run_configuration
-from src.games.chess.ChessSettings import ensure_eval_dataset_exists
+from src.games.chess.evaluation_dataset import ensure_evaluation_dataset_exists
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -50,7 +50,7 @@ def prepare_dataset(
     dataset_path = SOURCE_ROOT / configured_path
 
     random.seed(configuration.workload.random_seed)
-    ensure_eval_dataset_exists(str(dataset_path))
+    ensure_evaluation_dataset_exists(dataset_path)
     if not dataset_path.is_file():
         raise ValueError(f'Evaluation dataset was not created: {dataset_path}')
 

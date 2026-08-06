@@ -5,15 +5,18 @@ import numpy.typing as npt
 
 
 from src.games.Game import Board
-from src.settings import CurrentGame, CurrentBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.settings import CurrentBoard
 from src.util.timing import timeit
 
 
-C, H, W = CurrentGame.representation_shape
+C = CHESS_STATE_CONTRACT.representation.channels
+H = CHESS_STATE_CONTRACT.representation.rows
+W = CHESS_STATE_CONTRACT.representation.columns
 NUM_BITS = C * H * W
 
-BINARY_CHANNELS = CurrentGame.binary_channels
-SCALAR_CHANNELS = CurrentGame.scalar_channels
+BINARY_CHANNELS = CHESS_STATE_CONTRACT.representation.binary_channels
+SCALAR_CHANNELS = CHESS_STATE_CONTRACT.representation.scalar_channels
 
 N_BB = len(BINARY_CHANNELS)
 N_SCALAR = len(SCALAR_CHANNELS)
@@ -183,7 +186,9 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
     :param board: The chess board to filter the policy with.
     :return: The filtered policy.
     """
-    legal_moves_encoded = CurrentGame.encode_moves(board.get_valid_moves(), board)
+    legal_moves_encoded = np.zeros(CHESS_STATE_CONTRACT.action_size)
+    for move in board.get_valid_moves():
+        legal_moves_encoded[CHESS_STATE_CONTRACT.encode_move(move, board)] = 1
     filtered_policy = policy * legal_moves_encoded
     policy_sum = np.sum(filtered_policy)
     if policy_sum == 0:
