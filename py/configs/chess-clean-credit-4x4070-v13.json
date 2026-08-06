@@ -55,7 +55,6 @@
     "max_concurrent_evaluation_tasks": 16
   },
   "workload": {
-    "games_per_replay_file": 100,
     "training_global_batch_size": 2048,
     "training_local_batch_size": 512,
     "credit_training": {

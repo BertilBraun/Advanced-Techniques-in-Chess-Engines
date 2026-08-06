@@ -249,7 +249,6 @@ class CreditTrainingConfiguration(FrozenModel):
 
 
 class WorkloadConfiguration(FrozenModel):
-    games_per_replay_file: int = Field(gt=0)
     training_global_batch_size: int = Field(gt=0)
     training_local_batch_size: int = Field(gt=0)
     credit_training: CreditTrainingConfiguration
@@ -698,7 +697,6 @@ def apply_run_configuration(
     if retention is None:
         raise ValueError('Artifact retention must be configured for training.')
     training_args.save_path = str(_resolve_source_path(configuration.output_path))
-    training_args.self_play.num_games_after_which_to_write = workload.games_per_replay_file
     training_args.training.global_batch_size = workload.training_global_batch_size
     training_args.training.local_batch_size = workload.training_local_batch_size
     training_args.training.credit_training = workload.credit_training.to_parameters()

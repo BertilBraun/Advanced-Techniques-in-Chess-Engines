@@ -121,17 +121,11 @@ class SelfPlayParams:
     low_material_termination_probability: float = 0.0
     """Probability of terminating the first eligible low-material position with a material result."""
 
-    only_store_sampled_moves: bool = False
-    """This is a flag to indicate whether states which are greedily sampled (after num_moves_after_which_to_play_greedy) should be stored in the self-play dataset. If this is set to True, only the moves that were sampled from the policy will be stored in the self-play dataset. If this is set to False, all moves that were played in self-play will be stored in the self-play dataset."""
-
     starting_temperature: float = 1.25
     """This is the sampling temperature to use for in self-play to sample new moves from the policy. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. Typically 1-2 for exploration and 0.1-0.5 for exploitation. This value is linearly interpolated to the final_temperature over the first num_moves_after_which_to_play_greedy moves."""
 
     final_temperature: float = 0.1
     """This is the final temperature to use for in self-play to sample new moves from the policy after num_moves_after_which_to_play_greedy moves. The higher the temperature the more random the moves are. The lower the temperature the more the moves are like the policy. A temperature of 1 is the same as the policy, a temperature of 0 is the argmax of the policy. See ``starting_temperature`` for more details."""
-
-    num_games_after_which_to_write: int = 5
-    """This is the number of games to collect before writing them to disk. Smaller values will write more often but will be slower. Larger values will write less often but will be faster. The larger the value, the longer the training delay might be, if not enough games are collected. Typically 5-50 for self-play."""
 
     resignation: ResignationParams = field(default_factory=ResignationParams)
     """Audit and production-resignation configuration. Both paths are disabled by default."""
