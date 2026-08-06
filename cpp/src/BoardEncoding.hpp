@@ -1,6 +1,8 @@
 #pragma once
 
 #include "common.hpp"
+#include "util/BitBoard.hpp"
+#include "util/PackedPlane.hpp"
 
 // ------------ board layout --------------------------------------------------
 // 12 piece-type bit-boards  (6 white + 6 black)
@@ -21,13 +23,15 @@ static_assert(BOARD_C == BINARY_C + SCALAR_C);
 // in-memory compressed format
 // ---------------------------------------------------------------------------
 struct CompressedEncodedBoard {
-    std::array<uint64, BINARY_C> bits; // 19 × 8  B
-    std::array<int8, SCALAR_C> scal;   //  6 × 1  B
+    std::array<BitBoard<BOARD_LEN>, BINARY_C> bits;
+    std::array<int8, SCALAR_C> scal;
 
     [[nodiscard]] bool operator==(const CompressedEncodedBoard &other) const noexcept {
         return bits == other.bits && scal == other.scal;
     }
 };
+
+using ChessPackedPlaneLayout = PackedPlaneLayout<BOARD_LEN, BINARY_C, SCALAR_C>;
 
 struct BoardFingerprint {
     uint64 first;
@@ -49,6 +53,8 @@ struct BoardFingerprintHash {
 [[nodiscard]] torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
 
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination);
+
+void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, int8 *destination);
 
 void encodeBoardInto(const Board &board, int8 *destination);
 

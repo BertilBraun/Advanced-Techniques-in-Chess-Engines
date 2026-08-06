@@ -195,6 +195,26 @@ add_executable(BlockingQueueTest test/TestBlockingQueue.cpp)
 target_include_directories(BlockingQueueTest PRIVATE src)
 add_test(NAME BlockingQueueTest COMMAND BlockingQueueTest)
 
+add_executable(BitBoardTest test/TestBitBoard.cpp)
+target_include_directories(BitBoardTest PRIVATE src)
+add_test(NAME BitBoardTest COMMAND BitBoardTest)
+
+add_executable(
+        PackedPlaneFixtureTest
+        test/TestPackedPlaneFixtures.cpp
+        src/Board.cpp
+        src/BoardEncoding.cpp
+        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+        "${stockfish_SOURCE_DIR}/src/memory.cpp"
+        "${stockfish_SOURCE_DIR}/src/misc.cpp"
+        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+        "${stockfish_SOURCE_DIR}/src/position.cpp"
+)
+target_include_directories(PackedPlaneFixtureTest PRIVATE src)
+target_compile_definitions(PackedPlaneFixtureTest PRIVATE SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(PackedPlaneFixtureTest PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+add_test(NAME PackedPlaneFixtureTest COMMAND PackedPlaneFixtureTest)
+
 add_executable(
         BoardLegalMovesCacheTest
         test/TestBoardLegalMovesCache.cpp

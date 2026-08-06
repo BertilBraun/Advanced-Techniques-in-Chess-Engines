@@ -31,6 +31,7 @@ __all__ = [
     'TimeInfo',
     'WdlPrediction',
     'encode_board_compressed',
+    'encode_board_packed_bytes',
     'new_eval_root',
     'new_root',
     'test_eval_mcts_speed_cpp',
@@ -127,6 +128,9 @@ class InteractiveGame:
 
 def encode_board_compressed(fen: str) -> tuple[list[int], list[int]]:
     """Encode a FEN into the canonical compressed binary and scalar planes."""
+
+def encode_board_packed_bytes(fen: str) -> bytes:
+    """Encode a FEN into the canonical packed plane-major byte layout."""
 
 class EvalMCTS:
     def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None: ...

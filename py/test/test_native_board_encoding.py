@@ -1,57 +1,41 @@
 from __future__ import annotations
 
-import chess
+import json
+from pathlib import Path
+
+import numpy as np
 import pytest
+
+from src.Encoding import decode_board_state, encode_board_state
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT
+
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp, 'encode_board_compressed'):
-    pytest.skip('AlphaZeroCpp must be rebuilt before native encoding tests run.', allow_module_level=True)
-
-ALL_SQUARES = (1 << 64) - 1
+if not hasattr(AlphaZeroCpp, 'encode_board_packed_bytes'):
+    pytest.skip('AlphaZeroCpp must be rebuilt before native packed-plane tests run.', allow_module_level=True)
 
 
-def expected_compressed_encoding(fen: str) -> tuple[list[int], list[int]]:
-    board = chess.Board(fen)
-    canonical = board if board.turn == chess.WHITE else board.mirror()
+_FIXTURE_PATH = Path(__file__).with_name('fixtures') / 'chess_packed_plane_fixtures.json'
+_FIXTURES: tuple[dict[str, str], ...] = tuple(json.loads(_FIXTURE_PATH.read_text(encoding='utf-8')))
 
-    binary_planes = [
-        int(canonical.pieces(piece_type, color))
-        for color in (chess.WHITE, chess.BLACK)
-        for piece_type in chess.PIECE_TYPES
-    ]
-    binary_planes.extend(
-        (
-            ALL_SQUARES * canonical.has_kingside_castling_rights(chess.WHITE),
-            ALL_SQUARES * canonical.has_queenside_castling_rights(chess.WHITE),
-            ALL_SQUARES * canonical.has_kingside_castling_rights(chess.BLACK),
-            ALL_SQUARES * canonical.has_queenside_castling_rights(chess.BLACK),
-            int(canonical.occupied_co[chess.WHITE]),
-            int(canonical.occupied_co[chess.BLACK]),
-            int(canonical.checkers()),
-            0 if canonical.ep_square is None else int(chess.BB_SQUARES[canonical.ep_square]),
-            0,
-            0,
-        )
+
+@pytest.mark.parametrize('fixture', _FIXTURES)
+def test_native_and_python_packed_layout_match_shared_fixture(fixture: dict[str, str]) -> None:
+    fen = fixture['fen']
+    expected_payload = bytes.fromhex(fixture['packed_hex'])
+    board = ChessBoard.from_fen(fen)
+    canonical_state = CHESS_STATE_CONTRACT.canonical_board(board).astype(np.int8, copy=False)
+
+    python_encoded = encode_board_state(canonical_state)
+    native_payload = AlphaZeroCpp.encode_board_packed_bytes(fen)
+    native_binary, native_scalar = AlphaZeroCpp.encode_board_compressed(fen)
+
+    assert python_encoded.payload == expected_payload
+    assert native_payload == expected_payload
+    assert tuple(native_binary) == tuple(
+        int.from_bytes(expected_payload[index * 8 : (index + 1) * 8], 'little') for index in range(len(native_binary))
     )
-
-    scalar_planes = [
-        len(canonical.pieces(piece_type, chess.WHITE)) - len(canonical.pieces(piece_type, chess.BLACK))
-        for piece_type in chess.PIECE_TYPES
-    ]
-    scalar_planes.append(min(canonical.halfmove_clock, 100))
-    return binary_planes, scalar_planes
-
-
-@pytest.mark.parametrize(
-    'fen',
-    (
-        'r3k2r/pppp3p/8/4pP2/8/8/PPPP1PPP/R3K2R w Qk e6 17 9',
-        'r3k2r/pppp1ppp/8/8/4Pp2/8/PPPP3P/R3K2R b Kq e3 17 9',
-        '4k3/8/8/8/8/8/4R3/4K3 b - - 142 1',
-    ),
-)
-def test_native_encoding_matches_canonical_plane_semantics(fen: str) -> None:
-    encoded_binary, encoded_scalar = AlphaZeroCpp.encode_board_compressed(fen)
-
-    assert (encoded_binary, encoded_scalar) == expected_compressed_encoding(fen)
+    assert tuple(native_scalar) == tuple(int(value) for value in expected_payload[len(native_binary) * 8 :])
+    np.testing.assert_array_equal(decode_board_state(python_encoded), canonical_state)

@@ -219,10 +219,27 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             -> std::pair<std::array<uint64, BINARY_C>, std::array<int8, SCALAR_C>> {
             const Board board(fen);
             const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
-            return {encoded.bits, encoded.scal};
+            std::array<uint64, BINARY_C> bitboards{};
+            for (int index = 0; index < BINARY_C; ++index) {
+                bitboards[static_cast<std::size_t>(index)] = encoded.bits[static_cast<std::size_t>(index)].word(0);
+            }
+            return {bitboards, encoded.scal};
         },
         py::arg("fen"),
         R"pbdoc(Encode a FEN into the canonical compressed binary and scalar planes.)pbdoc");
+
+    m.def(
+        "encode_board_packed_bytes",
+        [](const std::string &fen) {
+            const Board board(fen);
+            const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
+            std::string payload;
+            payload.resize(ChessPackedPlaneLayout::payload_bytes);
+            writePackedPlaneEncoding(encoded, reinterpret_cast<int8 *>(payload.data()));
+            return py::bytes(payload);
+        },
+        py::arg("fen"),
+        R"pbdoc(Encode a FEN into the canonical packed plane-major byte layout.)pbdoc");
 
     m.def("test_mcts_speed_cpp", &testMCTSSpeed, "Test the MCTS search speed",
           py::arg("numBoards") = 100, py::arg("numIterations") = 10,

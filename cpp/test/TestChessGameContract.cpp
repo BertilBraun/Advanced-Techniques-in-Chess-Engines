@@ -12,6 +12,9 @@ void require(const bool condition, const std::string &message) {
 } // namespace
 
 int main() {
+    Bitboards::init();
+    Position::init();
+
     const Board initial = ChessGameContract::initialPosition();
     require(!ChessGameContract::isTerminal(initial), "Initial chess position must not be terminal");
     require(
