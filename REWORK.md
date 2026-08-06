@@ -185,6 +185,23 @@ while Go histories store arrays of absolute black and white bitboards.
 Stockfish continues to use its own bitboard type inside chess rules. Conversion
 occurs only at the chess encoding boundary.
 
+Packed neural-network states use one explicit cross-language layout: binary
+planes are plane-major arrays of 64-bit words serialized in little-endian byte
+order, each plane's padding bits are zero, and the game-specific scalar payload
+follows in its declared scalar representation. C++ game-specific
+encoded-position types compose fixed-size bitboard arrays with their scalar
+storage. They may share
+mechanical serialization, hashing, equality, and tensor expansion without
+sharing plane meanings.
+
+Python uses a small immutable packed-plane value type backed by one contiguous
+payload rather than raw, untyped bytes. Board size, binary-plane count, scalar
+layout, and expected payload length belong to the game contract or type rather
+than each instance. Active replay does not allocate one Python object per
+plane or bitboard. Its measured per-sample overhead and projected memory at
+the configured 2.5-million-sample capacity are review evidence before the
+representation is accepted.
+
 `GoPosition<BoardSize, HistoryLength>` contains:
 
 - an array of historical boards, each with absolute black and white bitboards;
@@ -352,7 +369,7 @@ process group and records the resulting status.
 | R3 | Chess completed-game persistence and replay materialization | accepted |
 | R4 | Chess RAM replay, batch construction, and DDP integration | accepted |
 | R5 | Chess game-contract and configuration extraction | in_progress |
-| R6 | Shared bitboard and chess packed-plane integration | pending |
+| R6 | Shared bitboard and packed-plane representation | pending |
 | R7 | Native Go game implementation | pending |
 | R8 | Go pipeline integration | pending |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
@@ -515,7 +532,7 @@ Review evidence:
 
 The task ends for user inspection after the chess abstraction is complete.
 
-### R6 — Shared bitboard and chess packed-plane integration
+### R6 — Shared bitboard and packed-plane representation
 
 Deliverables:
 
@@ -525,11 +542,23 @@ Deliverables:
   storage read-only;
 - canonicalize padding bits when constructing or deserializing boards whose
   final word is only partially used;
+- define the canonical plane-major packed layout, including point mapping,
+  word order, byte order, scalar placement, and validation of payload length;
+- add a small immutable Python packed-plane value type backed by one
+  contiguous payload, with representation dimensions owned by the game
+  contract and no per-plane Python objects;
 - use `std::array<BitBoard<8>, BinaryPlaneCount>` for compact chess binary
   planes beside the existing scalar-plane array;
 - convert Stockfish bitboards only at the chess encoding boundary;
 - share mechanical word serialization, hashing, equality, and direct batch
-  expansion where chess and future Go representations have identical needs;
+  expansion where C++ chess and future Go representations have identical
+  needs;
+- make C++ and Python produce and consume the same packed layout, verified by
+  shared fixtures, without routing Python replay operations through native
+  bindings or deduplicating game-specific plane construction;
+- convert Python chess replay and batch construction from raw state bytes to
+  the packed-plane value type while retaining one contiguous payload per
+  sample;
 - update the chess completed-game, replay, and batch fixtures to the bitboard
   representation without changing their game-specific schemas or plane
   meanings.
@@ -539,7 +568,12 @@ Review evidence:
 - tests cover empty/full boards, point mapping, set algebra, iteration,
   multiword boards, and canonical padding for 7x7, 8x8, and 9x9;
 - serialized bitboards round-trip with stable word ordering and zeroed padding;
+- C++ and Python encode the shared fixtures to identical packed bytes and
+  decode them to identical tensors;
 - chess compact states and decoded batches match their pre-conversion fixtures;
+- replay metrics record the packed value type's per-sample overhead and
+  projected memory at 2.5 million samples, with no per-plane Python-object
+  allocation;
 - Stockfish rule and move-generation code continues to use its native bitboard
   representation.
 
@@ -555,6 +589,8 @@ Deliverables:
   the maximum-move safety result;
 - implement Go action encoding and decoding, network input encoding, hashing,
   and board symmetries required by the C++ contract;
+- represent Go neural-network inputs with game-specific binary-plane and
+  scalar semantics over the canonical packed layout established in R6;
 - expose focused bindings for independently exercising Go positions, actions,
   transitions, terminal results, scoring, and encoding;
 - adapt the extracted C++ contract where the concrete Go implementation
@@ -589,6 +625,8 @@ Deliverables:
 - add the Python Go implementation for compact samples, target construction,
   augmentation, batch encoding, model, loss, and coarse self-play
   orchestration;
+- use the R6 Python packed-plane value type for Go replay samples, adding only
+  Go-specific plane construction and augmentation;
 - extend the completed-game schema, target materializer, active replay, and
   batch construction path with their Go-specific representations;
 - connect Go completed-game publication, replay credits, DDP sampling, and
@@ -700,3 +738,4 @@ task.
 | 2026-08-05 | R8 | Open decision | Define the result target, sample eligibility, and weight for a Go game terminated by the maximum-move safety bound. | Decide before implementing safety-cap target materialization. |
 | 2026-08-06 | R3/R4 | Design change | The disk replay and its reanalysis sidecars were replaced together by completed-game archives and RAM snapshots; the reanalysis settings were removed rather than left inert in the new ownership model. | Review with the combined R3/R4 implementation; any future reanalysis design must use completed-game or snapshot ownership explicitly. |
 | 2026-08-06 | R3/R4 | Design change | Archive frame headers retain identity, credit totals, and eligible-sample counts so restart scans metadata but materializes only the newest capacity-sized tail. Memory mapping is deferred because the current object replay would require a second packed columnar representation and 10 GB across four ranks is acceptable. | Reconsider shared read-only memory only if target-hardware measurements show RAM or DDP snapshot publication is limiting. |
+| 2026-08-06 | R6 | Design change | R6 establishes the packed-plane representation needed by Go before implementing Go: tested fixed-size C++ bitboards, one explicit cross-language layout, a contiguous Python packed value type, and a behavior-preserving chess integration. | Share storage mechanics and fixtures, not chess/Go plane semantics; prohibit per-plane Python objects and review projected replay memory before acceptance. |
