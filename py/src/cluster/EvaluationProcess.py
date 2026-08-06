@@ -30,7 +30,7 @@ from src.experiment.evaluation_schedule import (
     evaluation_device_for_task,
     select_historical_model_versions,
 )
-from src.experiment.chess_run import ChessRunManifest
+from src.experiment.chess_run import ExperimentRunManifest
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
@@ -50,7 +50,7 @@ class EvaluationRunProvenance:
 
 def load_evaluation_run_provenance(save_path: str) -> EvaluationRunProvenance:
     run_manifest_path = Path(save_path) / 'run_manifest.json'
-    run_manifest = ChessRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    run_manifest = ExperimentRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
     return EvaluationRunProvenance(
         source_revision=run_manifest.source_revision,
         stockfish_binary_sha256=run_manifest.stockfish_binary_sha256,

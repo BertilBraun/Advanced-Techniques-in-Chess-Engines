@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.experiment.chess_experiment import load_chess_experiment_configuration
-from src.experiment.chess_run import ChessRunManifest, experiment_sha256
+from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.train.CreditPublication import (
     PublicationValidationScope,
@@ -23,9 +23,9 @@ from src.util.save_paths import CheckpointManifest
 CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-default-experiment.yaml'
 
 
-def _write_run_manifest(run_path: Path, source_revision: str = 'a' * 40) -> ChessRunManifest:
+def _write_run_manifest(run_path: Path, source_revision: str = 'a' * 40) -> ExperimentRunManifest:
     experiment = load_chess_experiment_configuration(CONFIGURATION_PATH)
-    manifest = ChessRunManifest(
+    manifest = ExperimentRunManifest(
         experiment=experiment,
         approval=ApprovalRecord(
             approved_by='test',

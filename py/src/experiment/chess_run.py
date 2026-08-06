@@ -12,9 +12,12 @@ import torch
 
 from src.experiment.chess_experiment import (
     ChessExperimentConfiguration,
+    ExperimentConfiguration,
+    GoExperimentConfiguration,
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
+from src.Network import NetworkDimensions
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
 from src.util.atomic_file import write_text_atomically
@@ -25,8 +28,8 @@ from src.util.save_paths import create_model, create_optimizer, load_model, mode
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
 
 
-class ChessRunManifest(FrozenModel):
-    experiment: ChessExperimentConfiguration
+class ExperimentRunManifest(FrozenModel):
+    experiment: ExperimentConfiguration
     approval: ApprovalRecord
     resolved_hardware: ResolvedHardware
     source_revision: str
@@ -39,7 +42,7 @@ class ChessRunManifest(FrozenModel):
     cuda_version: str | None
 
 
-def experiment_sha256(experiment: ChessExperimentConfiguration) -> str:
+def experiment_sha256(experiment: ExperimentConfiguration) -> str:
     return hashlib.sha256(experiment.model_dump_json().encode('utf-8')).hexdigest()
 
 
@@ -107,7 +110,7 @@ def _validate_hardware(experiment: ChessExperimentConfiguration, hardware: Resol
 
 
 def _validate_approval(
-    experiment: ChessExperimentConfiguration,
+    experiment: ExperimentConfiguration,
     approval: ApprovalRecord,
     source_revision: str,
 ) -> None:
@@ -127,13 +130,13 @@ def _validate_approval(
         and approval.maximum_wall_time_minutes == int(limits.maximum_wall_time_seconds / 60)
     )
     if not expected:
-        raise ValueError('Approval does not match the requested chess experiment.')
+        raise ValueError('Approval does not match the requested experiment.')
 
 
-def _write_manifest(path: Path, manifest: ChessRunManifest) -> ChessRunManifest:
+def _write_manifest(path: Path, manifest: ExperimentRunManifest) -> ExperimentRunManifest:
     serialized = manifest.model_dump_json(indent=2)
     if path.exists():
-        existing = ChessRunManifest.model_validate_json(path.read_text(encoding='utf-8'))
+        existing = ExperimentRunManifest.model_validate_json(path.read_text(encoding='utf-8'))
         current = existing.model_copy(update={'resolved_hardware': manifest.resolved_hardware})
         if current == manifest:
             return existing
@@ -146,11 +149,11 @@ def _write_manifest(path: Path, manifest: ChessRunManifest) -> ChessRunManifest:
     return manifest
 
 
-def prepare_chess_training_run(
-    experiment: ChessExperimentConfiguration,
+def prepare_experiment_training_run(
+    experiment: ExperimentConfiguration,
     expected_source_revision: str,
     approval_path: Path,
-) -> ChessRunManifest:
+) -> ExperimentRunManifest:
     hardware = _resolved_hardware()
     _validate_hardware(experiment, hardware)
     source_revision = _git_output(['rev-parse', 'HEAD'])
@@ -161,7 +164,7 @@ def prepare_chess_training_run(
 
     run = experiment.run
     training = experiment.training
-    evaluation = experiment.chess.evaluation
+    evaluation = experiment.chess.evaluation if isinstance(experiment, ChessExperimentConfiguration) else None
     if run.hardware.provider_name.casefold() == 'unconfirmed' or run.hardware.offer_id.casefold() == 'unconfirmed':
         raise ValueError('Hardware provider and offer ID must be confirmed before training.')
     dependency_lock_path = _resolve_source_path(run.environment.dependency_lock_path)
@@ -180,13 +183,25 @@ def prepare_chess_training_run(
     if training.limits.maximum_open_file_count >= open_file_soft_limit:
         raise ValueError('Open-file safety stop must be lower than the process soft limit.')
 
-    opening_suite_path = _resolve_source_path(evaluation.opening_suite_path) if evaluation.opening_suite_path else None
-    if opening_suite_path is not None and evaluation.num_games != len(load_opening_suite(opening_suite_path)) * 2:
+    opening_suite_path = (
+        _resolve_source_path(evaluation.opening_suite_path)
+        if evaluation is not None and evaluation.opening_suite_path
+        else None
+    )
+    if (
+        opening_suite_path is not None
+        and evaluation is not None
+        and evaluation.num_games != len(load_opening_suite(opening_suite_path)) * 2
+    ):
         raise ValueError('Evaluation game count must cover every opening with both colors.')
-    dataset_path = _resolve_source_path(evaluation.dataset_path) if evaluation.dataset_path else None
+    dataset_path = (
+        _resolve_source_path(evaluation.dataset_path) if evaluation is not None and evaluation.dataset_path else None
+    )
     if dataset_path is not None and not dataset_path.is_file():
         raise ValueError(f'Evaluation dataset does not exist: {dataset_path}')
-    stockfish_path = Path(evaluation.stockfish_binary_path) if evaluation.stockfish_binary_path else None
+    stockfish_path = (
+        Path(evaluation.stockfish_binary_path) if evaluation is not None and evaluation.stockfish_binary_path else None
+    )
     if stockfish_path is not None and not stockfish_path.is_file():
         raise ValueError(f'Stockfish binary does not exist: {stockfish_path}')
 
@@ -197,23 +212,45 @@ def prepare_chess_training_run(
     manifest_path = output_path / 'run_manifest.json'
     initial_checkpoint_path = model_save_path(0, output_path)
     optimizer_type = training.trainer.optimizer
-    device = torch.device(training.topology.trainer.device_type, training.topology.trainer.rank_zero_device_id)
+    device = (
+        torch.device('cpu')
+        if training.topology.trainer.device_type == 'cpu'
+        else torch.device('cuda', training.topology.trainer.rank_zero_device_id)
+    )
+    dimensions = (
+        NetworkDimensions(
+            experiment.go.representation.channel_count,
+            experiment.go.representation.board_size,
+            experiment.go.representation.board_size,
+            experiment.go.representation.action_count,
+        )
+        if isinstance(experiment, GoExperimentConfiguration)
+        else None
+    )
     match run.resume:
         case WeightsOnlyResumeConfiguration(model_path=model_path):
             initial_model_path = _resolve_source_path(model_path)
             if not initial_model_path.is_file():
                 raise ValueError(f'Initial model does not exist: {initial_model_path}')
             if not initial_checkpoint_path.exists():
-                model = load_model(initial_model_path, training.network, device)
+                model = (
+                    load_model(initial_model_path, training.network, device, dimensions)
+                    if dimensions
+                    else load_model(initial_model_path, training.network, device)
+                )
                 save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
         case RandomInitializationResumeConfiguration():
             if initial_checkpoint_path.exists() and not manifest_path.exists():
                 raise ValueError(f'Random checkpoint exists without a run manifest: {initial_checkpoint_path}')
             if not initial_checkpoint_path.exists():
-                model = create_model(training.network, device)
+                model = (
+                    create_model(training.network, device, dimensions)
+                    if dimensions
+                    else create_model(training.network, device)
+                )
                 save_model_and_optimizer(model, create_optimizer(model, optimizer_type), 0, output_path)
 
-    manifest = ChessRunManifest(
+    manifest = ExperimentRunManifest(
         experiment=experiment,
         approval=approval,
         resolved_hardware=hardware,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -12,8 +13,11 @@ if not hasattr(AlphaZeroCpp, 'GoBatchedSearch7'):
     pytest.skip('AlphaZeroCpp must be rebuilt with the R8 Go pipeline.', allow_module_level=True)
 
 from src.experiment.chess_experiment import GoExperimentConfiguration, load_experiment_configuration
+from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
+from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
 from src.games.go.training import calculate_go_loss, create_go_model
+from src.cluster.GoTrainingLifecycle import GoTrainingLifecycle
 from src.self_play.chess_completed_game import SparseSearchVisit
 from src.self_play.go_completed_game import (
     GoCompletedGame,
@@ -34,6 +38,7 @@ from src.train.GoReplay import (
     materialize_go_game,
     rebuild_go_replay,
 )
+from src.util.save_paths import create_optimizer, save_model_and_optimizer
 
 
 def _configuration() -> GoExperimentConfiguration:
@@ -208,3 +213,124 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     self_play.refresh_model(1, refreshed_model)
     assert root.visits == 0
     assert self_play.search.model_generation == 1
+
+
+def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
+    configuration = _configuration()
+    search = configuration.training.self_play.search.validated_copy(
+        update={'num_searches_per_turn': 4, 'num_parallel_searches': 1}
+    )
+    inference = configuration.training.self_play.inference.validated_copy(update={'inference_batch_size': 2})
+    self_play_parameters = configuration.training.self_play.validated_copy(
+        update={
+            'search': search.model_dump(mode='json'),
+            'inference': inference.model_dump(mode='json'),
+            'num_moves_after_which_to_play_greedy': 1,
+        }
+    )
+    trainer = configuration.training.trainer.validated_copy(
+        update={
+            'global_batch_size': 2,
+            'local_batch_size': 2,
+            'learning_rate': configuration.training.trainer.learning_rate.validated_copy(
+                update={'optimizer_steps_per_model_version': 1}
+            ).model_dump(mode='json'),
+        }
+    )
+    topology = configuration.training.topology.validated_copy(
+        update={
+            'self_play': configuration.training.topology.self_play.validated_copy(
+                update={'parallel_games_per_process': 1}
+            ).model_dump(mode='json')
+        }
+    )
+    credit = configuration.training.lifecycle.credit.validated_copy(
+        update={
+            'replay_ratio': 1,
+            'optimizer_steps_per_quantum': 1,
+            'maximum_optimizer_steps': 1,
+            'initial_replay_capacity_unique_positions': 10,
+            'maximum_replay_capacity_unique_positions': 10,
+            'replay_capacity_ramp_model_versions': 1,
+            'retained_checkpoint_interval_steps': 1,
+        }
+    )
+    evaluation = configuration.training.lifecycle.evaluation.validated_copy(
+        update={'interval_optimizer_steps': 1, 'full_interval_optimizer_steps': 1}
+    )
+    lifecycle = configuration.training.lifecycle.validated_copy(
+        update={
+            'credit': credit.model_dump(mode='json'),
+            'evaluation': evaluation.model_dump(mode='json'),
+        }
+    )
+    training = configuration.training.validated_copy(
+        update={
+            'save_path': str(tmp_path),
+            'self_play': self_play_parameters.model_dump(mode='json'),
+            'trainer': trainer.model_dump(mode='json'),
+            'topology': topology.model_dump(mode='json'),
+            'lifecycle': lifecycle.model_dump(mode='json'),
+        }
+    )
+    return configuration.validated_copy(update={'training': training.model_dump(mode='json')})
+
+
+def _write_go_run_manifest(run_path: Path, configuration: GoExperimentConfiguration) -> None:
+    manifest = ExperimentRunManifest(
+        experiment=configuration,
+        approval=ApprovalRecord(
+            approved_by='test',
+            approved_at_utc=datetime.now(timezone.utc),
+            run_name=configuration.run.run_name,
+            source_revision='a' * 40,
+            configuration_sha256=experiment_sha256(configuration),
+            provider_name=configuration.run.hardware.provider_name,
+            offer_id=configuration.run.hardware.offer_id,
+            cost_currency=configuration.training.limits.cost_currency,
+            hourly_price=configuration.training.limits.hourly_price,
+            maximum_cost=None,
+            maximum_wall_time_minutes=360,
+        ),
+        resolved_hardware=ResolvedHardware(
+            visible_gpu_names=(),
+            visible_gpu_count=0,
+            logical_cpu_count=1,
+            total_ram_gib=8,
+            free_disk_gib=8,
+        ),
+        source_revision='a' * 40,
+        source_worktree_clean=True,
+        initial_model_sha256='b' * 64,
+        evaluation_dataset_sha256=None,
+        stockfish_binary_sha256=None,
+        open_file_soft_limit=1024,
+        torch_version=torch.__version__,
+        cuda_version=None,
+    )
+    (run_path / 'run_manifest.json').write_text(manifest.model_dump_json(indent=2) + '\n', encoding='utf-8')
+
+
+def test_go_credit_lifecycle_publication_and_recovery(tmp_path: Path) -> None:
+    configuration = _smoke_configuration(tmp_path)
+    model = create_go_model(configuration, torch.device('cpu'))
+    policy_output = model.policyHead[-1]
+    assert isinstance(policy_output, torch.nn.Linear)
+    with torch.no_grad():
+        policy_output.weight.zero_()
+        policy_output.bias.fill_(-20.0)
+        policy_output.bias[49] = 20.0
+    optimizer = create_optimizer(model, configuration.training.trainer.optimizer)
+    save_model_and_optimizer(model, optimizer, 0, tmp_path)
+    _write_go_run_manifest(tmp_path, configuration)
+
+    lifecycle = GoTrainingLifecycle(run_id=9, configuration=configuration)
+    result = lifecycle.run_one_quantum()
+    assert result.progress.model_version == 1
+    assert result.progress.completed_optimizer_steps == 1
+    assert (tmp_path / 'credit-publications' / 'model-version-0000000001.json').is_file()
+
+    recovered = GoTrainingLifecycle(run_id=9, configuration=configuration)
+    assert recovered.ledger.progress == result.progress
+    assert recovered.self_play.search.model_generation == 1
+    assert recovered.replay.maintain(10).credited_samples >= 2

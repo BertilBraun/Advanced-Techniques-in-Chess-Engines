@@ -37,24 +37,26 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS, USE_GPU, get_run_id
+    from src.settings import EXPERIMENT, TRAINING_ARGS, USE_GPU, get_run_id
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
     from src.util.tensorboard import configure_tensorboard_run_directory
     from src.experiment.chess_experiment import (
-        write_resolved_chess_experiment,
+        ChessExperimentConfiguration,
+        GoExperimentConfiguration,
+        write_resolved_experiment,
     )
-    from src.experiment.chess_run import prepare_chess_training_run
+    from src.experiment.chess_run import prepare_experiment_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
         RunOutcomeStatus,
         write_run_outcome,
     )
 
-    chess_experiment = CHESS_EXPERIMENT
-    run_configuration = chess_experiment.run
+    experiment = EXPERIMENT
+    run_configuration = experiment.run
     configure_tensorboard_run_directory(run_configuration.tensorboard_run_directory)
 
     random.seed(TRAINING_ARGS.random_seed)
@@ -71,12 +73,12 @@ if __name__ == '__main__':
     log(f'Run ID: {run}')
 
     run_started_at = monotonic()
-    manifest = prepare_chess_training_run(
-        chess_experiment,
+    manifest = prepare_experiment_training_run(
+        experiment,
         command_line_arguments.expected_source_revision,
         command_line_arguments.approval_file,
     )
-    write_resolved_chess_experiment(Path(TRAINING_ARGS.save_path) / 'resolved-chess-experiment.json', chess_experiment)
+    write_resolved_experiment(Path(TRAINING_ARGS.save_path) / 'resolved-experiment.json', experiment)
     log('Resolved run manifest:')
     log(manifest.model_dump(), use_pprint=True)
 
@@ -95,15 +97,24 @@ if __name__ == '__main__':
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
-    commander = CommanderProcess(
-        run,
-        TRAINING_ARGS,
-        chess_experiment.chess.evaluation,
-        run_started_at,
-    )
+    go_lifecycle = None
+    if isinstance(experiment, ChessExperimentConfiguration):
+        commander = CommanderProcess(
+            run,
+            TRAINING_ARGS,
+            experiment.chess.evaluation,
+            run_started_at,
+        )
+        training_results = commander.run()
+    elif isinstance(experiment, GoExperimentConfiguration):
+        from src.cluster.GoTrainingLifecycle import GoTrainingLifecycle
+
+        go_lifecycle = GoTrainingLifecycle(run, experiment)
+        training_results = go_lifecycle.run()
+        commander = None
     outcome_path = Path(TRAINING_ARGS.save_path) / 'run-outcome.json'
     try:
-        for _ in commander.run():
+        for _ in training_results:
             pass
     except Exception as error:
         write_run_outcome(
@@ -113,22 +124,30 @@ if __name__ == '__main__':
             run_started_at,
             TRAINING_ARGS.limits.cost_currency,
             TRAINING_ARGS.limits.hourly_price,
-            commander.latest_completed_model_version,
+            commander.latest_completed_model_version
+            if commander is not None
+            else go_lifecycle.ledger.progress.model_version,
         )
         raise
     finally:
         gpu_usage_logger.stop()
         resource_telemetry.stop()
 
-    outcome_status = RunOutcomeStatus.STOPPED if commander.final_stop_reason is not None else RunOutcomeStatus.COMPLETED
+    outcome_status = (
+        RunOutcomeStatus.STOPPED
+        if commander is not None and commander.final_stop_reason is not None
+        else RunOutcomeStatus.COMPLETED
+    )
     write_run_outcome(
         outcome_path,
         outcome_status,
-        commander.final_stop_reason,
+        commander.final_stop_reason if commander is not None else None,
         run_started_at,
         TRAINING_ARGS.limits.cost_currency,
         TRAINING_ARGS.limits.hourly_price,
-        commander.latest_completed_model_version,
+        commander.latest_completed_model_version
+        if commander is not None
+        else go_lifecycle.ledger.progress.model_version,
     )
 
     log('Training finished')

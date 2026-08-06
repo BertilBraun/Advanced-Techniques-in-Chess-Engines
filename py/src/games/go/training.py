@@ -34,12 +34,28 @@ def calculate_go_loss(
     objective: GoTrainingObjectiveConfiguration,
 ) -> GoLoss:
     states = batch.states.to(model.device)
-    policy_targets = batch.policy_targets.to(model.device)
-    final_outcomes = batch.final_outcomes.to(model.device)
-    root_values = batch.mcts_root_values.to(model.device)
-    sample_weights = batch.sample_weights.to(model.device)
-    sample_weights = sample_weights / sample_weights.mean()
     policy_logits, value_logits = model.logit_forward(states)
+    return calculate_go_loss_from_logits(
+        policy_logits,
+        value_logits,
+        batch,
+        objective,
+        model.device,
+    )
+
+
+def calculate_go_loss_from_logits(
+    policy_logits: torch.Tensor,
+    value_logits: torch.Tensor,
+    batch: TrainingBatch,
+    objective: GoTrainingObjectiveConfiguration,
+    device: torch.device,
+) -> GoLoss:
+    policy_targets = batch.policy_targets.to(device)
+    final_outcomes = batch.final_outcomes.to(device)
+    root_values = batch.mcts_root_values.to(device)
+    sample_weights = batch.sample_weights.to(device)
+    sample_weights = sample_weights / sample_weights.mean()
     policy_rows = functional.cross_entropy(policy_logits, policy_targets, reduction='none')
     policy_loss = (policy_rows * sample_weights).mean()
     outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(value_logits.dtype) - final_outcomes.eq(

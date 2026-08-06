@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.util.frozen_model import FrozenModel
 
-from src.Network import Network
+from src.Network import CHESS_NETWORK_DIMENSIONS, Network, NetworkDimensions
 from src.train.TrainingArgs import NetworkParams, OptimizerType
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
@@ -101,8 +101,12 @@ def load_checkpoint_manifest(
     return manifest
 
 
-def create_model(args: NetworkParams, device: torch.device) -> Network:
-    model = Network(args, device)
+def create_model(
+    args: NetworkParams,
+    device: torch.device,
+    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+) -> Network:
+    model = Network(args, device, dimensions)
     # Not possible with JIT and model fusion model = try_compile(model)
     return model
 
@@ -115,8 +119,13 @@ def create_optimizer(model: Network, type: OptimizerType) -> torch.optim.Optimiz
     raise ValueError(f'Optimizer type {type} not supported. Supported types: adamw, sgd')
 
 
-def load_model(path: str | PathLike, args: NetworkParams, device: torch.device) -> Network:
-    model = create_model(args, device)
+def load_model(
+    path: str | PathLike,
+    args: NetworkParams,
+    device: torch.device,
+    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+) -> Network:
+    model = create_model(args, device, dimensions)
     try:
         for _ in range(5):
             try:
@@ -186,11 +195,16 @@ def load_optimizer(
 
 
 def load_model_and_optimizer(
-    iteration: int, args: NetworkParams, device: torch.device, save_folder: str | PathLike, type: OptimizerType
+    iteration: int,
+    args: NetworkParams,
+    device: torch.device,
+    save_folder: str | PathLike,
+    type: OptimizerType,
+    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
 ) -> tuple[Network, torch.optim.Optimizer]:
     manifest_path = checkpoint_manifest_path(iteration, save_folder)
     if iteration == 0 and not manifest_path.exists():
-        model = create_model(args, device)
+        model = create_model(args, device, dimensions)
         optimizer = create_optimizer(model, type)
         log('Created a new model and optimizer for iteration 0.')
         return model, optimizer
@@ -198,7 +212,7 @@ def load_model_and_optimizer(
         raise ValueError(f'Checkpoint iteration cannot be negative: {iteration}')
 
     manifest = load_checkpoint_manifest(iteration, save_folder)
-    model = load_model(Path(save_folder) / manifest.model_path, args, device)
+    model = load_model(Path(save_folder) / manifest.model_path, args, device, dimensions)
     optimizer = load_optimizer(Path(save_folder) / manifest.optimizer_path, model, type, device)
     log(f'Model and optimizer loaded from iteration {iteration}')
     return model, optimizer
