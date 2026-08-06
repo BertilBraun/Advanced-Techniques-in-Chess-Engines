@@ -36,6 +36,12 @@ assert N_BB + N_SCALAR == C, 'Total number of channels must match the representa
 
 
 def encode_board_state(state: npt.NDArray[np.int8]) -> PackedPlanePayload:
+    """
+    Compress a canonical chess tensor into the packed plane-major payload.
+
+    Binary channels are serialized as little-endian 64-bit words and scalar
+    channels are stored as one signed byte each after the binary section.
+    """
     return encode_packed_planes(
         state,
         PACKED_PLANES,
@@ -45,6 +51,7 @@ def encode_board_state(state: npt.NDArray[np.int8]) -> PackedPlanePayload:
 
 
 def decode_board_state(encoded_state: PackedPlanePayload) -> npt.NDArray[np.int8]:
+    """Expand one packed chess payload back into the canonical `(C, H, W)` tensor."""
     decoded = decode_packed_planes(
         encoded_state,
         PACKED_PLANES,
@@ -55,6 +62,7 @@ def decode_board_state(encoded_state: PackedPlanePayload) -> npt.NDArray[np.int8
 
 
 def decode_board_states(encoded_states: Sequence[PackedPlanePayload]) -> npt.NDArray[np.int8]:
+    """Decode a batch of packed chess payloads with vectorized NumPy operations."""
     return decode_packed_planes_batch(
         encoded_states,
         PACKED_PLANES,
@@ -67,6 +75,7 @@ def decode_board_states_into(
     encoded_states: Sequence[PackedPlanePayload],
     output: npt.NDArray[np.float32],
 ) -> None:
+    """Decode packed chess payloads directly into a preallocated float32 batch tensor."""
     decode_packed_planes_into(
         encoded_states,
         PACKED_PLANES,
@@ -77,6 +86,12 @@ def decode_board_states_into(
 
 
 def get_board_result_score(board: Board) -> float | None:
+    """
+    Return the terminal score from the current player's perspective.
+
+    The score is `-1.0` for checkmate, `0.0` for a draw, and `None` while the
+    game is still in progress.
+    """
     if not board.is_game_over():
         return None
 
@@ -92,12 +107,14 @@ MoveScore = tuple[int, float]
 
 @timeit
 def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[MoveScore]:
+    """Filter a policy by the legal move set and return the nonzero move scores."""
     filtered_policy = __filter_policy_with_legal_moves(policy, board)
     moves_with_probabilities = __map_policy_to_moves(filtered_policy)
     return moves_with_probabilities
 
 
 def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) -> np.ndarray:
+    """Zero illegal actions and renormalize the remaining legal policy mass."""
     legal_moves_encoded = np.zeros(CHESS_STATE_CONTRACT.action_size)
     for move in board.get_valid_moves():
         legal_moves_encoded[CHESS_STATE_CONTRACT.encode_move(move, board)] = 1
@@ -111,6 +128,7 @@ def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) ->
 
 
 def __map_policy_to_moves(policy: np.ndarray) -> list[MoveScore]:
+    """Return `(action_id, probability)` pairs for the nonzero policy entries."""
     nonzero_indices = np.nonzero(policy > 0)[0]
     moves_with_probabilities = list(zip(nonzero_indices, policy[nonzero_indices]))
     return moves_with_probabilities

@@ -31,7 +31,9 @@ struct CompressedEncodedBoard {
     }
 };
 
-using ChessPackedPlaneLayout = PackedPlaneLayout<BOARD_LEN, BINARY_C, SCALAR_C>;
+inline constexpr std::size_t CHESS_PACKED_BINARY_BYTES = packed_binary_plane_bytes<BOARD_LEN, BINARY_C>;
+inline constexpr std::size_t CHESS_PACKED_BYTES =
+    CHESS_PACKED_BINARY_BYTES + static_cast<std::size_t>(SCALAR_C) * sizeof(int8);
 
 struct BoardFingerprint {
     uint64 first;

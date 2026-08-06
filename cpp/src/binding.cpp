@@ -214,27 +214,12 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         R"pbdoc(Create a fixed-capacity MCTS root by replaying bounded UCI history.)pbdoc");
 
     m.def(
-        "encode_board_compressed",
-        [](const std::string &fen)
-            -> std::pair<std::array<uint64, BINARY_C>, std::array<int8, SCALAR_C>> {
-            const Board board(fen);
-            const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
-            std::array<uint64, BINARY_C> bitboards{};
-            for (int index = 0; index < BINARY_C; ++index) {
-                bitboards[static_cast<std::size_t>(index)] = encoded.bits[static_cast<std::size_t>(index)].word(0);
-            }
-            return {bitboards, encoded.scal};
-        },
-        py::arg("fen"),
-        R"pbdoc(Encode a FEN into the canonical compressed binary and scalar planes.)pbdoc");
-
-    m.def(
         "encode_board_packed_bytes",
         [](const std::string &fen) {
             const Board board(fen);
             const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
             std::string payload;
-            payload.resize(ChessPackedPlaneLayout::payload_bytes);
+            payload.resize(CHESS_PACKED_BYTES);
             writePackedPlaneEncoding(encoded, reinterpret_cast<int8 *>(payload.data()));
             return py::bytes(payload);
         },

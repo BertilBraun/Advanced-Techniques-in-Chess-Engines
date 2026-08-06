@@ -10,6 +10,8 @@ import numpy.typing as npt
 
 @dataclass(frozen=True)
 class PackedPlaneLayout:
+    """Game-owned dimensions for one canonical packed binary-plus-scalar layout."""
+
     board_size: int
     binary_plane_count: int
     scalar_count: int
@@ -54,6 +56,8 @@ class PackedPlaneLayout:
 
 @dataclass(frozen=True)
 class PackedPlanePayload:
+    """Immutable contiguous packed state value used by replay and batch code."""
+
     payload: bytes
 
     def __bytes__(self) -> bytes:
@@ -89,6 +93,7 @@ def encode_packed_planes(
     binary_channels: tuple[int, ...],
     scalar_channels: tuple[int, ...],
 ) -> PackedPlanePayload:
+    """Pack binary planes first and append scalar bytes after the binary section."""
     _validate_state_shape(state, layout, binary_channels, scalar_channels)
     plane_byte_count = layout.word_count * 8
     binary_payload = bytearray(layout.binary_bytes)
@@ -107,6 +112,7 @@ def decode_packed_planes(
     binary_channels: tuple[int, ...],
     scalar_channels: tuple[int, ...],
 ) -> npt.NDArray[np.int8]:
+    """Decode one packed payload into an `int8` tensor."""
     decoded_float = np.zeros(
         (
             layout.binary_plane_count + layout.scalar_count,
@@ -127,6 +133,7 @@ def _normalized_payload_bytes(
 ) -> npt.NDArray[np.uint8]:
     if not encoded_states:
         return np.empty((0, layout.payload_bytes), dtype=np.uint8)
+    # Replay stores one contiguous payload per sample, so batching is just concatenation.
     payload = b''.join(layout.validate_payload_length(state.payload) for state in encoded_states)
     return np.frombuffer(payload, dtype=np.uint8).reshape(len(encoded_states), layout.payload_bytes)
 
@@ -137,6 +144,7 @@ def decode_packed_planes_batch(
     binary_channels: tuple[int, ...],
     scalar_channels: tuple[int, ...],
 ) -> npt.NDArray[np.int8]:
+    """Decode a batch of packed payloads into an `int8` tensor."""
     decoded_float = np.zeros(
         (
             len(encoded_states),
@@ -157,6 +165,7 @@ def decode_packed_planes_into(
     scalar_channels: tuple[int, ...],
     output: npt.NDArray[np.float32],
 ) -> None:
+    """Decode packed payloads directly into a caller-owned float32 output tensor."""
     expected_shape = (
         len(encoded_states),
         layout.binary_plane_count + layout.scalar_count,
@@ -177,6 +186,7 @@ def decode_packed_planes_into(
         plane_byte_count,
     )
     binary_bits = np.unpackbits(binary_bytes, axis=2, bitorder='little')
+    # Padding bits must stay zero so C++ and Python have one canonical byte layout.
     if layout.padding_bits and np.any(binary_bits[:, :, layout.bit_count :]):
         raise ValueError('Packed-plane payload contains nonzero padding bits.')
     trimmed_bits = binary_bits[:, :, : layout.bit_count]

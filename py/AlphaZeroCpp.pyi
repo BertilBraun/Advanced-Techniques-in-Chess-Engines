@@ -30,7 +30,6 @@ __all__ = [
     'InteractiveSearchParams',
     'TimeInfo',
     'WdlPrediction',
-    'encode_board_compressed',
     'encode_board_packed_bytes',
     'new_eval_root',
     'new_root',
@@ -125,9 +124,6 @@ class InteractiveGame:
     def moves_uci(self) -> list[str]: ...
     @property
     def root_visits(self) -> int: ...
-
-def encode_board_compressed(fen: str) -> tuple[list[int], list[int]]:
-    """Encode a FEN into the canonical compressed binary and scalar planes."""
 
 def encode_board_packed_bytes(fen: str) -> bytes:
     """Encode a FEN into the canonical packed plane-major byte layout."""

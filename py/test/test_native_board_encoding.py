@@ -30,12 +30,7 @@ def test_native_and_python_packed_layout_match_shared_fixture(fixture: dict[str,
 
     python_encoded = encode_board_state(canonical_state)
     native_payload = AlphaZeroCpp.encode_board_packed_bytes(fen)
-    native_binary, native_scalar = AlphaZeroCpp.encode_board_compressed(fen)
 
     assert python_encoded.payload == expected_payload
     assert native_payload == expected_payload
-    assert tuple(native_binary) == tuple(
-        int.from_bytes(expected_payload[index * 8 : (index + 1) * 8], 'little') for index in range(len(native_binary))
-    )
-    assert tuple(native_scalar) == tuple(int(value) for value in expected_payload[len(native_binary) * 8 :])
     np.testing.assert_array_equal(decode_board_state(python_encoded), canonical_state)

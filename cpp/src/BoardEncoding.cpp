@@ -43,6 +43,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     TIMEIT("encodeBoard");
     CompressedEncodedBoard out{};
 
+    // Canonical chess inputs are always encoded from the side-to-move perspective.
     const Position &position = board->position();
     const bool flipForBlack = position.side_to_move() == BLACK;
     const auto canonicalBits = [flipForBlack](const Bitboard bits) {
@@ -50,6 +51,7 @@ CompressedEncodedBoard encodeBoard(const Board *board) {
     };
 
     int ch = 0;
+    // Piece-type planes remain Stockfish bitboards until the encoding boundary.
     for (const Color color : {WHITE, BLACK}) {
         const Color positionColor = flipForBlack ? ~color : color;
         for (const PieceType piece : PIECE_TYPES) {
@@ -104,9 +106,9 @@ void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, int8 *de
     assert(destination != nullptr);
     serialize_binary_planes<BOARD_LEN, BINARY_C>(
         compressed.bits,
-        std::span<int8>(destination, ChessPackedPlaneLayout::binary_bytes));
+        std::span<int8>(destination, CHESS_PACKED_BINARY_BYTES));
     std::memcpy(
-        destination + ChessPackedPlaneLayout::binary_bytes,
+        destination + CHESS_PACKED_BINARY_BYTES,
         compressed.scal.data(),
         compressed.scal.size() * sizeof(int8));
 }
@@ -114,9 +116,9 @@ void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, int8 *de
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination) {
     assert(destination != nullptr);
 
-    for (int ch = 0; ch < BINARY_C; ++ch) {
-        const uint64 bits = compressed.bits[ch].word(0);
-        int8 *planeDestination = destination + ch * 64;
+    for (std::size_t channelIndex = 0; channelIndex < static_cast<std::size_t>(BINARY_C); ++channelIndex) {
+        const uint64 bits = compressed.bits[channelIndex].word(0);
+        int8 *planeDestination = destination + static_cast<std::ptrdiff_t>(channelIndex) * 64;
 
         for (int byte = 0; byte < 8; ++byte) {
             const uint8 value = (bits >> (byte * 8)) & 0xFFu;
@@ -131,9 +133,10 @@ void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destina
         }
     }
 
-    for (int i = 0; i < SCALAR_C; ++i) {
-        int8 *scalarDestination = destination + (BINARY_C + i) * 64;
-        std::memset(scalarDestination, compressed.scal[i], 64);
+    for (std::size_t scalarIndex = 0; scalarIndex < static_cast<std::size_t>(SCALAR_C); ++scalarIndex) {
+        int8 *scalarDestination =
+            destination + static_cast<std::ptrdiff_t>(BINARY_C + scalarIndex) * 64;
+        std::memset(scalarDestination, compressed.scal[scalarIndex], 64);
     }
 }
 
@@ -146,7 +149,7 @@ float getBoardResultScore(const Board &board) {
 
     if (const auto winner = board.checkWinner()) {
         assert(winner.value() != board.currentPlayer());
-        return -1.0f;
+        return -1.0f; // The side to move is checkmated.
     }
 
     return 0.0f;
