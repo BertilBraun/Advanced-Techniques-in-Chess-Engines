@@ -202,6 +202,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
             ),
         ),
     )
+    model_evaluation.evaluation_args = model_evaluation.args.evaluation
     model_evaluation.paired_schedule = ()
 
     model_evaluation.play_two_models_paired(tmp_path / 'model_0.pt')
@@ -232,6 +233,7 @@ def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
             ),
         ),
     )
+    model_evaluation.evaluation_args = model_evaluation.args.evaluation
 
     condition = _model_engine_condition(model_evaluation, 'a' * 64, 'candidate-model-1')
 
@@ -302,6 +304,7 @@ def test_policy_evaluation_uses_non_cached_inference_client(
             network='network-settings',
         ),
     )
+    model_evaluation.evaluation_args = model_evaluation.args.evaluation
 
     assert model_evaluation.play_policy_vs_random() == Results(0, 0, 0)
     assert created_clients == [(2, 'network-settings', 'training-output')]
@@ -346,6 +349,7 @@ def test_skill_level_stockfish_uses_configured_hash(
             ),
         ),
     )
+    model_evaluation.evaluation_args = model_evaluation.args.evaluation
     monkeypatch.setattr(model_evaluation, 'play_vs_evaluation_model', finish_without_games)
 
     model_evaluation.play_vs_stockfish(level=2)
@@ -407,6 +411,7 @@ def test_skill_level_stockfish_restarts_after_engine_error(
             ),
         ),
     )
+    model_evaluation.evaluation_args = model_evaluation.args.evaluation
 
     def evaluate_once(evaluator: PairedEvaluationModel, _: str) -> Results:
         decisions = evaluator([current_board])

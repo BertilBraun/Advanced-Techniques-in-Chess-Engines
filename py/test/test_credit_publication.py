@@ -6,14 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from src.experiment.cost_accounting import CostCurrency
-from src.experiment.run_configuration import (
-    ApprovalRecord,
-    ResolvedHardware,
-    RunManifest,
-    configuration_sha256,
-    load_run_configuration,
-)
+from src.experiment.chess_experiment import load_chess_experiment_configuration
+from src.experiment.chess_run import ChessRunManifest, experiment_sha256
+from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.train.CreditPublication import (
     PublicationValidationScope,
     create_credit_publication_manifest,
@@ -25,22 +20,22 @@ from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.util.save_paths import CheckpointManifest
 
 
-CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-clean-credit-4x4070-v13.json'
+CONFIGURATION_PATH = Path(__file__).parents[1] / 'configs' / 'chess-default-experiment.yaml'
 
 
-def _write_run_manifest(run_path: Path, source_revision: str = 'a' * 40) -> RunManifest:
-    configuration = load_run_configuration(CONFIGURATION_PATH)
-    manifest = RunManifest(
-        configuration=configuration,
+def _write_run_manifest(run_path: Path, source_revision: str = 'a' * 40) -> ChessRunManifest:
+    experiment = load_chess_experiment_configuration(CONFIGURATION_PATH)
+    manifest = ChessRunManifest(
+        experiment=experiment,
         approval=ApprovalRecord(
             approved_by='test',
             approved_at_utc=datetime.now(timezone.utc),
-            run_name=configuration.run_name,
+            run_name=experiment.run.run_name,
             source_revision=source_revision,
-            configuration_sha256=configuration_sha256(configuration),
-            provider_name=configuration.hardware.provider_name,
-            offer_id=configuration.hardware.offer_id,
-            cost_currency=CostCurrency.EUR,
+            configuration_sha256=experiment_sha256(experiment),
+            provider_name=experiment.run.hardware.provider_name,
+            offer_id=experiment.run.hardware.offer_id,
+            cost_currency=experiment.training.run_limits.cost_currency,
             hourly_price=1,
             maximum_cost=1,
             maximum_wall_time_minutes=60,
@@ -116,7 +111,7 @@ def test_immutable_publication_binds_artifacts_configuration_and_source(tmp_path
     assert loaded_pointer == pointer
     assert loaded == publication
     assert loaded.source_revision == run_manifest.source_revision
-    assert loaded.run_configuration_sha256 == configuration_sha256(run_manifest.configuration)
+    assert loaded.run_configuration_sha256 == experiment_sha256(run_manifest.experiment)
     assert loaded.trained_position_presentations == 51_200
     assert loaded.available_position_credits == 0
 

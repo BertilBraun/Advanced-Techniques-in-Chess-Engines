@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import copy
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import time
@@ -11,11 +11,7 @@ import torch.multiprocessing as multiprocessing
 
 from src.cluster.EvaluationProcess import EvaluationProcess
 from src.cluster.EvaluationProcess import EvaluationRunProvenance
-from src.experiment.run_configuration import (
-    apply_run_configuration,
-    load_run_configuration,
-)
-from src.settings import TRAINING_ARGS
+from src.experiment.chess_experiment import load_chess_experiment_configuration
 
 
 class EvaluationSuiteBenchmarkResult(BaseModel):
@@ -73,22 +69,15 @@ def main() -> None:
     if arguments.output_path.exists():
         raise ValueError(f'Evaluation benchmark output already exists: {arguments.output_path}')
 
-    configuration = load_run_configuration(arguments.run_config)
-    evaluation_protocol = configuration.evaluation.protocol.model_copy(
-        update={'raw_results_subdirectory': str(arguments.raw_results_directory.resolve())}
+    experiment = load_chess_experiment_configuration(arguments.run_config)
+    training_arguments = replace(experiment.training, save_path=str(arguments.model_directory.resolve()))
+    evaluation_arguments = replace(
+        experiment.chess.evaluation,
+        raw_results_path=str(arguments.raw_results_directory.resolve()),
     )
-    isolated_configuration = configuration.model_copy(
-        update={'evaluation': configuration.evaluation.model_copy(update={'protocol': evaluation_protocol})}
-    )
-    training_arguments = copy.deepcopy(TRAINING_ARGS)
-    apply_run_configuration(training_arguments, isolated_configuration)
-    training_arguments.save_path = str(arguments.model_directory.resolve())
-    evaluation_arguments = training_arguments.evaluation
-    if evaluation_arguments is None:
-        raise ValueError('Evaluation benchmark requires an evaluation configuration.')
 
     started_at = time.perf_counter()
-    EvaluationProcess(training_arguments).run(
+    EvaluationProcess(training_arguments, evaluation_arguments).run(
         arguments.tensorboard_run_id,
         arguments.model_version,
         metrics_step=arguments.model_version,

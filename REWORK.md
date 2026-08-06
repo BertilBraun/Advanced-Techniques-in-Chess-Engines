@@ -368,7 +368,7 @@ process group and records the resulting status.
 | R2 | Credit-only training lifecycle and commander cleanup | accepted |
 | R3 | Chess completed-game persistence and replay materialization | accepted |
 | R4 | Chess RAM replay, batch construction, and DDP integration | accepted |
-| R5 | Chess game-contract and configuration extraction | in_progress |
+| R5 | Chess game-contract and configuration extraction | awaiting_user_review |
 | R6 | Shared bitboard and packed-plane representation | pending |
 | R7 | Native Go game implementation | pending |
 | R8 | Go pipeline integration | pending |

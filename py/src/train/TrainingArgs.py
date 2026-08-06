@@ -1,7 +1,7 @@
-from dataclasses import dataclass, field
+from dataclasses import field
 from decimal import Decimal
 from enum import Enum
-from typing import Callable, Literal
+from typing import Literal
 
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -10,7 +10,7 @@ from src.experiment.cost_accounting import CostCurrency
 from src.self_play.resignation import ResignationParams
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class MCTSParams:
     """This class contains the arguments for the MCTS algorithm."""
 
@@ -48,7 +48,7 @@ class MCTSParams:
     """The minimum number of visits that each root child should recieve. Typically this value is < 5 or in proportion to the num_searches_per_turn. This is used to ensure that the MCTS algorithm has explored the search tree enough to make a good decision. If the number of visits is too low, the MCTS algorithm might not explore enough to learn the best moves to play."""
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class DirectSelfPlayParams:
     inference_workers: int
     inference_batch_size: int
@@ -96,7 +96,7 @@ class NetworkParams:
             raise ValueError('Network value fully-connected size must be positive.')
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class SelfPlayParams:
     mcts: MCTSParams
 
@@ -155,7 +155,7 @@ class SelfPlayParams:
     initial_num_searches_per_turn: int | None = None
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class ClusterParams:
     trainer_device_type: Literal['cuda', 'cpu']
     """Device type used by every distributed trainer rank."""
@@ -191,7 +191,7 @@ class ClusterParams:
     """Maximum number of top-level evaluation processes."""
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class RuntimeLimits:
     cost_currency: CostCurrency
     hourly_price: float
@@ -200,9 +200,10 @@ class RuntimeLimits:
     maximum_open_file_count: int
     maximum_host_ram_percent: float
     minimum_free_disk_gib: float
+    resource_telemetry_interval_seconds: float
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class ArtifactRetention:
     checkpoint_count: int
     replay_window_model_versions: int
@@ -213,7 +214,7 @@ class ArtifactRetention:
 OptimizerType = Literal['adamw', 'sgd']
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class EvaluationScheduleParams:
     interval_optimizer_steps: int
     full_interval_optimizer_steps: int
@@ -239,7 +240,7 @@ class EvaluationScheduleParams:
             raise ValueError('Evaluation retry backoff cannot be negative.')
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class CreditTrainingParams:
     replay_ratio: Decimal
     optimizer_steps_per_quantum: int
@@ -290,11 +291,42 @@ class CreditTrainingParams:
         return int(required_samples)
 
 
-@dataclass
-class TrainingParams:
-    num_epochs: int
-    """This is the number of epochs to train with one batch of self-play data"""
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
+class ModelVersionLearningRateStage:
+    start_model_version: int
+    learning_rate: float
 
+    def __post_init__(self) -> None:
+        if self.start_model_version < 0:
+            raise ValueError('Learning-rate model version cannot be negative.')
+        if self.learning_rate <= 0.0:
+            raise ValueError('Learning rate must be positive.')
+
+
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
+class ModelVersionLearningRate:
+    stages: tuple[ModelVersionLearningRateStage, ...]
+    optimizer_steps_per_model_version: int
+
+    def __post_init__(self) -> None:
+        model_versions = tuple(stage.start_model_version for stage in self.stages)
+        if not self.stages or model_versions[0] != 0 or tuple(sorted(set(model_versions))) != model_versions:
+            raise ValueError('Learning-rate stages must start at model version zero and increase uniquely.')
+        if self.optimizer_steps_per_model_version <= 0:
+            raise ValueError('Optimizer steps per model version must be positive.')
+
+    def __call__(self, optimizer_step: int, _: OptimizerType) -> float:
+        model_version = optimizer_step // self.optimizer_steps_per_model_version
+        selected_stage = self.stages[0]
+        for stage in self.stages[1:]:
+            if stage.start_model_version > model_version:
+                break
+            selected_stage = stage
+        return selected_stage.learning_rate
+
+
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
+class TrainingParams:
     global_batch_size: int
     """Number of unique replay samples consumed by one optimizer step across all ranks."""
 
@@ -304,30 +336,11 @@ class TrainingParams:
     optimizer: OptimizerType
     """This is the optimizer to use for the training. Adam is typically better for most cases, but SGD is more stable and faster in some cases."""
 
-    learning_rate: Callable[[int, OptimizerType], float]
-    """Return the learning rate for the current optimizer step.
-    Example:
-    def learning_rate(optimizer_step: int) -> float:
-        if optimizer_step < 10:
-            return 0.2
-        if optimizer_step < 20:
-            return 0.02
-        return 0.002
-    """
-
-    learning_rate_scheduler: Callable[[float, float], float]
-    """Return the within-quantum learning rate from batch progress and the base learning rate.
-    Example:
-    def learning_rate_scheduler(batch_percentage: float, base_lr: float) -> float:
-        min_lr = base_lr / 10
-        return lerp(min_lr, base_lr, batch_percentage)
-    """
+    learning_rate: ModelVersionLearningRate
+    """Piecewise learning rate selected by published model version."""
 
     credit_training: CreditTrainingParams
     """Required persistent presentation-credit training schedule."""
-
-    max_buffer_samples: int = 2_500_000
-    """This is the maximum size of the training buffer to use for the training. This is used to limit the size of the training buffer to prevent memory issues. The higher the value the more stable the training but the slower the training. Typically 1_000_000-10_000_000 for training"""
 
     max_grad_norm: float = 0.5
     """This is the maximum gradient norm to use for the training. This is used to prevent exploding gradients and to stabilize the training. The lower the value the more stable the training but the slower the training. Typically 0.5-1.0 for training"""
@@ -338,8 +351,6 @@ class TrainingParams:
     """Final-result share of the blended scalar value target."""
     mcts_value_loss_weight: float = 0.15
     """Maximum MCTS-root share of the blended scalar value target."""
-    mcts_value_loss_scale: float = 1.0
-    """Legacy diagnostic field retained for reading historical run configurations."""
     mcts_value_target_warmup_optimizer_steps: int = 0
     """Optimizer steps over which the MCTS share increases from zero to its maximum."""
     duplicate_multiplicity_weight_cap: float | None = 4.0
@@ -355,8 +366,6 @@ class TrainingParams:
             raise ValueError('Value-objective component weights cannot be negative.')
         if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
             raise ValueError('Value-objective component weights must sum to 1.')
-        if self.mcts_value_loss_scale <= 0.0:
-            raise ValueError('Legacy MCTS value-loss scale must be positive.')
         if self.mcts_value_target_warmup_optimizer_steps < 0:
             raise ValueError('MCTS value-target warmup steps cannot be negative.')
         if self.duplicate_multiplicity_weight_cap is not None and self.duplicate_multiplicity_weight_cap < 1.0:
@@ -365,7 +374,7 @@ class TrainingParams:
         self.credit_training.unique_samples_per_quantum(self.global_batch_size)
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class EvaluationParams:
     num_searches_per_turn: int
     """This is the number of searches to run the MCTS algorithm in the evaluation. This is used to evaluate the model against itself to see how well it is doing. The higher the number the more accurate the evaluation but the slower the evaluation. Typically 20-50 for evaluation"""
@@ -415,7 +424,7 @@ class EvaluationParams:
     teacher_evaluation_games: int = 16
 
 
-@dataclass
+@pydantic_dataclass(config=ConfigDict(frozen=True, extra='forbid'))
 class TrainingArgs:
     save_path: str
     """Path for model generations, replay, telemetry, and evaluation artifacts."""
@@ -430,6 +439,3 @@ class TrainingArgs:
     random_seed: int
     self_play_search_warmup_model_versions: int
     self_play_endgame_shortcut_fade_model_versions: int = 0
-    evaluation: EvaluationParams | None = None
-    on_startup: Callable[[], None] | None = None
-    """This is a function that is called on startup to do any necessary setup before training starts. This can be used to ensure that the evaluation dataset exists or to set up the cluster."""

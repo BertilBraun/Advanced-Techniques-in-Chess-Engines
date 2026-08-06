@@ -3,15 +3,8 @@ run:
   tensorboard_run_directory: chess-default
   stage: clean_retrain
   requires_explicit_approval: false
-  output_path: py/training_data/chess
   resume:
     mode: random_initialization
-    optimizer: adamw
-  budget:
-    currency: EUR
-    hourly_price: 1.0
-    maximum_cost:
-    maximum_wall_time_minutes: 525600
   hardware:
     provider_name: local
     offer_id: local
@@ -20,80 +13,50 @@ run:
     logical_cpu_count: 8
     minimum_ram_gib: 8
     minimum_disk_gib: 1
-  topology:
-    training:
-      device_type: cpu
-      process_group_backend: gloo
-      rank_zero_device_id: 0
-      ddp_device_ids: [0]
-      cpu_threads: 1
-      interop_threads: 1
-      dataloader_workers: 0
-    self_play:
-      processes_per_device: [1]
-      processes_per_device_during_training: [1]
-      tensorboard_processes: 1
-      parallel_games_per_process: 2
-      search:
-        threads_per_process: 1
-        parallel_searches: 2
-      inference:
-        cache_capacity_per_process: 250000
-        direct:
-    evaluation:
-      device_cycle: [0]
-      maximum_concurrent_evaluations: 1
-      maximum_concurrent_tasks: 1
-      search:
-        threads_per_process: 1
-        parallel_searches: 1
-      inference:
-        cache_capacity_per_process: 50000
-        direct:
-    host:
-      reserved_logical_cpus: 1
-      maximum_cpu_oversubscription_ratio: 2.0
-  workload:
-    training_global_batch_size: 1024
-    training_local_batch_size: 1024
-    credit_training:
-      replay_ratio: 8
-      optimizer_steps_per_quantum: 500
-      maximum_optimizer_steps: 500000
-      maximum_replay_capacity_unique_positions: 2500000
-      initial_replay_capacity_unique_positions: 200000
-      replay_capacity_ramp_model_versions: 200
-      retained_checkpoint_interval_steps: 1000
-      learning_rate_schedule:
-        - start_model_version: 0
-          learning_rate: 0.005
-        - start_model_version: 60
-          learning_rate: 0.002
-        - start_model_version: 250
-          learning_rate: 0.001
-    self_play_searches_per_turn: 600
-    self_play_initial_searches_per_turn: 300
-    self_play_fast_searches_per_turn: 150
-    self_play_search_warmup_model_versions: 15
-    outcome_value_loss_weight: 0.85
-    mcts_value_loss_weight: 0.15
-    mcts_value_loss_scale: 1.0
-    mcts_value_target_warmup_optimizer_steps: 0
-    duplicate_multiplicity_weight_cap: 4.0
-    self_play_endgame_shortcut_fade_model_versions: 50
-    self_play_maximum_game_plies:
-    self_play_maximum_game_plies_until_model_version: 0
-    self_play_maximum_game_plies_hold_until_model_version: 0
-    self_play_final_maximum_game_plies:
-    self_play_endgame_continuation_start_plies:
-    self_play_low_material_termination_minimum_plies: 0
-    self_play_low_material_termination_piece_threshold_per_player: 0
-    self_play_low_material_termination_probability: 0.0
-    disagreement_prefix_start_probability: 0.15
-    disagreement_prefix_maximum_ply: 10
-    disagreement_prefix_archive_capacity: 2000
-    disagreement_prefix_weight_smoothing: 0.05
-    disagreement_prefix_weight_cap: 4.0
+  environment:
+    runtime_image: local
+    python_version: "3.12"
+    torch_version: "2.12.0+cu130"
+    cuda_version: "13.0"
+    dependency_lock_path: py/requirements-training.lock
+    dependency_lock_sha256: 2eb67d2a3c43b458bf66d7651c17fcafe8f180206287cc347ea09c9e0c64e250
+    stockfish_revision: cb3d4ee9b47d0c5aae855b12379378ea1439675c
+    minimum_open_file_soft_limit: 1024
+training:
+  save_path: py/training_data/chess
+  network:
+    num_layers: 12
+    hidden_size: 112
+    se_placement: every_second_block
+    num_policy_channels: 4
+    num_value_channels: 2
+    value_fc_size: 48
+  self_play:
+    mcts:
+      num_searches_per_turn: 600
+      fast_searches_proportion_of_full_searches: 0.25
+      playout_cap_randomization: 0.25
+      num_parallel_searches: 2
+      dirichlet_epsilon: 0.25
+      dirichlet_alpha: 0.3
+      c_param: 1.5
+      num_threads: 1
+      percentage_of_node_visits_to_keep: 0.6
+      min_visit_count: 0
+    num_parallel_games: 2
+    inference_cache_capacity: 250000
+    use_inference_cache: true
+    num_moves_after_which_to_play_greedy: 50
+    maximum_game_plies:
+    maximum_game_plies_until_model_version: 0
+    maximum_game_plies_hold_until_model_version: 0
+    final_maximum_game_plies:
+    endgame_continuation_start_plies:
+    low_material_termination_minimum_plies: 0
+    low_material_termination_piece_threshold_per_player: 0
+    low_material_termination_probability: 0.0
+    starting_temperature: 1.3
+    final_temperature: 0.1
     resignation:
       audit_enabled: false
       production_enabled: false
@@ -114,37 +77,77 @@ run:
       production_resignation_enable_fraction: 1.0
       production_resignation_fade_versions: 30
       require_external_safety_approval: true
-    random_seed: 0
-  safety:
+    direct_inference:
+    disagreement_prefix_start_probability: 0.15
+    disagreement_prefix_maximum_ply: 10
+    disagreement_prefix_archive_capacity: 2000
+    disagreement_prefix_weight_smoothing: 0.05
+    disagreement_prefix_weight_cap: 4.0
+    initial_num_searches_per_turn: 300
+  training:
+    global_batch_size: 1024
+    local_batch_size: 1024
+    optimizer: adamw
+    learning_rate:
+      stages:
+        - start_model_version: 0
+          learning_rate: 0.005
+        - start_model_version: 60
+          learning_rate: 0.002
+        - start_model_version: 250
+          learning_rate: 0.001
+      optimizer_steps_per_model_version: 500
+    credit_training:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: 500000
+      initial_replay_capacity_unique_positions: 200000
+      maximum_replay_capacity_unique_positions: 2500000
+      replay_capacity_ramp_model_versions: 200
+      retained_checkpoint_interval_steps: 1000
+    max_grad_norm: 0.5
+    value_loss_weight: 0.5
+    outcome_value_loss_weight: 0.85
+    mcts_value_loss_weight: 0.15
+    mcts_value_target_warmup_optimizer_steps: 0
+    duplicate_multiplicity_weight_cap: 4.0
+    policy_loss_weight: 1.0
+    num_workers: 0
+  cluster:
+    trainer_device_type: cpu
+    trainer_process_group_backend: gloo
+    trainer_rank_zero_device_id: 0
+    trainer_ddp_device_ids: [0]
+    evaluation_device_cycle: [0]
+    self_play_device_ids: [0]
+    self_play_tensorboard_processes: 1
+    trainer_cpu_threads: 1
+    trainer_interop_threads: 1
+    self_play_node_ids_to_pause_during_training: []
+    max_concurrent_evaluations: 1
+  run_limits:
+    cost_currency: EUR
+    hourly_price: 1.0
+    maximum_cost:
+    maximum_wall_time_seconds: 31536000
     maximum_open_file_count: 32768
     maximum_host_ram_percent: 95.0
     minimum_free_disk_gib: 0.1
-    telemetry_interval_seconds: 10.0
-  retention:
+    resource_telemetry_interval_seconds: 5.0
+  artifact_retention:
     checkpoint_count: 5
     replay_window_model_versions: 30
     recent_inference_checkpoint_count: 11
     milestone_inference_interval: 10
-  evaluation:
-    games: 100
-    searches_per_turn: 64
-    teacher_searches_per_turn: 600
-    teacher_games: 20
-    schedule:
-      interval_optimizer_steps: 1000
-      full_interval_optimizer_steps: 2000
-      timeout_seconds: 7200
-      maximum_attempts: 3
-      retry_backoff_seconds: 60
-  environment:
-    runtime_image: local
-    python_version: "3.12"
-    torch_version: "2.12.0+cu130"
-    cuda_version: "13.0"
-    dependency_lock_path: py/requirements-training.lock
-    dependency_lock_sha256: 2eb67d2a3c43b458bf66d7651c17fcafe8f180206287cc347ea09c9e0c64e250
-    stockfish_revision: cb3d4ee9b47d0c5aae855b12379378ea1439675c
-    minimum_open_file_soft_limit: 1024
+  evaluation_schedule:
+    interval_optimizer_steps: 1000
+    full_interval_optimizer_steps: 2000
+    timeout_seconds: 7200
+    maximum_attempts: 3
+    retry_backoff_seconds: 60
+  random_seed: 0
+  self_play_search_warmup_model_versions: 15
+  self_play_endgame_shortcut_fade_model_versions: 50
 chess:
   game: chess
   rules:
@@ -158,41 +161,33 @@ chess:
     scalar_channels: [22, 23, 24, 25, 26, 27, 28]
     action_encoding: chess-move2index-v1
     canonical_player_perspective: true
-  network:
-    num_layers: 12
-    hidden_size: 112
-    se_placement: every_second_block
-    num_policy_channels: 4
-    num_value_channels: 2
-    value_fc_size: 48
-  self_play:
-    num_moves_after_which_to_play_greedy: 50
-    starting_temperature: 1.3
-    final_temperature: 0.1
-    exploration_constant: 1.5
-    dirichlet_alpha: 0.3
-    dirichlet_epsilon: 0.25
-    percentage_of_node_visits_to_keep: 0.6
-    playout_cap_randomization: 0.25
   evaluation:
+    num_searches_per_turn: 64
+    num_games: 100
+    every_n_model_versions: 1
+    evaluate_initial_checkpoint: false
+    max_concurrent_tasks: 1
+    inference_cache_capacity: 50000
+    use_inference_cache: true
+    dataset_path: py/reference/memory_0_chess_database.hdf5
+    reference_model_path:
     opening_suite_path: py/reference/main-monitoring-openings-50.tsv
-    raw_results_subdirectory: evaluations
+    raw_results_path: py/training_data/chess/evaluations
     maximum_game_plies: 200
     bootstrap_seed: 0
     bootstrap_samples: 10000
-    evaluate_initial_checkpoint: false
+    mcts_threads: 1
+    previous_model_offsets: [5, 10]
+    historical_model_versions: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    historical_model_rotation_period: 1
+    stockfish_skill_levels: [0, 1, 2, 3]
+    stockfish_binary_path:
+    stockfish_nodes_per_move: 1000
+    stockfish_threads: 1
+    stockfish_hash_mib: 128
     evaluate_random: true
-    exploration_constant: 1.0
-    dataset:
-      path: py/reference/memory_0_chess_database.hdf5
-    model_ladder:
-      reference_model_path:
-      previous_model_offsets: [5, 10]
-      historical_model_versions: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-      historical_model_rotation_period: 1
-    stockfish:
-      skill_levels: [0, 1, 2, 3]
-      binary_path:
-      nodes_per_move: 1000
-      threads: 1
-      hash_mib: 128
+    search_exploration_constant: 1.0
+    parallel_searches: 1
+    direct_inference:
+    teacher_searches_per_turn: 600
+    teacher_evaluation_games: 20

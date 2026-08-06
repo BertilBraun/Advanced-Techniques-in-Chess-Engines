@@ -26,6 +26,7 @@ def parse_arguments() -> argparse.Namespace:
 
 if __name__ == '__main__':
     command_line_arguments = parse_arguments()
+    os.environ['ALPHAZERO_EXPERIMENT_PATH'] = str(command_line_arguments.run_config.resolve())
 
     import torch.multiprocessing as mp
 
@@ -36,29 +37,23 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.settings import TRAINING_ARGS, USE_GPU, get_run_id
+    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS, USE_GPU, get_run_id
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
     from src.util.tensorboard import configure_tensorboard_run_directory
     from src.experiment.chess_experiment import (
-        build_chess_training_args,
-        load_chess_experiment_configuration,
         write_resolved_chess_experiment,
     )
-    from src.experiment.run_configuration import (
-        prepare_training_run,
-    )
+    from src.experiment.chess_run import prepare_chess_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
         RunOutcomeStatus,
         write_run_outcome,
     )
 
-    chess_experiment = load_chess_experiment_configuration(command_line_arguments.run_config)
-    resolved_training_args = build_chess_training_args(chess_experiment)
-    TRAINING_ARGS.__dict__.update(resolved_training_args.__dict__)
+    chess_experiment = CHESS_EXPERIMENT
     run_configuration = chess_experiment.run
     configure_tensorboard_run_directory(run_configuration.tensorboard_run_directory)
 
@@ -76,9 +71,8 @@ if __name__ == '__main__':
     log(f'Run ID: {run}')
 
     run_started_at = monotonic()
-    manifest = prepare_training_run(
-        TRAINING_ARGS,
-        run_configuration,
+    manifest = prepare_chess_training_run(
+        chess_experiment,
         command_line_arguments.expected_source_revision,
         command_line_arguments.approval_file,
     )
@@ -89,24 +83,24 @@ if __name__ == '__main__':
     resource_telemetry = start_resource_telemetry(
         output_path=Path(TRAINING_ARGS.save_path),
         started_at=run_started_at,
-        cost_currency=run_configuration.budget.currency,
-        hourly_price=run_configuration.budget.hourly_price,
-        interval_seconds=run_configuration.safety.telemetry_interval_seconds,
+        cost_currency=TRAINING_ARGS.run_limits.cost_currency,
+        hourly_price=TRAINING_ARGS.run_limits.hourly_price,
+        interval_seconds=TRAINING_ARGS.run_limits.resource_telemetry_interval_seconds,
     )
 
     gpu_usage_logger = start_gpu_usage_logger(run)
-
-    # if a function on_startup is defined, call it
-    if TRAINING_ARGS.on_startup is not None:
-        log('Calling on_startup function...')
-        TRAINING_ARGS.on_startup()
 
     with TensorboardWriter(run, 'training_args', postfix_pid=False):
         import pprint
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
-    commander = CommanderProcess(run, TRAINING_ARGS, run_started_at)
+    commander = CommanderProcess(
+        run,
+        TRAINING_ARGS,
+        chess_experiment.chess.evaluation,
+        run_started_at,
+    )
     outcome_path = Path(TRAINING_ARGS.save_path) / 'run-outcome.json'
     try:
         for _ in commander.run():
@@ -117,8 +111,8 @@ if __name__ == '__main__':
             RunOutcomeStatus.FAILED,
             str(error),
             run_started_at,
-            run_configuration.budget.currency,
-            run_configuration.budget.hourly_price,
+            TRAINING_ARGS.run_limits.cost_currency,
+            TRAINING_ARGS.run_limits.hourly_price,
             commander.latest_completed_model_version,
         )
         raise
@@ -132,8 +126,8 @@ if __name__ == '__main__':
         outcome_status,
         commander.final_stop_reason,
         run_started_at,
-        run_configuration.budget.currency,
-        run_configuration.budget.hourly_price,
+        TRAINING_ARGS.run_limits.cost_currency,
+        TRAINING_ARGS.run_limits.hourly_price,
         commander.latest_completed_model_version,
     )
 

@@ -207,8 +207,6 @@ def load_model_and_optimizer(
 def save_model_and_optimizer(
     model: Network, optimizer: torch.optim.Optimizer, iteration: int, save_folder: str | PathLike
 ) -> None:
-    from src.settings import TRAINING_ARGS
-
     raw_model_path = model_save_path(iteration, save_folder)
     raw_optimizer_path = optimizer_save_path(iteration, save_folder)
     jit_model_path = raw_model_path.with_suffix('.jit.pt')
@@ -221,7 +219,7 @@ def save_model_and_optimizer(
     torch.save(optimizer.state_dict(), temporary_optimizer_path)
 
     # Create a copy of the model, then set that to eval mode, fuse it, and save it as a JIT script
-    fused_model = Network(TRAINING_ARGS.network, model.device)
+    fused_model = Network(model.network_args, model.device)
     fused_model.load_state_dict(model.state_dict())
     fused_model.eval()
     fused_model.fuse_model()

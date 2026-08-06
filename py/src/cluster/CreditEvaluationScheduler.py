@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import time
 from dataclasses import replace
 from enum import Enum
@@ -20,7 +19,7 @@ from src.train.CreditPublication import (
     load_credit_publication_manifest,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import EvaluationParams, TrainingArgs
 from src.util.atomic_file import write_text_atomically
 from src.util.log import log, warn
 
@@ -100,11 +99,13 @@ class CreditEvaluationScheduler:
         self,
         run_id: int,
         args: TrainingArgs,
+        evaluation_args: EvaluationParams,
     ) -> None:
         parameters = args.evaluation_schedule
 
         self.run_id = run_id
         self.args = args
+        self.evaluation_args = evaluation_args
         self.timeout_seconds = parameters.timeout_seconds
         self.maximum_attempts = parameters.maximum_attempts
         self.retry_backoff_seconds = parameters.retry_backoff_seconds
@@ -273,8 +274,9 @@ class CreditEvaluationScheduler:
 
     def _start(self, pending: PendingCreditEvaluation) -> None:
         self._validate_source(pending.source)
-        evaluation_args = credit_evaluation_arguments(
+        training_args, evaluation_args = credit_evaluation_arguments(
             self.args,
+            self.evaluation_args,
             pending.source.completed_optimizer_steps,
         )
         tier = self._tier(pending.source)
@@ -282,6 +284,7 @@ class CreditEvaluationScheduler:
             target=run_evaluation_process,
             args=(
                 self.run_id,
+                training_args,
                 evaluation_args,
                 pending.source.model_version,
                 pending.source.model_version,
@@ -463,27 +466,27 @@ class CreditEvaluationScheduler:
 
 def credit_evaluation_arguments(
     args: TrainingArgs,
+    evaluation: EvaluationParams,
     completed_optimizer_steps: int,
-) -> TrainingArgs:
+) -> tuple[TrainingArgs, EvaluationParams]:
     parameters = args.training.credit_training
     schedule = args.evaluation_schedule
-    evaluation = args.evaluation
-    if evaluation is None:
-        return args
     if completed_optimizer_steps % schedule.interval_optimizer_steps:
         raise ValueError('Credit evaluation must use a complete evaluation-checkpoint boundary.')
     versions_per_evaluation = schedule.interval_optimizer_steps // parameters.optimizer_steps_per_quantum
-    translated = copy.deepcopy(args)
-    assert translated.evaluation is not None
-    translated.evaluation.previous_model_offsets = tuple(
-        offset * versions_per_evaluation for offset in evaluation.previous_model_offsets
+    translated_evaluation = replace(
+        evaluation,
+        previous_model_offsets=tuple(offset * versions_per_evaluation for offset in evaluation.previous_model_offsets),
+        historical_model_versions=tuple(
+            checkpoint_ordinal * versions_per_evaluation for checkpoint_ordinal in evaluation.historical_model_versions
+        ),
+        every_n_model_versions=versions_per_evaluation,
     )
-    translated.evaluation.historical_model_versions = tuple(
-        checkpoint_ordinal * versions_per_evaluation for checkpoint_ordinal in evaluation.historical_model_versions
+    translated_args = replace(
+        args,
+        artifact_retention=replace(
+            args.artifact_retention,
+            milestone_inference_interval=versions_per_evaluation,
+        ),
     )
-    translated.evaluation.every_n_model_versions = versions_per_evaluation
-    translated.artifact_retention = replace(
-        translated.artifact_retention,
-        milestone_inference_interval=versions_per_evaluation,
-    )
-    return translated
+    return translated_args, translated_evaluation

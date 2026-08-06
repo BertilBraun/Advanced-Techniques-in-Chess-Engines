@@ -21,7 +21,13 @@ from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import CurrentGame, TRAINING_ARGS
 from src.train.Trainer import Trainer
-from src.train.TrainingArgs import NetworkParams, SEPlacement, TrainingParams
+from src.train.TrainingArgs import (
+    ModelVersionLearningRate,
+    ModelVersionLearningRateStage,
+    NetworkParams,
+    SEPlacement,
+    TrainingParams,
+)
 from src.value import scalar_to_wdl
 
 
@@ -139,16 +145,16 @@ def train_batch(
 
 def production_training_parameters(global_batch_size: int, local_batch_size: int) -> TrainingParams:
     return TrainingParams(
-        num_epochs=1,
         global_batch_size=global_batch_size,
         local_batch_size=local_batch_size,
         optimizer='adamw',
-        learning_rate=lambda _iteration, _optimizer: 0.0035,
-        learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+        learning_rate=ModelVersionLearningRate(
+            stages=(ModelVersionLearningRateStage(0, 0.0035),),
+            optimizer_steps_per_model_version=1,
+        ),
         credit_training=TRAINING_ARGS.training.credit_training,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=1.0,
         mcts_value_target_warmup_optimizer_steps=50_000,
     )
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.experiment.run_configuration import RunConfiguration, load_run_configuration
+from src.experiment.chess_experiment import ChessExperimentConfiguration, load_chess_experiment_configuration
 from src.games.chess.evaluation_dataset import ensure_evaluation_dataset_exists
 
 
@@ -41,15 +41,15 @@ def file_sha256(path: Path) -> str:
 
 
 def prepare_dataset(
-    configuration: RunConfiguration,
+    configuration: ChessExperimentConfiguration,
     manifest_output: Path,
 ) -> ChessEvaluationDatasetManifest:
-    configured_path = configuration.evaluation.protocol.evaluation_dataset_path
+    configured_path = configuration.chess.evaluation.dataset_path
     if configured_path is None:
         raise ValueError('Run configuration does not enable a fixed evaluation dataset.')
     dataset_path = SOURCE_ROOT / configured_path
 
-    random.seed(configuration.workload.random_seed)
+    random.seed(configuration.training.random_seed)
     ensure_evaluation_dataset_exists(dataset_path)
     if not dataset_path.is_file():
         raise ValueError(f'Evaluation dataset was not created: {dataset_path}')
@@ -61,7 +61,7 @@ def prepare_dataset(
         source_year=2024,
         source_month=10,
         source_game_count=50,
-        random_seed=configuration.workload.random_seed,
+        random_seed=configuration.training.random_seed,
     )
     manifest_output.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = manifest_output.with_suffix('.json.tmp')
@@ -72,7 +72,7 @@ def prepare_dataset(
 
 def main() -> None:
     arguments = parse_arguments()
-    configuration = load_run_configuration(arguments.run_config)
+    configuration = load_chess_experiment_configuration(arguments.run_config)
     manifest = prepare_dataset(configuration, arguments.manifest_output)
     print(manifest.model_dump_json(indent=2))
 

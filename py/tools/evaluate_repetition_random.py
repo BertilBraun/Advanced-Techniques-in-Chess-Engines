@@ -3,15 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import random
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.experiment.run_configuration import apply_run_configuration, load_run_configuration
-from src.settings import TRAINING_ARGS
+from src.experiment.chess_experiment import load_chess_experiment_configuration
 
 
 @dataclass(frozen=True)
@@ -71,15 +70,17 @@ def main() -> None:
     np.random.seed(arguments.seed)
     torch.manual_seed(arguments.seed)
 
-    configuration = load_run_configuration(arguments.run_configuration)
-    apply_run_configuration(TRAINING_ARGS, configuration)
-    TRAINING_ARGS.save_path = str(arguments.save_path.resolve())
-    assert TRAINING_ARGS.evaluation is not None
-    TRAINING_ARGS.evaluation.opening_suite_path = str(arguments.opening_suite.resolve())
+    experiment = load_chess_experiment_configuration(arguments.run_configuration)
+    training_arguments = replace(experiment.training, save_path=str(arguments.save_path.resolve()))
+    evaluation_arguments = replace(
+        experiment.chess.evaluation,
+        opening_suite_path=str(arguments.opening_suite.resolve()),
+    )
 
     evaluator = ModelEvaluation(
         iteration=arguments.iteration,
-        args=TRAINING_ARGS,
+        args=training_arguments,
+        evaluation_args=evaluation_arguments,
         device_id=arguments.device,
         num_games=arguments.games,
         num_searches_per_turn=arguments.searches,

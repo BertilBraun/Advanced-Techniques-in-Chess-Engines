@@ -1,7 +1,7 @@
 import copy
 from pathlib import Path
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import ModuleType
 from types import SimpleNamespace
 
@@ -140,13 +140,19 @@ def test_self_play_constructs_selected_inference_client(
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    training_args = copy.deepcopy(TRAINING_ARGS)
-    training_args.self_play.use_inference_cache = False
-    training_args.self_play.inference_cache_capacity = 0
-    training_args.self_play.initial_num_searches_per_turn = 100
-    training_args.self_play.mcts.num_searches_per_turn = 600
-    training_args.self_play_search_warmup_model_versions = 100
-    training_args.save_path = str(tmp_path)
+    self_play_args = replace(
+        TRAINING_ARGS.self_play,
+        use_inference_cache=False,
+        inference_cache_capacity=0,
+        initial_num_searches_per_turn=100,
+        mcts=replace(TRAINING_ARGS.self_play.mcts, num_searches_per_turn=600),
+    )
+    training_args = replace(
+        TRAINING_ARGS,
+        self_play=self_play_args,
+        self_play_search_warmup_model_versions=100,
+        save_path=str(tmp_path),
+    )
     self_play = SelfPlay(
         device_id=0,
         args=training_args,
@@ -173,15 +179,17 @@ def test_self_play_constructs_direct_inference_pipeline(
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    training_args = copy.deepcopy(TRAINING_ARGS)
-    training_args.self_play.use_inference_cache = False
-    training_args.self_play.inference_cache_capacity = 0
-    training_args.self_play.direct_inference = DirectSelfPlayParams(
-        inference_workers=2,
-        inference_batch_size=64,
-        outstanding_batches_per_worker=1,
+    self_play_args = replace(
+        TRAINING_ARGS.self_play,
+        use_inference_cache=False,
+        inference_cache_capacity=0,
+        direct_inference=DirectSelfPlayParams(
+            inference_workers=2,
+            inference_batch_size=64,
+            outstanding_batches_per_worker=1,
+        ),
     )
-    training_args.save_path = str(tmp_path)
+    training_args = replace(TRAINING_ARGS, self_play=self_play_args, save_path=str(tmp_path))
     self_play = SelfPlay(
         device_id=0,
         args=training_args,

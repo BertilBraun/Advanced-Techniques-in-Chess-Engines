@@ -10,7 +10,7 @@ from time import monotonic
 from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
-from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
+from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs
 from src.train.TrainingStats import TrainingStats
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -98,9 +98,16 @@ class CompletedQuantum:
 class CommanderProcess:
     """Coordinate persistent self-play, replay, training, publication, and evaluation."""
 
-    def __init__(self, run: int, args: TrainingArgs, started_at: float) -> None:
+    def __init__(
+        self,
+        run: int,
+        args: TrainingArgs,
+        evaluation_args: EvaluationParams,
+        started_at: float,
+    ) -> None:
         self.run_id = run
         self.args = args
+        self.evaluation_args = evaluation_args
 
         self.communication_folder = f'communication/{self.run_id}'
         self.communication = Communication(self.communication_folder)
@@ -176,7 +183,7 @@ class CommanderProcess:
         self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
         if ledger.prepared_quantum is not None:
             self._finish_prepared_publication(ledger, ledger.prepared_quantum)
-        evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args)
+        evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args, self.evaluation_args)
         evaluation_scheduler.offer(
             create_credit_publication_manifest(
                 ledger.run_path,

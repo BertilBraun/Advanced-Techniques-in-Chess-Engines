@@ -12,7 +12,7 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import default_collate
 
 from src.train.TrainingDataLoader import training_dataloader
-from src.experiment.run_configuration import apply_run_configuration, load_run_configuration
+from src.experiment.chess_experiment import load_chess_experiment_configuration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.settings import TRAINING_ARGS
 from src.train.Trainer import Trainer, prefetch_training_batches
@@ -133,9 +133,9 @@ def benchmark_training(
 
 
 def main() -> None:
+    global TRAINING_ARGS
     arguments = parse_arguments()
-    configuration = load_run_configuration(arguments.run_config)
-    apply_run_configuration(TRAINING_ARGS, configuration)
+    TRAINING_ARGS = load_chess_experiment_configuration(arguments.run_config).training
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 

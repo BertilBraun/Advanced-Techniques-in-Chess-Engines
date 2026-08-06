@@ -14,7 +14,7 @@ from src.settings import log_scalar, TensorboardWriter
 from src.settings_common import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import EvaluationParams, TrainingArgs
 from src.util.save_paths import inference_model_path, model_save_path
 from src.util.tensorboard import log_scalars
 from src.experiment.evaluation_protocol import (
@@ -30,7 +30,7 @@ from src.experiment.evaluation_schedule import (
     evaluation_device_for_task,
     select_historical_model_versions,
 )
-from src.experiment.run_configuration import RunManifest
+from src.experiment.chess_run import ChessRunManifest
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
@@ -50,7 +50,7 @@ class EvaluationRunProvenance:
 
 def load_evaluation_run_provenance(save_path: str) -> EvaluationRunProvenance:
     run_manifest_path = Path(save_path) / 'run_manifest.json'
-    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    run_manifest = ChessRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
     return EvaluationRunProvenance(
         source_revision=run_manifest.source_revision,
         stockfish_binary_sha256=run_manifest.stockfish_binary_sha256,
@@ -116,9 +116,7 @@ def _model_engine_condition(
     artifact_sha256: str,
     identifier: str,
 ) -> EngineCondition:
-    evaluation = model_evaluation.args.evaluation
-    if evaluation is None:
-        raise ValueError('Evaluation settings are required for model engine provenance.')
+    evaluation = model_evaluation.evaluation_args
     direct_inference = evaluation.direct_inference
     settings = (
         (
@@ -158,11 +156,12 @@ def _evaluation_source_revision() -> str:
 def run_evaluation_process(
     run: int,
     args: TrainingArgs,
+    evaluation_args: EvaluationParams,
     iteration: int,
     metrics_step: int | None = None,
     tier: EvaluationTier = EvaluationTier.FULL,
 ) -> None:
-    evaluation_process = EvaluationProcess(args)
+    evaluation_process = EvaluationProcess(args, evaluation_args)
     with log_exceptions('Evaluation process'):
         evaluation_process.run(run, iteration, metrics_step, tier=tier)
 
@@ -259,8 +258,8 @@ def _eval_vs_reference(
     provenance: EvaluationRunProvenance,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
-    evaluation = args.evaluation
-    if evaluation is None or evaluation.reference_model_path is None:
+    evaluation = model_evaluation.evaluation_args
+    if evaluation.reference_model_path is None:
         return
     if evaluation.opening_suite_path is None or evaluation.raw_results_path is None:
         raise ValueError('Reference evaluation requires opening and raw-results paths.')
@@ -326,8 +325,8 @@ def _eval_vs_stockfish_fixed(
     provenance: EvaluationRunProvenance,
 ) -> None:
     _activate_evaluation_device(model_evaluation)
-    evaluation = args.evaluation
-    if evaluation is None or evaluation.stockfish_binary_path is None:
+    evaluation = model_evaluation.evaluation_args
+    if evaluation.stockfish_binary_path is None:
         return
     if evaluation.opening_suite_path is None or evaluation.raw_results_path is None:
         raise ValueError('Stockfish evaluation requires opening and raw-results paths.')
@@ -478,9 +477,9 @@ def _eval_vs_stockfish(
 class EvaluationProcess:
     """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
 
-    def __init__(self, args: TrainingArgs) -> None:
+    def __init__(self, args: TrainingArgs, evaluation_args: EvaluationParams) -> None:
         self.args = args
-        self.eval_args = args.evaluation
+        self.eval_args = evaluation_args
 
     def run(
         self,
@@ -517,6 +516,7 @@ class EvaluationProcess:
             model_evaluation = ModelEvaluation(
                 iteration,
                 self.args,
+                self.eval_args,
                 device_id=0,
                 num_games=self.eval_args.num_games if game_limit is None else game_limit,
                 num_searches_per_turn=(
@@ -672,17 +672,16 @@ class EvaluationProcess:
 
 
 def evaluate_iteration(iteration: int, run_id: int) -> None:
-    from src.settings import TRAINING_ARGS
+    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
     from src.util.save_paths import model_save_path
 
-    assert TRAINING_ARGS.evaluation, 'Evaluation process is not enabled. Set evaluation.enabled to True in the config.'
     assert iteration > 0, 'Iteration must be greater than 0.'
 
     if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
         return
 
     log(f'Running evaluation process for iteration {iteration}')
-    run_evaluation_process(run_id, TRAINING_ARGS, iteration)
+    run_evaluation_process(run_id, TRAINING_ARGS, CHESS_EXPERIMENT.chess.evaluation, iteration)
 
 
 def __main() -> None:

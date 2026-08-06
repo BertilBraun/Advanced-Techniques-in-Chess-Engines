@@ -23,6 +23,7 @@ class Network(nn.Module):
         super().__init__()
 
         self.device = device
+        self.network_args = args
 
         encoding_channels = CHESS_STATE_CONTRACT.representation.channels
         row_count = CHESS_STATE_CONTRACT.representation.rows

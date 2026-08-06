@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from src.settings_common import *
-from src.experiment.chess_experiment import build_chess_training_args, load_chess_experiment_configuration
+from src.experiment.chess_experiment import load_chess_experiment_configuration
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import ChessGame, ChessMove
 from src.games.chess.ChessVisuals import ChessVisuals
@@ -24,4 +24,5 @@ CurrentBoard = ChessBoard
 CurrentGameVisuals = ChessVisuals()
 
 CHESS_EXPERIMENT = load_chess_experiment_configuration(_default_experiment_path())
-TRAINING_ARGS = build_chess_training_args(CHESS_EXPERIMENT)
+TRAINING_ARGS = CHESS_EXPERIMENT.training
+PLAY_C_PARAM = CHESS_EXPERIMENT.chess.evaluation.search_exploration_constant

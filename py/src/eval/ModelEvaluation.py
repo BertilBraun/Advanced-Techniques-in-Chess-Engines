@@ -28,7 +28,7 @@ from src.eval.evaluation_types import (
 )
 from src.eval.paired_match import play_paired_models
 from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
-from src.train.TrainingArgs import TrainingArgs
+from src.train.TrainingArgs import EvaluationParams, TrainingArgs
 from src.cluster.InferenceClient import InferenceClient
 from src.cluster.NonCachingInferenceClient import NonCachingInferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
@@ -79,6 +79,7 @@ class ModelEvaluation:
         self,
         iteration: int,
         args: TrainingArgs,
+        evaluation_args: EvaluationParams,
         device_id: int,
         num_games: int = 64,
         num_searches_per_turn: int = 20,
@@ -87,12 +88,13 @@ class ModelEvaluation:
         self.iteration = iteration
         self.num_games = num_games
         self.args = args
+        self.evaluation_args = evaluation_args
         self.num_searches_per_turn = num_searches_per_turn
         self.device_id = device_id
-        if args.evaluation is None or args.evaluation.opening_suite_path is None:
+        if evaluation_args.opening_suite_path is None:
             self.paired_schedule = None
         else:
-            openings = load_opening_suite(Path(args.evaluation.opening_suite_path))
+            openings = load_opening_suite(Path(evaluation_args.opening_suite_path))
             if paired_opening_count is not None:
                 if paired_opening_count <= 0 or paired_opening_count > len(openings):
                     raise ValueError('Paired opening count must select a nonempty subset of the opening suite.')
@@ -108,12 +110,12 @@ class ModelEvaluation:
         from AlphaZeroCpp import MCTSParams
 
         return MCTSParams(
-            num_parallel_searches=self.args.evaluation.parallel_searches,
-            c_param=self.args.evaluation.search_exploration_constant,
+            num_parallel_searches=self.evaluation_args.parallel_searches,
+            c_param=self.evaluation_args.search_exploration_constant,
             dirichlet_epsilon=0.0,
             dirichlet_alpha=1.0,
             min_visit_count=0,
-            num_threads=self.args.evaluation.mcts_threads,
+            num_threads=self.evaluation_args.mcts_threads,
             num_full_searches=self.num_searches_per_turn,
             num_fast_searches=self.num_searches_per_turn,
         )
@@ -121,9 +123,7 @@ class ModelEvaluation:
     def _create_mcts(self, inference_path: Path) -> MCTS:
         from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
 
-        evaluation = self.args.evaluation
-        if evaluation is None:
-            raise ValueError('Evaluation settings are required for MCTS evaluation.')
+        evaluation = self.evaluation_args
         direct_parameters = (
             DirectSelfPlayInferenceParams(
                 evaluation.direct_inference.inference_workers,
@@ -237,13 +237,12 @@ class ModelEvaluation:
         opponent_inference_path = inference_model_path(model_path)
         if not opponent_inference_path.is_file():
             raise ValueError(f'Opponent inference model does not exist: {opponent_inference_path}')
-        if self.paired_schedule is None or self.args.evaluation is None:
+        if self.paired_schedule is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
         opponent = self._create_mcts(opponent_inference_path)
 
         def opponent_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = opponent.search([MCTSBoard(history_aware_root(board, opponent), False) for board in boards])
             return self._search_decisions(results.results)
 
@@ -255,9 +254,7 @@ class ModelEvaluation:
         return res
 
     def play_policy_vs_random(self) -> Results:
-        evaluation = self.args.evaluation
-        if evaluation is None:
-            raise ValueError('Evaluation settings are required for policy-versus-random evaluation.')
+        evaluation = self.evaluation_args
         inference_client_type = InferenceClient if evaluation.use_inference_cache else NonCachingInferenceClient
         current_model = inference_client_type(self.device_id, self.args.network, self.args.save_path)
         current_model.update_iteration(self.iteration)
@@ -282,8 +279,8 @@ class ModelEvaluation:
         return results
 
     def play_vs_stockfish(self, level: int) -> Results:
-        evaluation = self.args.evaluation
-        if evaluation is None or evaluation.stockfish_binary_path is None:
+        evaluation = self.evaluation_args
+        if evaluation.stockfish_binary_path is None:
             raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
         engine = self._open_skill_level_stockfish(level)
 
@@ -366,7 +363,7 @@ class ModelEvaluation:
     ) -> tuple[Results, tuple[GameRecord, ...]]:
         from AlphaZeroCpp import MCTSBoard
 
-        if self.paired_schedule is None or self.args.evaluation is None:
+        if self.paired_schedule is None:
             raise ValueError('A fixed paired opening suite is required for model evaluation.')
 
         current_inference_path = inference_model_path(model_save_path(self.iteration, self.args.save_path))
@@ -375,7 +372,6 @@ class ModelEvaluation:
         current = self._create_mcts(current_inference_path)
 
         def current_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
-            assert self.args.evaluation is not None, 'Evaluation args must be set to use opponent evaluator'
             results = current.search([MCTSBoard(history_aware_root(board, current), False) for board in boards])
             return self._search_decisions(results.results)
 
@@ -384,15 +380,15 @@ class ModelEvaluation:
             candidate_model=current_model,
             opponent_model=eval_model,
             schedule=self.paired_schedule,
-            maximum_game_plies=self.args.evaluation.maximum_game_plies,
+            maximum_game_plies=self.evaluation_args.maximum_game_plies,
             name=name,
         )
 
         return results, records
 
     def _open_skill_level_stockfish(self, level: int) -> chess.engine.SimpleEngine:
-        evaluation = self.args.evaluation
-        if evaluation is None or evaluation.stockfish_binary_path is None:
+        evaluation = self.evaluation_args
+        if evaluation.stockfish_binary_path is None:
             raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
         engine = chess.engine.SimpleEngine.popen_uci(evaluation.stockfish_binary_path)
         engine.configure(
@@ -433,7 +429,7 @@ class ModelEvaluation:
 
 
 if __name__ == '__main__':
-    from src.settings import TRAINING_ARGS
+    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
 
-    evaluation = ModelEvaluation(0, TRAINING_ARGS, 0, 100, 400)
+    evaluation = ModelEvaluation(0, TRAINING_ARGS, CHESS_EXPERIMENT.chess.evaluation, 0, 100, 400)
     print('Evaluation vs Random:', evaluation.play_vs_random())

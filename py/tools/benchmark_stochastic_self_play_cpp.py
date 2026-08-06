@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import os
 import random
 import resource
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -236,13 +235,23 @@ def seed_python_libraries(seed: int, device: int) -> None:
 
 
 def create_self_play(arguments: Arguments) -> SelfPlay:
-    configuration = copy.deepcopy(TRAINING_ARGS)
-    configuration.random_seed = arguments.seed
-    configuration.self_play.num_parallel_games = arguments.games
-    configuration.self_play.inference_cache_capacity = arguments.cache_capacity
-    configuration.self_play.mcts.num_searches_per_turn = arguments.searches
-    configuration.self_play.mcts.num_parallel_searches = arguments.parallel_searches
-    configuration.self_play.mcts.num_threads = arguments.threads
+    mcts = replace(
+        TRAINING_ARGS.self_play.mcts,
+        num_searches_per_turn=arguments.searches,
+        num_parallel_searches=arguments.parallel_searches,
+        num_threads=arguments.threads,
+    )
+    self_play_configuration = replace(
+        TRAINING_ARGS.self_play,
+        mcts=mcts,
+        num_parallel_games=arguments.games,
+        inference_cache_capacity=arguments.cache_capacity,
+    )
+    configuration = replace(
+        TRAINING_ARGS,
+        random_seed=arguments.seed,
+        self_play=self_play_configuration,
+    )
 
     publisher = BenchmarkCompletedGamePublisher(Path(configuration.save_path), arguments.seed)
     self_play = SelfPlay(arguments.device, configuration, publisher)

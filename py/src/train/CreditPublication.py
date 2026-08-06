@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from src.util.frozen_model import FrozenModel
 
-from src.experiment.run_configuration import RunManifest, configuration_sha256
+from src.experiment.chess_run import ChessRunManifest, experiment_sha256
 from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.util.atomic_file import write_text_atomically
 from src.util.save_paths import CheckpointManifest, load_checkpoint_manifest
@@ -92,7 +92,7 @@ def create_credit_publication_manifest(
     run_manifest_path = run_path / 'run_manifest.json'
     if not run_manifest_path.is_file():
         raise ValueError(f'Run manifest does not exist: {run_manifest_path}')
-    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    run_manifest = ChessRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
     checkpoint_path = run_path / f'checkpoint_{progress.model_version}.json'
     expected_presentations = progress.completed_optimizer_steps * global_batch_size
     if Decimal(expected_presentations) != progress.consumed_position_credits:
@@ -112,7 +112,7 @@ def create_credit_publication_manifest(
         checkpoint_manifest_path=checkpoint_path.relative_to(run_path).as_posix(),
         checkpoint_manifest_sha256=file_sha256(checkpoint_path),
         source_revision=run_manifest.source_revision,
-        run_configuration_sha256=configuration_sha256(run_manifest.configuration),
+        run_configuration_sha256=experiment_sha256(run_manifest.experiment),
     )
 
 
@@ -180,10 +180,10 @@ def validate_credit_publication_manifest(
     if checkpoint.iteration != manifest.model_version:
         raise ValueError('Checkpoint and publication model versions differ.')
     run_manifest_path = run_path / 'run_manifest.json'
-    run_manifest = RunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
+    run_manifest = ChessRunManifest.model_validate_json(run_manifest_path.read_text(encoding='utf-8'))
     if run_manifest.source_revision != manifest.source_revision:
         raise ValueError('Credit publication source revision differs from the run manifest.')
-    if configuration_sha256(run_manifest.configuration) != manifest.run_configuration_sha256:
+    if experiment_sha256(run_manifest.experiment) != manifest.run_configuration_sha256:
         raise ValueError('Credit publication configuration hash differs from the run manifest.')
     expected_artifacts = (
         (manifest.model, checkpoint.model_path, checkpoint.model_sha256),

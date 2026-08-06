@@ -10,7 +10,7 @@ from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import TRAINING_ARGS
 from src.train.Trainer import Trainer
-from src.train.TrainingArgs import TrainingParams
+from src.train.TrainingArgs import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
 
 
 class MaskedValueNetwork(Network):
@@ -47,12 +47,13 @@ def masked_value_gradient_rank(
         distributed_model = DistributedDataParallel(model)
         optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
         training_parameters = TrainingParams(
-            num_epochs=1,
             global_batch_size=4,
             local_batch_size=2,
             optimizer='sgd',
-            learning_rate=lambda _iteration, _optimizer: 0.0,
-            learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+            learning_rate=ModelVersionLearningRate(
+                stages=(ModelVersionLearningRateStage(0, 0.001),),
+                optimizer_steps_per_model_version=1,
+            ),
             credit_training=TRAINING_ARGS.training.credit_training,
             policy_loss_weight=0.0,
             value_loss_weight=1.0,

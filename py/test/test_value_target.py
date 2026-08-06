@@ -18,7 +18,7 @@ from src.self_play.value_target import (
 )
 from src.settings import TRAINING_ARGS
 from src.train.Trainer import Trainer
-from src.train.TrainingArgs import TrainingParams
+from src.train.TrainingArgs import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
 from src.value import scalar_to_wdl
 
 
@@ -55,16 +55,16 @@ def training_parameters(
     duplicate_multiplicity_weight_cap: float | None = 4.0,
 ) -> TrainingParams:
     return TrainingParams(
-        num_epochs=1,
         global_batch_size=4,
         local_batch_size=4,
         optimizer='adamw',
-        learning_rate=lambda _iteration, _optimizer: 0.0,
-        learning_rate_scheduler=lambda _progress, learning_rate: learning_rate,
+        learning_rate=ModelVersionLearningRate(
+            stages=(ModelVersionLearningRateStage(0, 0.001),),
+            optimizer_steps_per_model_version=1,
+        ),
         credit_training=TRAINING_ARGS.training.credit_training,
         outcome_value_loss_weight=0.85,
         mcts_value_loss_weight=0.15,
-        mcts_value_loss_scale=1.0,
         mcts_value_target_warmup_optimizer_steps=mcts_value_target_warmup_optimizer_steps,
         duplicate_multiplicity_weight_cap=duplicate_multiplicity_weight_cap,
     )

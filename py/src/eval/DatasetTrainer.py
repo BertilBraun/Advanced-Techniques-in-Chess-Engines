@@ -1,16 +1,16 @@
 import os
 import sys
 import torch
+from dataclasses import replace
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id, learning_rate
+from src.settings import TRAINING_ARGS, TensorboardWriter, CurrentGame, get_run_id
 from src.Network import Network
 from src.eval.ModelEvaluation import ModelEvaluation
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.train.Trainer import Trainer
 from src.train.TrainingDataLoader import training_dataloader
-from src.train.TrainingArgs import TrainingParams
 from src.util.log import log
 from src.util.save_paths import (
     create_model,
@@ -34,16 +34,7 @@ def train_model(
     trainer = Trainer(
         model,
         optimizer,
-        TrainingParams(
-            num_epochs=num_epochs,
-            optimizer='adamw',
-            global_batch_size=TRAINING_ARGS.training.global_batch_size,
-            local_batch_size=TRAINING_ARGS.training.local_batch_size,
-            learning_rate=learning_rate,
-            learning_rate_scheduler=lambda _, lr: lr,
-            credit_training=TRAINING_ARGS.training.credit_training,
-            num_workers=2,
-        ),
+        replace(TRAINING_ARGS.training, num_workers=2),
     )
 
     log(

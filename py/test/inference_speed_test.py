@@ -5,7 +5,7 @@ import src.environ_setup  # noqa # isort:skip # This import is necessary for set
 
 import os
 
-from src.games.chess.ChessSettings import TRAINING_ARGS, CurrentBoard
+from src.settings import CurrentBoard, TRAINING_ARGS
 from src.util.save_paths import create_model, create_optimizer, save_model_and_optimizer
 
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
@@ -14,8 +14,9 @@ os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
 # This ensures, that the seperate processes spawned by torch.multiprocessing do not interfere with each other by using more than one core. Since we are using as many processes as cores for workers, we need to limit the number of threads to 1 for each process. Otherwise, we would use more than one core per process, which would lead to a lot of context switching and slow down the training.
 
 import torch  # noqa
+import pytest
 
-from AlphaZeroCpp import test_inference_speed_cpp
+test_inference_speed_cpp = pytest.importorskip('AlphaZeroCpp').test_inference_speed_cpp
 
 
 def benchmark_inference_speed_py(num_boards: int, num_iterations: int) -> None:

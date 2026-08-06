@@ -23,7 +23,7 @@ from src.train.CreditPublication import (
 from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs
 
 
-EvaluationTarget = Callable[[int, TrainingArgs, int, int | None], None]
+EvaluationTarget = Callable[[int, TrainingArgs, EvaluationParams, int, int | None], None]
 
 
 class _FakeProcess:
@@ -32,7 +32,7 @@ class _FakeProcess:
     def __init__(
         self,
         target: EvaluationTarget,
-        args: tuple[int, TrainingArgs, int, int],
+        args: tuple[int, TrainingArgs, EvaluationParams, int, int],
         name: str,
     ) -> None:
         self.target = target
@@ -84,7 +84,23 @@ def _arguments(
         local_batch_size=256,
         credit_training=parameters,
     )
-    evaluation = EvaluationParams(
+    return replace(
+        TRAINING_ARGS,
+        save_path=str(run_path),
+        training=training,
+        evaluation_schedule=replace(
+            TRAINING_ARGS.evaluation_schedule,
+            interval_optimizer_steps=1_000,
+            full_interval_optimizer_steps=2_000,
+            timeout_seconds=60,
+            maximum_attempts=maximum_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+        ),
+    )
+
+
+def _evaluation() -> EvaluationParams:
+    return EvaluationParams(
         num_searches_per_turn=64,
         num_games=2,
         every_n_model_versions=1,
@@ -109,20 +125,6 @@ def _arguments(
         stockfish_threads=1,
         stockfish_hash_mib=128,
         evaluate_random=False,
-    )
-    return replace(
-        TRAINING_ARGS,
-        save_path=str(run_path),
-        training=training,
-        evaluation_schedule=replace(
-            TRAINING_ARGS.evaluation_schedule,
-            interval_optimizer_steps=1_000,
-            full_interval_optimizer_steps=2_000,
-            timeout_seconds=60,
-            maximum_attempts=maximum_attempts,
-            retry_backoff_seconds=retry_backoff_seconds,
-        ),
-        evaluation=evaluation,
     )
 
 
@@ -162,7 +164,7 @@ def fake_processes(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_slow_evaluation_is_out_of_band_and_coalesces_newest_boundary(tmp_path: Path) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path), _evaluation())
     first = _publication(tmp_path, 1_000)
     second = _publication(tmp_path, 2_000)
 
@@ -170,8 +172,8 @@ def test_slow_evaluation_is_out_of_band_and_coalesces_newest_boundary(tmp_path: 
     scheduler.poll()
     assert scheduler.state.active is not None
     assert scheduler.state.active.source.model_version == 20
-    assert _FakeProcess.created[0].args[2] == 20
     assert _FakeProcess.created[0].args[3] == 20
+    assert _FakeProcess.created[0].args[4] == 20
     scheduler.offer(second)
     scheduler.poll()
     assert scheduler.state.pending is not None
@@ -191,7 +193,7 @@ def test_slow_evaluation_is_out_of_band_and_coalesces_newest_boundary(tmp_path: 
 
 
 def test_initial_publication_starts_model_zero_evaluation(tmp_path: Path) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path), _evaluation())
 
     scheduler.offer(_publication(tmp_path, 0))
     scheduler.poll()
@@ -202,7 +204,7 @@ def test_initial_publication_starts_model_zero_evaluation(tmp_path: Path) -> Non
 
 
 def test_crash_retry_is_bounded_and_later_boundary_still_runs(tmp_path: Path) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2), _evaluation())
     scheduler.offer(_publication(tmp_path, 1_000))
     scheduler.poll()
     _FakeProcess.created[-1].complete(1)
@@ -225,7 +227,7 @@ def test_timed_out_evaluation_is_terminated_and_retried(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path), _evaluation())
     scheduler.offer(_publication(tmp_path, 1_000))
     scheduler.poll()
     active = scheduler.state.active
@@ -246,12 +248,12 @@ def test_timed_out_evaluation_is_terminated_and_retried(
 
 def test_scheduler_restart_recovers_active_job_as_bounded_retry(tmp_path: Path) -> None:
     arguments = _arguments(tmp_path)
-    scheduler = CreditEvaluationScheduler(1, arguments)
+    scheduler = CreditEvaluationScheduler(1, arguments, _evaluation())
     scheduler.offer(_publication(tmp_path, 1_000))
     scheduler.poll()
     assert scheduler.pinned_model_versions == frozenset({20})
 
-    restarted = CreditEvaluationScheduler(1, arguments)
+    restarted = CreditEvaluationScheduler(1, arguments, _evaluation())
     assert restarted.state.active is None
     assert restarted.state.pending is not None
     assert restarted.state.pending.next_attempt == 2
@@ -260,7 +262,7 @@ def test_scheduler_restart_recovers_active_job_as_bounded_retry(tmp_path: Path) 
 
 
 def test_close_records_an_already_completed_evaluation_as_success(tmp_path: Path) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path), _evaluation())
     scheduler.offer(_publication(tmp_path, 1_000))
     scheduler.poll()
     _FakeProcess.created[-1].complete(0)
@@ -275,7 +277,7 @@ def test_pending_start_failure_advances_attempt_instead_of_spinning(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2), _evaluation())
     scheduler.offer(_publication(tmp_path, 1_000))
 
     def reject_arguments(_args: TrainingArgs, _optimizer_steps: int) -> TrainingArgs:
@@ -291,7 +293,7 @@ def test_pending_start_failure_advances_attempt_instead_of_spinning(
 
 
 def test_scheduler_rejects_tampered_evaluation_artifact_before_launch(tmp_path: Path) -> None:
-    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2))
+    scheduler = CreditEvaluationScheduler(1, _arguments(tmp_path, maximum_attempts=2), _evaluation())
     publication = _publication(tmp_path, 1_000)
     scheduler.offer(publication)
     (tmp_path / publication.jit_model.path).write_bytes(b'tampered')
@@ -306,10 +308,9 @@ def test_scheduler_rejects_tampered_evaluation_artifact_before_launch(tmp_path: 
 
 def test_credit_evaluation_offsets_are_evaluation_checkpoint_ordinals(tmp_path: Path) -> None:
     arguments = _arguments(tmp_path)
-    translated = credit_evaluation_arguments(arguments, 2_000)
+    translated, evaluation = credit_evaluation_arguments(arguments, _evaluation(), 2_000)
 
-    assert translated.evaluation is not None
-    assert translated.evaluation.previous_model_offsets == (20, 40)
-    assert translated.evaluation.historical_model_versions == (20, 40, 60)
-    assert translated.evaluation.every_n_model_versions == 20
+    assert evaluation.previous_model_offsets == (20, 40)
+    assert evaluation.historical_model_versions == (20, 40, 60)
+    assert evaluation.every_n_model_versions == 20
     assert translated.artifact_retention.milestone_inference_interval == 20
