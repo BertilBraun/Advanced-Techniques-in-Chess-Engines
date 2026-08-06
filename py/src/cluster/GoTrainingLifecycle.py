@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,23 +69,24 @@ class GoTrainingLifecycle:
             self.training.random_seed,
         )
         self.model, self.optimizer = self._load_training_state(self.ledger.progress.model_version)
-        self.publisher = GoCompletedGamePublisher(self.run_path, run_id, worker_id=0)
-        self.self_play = GoSelfPlay(
-            configuration,
-            inference_model_path(model_save_path(self.ledger.progress.model_version, self.run_path)),
-            self.ledger.progress.model_version,
-            self.publisher,
-            self.training.topology.self_play.device_ids[0],
+        model_path = inference_model_path(model_save_path(self.ledger.progress.model_version, self.run_path))
+        self.self_play_workers = tuple(
+            GoSelfPlay(
+                configuration,
+                model_path,
+                self.ledger.progress.model_version,
+                GoCompletedGamePublisher(self.run_path, run_id, worker_id),
+                device_id,
+            )
+            for worker_id, device_id in enumerate(self.training.topology.self_play.device_ids)
         )
         self._recover_prepared_quantum()
 
-    def run(self) -> tuple[GoQuantumResult, ...]:
-        results: list[GoQuantumResult] = []
+    def run(self) -> Iterator[GoQuantumResult]:
         parameters = self.training.lifecycle.credit
         while self.ledger.progress.completed_optimizer_steps < parameters.maximum_optimizer_steps:
             snapshot = self._earn_training_credits()
-            results.append(self._train_quantum(snapshot))
-        return tuple(results)
+            yield self._train_quantum(snapshot)
 
     def run_one_quantum(self) -> GoQuantumResult:
         return self._train_quantum(self._earn_training_credits())
@@ -98,7 +100,8 @@ class GoTrainingLifecycle:
             progress = self.ledger.reconcile_credited_samples(snapshot.credited_samples)
             if progress.can_train(required) and len(snapshot.samples) >= self.training.trainer.global_batch_size:
                 return snapshot
-            self.self_play.generate(self.training.topology.self_play.parallel_games_per_process)
+            for worker in self.self_play_workers:
+                worker.generate(self.training.topology.self_play.parallel_games_per_process)
 
     def _train_quantum(self, snapshot: GoReplaySnapshot) -> GoQuantumResult:
         next_generation = self.ledger.progress.model_version + 1
@@ -126,10 +129,9 @@ class GoTrainingLifecycle:
             self.training.trainer.global_batch_size,
         )
         write_credit_publication_manifest(self.run_path, publication)
-        self.self_play.refresh_model(
-            next_generation,
-            inference_model_path(model_save_path(next_generation, self.run_path)),
-        )
+        published_model = inference_model_path(model_save_path(next_generation, self.run_path))
+        for worker in self.self_play_workers:
+            worker.refresh_model(next_generation, published_model)
         assert prepared.prepared_progress == progress
         return GoQuantumResult(
             progress=progress,
@@ -206,7 +208,6 @@ class GoTrainingLifecycle:
         )
         write_credit_publication_manifest(self.run_path, publication)
         self.model, self.optimizer = self._load_training_state(progress.model_version)
-        self.self_play.refresh_model(
-            progress.model_version,
-            inference_model_path(model_save_path(progress.model_version, self.run_path)),
-        )
+        published_model = inference_model_path(model_save_path(progress.model_version, self.run_path))
+        for worker in self.self_play_workers:
+            worker.refresh_model(progress.model_version, published_model)

@@ -184,7 +184,17 @@ class GoSearchRoot9:
     def play(self, action_id: int) -> None: ...
 
 class GoBatchedSearch7:
-    def __init__(self, model_path: str, device: InferenceDevice, device_id: int, maximum_batch_size: int, dimensions: InferenceDimensions, exploration_constant: float, tree_capacity: int, model_generation: int) -> None: ...
+    def __init__(
+        self,
+        model_path: str,
+        device: InferenceDevice,
+        device_id: int,
+        maximum_batch_size: int,
+        dimensions: InferenceDimensions,
+        exploration_constant: float,
+        tree_capacity: int,
+        model_generation: int,
+    ) -> None: ...
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot7: ...
@@ -194,7 +204,17 @@ class GoBatchedSearch7:
     def model_generation(self) -> int: ...
 
 class GoBatchedSearch9:
-    def __init__(self, model_path: str, device: InferenceDevice, device_id: int, maximum_batch_size: int, dimensions: InferenceDimensions, exploration_constant: float, tree_capacity: int, model_generation: int) -> None: ...
+    def __init__(
+        self,
+        model_path: str,
+        device: InferenceDevice,
+        device_id: int,
+        maximum_batch_size: int,
+        dimensions: InferenceDimensions,
+        exploration_constant: float,
+        tree_capacity: int,
+        model_generation: int,
+    ) -> None: ...
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot9: ...

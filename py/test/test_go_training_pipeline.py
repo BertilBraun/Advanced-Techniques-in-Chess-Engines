@@ -332,5 +332,5 @@ def test_go_credit_lifecycle_publication_and_recovery(tmp_path: Path) -> None:
 
     recovered = GoTrainingLifecycle(run_id=9, configuration=configuration)
     assert recovered.ledger.progress == result.progress
-    assert recovered.self_play.search.model_generation == 1
+    assert recovered.self_play_workers[0].search.model_generation == 1
     assert recovered.replay.maintain(10).credited_samples >= 2

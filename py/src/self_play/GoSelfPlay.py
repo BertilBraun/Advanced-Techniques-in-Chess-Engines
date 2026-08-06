@@ -65,12 +65,30 @@ class GoSelfPlay:
         )
         search = configuration.training.self_play.search
         inference = configuration.training.self_play.inference
+        dimensions = search_type.inference_dimensions()
+        representation = configuration.go.representation
+        expected_dimensions = (
+            representation.channel_count,
+            representation.board_size,
+            representation.board_size,
+            representation.action_count,
+            3,
+        )
+        actual_dimensions = (
+            dimensions.channels,
+            dimensions.rows,
+            dimensions.columns,
+            dimensions.actions,
+            dimensions.outcomes,
+        )
+        if actual_dimensions != expected_dimensions:
+            raise ValueError('Resolved Go representation disagrees with the native template dimensions.')
         self.search: NativeGoSearch = search_type(
             str(model_path),
             device,
             device_id,
             inference.inference_batch_size,
-            search_type.inference_dimensions(),
+            dimensions,
             search.c_param,
             search.num_searches_per_turn + search.num_parallel_searches + 2,
             model_generation,
