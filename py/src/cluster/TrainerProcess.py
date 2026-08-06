@@ -4,7 +4,6 @@ import os
 import socket
 import time
 import traceback
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from multiprocessing.connection import Connection, wait
@@ -18,13 +17,11 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
 from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.self_play.SelfPlayDataset import TrainingBatch
 from src.Network import Network
-from src.train.RollingReplayBuffer import (
-    CompactionStepStatus,
-    ReplayQuantumRequest,
-    RollingReplayBuffer,
-    decode_rank_quantum,
+from src.train.ChessReplay import (
+    ChessReplayMaintainer,
+    ChessReplaySnapshot,
+    training_batch_loader,
 )
 from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import ClusterParams, TrainingArgs, TrainingParams
@@ -150,13 +147,10 @@ def _wrap_distributed_model(
 class MaintainReplayCommand:
     phase_id: int
     replay_capacity_unique_positions: int
-    compact_below_credited_unique_samples: int | None
 
     def __post_init__(self) -> None:
         if self.replay_capacity_unique_positions <= 0:
             raise ValueError('Replay capacity must be positive.')
-        if self.compact_below_credited_unique_samples is not None and self.compact_below_credited_unique_samples <= 0:
-            raise ValueError('Replay compaction credit threshold must be positive.')
 
 
 @dataclass(frozen=True)
@@ -187,6 +181,8 @@ class RankReplayMaintained:
     weighted_mean_source_model_version_midpoint: float | None
     oldest_position_age_seconds: float | None
     weighted_mean_position_age_seconds: float | None
+    evicted_unique_samples: int
+    replay_memory_bytes: int
 
 
 @dataclass(frozen=True)
@@ -220,6 +216,8 @@ class ReplayState:
     weighted_mean_source_model_version_midpoint: float | None
     oldest_position_age_seconds: float | None
     weighted_mean_position_age_seconds: float | None
+    evicted_unique_samples: int
+    replay_memory_bytes: int
 
 
 @dataclass(frozen=True)
@@ -235,17 +233,6 @@ class QuantumResult:
     selected_bytes: int
     bytes_read: int
     checkpoint_manifest: Path
-
-
-@dataclass(frozen=True)
-class _QuantumBatchLoader:
-    batches: tuple[TrainingBatch, ...]
-
-    def __iter__(self) -> Iterator[TrainingBatch]:
-        return iter(self.batches)
-
-    def __len__(self) -> int:
-        return len(self.batches)
 
 
 class TrainerProcess:
@@ -269,16 +256,6 @@ class TrainerProcess:
             raise ValueError('Credit-driven production training requires a 500,000 optimizer-step limit.')
         if parameters.retained_checkpoint_interval_steps != 1_000:
             raise ValueError('Credit-driven production training requires retained checkpoints every 1,000 steps.')
-        replay_root = Path(args.save_path)
-        replay_inbox = replay_root / 'replay_inbox'
-        replay_index = replay_root / 'rolling-replay-index.json'
-        RollingReplayBuffer(
-            replay_inbox=replay_inbox,
-            index_path=replay_index,
-            capacity=parameters.replay_capacity_for_model_version(starting_model_version),
-            sampler_seed=args.random_seed,
-        )
-
         self.args = args
         self.run_id = run_id
         self.world_size = len(args.cluster.trainer_ddp_device_ids)
@@ -305,13 +282,11 @@ class TrainerProcess:
     def maintain_replay(
         self,
         replay_capacity_unique_positions: int,
-        compact_below_credited_unique_samples: int | None,
     ) -> ReplayState:
         self._phase_id += 1
         command = MaintainReplayCommand(
             self._phase_id,
             replay_capacity_unique_positions,
-            compact_below_credited_unique_samples,
         )
         for connection in self._connections:
             connection.send(command)
@@ -339,6 +314,8 @@ class TrainerProcess:
             weighted_mean_source_model_version_midpoint=rank_zero.weighted_mean_source_model_version_midpoint,
             oldest_position_age_seconds=rank_zero.oldest_position_age_seconds,
             weighted_mean_position_age_seconds=rank_zero.weighted_mean_position_age_seconds,
+            evicted_unique_samples=rank_zero.evicted_unique_samples,
+            replay_memory_bytes=rank_zero.replay_memory_bytes,
         )
 
     def train_quantum(self, global_step: int, model_version: int) -> QuantumResult:
@@ -495,66 +472,62 @@ class TrainerProcess:
         self._processes = []
 
 
-def quantum_request(
-    args: TrainingArgs,
-    rank: int,
-    global_step: int,
-) -> ReplayQuantumRequest:
-    parameters = args.training.credit_training
-    return ReplayQuantumRequest(
-        global_step=global_step,
-        optimizer_steps=parameters.optimizer_steps_per_quantum,
-        global_batch_size=args.training.global_batch_size,
-        world_size=len(args.cluster.trainer_ddp_device_ids),
-        rank=rank,
-    )
-
-
 def _maintain_replay(
     command: MaintainReplayCommand,
-    replay_buffer: RollingReplayBuffer,
+    replay_maintainer: ChessReplayMaintainer | None,
     rank: int,
     device: torch.device,
-) -> RankReplayMaintained:
+) -> tuple[RankReplayMaintained, ChessReplaySnapshot]:
     distributed.barrier()
-    compacted_container = False
-    replay_buffer.set_capacity(command.replay_capacity_unique_positions)
+    snapshot: ChessReplaySnapshot | None = None
+    metrics = None
     if is_rank_zero(rank):
-        replay_buffer.discover_committed_shards()
-        should_compact = (
-            command.compact_below_credited_unique_samples is not None
-            and replay_buffer.credited_unique_sample_count < command.compact_below_credited_unique_samples
-        )
-        if should_compact:
-            result = replay_buffer.compact_one_idle_container()
-            compacted_container = result.status is CompactionStepStatus.COMMITTED_CONTAINER
-    distributed.barrier()
-    if not is_rank_zero(rank):
-        replay_buffer.refresh_index_for_read()
-    distributed.barrier()
-    counters = torch.tensor(
-        [
-            replay_buffer.credited_unique_sample_count,
-            replay_buffer.credited_completed_search_count,
-            replay_buffer.unique_sample_count,
-        ],
-        dtype=torch.int64,
+        if replay_maintainer is None:
+            raise RuntimeError('Rank zero must own the chess replay maintainer.')
+        snapshot, metrics = replay_maintainer.maintain(command.replay_capacity_unique_positions)
+    objects: list[ChessReplaySnapshot | None] = [snapshot]
+    distributed.broadcast_object_list(
+        objects,
+        src=0,
         device=device,
     )
-    distributed.broadcast(counters, src=0)
-    live_statistics = replay_buffer.live_statistics(time.time())
-    return RankReplayMaintained(
-        rank=rank,
-        phase_id=command.phase_id,
-        credited_unique_samples=int(counters[0].item()),
-        credited_completed_searches=int(counters[1].item()),
-        live_unique_samples=int(counters[2].item()),
-        compacted_container=compacted_container,
-        oldest_source_model_version=live_statistics.oldest_source_model_version,
-        newest_source_model_version=live_statistics.newest_source_model_version,
-        weighted_mean_source_model_version_midpoint=(live_statistics.weighted_mean_source_model_version_midpoint),
-        oldest_position_age_seconds=live_statistics.oldest_position_age_seconds,
-        weighted_mean_position_age_seconds=live_statistics.weighted_mean_position_age_seconds,
+    received_snapshot = objects[0]
+    if received_snapshot is None:
+        raise RuntimeError('DDP rank did not receive a frozen chess replay snapshot.')
+    if metrics is None:
+        samples = received_snapshot.samples
+        generations = tuple(sample.source_model_generation for sample in samples)
+        ages = tuple(
+            max(0.0, received_snapshot.frozen_at_seconds - sample.source_created_at_seconds) for sample in samples
+        )
+        oldest_generation = min(generations) if generations else None
+        newest_generation = max(generations) if generations else None
+        mean_generation = sum(generations) / len(generations) if generations else None
+        oldest_age = max(ages) if ages else None
+        mean_age = sum(ages) / len(ages) if ages else None
+    else:
+        oldest_generation = metrics.oldest_source_model_generation
+        newest_generation = metrics.newest_source_model_generation
+        mean_generation = metrics.mean_source_model_generation
+        oldest_age = metrics.oldest_sample_age_seconds
+        mean_age = metrics.mean_sample_age_seconds
+    return (
+        RankReplayMaintained(
+            rank=rank,
+            phase_id=command.phase_id,
+            credited_unique_samples=received_snapshot.credited_samples,
+            credited_completed_searches=received_snapshot.credited_completed_searches,
+            live_unique_samples=len(received_snapshot.samples),
+            compacted_container=False,
+            oldest_source_model_version=oldest_generation,
+            newest_source_model_version=newest_generation,
+            weighted_mean_source_model_version_midpoint=mean_generation,
+            oldest_position_age_seconds=oldest_age,
+            weighted_mean_position_age_seconds=mean_age,
+            evicted_unique_samples=received_snapshot.evicted_samples,
+            replay_memory_bytes=received_snapshot.estimated_sample_bytes,
+        ),
+        received_snapshot,
     )
 
 
@@ -565,31 +538,20 @@ def _train_quantum(
     model: Network,
     optimizer: torch.optim.Optimizer,
     training_model: DistributedDataParallel,
-    replay_buffer: RollingReplayBuffer,
+    replay_snapshot: ChessReplaySnapshot,
 ) -> RankQuantumComplete:
     parameters = args.training.credit_training
-    request = quantum_request(args, rank, command.global_step)
-    decode_started_at = time.perf_counter()
-    quantum = decode_rank_quantum(replay_buffer, request)
-    decode_seconds = torch.tensor(
-        time.perf_counter() - decode_started_at,
-        device=model.device,
-        dtype=torch.float64,
+    batches = training_batch_loader(
+        replay_snapshot,
+        global_step=command.global_step,
+        optimizer_steps=parameters.optimizer_steps_per_quantum,
+        global_batch_size=args.training.global_batch_size,
+        world_size=len(args.cluster.trainer_ddp_device_ids),
+        rank=rank,
+        pin_memory=model.device.type == 'cuda',
     )
-    distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
-    replay_statistics = torch.tensor(
-        [
-            quantum.decode_statistics.payload_open_count,
-            quantum.decode_statistics.selected_rows,
-            quantum.decode_statistics.rows_read,
-            quantum.decode_statistics.selected_bytes,
-            quantum.decode_statistics.bytes_read,
-        ],
-        device=model.device,
-        dtype=torch.int64,
-    )
-    distributed.all_reduce(replay_statistics, op=distributed.ReduceOp.SUM)
-    if quantum.optimizer_steps != parameters.optimizer_steps_per_quantum:
+    selected_rows = len(batches.indices)
+    if len(batches) != parameters.optimizer_steps_per_quantum:
         raise RuntimeError('Decoded replay quantum has the wrong optimizer-step count.')
     distributed.barrier()
 
@@ -604,9 +566,15 @@ def _train_quantum(
         torch.cuda.synchronize(model.device)
     optimizer_started_at = time.perf_counter()
     training_stats = trainer.train(
-        _QuantumBatchLoader(tuple(quantum.optimizer_batches())),
+        batches,
         command.global_step,
     )
+    decode_seconds = torch.tensor(
+        batches.preparation_seconds,
+        device=model.device,
+        dtype=torch.float64,
+    )
+    distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
     elapsed_seconds = torch.tensor(
@@ -638,11 +606,11 @@ def _train_quantum(
         training_stats=training_stats if is_rank_zero(rank) else None,
         optimizer_seconds=float(elapsed_seconds.item()) if is_rank_zero(rank) else None,
         decode_seconds=float(decode_seconds.item()) if is_rank_zero(rank) else None,
-        payload_open_count=int(replay_statistics[0].item()) if is_rank_zero(rank) else None,
-        selected_rows=int(replay_statistics[1].item()) if is_rank_zero(rank) else None,
-        rows_read=int(replay_statistics[2].item()) if is_rank_zero(rank) else None,
-        selected_bytes=int(replay_statistics[3].item()) if is_rank_zero(rank) else None,
-        bytes_read=int(replay_statistics[4].item()) if is_rank_zero(rank) else None,
+        payload_open_count=0 if is_rank_zero(rank) else None,
+        selected_rows=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,
+        rows_read=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,
+        selected_bytes=0 if is_rank_zero(rank) else None,
+        bytes_read=0 if is_rank_zero(rank) else None,
         checkpoint_manifest=str(manifest.resolve()) if manifest is not None else None,
     )
 
@@ -657,15 +625,17 @@ def run_trainer_rank(
 ) -> None:
     configure_logging(enabled=is_rank_zero(rank))
     current_phase_id: int | None = None
-    replay_root = Path(args.save_path)
     parameters = args.training.credit_training
-    replay_buffer = RollingReplayBuffer(
-        replay_inbox=replay_root / 'replay_inbox',
-        index_path=replay_root / 'rolling-replay-index.json',
-        capacity=parameters.replay_capacity_for_model_version(starting_model_version),
-        sampler_seed=args.random_seed,
-        read_only=not is_rank_zero(rank),
+    replay_maintainer = (
+        ChessReplayMaintainer(
+            Path(args.save_path),
+            capacity=parameters.replay_capacity_for_model_version(starting_model_version),
+            sampler_seed=args.random_seed,
+        )
+        if is_rank_zero(rank)
+        else None
     )
+    replay_snapshot: ChessReplaySnapshot | None = None
     usage_logger = start_cpu_usage_logger(run_id, 'trainer') if is_rank_zero(rank) else None
     process_group_initialized = False
     normal_shutdown = False
@@ -699,9 +669,17 @@ def run_trainer_rank(
             match command:
                 case MaintainReplayCommand():
                     current_phase_id = command.phase_id
-                    connection.send(_maintain_replay(command, replay_buffer, rank, device))
+                    response, replay_snapshot = _maintain_replay(
+                        command,
+                        replay_maintainer,
+                        rank,
+                        device,
+                    )
+                    connection.send(response)
                 case TrainQuantumCommand():
                     current_phase_id = command.phase_id
+                    if replay_snapshot is None:
+                        raise RuntimeError('Training requires a frozen chess replay snapshot.')
                     connection.send(
                         _train_quantum(
                             command,
@@ -710,7 +688,7 @@ def run_trainer_rank(
                             model,
                             optimizer,
                             training_model,
-                            replay_buffer,
+                            replay_snapshot,
                         )
                     )
                 case StopTrainerCommand():

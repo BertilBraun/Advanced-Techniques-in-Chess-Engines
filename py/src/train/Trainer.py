@@ -125,6 +125,35 @@ def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[Training
             yield batch
 
 
+def prefetch_device_training_batches(
+    batches: TrainingBatchLoader,
+    device: torch.device,
+) -> Iterator[TrainingBatch]:
+    cpu_batches = iter(prefetch_training_batches(batches))
+    if device.type != 'cuda':
+        yield from cpu_batches
+        return
+    transfer_stream = torch.cuda.Stream(device=device)
+    try:
+        first_cpu_batch = next(cpu_batches)
+    except StopIteration:
+        return
+    with torch.cuda.stream(transfer_stream):
+        current_device_batch = first_cpu_batch.to_device(device, non_blocking=True)
+    while True:
+        try:
+            next_cpu_batch = next(cpu_batches)
+        except StopIteration:
+            torch.cuda.current_stream(device).wait_stream(transfer_stream)
+            yield current_device_batch
+            return
+        with torch.cuda.stream(transfer_stream):
+            next_device_batch = next_cpu_batch.to_device(device, non_blocking=True)
+        torch.cuda.current_stream(device).wait_stream(transfer_stream)
+        yield current_device_batch
+        current_device_batch = next_device_batch
+
+
 class Trainer:
     def __init__(
         self,
@@ -152,8 +181,7 @@ class Trainer:
         outcome_target_eligible = batch.outcome_target_eligible.to(device=self.model.device)
         material_result_scores = batch.material_result_scores.to(device=self.model.device)
         material_target_eligible = batch.material_target_eligible.to(device=self.model.device)
-        occurrence_counts = batch.occurrence_counts.to(device=self.model.device)
-        sample_weights = torch.sqrt(occurrence_counts.to(dtype=torch.float32))
+        sample_weights = batch.sample_weights.to(device=self.model.device)
         if self.args.duplicate_multiplicity_weight_cap is not None:
             sample_weights.clamp_(max=self.args.duplicate_multiplicity_weight_cap)
         sample_weights /= sample_weights.mean()
@@ -214,7 +242,7 @@ class Trainer:
         gradient_norms: list[torch.Tensor] = []
         metric_batches: list[_DetachedMetricBatch] = []
 
-        for batch in prefetch_training_batches(dataloader):
+        for batch in prefetch_device_training_batches(dataloader, self.model.device):
             self.optimizer.zero_grad()
             sample_count = batch.states.shape[0]
 

@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 import sys
 from dataclasses import dataclass
 from types import ModuleType
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
+from src.self_play.chess_completed_game import ChessCompletedGamePublisher
 from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import DirectSelfPlayParams
 
@@ -127,7 +129,10 @@ class _LifecycleRoot:
         self.events.append('release_root')
 
 
-def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_self_play_constructs_selected_inference_client(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
     fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectSelfPlayInferenceParams
@@ -141,7 +146,12 @@ def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.Monk
     training_args.self_play.initial_num_searches_per_turn = 100
     training_args.self_play.mcts.num_searches_per_turn = 600
     training_args.self_play_search_warmup_model_versions = 100
-    self_play = SelfPlay(device_id=0, args=training_args)
+    training_args.save_path = str(tmp_path)
+    self_play = SelfPlay(
+        device_id=0,
+        args=training_args,
+        completed_game_publisher=ChessCompletedGamePublisher(tmp_path, 0, 0),
+    )
 
     self_play._set_mcts(iteration=50)
 
@@ -152,7 +162,10 @@ def test_self_play_constructs_selected_inference_client(monkeypatch: pytest.Monk
     assert self_play.search_schedule(100).num_full_searches == 600
 
 
-def test_self_play_constructs_direct_inference_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_self_play_constructs_direct_inference_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
     fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectSelfPlayInferenceParams
@@ -168,7 +181,12 @@ def test_self_play_constructs_direct_inference_pipeline(monkeypatch: pytest.Monk
         inference_batch_size=64,
         outstanding_batches_per_worker=1,
     )
-    self_play = SelfPlay(device_id=0, args=training_args)
+    training_args.save_path = str(tmp_path)
+    self_play = SelfPlay(
+        device_id=0,
+        args=training_args,
+        completed_game_publisher=ChessCompletedGamePublisher(tmp_path, 0, 0),
+    )
 
     self_play._set_mcts(iteration=50)
 

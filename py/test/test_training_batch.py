@@ -111,6 +111,7 @@ def test_prebatched_dataset_matches_individual_samples() -> None:
         current_player_piece_counts=torch.stack([sample.current_player_piece_count for sample in individual]),
         opponent_piece_counts=torch.stack([sample.opponent_piece_count for sample in individual]),
         occurrence_counts=torch.stack([sample.occurrence_count for sample in individual]),
+        sample_weights=torch.stack([sample.sample_weight for sample in individual]),
     )
 
     batch = samples.__getitems__(list(range(len(samples))))

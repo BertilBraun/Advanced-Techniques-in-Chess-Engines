@@ -1484,6 +1484,14 @@ def _decode_with_deterministic_symmetry(
                 dtype=np.int32,
             )
         ),
+        sample_weights=torch.from_numpy(
+            np.sqrt(
+                np.fromiter(
+                    (metadata.occurrence_count for metadata in sample_metadata),
+                    dtype=np.float32,
+                )
+            )
+        ),
     )
 
 

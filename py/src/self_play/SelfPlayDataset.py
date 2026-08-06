@@ -48,6 +48,7 @@ class TrainingBatch:
     current_player_piece_counts: torch.Tensor
     opponent_piece_counts: torch.Tensor
     occurrence_counts: torch.Tensor
+    sample_weights: torch.Tensor
 
     def __len__(self) -> int:
         return int(self.states.shape[0])
@@ -69,6 +70,7 @@ class TrainingBatch:
             current_player_piece_counts=self.current_player_piece_counts[rows],
             opponent_piece_counts=self.opponent_piece_counts[rows],
             occurrence_counts=self.occurrence_counts[rows],
+            sample_weights=self.sample_weights[rows],
         )
 
     def pin_memory(self) -> TrainingBatch:
@@ -85,6 +87,24 @@ class TrainingBatch:
             current_player_piece_counts=self.current_player_piece_counts.pin_memory(),
             opponent_piece_counts=self.opponent_piece_counts.pin_memory(),
             occurrence_counts=self.occurrence_counts.pin_memory(),
+            sample_weights=self.sample_weights.pin_memory(),
+        )
+
+    def to_device(self, device: torch.device, non_blocking: bool) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.to(device=device, non_blocking=non_blocking),
+            policy_targets=self.policy_targets.to(device=device, non_blocking=non_blocking),
+            final_outcomes=self.final_outcomes.to(device=device, non_blocking=non_blocking),
+            mcts_root_values=self.mcts_root_values.to(device=device, non_blocking=non_blocking),
+            outcome_target_eligible=self.outcome_target_eligible.to(device=device, non_blocking=non_blocking),
+            material_result_scores=self.material_result_scores.to(device=device, non_blocking=non_blocking),
+            material_target_eligible=self.material_target_eligible.to(device=device, non_blocking=non_blocking),
+            termination_reasons=self.termination_reasons.to(device=device, non_blocking=non_blocking),
+            plies=self.plies.to(device=device, non_blocking=non_blocking),
+            current_player_piece_counts=self.current_player_piece_counts.to(device=device, non_blocking=non_blocking),
+            opponent_piece_counts=self.opponent_piece_counts.to(device=device, non_blocking=non_blocking),
+            occurrence_counts=self.occurrence_counts.to(device=device, non_blocking=non_blocking),
+            sample_weights=self.sample_weights.to(device=device, non_blocking=non_blocking),
         )
 
 
@@ -102,6 +122,7 @@ class TrainingSample:
     current_player_piece_count: torch.Tensor
     opponent_piece_count: torch.Tensor
     occurrence_count: torch.Tensor
+    sample_weight: torch.Tensor
 
 
 @dataclass(frozen=True)
@@ -219,6 +240,9 @@ def training_batch_from_raw_samples(
         occurrence_counts=torch.from_numpy(
             np.fromiter((metadata.occurrence_count for metadata in sample_metadata), dtype=np.int32)
         ),
+        sample_weights=torch.from_numpy(
+            np.sqrt(np.fromiter((metadata.occurrence_count for metadata in sample_metadata), dtype=np.float32))
+        ),
     )
 
 
@@ -298,6 +322,9 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             ),
             opponent_piece_count=torch.tensor(self.sample_metadata[idx].opponent_piece_count, dtype=torch.int8),
             occurrence_count=torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.int32),
+            sample_weight=torch.sqrt(
+                torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.float32)
+            ),
         )
 
     def __getitems__(self, indices: list[int]) -> TrainingBatch:

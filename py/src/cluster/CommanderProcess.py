@@ -1,7 +1,6 @@
 from typing import Generator
 import time
 from dataclasses import dataclass
-from decimal import ROUND_CEILING, Decimal
 import torch
 import psutil
 from torch.multiprocessing import Process
@@ -211,16 +210,10 @@ class CommanderProcess:
         parameters: CreditTrainingParams,
     ) -> CreditObservation | None:
         replay_capacity = parameters.replay_capacity_for_model_version(lifecycle.ledger.progress.model_version)
-        replay_state = lifecycle.trainer.maintain_replay(replay_capacity, None)
+        replay_state = lifecycle.trainer.maintain_replay(replay_capacity)
         progress = lifecycle.ledger.reconcile_credited_samples(replay_state.credited_unique_samples)
         required_credits = parameters.presentation_credits_per_quantum(self.args.training.global_batch_size)
         if not progress.can_train(required_credits):
-            minimum_samples = int(
-                (
-                    (progress.consumed_position_credits + Decimal(required_credits)) / parameters.replay_ratio
-                ).to_integral_value(rounding=ROUND_CEILING)
-            )
-            lifecycle.trainer.maintain_replay(replay_capacity, minimum_samples)
             return None
         completed_at = monotonic()
         return CreditObservation(
@@ -276,6 +269,8 @@ class CommanderProcess:
             credited_completed_searches=replay_state.credited_completed_searches,
             live_replay_positions=replay_state.live_unique_samples,
             replay_capacity_unique_positions=observation.replay_capacity,
+            replay_evicted_unique_positions=replay_state.evicted_unique_samples,
+            replay_memory_bytes=replay_state.replay_memory_bytes,
             optimizer_seconds=result.optimizer_seconds,
             decode_seconds=result.decode_seconds,
             loader_wait_seconds=observation.loader_wait_seconds,

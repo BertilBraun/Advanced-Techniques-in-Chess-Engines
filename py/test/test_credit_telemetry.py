@@ -50,6 +50,8 @@ def _telemetry(
         credited_completed_searches=900_000,
         live_replay_positions=current.credited_unique_samples,
         replay_capacity_unique_positions=100_000,
+        replay_evicted_unique_positions=20,
+        replay_memory_bytes=2_000_000,
         optimizer_seconds=2,
         decode_seconds=1,
         loader_wait_seconds=3,

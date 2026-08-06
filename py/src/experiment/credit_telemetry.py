@@ -40,6 +40,8 @@ class CreditTrainingTelemetry(FrozenModel):
     cumulative_replay_ratio: float = Field(ge=0)
     live_replay_positions: int = Field(ge=0)
     replay_capacity_unique_positions: int = Field(gt=0)
+    replay_evicted_unique_positions: int = Field(ge=0)
+    replay_memory_bytes: int = Field(ge=0)
     optimizer_seconds: float = Field(ge=0)
     optimizer_samples_per_second: float = Field(ge=0)
     newly_credited_unique_positions_per_second: float = Field(ge=0)
@@ -115,6 +117,8 @@ class CreditTrainingTelemetry(FrozenModel):
             ('credit/cumulative_replay_ratio', self.cumulative_replay_ratio),
             ('credit/live_replay_positions', self.live_replay_positions),
             ('credit/replay_capacity_unique_positions', self.replay_capacity_unique_positions),
+            ('credit/replay_evicted_unique_positions', self.replay_evicted_unique_positions),
+            ('credit/replay_memory_bytes', self.replay_memory_bytes),
             ('credit/optimizer_seconds', self.optimizer_seconds),
             ('credit/optimizer_samples_per_second', self.optimizer_samples_per_second),
             (
@@ -186,6 +190,8 @@ def build_credit_training_telemetry(
     credited_completed_searches: int,
     live_replay_positions: int,
     replay_capacity_unique_positions: int,
+    replay_evicted_unique_positions: int,
+    replay_memory_bytes: int,
     optimizer_seconds: float,
     decode_seconds: float,
     loader_wait_seconds: float,
@@ -245,6 +251,8 @@ def build_credit_training_telemetry(
         cumulative_replay_ratio=cumulative_replay_ratio,
         live_replay_positions=live_replay_positions,
         replay_capacity_unique_positions=replay_capacity_unique_positions,
+        replay_evicted_unique_positions=replay_evicted_unique_positions,
+        replay_memory_bytes=replay_memory_bytes,
         optimizer_seconds=optimizer_seconds,
         optimizer_samples_per_second=float(newly_consumed) / optimizer_seconds if optimizer_seconds else 0.0,
         newly_credited_unique_positions_per_second=(

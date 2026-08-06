@@ -234,16 +234,16 @@ monotonic game number. One trainer-side replay maintainer owns ingestion. For
 each published game it:
 
 1. reads and validates the record;
-2. appends one framed record to the archive for its model iteration;
+2. appends one framed record to the archive for its model generation;
 3. durably commits that append;
 4. materializes eligible replay samples;
 5. updates replay credits and telemetry;
 6. removes the consumed inbox file.
 
-An iteration archive is a sequence of independently readable game records with
+A model-generation archive is a sequence of independently readable game records with
 enough framing to detect an incomplete final append during recovery. This
 provides prompt sample availability, a small steady-state inbox, easy per-
-iteration inspection, and replay reconstruction from durable archives.
+generation inspection, and replay reconstruction from durable archives.
 
 A completed-game record contains:
 
@@ -349,8 +349,8 @@ process group and records the resulting status.
 | --- | --- | --- |
 | R1 | Remove Python MCTS and obsolete games | accepted |
 | R2 | Credit-only training lifecycle and commander cleanup | accepted |
-| R3 | Chess completed-game persistence and replay materialization | pending |
-| R4 | Chess RAM replay, batch construction, and DDP integration | pending |
+| R3 | Chess completed-game persistence and replay materialization | in_progress |
+| R4 | Chess RAM replay, batch construction, and DDP integration | in_progress |
 | R5 | Chess game-contract and configuration extraction | pending |
 | R6 | Shared bitboard and chess packed-plane integration | pending |
 | R7 | Native Go game implementation | pending |
@@ -360,7 +360,7 @@ process group and records the resulting status.
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R1 and R2 accepted. No later phase is authorized.
+Current authorization: R1 and R2 accepted. R3 and R4 are authorized and in progress as one implementation unit.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -437,7 +437,7 @@ Deliverables:
 
 - define the versioned chess completed-game schema;
 - publish one atomic completed-game file per worker game;
-- implement the single-owner inbox consumer and framed per-iteration archives;
+- implement the single-owner inbox consumer and framed per-model-generation archives;
 - implement crash recovery for inbox files and incomplete final archive
   records;
 - build the chess target materializer;

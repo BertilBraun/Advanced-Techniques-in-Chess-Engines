@@ -50,10 +50,10 @@ class _Trainer:
 class _ReplayTrainer:
     def __init__(self, credited_unique_samples: int) -> None:
         self.credited_unique_samples = credited_unique_samples
-        self.calls: list[tuple[int, int | None]] = []
+        self.calls: list[int] = []
 
-    def maintain_replay(self, capacity: int, minimum_samples: int | None) -> ReplayState:
-        self.calls.append((capacity, minimum_samples))
+    def maintain_replay(self, capacity: int) -> ReplayState:
+        self.calls.append(capacity)
         return ReplayState(
             credited_unique_samples=self.credited_unique_samples,
             credited_completed_searches=17,
@@ -64,6 +64,8 @@ class _ReplayTrainer:
             weighted_mean_source_model_version_midpoint=None,
             oldest_position_age_seconds=None,
             weighted_mean_position_age_seconds=None,
+            evicted_unique_samples=0,
+            replay_memory_bytes=0,
         )
 
 
@@ -105,7 +107,7 @@ def _lifecycle(tmp_path: Path, trainer: _ReplayTrainer) -> TrainingLifecycle:
     )
 
 
-def test_commander_waits_and_requests_compaction_until_enough_credits(tmp_path: Path) -> None:
+def test_commander_waits_until_enough_credits(tmp_path: Path) -> None:
     replay_trainer = _ReplayTrainer(credited_unique_samples=0)
 
     observation = commander()._observe_replay_credits(
@@ -114,7 +116,7 @@ def test_commander_waits_and_requests_compaction_until_enough_credits(tmp_path: 
     )
 
     assert observation is None
-    assert replay_trainer.calls == [(10, None), (10, 1)]
+    assert replay_trainer.calls == [10]
 
 
 def test_commander_observes_enough_credits_for_exactly_one_quantum(tmp_path: Path) -> None:
@@ -127,7 +129,7 @@ def test_commander_observes_enough_credits_for_exactly_one_quantum(tmp_path: Pat
 
     assert observation is not None
     assert observation.progress.can_train(4)
-    assert replay_trainer.calls == [(10, None)]
+    assert replay_trainer.calls == [10]
 
 
 def test_commander_attempts_resume_when_pause_acknowledgement_fails(

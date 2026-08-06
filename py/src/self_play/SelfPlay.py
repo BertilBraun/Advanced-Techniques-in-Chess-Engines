@@ -26,6 +26,16 @@ import numpy as np
 
 from src.games.Board import Player
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
+from src.self_play.chess_completed_game import (
+    ChessCompletedGame,
+    ChessCompletedGamePublisher,
+    ChessMoveSelectionMode,
+    ChessRepresentationMetadata,
+    ChessRulesMetadata,
+    ChessSearchObservation,
+    ChessGameIdentity,
+    SparseSearchVisit,
+)
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
 from src.self_play.resignation import (
@@ -37,12 +47,8 @@ from src.self_play.resignation import (
     best_child_value_from_root_perspective,
 )
 from src.util import lerp
-from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
-from src.self_play.value_target import (
-    ReplayValueTarget,
-    TerminationReason,
-    outcome_from_sample_perspective,
-)
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
@@ -63,6 +69,7 @@ class SelfPlayGameMemory:
     visit_counts: list[tuple[int, int]]
     result_score: float
     ply: int
+    model_generation: int
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,7 @@ class SelfPlayGame:
         is_resignation_audit: bool = False,
         production_resignation_enabled: bool = False,
         resignation_threshold: float | None = None,
+        identity: ChessGameIdentity | None = None,
     ) -> None:
         self.board = CurrentGame.get_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
@@ -106,6 +114,7 @@ class SelfPlayGame:
         self.is_resignation_audit = is_resignation_audit
         self.production_resignation_enabled = production_resignation_enabled
         self.resignation_threshold = resignation_threshold
+        self.identity = identity
         self.resignation_observations: list[ResignationObservation] = []
         self.resignation_trigger_ply: int | None = None
         self.resignee: Player | None = None
@@ -135,6 +144,7 @@ class SelfPlayGame:
             is_resignation_audit=self.is_resignation_audit,
             production_resignation_enabled=self.production_resignation_enabled,
             resignation_threshold=self.resignation_threshold,
+            identity=self.identity,
         )
         game.board = self.board.copy()
         game.memory = self.memory.copy()
@@ -175,12 +185,18 @@ def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
 
 
 class SelfPlay:
-    def __init__(self, device_id: int, args: TrainingArgs) -> None:
+    def __init__(
+        self,
+        device_id: int,
+        args: TrainingArgs,
+        completed_game_publisher: ChessCompletedGamePublisher,
+    ) -> None:
         self.device_id = device_id
         self.args = args.self_play
         self.search_warmup_iterations = args.self_play_search_warmup_model_versions
         self.endgame_shortcut_fade_iterations = args.self_play_endgame_shortcut_fade_model_versions
         self.save_path = args.save_path
+        self.completed_game_publisher = completed_game_publisher
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
         self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}
         self.disagreement_prefix_games_started = 0
@@ -464,6 +480,7 @@ class SelfPlay:
                         mcts_result.visits,
                         mcts_result.result,
                         len(spg.played_moves),
+                        self.model_version,
                     )
                 )
                 if self._record_resignation_observation(spg, mcts_result):
@@ -570,6 +587,7 @@ class SelfPlay:
             )
         if game.is_resignation_audit:
             self.dataset.stats += SelfPlayDatasetStats(resignation_audit_games_started=1)
+        game.identity = self.completed_game_publisher.reserve_identity()
         return game
 
     def _archive_disagreement_prefix(self, game: SelfPlayGame, root: MCTSRoot) -> None:
@@ -839,31 +857,52 @@ class SelfPlay:
             generation_time=time.time() - spg.start_generation_time,
         )
 
-        for mem in spg.memory[::-1]:
-            turn_game_outcome = outcome_from_sample_perspective(
-                game_outcome,
+        if spg.identity is None:
+            raise RuntimeError('Completed game has no reserved publication identity.')
+        moves_uci = tuple(move.uci() for move in spg.played_moves)
+        observations = tuple(
+            ChessSearchObservation(
+                ply=memory.ply,
+                model_generation=memory.model_generation,
+                legal_action_ids=tuple(
+                    sorted(CurrentGame.encode_move(move, memory.board) for move in memory.board.get_valid_moves())
+                ),
+                visits=tuple(
+                    SparseSearchVisit(action_id=action_id, visit_count=visit_count)
+                    for action_id, visit_count in memory.visit_counts
+                ),
+                root_value=memory.result_score,
+                selected_action_id=spg.encoded_moves[memory.ply],
+                move_selection_mode=(
+                    ChessMoveSelectionMode.GREEDY
+                    if memory.ply >= self.args.num_moves_after_which_to_play_greedy
+                    else ChessMoveSelectionMode.TEMPERATURE
+                ),
+                search_budget=self.num_searches_per_turn,
+                minimum_visit_count=self.args.mcts.min_visit_count,
+            )
+            for memory in spg.memory
+        )
+        self.completed_game_publisher.publish(
+            ChessCompletedGame(
+                identity=spg.identity,
+                rules=ChessRulesMetadata(),
+                representation=ChessRepresentationMetadata(),
+                model_generation=spg.newest_model_version,
+                minimum_model_generation=spg.oldest_model_version,
+                created_at_seconds=time.time(),
+                generation_seconds=time.time() - spg.start_generation_time,
+                initial_fen=chess.STARTING_FEN,
+                moves_uci=moves_uci,
                 final_current_player=spg.board.current_player,
-                sample_current_player=mem.board.current_player,
+                final_score=game_outcome,
+                termination_reason=termination_reason,
+                resignation_audit=spg.is_resignation_audit,
+                resignation_threshold=spg.resignation_threshold,
+                resignation_trigger_ply=spg.resignation_trigger_ply,
+                observations=observations,
             )
-
-            board = CurrentGame.get_canonical_board(mem.board).astype(np.int8).copy()
-            current_piece_count, opponent_piece_count = CurrentGame.replay_piece_counts(board)
-            self.dataset.add_sample(
-                board,
-                self._preprocess_visit_counts(mem.visit_counts),
-                ReplayValueTarget.from_scores(
-                    final_score=turn_game_outcome,
-                    mcts_root_value=mem.result_score,
-                    termination_reason=termination_reason,
-                ),
-                ReplaySampleMetadata(
-                    ply=mem.ply,
-                    current_player_piece_count=current_piece_count,
-                    opponent_piece_count=opponent_piece_count,
-                    starting_fen=mem.board.board.root().fen(),
-                    moves_uci=tuple(move.uci() for move in mem.board.board.move_stack),
-                ),
-            )
+        )
 
     def _preprocess_visit_counts(self, visit_counts: list[tuple[int, int]]) -> list[tuple[int, int]]:
         # Remove moves which were only visited exactly as many times as required, never more

@@ -107,6 +107,30 @@ def decode_board_states(encoded_states: Sequence[bytes]) -> npt.NDArray[np.int8]
     return decoded
 
 
+def decode_board_states_into(
+    encoded_states: Sequence[bytes],
+    output: npt.NDArray[np.float32],
+) -> None:
+    expected_shape = (len(encoded_states), C, H, W)
+    if output.shape != expected_shape or output.dtype != np.float32:
+        raise ValueError(f'Chess decode output must have shape {expected_shape} and float32 dtype.')
+    if not encoded_states:
+        return
+    normalized_states = (state[:ENCODED_BYTES].ljust(ENCODED_BYTES, b'\x00') for state in encoded_states)
+    encoded = np.frombuffer(b''.join(normalized_states), dtype=np.uint8).reshape(len(encoded_states), ENCODED_BYTES)
+    binary_bytes = encoded[:, : N_BB * 8].reshape(len(encoded_states), N_BB, 8)
+    binary_planes = np.unpackbits(binary_bytes, axis=2, bitorder='little').reshape(
+        len(encoded_states),
+        N_BB,
+        H,
+        W,
+    )
+    scalar_values = encoded[:, N_BB * 8 :].view(np.int8)
+    output.fill(0.0)
+    output[:, BINARY_CHANNELS] = binary_planes
+    output[:, SCALAR_CHANNELS] = scalar_values[:, :, np.newaxis, np.newaxis]
+
+
 def get_board_result_score(board: Board) -> float | None:
     """
     Returns the result score for the given board.
