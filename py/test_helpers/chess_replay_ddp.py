@@ -12,7 +12,7 @@ sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 from src.cluster.TrainerProcess import MaintainReplayCommand, _maintain_replay
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.ChessReplay import ChessReplayMetrics, ChessReplaySample, ChessReplaySnapshot
+from src.train.ChessReplay import ChessReplayMetrics, ChessReplaySample, ChessReplaySnapshot, pack_chess_visits
 
 
 WORLD_SIZE = 2
@@ -31,7 +31,7 @@ class SnapshotMaintainer:
 def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
     sample = ChessReplaySample(
         encoded_state=b'',
-        visits=((0, 1),),
+        visits=pack_chess_visits(((0, 1),)),
         value_target=ReplayValueTarget.from_scores(0.0, 0.0, TerminationReason.NATURAL),
         metadata=ReplaySampleMetadata(ply=0, current_player_piece_count=16, opponent_piece_count=16),
         sample_weight=1.0,

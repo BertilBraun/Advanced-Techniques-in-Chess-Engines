@@ -12,6 +12,7 @@ import time
 
 import chess
 import numpy as np
+import numpy.typing as npt
 import torch
 
 from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
@@ -27,17 +28,53 @@ from src.util.atomic_file import fsync_directory, write_bytes_atomically
 CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x02\n'
 _FRAME_HEADER = struct.Struct('>QQ32s')
 _ARCHIVE_FILE_PATTERN = 'model-generation-*.games'
+_MAXIMUM_PACKED_VISIT_VALUE = int(np.iinfo(np.uint16).max)
 
 
-@dataclass(frozen=True)
+def pack_chess_visits(visits: Sequence[tuple[int, int]]) -> npt.NDArray[np.uint16]:
+    if not visits:
+        raise ValueError('Packed chess visits must not be empty.')
+    if any(
+        action_id < 0
+        or action_id > _MAXIMUM_PACKED_VISIT_VALUE
+        or visit_count <= 0
+        or visit_count > _MAXIMUM_PACKED_VISIT_VALUE
+        for action_id, visit_count in visits
+    ):
+        raise ValueError('Packed chess actions must be nonnegative and visit counts positive uint16 values.')
+    packed = np.asarray(visits, dtype=np.uint16)
+    packed.flags.writeable = False
+    return packed
+
+
+@dataclass(frozen=True, eq=False)
 class ChessReplaySample:
     encoded_state: bytes
-    visits: tuple[tuple[int, int], ...]
+    visits: npt.NDArray[np.uint16]
     value_target: ReplayValueTarget
     metadata: ReplaySampleMetadata
     sample_weight: float
     source_model_generation: int
     source_created_at_seconds: float
+
+    def __post_init__(self) -> None:
+        if self.visits.dtype != np.uint16 or self.visits.ndim != 2 or self.visits.shape[1] != 2:
+            raise ValueError('Packed chess visits must have shape (N, 2) and uint16 dtype.')
+        if self.visits.flags.writeable:
+            raise ValueError('Packed chess visits must be read-only.')
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ChessReplaySample):
+            return NotImplemented
+        return (
+            self.encoded_state == other.encoded_state
+            and np.array_equal(self.visits, other.visits)
+            and self.value_target == other.value_target
+            and self.metadata == other.metadata
+            and self.sample_weight == other.sample_weight
+            and self.source_model_generation == other.source_model_generation
+            and self.source_created_at_seconds == other.source_created_at_seconds
+        )
 
 
 @dataclass(frozen=True)
@@ -205,14 +242,14 @@ class ChessReplay:
             sampler_seed=self.sampler_seed,
             frozen_at_seconds=time.time(),
             evicted_samples=self._evicted_samples,
-            estimated_sample_bytes=sum(len(sample.encoded_state) + len(sample.visits) * 8 + 64 for sample in samples),
+            estimated_sample_bytes=sum(len(sample.encoded_state) + sample.visits.nbytes + 64 for sample in samples),
         )
 
     def metrics(self, measured_at_seconds: float) -> ChessReplayMetrics:
         samples = tuple(self._samples)
         generations = tuple(sample.source_model_generation for sample in samples)
         ages = tuple(max(0.0, measured_at_seconds - sample.source_created_at_seconds) for sample in samples)
-        estimated_sample_bytes = sum(len(sample.encoded_state) + len(sample.visits) * 8 + 64 for sample in samples)
+        estimated_sample_bytes = sum(len(sample.encoded_state) + sample.visits.nbytes + 64 for sample in samples)
         return ChessReplayMetrics(
             credited_samples=self._credited_samples,
             credited_completed_searches=self._credited_completed_searches,
@@ -423,7 +460,7 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
                 )
                 materialized_by_ply[ply] = ChessReplaySample(
                     encoded_state=encode_board_state(canonical_state),
-                    visits=visits,
+                    visits=pack_chess_visits(visits),
                     value_target=ReplayValueTarget.from_scores(
                         final_score=final_score,
                         mcts_root_value=observation.root_value,
@@ -471,8 +508,8 @@ def build_chess_training_batch(
     decode_board_states_into(tuple(sample.encoded_state for sample in samples), states)
     policies = np.zeros((batch_size, CurrentGame.action_size), dtype=np.float32)
     for row, sample in enumerate(samples):
-        actions = np.fromiter((action for action, _ in sample.visits), dtype=np.int64)
-        counts = np.fromiter((count for _, count in sample.visits), dtype=np.float32)
+        actions = sample.visits[:, 0].astype(np.int64, copy=False)
+        counts = sample.visits[:, 1].astype(np.float32, copy=False)
         policies[row, actions] = counts / counts.sum()
     mirrored = np.fromiter(
         (

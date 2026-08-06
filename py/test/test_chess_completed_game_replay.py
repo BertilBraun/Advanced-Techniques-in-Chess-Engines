@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import chess
+import numpy as np
 import pytest
 import torch
 
@@ -30,6 +31,7 @@ from src.train.ChessReplay import (
     canonical_game_payload,
     inspect_chess_archives,
     materialize_chess_game,
+    pack_chess_visits,
     read_chess_archive,
     rebuild_chess_replay,
 )
@@ -144,8 +146,25 @@ def test_materializer_derives_current_chess_targets_and_source_metadata(tmp_path
     assert samples[1].value_target.final_outcome is FinalOutcome.LOSS
     assert samples[-1].sample_weight == 1.5
     assert samples[-1].source_model_generation == 3
+    assert samples[-1].visits.dtype == np.uint16
+    assert samples[-1].visits.shape == (2, 2)
+    assert not samples[-1].visits.flags.writeable
     assert game.initial_fen == chess.STARTING_FEN
     assert game.moves_uci == FOOLS_MATE
+
+
+@pytest.mark.parametrize(
+    'visits',
+    (
+        ((-1, 1),),
+        ((65_536, 1),),
+        ((0, 0),),
+        ((0, 65_536),),
+    ),
+)
+def test_packed_chess_visits_reject_values_outside_uint16(visits: tuple[tuple[int, int], ...]) -> None:
+    with pytest.raises(ValueError, match='uint16'):
+        pack_chess_visits(visits)
 
 
 def test_ineligible_fast_search_is_archived_and_counted_without_earning_credit(tmp_path: Path) -> None:
