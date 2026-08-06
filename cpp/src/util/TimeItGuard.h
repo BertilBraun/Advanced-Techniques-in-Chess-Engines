@@ -23,9 +23,9 @@ private:
 
 struct FunctionTimeInfo {
     std::string name; // Name of the function
-    float percent; // Percentage of total time spent in this function
-    float total;   // Total time spent in this function
-    int invocations; // Number of times this function was invoked
+    float percent;    // Percentage of total time spent in this function
+    float total;      // Total time spent in this function
+    int invocations;  // Number of times this function was invoked
 };
 
 struct TimeInfo {
@@ -33,7 +33,6 @@ struct TimeInfo {
     float percentRecorded;
     std::vector<FunctionTimeInfo> functionTimes;
 };
-
 
 TimeInfo resetTimes();
 

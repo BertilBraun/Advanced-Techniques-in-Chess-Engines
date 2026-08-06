@@ -13,10 +13,10 @@ inline constexpr std::size_t packed_binary_plane_bytes =
     BinaryPlaneCount * BitBoard<BoardSize>::word_count * sizeof(std::uint64_t);
 
 template <std::size_t BoardSize, std::size_t BinaryPlaneCount>
-constexpr void serialize_binary_planes(
-    const std::array<BitBoard<BoardSize>, BinaryPlaneCount> &planes,
-    std::span<std::int8_t> destination) noexcept {
-    assert((destination.size() == packed_binary_plane_bytes<BoardSize, BinaryPlaneCount>));
+constexpr void
+serialize_binary_planes(const std::array<BitBoard<BoardSize>, BinaryPlaneCount> &planes,
+                        std::span<std::int8_t> destination) noexcept {
+    assert((destination.size() == packed_binary_plane_bytes<BoardSize, BinaryPlaneCount>) );
     std::size_t offset = 0;
     for (const BitBoard<BoardSize> &plane : planes) {
         for (std::uint64_t word : plane.words()) {
@@ -30,7 +30,7 @@ template <std::size_t BoardSize, std::size_t BinaryPlaneCount>
 [[nodiscard]]
 constexpr std::array<BitBoard<BoardSize>, BinaryPlaneCount>
 deserialize_binary_planes(std::span<const std::int8_t> source) noexcept {
-    assert((source.size() == packed_binary_plane_bytes<BoardSize, BinaryPlaneCount>));
+    assert((source.size() == packed_binary_plane_bytes<BoardSize, BinaryPlaneCount>) );
     std::array<BitBoard<BoardSize>, BinaryPlaneCount> planes{};
     std::size_t offset = 0;
     for (BitBoard<BoardSize> &plane : planes) {

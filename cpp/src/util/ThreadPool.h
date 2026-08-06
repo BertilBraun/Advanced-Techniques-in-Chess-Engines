@@ -13,8 +13,8 @@ public:
 
     /// Enqueue an arbitrary callable and get a future to its result.
     template <class F, class... Args>
-    [[nodiscard]] auto enqueue(F &&f, Args &&...args)
-        -> std::future<std::invoke_result_t<F, Args...>>;
+    [[nodiscard]] auto enqueue(F &&f,
+                               Args &&...args) -> std::future<std::invoke_result_t<F, Args...>>;
 
     /// Gracefully stop accepting work and join all threads.
     void shutdown();

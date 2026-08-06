@@ -53,8 +53,7 @@ struct InferenceClientParams {
                           InferenceDevice device = InferenceDevice::Auto)
         : device_id(device_id), currentModelPath(std::move(currentModelPath)),
           maxBatchSize(maxBatchSize),
-          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread),
-          device(device) {
+          microsecondsTimeoutInferenceThread(microsecondsTimeoutInferenceThread), device(device) {
         if (maxBatchSize <= 0) {
             throw std::invalid_argument("maxBatchSize must be positive");
         }
