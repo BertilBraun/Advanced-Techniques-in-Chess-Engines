@@ -1,8 +1,8 @@
 #include "DirectSelfPlaySearch.hpp"
 
-#include "../ChessGameContract.hpp"
 #include "../InferenceResultProcessing.hpp"
 #include "../MoveEncoding.hpp"
+#include "games/chess/ChessGameContract.hpp"
 
 namespace {
 constexpr std::size_t ENCODED_BOARD_SIZE = BOARD_C * BOARD_LEN * BOARD_LEN;
@@ -334,9 +334,9 @@ MCTSResults DirectSelfPlaySearch::search(const std::vector<MCTSBoard> &boards,
                                 std::chrono::steady_clock::now() - selectionStartedAt)
                                 .count());
                         const auto encodingStartedAt = std::chrono::steady_clock::now();
-                        ChessGameContract::encodeInputInto(
-                            task.root.tree().node(*selected).board,
-                            writable.data + leaves.size() * ENCODED_BOARD_SIZE);
+                        ChessGameContract::encodeInputInto(task.root.tree().node(*selected).board,
+                                                           writable.data +
+                                                               leaves.size() * ENCODED_BOARD_SIZE);
                         m_encodingNanoseconds += static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 std::chrono::steady_clock::now() - encodingStartedAt)

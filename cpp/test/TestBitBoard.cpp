@@ -78,10 +78,9 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     std::array<Board, binaryPlaneCount> planes{};
     planes[0] = diagonal;
     planes[1] = ~Board::from_point(firstPoint);
-    std::vector<std::int8_t> payload(PackedPlaneLayout<BoardSize, binaryPlaneCount, 0>::binary_bytes);
+    std::vector<std::int8_t> payload(packed_binary_plane_bytes<BoardSize, binaryPlaneCount>);
     serialize_binary_planes<BoardSize, binaryPlaneCount>(planes, payload);
-    const auto decodedPlanes =
-        deserialize_binary_planes<BoardSize, binaryPlaneCount>(payload);
+    const auto decodedPlanes = deserialize_binary_planes<BoardSize, binaryPlaneCount>(payload);
     if (decodedPlanes != planes) {
         return false;
     }

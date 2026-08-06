@@ -1,9 +1,9 @@
 #include "InferenceClient.hpp"
 
 #include "BoardEncoding.hpp"
-#include "ChessGameContract.hpp"
 #include "InferenceModel.hpp"
 #include "MoveEncoding.hpp"
+#include "games/chess/ChessGameContract.hpp"
 
 InferenceClient::InferenceClient(const InferenceClientParams &args)
     : m_device(torch::kCPU), m_torchDtype(torch::kFloat32),

@@ -1,10 +1,11 @@
 #include "common.hpp"
 
 #include "BoardEncoding.hpp"
-#include "ChessGameContract.hpp"
 #include "InteractiveEngine.hpp"
 #include "MCTS/MCTS.hpp"
 #include "MoveEncoding.hpp"
+#include "games/chess/ChessGameContract.hpp"
+#include "games/go/GoBindings.hpp"
 
 #include "MCTS/EvalMCTS.hpp"
 
@@ -151,6 +152,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
 
     init();
 
+    bind_go_game(m);
+
     py::class_<MCTSChild>(m, "MCTSChild")
         .def_readonly("move", &MCTSChild::move)
         .def_readonly("encoded_move", &MCTSChild::encoded_move)
@@ -181,8 +184,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             Prune the old tree and return a new root node.
             `child_index` is the index of the child to make the new root.
             )pbdoc")
-        .def("reset", &MCTSRoot::reset,
-             R"pbdoc(Discard logical search state while retaining reusable arena allocations.)pbdoc")
+        .def(
+            "reset", &MCTSRoot::reset,
+            R"pbdoc(Discard logical search state while retaining reusable arena allocations.)pbdoc")
         .def("discount", &MCTSRoot::discount, py::arg("percentage_of_node_visits_to_keep"),
              R"pbdoc(
             Discount the node's score and visits by a percentage.
@@ -208,7 +212,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         "new_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci,
            const uint32 arenaCapacity) {
-            return MCTSRoot::create(ChessGameContract::replayPosition(startingFen, movesUci), arenaCapacity);
+            return MCTSRoot::create(ChessGameContract::replayPosition(startingFen, movesUci),
+                                    arenaCapacity);
         },
         py::arg("starting_fen"), py::arg("moves_uci"), py::arg("arena_capacity"),
         R"pbdoc(Create a fixed-capacity MCTS root by replaying bounded UCI history.)pbdoc");
@@ -365,8 +370,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &MCTS::getInferenceStatistics)
-        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"),
-             py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
+        .def("refresh_model", &MCTS::refreshModel, py::arg("model_version"), py::arg("model_path"),
+             py::call_guard<py::gil_scoped_release>())
         .def("update_search_schedule", &MCTS::updateSearchSchedule, py::arg("mcts_args"))
         .def("search", &MCTS::search, py::arg("boards"), py::arg("collect_statistics") = false,
              R"pbdoc(
@@ -462,7 +467,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     m.def(
         "new_eval_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
-            return EvalMCTSNode::createRoot(ChessGameContract::replayPosition(startingFen, movesUci));
+            return EvalMCTSNode::createRoot(
+                ChessGameContract::replayPosition(startingFen, movesUci));
         },
         py::arg("starting_fen"), py::arg("moves_uci"),
         R"pbdoc(Create an evaluation MCTS root by replaying a bounded UCI move history.)pbdoc");

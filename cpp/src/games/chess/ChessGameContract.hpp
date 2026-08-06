@@ -1,29 +1,22 @@
 #pragma once
 
-#include "Board.h"
-#include "BoardEncoding.hpp"
-#include "GameHistory.hpp"
-#include "MoveEncoding.hpp"
+#include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessEncoding.hpp"
+#include "games/chess/ChessPosition.hpp"
 
-struct ChessRepresentationDimensions {
-    static constexpr int board_length = BOARD_LEN;
-    static constexpr int channel_count = BOARD_C;
-    static constexpr int binary_channel_count = BINARY_C;
-    static constexpr int scalar_channel_count = SCALAR_C;
-    static constexpr int action_count = ACTION_SIZE;
-};
+#include <optional>
 
 class ChessGameContract {
 public:
-    using Position = Board;
-    using Action = Move;
-    using EncodedPosition = CompressedEncodedBoard;
+    using Position = ChessPosition;
+    using Action = ChessAction;
+    using EncodedPosition = EncodedChessPosition;
 
     [[nodiscard]] static Position initialPosition() { return Position{}; }
 
-    [[nodiscard]] static Position replayPosition(const std::string &startingFen,
-                                                const std::vector<std::string> &movesUci) {
-        return replayMoves(startingFen, movesUci);
+    [[nodiscard]] static Position replayPosition(const std::string &starting_fen,
+                                                 const std::vector<std::string> &moves_uci) {
+        return replay_chess_position(starting_fen, moves_uci);
     }
 
     [[nodiscard]] static Position childPosition(const Position &parent, const Action action) {
@@ -42,20 +35,27 @@ public:
         return getBoardResultScore(position);
     }
 
-    [[nodiscard]] static int actionId(const Action action, const Position &position) {
-        return encodeMove(action, &position);
+    [[nodiscard]] static std::optional<float> terminalValue(const Position &position) {
+        if (!isTerminal(position)) {
+            return std::nullopt;
+        }
+        return terminalResult(position);
     }
 
-    [[nodiscard]] static std::vector<Action> decodeActions(const std::vector<int> &actionIds,
+    [[nodiscard]] static int actionId(const Action action, const Position &position) {
+        return chess_action_id(action, position);
+    }
+
+    [[nodiscard]] static std::vector<Action> decodeActions(const std::vector<int> &action_ids,
                                                            const Position &position) {
-        return decodeMoves(actionIds, &position);
+        return decode_chess_actions(action_ids, position);
     }
 
     [[nodiscard]] static EncodedPosition encodeInput(const Position &position) {
-        return encodeBoard(&position);
+        return encode_chess_position(position);
     }
 
     static void encodeInputInto(const Position &position, int8 *destination) {
-        encodeBoardInto(position, destination);
+        encode_chess_position_into(position, destination);
     }
 };

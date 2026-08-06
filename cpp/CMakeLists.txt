@@ -295,6 +295,10 @@ target_include_directories(ChessGameContractTest PRIVATE src)
 target_link_libraries(ChessGameContractTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME ChessGameContractTest COMMAND ChessGameContractTest)
 
+add_executable(GoGameContractTest test/TestGoGameContract.cpp)
+target_include_directories(GoGameContractTest PRIVATE src)
+add_test(NAME GoGameContractTest COMMAND GoGameContractTest)
+
 add_executable(
         GameHistoryTest
         test/TestGameHistory.cpp
@@ -419,7 +423,7 @@ set_target_properties(AlphaZeroCpp PROPERTIES
 )
 
 # Post-build step to copy the module and generate the stubs
-set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/../../py")
+set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../py")
 
 add_custom_command(TARGET AlphaZeroCpp POST_BUILD
         COMMENT "Copying AlphaZeroCpp.so and generating stubs..."

@@ -1,9 +1,9 @@
 #include "MCTS.hpp"
 
 #include "../BoardEncoding.hpp"
-#include "../ChessGameContract.hpp"
 #include "DirectSelfPlaySearch.hpp"
 #include "MoveEncoding.hpp"
+#include "games/chess/ChessGameContract.hpp"
 
 #include <numeric>
 
