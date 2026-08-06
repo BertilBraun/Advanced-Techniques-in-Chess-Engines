@@ -194,6 +194,7 @@ class RankQuantumComplete:
     training_stats: TrainingStats | None
     optimizer_seconds: float | None
     decode_seconds: float | None
+    transfer_seconds: float | None
     payload_open_count: int | None
     selected_rows: int | None
     rows_read: int | None
@@ -227,6 +228,7 @@ class QuantumResult:
     training_stats: TrainingStats
     optimizer_seconds: float
     decode_seconds: float
+    transfer_seconds: float
     payload_open_count: int
     selected_rows: int
     rows_read: int
@@ -301,7 +303,7 @@ class TrainerProcess:
             response.credited_completed_searches for response in responses if isinstance(response, RankReplayMaintained)
         }
         if len(credited_counts) != 1 or len(completed_search_counts) != 1 or len(live_counts) != 1:
-            raise RuntimeError('DDP ranks did not refresh to the same rolling replay index.')
+            raise RuntimeError('DDP ranks did not receive the same frozen chess replay snapshot.')
         rank_zero = responses[0]
         assert isinstance(rank_zero, RankReplayMaintained)
         return ReplayState(
@@ -336,6 +338,8 @@ class TrainerProcess:
             raise RuntimeError('Rank zero did not return credit-quantum optimizer timing.')
         if rank_zero.decode_seconds is None:
             raise RuntimeError('Rank zero did not return credit-quantum replay timing.')
+        if rank_zero.transfer_seconds is None:
+            raise RuntimeError('Rank zero did not return credit-quantum transfer timing.')
         replay_statistics = (
             rank_zero.payload_open_count,
             rank_zero.selected_rows,
@@ -361,6 +365,7 @@ class TrainerProcess:
             training_stats=rank_zero.training_stats,
             optimizer_seconds=rank_zero.optimizer_seconds,
             decode_seconds=rank_zero.decode_seconds,
+            transfer_seconds=rank_zero.transfer_seconds,
             payload_open_count=int(rank_zero.payload_open_count),
             selected_rows=int(rank_zero.selected_rows),
             rows_read=int(rank_zero.rows_read),
@@ -575,6 +580,12 @@ def _train_quantum(
         dtype=torch.float64,
     )
     distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
+    transfer_seconds = torch.tensor(
+        trainer.last_transfer_seconds,
+        device=model.device,
+        dtype=torch.float64,
+    )
+    distributed.all_reduce(transfer_seconds, op=distributed.ReduceOp.MAX)
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
     elapsed_seconds = torch.tensor(
@@ -606,6 +617,7 @@ def _train_quantum(
         training_stats=training_stats if is_rank_zero(rank) else None,
         optimizer_seconds=float(elapsed_seconds.item()) if is_rank_zero(rank) else None,
         decode_seconds=float(decode_seconds.item()) if is_rank_zero(rank) else None,
+        transfer_seconds=float(transfer_seconds.item()) if is_rank_zero(rank) else None,
         payload_open_count=0 if is_rank_zero(rank) else None,
         selected_rows=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,
         rows_read=selected_rows * len(args.cluster.trainer_ddp_device_ids) if is_rank_zero(rank) else None,

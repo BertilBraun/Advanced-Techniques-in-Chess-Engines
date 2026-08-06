@@ -54,6 +54,7 @@ def _telemetry(
         replay_memory_bytes=2_000_000,
         optimizer_seconds=2,
         decode_seconds=1,
+        transfer_seconds=0.25,
         loader_wait_seconds=3,
         credit_observation_seconds=4,
         replay_payload_open_count=4,

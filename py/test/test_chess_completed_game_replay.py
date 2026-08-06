@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import chess
 import pytest
@@ -15,6 +16,8 @@ from src.self_play.chess_completed_game import (
     ChessSearchObservation,
     SparseSearchVisit,
 )
+from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, SelfPlayGameMemory
+from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.settings import CurrentGame
 from src.train.ChessReplay import (
@@ -100,6 +103,35 @@ def test_concurrent_publishers_create_complete_unique_game_files(tmp_path: Path)
     assert all(path.is_file() for path in paths)
     assert all(ChessCompletedGame.model_validate_json(path.read_text(encoding='utf-8')) for path in paths)
     assert not tuple((tmp_path / 'completed-games' / 'inbox').glob('*.tmp'))
+
+
+def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path: Path) -> None:
+    publisher = ChessCompletedGamePublisher(tmp_path, 18, 2)
+    self_play = object.__new__(SelfPlay)
+    self_play.args = SimpleNamespace(
+        num_moves_after_which_to_play_greedy=30,
+        mcts=SimpleNamespace(min_visit_count=0),
+    )
+    self_play.completed_game_publisher = publisher
+    self_play.dataset = SelfPlayDataset()
+    self_play.iteration = 0
+    self_play.num_searches_per_turn = 8
+    game = SelfPlayGame(identity=publisher.reserve_identity())
+    game.acknowledge_model_version(0)
+    for ply, move_uci in enumerate(FOOLS_MATE):
+        move = chess.Move.from_uci(move_uci)
+        selected_action = CurrentGame.encode_move(move, game.board)
+        game.memory.append(SelfPlayGameMemory(game.board.copy(), [(selected_action, 8)], 0.0, ply, 0))
+        game = game.expand(move)
+
+    self_play._add_training_data(game, -1.0, TerminationReason.NATURAL)
+
+    inbox_files = tuple((tmp_path / 'completed-games' / 'inbox').glob('*.json'))
+    assert len(inbox_files) == 1
+    published = ChessCompletedGame.model_validate_json(inbox_files[0].read_text(encoding='utf-8'))
+    assert published.moves_uci == FOOLS_MATE
+    assert len(published.observations) == 4
+    assert len(self_play.dataset) == 0
 
 
 def test_materializer_derives_current_chess_targets_and_source_metadata(tmp_path: Path) -> None:

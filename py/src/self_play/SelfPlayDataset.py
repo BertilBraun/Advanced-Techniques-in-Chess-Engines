@@ -322,9 +322,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
             ),
             opponent_piece_count=torch.tensor(self.sample_metadata[idx].opponent_piece_count, dtype=torch.int8),
             occurrence_count=torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.int32),
-            sample_weight=torch.sqrt(
-                torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.float32)
-            ),
+            sample_weight=torch.sqrt(torch.tensor(self.sample_metadata[idx].occurrence_count, dtype=torch.float32)),
         )
 
     def __getitems__(self, indices: list[int]) -> TrainingBatch:

@@ -22,6 +22,7 @@ from AlphaZeroCpp import (
 )
 from src.self_play.SelfPlay import SelfPlay
 from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.chess_completed_game import ChessCompletedGame, ChessCompletedGamePublisher
 from src.settings import TRAINING_ARGS
 
 
@@ -99,6 +100,21 @@ class BenchmarkResult:
     inference_model_calls: int
     inference_model_positions: int
     inference_average_batch_size: float
+
+
+class BenchmarkCompletedGamePublisher(ChessCompletedGamePublisher):
+    def __init__(self, run_path: Path, run_id: int) -> None:
+        super().__init__(run_path, run_id, worker_id=0)
+        self.published_games: list[ChessCompletedGame] = []
+
+    def publish(self, game: ChessCompletedGame) -> Path:
+        path = super().publish(game)
+        self.published_games.append(game)
+        return path
+
+    def reset_measurement(self) -> None:
+        self.published_games = []
+
     inference_batch_size_distribution: tuple[BatchSizeCount, ...]
     tree_selection_seconds: float
     board_encoding_seconds: float
@@ -228,7 +244,8 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
     configuration.self_play.mcts.num_parallel_searches = arguments.parallel_searches
     configuration.self_play.mcts.num_threads = arguments.threads
 
-    self_play = SelfPlay(arguments.device, configuration)
+    publisher = BenchmarkCompletedGamePublisher(Path(configuration.save_path), arguments.seed)
+    self_play = SelfPlay(arguments.device, configuration, publisher)
     self_play.update_search_schedule(self_play.search_schedule(arguments.iteration))
 
     fast_searches = (
@@ -278,6 +295,9 @@ def run_warmup(self_play: SelfPlay, steps: int) -> None:
     for _ in range(steps):
         self_play.self_play()
     self_play.dataset = SelfPlayDataset()
+    publisher = self_play.completed_game_publisher
+    assert isinstance(publisher, BenchmarkCompletedGamePublisher)
+    publisher.reset_measurement()
 
 
 def wait_for_synchronized_start(arguments: Arguments) -> None:
@@ -312,7 +332,10 @@ def build_result(
     initial_completed_searches: int,
 ) -> BenchmarkResult:
     dataset = self_play.dataset
-    retained_samples = len(dataset)
+    publisher = self_play.completed_game_publisher
+    assert isinstance(publisher, BenchmarkCompletedGamePublisher)
+    generated_samples = sum(len(game.observations) for game in publisher.published_games)
+    retained_samples = generated_samples
 
     evaluations = difference(final_statistics.evaluations, initial_statistics.evaluations)
     cache_hits = difference(final_statistics.cacheHits, initial_statistics.cacheHits)
@@ -367,7 +390,7 @@ def build_result(
         completed_games=dataset.stats.num_games,
         completed_game_plies=sum(dataset.stats.game_lengths),
         active_game_plies_at_end=sum(len(game.played_moves) for game in self_play.self_play_games),
-        generated_samples=len(dataset),
+        generated_samples=generated_samples,
         retained_samples=retained_samples,
         retained_sample_proportion=1.0,
         live_materialized_nodes=sum(root.live_nodes for root in active_roots),

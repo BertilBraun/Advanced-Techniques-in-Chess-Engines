@@ -104,8 +104,6 @@
     "disagreement_prefix_archive_capacity": 2000,
     "disagreement_prefix_weight_smoothing": 0.05,
     "disagreement_prefix_weight_cap": 4.0,
-    "replay_reanalysis_fraction": 0.15,
-    "replay_reanalysis_maximum_positions_per_refresh": 32,
     "resignation": {
       "audit_enabled": false,
       "production_enabled": false,

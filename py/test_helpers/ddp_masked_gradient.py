@@ -87,6 +87,7 @@ def masked_value_gradient_rank(
             current_player_piece_counts=torch.full((2,), 8, dtype=torch.int8),
             opponent_piece_counts=torch.full((2,), 8, dtype=torch.int8),
             occurrence_counts=torch.ones(2, dtype=torch.int32),
+            sample_weights=torch.ones(2),
         )
 
         loss = trainer._calculate_loss_for_batch(batch)

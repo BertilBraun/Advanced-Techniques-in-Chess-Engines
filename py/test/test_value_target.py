@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import replace
-from types import SimpleNamespace
 
 import pytest
 import torch
@@ -10,8 +9,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.Network import Network
-from src.self_play.SelfPlayDataset import SelfPlayDataset, TrainingBatch
-from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, SelfPlayGameMemory
+from src.self_play.SelfPlayDataset import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
     ReplayValueTarget,
@@ -96,6 +94,7 @@ def training_batch(
         current_player_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
         opponent_piece_counts=torch.full((sample_count,), 8, dtype=torch.int8),
         occurrence_counts=torch.ones(sample_count, dtype=torch.int32),
+        sample_weights=torch.ones(sample_count, dtype=torch.float32),
     )
 
 
@@ -145,24 +144,6 @@ def test_outcome_perspective_alternates_without_distance_discount() -> None:
     assert outcome_from_sample_perspective(1.0, final_current_player=1, sample_current_player=1) == 1.0
     assert outcome_from_sample_perspective(1.0, final_current_player=1, sample_current_player=-1) == -1.0
     assert outcome_from_sample_perspective(-1.0, final_current_player=-1, sample_current_player=-1) == -1.0
-
-
-def test_self_play_stores_hard_outcome_and_independent_root_values_without_discount() -> None:
-    self_play = object.__new__(SelfPlay)
-    self_play.args = SimpleNamespace(mcts=SimpleNamespace(min_visit_count=0))
-    self_play.dataset = SelfPlayDataset()
-    self_play.iteration = 0
-    game = SelfPlayGame()
-    game.acknowledge_model_version(0)
-    game.memory = [
-        SelfPlayGameMemory(game.board.copy(), [(0, 1)], 0.2, 0),
-        SelfPlayGameMemory(game.board.copy(), [(0, 1)], -0.4, 1),
-    ]
-
-    self_play._add_training_data(game, 1.0, TerminationReason.NATURAL)
-
-    assert {target.final_outcome for target in self_play.dataset.value_targets} == {FinalOutcome.WIN}
-    assert {target.mcts_root_value for target in self_play.dataset.value_targets} == {0.2, -0.4}
 
 
 def test_equal_expected_scalar_can_represent_different_wdl_distributions() -> None:
@@ -295,7 +276,11 @@ def test_occurrence_count_weight_uses_uncapped_square_root() -> None:
         (True, True),
         (TerminationReason.NATURAL, TerminationReason.NATURAL),
     )
-    batch = replace(batch, occurrence_counts=torch.tensor((1, 100), dtype=torch.int32))
+    batch = replace(
+        batch,
+        occurrence_counts=torch.tensor((1, 100), dtype=torch.int32),
+        sample_weights=torch.tensor((1.0, 10.0)),
+    )
     value_logits = (2.0, 0.0, -1.0)
     model = FixedValueNetwork(value_logits)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)

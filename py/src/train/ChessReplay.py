@@ -118,6 +118,7 @@ class ChessTrainingBatchLoader:
                 self.indices[offset : offset + self.local_batch_size],
                 self.global_step,
                 self.rank,
+                sample_position_offset=offset,
             )
             if self.pin_memory:
                 batch = batch.pin_memory()
@@ -427,6 +428,7 @@ def build_chess_training_batch(
     sample_indices: Sequence[int],
     global_step: int,
     rank: int,
+    sample_position_offset: int = 0,
 ) -> TrainingBatch:
     samples = tuple(snapshot.samples[index] for index in sample_indices)
     batch_size = len(samples)
@@ -438,7 +440,15 @@ def build_chess_training_batch(
         counts = np.fromiter((count for _, count in sample.visits), dtype=np.float32)
         policies[row, actions] = counts / counts.sum()
     mirrored = np.fromiter(
-        (sample_is_mirrored(snapshot.sampler_seed, global_step, rank, position) for position in range(batch_size)),
+        (
+            sample_is_mirrored(
+                snapshot.sampler_seed,
+                global_step,
+                rank,
+                sample_position_offset + position,
+            )
+            for position in range(batch_size)
+        ),
         dtype=np.bool_,
         count=batch_size,
     )

@@ -9,8 +9,6 @@ import pytest
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
 from src.cluster.SelfPlayProcess import SelfPlayProcess
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -24,7 +22,6 @@ from src.train.CreditPublication import (
     PublicationValidationScope,
     PublishedArtifact,
 )
-from src.train.RollingReplayBuffer import ReplayShardManifest, TerminationCounts
 
 
 @dataclass
@@ -111,61 +108,6 @@ def _credit_publication(model_version: int) -> tuple[CreditPublicationPointer, C
 def _initialize_credit_refresh_state(process: SelfPlayProcess) -> None:
     process.loaded_credit_jit_sha256 = None
     process.loaded_credit_publication_pointer = None
-
-
-def test_replay_flush_records_only_new_completed_searches(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    dataset = SelfPlayDataset()
-    dataset.encoded_states = [b'sample']
-    dataset.stats = SelfPlayDatasetStats(
-        num_samples=1,
-        num_games=1,
-        game_model_version_ranges=[(3, 4)],
-    )
-    process = object.__new__(SelfPlayProcess)
-    process.args = _FakeTrainingArguments(
-        save_path=str(tmp_path),
-        training=_FakeTraining(_FakeCreditTraining(500_000, 50)),
-    )
-    process.node_id = 2
-    process.self_play = _FakeSelfPlay(dataset=dataset, completed_searches=37)
-    process.last_flushed_completed_searches = 10
-    captured_searches: list[int] = []
-
-    def capture_shard(**arguments: object) -> ReplayShardManifest:
-        shard_dataset = arguments['dataset']
-        assert isinstance(shard_dataset, SelfPlayDataset)
-        captured_searches.append(shard_dataset.stats.completed_searches)
-        return ReplayShardManifest(
-            schema_version=5,
-            shard_id='test',
-            game_count=1,
-            unique_sample_count=1,
-            raw_sample_count=1,
-            completed_searches=shard_dataset.stats.completed_searches,
-            producing_worker=2,
-            minimum_model_version=3,
-            maximum_model_version=4,
-            termination_counts=TerminationCounts(
-                natural=1,
-                resignation=0,
-                ply_cap=0,
-                material_adjudication=0,
-                diagnostic=0,
-            ),
-            content_sha256='a' * 64,
-            creation_timestamp_seconds=0.0,
-            hdf5_file_name='test.hdf5',
-        )
-
-    monkeypatch.setattr('src.cluster.SelfPlayProcess.commit_replay_shard', capture_shard)
-
-    process.flush_replay_shard(model_version=4)
-
-    assert captured_searches == [27]
-    assert process.last_flushed_completed_searches == 37
 
 
 def test_credit_mode_continuous_command_has_no_iteration_game_cap(

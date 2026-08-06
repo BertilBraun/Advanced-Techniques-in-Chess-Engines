@@ -53,7 +53,6 @@ from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CurrentBoard, CurrentGame, CurrentGameMove, log_text
 from src.Encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
-from src.train.ReplayReanalysis import ReanalysisPosition, ReanalysisTarget
 from src.util.log import log
 from src.util.save_paths import model_save_path
 from src.util.tensorboard import is_tensorboard_writer_active, log_histogram, log_scalar
@@ -220,31 +219,6 @@ class SelfPlay:
         self.refresh_model(
             iteration,
             model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
-        )
-
-    def reanalyse_positions(
-        self,
-        positions: tuple[ReanalysisPosition, ...],
-    ) -> tuple[ReanalysisTarget, ...]:
-        if self.mcts is None:
-            raise RuntimeError('Reanalysis requires initialized MCTS.')
-        from AlphaZeroCpp import MCTSBoard
-
-        boards = [
-            MCTSBoard(
-                self.mcts.new_root_with_history(position.starting_fen, list(position.moves_uci)),
-                True,
-            )
-            for position in positions
-        ]
-        results = self.mcts.search(boards).results
-        return tuple(
-            ReanalysisTarget(
-                row_index=position.row_index,
-                visit_counts=np.asarray(result.visits, dtype=np.uint16),
-                mcts_root_value=float(result.result),
-            )
-            for position, result in zip(positions, results)
         )
 
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:

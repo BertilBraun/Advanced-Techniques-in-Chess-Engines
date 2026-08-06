@@ -69,19 +69,6 @@ def _temporary_path(path: Path) -> Path:
     return path.with_name(f'.{path.name}.tmp')
 
 
-def _replay_file_references(save_folder: str | PathLike) -> tuple[ReplayFileReference, ...]:
-    root = Path(save_folder)
-    references: list[ReplayFileReference] = []
-    for replay_path in sorted(root.glob('memory_*/*.hdf5')):
-        references.append(
-            ReplayFileReference(
-                path=replay_path.relative_to(root).as_posix(),
-                size_bytes=replay_path.stat().st_size,
-            )
-        )
-    return tuple(references)
-
-
 def load_checkpoint_manifest(
     iteration: int,
     save_folder: str | PathLike,
@@ -253,7 +240,7 @@ def save_model_and_optimizer(
         optimizer_sha256=_sha256(raw_optimizer_path),
         jit_model_path=jit_model_path.name,
         jit_model_sha256=_sha256(jit_model_path),
-        replay_files=_replay_file_references(save_folder),
+        replay_files=(),
     )
     manifest_path = checkpoint_manifest_path(iteration, save_folder)
     write_text_atomically(manifest_path, manifest.model_dump_json(indent=2) + '\n')

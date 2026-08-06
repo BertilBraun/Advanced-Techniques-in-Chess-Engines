@@ -103,6 +103,18 @@ class TrainingBatchLoader(Protocol):
     def __len__(self) -> int: ...
 
 
+@dataclass
+class DeviceTransferTracker:
+    event_pairs: list[tuple[torch.cuda.Event, torch.cuda.Event]]
+
+    def elapsed_seconds(self) -> float:
+        elapsed_milliseconds = 0.0
+        for start, end in self.event_pairs:
+            end.synchronize()
+            elapsed_milliseconds += start.elapsed_time(end)
+        return elapsed_milliseconds / 1_000.0
+
+
 class _LogitForward(nn.Module):
     def __init__(self, model: Network) -> None:
         super().__init__()
@@ -128,6 +140,7 @@ def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[Training
 def prefetch_device_training_batches(
     batches: TrainingBatchLoader,
     device: torch.device,
+    transfer_tracker: DeviceTransferTracker,
 ) -> Iterator[TrainingBatch]:
     cpu_batches = iter(prefetch_training_batches(batches))
     if device.type != 'cuda':
@@ -139,7 +152,12 @@ def prefetch_device_training_batches(
     except StopIteration:
         return
     with torch.cuda.stream(transfer_stream):
+        transfer_start = torch.cuda.Event(enable_timing=True)
+        transfer_end = torch.cuda.Event(enable_timing=True)
+        transfer_start.record(transfer_stream)
         current_device_batch = first_cpu_batch.to_device(device, non_blocking=True)
+        transfer_end.record(transfer_stream)
+        transfer_tracker.event_pairs.append((transfer_start, transfer_end))
     while True:
         try:
             next_cpu_batch = next(cpu_batches)
@@ -148,7 +166,12 @@ def prefetch_device_training_batches(
             yield current_device_batch
             return
         with torch.cuda.stream(transfer_stream):
+            transfer_start = torch.cuda.Event(enable_timing=True)
+            transfer_end = torch.cuda.Event(enable_timing=True)
+            transfer_start.record(transfer_stream)
             next_device_batch = next_cpu_batch.to_device(device, non_blocking=True)
+            transfer_end.record(transfer_stream)
+            transfer_tracker.event_pairs.append((transfer_start, transfer_end))
         torch.cuda.current_stream(device).wait_stream(transfer_stream)
         yield current_device_batch
         current_device_batch = next_device_batch
@@ -168,6 +191,7 @@ class Trainer:
         self.args: TrainingParams = args
         self.training_model = _LogitForward(model) if training_model is None else training_model
         self.rank = rank
+        self.last_transfer_seconds = 0.0
 
     def _calculate_loss_for_batch(
         self,
@@ -242,7 +266,8 @@ class Trainer:
         gradient_norms: list[torch.Tensor] = []
         metric_batches: list[_DetachedMetricBatch] = []
 
-        for batch in prefetch_device_training_batches(dataloader, self.model.device):
+        transfer_tracker = DeviceTransferTracker(event_pairs=[])
+        for batch in prefetch_device_training_batches(dataloader, self.model.device, transfer_tracker):
             self.optimizer.zero_grad()
             sample_count = batch.states.shape[0]
 
@@ -263,6 +288,7 @@ class Trainer:
 
         if not metric_batches:
             raise ValueError('Training requires at least one batch.')
+        self.last_transfer_seconds = transfer_tracker.elapsed_seconds()
         metric_batch = self._concatenate_metric_batches(metric_batches)
         metrics = self._calculate_value_metric_tensors(metric_batch)
         sample_count = sum(policy_loss_sample_counts)

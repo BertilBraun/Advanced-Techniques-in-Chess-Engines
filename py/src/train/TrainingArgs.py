@@ -143,8 +143,6 @@ class SelfPlayParams:
     disagreement_prefix_archive_capacity: int = 2_000
     disagreement_prefix_weight_smoothing: float = 0.05
     disagreement_prefix_weight_cap: float = 4.0
-    replay_reanalysis_fraction: float = 0.15
-    replay_reanalysis_maximum_positions_per_refresh: int = 32
     initial_num_searches_per_turn: int | None = None
 
 

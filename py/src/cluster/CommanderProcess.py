@@ -273,6 +273,7 @@ class CommanderProcess:
             replay_memory_bytes=replay_state.replay_memory_bytes,
             optimizer_seconds=result.optimizer_seconds,
             decode_seconds=result.decode_seconds,
+            transfer_seconds=result.transfer_seconds,
             loader_wait_seconds=observation.loader_wait_seconds,
             credit_observation_seconds=observation.observation_seconds,
             replay_payload_open_count=result.payload_open_count,

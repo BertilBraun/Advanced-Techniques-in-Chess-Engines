@@ -48,6 +48,7 @@ class CreditTrainingTelemetry(FrozenModel):
     newly_credited_completed_searches_per_second: float = Field(ge=0)
     credit_observation_seconds: float = Field(ge=0)
     decode_seconds: float = Field(ge=0)
+    transfer_seconds: float = Field(ge=0)
     loader_wait_seconds: float = Field(ge=0)
     replay_payload_open_count: int = Field(ge=0)
     replay_selected_rows: int = Field(ge=0)
@@ -131,6 +132,7 @@ class CreditTrainingTelemetry(FrozenModel):
             ),
             ('credit/credit_observation_seconds', self.credit_observation_seconds),
             ('credit/decode_seconds', self.decode_seconds),
+            ('credit/transfer_seconds', self.transfer_seconds),
             ('credit/loader_wait_seconds', self.loader_wait_seconds),
             ('credit/replay_payload_open_count', self.replay_payload_open_count),
             ('credit/replay_row_read_amplification', self.replay_row_read_amplification),
@@ -194,6 +196,7 @@ def build_credit_training_telemetry(
     replay_memory_bytes: int,
     optimizer_seconds: float,
     decode_seconds: float,
+    transfer_seconds: float,
     loader_wait_seconds: float,
     credit_observation_seconds: float,
     replay_payload_open_count: int,
@@ -263,6 +266,7 @@ def build_credit_training_telemetry(
         ),
         credit_observation_seconds=credit_observation_seconds,
         decode_seconds=decode_seconds,
+        transfer_seconds=transfer_seconds,
         loader_wait_seconds=loader_wait_seconds,
         replay_payload_open_count=replay_payload_open_count,
         replay_selected_rows=replay_selected_rows,
