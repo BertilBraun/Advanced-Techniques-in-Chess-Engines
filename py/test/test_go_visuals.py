@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip('AlphaZeroCpp')
+AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
 from src.games.go.GoVisuals import GoVisuals
 from src.games.go.NativeGoBoard import NativeGoBoard
@@ -46,3 +46,23 @@ def test_native_go_visual_board_copy_and_pass_termination() -> None:
     assert board.is_game_over()
     assert board.get_valid_moves() == []
     assert board.quick_hash() != initial.quick_hash()
+
+
+def test_pass_remains_legal_when_no_placement_is_legal() -> None:
+    position = AlphaZeroCpp.GoPosition7.restore(
+        [list(range(0, 49, 2))],
+        [list(range(1, 49, 2))],
+        AlphaZeroCpp.GoPlayer.BLACK,
+        None,
+        0,
+        0,
+        AlphaZeroCpp.GoRules(15, 196),
+    )
+    board = NativeGoBoard.from_position(position)
+
+    assert not board.is_game_over()
+    assert board.get_valid_moves() == [board.pass_action]
+    board.make_move(board.pass_action)
+    assert not board.is_game_over()
+    board.make_move(board.pass_action)
+    assert board.is_game_over()

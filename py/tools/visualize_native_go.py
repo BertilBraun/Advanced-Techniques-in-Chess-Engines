@@ -23,6 +23,10 @@ def window_title(board: NativeGoBoard, history_index: int, history_length: int) 
 
 def draw(board: NativeGoBoard, gui: GoGridGUI, visuals: GoVisuals, history_index: int, history_length: int) -> None:
     gui.clear_highlights_and_redraw(lambda: visuals.draw_pieces(board, gui))
+    legal_actions = board.get_valid_moves()
+    legal_placement_count = len(legal_actions) - (board.pass_action in legal_actions)
+    gui.draw_controls(legal_placement_count, board.pass_action in legal_actions)
+    gui.update_display()
     gui.update_window_title(window_title(board, history_index, history_length))
 
 
@@ -53,6 +57,8 @@ def run(board_size: int, komi_half_points: int, maximum_moves: int | None) -> No
                 cell = gui.get_cell_from_click()
                 if cell is not None:
                     action = visuals.try_make_move(board, None, cell)
+                elif gui.is_pass_button_clicked():
+                    action = board.pass_action
             elif events.up:
                 action = board.pass_action
         if action is not None:

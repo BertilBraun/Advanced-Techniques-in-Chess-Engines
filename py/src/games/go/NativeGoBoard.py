@@ -24,7 +24,7 @@ class NativeGoBoard(Board[int]):
         self._position: NativeGoPosition = GoPosition7(rules) if board_size == 7 else GoPosition9(rules)
 
     @classmethod
-    def _from_position(cls, position: NativeGoPosition) -> NativeGoBoard:
+    def from_position(cls, position: NativeGoPosition) -> NativeGoBoard:
         board = cls.__new__(cls)
         board._position = position
         return board
@@ -81,7 +81,7 @@ class NativeGoBoard(Board[int]):
         return self._position.legal_actions()
 
     def copy(self) -> NativeGoBoard:
-        return self._from_position(self._position)
+        return self.from_position(self._position)
 
     def quick_hash(self) -> int:
         return self._position.state_hash()
