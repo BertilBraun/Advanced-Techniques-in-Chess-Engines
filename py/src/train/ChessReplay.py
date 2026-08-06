@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections import deque
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -19,14 +19,14 @@ from src.Encoding import decode_board_states_into, encode_board_state, get_board
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
-from src.self_play.chess_completed_game import ChessCompletedGame, completed_game_from_path
+from src.self_play.chess_completed_game import ChessCompletedGame, ChessGameIdentity, completed_game_from_path
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
 from src.settings import CurrentGame
 from src.util.atomic_file import fsync_directory, write_bytes_atomically
 
 
-CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x02\n'
-_FRAME_HEADER = struct.Struct('>QQ32s')
+CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x03\n'
+_FRAME_HEADER = struct.Struct('>QQQQQQQQ32s')
 _ARCHIVE_FILE_PATTERN = 'model-generation-*.games'
 _MAXIMUM_PACKED_VISIT_VALUE = int(np.iinfo(np.uint16).max)
 
@@ -196,9 +196,16 @@ class ChessArchiveInspection:
 
 
 @dataclass(frozen=True)
-class ChessArchiveFrame:
+class ChessArchiveFrameIndex:
+    path: Path
     ingestion_sequence: int
-    game: ChessCompletedGame
+    payload_offset: int
+    payload_length: int
+    payload_digest: bytes
+    identity: ChessGameIdentity
+    model_generation: int
+    eligible_sample_count: int
+    completed_searches: int
 
 
 class ChessReplay:
@@ -229,6 +236,28 @@ class ChessReplay:
         self._credited_completed_searches += sum(observation.search_budget for observation in game.observations)
         self._evict_to_capacity()
         return len(samples)
+
+    def rebuild(
+        self,
+        games: Iterable[ChessCompletedGame],
+        credited_samples: int,
+        credited_completed_searches: int,
+    ) -> None:
+        if (
+            self.phase is not ReplayPhase.INGESTING
+            or self._samples
+            or self._credited_samples
+            or self._credited_completed_searches
+        ):
+            raise RuntimeError('Chess replay rebuild requires a new replay in the ingestion phase.')
+        for game in games:
+            self._samples.extend(materialize_chess_game(game))
+            self._evict_to_capacity()
+        if credited_samples < len(self._samples) or credited_completed_searches < 0:
+            raise ValueError('Chess replay recovery totals are inconsistent with the retained samples.')
+        self._credited_samples = credited_samples
+        self._credited_completed_searches = credited_completed_searches
+        self._evicted_samples = credited_samples - len(self._samples)
 
     def freeze(self) -> ChessReplaySnapshot:
         if self.phase is not ReplayPhase.INGESTING:
@@ -275,7 +304,7 @@ class ChessReplayMaintainer:
         self.inbox_path = run_path / 'completed-games' / 'inbox'
         self.archive_path = run_path / 'completed-games' / 'archive'
         self.replay = ChessReplay(capacity, sampler_seed)
-        self._archived_digests: dict[str, bytes] = {}
+        self._archived_digests: dict[ChessGameIdentity, bytes] = {}
         self._next_ingestion_sequence = 0
         self._recover_and_rebuild()
 
@@ -285,14 +314,15 @@ class ChessReplayMaintainer:
             game = completed_game_from_path(inbox_file)
             payload = canonical_game_payload(game)
             payload_digest = hashlib.sha256(payload).digest()
-            archived_digest = self._archived_digests.get(game.identity.archive_key)
+            archived_digest = self._archived_digests.get(game.identity)
             if archived_digest is None:
                 _append_recovered_chess_archive_record(
                     self.archive_file(game.model_generation),
                     payload,
                     self._next_ingestion_sequence,
+                    game,
                 )
-                self._archived_digests[game.identity.archive_key] = payload_digest
+                self._archived_digests[game.identity] = payload_digest
                 self.replay.ingest_game(game)
                 self._next_ingestion_sequence += 1
             elif archived_digest != payload_digest:
@@ -306,27 +336,37 @@ class ChessReplayMaintainer:
         return self.archive_path / f'model-generation-{model_generation:020d}.games'
 
     def _recover_and_rebuild(self) -> None:
-        frames: list[ChessArchiveFrame] = []
+        frame_indexes: list[ChessArchiveFrameIndex] = []
         for archive_file in sorted(self.archive_path.glob(_ARCHIVE_FILE_PATTERN)):
-            for frame in _read_chess_archive_frames(archive_file, recover_incomplete=True):
-                game = frame.game
-                expected_archive = self.archive_file(game.model_generation)
+            for frame_index in _index_chess_archive(archive_file, recover_incomplete=True):
+                expected_archive = self.archive_file(frame_index.model_generation)
                 if archive_file != expected_archive:
                     raise ValueError(f'Completed game is stored in the wrong model-generation archive: {archive_file}')
-                payload = canonical_game_payload(game)
-                payload_digest = hashlib.sha256(payload).digest()
-                previous_digest = self._archived_digests.setdefault(game.identity.archive_key, payload_digest)
-                if previous_digest != payload_digest:
-                    raise ValueError(f'Archive contains conflicting game identity {game.identity.archive_key}.')
-                frames.append(frame)
-        sequences = tuple(frame.ingestion_sequence for frame in frames)
+                previous_digest = self._archived_digests.setdefault(frame_index.identity, frame_index.payload_digest)
+                if previous_digest != frame_index.payload_digest:
+                    raise ValueError(f'Archive contains conflicting game identity {frame_index.identity.archive_key}.')
+                frame_indexes.append(frame_index)
+        sequences = tuple(frame.ingestion_sequence for frame in frame_indexes)
         if len(set(sequences)) != len(sequences):
             raise ValueError('Chess archives contain duplicate ingestion sequence numbers.')
-        for expected_sequence, frame in enumerate(sorted(frames, key=lambda item: item.ingestion_sequence)):
-            if frame.ingestion_sequence != expected_sequence:
+        ordered_indexes = tuple(sorted(frame_indexes, key=lambda item: item.ingestion_sequence))
+        for expected_sequence, frame_index in enumerate(ordered_indexes):
+            if frame_index.ingestion_sequence != expected_sequence:
                 raise ValueError('Chess archive ingestion sequence is not contiguous.')
-            self.replay.ingest_game(frame.game)
-        self._next_ingestion_sequence = len(frames)
+        retained_indexes: list[ChessArchiveFrameIndex] = []
+        retained_sample_count = 0
+        for frame_index in reversed(ordered_indexes):
+            if retained_sample_count >= self.replay.capacity:
+                break
+            if frame_index.eligible_sample_count:
+                retained_indexes.append(frame_index)
+                retained_sample_count += frame_index.eligible_sample_count
+        self.replay.rebuild(
+            (_read_indexed_chess_archive_frame(frame_index) for frame_index in reversed(retained_indexes)),
+            credited_samples=sum(frame_index.eligible_sample_count for frame_index in ordered_indexes),
+            credited_completed_searches=sum(frame_index.completed_searches for frame_index in ordered_indexes),
+        )
+        self._next_ingestion_sequence = len(frame_indexes)
 
 
 def canonical_game_payload(game: ChessCompletedGame) -> bytes:
@@ -336,16 +376,36 @@ def canonical_game_payload(game: ChessCompletedGame) -> bytes:
 def append_chess_archive_record(path: Path, payload: bytes, ingestion_sequence: int) -> None:
     if ingestion_sequence < 0:
         raise ValueError('Chess archive ingestion sequence must be nonnegative.')
+    game = ChessCompletedGame.model_validate_json(payload)
     if not path.exists():
         write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
     read_chess_archive(path, recover_incomplete=True)
-    _append_recovered_chess_archive_record(path, payload, ingestion_sequence)
+    _append_recovered_chess_archive_record(path, payload, ingestion_sequence, game)
 
 
-def _append_recovered_chess_archive_record(path: Path, payload: bytes, ingestion_sequence: int) -> None:
+def _append_recovered_chess_archive_record(
+    path: Path,
+    payload: bytes,
+    ingestion_sequence: int,
+    game: ChessCompletedGame,
+) -> None:
     if not path.exists():
         write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
-    frame = _FRAME_HEADER.pack(ingestion_sequence, len(payload), hashlib.sha256(payload).digest()) + payload
+    eligible_sample_count, completed_searches = _game_archive_counts(game)
+    frame = (
+        _FRAME_HEADER.pack(
+            ingestion_sequence,
+            len(payload),
+            game.model_generation,
+            eligible_sample_count,
+            completed_searches,
+            game.identity.run_id,
+            game.identity.worker_id,
+            game.identity.game_number,
+            hashlib.sha256(payload).digest(),
+        )
+        + payload
+    )
     with path.open('ab') as archive:
         archive.write(frame)
         archive.flush()
@@ -353,18 +413,28 @@ def _append_recovered_chess_archive_record(path: Path, payload: bytes, ingestion
 
 
 def read_chess_archive(path: Path, recover_incomplete: bool = False) -> tuple[ChessCompletedGame, ...]:
-    return tuple(frame.game for frame in _read_chess_archive_frames(path, recover_incomplete))
+    return tuple(
+        _read_indexed_chess_archive_frame(frame_index) for frame_index in _index_chess_archive(path, recover_incomplete)
+    )
 
 
-def _read_chess_archive_frames(path: Path, recover_incomplete: bool) -> tuple[ChessArchiveFrame, ...]:
+def _game_archive_counts(game: ChessCompletedGame) -> tuple[int, int]:
+    return (
+        sum(observation.sample_eligible for observation in game.observations),
+        sum(observation.search_budget for observation in game.observations),
+    )
+
+
+def _index_chess_archive(path: Path, recover_incomplete: bool) -> tuple[ChessArchiveFrameIndex, ...]:
     if not path.is_file():
         raise ValueError(f'Chess archive does not exist: {path}')
-    frames: list[ChessArchiveFrame] = []
+    frame_indexes: list[ChessArchiveFrameIndex] = []
     mode = 'r+b' if recover_incomplete else 'rb'
     with path.open(mode) as archive:
         header = archive.read(len(CHESS_ARCHIVE_HEADER))
         if header != CHESS_ARCHIVE_HEADER:
             raise ValueError(f'Unsupported chess archive header: {path}')
+        archive_size = os.fstat(archive.fileno()).st_size
         valid_end = len(CHESS_ARCHIVE_HEADER)
         while True:
             frame_header = archive.read(_FRAME_HEADER.size)
@@ -375,34 +445,71 @@ def _read_chess_archive_frames(path: Path, recover_incomplete: bool) -> tuple[Ch
                     raise ValueError(f'Chess archive has an incomplete final frame header: {path}')
                 archive.truncate(valid_end)
                 break
-            ingestion_sequence, payload_length, expected_digest = _FRAME_HEADER.unpack(frame_header)
-            payload = archive.read(payload_length)
-            if len(payload) < payload_length:
+            (
+                ingestion_sequence,
+                payload_length,
+                model_generation,
+                eligible_sample_count,
+                completed_searches,
+                run_id,
+                worker_id,
+                game_number,
+                payload_digest,
+            ) = _FRAME_HEADER.unpack(frame_header)
+            payload_offset = archive.tell()
+            payload_end = payload_offset + payload_length
+            if payload_end > archive_size:
                 if not recover_incomplete:
                     raise ValueError(f'Chess archive has an incomplete final frame payload: {path}')
                 archive.truncate(valid_end)
                 break
-            if hashlib.sha256(payload).digest() != expected_digest:
-                raise ValueError(f'Chess archive frame checksum failed: {path}')
-            frames.append(
-                ChessArchiveFrame(
+            archive.seek(payload_end)
+            frame_indexes.append(
+                ChessArchiveFrameIndex(
+                    path=path,
                     ingestion_sequence=ingestion_sequence,
-                    game=ChessCompletedGame.model_validate_json(payload),
+                    payload_offset=payload_offset,
+                    payload_length=payload_length,
+                    payload_digest=payload_digest,
+                    identity=ChessGameIdentity(run_id=run_id, worker_id=worker_id, game_number=game_number),
+                    model_generation=model_generation,
+                    eligible_sample_count=eligible_sample_count,
+                    completed_searches=completed_searches,
                 )
             )
-            valid_end = archive.tell()
+            valid_end = payload_end
         if recover_incomplete:
             archive.flush()
             os.fsync(archive.fileno())
-    return tuple(frames)
+    return tuple(frame_indexes)
+
+
+def _read_indexed_chess_archive_frame(frame_index: ChessArchiveFrameIndex) -> ChessCompletedGame:
+    with frame_index.path.open('rb') as archive:
+        archive.seek(frame_index.payload_offset)
+        payload = archive.read(frame_index.payload_length)
+    if len(payload) != frame_index.payload_length or hashlib.sha256(payload).digest() != frame_index.payload_digest:
+        raise ValueError(f'Chess archive frame checksum failed: {frame_index.path}')
+    game = ChessCompletedGame.model_validate_json(payload)
+    eligible_sample_count, completed_searches = _game_archive_counts(game)
+    if (
+        game.identity != frame_index.identity
+        or game.model_generation != frame_index.model_generation
+        or eligible_sample_count != frame_index.eligible_sample_count
+        or completed_searches != frame_index.completed_searches
+    ):
+        raise ValueError(f'Chess archive frame metadata disagrees with its payload: {frame_index.path}')
+    return game
 
 
 def inspect_chess_archives(run_path: Path) -> tuple[ChessArchiveInspection, ...]:
     archive_path = run_path / 'completed-games' / 'archive'
     inspections: list[ChessArchiveInspection] = []
     for path in sorted(archive_path.glob(_ARCHIVE_FILE_PATTERN)):
-        records = read_chess_archive(path)
-        generations = {record.model_generation for record in records}
+        frame_indexes = _index_chess_archive(path, recover_incomplete=False)
+        for frame_index in frame_indexes:
+            _read_indexed_chess_archive_frame(frame_index)
+        generations = {frame_index.model_generation for frame_index in frame_indexes}
         if len(generations) != 1:
             raise ValueError(f'Chess archive mixes model generations: {path}')
         model_generation = generations.pop()
@@ -410,13 +517,9 @@ def inspect_chess_archives(run_path: Path) -> tuple[ChessArchiveInspection, ...]
             ChessArchiveInspection(
                 path=path,
                 model_generation=model_generation,
-                game_count=len(records),
-                eligible_sample_count=sum(
-                    observation.sample_eligible for record in records for observation in record.observations
-                ),
-                completed_searches=sum(
-                    observation.search_budget for record in records for observation in record.observations
-                ),
+                game_count=len(frame_indexes),
+                eligible_sample_count=sum(frame_index.eligible_sample_count for frame_index in frame_indexes),
+                completed_searches=sum(frame_index.completed_searches for frame_index in frame_indexes),
                 byte_count=path.stat().st_size,
             )
         )

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+import src.train.ChessReplay as chess_replay_module
 from src.games.chess.ChessBoard import ChessBoard
 from src.self_play.chess_completed_game import (
     ChessCompletedGame,
@@ -267,6 +268,30 @@ def test_archive_rebuild_matches_live_fifo_samples_and_credits(tmp_path: Path) -
     assert len(inspection) == 1
     assert inspection[0].game_count == 3
     assert inspection[0].eligible_sample_count == 12
+
+
+def test_restart_materializes_only_the_newest_frames_needed_for_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publisher = ChessCompletedGamePublisher(tmp_path, 23, 0)
+    for model_generation in range(5):
+        publisher.publish(completed_game(publisher, model_generation=model_generation))
+    ChessReplayMaintainer(tmp_path, capacity=20, sampler_seed=29).maintain(20)
+    original_reader = chess_replay_module._read_indexed_chess_archive_frame
+    read_sequences: list[int] = []
+
+    def track_read(frame_index: chess_replay_module.ChessArchiveFrameIndex) -> ChessCompletedGame:
+        read_sequences.append(frame_index.ingestion_sequence)
+        return original_reader(frame_index)
+
+    monkeypatch.setattr(chess_replay_module, '_read_indexed_chess_archive_frame', track_read)
+
+    restarted, _ = ChessReplayMaintainer(tmp_path, capacity=8, sampler_seed=29).maintain(8)
+
+    assert read_sequences == [3, 4]
+    assert restarted.credited_samples == 20
+    assert tuple(sample.source_model_generation for sample in restarted.samples) == (3, 3, 3, 3, 4, 4, 4, 4)
 
 
 def test_archive_ingestion_sequence_preserves_late_older_generation_order(tmp_path: Path) -> None:
