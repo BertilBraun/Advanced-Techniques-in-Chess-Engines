@@ -121,7 +121,7 @@ def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path
     for ply, move_uci in enumerate(FOOLS_MATE):
         move = chess.Move.from_uci(move_uci)
         selected_action = CurrentGame.encode_move(move, game.board)
-        game.memory.append(SelfPlayGameMemory(game.board.copy(), [(selected_action, 8)], 0.0, ply, 0))
+        game.memory.append(SelfPlayGameMemory(game.board.copy(), [(selected_action, 8)], 0.0, ply, 0, 8, True))
         game = game.expand(move)
 
     self_play._add_training_data(game, -1.0, TerminationReason.NATURAL)
@@ -144,9 +144,56 @@ def test_materializer_derives_current_chess_targets_and_source_metadata(tmp_path
     assert samples[1].value_target.final_outcome is FinalOutcome.LOSS
     assert samples[-1].sample_weight == 1.5
     assert samples[-1].source_model_generation == 3
-    assert samples[-1].metadata.starting_fen == chess.STARTING_FEN
-    assert samples[-1].metadata.moves_uci == ()
-    assert samples[0].metadata.moves_uci == FOOLS_MATE[:3]
+    assert game.initial_fen == chess.STARTING_FEN
+    assert game.moves_uci == FOOLS_MATE
+
+
+def test_ineligible_fast_search_is_archived_and_counted_without_earning_credit(tmp_path: Path) -> None:
+    game = completed_game(ChessCompletedGamePublisher(tmp_path, 20, 0))
+    fast_observation = game.observations[1].model_copy(update={'sample_eligible': False, 'search_budget': 3})
+    game = game.model_copy(update={'observations': (game.observations[0], fast_observation, *game.observations[2:])})
+    replay = ChessReplay(capacity=10, sampler_seed=2)
+
+    credited = replay.ingest_game(game)
+    snapshot = replay.freeze()
+
+    assert len(game.observations) == len(game.moves_uci)
+    assert credited == snapshot.credited_samples == 3
+    assert snapshot.credited_completed_searches == 30
+
+
+def test_resignation_materializes_final_unplayed_search_position(tmp_path: Path) -> None:
+    publisher = ChessCompletedGamePublisher(tmp_path, 22, 0)
+    game = completed_game(publisher)
+    board = ChessBoard()
+    for move_uci in FOOLS_MATE[:3]:
+        board.make_move(chess.Move.from_uci(move_uci))
+    legal_actions = tuple(sorted(CurrentGame.encode_move(move, board) for move in board.get_valid_moves()))
+    terminal_observation = ChessSearchObservation(
+        ply=3,
+        model_generation=3,
+        legal_action_ids=legal_actions,
+        visits=(SparseSearchVisit(action_id=legal_actions[0], visit_count=9),),
+        root_value=-0.9,
+        selected_action_id=None,
+        move_selection_mode=ChessMoveSelectionMode.TERMINAL,
+        search_budget=9,
+        minimum_visit_count=0,
+    )
+    game = game.model_copy(
+        update={
+            'moves_uci': FOOLS_MATE[:3],
+            'final_current_player': board.current_player,
+            'final_score': -1.0,
+            'termination_reason': TerminationReason.RESIGNATION,
+            'observations': (*game.observations[:3], terminal_observation),
+        }
+    )
+
+    samples = materialize_chess_game(game)
+
+    assert samples[0].metadata.ply == len(game.moves_uci)
+    assert samples[0].value_target.final_outcome is FinalOutcome.LOSS
 
 
 def test_archive_recovers_incomplete_final_frame(tmp_path: Path) -> None:
@@ -154,9 +201,9 @@ def test_archive_recovers_incomplete_final_frame(tmp_path: Path) -> None:
     first = completed_game(publisher)
     second = completed_game(publisher)
     archive = tmp_path / 'archive.games'
-    append_chess_archive_record(archive, canonical_game_payload(first))
+    append_chess_archive_record(archive, canonical_game_payload(first), ingestion_sequence=0)
     first_size = archive.stat().st_size
-    append_chess_archive_record(archive, canonical_game_payload(second))
+    append_chess_archive_record(archive, canonical_game_payload(second), ingestion_sequence=1)
     with archive.open('r+b') as file:
         file.truncate(archive.stat().st_size - 11)
 
@@ -172,7 +219,7 @@ def test_restart_recovers_archived_inbox_game_exactly_once(tmp_path: Path) -> No
     game = completed_game(publisher)
     inbox_file = publisher.publish(game)
     archive = tmp_path / 'completed-games' / 'archive' / 'model-generation-00000000000000000003.games'
-    append_chess_archive_record(archive, canonical_game_payload(game))
+    append_chess_archive_record(archive, canonical_game_payload(game), ingestion_sequence=0)
 
     maintainer = ChessReplayMaintainer(tmp_path, capacity=100, sampler_seed=11)
     snapshot, _ = maintainer.maintain(100)
@@ -201,6 +248,20 @@ def test_archive_rebuild_matches_live_fifo_samples_and_credits(tmp_path: Path) -
     assert len(inspection) == 1
     assert inspection[0].game_count == 3
     assert inspection[0].eligible_sample_count == 12
+
+
+def test_archive_ingestion_sequence_preserves_late_older_generation_order(tmp_path: Path) -> None:
+    publisher = ChessCompletedGamePublisher(tmp_path, 21, 0)
+    publisher.publish(completed_game(publisher, model_generation=2))
+    maintainer = ChessReplayMaintainer(tmp_path, capacity=20, sampler_seed=5)
+    maintainer.maintain(20)
+    publisher.publish(completed_game(publisher, model_generation=1))
+
+    live, _ = maintainer.maintain(20)
+    rebuilt = rebuild_chess_replay(tmp_path, capacity=20, sampler_seed=5)
+
+    assert tuple(sample.source_model_generation for sample in live.samples) == (2, 2, 2, 2, 1, 1, 1, 1)
+    assert rebuilt.samples == live.samples
 
 
 def test_fifo_phase_capacity_and_deterministic_nonoverlapping_rank_sampling(tmp_path: Path) -> None:

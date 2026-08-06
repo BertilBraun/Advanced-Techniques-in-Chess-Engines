@@ -69,6 +69,8 @@ class SelfPlayGameMemory:
     result_score: float
     ply: int
     model_generation: int
+    search_budget: int
+    sample_eligible: bool
 
 
 @dataclass(frozen=True)
@@ -446,17 +448,22 @@ class SelfPlay:
                 continue
 
             was_full_searched = boards[i].should_run_full_search
+            search_schedule = self.search_schedule_state
+            if search_schedule is None:
+                raise RuntimeError('Search schedule must be initialized during self-play.')
+            spg.memory.append(
+                SelfPlayGameMemory(
+                    spg.board.copy(),
+                    mcts_result.visits,
+                    mcts_result.result,
+                    len(spg.played_moves),
+                    self.model_version,
+                    search_schedule.num_full_searches if was_full_searched else search_schedule.num_fast_searches,
+                    was_full_searched,
+                )
+            )
             if was_full_searched:
                 self._archive_disagreement_prefix(spg, mcts_result.root)
-                spg.memory.append(
-                    SelfPlayGameMemory(
-                        spg.board.copy(),
-                        mcts_result.visits,
-                        mcts_result.result,
-                        len(spg.played_moves),
-                        self.model_version,
-                    )
-                )
                 if self._record_resignation_observation(spg, mcts_result):
                     if spg.is_resignation_audit:
                         self.dataset.stats += SelfPlayDatasetStats(hypothetical_resignations=1)
@@ -846,14 +853,19 @@ class SelfPlay:
                     for action_id, visit_count in memory.visit_counts
                 ),
                 root_value=memory.result_score,
-                selected_action_id=spg.encoded_moves[memory.ply],
+                selected_action_id=(spg.encoded_moves[memory.ply] if memory.ply < len(spg.encoded_moves) else None),
                 move_selection_mode=(
-                    ChessMoveSelectionMode.GREEDY
-                    if memory.ply >= self.args.num_moves_after_which_to_play_greedy
-                    else ChessMoveSelectionMode.TEMPERATURE
+                    ChessMoveSelectionMode.TERMINAL
+                    if memory.ply == len(spg.encoded_moves)
+                    else (
+                        ChessMoveSelectionMode.GREEDY
+                        if memory.ply >= self.args.num_moves_after_which_to_play_greedy
+                        else ChessMoveSelectionMode.TEMPERATURE
+                    )
                 ),
-                search_budget=self.num_searches_per_turn,
+                search_budget=memory.search_budget,
                 minimum_visit_count=self.args.mcts.min_visit_count,
+                sample_eligible=memory.sample_eligible,
             )
             for memory in spg.memory
         )

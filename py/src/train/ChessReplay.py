@@ -14,18 +14,18 @@ import chess
 import numpy as np
 import torch
 
-from src.Encoding import decode_board_states_into, encode_board_state
+from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
 from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
 from src.self_play.chess_completed_game import ChessCompletedGame, completed_game_from_path
-from src.self_play.value_target import ReplayValueTarget, outcome_from_sample_perspective
+from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
 from src.settings import CurrentGame
 from src.util.atomic_file import fsync_directory, write_bytes_atomically
 
 
-CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x01\n'
-_FRAME_HEADER = struct.Struct('>Q32s')
+CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x02\n'
+_FRAME_HEADER = struct.Struct('>QQ32s')
 _ARCHIVE_FILE_PATTERN = 'model-generation-*.games'
 
 
@@ -158,6 +158,12 @@ class ChessArchiveInspection:
     byte_count: int
 
 
+@dataclass(frozen=True)
+class ChessArchiveFrame:
+    ingestion_sequence: int
+    game: ChessCompletedGame
+
+
 class ChessReplay:
     def __init__(self, capacity: int, sampler_seed: int) -> None:
         if capacity <= 0:
@@ -183,9 +189,7 @@ class ChessReplay:
         samples = materialize_chess_game(game)
         self._samples.extend(samples)
         self._credited_samples += len(samples)
-        self._credited_completed_searches += sum(
-            observation.search_budget for observation in game.observations if observation.sample_eligible
-        )
+        self._credited_completed_searches += sum(observation.search_budget for observation in game.observations)
         self._evict_to_capacity()
         return len(samples)
 
@@ -234,8 +238,8 @@ class ChessReplayMaintainer:
         self.inbox_path = run_path / 'completed-games' / 'inbox'
         self.archive_path = run_path / 'completed-games' / 'archive'
         self.replay = ChessReplay(capacity, sampler_seed)
-        self._archived_payloads: dict[str, bytes] = {}
-        self._latest_model_generation = -1
+        self._archived_digests: dict[str, bytes] = {}
+        self._next_ingestion_sequence = 0
         self._recover_and_rebuild()
 
     def maintain(self, capacity: int) -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
@@ -243,15 +247,18 @@ class ChessReplayMaintainer:
         for inbox_file in sorted(self.inbox_path.glob('*.json')):
             game = completed_game_from_path(inbox_file)
             payload = canonical_game_payload(game)
-            archived_payload = self._archived_payloads.get(game.identity.archive_key)
-            if archived_payload is None:
-                if game.model_generation < self._latest_model_generation:
-                    raise ValueError('Completed games cannot arrive after a newer model-generation archive.')
-                append_chess_archive_record(self.archive_file(game.model_generation), payload)
-                self._archived_payloads[game.identity.archive_key] = payload
+            payload_digest = hashlib.sha256(payload).digest()
+            archived_digest = self._archived_digests.get(game.identity.archive_key)
+            if archived_digest is None:
+                _append_recovered_chess_archive_record(
+                    self.archive_file(game.model_generation),
+                    payload,
+                    self._next_ingestion_sequence,
+                )
+                self._archived_digests[game.identity.archive_key] = payload_digest
                 self.replay.ingest_game(game)
-                self._latest_model_generation = game.model_generation
-            elif archived_payload != payload:
+                self._next_ingestion_sequence += 1
+            elif archived_digest != payload_digest:
                 raise ValueError(f'Archived completed game has conflicting identity {game.identity.archive_key}.')
             inbox_file.unlink()
             fsync_directory(inbox_file.parent)
@@ -262,28 +269,46 @@ class ChessReplayMaintainer:
         return self.archive_path / f'model-generation-{model_generation:020d}.games'
 
     def _recover_and_rebuild(self) -> None:
+        frames: list[ChessArchiveFrame] = []
         for archive_file in sorted(self.archive_path.glob(_ARCHIVE_FILE_PATTERN)):
-            for game in read_chess_archive(archive_file, recover_incomplete=True):
+            for frame in _read_chess_archive_frames(archive_file, recover_incomplete=True):
+                game = frame.game
                 expected_archive = self.archive_file(game.model_generation)
                 if archive_file != expected_archive:
                     raise ValueError(f'Completed game is stored in the wrong model-generation archive: {archive_file}')
                 payload = canonical_game_payload(game)
-                previous = self._archived_payloads.setdefault(game.identity.archive_key, payload)
-                if previous != payload:
+                payload_digest = hashlib.sha256(payload).digest()
+                previous_digest = self._archived_digests.setdefault(game.identity.archive_key, payload_digest)
+                if previous_digest != payload_digest:
                     raise ValueError(f'Archive contains conflicting game identity {game.identity.archive_key}.')
-                self.replay.ingest_game(game)
-                self._latest_model_generation = game.model_generation
+                frames.append(frame)
+        sequences = tuple(frame.ingestion_sequence for frame in frames)
+        if len(set(sequences)) != len(sequences):
+            raise ValueError('Chess archives contain duplicate ingestion sequence numbers.')
+        for expected_sequence, frame in enumerate(sorted(frames, key=lambda item: item.ingestion_sequence)):
+            if frame.ingestion_sequence != expected_sequence:
+                raise ValueError('Chess archive ingestion sequence is not contiguous.')
+            self.replay.ingest_game(frame.game)
+        self._next_ingestion_sequence = len(frames)
 
 
 def canonical_game_payload(game: ChessCompletedGame) -> bytes:
     return game.model_dump_json().encode('utf-8')
 
 
-def append_chess_archive_record(path: Path, payload: bytes) -> None:
+def append_chess_archive_record(path: Path, payload: bytes, ingestion_sequence: int) -> None:
+    if ingestion_sequence < 0:
+        raise ValueError('Chess archive ingestion sequence must be nonnegative.')
     if not path.exists():
         write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
     read_chess_archive(path, recover_incomplete=True)
-    frame = _FRAME_HEADER.pack(len(payload), hashlib.sha256(payload).digest()) + payload
+    _append_recovered_chess_archive_record(path, payload, ingestion_sequence)
+
+
+def _append_recovered_chess_archive_record(path: Path, payload: bytes, ingestion_sequence: int) -> None:
+    if not path.exists():
+        write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
+    frame = _FRAME_HEADER.pack(ingestion_sequence, len(payload), hashlib.sha256(payload).digest()) + payload
     with path.open('ab') as archive:
         archive.write(frame)
         archive.flush()
@@ -291,9 +316,13 @@ def append_chess_archive_record(path: Path, payload: bytes) -> None:
 
 
 def read_chess_archive(path: Path, recover_incomplete: bool = False) -> tuple[ChessCompletedGame, ...]:
+    return tuple(frame.game for frame in _read_chess_archive_frames(path, recover_incomplete))
+
+
+def _read_chess_archive_frames(path: Path, recover_incomplete: bool) -> tuple[ChessArchiveFrame, ...]:
     if not path.is_file():
         raise ValueError(f'Chess archive does not exist: {path}')
-    records: list[ChessCompletedGame] = []
+    frames: list[ChessArchiveFrame] = []
     mode = 'r+b' if recover_incomplete else 'rb'
     with path.open(mode) as archive:
         header = archive.read(len(CHESS_ARCHIVE_HEADER))
@@ -309,7 +338,7 @@ def read_chess_archive(path: Path, recover_incomplete: bool = False) -> tuple[Ch
                     raise ValueError(f'Chess archive has an incomplete final frame header: {path}')
                 archive.truncate(valid_end)
                 break
-            payload_length, expected_digest = _FRAME_HEADER.unpack(frame_header)
+            ingestion_sequence, payload_length, expected_digest = _FRAME_HEADER.unpack(frame_header)
             payload = archive.read(payload_length)
             if len(payload) < payload_length:
                 if not recover_incomplete:
@@ -318,12 +347,17 @@ def read_chess_archive(path: Path, recover_incomplete: bool = False) -> tuple[Ch
                 break
             if hashlib.sha256(payload).digest() != expected_digest:
                 raise ValueError(f'Chess archive frame checksum failed: {path}')
-            records.append(ChessCompletedGame.model_validate_json(payload))
+            frames.append(
+                ChessArchiveFrame(
+                    ingestion_sequence=ingestion_sequence,
+                    game=ChessCompletedGame.model_validate_json(payload),
+                )
+            )
             valid_end = archive.tell()
         if recover_incomplete:
             archive.flush()
             os.fsync(archive.fileno())
-    return tuple(records)
+    return tuple(frames)
 
 
 def inspect_chess_archives(run_path: Path) -> tuple[ChessArchiveInspection, ...]:
@@ -344,10 +378,7 @@ def inspect_chess_archives(run_path: Path) -> tuple[ChessArchiveInspection, ...]
                     observation.sample_eligible for record in records for observation in record.observations
                 ),
                 completed_searches=sum(
-                    observation.search_budget
-                    for record in records
-                    for observation in record.observations
-                    if observation.sample_eligible
+                    observation.search_budget for record in records for observation in record.observations
                 ),
                 byte_count=path.stat().st_size,
             )
@@ -365,18 +396,16 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
     board = ChessBoard.from_fen(game.initial_fen)
     observations_by_ply = {observation.ply: observation for observation in game.observations}
     materialized_by_ply: dict[int, ChessReplaySample] = {}
-    moves: list[str] = []
-    for ply, move_uci in enumerate(game.moves_uci):
+    for ply in range(len(game.moves_uci) + 1):
         observation = observations_by_ply.get(ply)
         if observation is not None:
             legal_actions = tuple(sorted(CurrentGame.encode_move(move, board) for move in board.get_valid_moves()))
             if legal_actions != observation.legal_action_ids:
                 raise ValueError(f'Completed-game legal actions disagree at ply {ply}.')
-            selected_move = chess.Move.from_uci(move_uci)
-            if selected_move not in board.get_valid_moves():
-                raise ValueError(f'Completed game contains illegal move {move_uci} at ply {ply}.')
-            if CurrentGame.encode_move(selected_move, board) != observation.selected_action_id:
-                raise ValueError(f'Completed-game selected action disagrees at ply {ply}.')
+            if ply < len(game.moves_uci):
+                selected_move = chess.Move.from_uci(game.moves_uci[ply])
+                if CurrentGame.encode_move(selected_move, board) != observation.selected_action_id:
+                    raise ValueError(f'Completed-game selected action disagrees at ply {ply}.')
             if observation.sample_eligible:
                 visits = tuple(
                     (visit.action_id, visit.visit_count - observation.minimum_visit_count)
@@ -404,18 +433,24 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
                         ply=ply,
                         current_player_piece_count=current_piece_count,
                         opponent_piece_count=opponent_piece_count,
-                        starting_fen=game.initial_fen,
-                        moves_uci=tuple(moves),
                     ),
                     sample_weight=observation.sample_weight,
                     source_model_generation=observation.model_generation,
                     source_created_at_seconds=game.created_at_seconds,
                 )
+        if ply == len(game.moves_uci):
+            break
+        move_uci = game.moves_uci[ply]
         move = chess.Move.from_uci(move_uci)
         if move not in board.get_valid_moves():
             raise ValueError(f'Completed game contains illegal move {move_uci} at ply {ply}.')
         board.make_move(move)
-        moves.append(move_uci)
+    if board.current_player != game.final_current_player:
+        raise ValueError('Completed-game final player does not match reconstructed moves.')
+    if game.termination_reason is TerminationReason.NATURAL:
+        natural_result = get_board_result_score(board)
+        if natural_result is None or natural_result != game.final_score:
+            raise ValueError('Completed-game natural result does not match reconstructed moves.')
     missing_observations = set(observations_by_ply) - set(materialized_by_ply)
     ineligible_plies = {observation.ply for observation in game.observations if not observation.sample_eligible}
     if missing_observations - ineligible_plies:

@@ -21,6 +21,7 @@ _GAME_FILE_PATTERN = re.compile(r'run-(?P<run>\d+)-worker-(?P<worker>\d+)-game-(
 class ChessMoveSelectionMode(str, Enum):
     TEMPERATURE = 'temperature'
     GREEDY = 'greedy'
+    TERMINAL = 'terminal'
 
 
 class ChessRulesMetadata(FrozenModel):
@@ -61,7 +62,7 @@ class ChessSearchObservation(FrozenModel):
     legal_action_ids: tuple[int, ...]
     visits: tuple[SparseSearchVisit, ...]
     root_value: float
-    selected_action_id: int = Field(ge=0)
+    selected_action_id: int | None
     move_selection_mode: ChessMoveSelectionMode
     search_budget: int = Field(gt=0)
     minimum_visit_count: int = Field(ge=0)
@@ -75,7 +76,7 @@ class ChessSearchObservation(FrozenModel):
         if not self.legal_action_ids or len(set(self.legal_action_ids)) != len(self.legal_action_ids):
             raise ValueError('Chess search legal actions must be nonempty and unique.')
         legal_actions = set(self.legal_action_ids)
-        if self.selected_action_id not in legal_actions:
+        if self.selected_action_id is not None and self.selected_action_id not in legal_actions:
             raise ValueError('Selected chess action must be legal.')
         visit_actions = tuple(visit.action_id for visit in self.visits)
         if not visit_actions or len(set(visit_actions)) != len(visit_actions):
@@ -127,8 +128,14 @@ class ChessCompletedGame(FrozenModel):
             raise ValueError('Chess search observations must be ordered by ply.')
         if len({observation.ply for observation in self.observations}) != len(self.observations):
             raise ValueError('Chess search observations must have unique plies.')
-        if any(observation.ply >= len(self.moves_uci) for observation in self.observations):
-            raise ValueError('Chess search observation ply must precede a played move.')
+        if any(observation.ply > len(self.moves_uci) for observation in self.observations):
+            raise ValueError('Chess search observation ply cannot follow the final position.')
+        for observation in self.observations:
+            terminal_observation = observation.ply == len(self.moves_uci)
+            if terminal_observation != (observation.selected_action_id is None):
+                raise ValueError('Only a final-position chess observation may omit its selected action.')
+            if terminal_observation != (observation.move_selection_mode is ChessMoveSelectionMode.TERMINAL):
+                raise ValueError('Only a final-position chess observation may use terminal move selection.')
         if any(
             not self.minimum_model_generation <= observation.model_generation <= self.model_generation
             for observation in self.observations
