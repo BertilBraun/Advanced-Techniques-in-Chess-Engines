@@ -188,7 +188,7 @@ include_directories(${stockfish_SOURCE_DIR}/src)
 include_directories(${nlohmann_json_SOURCE_DIR}/single_include/nlohmann)
 
 # --- Collect all source files from src/ and Stockfish/src/ ---
-file(GLOB_RECURSE ALL_SOURCES
+file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS
         "src/*.cpp"
         "src/*.h"
         "src/*.hpp"

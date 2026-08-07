@@ -1,0 +1,15 @@
+{
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "files.associations": {
+        "*.h": "cpp",
+        "*.hpp": "cpp"
+    },
+    "cmake.sourceDirectory": "C:/Projects/Papers/projects/advanced-techniques-chess-engines/sources/main/cpp",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/py"
+    ]
+}
