@@ -2,14 +2,15 @@
 
 #include "InferenceTypes.hpp"
 #include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"
-#include "games/chess/ChessPosition.hpp"
+#include "games/chess/ChessHistory.hpp"
 
 #include <optional>
 
 class ChessGameContract {
 public:
-    using Position = ChessPosition;
+    using Position = Board;
     using Action = ChessAction;
     using EncodedPosition = EncodedChessPosition;
 
@@ -21,7 +22,7 @@ public:
 
     [[nodiscard]] static Position replayPosition(const std::string &starting_fen,
                                                  const std::vector<std::string> &moves_uci) {
-        return replay_chess_position(starting_fen, moves_uci);
+        return replayMoves(starting_fen, moves_uci);
     }
 
     [[nodiscard]] static Position childPosition(const Position &parent, const Action action) {
