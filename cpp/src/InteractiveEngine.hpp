@@ -58,14 +58,14 @@ public:
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
     [[nodiscard]] const std::vector<std::string> &movesUci() const { return m_movesUci; }
     [[nodiscard]] int rootVisits() const {
-        return static_cast<int>(m_tree->rootStatistics().visits);
+        return static_cast<int>(m_tree->rootStatistics().number_of_visits);
     }
 
 private:
     std::shared_ptr<InteractiveEngine> m_engine;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
-    std::unique_ptr<EvalSearchTree> m_tree;
+    std::unique_ptr<SearchTree> m_tree;
 
     void reconstructRoot();
 };

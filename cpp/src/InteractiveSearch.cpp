@@ -132,7 +132,7 @@ void InteractiveSearch::recordBatch(const std::size_t batchSize,
     }
 }
 
-void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t workerIndex,
+void InteractiveSearch::completeWorker(SearchTree &tree, const std::size_t workerIndex,
                                        int &completed) {
     std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
     if (pendingBatches.empty()) {
@@ -153,8 +153,8 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
         const float *policyData = output.policies.data_ptr<float>();
         const float *outcomeData = output.outcomes.data_ptr<float>();
         for (; processed < pending.leaves.size(); ++processed) {
-            const EvalNodeIndex leafIndex = pending.leaves[processed];
-            EvalSearchNode &leaf = tree.node(leafIndex);
+            const NodeIndex leafIndex = pending.leaves[processed];
+            SearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult =
                 processSearchInference<ChessGameContract>(
@@ -188,7 +188,7 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
     }
 }
 
-void InteractiveSearch::cancelPending(EvalSearchTree &tree) noexcept {
+void InteractiveSearch::cancelPending(SearchTree &tree) noexcept {
     for (std::size_t workerIndex = 0; workerIndex < m_pending.size(); ++workerIndex) {
         std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
         while (!pendingBatches.empty()) {
@@ -198,7 +198,7 @@ void InteractiveSearch::cancelPending(EvalSearchTree &tree) noexcept {
                 m_workers[workerIndex]->release(pending.slot_index);
             } catch (...) {
             }
-            for (const EvalNodeIndex leafIndex : pending.leaves) {
+            for (const NodeIndex leafIndex : pending.leaves) {
                 try {
                     tree.cancelReservation(leafIndex);
                 } catch (...) {
@@ -210,7 +210,7 @@ void InteractiveSearch::cancelPending(EvalSearchTree &tree) noexcept {
 }
 
 InteractiveSearchResult
-InteractiveSearch::search(EvalSearchTree &tree,
+InteractiveSearch::search(SearchTree &tree,
                           const std::optional<std::chrono::steady_clock::time_point> deadline,
                           const std::optional<int> searchLimit) {
     if (searchLimit.has_value() && *searchLimit <= 0) {
@@ -231,20 +231,20 @@ InteractiveSearch::search(EvalSearchTree &tree,
                 DirectInferencePipeline &worker = *m_workers[workerIndex];
                 const DirectInferencePipeline::WritableBatch writable =
                     worker.acquireWritableBatch();
-                std::vector<EvalNodeIndex> leaves;
+                std::vector<NodeIndex> leaves;
                 leaves.reserve(static_cast<std::size_t>(m_parameters.inference_batch_size));
                 try {
                     while (leaves.size() <
                                static_cast<std::size_t>(m_parameters.inference_batch_size) &&
                            mayIssue(deadline, searchLimit, claimed)) {
                         const auto selectionStartedAt = std::chrono::steady_clock::now();
-                        const EvalNodeIndex leaf =
-                            tree.selectLeaf(m_parameters.exploration_constant);
+                        const NodeIndex leaf =
+                            tree.selectAvailableLeaf(m_parameters.exploration_constant);
                         m_selectionNanoseconds += static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 std::chrono::steady_clock::now() - selectionStartedAt)
                                 .count());
-                        if (leaf == INVALID_EVAL_NODE_INDEX) {
+                        if (leaf == INVALID_NODE_INDEX) {
                             break;
                         }
                         if (tree.node(leaf).isTerminal()) {
@@ -265,7 +265,7 @@ InteractiveSearch::search(EvalSearchTree &tree,
                         ++claimed;
                     }
                 } catch (...) {
-                    for (const EvalNodeIndex leaf : leaves) {
+                    for (const NodeIndex leaf : leaves) {
                         tree.cancelReservation(leaf);
                     }
                     worker.discardWritableBatch(writable.slotIndex);
@@ -317,10 +317,11 @@ InteractiveSearch::search(EvalSearchTree &tree,
         static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                        std::chrono::steady_clock::now() - searchStartedAt)
                                        .count());
-    const EvalSearchStatistics &statistics = tree.rootStatistics();
-    const float result = statistics.visits == 0
+    const RootStatistics &statistics = tree.rootStatistics();
+    const float result = statistics.number_of_visits == 0
                              ? 0.0F
-                             : statistics.result_sum / static_cast<float>(statistics.visits);
+                             : statistics.result_sum /
+                                   static_cast<float>(statistics.number_of_visits);
     return {result, completed};
 }
 

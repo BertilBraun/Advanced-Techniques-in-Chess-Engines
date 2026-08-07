@@ -4,17 +4,23 @@
 
 namespace {
 constexpr uint32 VIRTUAL_LOSS_DELTA = 1;
-constexpr float TURN_DISCOUNT = 0.99f;
 constexpr uint32 INVALID_CHILD_POSITION = std::numeric_limits<uint32>::max();
 } // namespace
 
-SearchTree::SearchTree(Board rootBoard, const uint32 capacity) : m_slots(capacity) {
-    if (capacity == 0) {
+SearchTree::SearchTree(Board rootBoard, const uint32 initialCapacity, const uint32 maximumCapacity,
+                       const float turnDiscount)
+    : m_slots(initialCapacity),
+      m_maximumCapacity(maximumCapacity == 0 ? initialCapacity : maximumCapacity),
+      m_turnDiscount(turnDiscount) {
+    if (initialCapacity == 0 || m_maximumCapacity < initialCapacity) {
         throw std::invalid_argument("SearchTree capacity must be positive");
     }
+    if (turnDiscount <= 0.0F || turnDiscount > 1.0F) {
+        throw std::invalid_argument("SearchTree turn discount must be in (0, 1]");
+    }
 
-    m_freeSlots.reserve(capacity);
-    for (uint32 slot = capacity; slot > 0; --slot) {
+    m_freeSlots.reserve(initialCapacity);
+    for (uint32 slot = initialCapacity; slot > 0; --slot) {
         m_freeSlots.push_back(slot - 1);
     }
     m_rootIndex = allocateNode(std::move(rootBoard), INVALID_NODE_INDEX, INVALID_CHILD_POSITION);
@@ -30,6 +36,11 @@ uint32 SearchTree::generation(const NodeIndex index) { return static_cast<uint32
 
 NodeIndex SearchTree::allocateNode(Board board, const NodeIndex parentIndex,
                                    const uint32 parentChildIndex) {
+    if (m_freeSlots.empty()) {
+        if (capacity() < m_maximumCapacity) {
+            grow();
+        }
+    }
     if (m_freeSlots.empty()) {
         throw std::overflow_error(
             "SearchTree arena exhausted at " + std::to_string(m_liveNodeCount) + "/" +
@@ -48,6 +59,20 @@ NodeIndex SearchTree::allocateNode(Board board, const NodeIndex parentIndex,
     slot.value->children.clear();
     ++m_liveNodeCount;
     return makeIndex(freeSlot, slot.generation);
+}
+
+void SearchTree::grow() {
+    const uint32 oldCapacity = capacity();
+    const uint32 newCapacity = static_cast<uint32>(
+        std::min<uint64>(m_maximumCapacity, static_cast<uint64>(oldCapacity) * 2U));
+    if (newCapacity <= oldCapacity) {
+        return;
+    }
+    m_slots.resize(newCapacity);
+    m_freeSlots.reserve(newCapacity);
+    for (uint32 slot = newCapacity; slot > oldCapacity; --slot) {
+        m_freeSlots.push_back(slot - 1);
+    }
 }
 
 SearchNode &SearchTree::node(const NodeIndex index) {
@@ -102,7 +127,8 @@ void SearchTree::releaseNode(const NodeIndex index) {
     --m_liveNodeCount;
 }
 
-void SearchTree::expand(const NodeIndex nodeIndex, const std::vector<MoveScore> &movesWithScores) {
+void SearchTree::expand(const NodeIndex nodeIndex, const std::vector<MoveScore> &movesWithScores,
+                        const std::optional<WdlPrediction> outcome) {
     TIMEIT("SearchTree::expand");
     SearchNode &expandedNode = node(nodeIndex);
     if (expandedNode.isExpanded() || movesWithScores.empty()) {
@@ -112,6 +138,7 @@ void SearchTree::expand(const NodeIndex nodeIndex, const std::vector<MoveScore> 
         throw std::overflow_error("SearchTree node has too many legal moves");
     }
 
+    expandedNode.network_outcome = outcome;
     expandedNode.children.reserve(movesWithScores.size());
     for (const auto &[move, policy] : movesWithScores) {
         expandedNode.children.emplace_back(move, policy);
@@ -173,6 +200,75 @@ uint32 SearchTree::bestChildIndex(const NodeIndex parentIndex, const float cPara
     return bestIndex;
 }
 
+uint32 SearchTree::preferredRootChild() const {
+    const SearchNode &root = node(m_rootIndex);
+    if (root.children.empty()) {
+        throw std::logic_error("Cannot choose a move from an unexpanded SearchTree root");
+    }
+    uint32 preferred = 0;
+    for (uint32 index = 1; index < root.children.size(); ++index) {
+        const Child &candidate = root.children[index];
+        const Child &current = root.children[preferred];
+        if (candidate.number_of_visits > current.number_of_visits ||
+            (candidate.number_of_visits == current.number_of_visits &&
+             (candidate.policy > current.policy ||
+              (candidate.policy == current.policy &&
+               toString(candidate.move) < toString(current.move))))) {
+            preferred = index;
+        }
+    }
+    return preferred;
+}
+
+NodeIndex SearchTree::selectAvailableLeaf(const float explorationConstant) {
+    return selectAvailableLeaf(m_rootIndex, explorationConstant);
+}
+
+NodeIndex SearchTree::selectAvailableLeaf(const NodeIndex nodeIndex,
+                                          const float explorationConstant) {
+    const SearchNode &selected = node(nodeIndex);
+    if (!selected.isExpanded()) {
+        return selected.evaluating ? INVALID_NODE_INDEX : nodeIndex;
+    }
+    const uint32 childCount = static_cast<uint32>(selected.children.size());
+    const uint32 preferred = bestChildIndex(nodeIndex, explorationConstant);
+    NodeIndex leaf = selectAvailableLeaf(materializeChild(nodeIndex, preferred),
+                                         explorationConstant);
+    if (leaf != INVALID_NODE_INDEX) {
+        return leaf;
+    }
+    std::vector<bool> attempted(childCount, false);
+    attempted[preferred] = true;
+    for (uint32 attempt = 1; attempt < childCount; ++attempt) {
+        float bestScore = -std::numeric_limits<float>::infinity();
+        uint32 bestIndex = 0;
+        const float common = explorationConstant *
+                             std::sqrt(static_cast<float>(nodeStatistics(nodeIndex).number_of_visits));
+        for (uint32 index = 0; index < childCount; ++index) {
+            if (attempted[index]) {
+                continue;
+            }
+            const Child &candidate = child(nodeIndex, index);
+            const float exploration = candidate.policy * common /
+                                      static_cast<float>(1U + candidate.number_of_visits);
+            const float action = candidate.number_of_visits == 0
+                                     ? 0.0F
+                                     : -(candidate.result_sum + candidate.virtual_loss) /
+                                           static_cast<float>(candidate.number_of_visits);
+            if (exploration + action > bestScore) {
+                bestScore = exploration + action;
+                bestIndex = index;
+            }
+        }
+        attempted[bestIndex] = true;
+        leaf = selectAvailableLeaf(materializeChild(nodeIndex, bestIndex), explorationConstant);
+        if (leaf != INVALID_NODE_INDEX) {
+            return leaf;
+        }
+    }
+    return INVALID_NODE_INDEX;
+}
+
 void SearchTree::addVirtualLoss(NodeIndex leafIndex) {
     TIMEIT("SearchTree::addVirtualLoss");
     while (leafIndex != m_rootIndex) {
@@ -209,7 +305,7 @@ void SearchTree::backPropagate(NodeIndex leafIndex, float result) {
         Child &incomingEdge = child(selectedNode.parent_index, selectedNode.parent_child_index);
         incomingEdge.result_sum += result;
         ++incomingEdge.number_of_visits;
-        result = -result * TURN_DISCOUNT;
+        result = -result * m_turnDiscount;
         leafIndex = selectedNode.parent_index;
     }
     m_rootStatistics.result_sum += result;
@@ -223,11 +319,38 @@ void SearchTree::backPropagateAndRemoveVirtualLoss(NodeIndex leafIndex, float re
         Child &incomingEdge = child(selectedNode.parent_index, selectedNode.parent_child_index);
         incomingEdge.result_sum += result;
         incomingEdge.virtual_loss -= static_cast<float>(VIRTUAL_LOSS_DELTA);
-        result = -result * TURN_DISCOUNT;
+        result = -result * m_turnDiscount;
         leafIndex = selectedNode.parent_index;
     }
     m_rootStatistics.result_sum += result;
     m_rootStatistics.virtual_loss -= static_cast<float>(VIRTUAL_LOSS_DELTA);
+}
+
+void SearchTree::reserveLeaf(const NodeIndex leafIndex) {
+    SearchNode &leaf = node(leafIndex);
+    if (leaf.evaluating) {
+        throw std::logic_error("SearchTree leaf is already being evaluated");
+    }
+    leaf.evaluating = true;
+    addVirtualLoss(leafIndex);
+}
+
+void SearchTree::cancelReservation(const NodeIndex leafIndex) {
+    SearchNode &leaf = node(leafIndex);
+    if (!leaf.evaluating) {
+        throw std::logic_error("SearchTree leaf has no evaluation reservation");
+    }
+    removeVirtualLoss(leafIndex);
+    leaf.evaluating = false;
+}
+
+void SearchTree::completeReservation(const NodeIndex leafIndex, const float result) {
+    SearchNode &leaf = node(leafIndex);
+    if (!leaf.evaluating) {
+        throw std::logic_error("SearchTree leaf has no evaluation reservation");
+    }
+    backPropagateAndRemoveVirtualLoss(leafIndex, result);
+    leaf.evaluating = false;
 }
 
 void SearchTree::reclaimSubtree(const NodeIndex index) {
@@ -411,6 +534,25 @@ int SearchTree::maxDepth() const {
         }
     }
     return maximumDepth;
+}
+
+uint32 SearchTree::evaluatingNodeCount() const {
+    return static_cast<uint32>(std::ranges::count_if(m_slots, [](const NodeSlot &slot) {
+        return slot.value.has_value() && slot.value->evaluating;
+    }));
+}
+
+uint64 SearchTree::totalVirtualLoss() const {
+    uint64 total = static_cast<uint64>(m_rootStatistics.virtual_loss);
+    for (const NodeSlot &slot : m_slots) {
+        if (!slot.value.has_value()) {
+            continue;
+        }
+        for (const Child &edge : slot.value->children) {
+            total += static_cast<uint64>(edge.virtual_loss);
+        }
+    }
+    return total;
 }
 
 uint64 SearchTree::totalChildCount() const {

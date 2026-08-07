@@ -230,38 +230,22 @@ target_link_libraries(BoardLegalMovesCacheTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
 
 add_executable(
-        EvalSearchTreeTest
-        test/TestEvalSearchTree.cpp
+        SearchTreeInteractiveTest
+        test/TestSearchTreeInteractive.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         src/games/chess/ChessHistory.cpp
         src/games/chess/ChessAction.cpp
-        src/MCTS/EvalSearchTree.cpp
+        src/MCTS/SearchTree.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
         "${stockfish_SOURCE_DIR}/src/movegen.cpp"
         "${stockfish_SOURCE_DIR}/src/position.cpp"
 )
-target_include_directories(EvalSearchTreeTest PRIVATE src)
-target_link_libraries(EvalSearchTreeTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME EvalSearchTreeTest COMMAND EvalSearchTreeTest)
-
-add_executable(
-        EvalSearchTreeBenchmark
-        benchmark/BenchmarkEvalSearchTree.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessAction.cpp
-        src/MCTS/EvalSearchTree.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(EvalSearchTreeBenchmark PRIVATE src)
-target_link_libraries(EvalSearchTreeBenchmark PRIVATE "${TORCH_LIBRARIES}")
+target_include_directories(SearchTreeInteractiveTest PRIVATE src)
+target_link_libraries(SearchTreeInteractiveTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME SearchTreeInteractiveTest COMMAND SearchTreeInteractiveTest)
 
 add_executable(
         ChessGameContractTest

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "InferenceTypes.hpp"
 #include "common.hpp"
 
 using NodeIndex = uint64;
@@ -23,6 +24,8 @@ struct SearchNode {
     std::vector<Child> children;
     NodeIndex parent_index;
     uint32 parent_child_index;
+    std::optional<WdlPrediction> network_outcome;
+    bool evaluating = false;
 
     SearchNode(Board board, NodeIndex parent_index, uint32 parent_child_index)
         : board(std::move(board)), parent_index(parent_index),
@@ -51,7 +54,8 @@ struct MCTSChild {
 
 class SearchTree {
 public:
-    SearchTree(Board rootBoard, uint32 capacity);
+    SearchTree(Board rootBoard, uint32 initialCapacity,
+               uint32 maximumCapacity = 0, float turnDiscount = 0.99F);
 
     SearchTree(const SearchTree &) = delete;
     SearchTree &operator=(const SearchTree &) = delete;
@@ -59,9 +63,11 @@ public:
     SearchTree &operator=(SearchTree &&) = delete;
 
     [[nodiscard]] uint32 capacity() const { return static_cast<uint32>(m_slots.size()); }
+    [[nodiscard]] uint32 maximumCapacity() const { return m_maximumCapacity; }
     [[nodiscard]] uint32 liveNodeCount() const { return m_liveNodeCount; }
     [[nodiscard]] uint64 totalChildCount() const;
     [[nodiscard]] NodeIndex rootIndex() const { return m_rootIndex; }
+    [[nodiscard]] const Board &rootBoard() const { return node(m_rootIndex).board; }
     [[nodiscard]] const RootStatistics &rootStatistics() const { return m_rootStatistics; }
 
     [[nodiscard]] SearchNode &node(NodeIndex index);
@@ -69,14 +75,20 @@ public:
     [[nodiscard]] Child &child(NodeIndex parentIndex, uint32 childIndex);
     [[nodiscard]] const Child &child(NodeIndex parentIndex, uint32 childIndex) const;
 
-    void expand(NodeIndex nodeIndex, const std::vector<MoveScore> &movesWithScores);
+    void expand(NodeIndex nodeIndex, const std::vector<MoveScore> &movesWithScores,
+                std::optional<WdlPrediction> outcome = std::nullopt);
     [[nodiscard]] NodeIndex materializeChild(NodeIndex parentIndex, uint32 childIndex);
     [[nodiscard]] uint32 bestChildIndex(NodeIndex parentIndex, float cParam) const;
+    [[nodiscard]] uint32 preferredRootChild() const;
+    [[nodiscard]] NodeIndex selectAvailableLeaf(float explorationConstant);
 
     void addVirtualLoss(NodeIndex leafIndex);
     void removeVirtualLoss(NodeIndex leafIndex);
     void backPropagate(NodeIndex leafIndex, float result);
     void backPropagateAndRemoveVirtualLoss(NodeIndex leafIndex, float result);
+    void reserveLeaf(NodeIndex leafIndex);
+    void cancelReservation(NodeIndex leafIndex);
+    void completeReservation(NodeIndex leafIndex, float result);
 
     [[nodiscard]] NodeIndex reroot(uint32 childIndex);
     [[nodiscard]] NodeIndex reset(Board rootBoard);
@@ -84,6 +96,8 @@ public:
     void prepareForSearch(uint32 visitLimit, uint32 parallelSearches);
 
     [[nodiscard]] int maxDepth() const;
+    [[nodiscard]] uint32 evaluatingNodeCount() const;
+    [[nodiscard]] uint64 totalVirtualLoss() const;
     [[nodiscard]] std::vector<MCTSChild> rootChildren() const;
     [[nodiscard]] std::string rootMove() const;
     [[nodiscard]] std::string rootRepr() const;
@@ -98,20 +112,24 @@ private:
     std::vector<NodeSlot> m_slots;
     std::vector<uint32> m_freeSlots;
     uint32 m_liveNodeCount = 0;
+    uint32 m_maximumCapacity;
     NodeIndex m_rootIndex = INVALID_NODE_INDEX;
     RootStatistics m_rootStatistics;
     Move m_rootMove = Move::null();
+    float m_turnDiscount;
 
     [[nodiscard]] static NodeIndex makeIndex(uint32 slotIndex, uint32 generation);
     [[nodiscard]] static uint32 slotIndex(NodeIndex index);
     [[nodiscard]] static uint32 generation(NodeIndex index);
     [[nodiscard]] NodeIndex allocateNode(Board board, NodeIndex parentIndex,
                                          uint32 parentChildIndex);
+    void grow();
     void releaseNode(NodeIndex index);
     void reclaimSubtree(NodeIndex index);
     void pruneToLiveNodeLimit(uint32 liveNodeLimit);
     void validateRoot(NodeIndex index) const;
     [[nodiscard]] RootStatistics nodeStatistics(NodeIndex index) const;
+    [[nodiscard]] NodeIndex selectAvailableLeaf(NodeIndex nodeIndex, float explorationConstant);
     static void discountStatistics(uint32 &numberOfVisits, float &resultSum,
                                    float percentageOfNodeVisitsToKeep);
 

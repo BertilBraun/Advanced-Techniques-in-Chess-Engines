@@ -1,7 +1,8 @@
 #pragma once
 
 #include "DirectInference.hpp"
-#include "MCTS/EvalSearchTree.hpp"
+#include "InferenceClientTypes.hpp"
+#include "MCTS/SearchTree.hpp"
 
 #include <deque>
 
@@ -30,14 +31,14 @@ public:
 
     [[nodiscard]] InferenceResult evaluate(const Board &board);
     [[nodiscard]] InteractiveSearchResult
-    search(EvalSearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
+    search(SearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
            std::optional<int> searchLimit);
     [[nodiscard]] InferenceStatistics inferenceStatistics() const;
 
 private:
     struct PendingBatch {
         std::size_t slot_index;
-        std::vector<EvalNodeIndex> leaves;
+        std::vector<NodeIndex> leaves;
         std::chrono::steady_clock::time_point submitted_at;
     };
 
@@ -64,7 +65,7 @@ private:
              const std::optional<int> &searchLimit, int claimed) const;
     [[nodiscard]] std::optional<std::size_t> freeWorker() const;
     [[nodiscard]] std::optional<std::size_t> readyWorker(std::size_t firstWorker) const;
-    void completeWorker(EvalSearchTree &tree, std::size_t workerIndex, int &completed);
-    void cancelPending(EvalSearchTree &tree) noexcept;
+    void completeWorker(SearchTree &tree, std::size_t workerIndex, int &completed);
+    void cancelPending(SearchTree &tree) noexcept;
     void recordBatch(std::size_t batchSize, std::chrono::steady_clock::duration inferenceDuration);
 };
