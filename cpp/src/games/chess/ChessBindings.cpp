@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#include "InteractiveEngine.hpp"
+#include "games/chess/ChessAnalysisEngine.hpp"
 #include "games/chess/ChessSelfPlaySearch.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessEncoding.hpp"
@@ -233,29 +233,35 @@ void bind_chess_game(py::module_ &m) {
         .def_readonly("elapsed_milliseconds", &AnalysisResult::elapsed_milliseconds)
         .def_readonly("principal_variation", &AnalysisResult::principal_variation);
 
-    py::class_<InteractiveSearchParams>(m, "InteractiveSearchParams")
+    py::class_<ChessAnalysisSearchParameters>(m, "ChessAnalysisSearchParameters")
         .def(py::init<float, int, int, int>(), py::arg("exploration_constant"),
              py::arg("inference_workers"), py::arg("inference_batch_size"),
              py::arg("outstanding_batches_per_worker") = 2)
-        .def_readwrite("exploration_constant", &InteractiveSearchParams::exploration_constant)
-        .def_readwrite("inference_workers", &InteractiveSearchParams::inference_workers)
-        .def_readwrite("inference_batch_size", &InteractiveSearchParams::inference_batch_size)
+        .def_readwrite("exploration_constant",
+                       &ChessAnalysisSearchParameters::exploration_constant)
+        .def_readwrite("inference_workers", &ChessAnalysisSearchParameters::inference_workers)
+        .def_readwrite("inference_batch_size",
+                       &ChessAnalysisSearchParameters::inference_batch_size)
         .def_readwrite("outstanding_batches_per_worker",
-                       &InteractiveSearchParams::outstanding_batches_per_worker);
+                       &ChessAnalysisSearchParameters::outstanding_batches_per_worker);
 
-    py::class_<InteractiveEngine, std::shared_ptr<InteractiveEngine>>(m, "InteractiveEngine")
-        .def(py::init<const InferenceRuntimeParameters &, const InteractiveSearchParams &>(),
+    py::class_<ChessAnalysisEngine, std::shared_ptr<ChessAnalysisEngine>>(m,
+                                                                         "ChessAnalysisEngine")
+        .def(py::init<const InferenceRuntimeParameters &,
+                      const ChessAnalysisSearchParameters &>(),
              py::arg("runtime_parameters"), py::arg("search_parameters"))
-        .def("new_game", &InteractiveEngine::newGame, py::arg("starting_fen"), py::arg("moves_uci"))
-        .def("get_inference_statistics", &InteractiveEngine::inferenceStatistics);
+        .def("new_session", &ChessAnalysisEngine::newGame, py::arg("starting_fen"),
+             py::arg("moves_uci"))
+        .def("inference_statistics", &ChessAnalysisEngine::inferenceStatistics);
 
-    py::class_<InteractiveGame, std::shared_ptr<InteractiveGame>>(m, "InteractiveGame")
-        .def("apply_move", &InteractiveGame::applyMove, py::arg("move_uci"))
-        .def("analyze", &InteractiveGame::analyze, py::arg("mode"),
+    py::class_<ChessAnalysisSession, std::shared_ptr<ChessAnalysisSession>>(
+        m, "ChessAnalysisSession")
+        .def("apply_move", &ChessAnalysisSession::applyMove, py::arg("move_uci"))
+        .def("analyze", &ChessAnalysisSession::analyze, py::arg("mode"),
              py::arg("time_limit_seconds") = std::nullopt, py::arg("search_limit") = std::nullopt,
              py::call_guard<py::gil_scoped_release>())
-        .def_property_readonly("fen", &InteractiveGame::fen)
-        .def_property_readonly("starting_fen", &InteractiveGame::startingFen)
-        .def_property_readonly("moves_uci", &InteractiveGame::movesUci)
-        .def_property_readonly("root_visits", &InteractiveGame::rootVisits);
+        .def_property_readonly("fen", &ChessAnalysisSession::fen)
+        .def_property_readonly("starting_fen", &ChessAnalysisSession::startingFen)
+        .def_property_readonly("moves_uci", &ChessAnalysisSession::movesUci)
+        .def_property_readonly("root_visits", &ChessAnalysisSession::rootVisits);
 }

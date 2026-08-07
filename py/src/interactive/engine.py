@@ -5,11 +5,11 @@ from dataclasses import dataclass
 import chess
 from AlphaZeroCpp import (
     AnalysisMode,
+    ChessAnalysisEngine as BoundChessAnalysisEngine,
+    ChessAnalysisSearchParameters,
+    ChessAnalysisSession as BoundChessAnalysisSession,
     InferenceDevice,
     InferenceRuntimeParameters,
-    InteractiveEngine as BoundInteractiveEngine,
-    InteractiveGame as BoundInteractiveGame,
-    InteractiveSearchParams,
 )
 from src.interactive.analysis import (
     AnalysisRequest,
@@ -51,9 +51,9 @@ class InteractiveEngine:
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
         )
-        self._bound_engine = BoundInteractiveEngine(
+        self._bound_engine = BoundChessAnalysisEngine(
             runtime_parameters,
-            InteractiveSearchParams(
+            ChessAnalysisSearchParameters(
                 exploration_constant=configuration.exploration_constant,
                 inference_workers=configuration.inference_workers,
                 inference_batch_size=batch_size,
@@ -62,10 +62,10 @@ class InteractiveEngine:
         )
 
     def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame:
-        return InteractiveGame(self._bound_engine.new_game(starting_fen, moves_uci))
+        return InteractiveGame(self._bound_engine.new_session(starting_fen, moves_uci))
 
     def inference_metrics(self) -> InferenceMetrics:
-        statistics = self._bound_engine.get_inference_statistics()
+        statistics = self._bound_engine.inference_statistics()
         return InferenceMetrics(
             evaluations=statistics.evaluations,
             model_calls=statistics.modelInferenceCalls,
@@ -82,7 +82,7 @@ class InteractiveEngine:
 
 
 class InteractiveGame:
-    def __init__(self, bound_game: BoundInteractiveGame) -> None:
+    def __init__(self, bound_game: BoundChessAnalysisSession) -> None:
         self._bound_game = bound_game
 
     @property

@@ -6,31 +6,32 @@
 
 #include <deque>
 
-struct InteractiveSearchParams {
+struct ChessAnalysisSearchParameters {
     float exploration_constant;
     int inference_workers;
     int inference_batch_size;
     int outstanding_batches_per_worker;
 
-    InteractiveSearchParams(float explorationConstant, int inferenceWorkers, int inferenceBatchSize,
-                            int outstandingBatchesPerWorker = 1);
+    ChessAnalysisSearchParameters(float explorationConstant, int inferenceWorkers,
+                                  int inferenceBatchSize,
+                                  int outstandingBatchesPerWorker = 1);
 };
 
-struct InteractiveSearchResult {
+struct ChessAnalysisSearchResult {
     float result;
     int completed_searches;
 };
 
-class InteractiveSearch {
+class ChessAnalysisSearch {
 public:
-    InteractiveSearch(const InferenceRuntimeParameters &runtimeParameters,
-                      const InteractiveSearchParams &searchParameters);
+    ChessAnalysisSearch(const InferenceRuntimeParameters &runtimeParameters,
+                        const ChessAnalysisSearchParameters &searchParameters);
 
-    InteractiveSearch(const InteractiveSearch &) = delete;
-    InteractiveSearch &operator=(const InteractiveSearch &) = delete;
+    ChessAnalysisSearch(const ChessAnalysisSearch &) = delete;
+    ChessAnalysisSearch &operator=(const ChessAnalysisSearch &) = delete;
 
     [[nodiscard]] ChessInferenceResult evaluate(const Board &board);
-    [[nodiscard]] InteractiveSearchResult
+    [[nodiscard]] ChessAnalysisSearchResult
     search(ChessSearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
            std::optional<int> searchLimit);
     [[nodiscard]] InferenceStatistics inferenceStatistics() const;
@@ -42,7 +43,7 @@ private:
         std::chrono::steady_clock::time_point submitted_at;
     };
 
-    InteractiveSearchParams m_parameters;
+    ChessAnalysisSearchParameters m_parameters;
     std::vector<std::unique_ptr<DirectInferencePipeline>> m_workers;
     std::vector<std::deque<PendingBatch>> m_pending;
     std::size_t m_nextWorker = 0;

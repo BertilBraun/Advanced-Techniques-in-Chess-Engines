@@ -1,4 +1,4 @@
-#include "InteractiveEngine.hpp"
+#include "games/chess/ChessAnalysisEngine.hpp"
 
 namespace {
 bool candidatePreference(const CandidateAnalysis &left, const CandidateAnalysis &right) {
@@ -84,25 +84,26 @@ std::vector<std::string> principalVariation(const ChessSearchTree &tree) {
 }
 } // namespace
 
-std::shared_ptr<InteractiveGame>
-InteractiveEngine::newGame(const std::string &startingFen,
-                           const std::vector<std::string> &movesUci) {
-    return std::make_shared<InteractiveGame>(shared_from_this(), startingFen, movesUci);
+std::shared_ptr<ChessAnalysisSession>
+ChessAnalysisEngine::newGame(const std::string &startingFen,
+                             const std::vector<std::string> &movesUci) {
+    return std::make_shared<ChessAnalysisSession>(shared_from_this(), startingFen, movesUci);
 }
 
-InteractiveGame::InteractiveGame(std::shared_ptr<InteractiveEngine> engine, std::string startingFen,
-                                 std::vector<std::string> movesUci)
+ChessAnalysisSession::ChessAnalysisSession(std::shared_ptr<ChessAnalysisEngine> engine,
+                                           std::string startingFen,
+                                           std::vector<std::string> movesUci)
     : m_engine(std::move(engine)), m_startingFen(std::move(startingFen)),
       m_movesUci(std::move(movesUci)) {
     reconstructRoot();
 }
 
-void InteractiveGame::reconstructRoot() {
+void ChessAnalysisSession::reconstructRoot() {
     m_tree = std::make_unique<ChessSearchTree>(replayMoves(m_startingFen, m_movesUci), 1'024,
                                                std::numeric_limits<uint32>::max(), 1.0F);
 }
 
-void InteractiveGame::applyMove(const std::string &moveUci) {
+void ChessAnalysisSession::applyMove(const std::string &moveUci) {
     if (m_tree->root().position.isGameOver()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
@@ -122,7 +123,7 @@ void InteractiveGame::applyMove(const std::string &moveUci) {
     reconstructRoot();
 }
 
-AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
+AnalysisResult ChessAnalysisSession::analyze(const AnalysisMode mode,
                                         const std::optional<int> timeLimitSeconds,
                                         const std::optional<int> searchLimit) {
     const auto startedAt = std::chrono::steady_clock::now();
@@ -159,7 +160,7 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
         throw std::invalid_argument("search_limit must be positive");
     }
 
-    const InteractiveSearchResult searchResult = m_engine->m_search.search(
+    const ChessAnalysisSearchResult searchResult = m_engine->m_search.search(
         *m_tree,
         timeLimitSeconds.has_value()
             ? std::optional{startedAt + std::chrono::seconds(*timeLimitSeconds)}

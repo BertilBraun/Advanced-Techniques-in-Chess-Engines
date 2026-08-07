@@ -1,4 +1,4 @@
-#include "InteractiveSearch.hpp"
+#include "games/chess/ChessAnalysisSearch.hpp"
 
 #include "SearchInference.hpp"
 #include "games/chess/ChessGameContract.hpp"
@@ -8,7 +8,7 @@ namespace {
 constexpr std::size_t ENCODED_BOARD_SIZE = BOARD_C * BOARD_LEN * BOARD_LEN;
 }
 
-InteractiveSearchParams::InteractiveSearchParams(const float explorationConstant,
+ChessAnalysisSearchParameters::ChessAnalysisSearchParameters(const float explorationConstant,
                                                  const int inferenceWorkers,
                                                  const int inferenceBatchSize,
                                                  const int outstandingBatchesPerWorker)
@@ -29,8 +29,9 @@ InteractiveSearchParams::InteractiveSearchParams(const float explorationConstant
     }
 }
 
-InteractiveSearch::InteractiveSearch(const InferenceRuntimeParameters &runtimeParameters,
-                                     const InteractiveSearchParams &searchParameters)
+ChessAnalysisSearch::ChessAnalysisSearch(
+    const InferenceRuntimeParameters &runtimeParameters,
+    const ChessAnalysisSearchParameters &searchParameters)
     : m_parameters(searchParameters),
       m_pending(static_cast<std::size_t>(searchParameters.inference_workers)),
       m_batchHistogram(static_cast<std::size_t>(searchParameters.inference_batch_size) + 1, 0) {
@@ -44,7 +45,7 @@ InteractiveSearch::InteractiveSearch(const InferenceRuntimeParameters &runtimePa
     }
 }
 
-ChessInferenceResult InteractiveSearch::decode(const torch::Tensor &policy,
+ChessInferenceResult ChessAnalysisSearch::decode(const torch::Tensor &policy,
                                                const torch::Tensor &outcome,
                                                const Board &board) {
     if (policy.device().is_cuda() || policy.scalar_type() != torch::kFloat32 || policy.dim() != 1 ||
@@ -60,7 +61,7 @@ ChessInferenceResult InteractiveSearch::decode(const torch::Tensor &policy,
                                                      outcome.data_ptr<float>(), board);
 }
 
-ChessInferenceResult InteractiveSearch::evaluate(const Board &board) {
+ChessInferenceResult ChessAnalysisSearch::evaluate(const Board &board) {
     DirectInferencePipeline &worker = *m_workers.front();
     const DirectInferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
     encodeBoardInto(board, writable.data);
@@ -81,7 +82,7 @@ ChessInferenceResult InteractiveSearch::evaluate(const Board &board) {
     }
 }
 
-bool InteractiveSearch::mayIssue(
+bool ChessAnalysisSearch::mayIssue(
     const std::optional<std::chrono::steady_clock::time_point> &deadline,
     const std::optional<int> &searchLimit, const int claimed) const {
     if (searchLimit.has_value() && claimed >= *searchLimit) {
@@ -96,7 +97,7 @@ bool InteractiveSearch::mayIssue(
     return std::chrono::steady_clock::now() + safetyMargin < *deadline;
 }
 
-std::optional<std::size_t> InteractiveSearch::freeWorker() const {
+std::optional<std::size_t> ChessAnalysisSearch::freeWorker() const {
     for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
         const std::size_t index = (m_nextWorker + offset) % m_workers.size();
         if (m_pending[index].size() <
@@ -107,7 +108,7 @@ std::optional<std::size_t> InteractiveSearch::freeWorker() const {
     return std::nullopt;
 }
 
-std::optional<std::size_t> InteractiveSearch::readyWorker(const std::size_t firstWorker) const {
+std::optional<std::size_t> ChessAnalysisSearch::readyWorker(const std::size_t firstWorker) const {
     for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
         const std::size_t workerIndex = (firstWorker + offset) % m_workers.size();
         if (!m_pending[workerIndex].empty() &&
@@ -118,7 +119,7 @@ std::optional<std::size_t> InteractiveSearch::readyWorker(const std::size_t firs
     return std::nullopt;
 }
 
-void InteractiveSearch::recordBatch(const std::size_t batchSize,
+void ChessAnalysisSearch::recordBatch(const std::size_t batchSize,
                                     const std::chrono::steady_clock::duration inferenceDuration) {
     ++m_modelCalls;
     m_modelPositions += batchSize;
@@ -133,7 +134,7 @@ void InteractiveSearch::recordBatch(const std::size_t batchSize,
     }
 }
 
-void InteractiveSearch::completeWorker(ChessSearchTree &tree, const std::size_t workerIndex,
+void ChessAnalysisSearch::completeWorker(ChessSearchTree &tree, const std::size_t workerIndex,
                                        int &completed) {
     std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
     if (pendingBatches.empty()) {
@@ -189,7 +190,7 @@ void InteractiveSearch::completeWorker(ChessSearchTree &tree, const std::size_t 
     }
 }
 
-void InteractiveSearch::cancelPending(ChessSearchTree &tree) noexcept {
+void ChessAnalysisSearch::cancelPending(ChessSearchTree &tree) noexcept {
     for (std::size_t workerIndex = 0; workerIndex < m_pending.size(); ++workerIndex) {
         std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
         while (!pendingBatches.empty()) {
@@ -210,8 +211,8 @@ void InteractiveSearch::cancelPending(ChessSearchTree &tree) noexcept {
     }
 }
 
-InteractiveSearchResult
-InteractiveSearch::search(ChessSearchTree &tree,
+ChessAnalysisSearchResult
+ChessAnalysisSearch::search(ChessSearchTree &tree,
                           const std::optional<std::chrono::steady_clock::time_point> deadline,
                           const std::optional<int> searchLimit) {
     if (searchLimit.has_value() && *searchLimit <= 0) {
@@ -326,7 +327,7 @@ InteractiveSearch::search(ChessSearchTree &tree,
     return {result, completed};
 }
 
-InferenceStatistics InteractiveSearch::inferenceStatistics() const {
+InferenceStatistics ChessAnalysisSearch::inferenceStatistics() const {
     InferenceStatistics statistics;
     statistics.evaluations = m_evaluations;
     statistics.modelInferenceCalls = m_modelCalls;

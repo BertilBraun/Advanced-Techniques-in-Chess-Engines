@@ -10,6 +10,9 @@ __all__ = [
     'CandidateAnalysis',
     'ChessSearchChild',
     'ChessSearchRoot',
+    'ChessAnalysisEngine',
+    'ChessAnalysisSearchParameters',
+    'ChessAnalysisSession',
     'ChessSelfPlaySearch',
     'ChessSelfPlaySearchBatch',
     'ChessSelfPlaySearchParameters',
@@ -35,9 +38,6 @@ __all__ = [
     'InferenceDevice',
     'InferenceRuntimeParameters',
     'InferenceStatistics',
-    'InteractiveEngine',
-    'InteractiveGame',
-    'InteractiveSearchParams',
     'TimeInfo',
     'WdlPrediction',
     'encode_board_packed_bytes',
@@ -279,7 +279,7 @@ class InferenceDevice:
     CPU: InferenceDevice
     CUDA: InferenceDevice
 
-class InteractiveSearchParams:
+class ChessAnalysisSearchParameters:
     def __init__(
         self,
         exploration_constant: float,
@@ -292,16 +292,16 @@ class InteractiveSearchParams:
     inference_batch_size: int
     outstanding_batches_per_worker: int
 
-class InteractiveEngine:
+class ChessAnalysisEngine:
     def __init__(
         self,
         runtime_parameters: InferenceRuntimeParameters,
-        search_parameters: InteractiveSearchParams,
+        search_parameters: ChessAnalysisSearchParameters,
     ) -> None: ...
-    def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame: ...
-    def get_inference_statistics(self) -> InferenceStatistics: ...
+    def new_session(self, starting_fen: str, moves_uci: tuple[str, ...]) -> ChessAnalysisSession: ...
+    def inference_statistics(self) -> InferenceStatistics: ...
 
-class InteractiveGame:
+class ChessAnalysisSession:
     def apply_move(self, move_uci: str) -> None: ...
     def analyze(
         self,

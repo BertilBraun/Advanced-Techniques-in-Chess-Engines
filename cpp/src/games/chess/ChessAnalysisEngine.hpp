@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InteractiveSearch.hpp"
+#include "games/chess/ChessAnalysisSearch.hpp"
 #include "games/chess/ChessHistory.hpp"
 
 enum class AnalysisMode { Policy, Mcts };
@@ -24,15 +24,15 @@ struct AnalysisResult {
     std::vector<std::string> principal_variation;
 };
 
-class InteractiveGame;
+class ChessAnalysisSession;
 
-class InteractiveEngine : public std::enable_shared_from_this<InteractiveEngine> {
+class ChessAnalysisEngine : public std::enable_shared_from_this<ChessAnalysisEngine> {
 public:
-    InteractiveEngine(const InferenceRuntimeParameters &runtimeParameters,
-                      const InteractiveSearchParams &searchParameters)
+    ChessAnalysisEngine(const InferenceRuntimeParameters &runtimeParameters,
+                        const ChessAnalysisSearchParameters &searchParameters)
         : m_search(runtimeParameters, searchParameters) {}
 
-    [[nodiscard]] std::shared_ptr<InteractiveGame>
+    [[nodiscard]] std::shared_ptr<ChessAnalysisSession>
     newGame(const std::string &startingFen, const std::vector<std::string> &movesUci);
 
     [[nodiscard]] InferenceStatistics inferenceStatistics() {
@@ -40,14 +40,14 @@ public:
     }
 
 private:
-    friend class InteractiveGame;
-    InteractiveSearch m_search;
+    friend class ChessAnalysisSession;
+    ChessAnalysisSearch m_search;
 };
 
-class InteractiveGame {
+class ChessAnalysisSession {
 public:
-    InteractiveGame(std::shared_ptr<InteractiveEngine> engine, std::string startingFen,
-                    std::vector<std::string> movesUci);
+    ChessAnalysisSession(std::shared_ptr<ChessAnalysisEngine> engine, std::string startingFen,
+                         std::vector<std::string> movesUci);
 
     void applyMove(const std::string &moveUci);
 
@@ -62,7 +62,7 @@ public:
     }
 
 private:
-    std::shared_ptr<InteractiveEngine> m_engine;
+    std::shared_ptr<ChessAnalysisEngine> m_engine;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
     std::unique_ptr<ChessSearchTree> m_tree;
