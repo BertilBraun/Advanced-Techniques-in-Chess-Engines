@@ -7,6 +7,7 @@
 #include <barrier>
 #include <nlohmann/json.hpp>
 #include <numeric>
+#include <span>
 
 namespace {
 constexpr size_t WARMUP_ITERATIONS = 5;
@@ -184,8 +185,7 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
         }
         pipeline.submit(warmup.slotIndex, arguments.batchSize);
         static_cast<void>(pipeline.consume<ChessGameContract>(
-            warmup.slotIndex, arguments.batchSize,
-            [&boards](const size_t row) -> const Board & { return boards[row]; }));
+            warmup.slotIndex, std::span<const Board>(boards).first(arguments.batchSize)));
     }
     double checksum = 0.0;
     const auto startedAt = std::chrono::steady_clock::now();
@@ -194,10 +194,8 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
             const auto [slotIndex, firstBoard] = pendingBatches.front();
             const std::vector<SearchInferenceResult<ChessGameContract>> results =
                 pipeline.consume<ChessGameContract>(
-                    slotIndex, arguments.batchSize,
-                    [&boards, firstBoard](const size_t row) -> const Board & {
-                        return boards[firstBoard + row];
-                    });
+                    slotIndex,
+                    std::span<const Board>(boards).subspan(firstBoard, arguments.batchSize));
             for (const SearchInferenceResult<ChessGameContract> &result : results) {
                 checksum += result.value() + static_cast<double>(result.actions.size());
             }
@@ -215,10 +213,7 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
     for (const auto [slotIndex, firstBoard] : pendingBatches) {
         const std::vector<SearchInferenceResult<ChessGameContract>> results =
             pipeline.consume<ChessGameContract>(
-                slotIndex, arguments.batchSize,
-                [&boards, firstBoard](const size_t row) -> const Board & {
-                    return boards[firstBoard + row];
-                });
+                slotIndex, std::span<const Board>(boards).subspan(firstBoard, arguments.batchSize));
         for (const SearchInferenceResult<ChessGameContract> &result : results) {
             checksum += result.value() + static_cast<double>(result.actions.size());
         }

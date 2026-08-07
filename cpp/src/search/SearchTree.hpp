@@ -37,7 +37,7 @@ template <typename Game> struct GameSearchNode {
     std::uint32_t visits = 0;
     float value_sum = 0.0F;
     float virtual_loss = 0.0F;
-    bool evaluating = false;
+    bool inference_pending = false;
     std::optional<WdlPrediction> network_outcome;
 
     [[nodiscard]] bool expanded() const noexcept { return !children.empty(); }
@@ -82,7 +82,6 @@ public:
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_rootIndex; }
     [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_liveNodeCount; }
     [[nodiscard]] std::size_t capacity() const noexcept { return m_nodes.size(); }
-    [[nodiscard]] std::size_t maximumCapacity() const noexcept { return m_maximumCapacity; }
     [[nodiscard]] std::size_t totalChildCount() const noexcept {
         std::size_t count = 0;
         for (const std::optional<Node> &slot : m_nodes) {
@@ -144,27 +143,27 @@ public:
     }
 
     void reserve(const std::size_t nodeIndex) {
-        if (node(nodeIndex).evaluating) {
+        if (node(nodeIndex).inference_pending) {
             throw std::logic_error("Game search leaf is already reserved");
         }
-        node(nodeIndex).evaluating = true;
+        node(nodeIndex).inference_pending = true;
         updatePath(nodeIndex, 1, 0.0F, 1.0F);
     }
 
     void cancelReservation(const std::size_t nodeIndex) {
-        if (!node(nodeIndex).evaluating) {
+        if (!node(nodeIndex).inference_pending) {
             throw std::logic_error("Game search leaf is not reserved");
         }
         updatePath(nodeIndex, -1, 0.0F, -1.0F);
-        node(nodeIndex).evaluating = false;
+        node(nodeIndex).inference_pending = false;
     }
 
     void completeReservation(const std::size_t nodeIndex, const float value) {
-        if (!node(nodeIndex).evaluating) {
+        if (!node(nodeIndex).inference_pending) {
             throw std::logic_error("Game search leaf is not reserved");
         }
         completeReservedPath(nodeIndex, value);
-        node(nodeIndex).evaluating = false;
+        node(nodeIndex).inference_pending = false;
     }
 
     void addRootNoise(const float alpha, const float epsilon, std::mt19937 &randomEngine) {
@@ -283,47 +282,6 @@ public:
         return result;
     }
 
-    [[nodiscard]] std::uint32_t evaluatingNodeCount() const {
-        return static_cast<std::uint32_t>(
-            std::ranges::count_if(m_nodes, [](const std::optional<Node> &slot) {
-                return slot.has_value() && slot->evaluating;
-            }));
-    }
-
-    [[nodiscard]] float totalVirtualLoss() const {
-        float result = root().virtual_loss;
-        for (const std::optional<Node> &slot : m_nodes) {
-            if (!slot.has_value()) {
-                continue;
-            }
-            for (const Edge &edge : slot->children) {
-                result += edge.virtual_loss;
-            }
-        }
-        return result;
-    }
-
-    [[nodiscard]] std::size_t preferredRootEdge() const {
-        const Node &rootNode = root();
-        if (rootNode.children.empty()) {
-            throw std::logic_error("Cannot choose an action from an unexpanded root");
-        }
-        std::size_t preferred = 0;
-        for (const auto index : range(std::size_t{1}, rootNode.children.size())) {
-            const Edge &candidate = rootNode.children[index];
-            const Edge &current = rootNode.children[preferred];
-            if (candidate.visits > current.visits ||
-                (candidate.visits == current.visits &&
-                 (candidate.prior > current.prior ||
-                  (candidate.prior == current.prior &&
-                   Game::actionId(candidate.action, rootNode.position) <
-                       Game::actionId(current.action, rootNode.position))))) {
-                preferred = index;
-            }
-        }
-        return preferred;
-    }
-
 private:
     std::size_t m_maximumCapacity;
     Position m_initialPosition;
@@ -357,8 +315,8 @@ private:
     [[nodiscard]] std::optional<std::size_t> selectAvailableLeaf(const std::size_t nodeIndex,
                                                                  const float explorationConstant) {
         if (!node(nodeIndex).expanded()) {
-            return node(nodeIndex).evaluating ? std::nullopt
-                                              : std::optional<std::size_t>(nodeIndex);
+            return node(nodeIndex).inference_pending ? std::nullopt
+                                                     : std::optional<std::size_t>(nodeIndex);
         }
         const std::size_t edgeCount = node(nodeIndex).children.size();
         std::vector<bool> attempted(edgeCount, false);

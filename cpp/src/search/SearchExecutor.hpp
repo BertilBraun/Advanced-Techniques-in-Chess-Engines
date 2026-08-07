@@ -15,6 +15,7 @@
 #include <optional>
 #include <random>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -23,6 +24,7 @@
 
 template <typename Game> class BatchedSearchExecutor {
 public:
+    using Position = typename Game::Position;
     using Root = GameSearchRoot<Game>;
     using Tree = GameSearchTree<Game>;
 
@@ -55,21 +57,7 @@ public:
         std::vector<RootTask> tasks;
         tasks.reserve(requests.size());
         for (const GameSearchRequest<Game> &request : requests) {
-            Root root = request.root;
-            const std::uint32_t startingVisits = root.visits();
-            const std::uint32_t visitLimit = request.visit_limit;
-            root.tree().prepareForSearch(visitLimit, m_searchParameters.parallel_searches);
-            tasks.push_back({
-                .root = root,
-                .starting_visits = startingVisits,
-                .visit_limit = visitLimit,
-                .in_flight = 0,
-                .noise_pending = request.add_root_noise && !root.tree().root().expanded(),
-                .count_root_initialization = request.count_root_initialization,
-            });
-            if (request.add_root_noise && root.tree().root().expanded()) {
-                addNoise(tasks.back().root);
-            }
+            tasks.push_back(createTask(request));
         }
         std::size_t completionCursor = 0;
         try {
@@ -81,14 +69,7 @@ public:
                 if (!hasPending()) {
                     break;
                 }
-                const std::optional<std::size_t> completed = readyWorker(completionCursor);
-                if (completed.has_value()) {
-                    completionCursor = *completed;
-                } else {
-                    while (m_pending[completionCursor].empty()) {
-                        completionCursor = (completionCursor + 1) % m_pending.size();
-                    }
-                }
+                completionCursor = completionWorker(completionCursor);
                 completeWorker(tasks, completionCursor);
                 completionCursor = (completionCursor + 1) % m_pending.size();
             }
@@ -126,7 +107,7 @@ public:
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
-    evaluate(const std::vector<typename Game::Position> &positions) {
+    evaluate(const std::vector<Position> &positions) {
         std::vector<SearchInferenceResult<Game>> results;
         results.reserve(positions.size());
         std::size_t offset = 0;
@@ -140,11 +121,9 @@ public:
                 Game::encodeInputInto(positions[offset + row], writable.data + row * encodedSize);
             }
             worker.submit(writable.slotIndex, batchSize);
-            std::vector<SearchInferenceResult<Game>> batch = worker.consume<Game>(
-                writable.slotIndex, batchSize,
-                [&positions, offset](const std::size_t row) -> const typename Game::Position & {
-                    return positions[offset + row];
-                });
+            const std::span<const Position> batchPositions(positions.data() + offset, batchSize);
+            std::vector<SearchInferenceResult<Game>> batch =
+                worker.consume<Game>(writable.slotIndex, batchPositions);
             results.insert(results.end(), std::make_move_iterator(batch.begin()),
                            std::make_move_iterator(batch.end()));
             recordBatch(batchSize);
@@ -193,8 +172,6 @@ public:
         }
     }
 
-    [[nodiscard]] bool idle() const { return !hasPending(); }
-
 private:
     struct RootTask {
         Root root;
@@ -217,6 +194,22 @@ private:
         std::vector<PendingLeaf> leaves;
     };
 
+    class PendingPositions {
+    public:
+        PendingPositions(const std::vector<RootTask> &tasks, const std::vector<PendingLeaf> &leaves)
+            : m_tasks(tasks), m_leaves(leaves) {}
+
+        [[nodiscard]] std::size_t size() const noexcept { return m_leaves.size(); }
+        [[nodiscard]] const Position &operator[](const std::size_t index) const {
+            const PendingLeaf &leaf = m_leaves[index];
+            return m_tasks[leaf.task_index].root.tree().node(leaf.node_index).position;
+        }
+
+    private:
+        const std::vector<RootTask> &m_tasks;
+        const std::vector<PendingLeaf> &m_leaves;
+    };
+
     BatchedInferenceParameters m_inferenceParameters;
     BatchedSearchParameters m_searchParameters;
     std::vector<std::unique_ptr<InferencePipeline>> m_workers;
@@ -226,6 +219,22 @@ private:
     std::mt19937 m_randomEngine;
     InferenceStatistics m_statistics;
     std::uint64_t m_searchWallNanoseconds = 0;
+
+    [[nodiscard]] RootTask createTask(const GameSearchRequest<Game> &request) {
+        RootTask task{
+            .root = request.root,
+            .starting_visits = request.root.visits(),
+            .visit_limit = request.visit_limit,
+            .in_flight = 0,
+            .noise_pending = request.add_root_noise && !request.root.tree().root().expanded(),
+            .count_root_initialization = request.count_root_initialization,
+        };
+        task.root.tree().prepareForSearch(task.visit_limit, m_searchParameters.parallel_searches);
+        if (request.add_root_noise && task.root.tree().root().expanded()) {
+            addNoise(task.root);
+        }
+        return task;
+    }
 
     [[nodiscard]] std::optional<std::size_t> freeWorker() const {
         for (const auto offset : range(m_workers.size())) {
@@ -248,6 +257,16 @@ private:
         return std::nullopt;
     }
 
+    [[nodiscard]] std::size_t completionWorker(std::size_t first) const {
+        if (const std::optional<std::size_t> ready = readyWorker(first); ready.has_value()) {
+            return *ready;
+        }
+        while (m_pending[first].empty()) {
+            first = (first + 1) % m_pending.size();
+        }
+        return first;
+    }
+
     [[nodiscard]] std::optional<std::size_t> schedulableTask(const std::vector<RootTask> &tasks) {
         for (const auto offset : range(tasks.size())) {
             const std::size_t index = (m_nextTask + offset) % tasks.size();
@@ -264,6 +283,57 @@ private:
         return std::nullopt;
     }
 
+    [[nodiscard]] bool appendInferenceLeaf(std::vector<RootTask> &tasks,
+                                           const std::size_t taskIndex,
+                                           const InferencePipeline::WritableBatch &writable,
+                                           std::vector<PendingLeaf> &leaves) {
+        RootTask &task = tasks[taskIndex];
+        Tree &tree = task.root.tree();
+        bool countsAsSearch = true;
+        bool rootInitialization = false;
+        std::optional<std::size_t> leaf;
+        {
+            ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
+            if (!tree.root().expanded()) {
+                if (Game::isTerminal(tree.root().position)) {
+                    tree.backPropagate(tree.rootIndex(),
+                                       Game::terminalValue(tree.root().position).value_or(0.0F));
+                    return true;
+                }
+                leaf = tree.rootIndex();
+                rootInitialization = true;
+                countsAsSearch = task.count_root_initialization;
+                tree.node(*leaf).inference_pending = true;
+            } else {
+                leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
+                                                m_searchParameters.minimum_root_visits);
+                if (!leaf.has_value()) {
+                    return false;
+                }
+                if (Game::isTerminal(tree.node(*leaf).position)) {
+                    tree.backPropagate(
+                        *leaf, Game::terminalValue(tree.node(*leaf).position).value_or(0.0F));
+                    return true;
+                }
+                tree.reserve(*leaf);
+            }
+        }
+        constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
+        {
+            ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
+            Game::encodeInputInto(tree.node(*leaf).position,
+                                  writable.data + leaves.size() * encodedSize);
+        }
+        ++task.in_flight;
+        leaves.push_back({
+            .task_index = taskIndex,
+            .node_index = *leaf,
+            .counts_as_search = countsAsSearch,
+            .root_initialization = rootInitialization,
+        });
+        return true;
+    }
+
     [[nodiscard]] bool issueBatch(std::vector<RootTask> &tasks, const std::size_t workerIndex) {
         InferencePipeline &worker = *m_workers[workerIndex];
         const InferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
@@ -275,52 +345,9 @@ private:
                 if (!taskIndex.has_value()) {
                     break;
                 }
-                RootTask &task = tasks[*taskIndex];
-                Tree &tree = task.root.tree();
-                bool countsAsSearch = true;
-                bool rootInitialization = false;
-                std::optional<std::size_t> leaf;
-                {
-                    ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
-                    if (!tree.root().expanded()) {
-                        if (Game::isTerminal(tree.root().position)) {
-                            tree.backPropagate(
-                                tree.rootIndex(),
-                                Game::terminalValue(tree.root().position).value_or(0.0F));
-                            continue;
-                        }
-                        leaf = tree.rootIndex();
-                        rootInitialization = true;
-                        countsAsSearch = task.count_root_initialization;
-                        tree.node(*leaf).evaluating = true;
-                    } else {
-                        leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
-                                                        m_searchParameters.minimum_root_visits);
-                        if (!leaf.has_value()) {
-                            break;
-                        }
-                        if (Game::isTerminal(tree.node(*leaf).position)) {
-                            tree.backPropagate(
-                                *leaf,
-                                Game::terminalValue(tree.node(*leaf).position).value_or(0.0F));
-                            continue;
-                        }
-                        tree.reserve(*leaf);
-                    }
+                if (!appendInferenceLeaf(tasks, *taskIndex, writable, leaves)) {
+                    break;
                 }
-                constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
-                {
-                    ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
-                    Game::encodeInputInto(tree.node(*leaf).position,
-                                          writable.data + leaves.size() * encodedSize);
-                }
-                ++task.in_flight;
-                leaves.push_back({
-                    .task_index = *taskIndex,
-                    .node_index = *leaf,
-                    .counts_as_search = countsAsSearch,
-                    .root_initialization = rootInitialization,
-                });
             }
         } catch (...) {
             cancelLeaves(tasks, leaves);
@@ -340,41 +367,40 @@ private:
         return true;
     }
 
+    void completeLeaf(RootTask &task, const PendingLeaf &pendingLeaf,
+                      const SearchInferenceResult<Game> &inference) {
+        Tree &tree = task.root.tree();
+        ScopedNanosecondTimer backupTimer(m_statistics.treeBackupNanoseconds);
+        tree.expand(pendingLeaf.node_index, inference);
+        if (pendingLeaf.root_initialization) {
+            tree.node(pendingLeaf.node_index).inference_pending = false;
+            if (pendingLeaf.counts_as_search) {
+                tree.backPropagate(pendingLeaf.node_index, inference.value());
+            }
+            if (task.noise_pending) {
+                addNoise(task.root);
+                task.noise_pending = false;
+            }
+        } else if (pendingLeaf.counts_as_search) {
+            tree.completeReservation(pendingLeaf.node_index, inference.value());
+        }
+        --task.in_flight;
+    }
+
     void completeWorker(std::vector<RootTask> &tasks, const std::size_t workerIndex) {
         PendingBatch pending = std::move(m_pending[workerIndex].front());
         m_pending[workerIndex].pop_front();
         InferencePipeline &worker = *m_workers[workerIndex];
         std::size_t processed = 0;
         try {
-            std::vector<SearchInferenceResult<Game>> inferenceResults = worker.consume<Game>(
-                pending.slot_index, pending.leaves.size(),
-                [&tasks, &pending](const std::size_t row) -> const typename Game::Position & {
-                    const PendingLeaf &leaf = pending.leaves[row];
-                    return tasks[leaf.task_index].root.tree().node(leaf.node_index).position;
-                });
+            const PendingPositions positions(tasks, pending.leaves);
+            std::vector<SearchInferenceResult<Game>> inferenceResults =
+                worker.consume<Game>(pending.slot_index, positions);
             for (const auto leafIndex : range(pending.leaves.size())) {
                 processed = leafIndex;
                 const PendingLeaf &pendingLeaf = pending.leaves[processed];
                 RootTask &task = tasks[pendingLeaf.task_index];
-                Tree &tree = task.root.tree();
-                const SearchInferenceResult<Game> &inference = inferenceResults[leafIndex];
-                {
-                    ScopedNanosecondTimer backupTimer(m_statistics.treeBackupNanoseconds);
-                    tree.expand(pendingLeaf.node_index, inference);
-                    if (pendingLeaf.root_initialization) {
-                        tree.node(pendingLeaf.node_index).evaluating = false;
-                        if (pendingLeaf.counts_as_search) {
-                            tree.backPropagate(pendingLeaf.node_index, inference.value());
-                        }
-                        if (task.noise_pending) {
-                            addNoise(task.root);
-                            task.noise_pending = false;
-                        }
-                    } else if (pendingLeaf.counts_as_search) {
-                        tree.completeReservation(pendingLeaf.node_index, inference.value());
-                    }
-                }
-                --task.in_flight;
+                completeLeaf(task, pendingLeaf, inferenceResults[leafIndex]);
                 ++processed;
             }
             recordBatch(pending.leaves.size());
@@ -395,7 +421,7 @@ private:
                 if (!pendingLeaf.root_initialization && pendingLeaf.counts_as_search) {
                     task.root.tree().cancelReservation(pendingLeaf.node_index);
                 } else {
-                    task.root.tree().node(pendingLeaf.node_index).evaluating = false;
+                    task.root.tree().node(pendingLeaf.node_index).inference_pending = false;
                 }
             } catch (...) {
             }

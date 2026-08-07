@@ -57,11 +57,7 @@ int runInferencePipelineTests() {
                 "pipeline did not publish nonblocking completion readiness");
         const std::vector<Board> firstPositions(2);
         const std::vector<SearchInferenceResult<ChessGameContract>> completed =
-            pipeline.consume<ChessGameContract>(
-                first.slotIndex, firstPositions.size(),
-                [&firstPositions](const std::size_t row) -> const Board & {
-                    return firstPositions[row];
-                });
+            pipeline.consume<ChessGameContract>(first.slotIndex, firstPositions);
         require(completed.size() == 2, "pipeline returned wrong processed batch size");
 
         const InferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();

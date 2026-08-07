@@ -125,23 +125,22 @@ public:
     void discardWritableBatch(size_t slotIndex);
     void submit(size_t slotIndex, size_t batchSize);
     [[nodiscard]] bool isCompleted(size_t slotIndex) const;
-    template <typename Game, typename PositionAt>
-    [[nodiscard]] std::vector<SearchInferenceResult<Game>>
-    consume(size_t slotIndex, size_t positionCount, PositionAt positionAt) {
+    template <typename Game, typename Positions>
+    [[nodiscard]] std::vector<SearchInferenceResult<Game>> consume(size_t slotIndex,
+                                                                   const Positions &positions) {
         const InferenceOutput output = waitCompletedOutput(slotIndex);
         try {
-            Stopwatch processingTimer;
+            ScopedNanosecondTimer processingTimer(m_statistics.result_processing_nanoseconds);
             std::vector<SearchInferenceResult<Game>> results;
-            results.reserve(positionCount);
+            results.reserve(positions.size());
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
             const InferenceDimensions dimensions = Game::inferenceDimensions();
-            for (const auto row : range(positionCount)) {
+            for (const auto row : range(positions.size())) {
                 results.push_back(processInferencePosition<Game>(
                     policies + row * dimensions.actions, outcomes + row * dimensions.outcomes,
-                    positionAt(row)));
+                    positions[row]));
             }
-            m_resultProcessingNanoseconds += processingTimer.elapsedNanoseconds();
             release(slotIndex);
             return results;
         } catch (...) {
@@ -153,13 +152,13 @@ public:
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
     [[nodiscard]] std::uint64_t inferenceNanoseconds() const noexcept {
-        return m_inferenceNanoseconds.load(std::memory_order_relaxed);
+        return m_statistics.inference_nanoseconds.load(std::memory_order_relaxed);
     }
     [[nodiscard]] std::uint64_t resultProcessingNanoseconds() const noexcept {
-        return m_resultProcessingNanoseconds;
+        return m_statistics.result_processing_nanoseconds;
     }
     [[nodiscard]] std::uint64_t consumerWaitNanoseconds() const noexcept {
-        return m_consumerWaitNanoseconds;
+        return m_statistics.consumer_wait_nanoseconds;
     }
 
 private:
@@ -173,14 +172,18 @@ private:
         std::atomic<SlotState> state = SlotState::Empty;
     };
 
+    struct PipelineStatistics {
+        std::atomic<std::uint64_t> inference_nanoseconds = 0;
+        std::uint64_t result_processing_nanoseconds = 0;
+        std::uint64_t consumer_wait_nanoseconds = 0;
+    };
+
     InferenceRunner m_runner;
     std::vector<std::unique_ptr<Slot>> m_slots;
     size_t m_producerCursor = 0;
     size_t m_consumerCursor = 0;
     std::atomic<bool> m_stopping = false;
-    std::atomic<std::uint64_t> m_inferenceNanoseconds = 0;
-    std::uint64_t m_resultProcessingNanoseconds = 0;
-    std::uint64_t m_consumerWaitNanoseconds = 0;
+    PipelineStatistics m_statistics;
     std::thread m_inferenceThread;
 
     void inferenceLoop();

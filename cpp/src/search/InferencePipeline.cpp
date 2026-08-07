@@ -224,7 +224,7 @@ bool InferencePipeline::isCompleted(const size_t slotIndex) const {
 }
 
 InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
-    ScopedNanosecondTimer waitTimer(m_consumerWaitNanoseconds);
+    ScopedNanosecondTimer waitTimer(m_statistics.consumer_wait_nanoseconds);
     if (slotIndex != m_consumerCursor) {
         throw std::invalid_argument("Inference completions must be consumed in order");
     }
@@ -298,8 +298,8 @@ void InferencePipeline::inferenceLoop() {
         try {
             Stopwatch inferenceTimer;
             m_runner.forwardInto(slot.input, slot.batchSize, slot.output);
-            m_inferenceNanoseconds.fetch_add(inferenceTimer.elapsedNanoseconds(),
-                                             std::memory_order_relaxed);
+            m_statistics.inference_nanoseconds.fetch_add(inferenceTimer.elapsedNanoseconds(),
+                                                         std::memory_order_relaxed);
             slot.state.store(SlotState::Complete, std::memory_order_release);
         } catch (...) {
             slot.exception = std::current_exception();

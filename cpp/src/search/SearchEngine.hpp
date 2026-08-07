@@ -57,9 +57,6 @@ public:
         if (modelGeneration <= m_modelGeneration) {
             throw std::invalid_argument("Model generation must increase during refresh");
         }
-        if (!m_executor.idle()) {
-            throw std::logic_error("Batched search must be idle during model refresh");
-        }
         m_executor.refreshModel(modelPath);
         m_modelGeneration = modelGeneration;
         if (m_resetTreesOnRefresh) {
