@@ -12,13 +12,14 @@ from torch.multiprocessing import Process
 
 from src.games.chess.evaluation.process import EvaluationTier, run_evaluation_process
 from src.experiment.credit_telemetry import CreditEvaluationTelemetryStatus
-from src.train.CreditPublication import (
+from src.training.publication import (
     CreditPublicationManifest,
     file_sha256,
     load_credit_publication_manifest,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import EvaluationParams, TrainingArgs
+from src.training.configuration import TrainingArgs
+from src.games.chess.configuration import ChessEvaluationConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.log import log, warn
 
@@ -98,7 +99,7 @@ class CreditEvaluationScheduler:
         self,
         run_id: int,
         args: TrainingArgs,
-        evaluation_args: EvaluationParams,
+        evaluation_args: ChessEvaluationConfiguration,
     ) -> None:
         parameters = args.lifecycle.evaluation
 
@@ -465,9 +466,9 @@ class CreditEvaluationScheduler:
 
 def credit_evaluation_arguments(
     args: TrainingArgs,
-    evaluation: EvaluationParams,
+    evaluation: ChessEvaluationConfiguration,
     completed_optimizer_steps: int,
-) -> tuple[TrainingArgs, EvaluationParams]:
+) -> tuple[TrainingArgs, ChessEvaluationConfiguration]:
     parameters = args.lifecycle.credit
     schedule = args.lifecycle.evaluation
     if completed_optimizer_steps % schedule.interval_optimizer_steps:

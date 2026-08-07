@@ -19,10 +19,10 @@ from torch.nn.parallel import DistributedDataParallel
 from src.neural_network import Network
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.train.training_batch import TrainingBatch
+from src.training.batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
-from src.train.Trainer import Trainer
-from src.train.TrainingArgs import (
+from src.training.trainer import Trainer
+from src.training.configuration import (
     ModelVersionLearningRate,
     ModelVersionLearningRateStage,
     NetworkParams,

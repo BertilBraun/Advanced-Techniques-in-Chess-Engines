@@ -10,11 +10,11 @@ from pathlib import Path
 from time import monotonic
 
 from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
-from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
+from src.training.cuda import start_process_on_cuda_device
+from src.training.trainer_process import QuantumResult, ReplayState, TrainerProcess
 from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.training_contract import GameImplementation
-from src.train.TrainingArgs import CreditTrainingParams
+from src.training.configuration import CreditTrainingParams
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
     Communication,
@@ -31,13 +31,13 @@ from src.util.save_paths import (
     load_model_and_optimizer,
     save_model_and_optimizer,
 )
-from src.cluster.SelfPlayProcess import run_self_play_process
-from src.train.CreditTrainingLedger import (
+from src.training.self_play_process import run_self_play_process
+from src.training.ledger import (
     CreditTrainingLedger,
     CreditTrainingProgress,
     PreparedTrainingQuantum,
 )
-from src.train.CreditPublication import (
+from src.training.publication import (
     CreditPublicationManifest,
     CreditPublicationPointer,
     create_credit_publication_manifest,

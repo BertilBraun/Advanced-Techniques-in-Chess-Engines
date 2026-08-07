@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import torch
-import src.train.Replay as replay_module
+import src.training.replay as replay_module
 
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
@@ -21,9 +21,8 @@ from src.games.go.configuration import GoExperimentConfiguration
 from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
-from src.games.go.training import calculate_go_loss, create_go_model
-from src.games.go.training_runtime import GoImplementation
-from src.cluster.TrainerProcess import TrainerProcess
+from src.games.go.training import GoImplementation, calculate_go_loss, create_go_model
+from src.training.trainer_process import TrainerProcess
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
 from src.self_play.completed_game_record import completed_game_from_path
 from src.games.go.completed_game import (
@@ -44,7 +43,7 @@ from src.games.go.replay import (
     pack_go_visits,
     rebuild_go_replay,
 )
-from src.train.Replay import ReplayMaintainer, ReplaySnapshot
+from src.training.replay import ReplayMaintainer, ReplaySnapshot
 from src.util.save_paths import create_optimizer, save_model_and_optimizer
 
 

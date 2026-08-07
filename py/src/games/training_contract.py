@@ -7,9 +7,9 @@ from src.experiment.configuration import ExperimentConfiguration
 from src.neural_network import NetworkDimensions
 from src.self_play.completed_game import CompletedGamePublisher, CompletedGameRecord
 from src.self_play.worker import GameSelfPlayPolicy
-from src.train.Replay import ReplayGameImplementation
-from src.train.Trainer import TrainingObjective
-from src.train.TrainingArgs import TrainingArgs
+from src.training.replay import ReplayGameImplementation
+from src.training.trainer import TrainingObjective
+from src.training.configuration import TrainingArgs
 
 
 CompletedGameT = TypeVar('CompletedGameT', bound=CompletedGameRecord)

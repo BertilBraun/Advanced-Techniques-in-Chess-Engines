@@ -248,34 +248,6 @@ class TrainingLifecycleParams(FrozenModel):
     inference_retention: InferenceRetentionParams
 
 
-class EvaluationParams(FrozenModel):
-    num_searches_per_turn: int = Field(gt=0)
-    num_games: int = Field(gt=0)
-    every_n_model_versions: int = Field(gt=0)
-    max_concurrent_tasks: int = Field(gt=0)
-    inference: BatchedInferenceParams
-    dataset_path: str | None
-    reference_model_path: str | None
-    opening_suite_path: str | None
-    raw_results_path: str | None
-    maximum_game_plies: int | None = Field(default=None, gt=0)
-    bootstrap_seed: int = Field(ge=0)
-    bootstrap_samples: int = Field(gt=0)
-    previous_model_offsets: tuple[int, ...]
-    historical_model_versions: tuple[int, ...]
-    historical_model_rotation_period: int = Field(gt=0)
-    stockfish_skill_levels: tuple[int, ...]
-    stockfish_binary_path: str | None
-    stockfish_nodes_per_move: int = Field(gt=0)
-    stockfish_threads: int = Field(gt=0)
-    stockfish_hash_mib: int = Field(gt=0)
-    evaluate_random: bool
-    search_exploration_constant: float = Field(default=1.0, gt=0.0)
-    parallel_searches: int = Field(default=1, gt=0)
-    teacher_searches_per_turn: int = Field(default=600, gt=0)
-    teacher_evaluation_games: int = Field(default=16, gt=0)
-
-
 class TrainingArgs(FrozenModel):
     save_path: str
     network: NetworkParams

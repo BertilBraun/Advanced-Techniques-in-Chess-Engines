@@ -7,7 +7,7 @@ import torch.distributed as distributed
 
 pytest.importorskip('GPUtil')
 
-from src.cluster.TrainerProcess import (
+from src.training.trainer_process import (
     DistributedTrainingError,
     RankFailure,
     RankReady,

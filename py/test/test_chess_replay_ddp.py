@@ -8,7 +8,7 @@ from types import ModuleType
 
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
-from src.cluster.TrainerProcess import available_tcp_port
+from src.training.trainer_process import available_tcp_port
 from test_helpers.chess_replay_ddp import WORLD_SIZE, run_replay_rank
 
 

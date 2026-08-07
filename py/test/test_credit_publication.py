@@ -9,14 +9,14 @@ import pytest
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
-from src.train.CreditPublication import (
+from src.training.publication import (
     PublicationValidationScope,
     create_credit_publication_manifest,
     file_sha256,
     load_credit_publication_pointer,
     write_credit_publication_manifest,
 )
-from src.train.CreditTrainingLedger import CreditTrainingProgress
+from src.training.ledger import CreditTrainingProgress
 from src.util.save_paths import CheckpointManifest
 
 

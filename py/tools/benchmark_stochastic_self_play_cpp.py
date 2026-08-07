@@ -17,7 +17,7 @@ from AlphaZeroCpp import (
 )
 from src.games.chess.self_play import ChessSelfPlayPolicy
 from src.self_play.worker import SelfPlayWorker
-from src.self_play.statistics import SelfPlayStatistics
+from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
 from src.experiment.configuration import load_chess_experiment_configuration

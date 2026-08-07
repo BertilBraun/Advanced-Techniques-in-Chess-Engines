@@ -11,12 +11,12 @@ import torch
 from torch.amp import GradScaler, autocast
 from torch.utils.data import default_collate
 
-from src.train.TrainingDataLoader import training_dataloader
+from src.training.data_loader import training_dataloader
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.dataset import SelfPlayDataset
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.train.Trainer import Trainer, prefetch_training_batches
-from src.train.TrainingArgs import TrainingArgs
+from src.training.trainer import Trainer, prefetch_training_batches
+from src.training.configuration import TrainingArgs
 from src.util.save_paths import load_model_and_optimizer
 
 

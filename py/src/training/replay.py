@@ -17,10 +17,10 @@ import numpy as np
 import numpy.typing as npt
 
 from src.packed_planes import PackedPlanePayload
-from src.train.training_batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, TrainingBatch
 from src.self_play.completed_game import CompletedGameRecord, GameIdentity
 from src.self_play.value_target import ReplayValueTarget
-from src.train.replay_sampling import deterministic_rank_indices
+from src.training.replay_sampling import deterministic_rank_indices
 from src.util.atomic_file import fsync_directory, write_bytes_atomically
 
 

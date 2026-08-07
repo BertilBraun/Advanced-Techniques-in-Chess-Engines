@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from src.cluster.CudaProcess import start_process_on_cuda_device
+from src.training.cuda import start_process_on_cuda_device
 
 
 class _EnvironmentCapturingProcess:

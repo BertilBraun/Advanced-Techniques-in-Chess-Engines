@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 from src.games.chess.encoding import decode_board_state, decode_board_states, encode_board_state
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.packed_planes import PackedPlanePayload
-from src.self_play.visit_policy import action_probabilities
+from src.games.chess.visit_policy import action_probabilities
 from src.runtime import USE_GPU
 from src.util import random_id
 from src.util.timing import timeit
@@ -27,7 +27,7 @@ from src.self_play.value_target import (
     ReplayValueTarget,
     TerminationReason,
 )
-from src.train.training_batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, TrainingBatch
 
 
 class ReplaySchemaVersionError(ValueError):

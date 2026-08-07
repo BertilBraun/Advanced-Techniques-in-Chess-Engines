@@ -12,8 +12,8 @@ from src.games.chess.evaluation.types import (
     Results,
 )
 from src.experiment.evaluation_protocol import GameOutcome, GameRecord, PlayerColor, ScheduledGame
-from src.games.Game import Player
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import Player
+from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.util.tensorboard import log_text
 

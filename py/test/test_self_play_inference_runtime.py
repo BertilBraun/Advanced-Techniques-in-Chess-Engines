@@ -9,9 +9,9 @@ import pytest
 
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, has_positive_visit_counts
 from src.self_play.completed_game import CompletedGamePublisher
-from src.self_play.model_refresh import SearchScheduleState
+from src.games.chess.search_schedule import SearchScheduleState
 from test_helpers.chess_configuration import CHESS_TRAINING
-from src.train.TrainingArgs import BatchedInferenceParams
+from src.training.configuration import BatchedInferenceParams
 
 
 @pytest.mark.parametrize(

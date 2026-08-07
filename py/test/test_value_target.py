@@ -9,15 +9,15 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.neural_network import Network
-from src.train.training_batch import TrainingBatch
+from src.training.batch import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
     ReplayValueTarget,
     TerminationReason,
     outcome_from_sample_perspective,
 )
-from src.train.Trainer import Trainer
-from src.train.TrainingArgs import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
+from src.training.trainer import Trainer
+from src.training.configuration import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
 from src.value import scalar_to_wdl
 
 

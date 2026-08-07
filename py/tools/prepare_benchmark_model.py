@@ -7,7 +7,7 @@ import torch
 
 from src.neural_network import Network
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.train.TrainingArgs import NetworkParams, SEPlacement
+from src.training.configuration import NetworkParams, SEPlacement
 
 
 def parse_arguments() -> argparse.Namespace:

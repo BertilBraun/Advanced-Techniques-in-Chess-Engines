@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from src.games.chess.encoding import decode_board_state, encode_board_state
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 

@@ -16,13 +16,13 @@ import torch.multiprocessing as multiprocessing
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
-from src.cluster.CudaProcess import start_process_on_cuda_device
+from src.training.cuda import start_process_on_cuda_device
 from src.games.training_contract import GameImplementation
 from src.neural_network import Network
-from src.train.Replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
-from src.train.Trainer import Trainer, _LogitForward
-from src.train.TrainingArgs import TrainerTopologyParams, TrainingArgs, TrainingParams
-from src.train.TrainingStats import TrainingStats
+from src.training.replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
+from src.training.trainer import Trainer, _LogitForward
+from src.training.configuration import TrainerTopologyParams, TrainingArgs, TrainingParams
+from src.training.statistics import TrainingStats
 from src.util.log import configure_logging, log
 from src.util.profiler import start_cpu_usage_logger
 from src.util.save_paths import (

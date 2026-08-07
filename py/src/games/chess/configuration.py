@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
-from src.games.chess.ChessGame import BINARY_CHANNELS, SCALAR_CHANNELS
+from src.games.chess.game import BINARY_CHANNELS, SCALAR_CHANNELS
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.neural_network import NetworkDimensions
-from src.train.TrainingArgs import EvaluationParams
+from src.training.configuration import BatchedInferenceParams
 from src.util.frozen_model import FrozenModel
 
 
@@ -37,10 +37,38 @@ class ChessRepresentationConfiguration(FrozenModel):
         return self
 
 
+class ChessEvaluationConfiguration(FrozenModel):
+    num_searches_per_turn: int = Field(gt=0)
+    num_games: int = Field(gt=0)
+    every_n_model_versions: int = Field(gt=0)
+    max_concurrent_tasks: int = Field(gt=0)
+    inference: BatchedInferenceParams
+    dataset_path: str | None
+    reference_model_path: str | None
+    opening_suite_path: str | None
+    raw_results_path: str | None
+    maximum_game_plies: int | None = Field(default=None, gt=0)
+    bootstrap_seed: int = Field(ge=0)
+    bootstrap_samples: int = Field(gt=0)
+    previous_model_offsets: tuple[int, ...]
+    historical_model_versions: tuple[int, ...]
+    historical_model_rotation_period: int = Field(gt=0)
+    stockfish_skill_levels: tuple[int, ...]
+    stockfish_binary_path: str | None
+    stockfish_nodes_per_move: int = Field(gt=0)
+    stockfish_threads: int = Field(gt=0)
+    stockfish_hash_mib: int = Field(gt=0)
+    evaluate_random: bool
+    search_exploration_constant: float = Field(default=1.0, gt=0.0)
+    parallel_searches: int = Field(default=1, gt=0)
+    teacher_searches_per_turn: int = Field(default=600, gt=0)
+    teacher_evaluation_games: int = Field(default=16, gt=0)
+
+
 class ChessConfiguration(FrozenModel):
     rules: ChessRulesConfiguration = ChessRulesConfiguration()
     representation: ChessRepresentationConfiguration = ChessRepresentationConfiguration()
-    evaluation: EvaluationParams
+    evaluation: ChessEvaluationConfiguration
 
 
 class ChessExperimentConfiguration(BaseExperimentConfiguration):

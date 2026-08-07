@@ -6,7 +6,7 @@ import torch
 from torch import multiprocessing as mp
 
 from src.games.chess.evaluation.model import ModelEvaluation
-from src.cluster.CudaProcess import start_process_on_cuda_device
+from src.training.cuda import start_process_on_cuda_device
 from src.games.chess.evaluation.types import Results
 
 from src.games.chess.dataset import SelfPlayDataset
@@ -14,7 +14,8 @@ from src.util.tensorboard import TensorboardWriter, log_scalar
 from src.runtime import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
-from src.train.TrainingArgs import EvaluationParams, TrainingArgs
+from src.training.configuration import TrainingArgs
+from src.games.chess.configuration import ChessEvaluationConfiguration
 from src.util.save_paths import inference_model_path, model_save_path
 from src.util.tensorboard import log_scalars
 from src.experiment.evaluation_protocol import (
@@ -152,7 +153,7 @@ def _evaluation_source_revision() -> str:
 def run_evaluation_process(
     run: int,
     args: TrainingArgs,
-    evaluation_args: EvaluationParams,
+    evaluation_args: ChessEvaluationConfiguration,
     iteration: int,
     metrics_step: int | None = None,
     tier: EvaluationTier = EvaluationTier.FULL,
@@ -473,7 +474,7 @@ def _eval_vs_stockfish(
 class EvaluationProcess:
     """This class provides functionallity to evaluate the model against itself and other models to collect performance metrics for the model. The results are logged to tensorboard."""
 
-    def __init__(self, args: TrainingArgs, evaluation_args: EvaluationParams) -> None:
+    def __init__(self, args: TrainingArgs, evaluation_args: ChessEvaluationConfiguration) -> None:
         self.args = args
         self.eval_args = evaluation_args
 

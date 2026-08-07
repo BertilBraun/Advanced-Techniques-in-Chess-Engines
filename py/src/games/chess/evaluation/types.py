@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from src.games.Game import Player
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import Player
+from src.games.chess.board import ChessBoard
 
 
 @dataclass

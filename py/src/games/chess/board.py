@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import chess
-from src.games.Board import Board, Player
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES
 
 ChessMove = chess.Move
+Player = Literal[-1, 1]
+BOARD_LENGTH = 8
 
 PIECE_VALUE = {
     chess.PAWN: 1,
@@ -23,12 +26,12 @@ MAX_MATERIAL_VALUE = (
 )
 
 
-class ChessBoard(Board[ChessMove]):
+class ChessBoard:
     def __init__(self) -> None:
         self.board = chess.Board()
 
     @property
-    def current_player(self) -> Player:  # type: ignore
+    def current_player(self) -> Player:
         return 1 if self.board.turn == chess.WHITE else -1
 
     def make_move(self, move: ChessMove) -> None:
@@ -91,8 +94,6 @@ class ChessBoard(Board[ChessMove]):
         return board
 
     def __repr__(self) -> str:
-        from src.games.chess.ChessGame import BOARD_LENGTH
-
         rows = []
         rows.append('  a b c d e f g h')
         for i in range(BOARD_LENGTH):

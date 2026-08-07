@@ -5,10 +5,8 @@ import numpy as np
 import numpy.typing as npt
 from typing import NamedTuple
 
-from src.games.Game import Game
-from src.games.chess.ChessBoard import ChessBoard, ChessMove
+from src.games.chess.board import BOARD_LENGTH, ChessBoard, ChessMove
 
-BOARD_LENGTH = 8
 BOARD_SIZE = BOARD_LENGTH * BOARD_LENGTH
 # 12 pieces, 4 castling rights, 2 occupancies, checkers, en passant, 2 repetitions,
 # 6 material differences, and the halfmove clock.
@@ -99,7 +97,7 @@ def _bitfield_to_board_state(state: npt.NDArray[np.uint64]) -> npt.NDArray[np.in
     return bits.reshape((BINARY_CHANNELS[-1] + 1, BOARD_LENGTH, BOARD_LENGTH))
 
 
-class ChessGame(Game[ChessMove]):
+class ChessGame:
     move2index, index2move = _build_action_dicts()
 
     @property
@@ -120,7 +118,7 @@ class ChessGame(Game[ChessMove]):
         """Returns which channels of the board state are scalar."""
         return SCALAR_CHANNELS
 
-    def get_canonical_board(self, board: ChessBoard) -> np.ndarray:  # type: ignore[override]
+    def get_canonical_board(self, board: ChessBoard) -> np.ndarray:
         """Returns a canonical representation of the board from the perspective of the white player."""
 
         # 1. If Black to move, mirror first
@@ -175,7 +173,7 @@ class ChessGame(Game[ChessMove]):
         state = np.concatenate((binary_state, scalar_state), axis=0)
         return state  # shape: (ENCODING_CHANNELS, BOARD_LENGTH, BOARD_LENGTH)
 
-    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:  # type: ignore[override]
+    def encode_move(self, move: ChessMove, board: ChessBoard) -> int:
         """Encodes a chess move into an integer index based on the predefined move2index mapping.
         Notably:
         - Black moves are mirrored to the equivalent white moves before encoding. This is because we always represent the current player's perspective as white.
@@ -207,7 +205,7 @@ class ChessGame(Game[ChessMove]):
         # Handle non-castling moves
         return self.move2index[DictMove(move.from_square, move.to_square, move.promotion)]
 
-    def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:  # type: ignore[override]
+    def decode_move(self, idx: int, board: ChessBoard) -> ChessMove:
         """Decodes an integer index back to a chess move. See `encode_move` for details on how moves are encoded."""
 
         m = self.index2move[idx]
@@ -240,7 +238,7 @@ class ChessGame(Game[ChessMove]):
 
         return move
 
-    def symmetric_variations(  # type: ignore[override]
+    def symmetric_variations(
         self, board: ChessBoard, visit_counts: list[tuple[int, int]]
     ) -> list[tuple[np.ndarray, list[tuple[int, int]]]]:
         encoded_board = self.get_canonical_board(board)

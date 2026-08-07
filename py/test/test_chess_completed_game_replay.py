@@ -8,8 +8,8 @@ import pytest
 import torch
 
 import src.games.chess.replay as chess_replay_module
-import src.train.Replay as replay_module
-from src.games.chess.ChessBoard import ChessBoard
+import src.training.replay as replay_module
+from src.games.chess.board import ChessBoard
 from src.games.chess.completed_game import (
     ChessCompletedGame,
     ChessMoveSelectionMode,
@@ -19,7 +19,7 @@ from src.games.chess.completed_game import (
 )
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, SelfPlayGameMemory
-from src.self_play.statistics import SelfPlayStatistics
+from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.replay import (
@@ -35,7 +35,7 @@ from src.games.chess.replay import (
     read_chess_archive,
     rebuild_chess_replay,
 )
-from src.train.Replay import Replay, ReplayMaintainer
+from src.training.replay import Replay, ReplayMaintainer
 
 
 FOOLS_MATE = ('f2f3', 'e7e5', 'g2g4', 'd8h4')

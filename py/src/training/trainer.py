@@ -12,11 +12,11 @@ from torch.amp import GradScaler, autocast
 
 from src.neural_network import Network
 from src.games.go.configuration import GoTrainingObjectiveConfiguration
-from src.train.training_batch import TrainingBatch
+from src.training.batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.util.tensorboard import log_scalar
-from src.train.TrainingArgs import TrainingParams
-from src.train.TrainingStats import (
+from src.training.configuration import TrainingParams
+from src.training.statistics import (
     EXPECTED_SCORE_CALIBRATION_BINS,
     MATERIAL_VALUE_BIN_LABELS,
     MATERIAL_VALUE_BIN_UPPER_BOUNDS,

@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.packed_planes import (
     PackedPlanePayload,

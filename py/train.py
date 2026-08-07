@@ -40,7 +40,7 @@ if __name__ == '__main__':
     from src.runtime import USE_GPU
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
-    from src.cluster.CommanderProcess import CommanderProcess
+    from src.training.commander import CommanderProcess
     from src.util.tensorboard import (
         TensorboardWriter,
         configure_tensorboard_run_directory,
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
         game = ChessImplementation(experiment)
     else:
-        from src.games.go.training_runtime import GoImplementation
+        from src.games.go.training import GoImplementation
 
         game = GoImplementation(experiment)
     commander = CommanderProcess(run_id, game, run_started_at)

@@ -14,8 +14,8 @@ from src.experiment.credit_telemetry import (
     build_credit_training_telemetry,
     load_last_credit_training_telemetry,
 )
-from src.train.CreditTrainingLedger import CreditTrainingProgress
-from src.train.TrainingStats import TrainingStats
+from src.training.ledger import CreditTrainingProgress
+from src.training.statistics import TrainingStats
 
 
 def _progress(

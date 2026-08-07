@@ -24,9 +24,9 @@ if TYPE_CHECKING:
 import chess
 import numpy as np
 
-from src.games.Board import Player
+from src.games.chess.board import Player
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.games.chess.ChessBoard import ChessBoard, ChessMove
+from src.games.chess.board import ChessBoard, ChessMove
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.games.chess.completed_game import (
     ChessCompletedGame,
@@ -38,7 +38,7 @@ from src.games.chess.completed_game import (
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
 from src.self_play.worker import GameSelfPlayPolicy
 from src.games.chess.dataset_statistics import SelfPlayDatasetStats
-from src.self_play.model_refresh import SearchScheduleState
+from src.games.chess.search_schedule import SearchScheduleState
 from src.games.chess.resignation import (
     CompletedResignationAudit,
     ResignationCalibrationState,
@@ -48,11 +48,11 @@ from src.games.chess.resignation import (
     best_child_value_from_root_perspective,
 )
 from src.util import lerp
-from src.self_play.statistics import SelfPlayStatistics
+from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
 from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 from src.games.chess.encoding import get_board_result_score
-from src.train.TrainingArgs import TrainingArgs
+from src.training.configuration import TrainingArgs
 from src.util.log import log
 from src.util.tensorboard import is_tensorboard_writer_active, log_scalar, log_text
 from src.util.timing import timeit

@@ -24,7 +24,7 @@ from src.games.chess.dataset import (
     preserve_prebatched_samples,
 )
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.Trainer import prefetch_training_batches
+from src.training.trainer import prefetch_training_batches
 
 
 class FixedBatchLoader:

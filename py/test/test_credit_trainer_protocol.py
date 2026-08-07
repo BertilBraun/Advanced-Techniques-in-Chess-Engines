@@ -3,14 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from src.cluster.CommanderProcess import CommanderProcess, credit_training_progress_axis
+from src.training.commander import CommanderProcess, credit_training_progress_axis
 from test_helpers.chess_configuration import CHESS_TRAINING
-from src.train.CreditTrainingLedger import (
+from src.training.ledger import (
     CreditTrainingLedger,
     CreditTrainingProgress,
     PreparedTrainingQuantum,
 )
-from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
+from src.training.configuration import CreditTrainingParams, TrainingArgs
 from src.util.communication import Communication, self_play_model_refreshed_message
 from src.util.save_paths import CheckpointManifest
 

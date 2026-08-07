@@ -9,8 +9,8 @@ from pydantic import Field, model_validator
 
 from src.util.frozen_model import FrozenModel
 
-from src.train.CreditTrainingLedger import CreditTrainingProgress
-from src.train.TrainingStats import TrainingStats
+from src.training.ledger import CreditTrainingProgress
+from src.training.statistics import TrainingStats
 from src.util.atomic_file import write_text_atomically
 from src.util.tensorboard import log_scalar
 

@@ -9,7 +9,7 @@ from src.experiment.run_contract import (
     HardwareConfiguration,
     TrainingStage,
 )
-from src.train.TrainingArgs import TrainingArgs
+from src.training.configuration import TrainingArgs
 from src.util.frozen_model import FrozenModel
 
 

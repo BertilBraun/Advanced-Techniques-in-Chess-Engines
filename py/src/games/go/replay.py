@@ -10,11 +10,11 @@ from AlphaZeroCpp import GoPlayer, GoRules
 
 from src.games.go.contract import GoStateContract, GoSymmetryIndex, NativeGoPosition
 from src.packed_planes import PackedPlanePayload
-from src.train.training_batch import ReplaySampleMetadata, TrainingBatch
+from src.training.batch import ReplaySampleMetadata, TrainingBatch
 from src.self_play.completed_game_record import completed_game_from_path
 from src.games.go.completed_game import GoCompletedGame
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
-from src.train.Replay import (
+from src.training.replay import (
     ARCHIVE_HEADER,
     PackedReplaySample,
     ReplayGameImplementation,

@@ -9,7 +9,7 @@ from pathlib import Path
 from src.util.frozen_model import FrozenModel
 
 from src.neural_network import Network, NetworkDimensions
-from src.train.TrainingArgs import NetworkParams, OptimizerType
+from src.training.configuration import NetworkParams, OptimizerType
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
 
@@ -107,7 +107,6 @@ def create_model(
     dimensions: NetworkDimensions,
 ) -> Network:
     model = Network(args, device, dimensions)
-    # Not possible with JIT and model fusion model = try_compile(model)
     return model
 
 

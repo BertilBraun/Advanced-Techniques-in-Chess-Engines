@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 from src.games.chess.dataset import SelfPlayDataset
-from src.train.training_batch import ReplaySampleMetadata
+from src.training.batch import ReplaySampleMetadata
 from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT

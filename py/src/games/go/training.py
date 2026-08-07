@@ -5,13 +5,25 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as functional
 
-from src.neural_network import Network
+from src.neural_network import Network, NetworkDimensions
+from src.games.training_contract import GameImplementation
 from src.games.go.configuration import (
     GoExperimentConfiguration,
     GoTrainingObjectiveConfiguration,
 )
 from src.games.go.contract import GoStateContract
-from src.train.training_batch import TrainingBatch
+from src.games.go.completed_game import GoCompletedGame
+from src.games.go.replay import GoReplayImplementation
+from src.games.go.self_play import (
+    GoSelfPlayGame,
+    GoSelfPlayPolicy,
+    NativeGoSearchRequest,
+    NativeGoSearchResult,
+)
+from src.self_play.completed_game import CompletedGamePublisher
+from src.training.batch import TrainingBatch
+from src.training.replay import ReplayGameImplementation
+from src.training.trainer import GoTrainingObjective, TrainingObjective
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
@@ -70,3 +82,43 @@ def calculate_go_loss_from_logits(
     value_loss = (value_rows * sample_weights).mean()
     total = objective.policy_loss_weight * policy_loss + value_loss
     return GoLoss(policy=policy_loss, value=value_loss, total=total)
+
+
+class GoImplementation(
+    GameImplementation[
+        GoCompletedGame,
+        GoSelfPlayGame,
+        NativeGoSearchRequest,
+        NativeGoSearchResult,
+        None,
+    ]
+):
+    def __init__(self, configuration: GoExperimentConfiguration) -> None:
+        self._configuration = configuration
+        self.state = GoStateContract(
+            configuration.go.representation.board_size,
+            configuration.go.representation.history_length,
+        )
+        self._replay = GoReplayImplementation(self.state)
+
+    @property
+    def configuration(self) -> GoExperimentConfiguration:
+        return self._configuration
+
+    @property
+    def network_dimensions(self) -> NetworkDimensions:
+        return self.configuration.network_dimensions
+
+    @property
+    def replay(self) -> ReplayGameImplementation[GoCompletedGame]:
+        return self._replay
+
+    def objective(self, optimizer_step: int) -> TrainingObjective:
+        return GoTrainingObjective(self.configuration.go.objective)
+
+    def create_self_play_policy(
+        self,
+        device_id: int,
+        publisher: CompletedGamePublisher,
+    ) -> GoSelfPlayPolicy:
+        return GoSelfPlayPolicy(self.configuration, publisher, device_id)

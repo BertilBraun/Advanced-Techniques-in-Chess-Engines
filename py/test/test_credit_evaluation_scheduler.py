@@ -13,16 +13,17 @@ from src.games.chess.evaluation.scheduler import (
     credit_evaluation_arguments,
 )
 from test_helpers.chess_configuration import CHESS_TRAINING
-from src.train.CreditPublication import (
+from src.training.publication import (
     CreditPublicationManifest,
     PublishedArtifact,
     file_sha256,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import BatchedInferenceParams, CreditTrainingParams, EvaluationParams, TrainingArgs
+from src.training.configuration import BatchedInferenceParams, CreditTrainingParams, TrainingArgs
+from src.games.chess.configuration import ChessEvaluationConfiguration
 
 
-EvaluationTarget = Callable[[int, TrainingArgs, EvaluationParams, int, int | None], None]
+EvaluationTarget = Callable[[int, TrainingArgs, ChessEvaluationConfiguration, int, int | None], None]
 
 
 class _FakeProcess:
@@ -31,7 +32,7 @@ class _FakeProcess:
     def __init__(
         self,
         target: EvaluationTarget,
-        args: tuple[int, TrainingArgs, EvaluationParams, int, int],
+        args: tuple[int, TrainingArgs, ChessEvaluationConfiguration, int, int],
         name: str,
     ) -> None:
         self.target = target
@@ -102,8 +103,8 @@ def _arguments(
     )
 
 
-def _evaluation() -> EvaluationParams:
-    return EvaluationParams(
+def _evaluation() -> ChessEvaluationConfiguration:
+    return ChessEvaluationConfiguration(
         num_searches_per_turn=64,
         num_games=2,
         every_n_model_versions=1,

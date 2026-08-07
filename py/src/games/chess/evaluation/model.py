@@ -34,14 +34,12 @@ from src.games.chess.evaluation.types import (
 )
 from src.games.chess.evaluation.paired_match import play_paired_models
 from src.games.chess.dataset import SelfPlayDataset, preserve_prebatched_samples
-from src.train.TrainingArgs import (
-    EvaluationParams,
-    TrainingArgs,
-)
-from src.games.chess.ChessGame import normalize_move_for_action_space
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.configuration import ChessEvaluationConfiguration
+from src.training.configuration import TrainingArgs
+from src.games.chess.game import normalize_move_for_action_space
+from src.games.chess.board import ChessBoard
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
-from src.self_play.visit_policy import action_probabilities
+from src.games.chess.visit_policy import action_probabilities
 from src.runtime import USE_GPU
 from src.util.save_paths import inference_model_path, load_model, model_save_path
 from src.experiment.evaluation_protocol import (
@@ -90,7 +88,7 @@ class ModelEvaluation:
         self,
         iteration: int,
         args: TrainingArgs,
-        evaluation_args: EvaluationParams,
+        evaluation_args: ChessEvaluationConfiguration,
         device_id: int,
         num_games: int = 64,
         num_searches_per_turn: int = 20,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import chess
 
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 
 

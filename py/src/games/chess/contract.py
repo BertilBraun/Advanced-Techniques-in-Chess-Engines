@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import numpy.typing as npt
 
-from src.games.chess.ChessBoard import ChessBoard, ChessMove
-from src.games.chess.ChessGame import ChessGame
+from src.games.chess.board import ChessBoard, ChessMove
+from src.games.chess.game import ChessGame
 from src.games.contracts import GameStateContract, RepresentationDimensions
 from src.neural_network import NetworkDimensions
 from src.packed_planes import PackedPlaneLayout

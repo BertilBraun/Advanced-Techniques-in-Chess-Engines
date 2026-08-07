@@ -10,13 +10,13 @@ import torch
 
 from src.games.chess.encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.games.chess.ChessBoard import ChessBoard
-from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
-from src.train.training_batch import ReplaySampleMetadata, TrainingBatch
+from src.games.chess.board import ChessBoard
+from src.games.chess.game import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
+from src.training.batch import ReplaySampleMetadata, TrainingBatch
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game_record import completed_game_from_path
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
-from src.train.Replay import (
+from src.training.replay import (
     ARCHIVE_HEADER,
     ArchiveFrameIndex,
     ArchiveInspection,

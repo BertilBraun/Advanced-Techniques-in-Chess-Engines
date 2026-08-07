@@ -1,7 +1,7 @@
 import chess
 import pytest
 
-from src.games.chess.ChessGame import ChessGame, normalize_move_for_action_space
+from src.games.chess.game import ChessGame, normalize_move_for_action_space
 
 
 @pytest.mark.parametrize('promotion', (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT))

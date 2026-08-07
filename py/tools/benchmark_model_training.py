@@ -14,8 +14,8 @@ from src.neural_network import Network
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.train.Trainer import Trainer, _LogitForward
-from src.train.TrainingArgs import NetworkParams, SEPlacement
+from src.training.trainer import Trainer, _LogitForward
+from src.training.configuration import NetworkParams, SEPlacement
 
 
 @dataclass(frozen=True)

@@ -11,12 +11,12 @@ import pytest
 
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
-import src.cluster.CommanderProcess as commander_module
-from src.cluster.CommanderProcess import CommanderProcess, TrainingLifecycle
+import src.training.commander as commander_module
+from src.training.commander import CommanderProcess, TrainingLifecycle
 from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
-from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
-from src.train.CreditTrainingLedger import CreditTrainingLedger
-from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs
+from src.training.trainer_process import QuantumResult, ReplayState, TrainerProcess
+from src.training.ledger import CreditTrainingLedger
+from src.training.configuration import CreditTrainingParams, TrainingArgs
 
 
 @dataclass(frozen=True)

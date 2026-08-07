@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from src.util.frozen_model import FrozenModel
 
-from src.train.TrainingArgs import CreditTrainingParams
+from src.training.configuration import CreditTrainingParams
 from src.util.atomic_file import write_text_atomically
 
 

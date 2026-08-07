@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import chess
 import pytest
 
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame
-from src.self_play.statistics import SelfPlayStatistics
+from src.games.chess.self_play_statistics import SelfPlayStatistics
 
 
 def self_play_client(shortcut_strength: float) -> ChessSelfPlayPolicy:

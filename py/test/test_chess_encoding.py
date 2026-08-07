@@ -1,8 +1,8 @@
 import chess
 import numpy as np
 
-from src.games.chess.ChessBoard import ChessBoard
-from src.games.chess.ChessGame import ChessGame
+from src.games.chess.board import ChessBoard
+from src.games.chess.game import ChessGame
 
 
 KNIGHT_CYCLE = ('g1f3', 'g8f6', 'f3g1', 'f6g8')

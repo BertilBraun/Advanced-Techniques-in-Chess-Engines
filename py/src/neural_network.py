@@ -5,7 +5,7 @@ import torch
 from torch import nn, Tensor
 
 from src.self_play.value_target import FinalOutcome
-from src.train.TrainingArgs import NetworkParams
+from src.training.configuration import NetworkParams
 from src.util.log import log
 
 

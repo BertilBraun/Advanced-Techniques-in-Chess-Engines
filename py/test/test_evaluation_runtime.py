@@ -19,10 +19,10 @@ from src.games.chess.evaluation.process import (
 from src.games.chess.evaluation.model import ModelEvaluation
 from src.games.chess.evaluation.types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
-from src.self_play.visit_policy import action_probabilities
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.visit_policy import action_probabilities
+from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.train.TrainingArgs import (
+from src.training.configuration import (
     BatchedInferenceParams,
     TrainingArgs,
 )

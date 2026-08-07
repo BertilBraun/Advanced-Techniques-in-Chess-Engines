@@ -39,8 +39,8 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 
 
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
-    from src.games.chess.ChessBoard import ChessBoard
-    from src.games.chess.ChessGame import ChessGame
+    from src.games.chess.board import ChessBoard
+    from src.games.chess.game import ChessGame
     from src.games.chess.dataset import SelfPlayDataset, chess_sample_metadata
     from src.self_play.value_target import ReplayValueTarget, TerminationReason
 
@@ -105,7 +105,7 @@ def retrieve_month_year_pairs(num_months: int) -> list[tuple[int, int]]:
 if __name__ == '__main__':
     # load year and months from sys.argv
     if len(sys.argv) < 3 or sys.argv[1] in ('-h', '--help'):
-        print('Usage: python -m src.games.chess.ChessDatabase <number_of_months> <number_of_games_per_month>')
+        print('Usage: python -m src.games.chess.database <number_of_months> <number_of_games_per_month>')
         print('Games are downloaded from https://database.nikonoel.fr/.')
         print('Make sure to check that the games are available for the year and months you are interested in.')
         sys.exit(1)

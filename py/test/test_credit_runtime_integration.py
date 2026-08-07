@@ -3,7 +3,7 @@ from pathlib import Path
 
 import chess
 
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.completed_game import (
     ChessCompletedGame,
     ChessMoveSelectionMode,
@@ -15,9 +15,9 @@ from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVis
 from src.self_play.value_target import TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
-from src.train.Replay import ReplayMaintainer
-from src.train.CreditTrainingLedger import CreditTrainingLedger
-from src.train.TrainingArgs import CreditTrainingParams
+from src.training.replay import ReplayMaintainer
+from src.training.ledger import CreditTrainingLedger
+from src.training.configuration import CreditTrainingParams
 
 
 def _completed_game(publisher: CompletedGamePublisher) -> ChessCompletedGame:

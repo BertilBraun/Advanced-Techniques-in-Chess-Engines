@@ -6,7 +6,7 @@ import chess
 import pytest
 
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame
-from src.self_play.statistics import SelfPlayStatistics
+from src.games.chess.self_play_statistics import SelfPlayStatistics
 
 
 def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> ChessSelfPlayPolicy:

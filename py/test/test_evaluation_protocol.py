@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src.experiment.evaluation_protocol import (
@@ -12,7 +13,7 @@ from src.experiment.evaluation_protocol import (
 )
 from src.games.chess.evaluation.types import EvaluationMove, EvaluationTerminal, Results
 from src.games.chess.evaluation.paired_match import play_paired_models
-from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.board import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 
@@ -100,9 +101,12 @@ def test_match_summary_rejects_unpaired_opening() -> None:
 
 
 def first_legal_move(boards: list[ChessBoard]) -> list[EvaluationMove]:
-    return [
-        EvaluationMove(CHESS_STATE_CONTRACT.game.encode_moves([board.get_valid_moves()[0]], board)) for board in boards
-    ]
+    decisions: list[EvaluationMove] = []
+    for board in boards:
+        policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
+        policy[CHESS_STATE_CONTRACT.encode_move(board.get_valid_moves()[0], board)] = 1.0
+        decisions.append(EvaluationMove(policy))
+    return decisions
 
 
 def test_paired_match_reuses_opening_with_colors_swapped() -> None:

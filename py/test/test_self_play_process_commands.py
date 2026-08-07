@@ -8,15 +8,15 @@ import pytest
 
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
-from src.cluster.SelfPlayProcess import SelfPlayProcess
-from src.self_play.model_refresh import SearchScheduleState
+from src.training.self_play_process import SelfPlayProcess
+from src.games.chess.search_schedule import SearchScheduleState
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
     Communication,
     LATEST_SELF_PLAY_MODEL_VERSION,
     self_play_model_refreshed_message,
 )
-from src.train.CreditPublication import (
+from src.training.publication import (
     CreditPublicationManifest,
     CreditPublicationPointer,
     PublicationValidationScope,
@@ -166,7 +166,7 @@ def test_credit_mode_model_refresh_initializes_matching_schedule_first(
         return _credit_publication(9_999)
 
     monkeypatch.setattr(
-        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        'src.training.self_play_process.load_credit_publication_pointer',
         load_publication,
     )
 
@@ -214,7 +214,7 @@ def test_credit_mode_refresh_reads_exact_latest_version_without_scanning(
         return _credit_publication(8_765)
 
     monkeypatch.setattr(
-        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        'src.training.self_play_process.load_credit_publication_pointer',
         load_publication,
     )
 
@@ -269,7 +269,7 @@ def test_credit_mode_rejects_invalid_published_model_version(
         raise ValueError('Published credit pointer is invalid.')
 
     monkeypatch.setattr(
-        'src.cluster.SelfPlayProcess.load_credit_publication_pointer',
+        'src.training.self_play_process.load_credit_publication_pointer',
         reject_pointer,
     )
 

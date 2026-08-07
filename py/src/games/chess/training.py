@@ -9,8 +9,8 @@ from src.games.chess.self_play import (
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
 from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION
-from src.train.Replay import ReplayGameImplementation
-from src.train.Trainer import ChessTrainingObjective, TrainingObjective
+from src.training.replay import ReplayGameImplementation
+from src.training.trainer import ChessTrainingObjective, TrainingObjective
 
 
 class ChessImplementation(

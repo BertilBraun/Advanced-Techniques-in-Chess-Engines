@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from src.train.CreditTrainingLedger import CreditTrainingLedger, CreditTrainingProgress
-from src.train.TrainingArgs import CreditTrainingParams
+from src.training.ledger import CreditTrainingLedger, CreditTrainingProgress
+from src.training.configuration import CreditTrainingParams
 
 
 def _parameters(replay_ratio: str = '4') -> CreditTrainingParams:
