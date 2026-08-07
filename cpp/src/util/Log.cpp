@@ -43,10 +43,10 @@ bool tqdm(size_t current, size_t total, std::string desc, int width) {
     std::ostringstream bar;
 
     bar << "[";
-    for (int i = 0; i < width; ++i) {
-        if (i < pos)
+    for (const int index : range(width)) {
+        if (index < pos)
             bar << "=";
-        else if (i == pos)
+        else if (index == pos)
             bar << ">";
         else
             bar << " ";
@@ -90,21 +90,21 @@ bool tqdm(size_t current, size_t total, std::string desc, int width) {
 
 std::string PrettyTable::getAsString() const {
     std::vector<size_t> columnWidths(m_columns.size(), 0);
-    for (size_t i = 0; i < m_columns.size(); ++i) {
-        columnWidths[i] = std::max(columnWidths[i], m_columns[i].size());
+    for (const auto index : range(m_columns.size())) {
+        columnWidths[index] = std::max(columnWidths[index], m_columns[index].size());
     }
     for (const auto &row : m_rows) {
-        for (size_t i = 0; i < row.size(); ++i) {
-            columnWidths[i] = std::max(columnWidths[i], row[i].size());
+        for (const auto index : range(row.size())) {
+            columnWidths[index] = std::max(columnWidths[index], row[index].size());
         }
     }
 
     std::string result;
     auto addRowToResult = [&result, &columnWidths](const std::vector<std::string> &row) {
         result += "| ";
-        for (size_t i = 0; i < row.size(); ++i) {
-            result += row[i];
-            result += std::string(columnWidths[i] - row[i].size(), ' ');
+        for (const auto index : range(row.size())) {
+            result += row[index];
+            result += std::string(columnWidths[index] - row[index].size(), ' ');
             result += " | ";
         }
         result += "\n";

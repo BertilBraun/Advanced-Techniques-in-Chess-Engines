@@ -1,5 +1,7 @@
 #pragma once
 
+#include "util/py.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -32,9 +34,9 @@ template <typename T1, typename T2> std::string toString(const std::pair<T1, T2>
 template <typename T> std::string toString(const std::vector<T> &vec) {
     // Specialization for vectors
     std::string result = "[";
-    for (size_t i = 0; i < vec.size(); ++i) {
-        result += toString(vec[i]);
-        if (i + 1 < vec.size())
+    for (const auto index : range(vec.size())) {
+        result += toString(vec[index]);
+        if (index + 1 < vec.size())
             result += ", ";
     }
     result += "]";
