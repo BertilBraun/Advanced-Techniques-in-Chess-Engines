@@ -6,7 +6,7 @@ import chess
 from AlphaZeroCpp import (
     AnalysisMode,
     ChessAnalysisEngine as BoundChessAnalysisEngine,
-    ChessAnalysisSearchParameters,
+    ChessAnalysisParameters,
     ChessAnalysisSession as BoundChessAnalysisSession,
     InferenceDevice,
     InferenceRuntimeParameters,
@@ -53,7 +53,8 @@ class InteractiveEngine:
         )
         self._bound_engine = BoundChessAnalysisEngine(
             runtime_parameters,
-            ChessAnalysisSearchParameters(
+            ChessAnalysisParameters(
+                parallel_searches=configuration.parallel_searches,
                 exploration_constant=configuration.exploration_constant,
                 inference_workers=configuration.inference_workers,
                 inference_batch_size=batch_size,

@@ -233,24 +233,23 @@ void bind_chess_game(py::module_ &m) {
         .def_readonly("elapsed_milliseconds", &AnalysisResult::elapsed_milliseconds)
         .def_readonly("principal_variation", &AnalysisResult::principal_variation);
 
-    py::class_<ChessAnalysisSearchParameters>(m, "ChessAnalysisSearchParameters")
-        .def(py::init<float, int, int, int>(), py::arg("exploration_constant"),
+    py::class_<ChessAnalysisParameters>(m, "ChessAnalysisParameters")
+        .def(py::init<std::uint32_t, float, std::size_t, std::size_t, std::size_t>(),
+             py::arg("parallel_searches"), py::arg("exploration_constant"),
              py::arg("inference_workers"), py::arg("inference_batch_size"),
              py::arg("outstanding_batches_per_worker") = 2)
-        .def_readwrite("exploration_constant",
-                       &ChessAnalysisSearchParameters::exploration_constant)
-        .def_readwrite("inference_workers", &ChessAnalysisSearchParameters::inference_workers)
-        .def_readwrite("inference_batch_size",
-                       &ChessAnalysisSearchParameters::inference_batch_size)
+        .def_readwrite("parallel_searches", &ChessAnalysisParameters::parallel_searches)
+        .def_readwrite("exploration_constant", &ChessAnalysisParameters::exploration_constant)
+        .def_readwrite("inference_workers", &ChessAnalysisParameters::inference_workers)
+        .def_readwrite("inference_batch_size", &ChessAnalysisParameters::inference_batch_size)
         .def_readwrite("outstanding_batches_per_worker",
-                       &ChessAnalysisSearchParameters::outstanding_batches_per_worker);
+                       &ChessAnalysisParameters::outstanding_batches_per_worker);
 
     py::class_<ChessAnalysisEngine, std::shared_ptr<ChessAnalysisEngine>>(m,
                                                                          "ChessAnalysisEngine")
-        .def(py::init<const InferenceRuntimeParameters &,
-                      const ChessAnalysisSearchParameters &>(),
-             py::arg("runtime_parameters"), py::arg("search_parameters"))
-        .def("new_session", &ChessAnalysisEngine::newGame, py::arg("starting_fen"),
+        .def(py::init<const InferenceRuntimeParameters &, const ChessAnalysisParameters &>(),
+             py::arg("runtime_parameters"), py::arg("parameters"))
+        .def("new_session", &ChessAnalysisEngine::newSession, py::arg("starting_fen"),
              py::arg("moves_uci"))
         .def("inference_statistics", &ChessAnalysisEngine::inferenceStatistics);
 

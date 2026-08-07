@@ -27,8 +27,8 @@ class InteractiveEngineConfiguration:
             raise ValueError('model_path must not be empty.')
         if self.parallel_searches < 1:
             raise ValueError('parallel_searches must be positive.')
-        if not isfinite(self.exploration_constant) or self.exploration_constant < 0:
-            raise ValueError('exploration_constant must be finite and non-negative.')
+        if not isfinite(self.exploration_constant) or self.exploration_constant <= 0:
+            raise ValueError('exploration_constant must be finite and positive.')
         if self.inference_workers < 1:
             raise ValueError('inference_workers must be positive.')
         if not 1 <= self.outstanding_batches_per_worker <= 2:

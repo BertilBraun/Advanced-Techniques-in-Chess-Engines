@@ -570,6 +570,7 @@ template <typename Game> struct GameSearchRequest {
     GameSearchRoot<Game> root;
     std::uint32_t visit_limit;
     bool add_root_noise;
+    bool count_root_initialization = false;
 };
 
 struct GameSearchBatchResult {
@@ -642,8 +643,10 @@ public:
         }
     }
 
-    [[nodiscard]] Root newRoot(typename Game::Position position) {
-        Root root(std::move(position), m_searchParameters.tree_capacity, 0, m_turnDiscount);
+    [[nodiscard]] Root newRoot(typename Game::Position position,
+                               const std::size_t maximumCapacity = 0) {
+        Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
+                  m_turnDiscount);
         m_trees.push_back(root.sharedTree());
         return root;
     }
@@ -660,6 +663,7 @@ public:
 
     [[nodiscard]] GameSearchBatchResult
     searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
+        const auto searchStartedAt = std::chrono::steady_clock::now();
         const bool hasInvalidRequest = std::ranges::any_of(
             requests, [](const GameSearchRequest<Game> &request) {
                 return request.visit_limit == 0;
@@ -675,7 +679,8 @@ public:
             const std::uint32_t visitLimit = request.visit_limit;
             root.tree().prepareForSearch(visitLimit, m_searchParameters.parallel_searches);
             tasks.push_back({root, startingVisits, visitLimit, 0,
-                             request.add_root_noise && !root.tree().root().expanded()});
+                             request.add_root_noise && !root.tree().root().expanded(),
+                             request.count_root_initialization});
             if (request.add_root_noise && root.tree().root().expanded()) {
                 addNoise(tasks.back().root);
             }
@@ -722,6 +727,10 @@ public:
             [](const std::uint64_t count, const RootTask &task) {
                 return count + task.root.visits() - task.starting_visits;
             });
+        m_searchWallNanoseconds +=
+            static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                           std::chrono::steady_clock::now() - searchStartedAt)
+                                           .count());
         return {std::move(results), completed};
     }
 
@@ -779,9 +788,22 @@ public:
             m_modelCalls == 0
                 ? 0.0F
                 : static_cast<float>(m_modelPositions) / static_cast<float>(m_modelCalls);
+        statistics.treeSelectionNanoseconds = m_selectionNanoseconds;
+        statistics.boardEncodingNanoseconds = m_encodingNanoseconds;
+        statistics.resultProcessingNanoseconds = m_resultProcessingNanoseconds;
+        statistics.treeBackupNanoseconds = m_backupNanoseconds;
+        statistics.treeOwnerWaitNanoseconds = m_waitNanoseconds;
         for (const std::unique_ptr<DirectInferencePipeline> &worker : m_workers) {
             statistics.directInferenceNanoseconds += worker->inferenceNanoseconds();
         }
+        const std::uint64_t availableWorkerNanoseconds =
+            m_searchWallNanoseconds * static_cast<std::uint64_t>(m_workers.size());
+        statistics.directWorkerUtilization =
+            availableWorkerNanoseconds == 0
+                ? 0.0F
+                : std::min(1.0F,
+                           static_cast<float>(statistics.directInferenceNanoseconds) /
+                               static_cast<float>(availableWorkerNanoseconds));
         return statistics;
     }
 
@@ -832,12 +854,14 @@ private:
         std::uint32_t visit_limit;
         std::uint32_t in_flight;
         bool noise_pending;
+        bool count_root_initialization;
     };
 
     struct PendingLeaf {
         std::size_t task_index;
         std::size_t node_index;
         bool counts_as_search;
+        bool root_initialization;
     };
 
     struct PendingBatch {
@@ -859,6 +883,12 @@ private:
     std::uint64_t m_modelCalls = 0;
     std::uint64_t m_modelPositions = 0;
     std::vector<std::size_t> m_batchHistogram;
+    std::uint64_t m_searchWallNanoseconds = 0;
+    std::uint64_t m_selectionNanoseconds = 0;
+    std::uint64_t m_encodingNanoseconds = 0;
+    std::uint64_t m_resultProcessingNanoseconds = 0;
+    std::uint64_t m_backupNanoseconds = 0;
+    std::uint64_t m_waitNanoseconds = 0;
     bool m_resetTreesOnRefresh;
     float m_turnDiscount;
 
@@ -914,7 +944,9 @@ private:
                 RootTask &task = tasks[*taskIndex];
                 Tree &tree = task.root.tree();
                 bool countsAsSearch = true;
+                bool rootInitialization = false;
                 std::optional<std::size_t> leaf;
+                const auto selectionStartedAt = std::chrono::steady_clock::now();
                 if (!tree.root().expanded()) {
                     if (Game::isTerminal(tree.root().position)) {
                         tree.backPropagate(tree.rootIndex(),
@@ -922,7 +954,8 @@ private:
                         continue;
                     }
                     leaf = tree.rootIndex();
-                    countsAsSearch = false;
+                    rootInitialization = true;
+                    countsAsSearch = task.count_root_initialization;
                     tree.node(*leaf).evaluating = true;
                 } else {
                     leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
@@ -938,14 +971,25 @@ private:
                     }
                     tree.reserve(*leaf);
                 }
+                m_selectionNanoseconds +=
+                    static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                   std::chrono::steady_clock::now() -
+                                                   selectionStartedAt)
+                                                   .count());
                 constexpr std::size_t encodedSize =
                     static_cast<std::size_t>(Game::inferenceDimensions().channels) *
                     static_cast<std::size_t>(Game::inferenceDimensions().rows) *
                     static_cast<std::size_t>(Game::inferenceDimensions().columns);
+                const auto encodingStartedAt = std::chrono::steady_clock::now();
                 Game::encodeInputInto(tree.node(*leaf).position,
                                       writable.data + leaves.size() * encodedSize);
+                m_encodingNanoseconds +=
+                    static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                   std::chrono::steady_clock::now() -
+                                                   encodingStartedAt)
+                                                   .count());
                 ++task.in_flight;
-                leaves.push_back({*taskIndex, *leaf, countsAsSearch});
+                leaves.push_back({*taskIndex, *leaf, countsAsSearch, rootInitialization});
             }
         } catch (...) {
             cancelLeaves(tasks, leaves);
@@ -969,7 +1013,12 @@ private:
         bool outputReady = false;
         std::size_t processed = 0;
         try {
+            const auto waitStartedAt = std::chrono::steady_clock::now();
             const DirectInferenceOutput output = worker.waitCompleted(pending.slot_index);
+            m_waitNanoseconds +=
+                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                               std::chrono::steady_clock::now() - waitStartedAt)
+                                               .count());
             outputReady = true;
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
@@ -977,20 +1026,34 @@ private:
                 const PendingLeaf &pendingLeaf = pending.leaves[processed];
                 RootTask &task = tasks[pendingLeaf.task_index];
                 Tree &tree = task.root.tree();
+                const auto processingStartedAt = std::chrono::steady_clock::now();
                 const SearchInferenceResult<Game> inference = processSearchInference<Game>(
                     policies + processed * static_cast<std::size_t>(m_dimensions.actions),
                     outcomes + processed * static_cast<std::size_t>(m_dimensions.outcomes),
                     tree.node(pendingLeaf.node_index).position);
+                m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - processingStartedAt)
+                        .count());
+                const auto backupStartedAt = std::chrono::steady_clock::now();
                 tree.expand(pendingLeaf.node_index, inference);
-                if (pendingLeaf.counts_as_search) {
-                    tree.completeReservation(pendingLeaf.node_index, inference.value());
-                } else {
+                if (pendingLeaf.root_initialization) {
                     tree.node(pendingLeaf.node_index).evaluating = false;
+                    if (pendingLeaf.counts_as_search) {
+                        tree.backPropagate(pendingLeaf.node_index, inference.value());
+                    }
                     if (task.noise_pending) {
                         addNoise(task.root);
                         task.noise_pending = false;
                     }
+                } else if (pendingLeaf.counts_as_search) {
+                    tree.completeReservation(pendingLeaf.node_index, inference.value());
                 }
+                m_backupNanoseconds +=
+                    static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                   std::chrono::steady_clock::now() -
+                                                   backupStartedAt)
+                                                   .count());
                 --task.in_flight;
             }
             worker.release(pending.slot_index);
@@ -1012,7 +1075,7 @@ private:
         for (const PendingLeaf &pendingLeaf : leaves) {
             RootTask &task = tasks[pendingLeaf.task_index];
             try {
-                if (pendingLeaf.counts_as_search) {
+                if (!pendingLeaf.root_initialization && pendingLeaf.counts_as_search) {
                     task.root.tree().cancelReservation(pendingLeaf.node_index);
                 } else {
                     task.root.tree().node(pendingLeaf.node_index).evaluating = false;

@@ -11,7 +11,7 @@ __all__ = [
     'ChessSearchChild',
     'ChessSearchRoot',
     'ChessAnalysisEngine',
-    'ChessAnalysisSearchParameters',
+    'ChessAnalysisParameters',
     'ChessAnalysisSession',
     'ChessSelfPlaySearch',
     'ChessSelfPlaySearchBatch',
@@ -279,14 +279,16 @@ class InferenceDevice:
     CPU: InferenceDevice
     CUDA: InferenceDevice
 
-class ChessAnalysisSearchParameters:
+class ChessAnalysisParameters:
     def __init__(
         self,
+        parallel_searches: int,
         exploration_constant: float,
         inference_workers: int,
         inference_batch_size: int,
         outstanding_batches_per_worker: int = 2,
     ) -> None: ...
+    parallel_searches: int
     exploration_constant: float
     inference_workers: int
     inference_batch_size: int
@@ -296,7 +298,7 @@ class ChessAnalysisEngine:
     def __init__(
         self,
         runtime_parameters: InferenceRuntimeParameters,
-        search_parameters: ChessAnalysisSearchParameters,
+        parameters: ChessAnalysisParameters,
     ) -> None: ...
     def new_session(self, starting_fen: str, moves_uci: tuple[str, ...]) -> ChessAnalysisSession: ...
     def inference_statistics(self) -> InferenceStatistics: ...

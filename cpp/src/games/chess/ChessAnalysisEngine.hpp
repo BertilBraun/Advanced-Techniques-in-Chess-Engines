@@ -1,8 +1,21 @@
 #pragma once
 
-#include "games/chess/ChessAnalysisSearch.hpp"
+#include "InferenceRuntime.hpp"
+#include "games/chess/ChessSearch.hpp"
 
 enum class AnalysisMode { Policy, Mcts };
+
+struct ChessAnalysisParameters {
+    std::uint32_t parallel_searches;
+    float exploration_constant;
+    std::size_t inference_workers;
+    std::size_t inference_batch_size;
+    std::size_t outstanding_batches_per_worker;
+
+    ChessAnalysisParameters(std::uint32_t parallelSearches, float explorationConstant,
+                            std::size_t inferenceWorkers, std::size_t inferenceBatchSize,
+                            std::size_t outstandingBatchesPerWorker = 1);
+};
 
 struct CandidateAnalysis {
     std::string move_uci;
@@ -28,11 +41,10 @@ class ChessAnalysisSession;
 class ChessAnalysisEngine : public std::enable_shared_from_this<ChessAnalysisEngine> {
 public:
     ChessAnalysisEngine(const InferenceRuntimeParameters &runtimeParameters,
-                        const ChessAnalysisSearchParameters &searchParameters)
-        : m_search(runtimeParameters, searchParameters) {}
+                        const ChessAnalysisParameters &parameters);
 
     [[nodiscard]] std::shared_ptr<ChessAnalysisSession>
-    newGame(const std::string &startingFen, const std::vector<std::string> &movesUci);
+    newSession(const std::string &startingFen, const std::vector<std::string> &movesUci);
 
     [[nodiscard]] InferenceStatistics inferenceStatistics() {
         return m_search.inferenceStatistics();
@@ -40,7 +52,8 @@ public:
 
 private:
     friend class ChessAnalysisSession;
-    ChessAnalysisSearch m_search;
+    ChessAnalysisParameters m_parameters;
+    BatchedGameSearch<ChessGameContract> m_search;
 };
 
 class ChessAnalysisSession {
@@ -53,18 +66,18 @@ public:
     [[nodiscard]] AnalysisResult analyze(AnalysisMode mode, std::optional<int> timeLimitSeconds,
                                          std::optional<int> searchLimit);
 
-    [[nodiscard]] std::string fen() const { return m_tree->root().position.fen(); }
+    [[nodiscard]] std::string fen() const { return m_root.position().fen(); }
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
     [[nodiscard]] const std::vector<std::string> &movesUci() const { return m_movesUci; }
     [[nodiscard]] int rootVisits() const {
-        return static_cast<int>(m_tree->root().visits);
+        return static_cast<int>(m_root.visits());
     }
 
 private:
     std::shared_ptr<ChessAnalysisEngine> m_engine;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
-    std::unique_ptr<ChessSearchTree> m_tree;
+    ChessGameSearchRoot m_root;
 
     void reconstructRoot();
 };
