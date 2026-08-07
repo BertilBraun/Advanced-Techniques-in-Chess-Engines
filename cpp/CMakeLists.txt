@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1 FATAL_ERROR)
 project(AlphaZeroSelfPlay LANGUAGES CXX)
 
+option(BUILD_TESTING "Build native C++ tests" OFF)
+option(BUILD_BENCHMARKS "Build native C++ benchmarks" OFF)
 include(CTest)
 
 # --- Export compile commands for Clang-Tidy ---
@@ -57,6 +59,9 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     if (CMAKE_CUDA_COMPILER)
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O2 -G")
     endif ()
+elseif (CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
+    message(STATUS "Adding compile-check flags (-O0 -g0)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g0")
 else ()
     message(FATAL_ERROR "Unknown build type: ${CMAKE_BUILD_TYPE}")
 endif ()
@@ -84,10 +89,20 @@ endif ()
 find_program(CCACHE_FOUND ccache)
 if (CCACHE_FOUND)
     message(STATUS "Using ccache")
-    set(CMAKE_C_COMPILER_LAUNCHER ccache)
-    set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
+    set(CCACHE_LAUNCHER
+            ${CMAKE_COMMAND} -E env
+            CCACHE_SLOPPINESS=pch_defines,time_macros
+            ${CCACHE_FOUND}
+    )
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_LAUNCHER})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_LAUNCHER})
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options(-fpch-preprocess)
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-fno-pch-timestamp)
+    endif ()
     if (CMAKE_CUDA_COMPILER)
-        set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
+        set(CMAKE_CUDA_COMPILER_LAUNCHER ${CCACHE_LAUNCHER})
     endif ()
 endif ()
 
@@ -182,7 +197,11 @@ file(GLOB_RECURSE ALL_SOURCES
 )
 
 # Build the Python module from the binding entry point and shared sources
-pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
+if (CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
+    pybind11_add_module(AlphaZeroCpp NO_EXTRAS ${ALL_SOURCES})
+else ()
+    pybind11_add_module(AlphaZeroCpp ${ALL_SOURCES})
+endif ()
 
 target_precompile_headers(AlphaZeroCpp PRIVATE src/common.hpp)
 if (ENABLE_TIMING_INSTRUMENTATION)
@@ -191,6 +210,7 @@ endif ()
 
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 
+if (BUILD_TESTING)
 add_executable(BlockingQueueTest test/TestBlockingQueue.cpp)
 target_include_directories(BlockingQueueTest PRIVATE src)
 add_test(NAME BlockingQueueTest COMMAND BlockingQueueTest)
@@ -378,7 +398,9 @@ add_executable(
 target_include_directories(DirectSelfPlaySearchTest PRIVATE src)
 target_link_libraries(DirectSelfPlaySearchTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME DirectSelfPlaySearchTest COMMAND DirectSelfPlaySearchTest)
+endif ()
 
+if (BUILD_BENCHMARKS)
 add_executable(
         DirectInferenceBenchmark
         benchmark/DirectInferenceBenchmark.cpp
@@ -394,6 +416,7 @@ add_executable(
 )
 target_include_directories(DirectInferenceBenchmark PRIVATE src)
 target_link_libraries(DirectInferenceBenchmark PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+endif ()
 
 set_target_properties(AlphaZeroCpp PROPERTIES
         CXX_STANDARD 20
@@ -406,20 +429,22 @@ set_target_properties(AlphaZeroCpp PROPERTIES
 # Post-build step to copy the module and generate the stubs
 set(PYTHON_MODULE_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../py")
 
-add_custom_command(TARGET AlphaZeroCpp POST_BUILD
-        COMMENT "Copying AlphaZeroCpp.so and generating stubs..."
+if (NOT CMAKE_BUILD_TYPE STREQUAL "CompileCheck")
+    add_custom_command(TARGET AlphaZeroCpp POST_BUILD
+            COMMENT "Copying AlphaZeroCpp.so and generating stubs..."
 
-        # Make sure the output Python directory exists
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${PYTHON_MODULE_OUTPUT_DIR}
+            # Make sure the output Python directory exists
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${PYTHON_MODULE_OUTPUT_DIR}
 
-        # Copy the compiled .so to the Python project directory
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> ${PYTHON_MODULE_OUTPUT_DIR}
+            # Copy the compiled .so to the Python project directory
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:AlphaZeroCpp> ${PYTHON_MODULE_OUTPUT_DIR}
 
-        # Generate the stub with correct PYTHONPATH
-        COMMAND ${CMAKE_COMMAND} -E env
-        PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
-        pybind11-stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
-)
+            # Generate the stub with correct PYTHONPATH
+            COMMAND ${CMAKE_COMMAND} -E env
+            PYTHONPATH=${PYTHON_MODULE_OUTPUT_DIR}
+            pybind11-stubgen AlphaZeroCpp -o ${CMAKE_CURRENT_BINARY_DIR}/stubs
+    )
+endif ()
 
 
 # --- Export compile commands ---
