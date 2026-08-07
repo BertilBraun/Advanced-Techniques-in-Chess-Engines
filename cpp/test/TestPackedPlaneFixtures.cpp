@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessEncoding.hpp"
 
 #include <fstream>
@@ -35,7 +36,7 @@ std::string toHex(const std::vector<std::int8_t> &payload) {
 
 } // namespace
 
-int main() {
+int runPackedPlaneFixtureTests() {
     try {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();

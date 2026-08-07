@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 #include <iostream>
@@ -11,7 +12,7 @@ void require(const bool condition, const std::string &message) {
 }
 } // namespace
 
-int main() {
+int runChessGameContractTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
 

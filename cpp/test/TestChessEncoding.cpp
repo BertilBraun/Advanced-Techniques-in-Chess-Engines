@@ -1,6 +1,7 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessEncoding.hpp"
 
-int main() {
+int runChessEncodingTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     const Board board("r3k2r/ppp2ppp/2n1bn2/3qp3/3P4/2N1BN2/PPP2PPP/R2Q1RK1 w kq - 7 11");

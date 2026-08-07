@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/go/GoGameContract.hpp"
 #include "search/SearchTree.hpp"
@@ -44,7 +45,7 @@ template <typename Game> void exercise_tree(typename Game::Position position) {
 
 } // namespace
 
-int main() {
+int runGameSearchTreeTests() {
     try {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();

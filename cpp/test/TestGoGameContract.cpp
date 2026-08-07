@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/go/GoGameContract.hpp"
 
 #include <array>
@@ -193,7 +194,7 @@ void test_invalid_boundaries() {
 
 } // namespace
 
-int main() {
+int runGoGameContractTests() {
     try {
         test_initial_and_actions<7>();
         test_initial_and_actions<9>();

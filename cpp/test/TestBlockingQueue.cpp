@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "util/BlockingQueue.hpp"
 
 #include <chrono>
@@ -213,7 +214,7 @@ void testCloseInterruptsBatchDeadlineAndDrains() {
 
 } // namespace
 
-int main() {
+int runBlockingQueueTests() {
     testBoundedBackpressureAndCloseDrain();
     testCloseReleasesBlockedProducer();
     testBoundedBulkBackpressureAndCapacityRejection();

@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "position.h"
 
 #include <iostream>
@@ -35,7 +36,7 @@ void testReplayPreservesRepetition() {
 void testReplayRejectsInvalidMoves() { requireInvalidHistory({"e2e5"}); }
 } // namespace
 
-int main() {
+int runGameHistoryTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     testReplayPreservesRepetition();

@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "search/InferencePipeline.hpp"
 
@@ -26,7 +27,7 @@ void require(const bool condition, const std::string &message) {
 }
 } // namespace
 
-int main() {
+int runInferencePipelineTests() {
     const std::filesystem::path modelPath = createTestModel();
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,

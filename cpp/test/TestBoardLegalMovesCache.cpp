@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "position.h"
 
 #include <iostream>
@@ -89,7 +90,7 @@ void testKnightOnlyInsufficientMaterial() {
 }
 } // namespace
 
-int main() {
+int runBoardLegalMovesCacheTests() {
     initializeStockfish();
     testRepeatedAccessReusesCache();
     testMutationInvalidatesCache();

@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "util/BitBoard.hpp"
 #include "util/PackedPlane.hpp"
 
@@ -88,6 +89,6 @@ template <std::size_t BoardSize> bool runBitBoardChecks() {
     return true;
 }
 
-int main() {
+int runBitBoardTests() {
     return runBitBoardChecks<7>() && runBitBoardChecks<8>() && runBitBoardChecks<9>() ? 0 : 1;
 }

@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "search/SearchInference.hpp"
 
@@ -107,7 +108,7 @@ void testTerminalAndOutcomeValidation() {
 }
 } // namespace
 
-int main() {
+int runMovePolicyProcessingTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     testRepresentativePositions();

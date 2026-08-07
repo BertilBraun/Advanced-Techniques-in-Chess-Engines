@@ -211,153 +211,39 @@ endif ()
 target_link_libraries(AlphaZeroCpp PRIVATE "${TORCH_LIBRARIES}")
 
 if (BUILD_TESTING)
-add_executable(BlockingQueueTest test/TestBlockingQueue.cpp)
-target_include_directories(BlockingQueueTest PRIVATE src)
-add_test(NAME BlockingQueueTest COMMAND BlockingQueueTest)
-
-add_executable(BitBoardTest test/TestBitBoard.cpp)
-target_include_directories(BitBoardTest PRIVATE src)
-add_test(NAME BitBoardTest COMMAND BitBoardTest)
-
-add_executable(
-        PackedPlaneFixtureTest
-        test/TestPackedPlaneFixtures.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(PackedPlaneFixtureTest PRIVATE src)
-target_compile_definitions(PackedPlaneFixtureTest PRIVATE SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(PackedPlaneFixtureTest PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
-add_test(NAME PackedPlaneFixtureTest COMMAND PackedPlaneFixtureTest)
-
-add_executable(
-        BoardLegalMovesCacheTest
-        test/TestBoardLegalMovesCache.cpp
-        src/games/chess/ChessBoard.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(BoardLegalMovesCacheTest PRIVATE src)
-target_link_libraries(BoardLegalMovesCacheTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
-
-add_executable(
-        ChessGameContractTest
-        test/TestChessGameContract.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessAction.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(ChessGameContractTest PRIVATE src)
-target_link_libraries(ChessGameContractTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME ChessGameContractTest COMMAND ChessGameContractTest)
-
-add_executable(GoGameContractTest test/TestGoGameContract.cpp)
-target_include_directories(GoGameContractTest PRIVATE src)
-add_test(NAME GoGameContractTest COMMAND GoGameContractTest)
-
-add_executable(
-        GameHistoryTest
-        test/TestGameHistory.cpp
-        src/games/chess/ChessBoard.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(GameHistoryTest PRIVATE src)
-target_link_libraries(GameHistoryTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME GameHistoryTest COMMAND GameHistoryTest)
-
-add_executable(
-        GameSearchTreeTest
-        test/TestGameSearchTree.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessAction.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(GameSearchTreeTest PRIVATE src)
-target_link_libraries(GameSearchTreeTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME GameSearchTreeTest COMMAND GameSearchTreeTest)
-
-add_executable(
-        MovePolicyProcessingTest
-        test/TestMovePolicyProcessing.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessAction.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(MovePolicyProcessingTest PRIVATE src)
-target_link_libraries(MovePolicyProcessingTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME MovePolicyProcessingTest COMMAND MovePolicyProcessingTest)
-
-add_executable(
-        ChessEncodingTest
-        test/TestChessEncoding.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(ChessEncodingTest PRIVATE src)
-target_link_libraries(ChessEncodingTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME ChessEncodingTest COMMAND ChessEncodingTest)
-
-add_executable(
-        InferencePipelineTest
-        test/TestInferencePipeline.cpp
-        src/search/InferencePipeline.cpp
-)
-target_include_directories(InferencePipelineTest PRIVATE src)
-target_link_libraries(InferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME InferencePipelineTest COMMAND InferencePipelineTest)
-
-add_executable(
-        BatchedSearchTest
-        test/TestBatchedSearch.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/search/InferencePipeline.cpp
-        src/games/chess/ChessSearchPresentation.cpp
-        src/games/chess/ChessAction.cpp
-        src/util/Log.cpp
-        src/util/ThreadPool.cpp
-        src/util/TimeItGuard.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(BatchedSearchTest PRIVATE src)
-target_link_libraries(BatchedSearchTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME BatchedSearchTest COMMAND BatchedSearchTest)
+    add_executable(
+            NativeTests
+            test/TestMain.cpp
+            test/TestBatchedSearch.cpp
+            test/TestBitBoard.cpp
+            test/TestBlockingQueue.cpp
+            test/TestBoardLegalMovesCache.cpp
+            test/TestChessEncoding.cpp
+            test/TestChessGameContract.cpp
+            test/TestGameHistory.cpp
+            test/TestGameSearchTree.cpp
+            test/TestGoGameContract.cpp
+            test/TestInferencePipeline.cpp
+            test/TestMovePolicyProcessing.cpp
+            test/TestPackedPlaneFixtures.cpp
+            src/games/chess/ChessAction.cpp
+            src/games/chess/ChessBoard.cpp
+            src/games/chess/ChessEncoding.cpp
+            src/games/chess/ChessSearchPresentation.cpp
+            src/search/InferencePipeline.cpp
+            src/util/Log.cpp
+            src/util/ThreadPool.cpp
+            src/util/TimeItGuard.cpp
+            "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
+            "${stockfish_SOURCE_DIR}/src/memory.cpp"
+            "${stockfish_SOURCE_DIR}/src/misc.cpp"
+            "${stockfish_SOURCE_DIR}/src/movegen.cpp"
+            "${stockfish_SOURCE_DIR}/src/position.cpp"
+    )
+    target_include_directories(NativeTests PRIVATE src test)
+    target_compile_definitions(NativeTests PRIVATE SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(NativeTests PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+    add_test(NAME NativeTests COMMAND NativeTests)
 endif ()
 
 if (BUILD_BENCHMARKS)

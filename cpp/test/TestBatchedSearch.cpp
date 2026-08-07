@@ -1,3 +1,4 @@
+#include "TestRunner.hpp"
 #include "games/chess/ChessSearchPresentation.hpp"
 #include "position.h"
 #include "search/SelfPlay.hpp"
@@ -46,7 +47,7 @@ float inferenceValue(ChessSelfPlaySearch &search) {
 
 } // namespace
 
-int main() {
+int runBatchedSearchTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
     const std::filesystem::path modelPath =
