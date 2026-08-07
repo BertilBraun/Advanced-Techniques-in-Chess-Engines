@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | in_progress |
+| R8 | Go pipeline integration | awaiting_user_review |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is in progress for removal of remaining chess defaults from shared Python boundaries.
+Current authorization: R8 is awaiting user review after removal of remaining chess defaults from shared Python boundaries.
 R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
@@ -827,6 +827,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-08 | R8 | Shared Python boundary correction | User review found that root settings still installed chess as a process-global current game, model creation and loading silently defaulted to chess dimensions, root encoding was chess-only, shared experiment/run ownership remained in chess-named modules, and eight files in the live configuration directory used an obsolete pre-R8 schema. | Delete the root game settings and current-game aliases; load the selected experiment directly in `train.py`; require explicit `NetworkDimensions` at every model boundary; move chess encoding under the chess implementation; rename shared experiment and run modules; make hardware validation accept the full experiment union; move shared telemetry/runtime imports off chess configuration; remove obsolete configuration documents and dead regression/settings helpers; retain three explicitly named, approval-required templates whose dependency hashes and chess/7x7/9x9 dimensions are validated together. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Desktop visualization cleanup | The retained Pygame grid, chess and Go visual strategies, mutable native-Go board adapter, font asset, and standalone Go inspector had no production training, evaluation, UCI, or deployment consumer after removal of the legacy human-play graph. | Remove the complete desktop presentation graph and its visualization-only tests, delete `CurrentGameVisuals`, and regenerate the locked training environment without Pygame. Preserve typed game/search/analysis boundaries for future web presentation. The exact Windows suite passes 313 tests with 5 native-dependent skips, the fresh-extension suite passes all 351 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Python configuration and legacy cleanup | Chess and Go experiment variants duplicated ownership and validation of the shared run and training configuration, while manually removed legacy bot, tournament, dataset-training, inspection, and optimization entrypoints left stale imports, dependencies, and documentation. | Introduce `BaseExperimentConfiguration` as the canonical owner of `ExperimentRunConfiguration` and `TrainingArgs`, leaving concrete variants to validate only game-specific fields. Retain the production chess evaluation/database path and its `SelfPlayDataset` consumer, colocate the sole UCI legal-move selection helper with the server, remove the orphan legacy graph and unused Optuna dependency, and update entrypoint documentation. The exact Windows suite passes 314 tests with 6 native-dependent skips, the fresh-extension suite passes all 356 tests, the focused UCI suite passes 17 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Inference ownership review | `InferenceModel.hpp` contained implementation-only TorchScript loading and refresh validation despite having no independent owner, while `InferencePipeline.hpp` opened with the full game-result processing implementation before declaring the pipeline. | Delete the model header and keep its private implementation beside `InferenceRunner` in `InferencePipeline.cpp`; retain only the prepared-model ownership type in the public pipeline interface. Forward-declare `processInferencePosition` near its result type and place its required template implementation after the pipeline declaration. Native extension, test, and benchmark targets compile; native tests and Ruff pass. Return R8 to `awaiting_user_review`. |
