@@ -1,2 +1,7 @@
 CompileFlags:
   CompilationDatabase: build
+  Remove:
+    - "/permissive-"
+    - "/Z7"
+    - "/EHsc"
+    - "/bigobj"
