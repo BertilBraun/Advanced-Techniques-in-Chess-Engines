@@ -39,12 +39,17 @@ class ActiveGamePool(Generic[ActiveGameT, SearchRequestT, SearchResultT]):
         self.policy = policy
         self.games = [policy.new_game() for _ in range(size)]
 
-    def run_turn(self) -> None:
-        requests = tuple(self.policy.build_search_request(game) for game in self.games)
+    def run_turn(self, maximum_games: int | None = None) -> None:
+        active_count = len(self.games) if maximum_games is None else min(maximum_games, len(self.games))
+        if active_count <= 0:
+            raise ValueError('A self-play turn must advance at least one active game.')
+        selected_games = self.games[:active_count]
+        requests = tuple(self.policy.build_search_request(game) for game in selected_games)
         results = self.policy.search_active_games(requests)
-        if len(results) != len(self.games):
+        if len(results) != active_count:
             raise RuntimeError('Batched self-play search returned the wrong result count.')
-        self.games = [
+        advanced_games = [
             self.policy.advance_game(game, request, result)
-            for game, request, result in zip(self.games, requests, results, strict=True)
+            for game, request, result in zip(selected_games, requests, results, strict=True)
         ]
+        self.games[:active_count] = advanced_games

@@ -125,7 +125,8 @@ class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGo
             raise ValueError('Go self-play game count must be positive.')
         start = len(self._published)
         while len(self._published) - start < game_count:
-            self.active_games.run_turn()
+            remaining_games = game_count - (len(self._published) - start)
+            self.active_games.run_turn(remaining_games)
         return tuple(self._published[start:])
 
     def refresh_model(self, model_generation: int, model_path: Path) -> None:
