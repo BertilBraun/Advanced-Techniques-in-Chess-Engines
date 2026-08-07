@@ -10,7 +10,7 @@ import pytest
 from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, has_positive_visit_counts
 from src.self_play.completed_game import CompletedGamePublisher
 from src.games.chess.search_schedule import SearchScheduleState
-from test_helpers.chess_configuration import CHESS_TRAINING
+from test_helpers.chess_configuration import CHESS_SELF_PLAY
 from src.training.configuration import BatchedInferenceParams
 
 
@@ -139,20 +139,18 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     fake_alpha_zero_cpp.SelfPlaySearchParameters = _FakeSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    search = CHESS_TRAINING.self_play.search.validated_copy(update={'num_searches_per_turn': 600})
-    self_play_args = CHESS_TRAINING.self_play.validated_copy(
+    search = CHESS_SELF_PLAY.search.validated_copy(update={'num_searches_per_turn': 600})
+    self_play_args = CHESS_SELF_PLAY.validated_copy(
         update={
             'initial_num_searches_per_turn': 100,
             'search': search.model_dump(mode='json'),
             'search_warmup_model_versions': 100,
         }
     )
-    training_args = CHESS_TRAINING.validated_copy(
-        update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
-    )
     self_play = ChessSelfPlayPolicy(
         device_id=0,
-        args=training_args,
+        configuration=self_play_args,
+        save_path=str(tmp_path),
         completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
@@ -180,15 +178,11 @@ def test_self_play_constructs_direct_inference_pipeline(
         inference_batch_size=64,
         outstanding_batches_per_worker=1,
     )
-    self_play_args = CHESS_TRAINING.self_play.validated_copy(
-        update={'inference': batched_inference.model_dump(mode='json')}
-    )
-    training_args = CHESS_TRAINING.validated_copy(
-        update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
-    )
+    self_play_args = CHESS_SELF_PLAY.validated_copy(update={'inference': batched_inference.model_dump(mode='json')})
     self_play = ChessSelfPlayPolicy(
         device_id=0,
-        args=training_args,
+        configuration=self_play_args,
+        save_path=str(tmp_path),
         completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
@@ -202,9 +196,9 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
 ) -> None:
     events: list[str] = []
     self_play = object.__new__(ChessSelfPlayPolicy)
-    self_play.args = copy.deepcopy(CHESS_TRAINING.self_play)
-    self_play.search_warmup_iterations = CHESS_TRAINING.self_play.search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = CHESS_TRAINING.self_play.endgame_shortcut_fade_model_versions
+    self_play.args = copy.deepcopy(CHESS_SELF_PLAY)
+    self_play.search_warmup_iterations = CHESS_SELF_PLAY.search_warmup_model_versions
+    self_play.endgame_shortcut_fade_iterations = CHESS_SELF_PLAY.endgame_shortcut_fade_model_versions
     self_play.dataset = [object()]
     self_play.iteration = 0
     self_play.model_version = 0
@@ -236,9 +230,9 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
 
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
     self_play = object.__new__(ChessSelfPlayPolicy)
-    self_play.args = copy.deepcopy(CHESS_TRAINING.self_play)
-    self_play.search_warmup_iterations = CHESS_TRAINING.self_play.search_warmup_model_versions
-    self_play.endgame_shortcut_fade_iterations = CHESS_TRAINING.self_play.endgame_shortcut_fade_model_versions
+    self_play.args = copy.deepcopy(CHESS_SELF_PLAY)
+    self_play.search_warmup_iterations = CHESS_SELF_PLAY.search_warmup_model_versions
+    self_play.endgame_shortcut_fade_iterations = CHESS_SELF_PLAY.endgame_shortcut_fade_model_versions
     self_play.iteration = 0
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]

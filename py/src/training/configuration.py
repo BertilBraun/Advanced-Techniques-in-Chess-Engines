@@ -7,7 +7,6 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
-from src.games.chess.resignation import ResignationParams
 from src.util.frozen_model import FrozenModel
 
 
@@ -51,32 +50,15 @@ class NetworkParams(FrozenModel):
     value_fc_size: int = Field(default=48, gt=0)
 
 
-class SelfPlayParams(FrozenModel):
+class SelfPlayConfiguration(FrozenModel):
     search: SelfPlaySearchParams
     inference: BatchedInferenceParams
     num_moves_after_which_to_play_greedy: int = Field(gt=0)
-    maximum_game_plies: int | None = Field(default=None, gt=0)
-    maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
-    maximum_game_plies_hold_until_model_version: int = Field(default=0, ge=0)
-    final_maximum_game_plies: int | None = Field(default=None, gt=0)
-    endgame_continuation_start_plies: int | None = Field(default=None, ge=0)
-    low_material_termination_minimum_plies: int = Field(default=0, ge=0)
-    low_material_termination_piece_threshold_per_player: int = Field(default=0, ge=0)
-    low_material_termination_probability: float = Field(default=0.0, ge=0.0, le=1.0)
     starting_temperature: float = Field(default=1.25, gt=0.0)
     final_temperature: float = Field(default=0.1, gt=0.0)
-    resignation: ResignationParams = ResignationParams()
-    disagreement_prefix_start_probability: float = Field(default=0.15, ge=0.0, le=1.0)
-    disagreement_prefix_maximum_ply: int = Field(default=10, ge=0)
-    disagreement_prefix_archive_capacity: int = Field(default=2_000, gt=0)
-    disagreement_prefix_weight_smoothing: float = Field(default=0.05, gt=0.0)
-    disagreement_prefix_weight_cap: float = Field(default=4.0, ge=1.0)
-    initial_num_searches_per_turn: int | None = Field(default=None, gt=0)
-    search_warmup_model_versions: int = Field(default=0, ge=0)
-    endgame_shortcut_fade_model_versions: int = Field(default=0, ge=0)
 
     @model_validator(mode='after')
-    def validate_temperatures(self) -> SelfPlayParams:
+    def validate_temperatures(self) -> SelfPlayConfiguration:
         if self.final_temperature > self.starting_temperature:
             raise ValueError('Final self-play temperature cannot exceed the starting temperature.')
         return self
@@ -228,18 +210,7 @@ class TrainingParams(FrozenModel):
     optimizer: OptimizerType
     learning_rate: ModelVersionLearningRate
     max_grad_norm: float = Field(default=0.5, gt=0.0)
-    value_loss_weight: float = Field(default=0.5, ge=0.0)
-    outcome_value_loss_weight: float = Field(default=0.85, ge=0.0)
-    mcts_value_loss_weight: float = Field(default=0.15, ge=0.0)
-    mcts_value_target_warmup_optimizer_steps: int = Field(default=0, ge=0)
     duplicate_multiplicity_weight_cap: float | None = Field(default=4.0, ge=1.0)
-    policy_loss_weight: float = Field(default=1.0, ge=0.0)
-
-    @model_validator(mode='after')
-    def validate_value_weights(self) -> TrainingParams:
-        if abs(self.outcome_value_loss_weight + self.mcts_value_loss_weight - 1.0) > 1e-9:
-            raise ValueError('Value-objective component weights must sum to 1.')
-        return self
 
 
 class TrainingLifecycleParams(FrozenModel):
@@ -251,7 +222,6 @@ class TrainingLifecycleParams(FrozenModel):
 class TrainingArgs(FrozenModel):
     save_path: str
     network: NetworkParams
-    self_play: SelfPlayParams
     trainer: TrainingParams
     topology: TopologyParams
     lifecycle: TrainingLifecycleParams

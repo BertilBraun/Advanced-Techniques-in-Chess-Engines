@@ -9,6 +9,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.neural_network import Network
+from src.games.chess.training import ChessTrainingObjective
+from src.games.chess.configuration import ChessTrainingObjectiveConfiguration
 from src.training.batch import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
@@ -50,7 +52,6 @@ class FixedBatchLoader:
 
 
 def training_parameters(
-    mcts_value_target_warmup_optimizer_steps: int = 0,
     duplicate_multiplicity_weight_cap: float | None = 4.0,
 ) -> TrainingParams:
     return TrainingParams(
@@ -61,9 +62,6 @@ def training_parameters(
             stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.001),),
             optimizer_steps_per_model_version=1,
         ),
-        outcome_value_loss_weight=0.85,
-        mcts_value_loss_weight=0.15,
-        mcts_value_target_warmup_optimizer_steps=mcts_value_target_warmup_optimizer_steps,
         duplicate_multiplicity_weight_cap=duplicate_multiplicity_weight_cap,
     )
 
@@ -96,10 +94,20 @@ def training_batch(
     )
 
 
-def trainer(value_logits: tuple[float, float, float]) -> Trainer:
+def trainer(
+    value_logits: tuple[float, float, float],
+    mcts_value_target_weight: float | None = 0.0,
+) -> Trainer:
     model = FixedValueNetwork(value_logits)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
-    return Trainer(model, optimizer, training_parameters())
+    parameters = training_parameters()
+    objective = ChessTrainingObjective(
+        parameters,
+        ChessTrainingObjectiveConfiguration(),
+        optimizer_step=0,
+        value_target_weight_override=mcts_value_target_weight,
+    )
+    return Trainer(model, optimizer, parameters, objective)
 
 
 def test_wdl_order_is_win_draw_loss_in_python_and_torchscript() -> None:
@@ -196,7 +204,7 @@ def test_value_objective_blends_base_scalar_with_mcts_before_soft_wdl_conversion
     )
 
     value_logits = (0.3, -0.2, 0.1)
-    result = trainer(value_logits)._calculate_loss_for_batch(batch, mcts_value_target_weight=0.15)
+    result = trainer(value_logits, mcts_value_target_weight=0.15)._calculate_loss_for_batch(batch)
 
     expected_scores = torch.tensor((0.88, -0.06))
     expected_targets = scalar_to_wdl(expected_scores)
@@ -240,7 +248,7 @@ def test_mcts_huber_diagnostic_does_not_change_backward_gradient() -> None:
     gradients: list[torch.Tensor] = []
     for batch in (first_batch, second_batch):
         training_trainer = trainer((0.3, -0.2, 0.1))
-        result = training_trainer._calculate_loss_for_batch(batch, mcts_value_target_weight=0.0)
+        result = training_trainer._calculate_loss_for_batch(batch)
         result.total_loss.backward()
         gradients.append(training_trainer.model.value_logits.grad.detach().clone())
 
@@ -256,10 +264,13 @@ def test_mcts_target_weight_warms_up_over_optimizer_steps() -> None:
     )
     model = FixedValueNetwork((0.0, 0.0, 0.0))
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    parameters = training_parameters()
+    objective_configuration = ChessTrainingObjectiveConfiguration(mcts_value_target_warmup_optimizer_steps=100)
     warmup_trainer = Trainer(
         model,
         optimizer,
-        training_parameters(mcts_value_target_warmup_optimizer_steps=100),
+        parameters,
+        ChessTrainingObjective(parameters, objective_configuration, optimizer_step=50),
     )
 
     stats = warmup_trainer.train(FixedBatchLoader(batch), optimizer_step=50)
@@ -282,10 +293,17 @@ def test_occurrence_count_weight_uses_uncapped_square_root() -> None:
     value_logits = (2.0, 0.0, -1.0)
     model = FixedValueNetwork(value_logits)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    parameters = training_parameters(duplicate_multiplicity_weight_cap=None)
     uncapped_trainer = Trainer(
         model,
         optimizer,
-        training_parameters(duplicate_multiplicity_weight_cap=None),
+        parameters,
+        ChessTrainingObjective(
+            parameters,
+            ChessTrainingObjectiveConfiguration(),
+            optimizer_step=0,
+            value_target_weight_override=0.0,
+        ),
     )
 
     result = uncapped_trainer._calculate_loss_for_batch(batch)
@@ -311,7 +329,7 @@ def test_training_metrics_use_outcome_and_mcts_denominators_independently() -> N
             TerminationReason.RESIGNATION,
         ),
     )
-    training_trainer = trainer((0.0, 0.0, 0.0))
+    training_trainer = trainer((0.0, 0.0, 0.0), None)
 
     stats = training_trainer._train_epoch(FixedBatchLoader(batch))
 
@@ -332,9 +350,10 @@ def test_diagnostic_rows_are_excluded_from_both_value_objectives() -> None:
         (False,),
         (TerminationReason.DIAGNOSTIC,),
     )
-    training_trainer = trainer((0.0, 0.0, 0.0))
+    loss_trainer = trainer((0.0, 0.0, 0.0))
+    training_trainer = trainer((0.0, 0.0, 0.0), None)
 
-    loss = training_trainer._calculate_loss_for_batch(batch)
+    loss = loss_trainer._calculate_loss_for_batch(batch)
     stats = training_trainer._train_epoch(FixedBatchLoader(batch))
 
     assert loss.value_loss.item() == 0.0
@@ -350,7 +369,7 @@ def test_expected_score_calibration_compares_binned_predictions_to_outcomes() ->
         (TerminationReason.NATURAL,),
     )
 
-    stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch))
+    stats = trainer((0.0, 0.0, 0.0), None)._train_epoch(FixedBatchLoader(batch))
 
     assert stats.value_metrics.expected_score_calibration_error == pytest.approx(0.85)
 
@@ -369,7 +388,7 @@ def test_value_metrics_are_sliced_by_ply_and_total_material() -> None:
         opponent_piece_counts=torch.tensor((1, 6, 10, 14, 16), dtype=torch.int8),
     )
 
-    stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch))
+    stats = trainer((0.0, 0.0, 0.0), None)._train_epoch(FixedBatchLoader(batch))
 
     assert tuple(metrics.outcome_target_count for metrics in stats.ply_value_metrics) == (1, 1, 1, 1, 1)
     assert tuple(metrics.outcome_target_count for metrics in stats.material_value_metrics) == (1, 1, 1, 2)
@@ -383,7 +402,7 @@ def test_sliced_value_metrics_sample_every_tenth_batch() -> None:
         (TerminationReason.NATURAL,),
     )
 
-    stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch, repetitions=11))
+    stats = trainer((0.0, 0.0, 0.0), None)._train_epoch(FixedBatchLoader(batch, repetitions=11))
 
     assert stats.value_metrics.outcome_target_count == 11
     assert stats.ply_value_metrics[0].outcome_target_count == 2

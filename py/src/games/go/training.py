@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as functional
+from torch import nn
 
 from src.neural_network import Network, NetworkDimensions
 from src.games.training_contract import GameImplementation
@@ -23,7 +24,7 @@ from src.games.go.self_play import (
 from src.self_play.completed_game import CompletedGamePublisher
 from src.training.batch import TrainingBatch
 from src.training.replay import ReplayGameImplementation
-from src.training.trainer import GoTrainingObjective, TrainingObjective
+from src.training.trainer import LossResult, TrainingObjective
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 
@@ -33,6 +34,70 @@ class GoLoss:
     policy: torch.Tensor
     value: torch.Tensor
     total: torch.Tensor
+
+
+class GoTrainingObjective(TrainingObjective):
+    def __init__(self, configuration: GoTrainingObjectiveConfiguration) -> None:
+        self.configuration = configuration
+
+    @property
+    def policy_loss_weight(self) -> float:
+        return self.configuration.policy_loss_weight
+
+    @property
+    def value_loss_weight(self) -> float:
+        return 1.0
+
+    def value_target_weight(self, optimizer_step: int) -> float:
+        return self.configuration.root_value_loss_weight
+
+    def calculate_loss(
+        self,
+        training_model: nn.Module,
+        batch: TrainingBatch,
+        device: torch.device,
+    ) -> LossResult:
+        states = batch.states.to(device=device)
+        policy_targets = batch.policy_targets.to(device=device)
+        final_outcomes = batch.final_outcomes.to(device=device)
+        mcts_root_values = batch.mcts_root_values.to(device=device)
+        outcome_target_eligible = batch.outcome_target_eligible.to(device=device)
+        material_result_scores = batch.material_result_scores.to(device=device)
+        material_target_eligible = batch.material_target_eligible.to(device=device)
+        sample_weights = batch.sample_weights.to(device=device)
+        sample_weights /= sample_weights.mean()
+        policy_logits, value_logits = training_model(states)
+        policy_rows = functional.cross_entropy(policy_logits, policy_targets, reduction='none')
+        policy_loss = (policy_rows * sample_weights).mean()
+        outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(mcts_root_values.dtype) - final_outcomes.eq(
+            int(FinalOutcome.LOSS)
+        ).to(mcts_root_values.dtype)
+        target_expected_scores = torch.lerp(
+            outcome_scores,
+            mcts_root_values,
+            self.configuration.root_value_loss_weight,
+        )
+        value_rows = functional.cross_entropy(
+            value_logits,
+            scalar_to_wdl(target_expected_scores),
+            reduction='none',
+        )
+        value_loss_contributions = value_rows * sample_weights
+        value_loss = value_loss_contributions.mean()
+        total_loss = self.policy_loss_weight * policy_loss + value_loss
+        return LossResult(
+            policy_loss=policy_loss,
+            value_loss=value_loss,
+            total_loss=total_loss,
+            value_logits=value_logits,
+            target_expected_scores=target_expected_scores,
+            value_loss_contributions=value_loss_contributions,
+            final_outcomes=final_outcomes,
+            mcts_root_values=mcts_root_values,
+            outcome_target_eligible=outcome_target_eligible,
+            material_result_scores=material_result_scores,
+            material_target_eligible=material_target_eligible,
+        )
 
 
 def create_go_model(configuration: GoExperimentConfiguration, device: torch.device) -> Network:

@@ -65,12 +65,12 @@ def test_chess_experiment_template_loads_canonical_runtime_configuration() -> No
     assert isinstance(configuration, ChessExperimentConfiguration)
     assert configuration.game == 'chess'
     assert configuration.training.network.hidden_size == 112
-    assert configuration.training.self_play.search.c_param == pytest.approx(1.5)
+    assert configuration.chess.self_play.search.c_param == pytest.approx(1.5)
     assert configuration.training.topology.trainer.ddp_device_ids == (0,)
-    assert configuration.training.self_play.search.num_parallel_searches == 2
-    assert configuration.training.self_play.inference.inference_workers == 2
-    assert configuration.training.self_play.inference.inference_batch_size == 64
-    assert configuration.training.self_play.inference.outstanding_batches_per_worker == 2
+    assert configuration.chess.self_play.search.num_parallel_searches == 2
+    assert configuration.chess.self_play.inference.inference_workers == 2
+    assert configuration.chess.self_play.inference.inference_batch_size == 64
+    assert configuration.chess.self_play.inference.outstanding_batches_per_worker == 2
     assert configuration.chess.evaluation.inference.inference_workers == 1
     assert configuration.chess.evaluation.inference.inference_batch_size == 64
     assert configuration.chess.evaluation.inference.outstanding_batches_per_worker == 1
@@ -124,7 +124,7 @@ def test_queue_validation_supports_both_games() -> None:
         (('go', 'representation', 'board_size'), 8, 'Input should be 7 or 9'),
         (('go', 'rules', 'maximum_moves'), 10, 'twice the board point count'),
         (('go', 'objective', 'root_value_loss_weight'), 0.5, 'must sum to 1'),
-        (('training', 'self_play', 'maximum_game_plies'), 200, 'equal the rules maximum moves'),
+        (('go', 'self_play', 'maximum_game_plies'), 200, 'Extra inputs are not permitted'),
     ),
 )
 def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], value: JsonValue, message: str) -> None:
@@ -191,10 +191,10 @@ def test_validated_copy_reruns_field_validation() -> None:
         (('training', 'trainer'), 'num_workers', 2),
         (('training', 'topology'), 'max_concurrent_evaluations', 1),
         (('chess', 'evaluation'), 'evaluate_initial_checkpoint', True),
-        (('training', 'self_play'), 'use_inference_cache', True),
-        (('training', 'self_play'), 'inference_cache_capacity', 250_000),
-        (('training', 'self_play', 'inference'), 'mode', 'cached'),
-        (('training', 'self_play', 'inference'), 'capacity', 250_000),
+        (('chess', 'self_play'), 'use_inference_cache', True),
+        (('chess', 'self_play'), 'inference_cache_capacity', 250_000),
+        (('chess', 'self_play', 'inference'), 'mode', 'cached'),
+        (('chess', 'self_play', 'inference'), 'capacity', 250_000),
     ),
 )
 def test_removed_configuration_fields_are_rejected(

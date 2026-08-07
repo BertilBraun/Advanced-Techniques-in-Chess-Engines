@@ -135,12 +135,12 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
     namespace = parser.parse_args()
-    training = load_chess_experiment_configuration(namespace.run_config).training
+    self_play = load_chess_experiment_configuration(namespace.run_config).chess.self_play
     iteration = namespace.iteration
     if iteration is None:
         iteration = max(
-            training.self_play.search_warmup_model_versions,
-            training.self_play.endgame_shortcut_fade_model_versions,
+            self_play.search_warmup_model_versions,
+            self_play.endgame_shortcut_fade_model_versions,
         )
     return Arguments(
         run_config=namespace.run_config,
@@ -213,8 +213,10 @@ def seed_python_libraries(seed: int, device: int) -> None:
 def create_self_play(
     arguments: Arguments,
 ) -> tuple[SelfPlayWorker, ChessSelfPlayPolicy]:
-    training = load_chess_experiment_configuration(arguments.run_config).training
-    search = training.self_play.search.validated_copy(
+    experiment = load_chess_experiment_configuration(arguments.run_config)
+    training = experiment.training
+    configured_self_play = experiment.chess.self_play
+    search = configured_self_play.search.validated_copy(
         update={
             'num_searches_per_turn': arguments.searches,
             'num_parallel_searches': arguments.parallel_searches,
@@ -223,13 +225,13 @@ def create_self_play(
     fast_searches = (
         arguments.fast_searches
         if arguments.fast_searches is not None
-        else int(arguments.searches * training.self_play.search.fast_searches_proportion_of_full_searches)
+        else int(arguments.searches * configured_self_play.search.fast_searches_proportion_of_full_searches)
     )
     if fast_searches <= arguments.parallel_searches:
         raise ValueError(
             f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
         )
-    inference = training.self_play.inference.validated_copy(
+    inference = configured_self_play.inference.validated_copy(
         update={
             'inference_workers': arguments.direct_inference_workers,
             'inference_batch_size': arguments.direct_inference_batch_size,
@@ -241,26 +243,19 @@ def create_self_play(
             'fast_searches_proportion_of_full_searches': fast_searches / arguments.searches,
         }
     )
-    self_play_configuration = training.self_play.validated_copy(
+    self_play_configuration = configured_self_play.validated_copy(
         update={
             'search': search.model_dump(mode='json'),
             'inference': inference.model_dump(mode='json'),
         }
     )
-    self_play_topology = training.topology.self_play.validated_copy(
-        update={'parallel_games_per_process': arguments.games}
+    publisher = BenchmarkCompletedGamePublisher(Path(training.save_path), arguments.seed)
+    policy = ChessSelfPlayPolicy(
+        arguments.device,
+        self_play_configuration,
+        training.save_path,
+        publisher,
     )
-    topology = training.topology.validated_copy(update={'self_play': self_play_topology.model_dump(mode='json')})
-    configuration = training.validated_copy(
-        update={
-            'random_seed': arguments.seed,
-            'self_play': self_play_configuration.model_dump(mode='json'),
-            'topology': topology.model_dump(mode='json'),
-        }
-    )
-
-    publisher = BenchmarkCompletedGamePublisher(Path(configuration.save_path), arguments.seed)
-    policy = ChessSelfPlayPolicy(arguments.device, configuration, publisher)
     worker = SelfPlayWorker(policy, arguments.games)
     worker.refresh_published_model(arguments.iteration, arguments.model.resolve())
     return worker, policy

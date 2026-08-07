@@ -18,13 +18,6 @@ run:
 training:
   save_path: py/training_data/go-7x7
   network: {num_layers: 6, hidden_size: 64, se_placement: every_second_block, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
-  self_play:
-    search: {num_searches_per_turn: 128, fast_searches_proportion_of_full_searches: 0.25, playout_cap_randomization: 0.25, num_parallel_searches: 2, dirichlet_epsilon: 0.25, dirichlet_alpha: 0.3, c_param: 1.5, percentage_of_node_visits_to_keep: 0.0, min_visit_count: 0}
-    inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 2}
-    num_moves_after_which_to_play_greedy: 40
-    maximum_game_plies: 196
-    starting_temperature: 1.0
-    final_temperature: 0.1
   trainer:
     global_batch_size: 256
     local_batch_size: 256
@@ -41,6 +34,12 @@ training:
   limits: {cost_currency: EUR, hourly_price: 1.0, maximum_wall_time_seconds: 21600, maximum_open_file_count: 32768, maximum_host_ram_percent: 95.0, minimum_free_disk_gib: 0.1, resource_telemetry_interval_seconds: 5.0}
   random_seed: 0
 go:
+  self_play:
+    search: {num_searches_per_turn: 128, fast_searches_proportion_of_full_searches: 0.25, playout_cap_randomization: 0.25, num_parallel_searches: 2, dirichlet_epsilon: 0.25, dirichlet_alpha: 0.3, c_param: 1.5, percentage_of_node_visits_to_keep: 0.0, min_visit_count: 0}
+    inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 2}
+    num_moves_after_which_to_play_greedy: 40
+    starting_temperature: 1.0
+    final_temperature: 0.1
   rules: {scoring: area, komi_half_points: 15, maximum_moves: 196}
   representation: {board_size: 7, history_length: 8, binary_channel_count: 16, scalar_channel_count: 1, action_encoding: go-point-pass-v1, canonical_player_perspective: true}
   objective: {policy_loss_weight: 1.0, outcome_value_loss_weight: 1.0, root_value_loss_weight: 0.0}

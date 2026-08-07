@@ -15,6 +15,7 @@ from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.training.trainer import Trainer, _LogitForward
+from src.games.chess.training import ChessTrainingObjective
 from src.training.configuration import NetworkParams, SEPlacement
 
 
@@ -85,7 +86,8 @@ def train_batch(
 
 def main() -> None:
     arguments = parse_arguments()
-    training = load_chess_experiment_configuration(arguments.run_config).training
+    experiment = load_chess_experiment_configuration(arguments.run_config)
+    training = experiment.training
     device = torch.device('cuda', arguments.device_ids[0])
     torch.cuda.set_device(device)
     model = Network(
@@ -104,7 +106,17 @@ def main() -> None:
         if len(arguments.device_ids) > 1
         else logit_model
     )
-    trainer = Trainer(model, optimizer, training.trainer, training_model=training_model)
+    trainer = Trainer(
+        model,
+        optimizer,
+        training.trainer,
+        ChessTrainingObjective(
+            training.trainer,
+            experiment.chess.objective,
+            optimizer_step=0,
+        ),
+        training_model=training_model,
+    )
     scaler = GradScaler()
 
     batch_size = arguments.batch_size

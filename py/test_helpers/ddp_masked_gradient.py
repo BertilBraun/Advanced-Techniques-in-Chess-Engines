@@ -9,6 +9,8 @@ from src.neural_network import Network
 from src.training.batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.training.trainer import Trainer
+from src.games.chess.training import ChessTrainingObjective
+from src.games.chess.configuration import ChessTrainingObjectiveConfiguration
 from src.training.configuration import ModelVersionLearningRate, ModelVersionLearningRateStage, TrainingParams
 
 
@@ -53,15 +55,19 @@ def masked_value_gradient_rank(
                 stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.001),),
                 optimizer_steps_per_model_version=1,
             ),
-            policy_loss_weight=0.0,
-            value_loss_weight=1.0,
-            outcome_value_loss_weight=0.85,
-            mcts_value_loss_weight=0.15,
         )
         trainer = Trainer(
             model,
             optimizer,
             training_parameters,
+            ChessTrainingObjective(
+                training_parameters,
+                ChessTrainingObjectiveConfiguration(
+                    policy_loss_weight=0.0,
+                    value_loss_weight=1.0,
+                ),
+                optimizer_step=0,
+            ),
             training_model=distributed_model,
             rank=rank,
         )

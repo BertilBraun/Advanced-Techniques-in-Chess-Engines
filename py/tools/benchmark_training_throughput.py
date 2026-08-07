@@ -11,11 +11,13 @@ import torch
 from torch.amp import GradScaler, autocast
 from torch.utils.data import default_collate
 
-from src.training.data_loader import training_dataloader
+from src.games.chess.data_loader import training_dataloader
 from src.experiment.configuration import load_chess_experiment_configuration
 from src.games.chess.dataset import SelfPlayDataset
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.training.trainer import Trainer, prefetch_training_batches
+from src.games.chess.training import ChessTrainingObjective
+from src.games.chess.configuration import ChessTrainingObjectiveConfiguration
 from src.training.configuration import TrainingArgs
 from src.util.save_paths import load_model_and_optimizer
 
@@ -90,6 +92,7 @@ def benchmark_training(
     batches: int,
     dataloader_workers: int,
     training: TrainingArgs,
+    objective: ChessTrainingObjectiveConfiguration,
 ) -> tuple[float, float, float]:
     device = torch.device('cuda', training.topology.trainer.rank_zero_device_id)
     torch.cuda.set_device(device)
@@ -101,7 +104,12 @@ def benchmark_training(
         training.trainer.optimizer,
         CHESS_NETWORK_DIMENSIONS,
     )
-    trainer = Trainer(model, optimizer, training.trainer)
+    trainer = Trainer(
+        model,
+        optimizer,
+        training.trainer,
+        ChessTrainingObjective(training.trainer, objective, optimizer_step=0),
+    )
     scaler = GradScaler()
     dataloader = training_dataloader(
         dataset,
@@ -137,7 +145,8 @@ def benchmark_training(
 
 def main() -> None:
     arguments = parse_arguments()
-    training = load_chess_experiment_configuration(arguments.run_config).training
+    experiment = load_chess_experiment_configuration(arguments.run_config)
+    training = experiment.training
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -150,6 +159,7 @@ def main() -> None:
         arguments.batches,
         arguments.dataloader_workers,
         training,
+        experiment.chess.objective,
     )
     result = ThroughputResult(
         samples=len(dataset),

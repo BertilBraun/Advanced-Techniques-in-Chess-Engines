@@ -279,10 +279,10 @@ def test_go_uses_shared_policy_and_counted_analysis(tmp_path: Path) -> None:
 
 def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) -> None:
     configuration = _configuration()
-    search = configuration.training.self_play.search.validated_copy(
+    search = configuration.go.self_play.search.validated_copy(
         update={'num_searches_per_turn': 4, 'num_parallel_searches': 1}
     )
-    self_play_parameters = configuration.training.self_play.validated_copy(
+    self_play_parameters = configuration.go.self_play.validated_copy(
         update={'search': search.model_dump(mode='json'), 'num_moves_after_which_to_play_greedy': 1}
     )
     topology = configuration.training.topology.validated_copy(
@@ -294,11 +294,16 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     )
     training = configuration.training.validated_copy(
         update={
-            'self_play': self_play_parameters.model_dump(mode='json'),
             'topology': topology.model_dump(mode='json'),
         }
     )
-    configuration = configuration.validated_copy(update={'training': training.model_dump(mode='json')})
+    game = configuration.go.validated_copy(update={'self_play': self_play_parameters.model_dump(mode='json')})
+    configuration = configuration.validated_copy(
+        update={
+            'training': training.model_dump(mode='json'),
+            'go': game.model_dump(mode='json'),
+        }
+    )
     initial_model = tmp_path / 'model-0.jit.pt'
     refreshed_model = tmp_path / 'model-1.jit.pt'
     _write_pass_model(initial_model, (0.2, 0.6, 0.2))
@@ -327,11 +332,11 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
 
 def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
     configuration = _configuration()
-    search = configuration.training.self_play.search.validated_copy(
+    search = configuration.go.self_play.search.validated_copy(
         update={'num_searches_per_turn': 4, 'num_parallel_searches': 1}
     )
-    inference = configuration.training.self_play.inference.validated_copy(update={'inference_batch_size': 2})
-    self_play_parameters = configuration.training.self_play.validated_copy(
+    inference = configuration.go.self_play.inference.validated_copy(update={'inference_batch_size': 2})
+    self_play_parameters = configuration.go.self_play.validated_copy(
         update={
             'search': search.model_dump(mode='json'),
             'inference': inference.model_dump(mode='json'),
@@ -377,13 +382,18 @@ def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
     training = configuration.training.validated_copy(
         update={
             'save_path': str(tmp_path),
-            'self_play': self_play_parameters.model_dump(mode='json'),
             'trainer': trainer.model_dump(mode='json'),
             'topology': topology.model_dump(mode='json'),
             'lifecycle': lifecycle.model_dump(mode='json'),
         }
     )
-    return configuration.validated_copy(update={'training': training.model_dump(mode='json')})
+    game = configuration.go.validated_copy(update={'self_play': self_play_parameters.model_dump(mode='json')})
+    return configuration.validated_copy(
+        update={
+            'training': training.model_dump(mode='json'),
+            'go': game.model_dump(mode='json'),
+        }
+    )
 
 
 def _write_go_run_manifest(run_path: Path, configuration: GoExperimentConfiguration) -> None:

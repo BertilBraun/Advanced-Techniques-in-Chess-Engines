@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.neural_network import NetworkDimensions
+from src.training.configuration import SelfPlayConfiguration
 from src.util.frozen_model import FrozenModel
 
 
@@ -59,6 +60,7 @@ class GoEvaluationConfiguration(FrozenModel):
 class GoConfiguration(FrozenModel):
     rules: GoRulesConfiguration
     representation: GoRepresentationConfiguration
+    self_play: SelfPlayConfiguration
     objective: GoTrainingObjectiveConfiguration = GoTrainingObjectiveConfiguration()
     evaluation: GoEvaluationConfiguration
 
@@ -100,6 +102,4 @@ class GoExperimentConfiguration(BaseExperimentConfiguration):
             for model_generation in evaluation.historical_model_versions
         ):
             raise ValueError('Historical model generations must align with retained milestone checkpoints.')
-        if self.training.self_play.maximum_game_plies not in (None, self.go.rules.maximum_moves):
-            raise ValueError('Go self-play maximum plies must be absent or equal the rules maximum moves.')
         return self

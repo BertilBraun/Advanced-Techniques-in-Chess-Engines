@@ -32,6 +32,65 @@ training:
     num_policy_channels: 4
     num_value_channels: 2
     value_fc_size: 48
+  trainer:
+    global_batch_size: 1024
+    local_batch_size: 1024
+    optimizer: adamw
+    learning_rate:
+      stages:
+        - start_model_version: 0
+          learning_rate: 0.005
+        - start_model_version: 60
+          learning_rate: 0.002
+        - start_model_version: 250
+          learning_rate: 0.001
+      optimizer_steps_per_model_version: 500
+    max_grad_norm: 0.5
+    duplicate_multiplicity_weight_cap: 4.0
+  topology:
+    trainer:
+      device_type: cpu
+      process_group_backend: gloo
+      rank_zero_device_id: 0
+      ddp_device_ids: [0]
+      cpu_threads: 1
+      interop_threads: 1
+    self_play:
+      device_ids: [0]
+      parallel_games_per_process: 2
+      tensorboard_processes: 1
+      node_ids_to_pause_during_training: []
+    evaluation:
+      device_cycle: [0]
+  lifecycle:
+    credit:
+      replay_ratio: 8
+      optimizer_steps_per_quantum: 500
+      maximum_optimizer_steps: 500000
+      initial_replay_capacity_unique_positions: 200000
+      maximum_replay_capacity_unique_positions: 2500000
+      replay_capacity_ramp_model_versions: 200
+      retained_checkpoint_interval_steps: 1000
+    evaluation:
+      interval_optimizer_steps: 1000
+      full_interval_optimizer_steps: 2000
+      timeout_seconds: 7200
+      maximum_attempts: 3
+      retry_backoff_seconds: 60
+    inference_retention:
+      recent_checkpoint_count: 11
+      milestone_interval: 10
+  limits:
+    cost_currency: EUR
+    hourly_price: 1.0
+    maximum_cost:
+    maximum_wall_time_seconds: 31536000
+    maximum_open_file_count: 32768
+    maximum_host_ram_percent: 95.0
+    minimum_free_disk_gib: 0.1
+    resource_telemetry_interval_seconds: 5.0
+  random_seed: 0
+chess:
   self_play:
     search:
       num_searches_per_turn: 600
@@ -86,70 +145,12 @@ training:
     initial_num_searches_per_turn: 300
     search_warmup_model_versions: 15
     endgame_shortcut_fade_model_versions: 50
-  trainer:
-    global_batch_size: 1024
-    local_batch_size: 1024
-    optimizer: adamw
-    learning_rate:
-      stages:
-        - start_model_version: 0
-          learning_rate: 0.005
-        - start_model_version: 60
-          learning_rate: 0.002
-        - start_model_version: 250
-          learning_rate: 0.001
-      optimizer_steps_per_model_version: 500
-    max_grad_norm: 0.5
+  objective:
+    policy_loss_weight: 1.0
     value_loss_weight: 0.5
     outcome_value_loss_weight: 0.85
     mcts_value_loss_weight: 0.15
     mcts_value_target_warmup_optimizer_steps: 0
-    duplicate_multiplicity_weight_cap: 4.0
-    policy_loss_weight: 1.0
-  topology:
-    trainer:
-      device_type: cpu
-      process_group_backend: gloo
-      rank_zero_device_id: 0
-      ddp_device_ids: [0]
-      cpu_threads: 1
-      interop_threads: 1
-    self_play:
-      device_ids: [0]
-      parallel_games_per_process: 2
-      tensorboard_processes: 1
-      node_ids_to_pause_during_training: []
-    evaluation:
-      device_cycle: [0]
-  lifecycle:
-    credit:
-      replay_ratio: 8
-      optimizer_steps_per_quantum: 500
-      maximum_optimizer_steps: 500000
-      initial_replay_capacity_unique_positions: 200000
-      maximum_replay_capacity_unique_positions: 2500000
-      replay_capacity_ramp_model_versions: 200
-      retained_checkpoint_interval_steps: 1000
-    evaluation:
-      interval_optimizer_steps: 1000
-      full_interval_optimizer_steps: 2000
-      timeout_seconds: 7200
-      maximum_attempts: 3
-      retry_backoff_seconds: 60
-    inference_retention:
-      recent_checkpoint_count: 11
-      milestone_interval: 10
-  limits:
-    cost_currency: EUR
-    hourly_price: 1.0
-    maximum_cost:
-    maximum_wall_time_seconds: 31536000
-    maximum_open_file_count: 32768
-    maximum_host_ram_percent: 95.0
-    minimum_free_disk_gib: 0.1
-    resource_telemetry_interval_seconds: 5.0
-  random_seed: 0
-chess:
   rules:
     variant: standard
     chess960: false

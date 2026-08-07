@@ -52,7 +52,7 @@ from src.games.chess.self_play_statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
 from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 from src.games.chess.encoding import get_board_result_score
-from src.training.configuration import TrainingArgs
+from src.games.chess.configuration import ChessSelfPlayConfiguration
 from src.util.log import log
 from src.util.tensorboard import is_tensorboard_writer_active, log_scalar, log_text
 from src.util.timing import timeit
@@ -195,14 +195,15 @@ class ChessSelfPlayPolicy(
     def __init__(
         self,
         device_id: int,
-        args: TrainingArgs,
+        configuration: ChessSelfPlayConfiguration,
+        save_path: str,
         completed_game_publisher: CompletedGamePublisher,
     ) -> None:
         self.device_id = device_id
-        self.args = args.self_play
+        self.args = configuration
         self.search_warmup_iterations = self.args.search_warmup_model_versions
         self.endgame_shortcut_fade_iterations = self.args.endgame_shortcut_fade_model_versions
-        self.save_path = args.save_path
+        self.save_path = save_path
         self.completed_game_publisher = completed_game_publisher
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
         self.disagreement_prefix_archive: dict[tuple[int, ...], float] = {}

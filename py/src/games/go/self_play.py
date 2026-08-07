@@ -79,8 +79,8 @@ class GoSelfPlayPolicy(
             if configuration.training.topology.trainer.device_type == 'cpu'
             else InferenceDevice.CUDA
         )
-        search = configuration.training.self_play.search
-        inference = configuration.training.self_play.inference
+        search = configuration.go.self_play.search
+        inference = configuration.go.self_play.inference
         dimensions = self.search_type.inference_dimensions()
         representation = configuration.go.representation
         expected_dimensions = (
@@ -179,13 +179,13 @@ class GoSelfPlayPolicy(
         if not positive_visits:
             raise RuntimeError('Native Go search returned no visited action.')
         ply = len(game.actions)
-        greedy_after = self.configuration.training.self_play.num_moves_after_which_to_play_greedy
+        greedy_after = self.configuration.go.self_play.num_moves_after_which_to_play_greedy
         if ply >= greedy_after:
             selected_action = max(positive_visits, key=lambda visit: (visit[1], -visit[0]))[0]
             selection_mode = GoMoveSelectionMode.GREEDY
         else:
             counts = np.asarray([visit_count for _, visit_count in positive_visits], dtype=np.float64)
-            temperature = self.configuration.training.self_play.starting_temperature
+            temperature = self.configuration.go.self_play.starting_temperature
             probabilities = np.power(counts, 1.0 / temperature)
             probabilities /= probabilities.sum()
             selected_action = positive_visits[int(self.random.choice(len(positive_visits), p=probabilities))][0]
@@ -202,8 +202,8 @@ class GoSelfPlayPolicy(
                 root_value=result.root_value,
                 selected_action_id=selected_action,
                 move_selection_mode=selection_mode,
-                search_budget=self.configuration.training.self_play.search.num_searches_per_turn,
-                minimum_visit_count=self.configuration.training.self_play.search.min_visit_count,
+                search_budget=self.configuration.go.self_play.search.num_searches_per_turn,
+                minimum_visit_count=self.configuration.go.self_play.search.min_visit_count,
             )
         )
         game.actions.append(selected_action)

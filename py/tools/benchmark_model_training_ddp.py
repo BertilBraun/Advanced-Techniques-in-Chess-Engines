@@ -22,6 +22,8 @@ from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.training.batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.training.trainer import Trainer
+from src.games.chess.training import ChessTrainingObjective
+from src.games.chess.configuration import ChessTrainingObjectiveConfiguration
 from src.training.configuration import (
     ModelVersionLearningRate,
     ModelVersionLearningRateStage,
@@ -153,9 +155,6 @@ def production_training_parameters(global_batch_size: int, local_batch_size: int
             stages=(ModelVersionLearningRateStage(start_model_version=0, learning_rate=0.0035),),
             optimizer_steps_per_model_version=1,
         ),
-        outcome_value_loss_weight=0.85,
-        mcts_value_loss_weight=0.15,
-        mcts_value_target_warmup_optimizer_steps=50_000,
     )
 
 
@@ -247,10 +246,19 @@ def benchmark_rank(
         )
 
         global_batch_size = arguments.local_batch_size * world_size
+        training_parameters = production_training_parameters(
+            global_batch_size,
+            arguments.local_batch_size,
+        )
         production_trainer = Trainer(
             network,
             optimizer,
-            production_training_parameters(global_batch_size, arguments.local_batch_size),
+            training_parameters,
+            ChessTrainingObjective(
+                training_parameters,
+                ChessTrainingObjectiveConfiguration(mcts_value_target_warmup_optimizer_steps=50_000),
+                optimizer_step=0,
+            ),
             training_model=model,
             rank=rank,
         )

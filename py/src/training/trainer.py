@@ -11,7 +11,6 @@ from torch import nn
 from torch.amp import GradScaler, autocast
 
 from src.neural_network import Network
-from src.games.go.configuration import GoTrainingObjectiveConfiguration
 from src.training.batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.util.tensorboard import log_scalar
@@ -27,7 +26,7 @@ from src.training.statistics import (
 )
 from src.util.log import log
 from src.util.timing import timeit
-from src.value import scalar_to_wdl, wdl_to_scalar
+from src.value import wdl_to_scalar
 
 
 VALUE_METRIC_WIDTH = 20 + EXPECTED_SCORE_CALIBRATION_BINS * 3
@@ -36,7 +35,7 @@ SLICED_VALUE_METRIC_BATCH_INTERVAL = 10
 
 
 @dataclass(frozen=True)
-class _LossResult:
+class LossResult:
     policy_loss: torch.Tensor
     value_loss: torch.Tensor
     total_loss: torch.Tensor
@@ -147,149 +146,8 @@ class TrainingObjective(ABC):
         training_model: nn.Module,
         batch: TrainingBatch,
         device: torch.device,
-    ) -> _LossResult:
+    ) -> LossResult:
         raise NotImplementedError
-
-
-class ChessTrainingObjective(TrainingObjective):
-    def __init__(
-        self,
-        parameters: TrainingParams,
-        optimizer_step: int,
-        value_target_weight_override: float | None = None,
-    ) -> None:
-        self.parameters = parameters
-        self.optimizer_step = optimizer_step
-        self.value_target_weight_override = value_target_weight_override
-
-    @property
-    def policy_loss_weight(self) -> float:
-        return self.parameters.policy_loss_weight
-
-    @property
-    def value_loss_weight(self) -> float:
-        return self.parameters.value_loss_weight
-
-    def value_target_weight(self, optimizer_step: int) -> float:
-        if self.value_target_weight_override is not None:
-            return self.value_target_weight_override
-        warmup_steps = self.parameters.mcts_value_target_warmup_optimizer_steps
-        warmup_progress = 1.0 if warmup_steps == 0 else min(1.0, optimizer_step / warmup_steps)
-        return self.parameters.mcts_value_loss_weight * warmup_progress
-
-    def calculate_loss(
-        self,
-        training_model: nn.Module,
-        batch: TrainingBatch,
-        device: torch.device,
-    ) -> _LossResult:
-        mcts_value_target_weight = self.value_target_weight(self.optimizer_step)
-        states = batch.states.to(device=device)
-        policy_targets = batch.policy_targets.to(device=device)
-        final_outcomes = batch.final_outcomes.to(device=device)
-        mcts_root_values = batch.mcts_root_values.to(device=device)
-        outcome_target_eligible = batch.outcome_target_eligible.to(device=device)
-        material_result_scores = batch.material_result_scores.to(device=device)
-        material_target_eligible = batch.material_target_eligible.to(device=device)
-        sample_weights = batch.sample_weights.to(device=device)
-        if self.parameters.duplicate_multiplicity_weight_cap is not None:
-            sample_weights.clamp_(max=self.parameters.duplicate_multiplicity_weight_cap)
-        sample_weights /= sample_weights.mean()
-        policy_logits, value_logits = training_model(states)
-        policy_losses = F.cross_entropy(policy_logits, policy_targets, reduction='none')
-        policy_loss = (policy_losses * sample_weights).mean()
-        outcome_expected_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(
-            dtype=value_logits.dtype
-        ) - final_outcomes.eq(int(FinalOutcome.LOSS)).to(dtype=value_logits.dtype)
-        base_target_eligible = torch.logical_or(outcome_target_eligible, material_target_eligible)
-        base_expected_scores = torch.where(
-            outcome_target_eligible,
-            outcome_expected_scores,
-            material_result_scores,
-        )
-        target_expected_scores = torch.lerp(
-            base_expected_scores,
-            mcts_root_values,
-            mcts_value_target_weight,
-        )
-        value_targets = scalar_to_wdl(target_expected_scores)
-        value_losses = F.cross_entropy(value_logits, value_targets, reduction='none')
-        value_loss_contributions = value_losses * base_target_eligible.to(dtype=value_losses.dtype) * sample_weights
-        value_loss = value_loss_contributions.sum() / value_losses.shape[0]
-        total_loss = self.policy_loss_weight * policy_loss + self.value_loss_weight * value_loss
-        return _LossResult(
-            policy_loss=policy_loss,
-            value_loss=value_loss,
-            total_loss=total_loss,
-            value_logits=value_logits,
-            target_expected_scores=target_expected_scores,
-            value_loss_contributions=value_loss_contributions,
-            final_outcomes=final_outcomes,
-            mcts_root_values=mcts_root_values,
-            outcome_target_eligible=outcome_target_eligible,
-            material_result_scores=material_result_scores,
-            material_target_eligible=material_target_eligible,
-        )
-
-
-class GoTrainingObjective(TrainingObjective):
-    def __init__(self, configuration: GoTrainingObjectiveConfiguration) -> None:
-        self.configuration = configuration
-
-    @property
-    def policy_loss_weight(self) -> float:
-        return self.configuration.policy_loss_weight
-
-    @property
-    def value_loss_weight(self) -> float:
-        return 1.0
-
-    def value_target_weight(self, optimizer_step: int) -> float:
-        return self.configuration.root_value_loss_weight
-
-    def calculate_loss(
-        self,
-        training_model: nn.Module,
-        batch: TrainingBatch,
-        device: torch.device,
-    ) -> _LossResult:
-        states = batch.states.to(device=device)
-        policy_targets = batch.policy_targets.to(device=device)
-        final_outcomes = batch.final_outcomes.to(device=device)
-        mcts_root_values = batch.mcts_root_values.to(device=device)
-        outcome_target_eligible = batch.outcome_target_eligible.to(device=device)
-        material_result_scores = batch.material_result_scores.to(device=device)
-        material_target_eligible = batch.material_target_eligible.to(device=device)
-        sample_weights = batch.sample_weights.to(device=device)
-        sample_weights /= sample_weights.mean()
-        policy_logits, value_logits = training_model(states)
-        policy_rows = F.cross_entropy(policy_logits, policy_targets, reduction='none')
-        policy_loss = (policy_rows * sample_weights).mean()
-        outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(mcts_root_values.dtype) - final_outcomes.eq(
-            int(FinalOutcome.LOSS)
-        ).to(mcts_root_values.dtype)
-        target_expected_scores = torch.lerp(
-            outcome_scores,
-            mcts_root_values,
-            self.configuration.root_value_loss_weight,
-        )
-        value_rows = F.cross_entropy(value_logits, scalar_to_wdl(target_expected_scores), reduction='none')
-        value_loss_contributions = value_rows * sample_weights
-        value_loss = value_loss_contributions.mean()
-        total_loss = self.policy_loss_weight * policy_loss + value_loss
-        return _LossResult(
-            policy_loss=policy_loss,
-            value_loss=value_loss,
-            total_loss=total_loss,
-            value_logits=value_logits,
-            target_expected_scores=target_expected_scores,
-            value_loss_contributions=value_loss_contributions,
-            final_outcomes=final_outcomes,
-            mcts_root_values=mcts_root_values,
-            outcome_target_eligible=outcome_target_eligible,
-            material_result_scores=material_result_scores,
-            material_target_eligible=material_target_eligible,
-        )
 
 
 def prefetch_training_batches(batches: TrainingBatchLoader) -> Iterator[TrainingBatch]:
@@ -351,9 +209,9 @@ class Trainer:
         model: Network,
         optimizer: torch.optim.Optimizer,
         args: TrainingParams,
+        objective: TrainingObjective,
         training_model: nn.Module | None = None,
         rank: int = 0,
-        objective: TrainingObjective | None = None,
     ) -> None:
         self.model: Network = model
         self.optimizer: torch.optim.Optimizer = optimizer
@@ -363,25 +221,14 @@ class Trainer:
         self.objective = objective
         self.last_transfer_seconds = 0.0
 
-    def _calculate_loss_for_batch(
-        self,
-        batch: TrainingBatch,
-        mcts_value_target_weight: float = 0.0,
-    ) -> _LossResult:
-        objective = ChessTrainingObjective(
-            self.args,
-            optimizer_step=0,
-            value_target_weight_override=mcts_value_target_weight,
-        )
-        return objective.calculate_loss(self.training_model, batch, self.model.device)
+    def _calculate_loss_for_batch(self, batch: TrainingBatch) -> LossResult:
+        return self.objective.calculate_loss(self.training_model, batch, self.model.device)
 
     def _train_epoch(
         self,
         dataloader: TrainingBatchLoader,
-        objective: TrainingObjective | None = None,
         optimizer_step: int = 0,
     ) -> TrainingStats:
-        objective = objective or ChessTrainingObjective(self.args, optimizer_step)
         self.model.train()
         self.training_model.train()
         termination_offset = 1
@@ -402,7 +249,11 @@ class Trainer:
             sample_count = batch.states.shape[0]
 
             with autocast(self.model.device.type, dtype=torch.bfloat16):
-                loss_result = objective.calculate_loss(self.training_model, batch, self.model.device)
+                loss_result = self.objective.calculate_loss(
+                    self.training_model,
+                    batch,
+                    self.model.device,
+                )
 
             scaler.scale(loss_result.total_loss).backward()
             scaler.unscale_(self.optimizer)
@@ -496,9 +347,9 @@ class Trainer:
             gradient_norm_sum=float(reduction_values[4].item()),
             gradient_norm_count=int(reduction_values[5].item()),
             num_batches=int(reduction_values[6].item()),
-            mcts_value_target_weight=objective.value_target_weight(optimizer_step),
-            policy_loss_weight=objective.policy_loss_weight,
-            value_loss_weight=objective.value_loss_weight,
+            mcts_value_target_weight=self.objective.value_target_weight(optimizer_step),
+            policy_loss_weight=self.objective.policy_loss_weight,
+            value_loss_weight=self.objective.value_loss_weight,
             ply_value_metrics=tuple(
                 _value_metrics_from_reduction(
                     reduction_values,
@@ -517,7 +368,7 @@ class Trainer:
 
     def _detach_metric_batch(
         self,
-        loss_result: _LossResult,
+        loss_result: LossResult,
         batch: TrainingBatch,
     ) -> _DetachedMetricBatch:
         return _DetachedMetricBatch(
@@ -688,8 +539,7 @@ class Trainer:
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = base_lr
 
-        objective = self.objective or ChessTrainingObjective(self.args, optimizer_step)
-        return self._train_epoch(dataloader, objective, optimizer_step)
+        return self._train_epoch(dataloader, optimizer_step)
 
 
 def _fixed_bin_masks(
