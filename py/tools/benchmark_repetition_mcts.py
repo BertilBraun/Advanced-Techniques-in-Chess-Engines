@@ -17,7 +17,7 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearch,
     ChessSelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
-    InferenceClientParams,
+    InferenceRuntimeParameters,
 )
 
 
@@ -69,7 +69,6 @@ class Arguments:
     searches: int
     parallel_searches: int
     maximum_batch_size: int
-    inference_timeout_microseconds: int
     gpu_sampling_interval_seconds: float
     ready_file: Path | None
     start_barrier: Path | None
@@ -177,12 +176,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         raise ValueError('GPU sampling interval cannot be negative.')
 
     search = ChessSelfPlaySearch(
-        InferenceClientParams(
-            args.device,
-            str(args.model),
-            args.maximum_batch_size,
-            args.inference_timeout_microseconds,
-        ),
+        InferenceRuntimeParameters(args.device, str(args.model)),
         ChessSelfPlaySearchParameters(
             args.parallel_searches,
             args.searches,
@@ -282,7 +276,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--searches', type=int, default=600)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
-    parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--gpu-sampling-interval-seconds', type=float, default=1.0)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
@@ -297,7 +290,6 @@ def parse_arguments() -> Arguments:
         searches=namespace.searches,
         parallel_searches=namespace.parallel_searches,
         maximum_batch_size=namespace.maximum_batch_size,
-        inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         gpu_sampling_interval_seconds=namespace.gpu_sampling_interval_seconds,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,

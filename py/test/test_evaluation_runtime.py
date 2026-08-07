@@ -22,15 +22,14 @@ from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
 from src.self_play.visit_policy import action_probabilities
 from src.settings import CurrentBoard
 from src.train.TrainingArgs import (
-    DirectInferenceParams,
+    BatchedInferenceParams,
     TrainingArgs,
 )
 
 
 @dataclass(frozen=True)
 class _EvaluationSettings:
-    inference: DirectInferenceParams
-    mcts_threads: int = 1
+    inference: BatchedInferenceParams
     parallel_searches: int = 1
     maximum_game_plies: int | None = 200
     stockfish_binary_path: str | None = None
@@ -51,11 +50,9 @@ class _EvaluationTrainingArguments:
 
 
 @dataclass(frozen=True)
-class _FakeInferenceClientParameters:
+class _FakeInferenceRuntimeParameters:
     device_id: int
     model_path: str
-    maximum_batch_size: int
-    timeout_microseconds: int
 
 
 @dataclass(frozen=True)
@@ -65,7 +62,7 @@ class _FakeChessSelfPlaySearchRequest:
 
 
 @dataclass(frozen=True)
-class _FakeDirectInferenceParameters:
+class _FakeBatchedInferenceParameters:
     inference_workers: int
     inference_batch_size: int
     outstanding_batches_per_worker: int
@@ -140,17 +137,17 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     current_model_path.touch()
     opponent_model_path.touch()
 
-    inference_clients: list[_FakeDirectInferenceParameters | None] = []
+    inference_clients: list[_FakeBatchedInferenceParameters | None] = []
 
     class FakeChessSelfPlaySearch:
         def __init__(
             self,
-            runtime_parameters: _FakeInferenceClientParameters,
+            runtime_parameters: _FakeInferenceRuntimeParameters,
             search_parameters: str,
-            inference_parameters: _FakeDirectInferenceParameters | None,
+            inference_parameters: _FakeBatchedInferenceParameters | None,
         ) -> None:
             assert search_parameters == 'search-parameters'
-            assert runtime_parameters.maximum_batch_size == 64
+            assert runtime_parameters.model_path.endswith('.jit.pt')
             inference_clients.append(inference_parameters)
 
     def fake_paired_match(
@@ -174,8 +171,8 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
         return 'search-parameters'
 
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParameters
-    fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeDirectInferenceParameters
+    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
+    fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = FakeChessSelfPlaySearch
     fake_alpha_zero_cpp.ChessSelfPlaySearchRequest = _FakeChessSelfPlaySearchRequest
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
@@ -190,7 +187,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
         _EvaluationTrainingArguments(
             save_path=str(tmp_path),
             evaluation=_EvaluationSettings(
-                inference=DirectInferenceParams(
+                inference=BatchedInferenceParams(
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
@@ -203,7 +200,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     model_evaluation.play_two_models_paired(tmp_path / 'model_0.pt')
 
-    expected_direct_parameters = _FakeDirectInferenceParameters(1, 64, 1)
+    expected_direct_parameters = _FakeBatchedInferenceParameters(1, 64, 1)
     assert inference_clients == [
         expected_direct_parameters,
         expected_direct_parameters,
@@ -218,7 +215,7 @@ def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference=DirectInferenceParams(
+                inference=BatchedInferenceParams(
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
@@ -288,7 +285,7 @@ def test_policy_evaluation_uses_native_batched_inference(
         _EvaluationTrainingArguments(
             save_path='training-output',
             evaluation=_EvaluationSettings(
-                inference=DirectInferenceParams(
+                inference=BatchedInferenceParams(
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
@@ -335,7 +332,7 @@ def test_skill_level_stockfish_uses_configured_hash(
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference=DirectInferenceParams(
+                inference=BatchedInferenceParams(
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,
@@ -401,7 +398,7 @@ def test_skill_level_stockfish_restarts_after_engine_error(
         _EvaluationTrainingArguments(
             save_path='unused',
             evaluation=_EvaluationSettings(
-                inference=DirectInferenceParams(
+                inference=BatchedInferenceParams(
                     inference_workers=1,
                     inference_batch_size=64,
                     outstanding_batches_per_worker=1,

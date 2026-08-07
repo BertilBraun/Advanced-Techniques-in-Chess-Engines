@@ -19,12 +19,11 @@ class SelfPlaySearchParams(FrozenModel):
     dirichlet_epsilon: float = Field(ge=0.0, le=1.0)
     dirichlet_alpha: float = Field(gt=0.0)
     c_param: float = Field(gt=0.0)
-    num_threads: int = Field(gt=0)
     percentage_of_node_visits_to_keep: float = Field(ge=0.0, le=1.0)
     min_visit_count: int = Field(default=0, ge=0)
 
 
-class DirectInferenceParams(FrozenModel):
+class BatchedInferenceParams(FrozenModel):
     inference_workers: int = Field(gt=0)
     inference_batch_size: int = Field(gt=0)
     outstanding_batches_per_worker: int = Field(ge=1, le=2)
@@ -54,7 +53,7 @@ class NetworkParams(FrozenModel):
 
 class SelfPlayParams(FrozenModel):
     search: SelfPlaySearchParams
-    inference: DirectInferenceParams
+    inference: BatchedInferenceParams
     num_moves_after_which_to_play_greedy: int = Field(gt=0)
     maximum_game_plies: int | None = Field(default=None, gt=0)
     maximum_game_plies_until_model_version: int = Field(default=0, ge=0)
@@ -254,7 +253,7 @@ class EvaluationParams(FrozenModel):
     num_games: int = Field(gt=0)
     every_n_model_versions: int = Field(gt=0)
     max_concurrent_tasks: int = Field(gt=0)
-    inference: DirectInferenceParams
+    inference: BatchedInferenceParams
     dataset_path: str | None
     reference_model_path: str | None
     opening_suite_path: str | None
@@ -262,7 +261,6 @@ class EvaluationParams(FrozenModel):
     maximum_game_plies: int | None = Field(default=None, gt=0)
     bootstrap_seed: int = Field(ge=0)
     bootstrap_samples: int = Field(gt=0)
-    mcts_threads: int = Field(gt=0)
     previous_model_offsets: tuple[int, ...]
     historical_model_versions: tuple[int, ...]
     historical_model_rotation_period: int = Field(gt=0)

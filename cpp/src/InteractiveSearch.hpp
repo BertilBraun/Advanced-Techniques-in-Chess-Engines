@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DirectInference.hpp"
-#include "InferenceClientTypes.hpp"
+#include "InferenceRuntime.hpp"
 #include "games/chess/ChessSearch.hpp"
 
 #include <deque>
@@ -23,13 +23,13 @@ struct InteractiveSearchResult {
 
 class InteractiveSearch {
 public:
-    InteractiveSearch(const InferenceClientParams &clientParameters,
+    InteractiveSearch(const InferenceRuntimeParameters &runtimeParameters,
                       const InteractiveSearchParams &searchParameters);
 
     InteractiveSearch(const InteractiveSearch &) = delete;
     InteractiveSearch &operator=(const InteractiveSearch &) = delete;
 
-    [[nodiscard]] InferenceResult evaluate(const Board &board);
+    [[nodiscard]] ChessInferenceResult evaluate(const Board &board);
     [[nodiscard]] InteractiveSearchResult
     search(ChessSearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
            std::optional<int> searchLimit);
@@ -58,8 +58,8 @@ private:
     std::uint64_t m_backupNanoseconds = 0;
     std::uint64_t m_waitNanoseconds = 0;
 
-    [[nodiscard]] static InferenceResult decode(const torch::Tensor &policy,
-                                                const torch::Tensor &outcome, const Board &board);
+    [[nodiscard]] static ChessInferenceResult
+    decode(const torch::Tensor &policy, const torch::Tensor &outcome, const Board &board);
     [[nodiscard]] bool
     mayIssue(const std::optional<std::chrono::steady_clock::time_point> &deadline,
              const std::optional<int> &searchLimit, int claimed) const;

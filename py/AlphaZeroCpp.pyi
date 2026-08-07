@@ -31,9 +31,9 @@ __all__ = [
     'GoSymmetry',
     'GoTerminalResult',
     'GoTerminationReason',
-    'InferenceClientParams',
     'InferenceDimensions',
     'InferenceDevice',
+    'InferenceRuntimeParameters',
     'InferenceStatistics',
     'InteractiveEngine',
     'InteractiveGame',
@@ -295,7 +295,7 @@ class InteractiveSearchParams:
 class InteractiveEngine:
     def __init__(
         self,
-        client_parameters: InferenceClientParams,
+        runtime_parameters: InferenceRuntimeParameters,
         search_parameters: InteractiveSearchParams,
     ) -> None: ...
     def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame: ...
@@ -331,27 +331,16 @@ class FunctionTimeInfo:
     @property
     def total(self) -> float: ...
 
-class InferenceClientParams:
-    currentModelPath: str
+class InferenceRuntimeParameters:
     device_id: int
-    maxBatchSize: int
+    model_path: str
     device: InferenceDevice
     def __init__(
         self,
         device_id: int,
-        currentModelPath: str,
-        maxBatchSize: int,
-        microsecondsTimeoutInferenceThread: int,
+        model_path: str,
         device: InferenceDevice = InferenceDevice.AUTO,
     ) -> None: ...
-    @property
-    def microsecondsTimeoutInferenceThread(self) -> int:
-        """
-        Timeout for the inference thread in microseconds.
-        Default is 500 microseconds.
-        """
-    @microsecondsTimeoutInferenceThread.setter
-    def microsecondsTimeoutInferenceThread(self, arg0: int) -> None: ...
 
 class InferenceStatistics:
     def __init__(self) -> None: ...
@@ -369,7 +358,7 @@ class InferenceStatistics:
 class ChessSelfPlaySearch:
     def __init__(
         self,
-        runtime_parameters: InferenceClientParams,
+        runtime_parameters: InferenceRuntimeParameters,
         search_parameters: ChessSelfPlaySearchParameters,
         inference_parameters: BatchedInferenceParameters,
         initial_model_version: int = 0,

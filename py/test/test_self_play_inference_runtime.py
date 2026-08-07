@@ -10,7 +10,7 @@ import pytest
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
 from src.self_play.chess_completed_game import ChessCompletedGamePublisher
 from src.settings import TRAINING_ARGS
-from src.train.TrainingArgs import DirectInferenceParams
+from src.train.TrainingArgs import BatchedInferenceParams
 
 
 @pytest.mark.parametrize(
@@ -39,11 +39,9 @@ def test_game_tracks_model_version_range_across_copies() -> None:
 
 
 @dataclass(frozen=True)
-class _FakeInferenceClientParams:
+class _FakeInferenceRuntimeParameters:
     device_id: int
-    currentModelPath: str
-    maxBatchSize: int
-    microsecondsTimeoutInferenceThread: int
+    model_path: str
 
 
 @dataclass(frozen=True)
@@ -69,12 +67,12 @@ class _FakeChessSelfPlaySearch:
 
     def __init__(
         self,
-        client_args: _FakeInferenceClientParams,
+        runtime_parameters: _FakeInferenceRuntimeParameters,
         search_parameters: _FakeChessSelfPlaySearchParameters,
         inference_parameters: _FakeBatchedInferenceParameters | None,
         initial_model_version: int,
     ) -> None:
-        assert client_args.maxBatchSize == 64
+        assert runtime_parameters.model_path.endswith('.jit.pt')
         assert search_parameters.full_searches > search_parameters.parallel_searches
         _FakeChessSelfPlaySearch.inference_parameters = inference_parameters
         assert initial_model_version >= 0
@@ -117,12 +115,12 @@ class _LifecycleRoot:
         self.events.append('release_root')
 
 
-def test_self_play_constructs_direct_inference_client_during_search_warmup(
+def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
+    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
     fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
@@ -158,19 +156,19 @@ def test_self_play_constructs_direct_inference_pipeline(
     tmp_path: Path,
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
+    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
     fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
-    direct_inference = DirectInferenceParams(
+    batched_inference = BatchedInferenceParams(
         inference_workers=2,
         inference_batch_size=64,
         outstanding_batches_per_worker=1,
     )
     self_play_args = TRAINING_ARGS.self_play.validated_copy(
-        update={'inference': direct_inference.model_dump(mode='json')}
+        update={'inference': batched_inference.model_dump(mode='json')}
     )
     training_args = TRAINING_ARGS.validated_copy(
         update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}

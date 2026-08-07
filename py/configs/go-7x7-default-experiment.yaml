@@ -19,7 +19,7 @@ training:
   save_path: py/training_data/go-7x7
   network: {num_layers: 6, hidden_size: 64, se_placement: every_second_block, num_policy_channels: 2, num_value_channels: 1, value_fc_size: 32}
   self_play:
-    search: {num_searches_per_turn: 128, fast_searches_proportion_of_full_searches: 0.25, playout_cap_randomization: 0.25, num_parallel_searches: 2, dirichlet_epsilon: 0.25, dirichlet_alpha: 0.3, c_param: 1.5, num_threads: 1, percentage_of_node_visits_to_keep: 0.0, min_visit_count: 0}
+    search: {num_searches_per_turn: 128, fast_searches_proportion_of_full_searches: 0.25, playout_cap_randomization: 0.25, num_parallel_searches: 2, dirichlet_epsilon: 0.25, dirichlet_alpha: 0.3, c_param: 1.5, percentage_of_node_visits_to_keep: 0.0, min_visit_count: 0}
     inference: {inference_workers: 1, inference_batch_size: 64, outstanding_batches_per_worker: 2}
     num_moves_after_which_to_play_greedy: 40
     maximum_game_plies: 196

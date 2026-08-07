@@ -216,29 +216,6 @@ void bind_position(py::module_ &module, const char *name) {
 } // namespace
 
 void bind_go_game(py::module_ &module) {
-    py::class_<InferenceDimensions>(module, "InferenceDimensions")
-        .def(py::init<int, int, int, int, int>(), py::arg("channels"), py::arg("rows"),
-             py::arg("columns"), py::arg("actions"), py::arg("outcomes"))
-        .def_readonly("channels", &InferenceDimensions::channels)
-        .def_readonly("rows", &InferenceDimensions::rows)
-        .def_readonly("columns", &InferenceDimensions::columns)
-        .def_readonly("actions", &InferenceDimensions::actions)
-        .def_readonly("outcomes", &InferenceDimensions::outcomes)
-        .def(py::self == py::self);
-    py::class_<GameSearchVisit>(module, "GameSearchVisit")
-        .def_readonly("action_id", &GameSearchVisit::action_id)
-        .def_readonly("visit_count", &GameSearchVisit::visit_count);
-    py::class_<GameSearchResult>(module, "GameSearchResult")
-        .def_readonly("root_value", &GameSearchResult::root_value)
-        .def_readonly("visits", &GameSearchResult::visits);
-    py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
-        .def(py::init<std::uint32_t, float, std::uint32_t, float, float, std::size_t>(),
-             py::arg("parallel_searches"), py::arg("exploration_constant"),
-             py::arg("minimum_root_visits"), py::arg("dirichlet_alpha"),
-             py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
-    py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
-        .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
-             py::arg("batch_size"), py::arg("outstanding_batches_per_worker"));
     py::enum_<GoPlayer>(module, "GoPlayer")
         .value("BLACK", GoPlayer::black)
         .value("WHITE", GoPlayer::white);

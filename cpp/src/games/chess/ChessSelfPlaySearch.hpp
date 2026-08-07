@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InferenceClientTypes.hpp"
+#include "InferenceRuntime.hpp"
 #include "games/chess/ChessSearch.hpp"
 
 #include <shared_mutex>
@@ -56,7 +56,7 @@ struct ChessSelfPlaySearchRequest {
 
 class ChessSelfPlaySearch {
 public:
-    ChessSelfPlaySearch(const InferenceClientParams &runtimeParameters,
+    ChessSelfPlaySearch(const InferenceRuntimeParameters &runtimeParameters,
                         const ChessSelfPlaySearchParameters &searchParameters,
                         BatchedInferenceParameters inferenceParameters,
                         std::uint64_t initialModelVersion = 0);
@@ -74,12 +74,12 @@ public:
     void refreshModel(std::uint64_t modelVersion, const std::string &modelPath);
     [[nodiscard]] bool
     updateSearchSchedule(const ChessSelfPlaySearchParameters &searchParameters);
-    [[nodiscard]] std::vector<InferenceResult>
+    [[nodiscard]] std::vector<ChessInferenceResult>
     evaluate(const std::vector<const Board *> &boards);
     [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const;
 
 private:
-    InferenceClientParams m_runtimeParameters;
+    InferenceRuntimeParameters m_runtimeParameters;
     ChessSelfPlaySearchParameters m_searchParameters;
     std::uint32_t m_arenaCapacity;
     std::uint64_t m_modelVersion;

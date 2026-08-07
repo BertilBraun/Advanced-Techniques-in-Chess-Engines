@@ -48,12 +48,12 @@ int main() {
     const std::filesystem::path invalidModelPath =
         createTestModel("invalid", 0.5F, 0.5F, 0.0F, false);
     try {
-        const InferenceClientParams clientParameters(0, modelPath.string(), 4, 0,
-                                                     InferenceDevice::Cpu);
+        const InferenceRuntimeParameters runtimeParameters(0, modelPath.string(),
+                                                           InferenceDevice::Cpu);
         const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.3F,
                                                              0.25F, 0);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
-        ChessSelfPlaySearch search(clientParameters, searchParameters, inferenceParameters, 7);
+        ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
         const std::vector<std::uintptr_t> workerIdentities = search.workerIdentityTokens();
         require(workerIdentities.size() == 2, "direct search created the wrong worker count");
         require(search.modelVersion() == 7, "direct search lost its initial model version");
@@ -126,7 +126,7 @@ int main() {
             concurrentBoardPointers.push_back(&board);
         }
         std::atomic<bool> concurrentBatchStarted = false;
-        std::future<std::vector<InferenceResult>> concurrentInference =
+        std::future<std::vector<ChessInferenceResult>> concurrentInference =
             std::async(std::launch::async, [&] {
                 concurrentBatchStarted.store(true, std::memory_order_release);
                 return search.evaluate(concurrentBoardPointers);
@@ -135,14 +135,14 @@ int main() {
             std::this_thread::yield();
         }
         search.refreshModel(9, modelPath.string());
-        const std::vector<InferenceResult> concurrentResults = concurrentInference.get();
+        const std::vector<ChessInferenceResult> concurrentResults = concurrentInference.get();
         require(!concurrentResults.empty(), "concurrent inference returned no results");
         const float concurrentValue = concurrentResults.front().value();
         const bool usedInitialModel = std::abs(concurrentValue) < 0.001F;
         const bool usedUpdatedModel = std::abs(concurrentValue - 0.75F) < 0.001F;
         require(usedInitialModel || usedUpdatedModel,
                 "concurrent inference observed mixed model parameters and buffers");
-        for (const InferenceResult &result : concurrentResults) {
+        for (const ChessInferenceResult &result : concurrentResults) {
             require(std::abs(result.value() - concurrentValue) < 0.001F,
                     "one accepted batch crossed model generations");
         }

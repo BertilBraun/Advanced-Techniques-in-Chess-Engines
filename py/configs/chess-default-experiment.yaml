@@ -41,7 +41,6 @@ training:
       dirichlet_epsilon: 0.25
       dirichlet_alpha: 0.3
       c_param: 1.5
-      num_threads: 1
       percentage_of_node_visits_to_keep: 0.6
       min_visit_count: 0
     inference:
@@ -178,7 +177,6 @@ chess:
     maximum_game_plies: 200
     bootstrap_seed: 0
     bootstrap_samples: 10000
-    mcts_threads: 1
     previous_model_offsets: [5, 10]
     historical_model_versions: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     historical_model_rotation_period: 1

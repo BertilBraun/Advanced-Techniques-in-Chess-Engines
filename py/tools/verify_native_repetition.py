@@ -11,7 +11,7 @@ from AlphaZeroCpp import (
     ChessSelfPlaySearch,
     ChessSelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
-    InferenceClientParams,
+    InferenceRuntimeParameters,
     new_root,
     new_root_with_history,
 )
@@ -67,7 +67,7 @@ def main() -> None:
         board_before_third_occurrence.push_uci(move)
 
     search = ChessSelfPlaySearch(
-        InferenceClientParams(args.device, str(args.model), 16, 500),
+        InferenceRuntimeParameters(args.device, str(args.model)),
         ChessSelfPlaySearchParameters(1, 8, 8, 1.0, 0.3, 0.0, 0),
         BatchedInferenceParameters(1, 16, 1),
     )

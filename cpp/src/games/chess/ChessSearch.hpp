@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SearchInference.hpp"
 #include "search/BatchedSearch.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
@@ -15,6 +16,7 @@ using ChessSearchTree = GameSearchTree<ChessGameContract>;
 using ChessSearchNode = GameSearchNode<ChessGameContract>;
 using ChessSearchEdge = GameSearchEdge<ChessAction>;
 using ChessGameSearchRoot = GameSearchRoot<ChessGameContract>;
+using ChessInferenceResult = SearchInferenceResult<ChessGameContract>;
 
 struct ChessSearchChild {
     std::string move;

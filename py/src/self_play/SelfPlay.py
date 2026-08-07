@@ -336,7 +336,7 @@ class SelfPlay:
         if schedule is None:
             raise RuntimeError('Search schedule must be initialized before loading a model.')
         if self.search_engine is None:
-            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceClientParams
+            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceRuntimeParameters
 
             inference = self.args.inference
             inference_parameters = BatchedInferenceParameters(
@@ -344,14 +344,12 @@ class SelfPlay:
                 inference.inference_batch_size,
                 inference.outstanding_batches_per_worker,
             )
-            client_args = InferenceClientParams(
-                self.device_id,
-                currentModelPath=str(model_path),
-                maxBatchSize=inference.inference_batch_size,
-                microsecondsTimeoutInferenceThread=500,  # TODO make this a parameter
+            runtime_parameters = InferenceRuntimeParameters(
+                device_id=self.device_id,
+                model_path=str(model_path),
             )
             self.search_engine = ChessSelfPlaySearch(
-                client_args,
+                runtime_parameters,
                 self._native_mcts_params(schedule),
                 inference_parameters=inference_parameters,
                 initial_model_version=model_version,

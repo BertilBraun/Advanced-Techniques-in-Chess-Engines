@@ -19,7 +19,7 @@ from src.train.CreditPublication import (
     file_sha256,
     publication_manifest_path,
 )
-from src.train.TrainingArgs import CreditTrainingParams, DirectInferenceParams, EvaluationParams, TrainingArgs
+from src.train.TrainingArgs import BatchedInferenceParams, CreditTrainingParams, EvaluationParams, TrainingArgs
 
 
 EvaluationTarget = Callable[[int, TrainingArgs, EvaluationParams, int, int | None], None]
@@ -108,7 +108,7 @@ def _evaluation() -> EvaluationParams:
         num_games=2,
         every_n_model_versions=1,
         max_concurrent_tasks=1,
-        inference=DirectInferenceParams(
+        inference=BatchedInferenceParams(
             inference_workers=1,
             inference_batch_size=64,
             outstanding_batches_per_worker=1,
@@ -120,7 +120,6 @@ def _evaluation() -> EvaluationParams:
         maximum_game_plies=None,
         bootstrap_seed=0,
         bootstrap_samples=10,
-        mcts_threads=1,
         previous_model_offsets=(1, 2),
         historical_model_versions=(1, 2, 3),
         historical_model_rotation_period=1,

@@ -16,7 +16,7 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSelfPlaySearch,
     ChessSelfPlaySearchParameters,
-    InferenceClientParams,
+    InferenceRuntimeParameters,
     InferenceStatistics,
 )
 from src.self_play.SelfPlay import SelfPlay
@@ -37,7 +37,6 @@ class Arguments:
     fast_searches: int | None
     parallel_searches: int
     maximum_batch_size: int
-    inference_timeout_microseconds: int
     direct_inference_workers: int
     direct_inference_batch_size: int
     direct_outstanding_batches_per_worker: int
@@ -128,7 +127,6 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--fast-searches', type=int)
     parser.add_argument('--parallel-searches', type=int, default=4)
     parser.add_argument('--maximum-batch-size', type=int, default=256)
-    parser.add_argument('--inference-timeout-microseconds', type=int, default=500)
     parser.add_argument('--direct-inference-workers', type=int, default=0)
     parser.add_argument('--direct-inference-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches-per-worker', type=int, default=2)
@@ -155,7 +153,6 @@ def parse_arguments() -> Arguments:
         fast_searches=namespace.fast_searches,
         parallel_searches=namespace.parallel_searches,
         maximum_batch_size=namespace.maximum_batch_size,
-        inference_timeout_microseconds=namespace.inference_timeout_microseconds,
         direct_inference_workers=namespace.direct_inference_workers,
         direct_inference_batch_size=namespace.direct_inference_batch_size,
         direct_outstanding_batches_per_worker=namespace.direct_outstanding_batches_per_worker,
@@ -176,7 +173,6 @@ def validate_arguments(arguments: Arguments) -> None:
         ('searches', arguments.searches),
         ('parallel searches', arguments.parallel_searches),
         ('maximum batch size', arguments.maximum_batch_size),
-        ('inference timeout', arguments.inference_timeout_microseconds),
     )
     for name, value in positive_integers:
         if value < 1:
@@ -247,12 +243,7 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
         )
     self_play.search_engine = ChessSelfPlaySearch(
-        InferenceClientParams(
-            arguments.device,
-            str(arguments.model.resolve()),
-            arguments.maximum_batch_size,
-            arguments.inference_timeout_microseconds,
-        ),
+        InferenceRuntimeParameters(arguments.device, str(arguments.model.resolve())),
         ChessSelfPlaySearchParameters(
             arguments.parallel_searches,
             arguments.searches,

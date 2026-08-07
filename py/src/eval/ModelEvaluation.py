@@ -129,7 +129,7 @@ class ModelEvaluation:
         )
 
     def _create_search(self, inference_path: Path) -> ChessSelfPlaySearch:
-        from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceClientParams
+        from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceRuntimeParameters
 
         inference = self.evaluation_args.inference
         inference_parameters = BatchedInferenceParameters(
@@ -138,12 +138,7 @@ class ModelEvaluation:
             inference.outstanding_batches_per_worker,
         )
         return ChessSelfPlaySearch(
-            InferenceClientParams(
-                self.device_id,
-                str(inference_path),
-                inference.inference_batch_size,
-                500,
-            ),
+            InferenceRuntimeParameters(self.device_id, str(inference_path)),
             self.self_play_search_parameters,
             inference_parameters=inference_parameters,
         )

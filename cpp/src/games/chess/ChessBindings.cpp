@@ -15,7 +15,7 @@ namespace py = pybind11;
 
 using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
 
-EncodedInference encodeInference(const Board &board, const InferenceResult &inferenceResult) {
+EncodedInference encodeInference(const Board &board, const ChessInferenceResult &inferenceResult) {
     std::vector<std::pair<int, float>> encodedMoves;
     encodedMoves.reserve(inferenceResult.actions.size());
     for (const auto &[move, score] : inferenceResult.actions) {
@@ -37,7 +37,7 @@ std::vector<EncodedInference> inferenceWithHistory(
     for (const Board &board : boards) {
         boardPointers.push_back(&board);
     }
-    const std::vector<InferenceResult> inferenceResults = search.evaluate(boardPointers);
+    const std::vector<ChessInferenceResult> inferenceResults = search.evaluate(boardPointers);
     std::vector<EncodedInference> encodedResults;
     encodedResults.reserve(boards.size());
     for (std::size_t index = 0; index < boards.size(); ++index) {
@@ -143,49 +143,6 @@ void bind_chess_game(py::module_ &m) {
         .def_readwrite("minimum_root_visits",
                        &ChessSelfPlaySearchParameters::minimum_root_visits);
 
-    // --- (2.2) InferenceClientParams ---
-    py::enum_<InferenceDevice>(m, "InferenceDevice")
-        .value("AUTO", InferenceDevice::Auto)
-        .value("CPU", InferenceDevice::Cpu)
-        .value("CUDA", InferenceDevice::Cuda);
-
-    py::class_<InferenceClientParams>(m, "InferenceClientParams")
-        .def(py::init<int, std::string, int, int>(), py::arg("device_id"),
-             py::arg("currentModelPath"), py::arg("maxBatchSize"),
-             py::arg("microsecondsTimeoutInferenceThread"))
-        .def(py::init<int, std::string, int, int, InferenceDevice>(), py::arg("device_id"),
-             py::arg("currentModelPath"), py::arg("maxBatchSize"),
-             py::arg("microsecondsTimeoutInferenceThread"), py::arg("device"))
-        .def_readwrite("device_id", &InferenceClientParams::device_id)
-        .def_readwrite("currentModelPath", &InferenceClientParams::currentModelPath)
-        .def_readwrite("maxBatchSize", &InferenceClientParams::maxBatchSize)
-        .def_readwrite("microsecondsTimeoutInferenceThread",
-                       &InferenceClientParams::microsecondsTimeoutInferenceThread,
-                       R"pbdoc(
-                Timeout for the inference thread in microseconds.
-                Default is 500 microseconds.
-            )pbdoc")
-        .def_readwrite("device", &InferenceClientParams::device);
-
-    // --- (2.3) InferenceStatistics ---
-    py::class_<InferenceStatistics>(m, "InferenceStatistics")
-        .def(py::init<>())
-        .def_readonly("evaluations", &InferenceStatistics::evaluations)
-        .def_readonly("modelInferenceCalls", &InferenceStatistics::modelInferenceCalls)
-        .def_readonly("modelInferencePositions", &InferenceStatistics::modelInferencePositions)
-        .def_readonly("modelBatchSizeHistogram", &InferenceStatistics::modelBatchSizeHistogram)
-        .def_readonly("averageNumberOfPositionsInInferenceCall",
-                      &InferenceStatistics::averageNumberOfPositionsInInferenceCall)
-        .def_readonly("treeSelectionNanoseconds", &InferenceStatistics::treeSelectionNanoseconds)
-        .def_readonly("boardEncodingNanoseconds", &InferenceStatistics::boardEncodingNanoseconds)
-        .def_readonly("resultProcessingNanoseconds",
-                      &InferenceStatistics::resultProcessingNanoseconds)
-        .def_readonly("treeBackupNanoseconds", &InferenceStatistics::treeBackupNanoseconds)
-        .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
-        .def_readonly("directInferenceNanoseconds",
-                      &InferenceStatistics::directInferenceNanoseconds)
-        .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
-
     py::class_<ChessSelfPlaySearchResult>(m, "ChessSelfPlaySearchResult")
         .def_readonly("root_value", &ChessSelfPlaySearchResult::root_value)
         .def_readonly("visits", &ChessSelfPlaySearchResult::visits)
@@ -209,19 +166,8 @@ void bind_chess_game(py::module_ &m) {
         .def_readonly("simulations_completed",
                       &ChessSelfPlaySearchBatch::simulations_completed);
 
-    py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
-        .def_readonly("name", &FunctionTimeInfo::name)
-        .def_readonly("percent", &FunctionTimeInfo::percent)
-        .def_readonly("total", &FunctionTimeInfo::total)
-        .def_readonly("invocations", &FunctionTimeInfo::invocations);
-
-    py::class_<TimeInfo>(m, "TimeInfo")
-        .def_readonly("totalTime", &TimeInfo::totalTime)
-        .def_readonly("percentRecorded", &TimeInfo::percentRecorded)
-        .def_readonly("functionTimes", &TimeInfo::functionTimes);
-
     py::class_<ChessSelfPlaySearch>(m, "ChessSelfPlaySearch")
-        .def(py::init<const InferenceClientParams &, const ChessSelfPlaySearchParameters &,
+        .def(py::init<const InferenceRuntimeParameters &, const ChessSelfPlaySearchParameters &,
                       BatchedInferenceParameters, uint64>(),
              py::arg("runtime_parameters"), py::arg("search_parameters"),
              py::arg("inference_parameters"),
@@ -298,8 +244,8 @@ void bind_chess_game(py::module_ &m) {
                        &InteractiveSearchParams::outstanding_batches_per_worker);
 
     py::class_<InteractiveEngine, std::shared_ptr<InteractiveEngine>>(m, "InteractiveEngine")
-        .def(py::init<const InferenceClientParams &, const InteractiveSearchParams &>(),
-             py::arg("client_parameters"), py::arg("search_parameters"))
+        .def(py::init<const InferenceRuntimeParameters &, const InteractiveSearchParams &>(),
+             py::arg("runtime_parameters"), py::arg("search_parameters"))
         .def("new_game", &InteractiveEngine::newGame, py::arg("starting_fen"), py::arg("moves_uci"))
         .def("get_inference_statistics", &InteractiveEngine::inferenceStatistics);
 

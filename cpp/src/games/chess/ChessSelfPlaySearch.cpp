@@ -74,14 +74,14 @@ std::uint32_t ChessSelfPlaySearchParameters::arenaCapacity() const {
 }
 
 ChessSelfPlaySearch::ChessSelfPlaySearch(
-    const InferenceClientParams &runtimeParameters,
+    const InferenceRuntimeParameters &runtimeParameters,
     const ChessSelfPlaySearchParameters &searchParameters,
     BatchedInferenceParameters inferenceParameters, const std::uint64_t initialModelVersion)
     : m_runtimeParameters(runtimeParameters), m_searchParameters(searchParameters),
       m_arenaCapacity(searchParameters.arenaCapacity()), m_modelVersion(initialModelVersion),
       m_inferenceParameters(std::move(inferenceParameters)),
       m_search(std::make_unique<BatchedGameSearch<ChessGameContract>>(
-          m_runtimeParameters.currentModelPath, m_runtimeParameters.device,
+          m_runtimeParameters.model_path, m_runtimeParameters.device,
           m_runtimeParameters.device_id, m_inferenceParameters,
           sharedSearchParameters(m_searchParameters), initialModelVersion, false, 0.99F)) {}
 
@@ -151,7 +151,7 @@ void ChessSelfPlaySearch::refreshModel(const std::uint64_t modelVersion,
                                        const std::string &modelPath) {
     const std::unique_lock lock(m_operationMutex);
     m_search->refreshModel(modelVersion, modelPath);
-    m_runtimeParameters.currentModelPath = modelPath;
+    m_runtimeParameters.model_path = modelPath;
     m_modelVersion = modelVersion;
 }
 
@@ -166,7 +166,7 @@ bool ChessSelfPlaySearch::updateSearchSchedule(
     return capacityChanged;
 }
 
-std::vector<InferenceResult>
+std::vector<ChessInferenceResult>
 ChessSelfPlaySearch::evaluate(const std::vector<const Board *> &boards) {
     const std::shared_lock lock(m_operationMutex);
     std::vector<Board> positions;

@@ -9,8 +9,8 @@ python_binary=${PYTHON_BINARY:-python3}
 build_directory=${BUILD_DIRECTORY:-"${source_root}/cpp/build"}
 if [[ "$#" -lt 1 ]]; then
     echo "Usage: $0 MODEL_PATH [SOURCE_ROOT]"
-    echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, MCTS_THREADS_PER_PROCESS, PARALLEL_GAMES_PER_PROCESS"
-    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, FAST_SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, INFERENCE_TIMEOUT_MICROSECONDS, SEED_BASE"
+    echo "Topology overrides: GPU_COUNT, PROCESSES_PER_GPU, PARALLEL_GAMES_PER_PROCESS"
+    echo "Workload overrides: WARMUP_STEPS, MEASUREMENT_DURATION_SECONDS, SEARCHES_PER_PLY, FAST_SEARCHES_PER_PLY, PARALLEL_SEARCHES, MAXIMUM_BATCH_SIZE, DIRECT_INFERENCE_WORKERS, DIRECT_INFERENCE_BATCH_SIZE, DIRECT_OUTSTANDING_BATCHES_PER_WORKER, SEED_BASE"
     echo "Affinity override: PIN_WORKERS_TO_CPUS=0|1"
     exit 1
 fi
@@ -19,7 +19,6 @@ output_root=${STOCHASTIC_BENCHMARK_OUTPUT_ROOT:-${BASELINE_OUTPUT_ROOT:-"${sourc
 
 gpu_count=${GPU_COUNT:-4}
 processes_per_gpu=${PROCESSES_PER_GPU:-8}
-mcts_threads_per_process=${MCTS_THREADS_PER_PROCESS:-3}
 parallel_games_per_process=${PARALLEL_GAMES_PER_PROCESS:-96}
 warmup_steps=${WARMUP_STEPS:-1}
 measurement_duration_seconds=${MEASUREMENT_DURATION_SECONDS:-120}
@@ -27,8 +26,7 @@ searches_per_ply=${SEARCHES_PER_PLY:-600}
 fast_searches_per_ply=${FAST_SEARCHES_PER_PLY:-0}
 parallel_searches=${PARALLEL_SEARCHES:-4}
 maximum_batch_size=${MAXIMUM_BATCH_SIZE:-256}
-inference_timeout_microseconds=${INFERENCE_TIMEOUT_MICROSECONDS:-500}
-direct_inference_workers=${DIRECT_INFERENCE_WORKERS:-0}
+direct_inference_workers=${DIRECT_INFERENCE_WORKERS:-2}
 direct_inference_batch_size=${DIRECT_INFERENCE_BATCH_SIZE:-64}
 direct_outstanding_batches_per_worker=${DIRECT_OUTSTANDING_BATCHES_PER_WORKER:-2}
 seed_base=${SEED_BASE:-1}
@@ -56,7 +54,6 @@ require_nonnegative_integer() {
 
 require_positive_integer GPU_COUNT "${gpu_count}"
 require_positive_integer PROCESSES_PER_GPU "${processes_per_gpu}"
-require_positive_integer MCTS_THREADS_PER_PROCESS "${mcts_threads_per_process}"
 require_positive_integer PARALLEL_GAMES_PER_PROCESS "${parallel_games_per_process}"
 require_nonnegative_integer WARMUP_STEPS "${warmup_steps}"
 require_positive_integer MEASUREMENT_DURATION_SECONDS "${measurement_duration_seconds}"
@@ -64,9 +61,8 @@ require_positive_integer SEARCHES_PER_PLY "${searches_per_ply}"
 require_nonnegative_integer FAST_SEARCHES_PER_PLY "${fast_searches_per_ply}"
 require_positive_integer PARALLEL_SEARCHES "${parallel_searches}"
 require_positive_integer MAXIMUM_BATCH_SIZE "${maximum_batch_size}"
-require_positive_integer INFERENCE_TIMEOUT_MICROSECONDS "${inference_timeout_microseconds}"
 require_nonnegative_integer SEED_BASE "${seed_base}"
-require_nonnegative_integer DIRECT_INFERENCE_WORKERS "${direct_inference_workers}"
+require_positive_integer DIRECT_INFERENCE_WORKERS "${direct_inference_workers}"
 require_positive_integer DIRECT_INFERENCE_BATCH_SIZE "${direct_inference_batch_size}"
 require_positive_integer DIRECT_OUTSTANDING_BATCHES_PER_WORKER "${direct_outstanding_batches_per_worker}"
 require_positive_integer MAXIMUM_HOST_RAM_PERCENT "${maximum_host_ram_percent}"
@@ -91,7 +87,6 @@ if [[ "${fast_searches_per_ply}" -gt 0 ]] && {
 fi
 
 expected_processes=$((gpu_count * processes_per_gpu))
-total_mcts_threads=$((expected_processes * mcts_threads_per_process))
 
 cd "${python_root}"
 export PYTHONPATH=.
@@ -110,16 +105,10 @@ for ((device = 0; device < gpu_count; device++)); do
 done
 visible_gpu_count=$(nvidia-smi --query-gpu=index --format=csv,noheader,nounits | wc -l)
 logical_cpu_count=$(nproc)
-maximum_mcts_threads=$((logical_cpu_count * 3))
 if [[ "${visible_gpu_count}" -lt "${gpu_count}" ]]; then
     echo "Requested ${gpu_count} GPUs, but only ${visible_gpu_count} are visible"
     exit 1
 fi
-if [[ "${total_mcts_threads}" -gt "${maximum_mcts_threads}" ]]; then
-    echo "MCTS threads ${total_mcts_threads} exceed the 3x CPU limit ${maximum_mcts_threads}"
-    exit 1
-fi
-
 affinity_mode=disabled
 worker_cpu_lists=()
 gpu_cpu_affinity_specs=()
@@ -260,15 +249,9 @@ if grep -q -- '-DENABLE_TIMING' "${compile_commands}"; then
 fi
 
 run_timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-topology_name="g${gpu_count}-pg${processes_per_gpu}-t${mcts_threads_per_process}-games${parallel_games_per_process}"
+topology_name="g${gpu_count}-pg${processes_per_gpu}-games${parallel_games_per_process}"
 workload_name="s${searches_per_ply}-fs${fast_searches_per_ply}-ps${parallel_searches}-b${maximum_batch_size}"
-if [[ "${direct_inference_workers}" -gt 0 ]]; then
-    inference_client_name=direct
-else
-    inference_client_name=client
-fi
-workload_name="${workload_name}-${inference_client_name}"
-output_directory="${output_root}/self-play-cpp-stochastic-${topology_name}-${workload_name}-duration${measurement_duration_seconds}s-timeout${inference_timeout_microseconds}us-affinity${affinity_mode}-${run_timestamp}"
+output_directory="${output_root}/self-play-cpp-stochastic-${topology_name}-${workload_name}-duration${measurement_duration_seconds}s-affinity${affinity_mode}-${run_timestamp}"
 mkdir -p "${output_directory}"
 exec > >(tee -a "${output_directory}/console.log") 2>&1
 
@@ -301,7 +284,6 @@ jq -n \
     --argjson visible_gpu_count "${visible_gpu_count}" \
     --argjson logical_cpu_count "${logical_cpu_count}" \
     --argjson processes_per_gpu "${processes_per_gpu}" \
-    --argjson mcts_threads_per_process "${mcts_threads_per_process}" \
     --argjson parallel_games_per_process "${parallel_games_per_process}" \
     --argjson warmup_steps "${warmup_steps}" \
     --argjson measurement_duration_seconds "${measurement_duration_seconds}" \
@@ -309,7 +291,6 @@ jq -n \
     --argjson fast_searches_per_ply "${fast_searches_per_ply}" \
     --argjson parallel_searches "${parallel_searches}" \
     --argjson maximum_batch_size "${maximum_batch_size}" \
-    --argjson inference_timeout_microseconds "${inference_timeout_microseconds}" \
     --argjson direct_inference_workers "${direct_inference_workers}" \
     --argjson direct_inference_batch_size "${direct_inference_batch_size}" \
     --argjson direct_outstanding_batches_per_worker "${direct_outstanding_batches_per_worker}" \
@@ -343,8 +324,6 @@ jq -n \
         topology: {
             processes_per_gpu: $processes_per_gpu,
             total_processes: ($gpu_count * $processes_per_gpu),
-            mcts_threads_per_process: $mcts_threads_per_process,
-            total_mcts_threads: ($gpu_count * $processes_per_gpu * $mcts_threads_per_process),
             parallel_games_per_process: $parallel_games_per_process,
             total_parallel_games: ($gpu_count * $processes_per_gpu * $parallel_games_per_process),
             affinity: {
@@ -362,7 +341,6 @@ jq -n \
             target_fast_searches_per_ply_override: $fast_searches_per_ply,
             parallel_searches: $parallel_searches,
             maximum_batch_size: $maximum_batch_size,
-            inference_timeout_microseconds: $inference_timeout_microseconds,
             direct_inference_workers: $direct_inference_workers,
             direct_inference_batch_size: $direct_inference_batch_size,
             direct_outstanding_batches_per_worker: $direct_outstanding_batches_per_worker,
@@ -388,20 +366,16 @@ for ((device = 0; device < gpu_count; device++)); do
             --warmup-steps "${warmup_steps}"
             --searches "${searches_per_ply}"
             --parallel-searches "${parallel_searches}"
-            --threads "${mcts_threads_per_process}"
             --maximum-batch-size "${maximum_batch_size}"
-            --inference-timeout-microseconds "${inference_timeout_microseconds}"
             --seed "${worker_seed}"
             --ready-file "${output_directory}/ready-${process_index}"
             --start-barrier "${start_barrier}"
         )
-        if [[ "${direct_inference_workers}" -gt 0 ]]; then
-            worker_command+=(
-                --direct-inference-workers "${direct_inference_workers}"
-                --direct-inference-batch-size "${direct_inference_batch_size}"
-                --direct-outstanding-batches-per-worker "${direct_outstanding_batches_per_worker}"
-            )
-        fi
+        worker_command+=(
+            --direct-inference-workers "${direct_inference_workers}"
+            --direct-inference-batch-size "${direct_inference_batch_size}"
+            --direct-outstanding-batches-per-worker "${direct_outstanding_batches_per_worker}"
+        )
         if [[ "${fast_searches_per_ply}" -gt 0 ]]; then
             worker_command+=(--fast-searches "${fast_searches_per_ply}")
         fi

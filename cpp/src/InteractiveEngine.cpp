@@ -40,7 +40,7 @@ std::vector<CandidateAnalysis> gatherMctsCandidates(const ChessSearchTree &tree)
     return candidates;
 }
 
-std::vector<CandidateAnalysis> gatherPolicyCandidates(const InferenceResult &inferenceResult) {
+std::vector<CandidateAnalysis> gatherPolicyCandidates(const ChessInferenceResult &inferenceResult) {
     std::vector<CandidateAnalysis> candidates;
     candidates.reserve(inferenceResult.actions.size());
     for (const auto &[move, prior] : inferenceResult.actions) {
@@ -131,7 +131,7 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
     }
 
     if (mode == AnalysisMode::Policy) {
-        const InferenceResult inferenceResult =
+        const ChessInferenceResult inferenceResult =
             m_engine->m_search.evaluate(m_tree->root().position);
         std::vector<CandidateAnalysis> candidates = gatherPolicyCandidates(inferenceResult);
         if (candidates.empty()) {

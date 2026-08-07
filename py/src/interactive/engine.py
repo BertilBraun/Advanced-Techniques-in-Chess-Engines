@@ -5,8 +5,8 @@ from dataclasses import dataclass
 import chess
 from AlphaZeroCpp import (
     AnalysisMode,
-    InferenceClientParams,
     InferenceDevice,
+    InferenceRuntimeParameters,
     InteractiveEngine as BoundInteractiveEngine,
     InteractiveGame as BoundInteractiveGame,
     InteractiveSearchParams,
@@ -46,15 +46,13 @@ class InteractiveEngine:
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
         batch_size = configuration.resolved_batch_size
-        client_parameters = InferenceClientParams(
+        runtime_parameters = InferenceRuntimeParameters(
             device_id=configuration.device_id,
-            currentModelPath=configuration.model_path,
-            maxBatchSize=batch_size,
-            microsecondsTimeoutInferenceThread=0,
+            model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
         )
         self._bound_engine = BoundInteractiveEngine(
-            client_parameters,
+            runtime_parameters,
             InteractiveSearchParams(
                 exploration_constant=configuration.exploration_constant,
                 inference_workers=configuration.inference_workers,

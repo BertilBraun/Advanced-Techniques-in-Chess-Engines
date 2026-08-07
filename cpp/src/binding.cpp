@@ -2,6 +2,7 @@
 
 #include "games/chess/ChessBindings.hpp"
 #include "games/go/GoBindings.hpp"
+#include "search/SearchBindings.hpp"
 
 #include <pybind11/pybind11.h>
 
@@ -22,6 +23,7 @@ void initializeRuntime() {
 PYBIND11_MODULE(AlphaZeroCpp, module) {
     module.doc() = "Native game search and inference";
     initializeRuntime();
+    bind_search(module);
     bind_chess_game(module);
     bind_go_game(module);
 }

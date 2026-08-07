@@ -28,9 +28,9 @@ class InteractiveGame;
 
 class InteractiveEngine : public std::enable_shared_from_this<InteractiveEngine> {
 public:
-    InteractiveEngine(const InferenceClientParams &clientParameters,
+    InteractiveEngine(const InferenceRuntimeParameters &runtimeParameters,
                       const InteractiveSearchParams &searchParameters)
-        : m_search(clientParameters, searchParameters) {}
+        : m_search(runtimeParameters, searchParameters) {}
 
     [[nodiscard]] std::shared_ptr<InteractiveGame>
     newGame(const std::string &startingFen, const std::vector<std::string> &movesUci);

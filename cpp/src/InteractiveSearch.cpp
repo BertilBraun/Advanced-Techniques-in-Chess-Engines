@@ -29,7 +29,7 @@ InteractiveSearchParams::InteractiveSearchParams(const float explorationConstant
     }
 }
 
-InteractiveSearch::InteractiveSearch(const InferenceClientParams &clientParameters,
+InteractiveSearch::InteractiveSearch(const InferenceRuntimeParameters &runtimeParameters,
                                      const InteractiveSearchParams &searchParameters)
     : m_parameters(searchParameters),
       m_pending(static_cast<std::size_t>(searchParameters.inference_workers)),
@@ -37,15 +37,16 @@ InteractiveSearch::InteractiveSearch(const InferenceClientParams &clientParamete
     m_workers.reserve(static_cast<std::size_t>(searchParameters.inference_workers));
     for (int worker = 0; worker < searchParameters.inference_workers; ++worker) {
         m_workers.push_back(std::make_unique<DirectInferencePipeline>(
-            clientParameters.currentModelPath, clientParameters.device, clientParameters.device_id,
+            runtimeParameters.model_path, runtimeParameters.device, runtimeParameters.device_id,
             static_cast<std::size_t>(searchParameters.inference_batch_size),
             static_cast<std::size_t>(std::max(2, searchParameters.outstanding_batches_per_worker)),
             true, ChessGameContract::inferenceDimensions()));
     }
 }
 
-InferenceResult InteractiveSearch::decode(const torch::Tensor &policy, const torch::Tensor &outcome,
-                                          const Board &board) {
+ChessInferenceResult InteractiveSearch::decode(const torch::Tensor &policy,
+                                               const torch::Tensor &outcome,
+                                               const Board &board) {
     if (policy.device().is_cuda() || policy.scalar_type() != torch::kFloat32 || policy.dim() != 1 ||
         policy.numel() != ACTION_SIZE || !policy.is_contiguous()) {
         throw std::runtime_error("Inference model policy output must contain one float per action");
@@ -59,7 +60,7 @@ InferenceResult InteractiveSearch::decode(const torch::Tensor &policy, const tor
                                                      outcome.data_ptr<float>(), board);
 }
 
-InferenceResult InteractiveSearch::evaluate(const Board &board) {
+ChessInferenceResult InteractiveSearch::evaluate(const Board &board) {
     DirectInferencePipeline &worker = *m_workers.front();
     const DirectInferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
     encodeBoardInto(board, writable.data);
@@ -68,7 +69,7 @@ InferenceResult InteractiveSearch::evaluate(const Board &board) {
     try {
         DirectInferenceOutput output = worker.waitCompleted(writable.slotIndex);
         outputReady = true;
-        InferenceResult result = decode(output.policies[0], output.outcomes[0], board);
+        ChessInferenceResult result = decode(output.policies[0], output.outcomes[0], board);
         worker.release(writable.slotIndex);
         recordBatch(1, std::chrono::microseconds(0));
         return result;
@@ -156,7 +157,7 @@ void InteractiveSearch::completeWorker(ChessSearchTree &tree, const std::size_t 
             const NodeIndex leafIndex = pending.leaves[processed];
             ChessSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
-            const InferenceResult inferenceResult =
+            const ChessInferenceResult inferenceResult =
                 processSearchInference<ChessGameContract>(
                     policyData + processed * ACTION_SIZE,
                     outcomeData + processed * WDL_OUTPUT_SIZE, leaf.position);
