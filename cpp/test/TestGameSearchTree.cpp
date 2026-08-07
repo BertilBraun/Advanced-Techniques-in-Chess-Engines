@@ -17,7 +17,7 @@ void require(const bool condition, const char *message) {
 
 template <typename Game>
 void exercise_tree(typename Game::Position position) {
-    GameSearchTree<Game> tree(std::move(position), 16);
+    GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
     SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
     inference.actions.reserve(legalActions.size());
@@ -32,6 +32,15 @@ void exercise_tree(typename Game::Position position) {
     tree.backPropagate(leaf, 0.5F);
     require(tree.root().visits == 1, "Shared game tree did not backpropagate to the root");
     require(tree.liveNodeCount() == 2, "Shared game tree created an unexpected node count");
+    require(tree.capacity() >= 2, "Shared game tree did not grow its reusable arena");
+    const auto &leafNode = tree.node(leaf);
+    const int selectedAction = Game::actionId(
+        tree.root().children[*leafNode.parent_edge_index].action, tree.root().position);
+    tree.reroot(selectedAction);
+    require(tree.root().visits == 1, "Shared game tree discarded retained child statistics");
+    require(tree.liveNodeCount() == 1, "Shared game tree did not reclaim the previous root");
+    tree.reset();
+    require(tree.root().visits == 0, "Shared game tree reset retained old statistics");
 }
 
 } // namespace

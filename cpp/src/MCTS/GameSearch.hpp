@@ -49,22 +49,36 @@ public:
     using Node = GameSearchNode<Game>;
     using Edge = GameSearchEdge<Action>;
 
-    GameSearchTree(Position rootPosition, const std::size_t capacity)
-        : m_capacity(capacity), m_initialPosition(rootPosition) {
-        if (capacity == 0) {
+    GameSearchTree(Position rootPosition, const std::size_t initialCapacity,
+                   const std::size_t maximumCapacity = 0)
+        : m_maximumCapacity(maximumCapacity == 0 ? initialCapacity : maximumCapacity),
+          m_initialPosition(rootPosition) {
+        if (initialCapacity == 0 || m_maximumCapacity < initialCapacity) {
             throw std::invalid_argument("Game search tree capacity must be positive");
         }
-        m_nodes.reserve(capacity);
-        m_nodes.push_back({std::move(rootPosition), {}, std::nullopt, std::nullopt});
+        m_nodes.reserve(m_maximumCapacity);
+        m_nodes.resize(initialCapacity);
+        for (std::size_t slot = initialCapacity; slot > 0; --slot) {
+            m_freeSlots.push_back(slot - 1);
+        }
+        m_rootIndex = allocateNode(std::move(rootPosition), std::nullopt, std::nullopt);
     }
 
-    [[nodiscard]] const Node &node(const std::size_t index) const { return m_nodes.at(index); }
-    [[nodiscard]] Node &node(const std::size_t index) { return m_nodes.at(index); }
+    [[nodiscard]] const Node &node(const std::size_t index) const {
+        return const_cast<GameSearchTree *>(this)->node(index);
+    }
+    [[nodiscard]] Node &node(const std::size_t index) {
+        if (index >= m_nodes.size() || !m_nodes[index].has_value()) {
+            throw std::out_of_range("Game search node is not live");
+        }
+        return *m_nodes[index];
+    }
     [[nodiscard]] const Node &root() const { return node(m_rootIndex); }
     [[nodiscard]] Node &root() { return node(m_rootIndex); }
     [[nodiscard]] std::size_t rootIndex() const noexcept { return m_rootIndex; }
-    [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_nodes.size(); }
-    [[nodiscard]] std::size_t capacity() const noexcept { return m_capacity; }
+    [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_liveNodeCount; }
+    [[nodiscard]] std::size_t capacity() const noexcept { return m_nodes.size(); }
+    [[nodiscard]] std::size_t maximumCapacity() const noexcept { return m_maximumCapacity; }
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const float explorationConstant, const std::uint32_t minimumRootVisits = 0) {
@@ -165,23 +179,66 @@ public:
 
     void reroot(const int actionId) {
         const std::size_t edgeIndex = actionIdToEdgeIndex(actionId);
-        const Position nextPosition =
-            Game::childPosition(root().position, root().children[edgeIndex].action);
-        m_initialPosition = nextPosition;
-        reset();
+        rerootEdge(edgeIndex);
+    }
+
+    void rerootEdge(const std::size_t edgeIndex) {
+        Node &oldRoot = root();
+        if (edgeIndex >= oldRoot.children.size()) {
+            throw std::out_of_range("Cannot reroot to a missing game-search edge");
+        }
+        const std::size_t oldRootIndex = m_rootIndex;
+        const std::size_t retainedIndex = materializeChild(oldRootIndex, edgeIndex);
+        for (std::size_t index = 0; index < oldRoot.children.size(); ++index) {
+            Edge &discarded = oldRoot.children[index];
+            if (index != edgeIndex && discarded.child_index.has_value()) {
+                reclaimSubtree(*discarded.child_index);
+                discarded.child_index.reset();
+            }
+        }
+        node(oldRootIndex).children[edgeIndex].child_index.reset();
+        Node &retainedRoot = node(retainedIndex);
+        retainedRoot.parent_index.reset();
+        retainedRoot.parent_edge_index.reset();
+        m_rootIndex = retainedIndex;
+        m_initialPosition = retainedRoot.position;
+        releaseNode(oldRootIndex);
     }
 
     void reset() {
-        m_nodes.clear();
-        m_rootIndex = 0;
-        m_nodes.push_back({m_initialPosition, {}, std::nullopt, std::nullopt});
+        m_freeSlots.clear();
+        for (std::size_t slot = m_nodes.size(); slot > 0; --slot) {
+            m_nodes[slot - 1].reset();
+            m_freeSlots.push_back(slot - 1);
+        }
+        m_liveNodeCount = 0;
+        m_rootIndex = allocateNode(m_initialPosition, std::nullopt, std::nullopt);
+    }
+
+    void prepareForSearch(const std::uint32_t visitLimit,
+                          const std::uint32_t parallelSearches) {
+        if (parallelSearches == 0) {
+            throw std::invalid_argument("Parallel search count must be positive");
+        }
+        std::uint64_t maximumNewNodes = parallelSearches;
+        if (root().visits < visitLimit) {
+            maximumNewNodes = static_cast<std::uint64_t>(visitLimit - root().visits) +
+                              parallelSearches - 1U;
+        }
+        if (maximumNewNodes + 1U >= capacity()) {
+            throw std::logic_error("Game search arena cannot reserve search and reroot slots");
+        }
+        pruneToLiveNodeLimit(
+            std::max<std::size_t>(1, capacity() - static_cast<std::size_t>(maximumNewNodes) - 1));
     }
 
 private:
-    std::size_t m_capacity;
+    std::size_t m_maximumCapacity;
     Position m_initialPosition;
-    std::vector<Node> m_nodes;
-    std::size_t m_rootIndex = 0;
+    std::vector<std::optional<Node>> m_nodes;
+    std::vector<std::size_t> m_freeSlots;
+    std::size_t m_liveNodeCount = 0;
+    std::size_t m_rootIndex;
 
     [[nodiscard]] std::size_t bestEdgeIndex(const std::size_t nodeIndex,
                                             const float explorationConstant) const {
@@ -287,14 +344,93 @@ private:
         if (edge.child_index.has_value()) {
             return *edge.child_index;
         }
-        if (m_nodes.size() == m_capacity) {
-            throw std::overflow_error("Game search tree capacity exhausted");
-        }
         const Position child = Game::childPosition(node(parentIndex).position, edge.action);
-        const std::size_t childIndex = m_nodes.size();
-        m_nodes.push_back({child, {}, parentIndex, edgeIndex});
+        const std::size_t childIndex = allocateNode(child, parentIndex, edgeIndex);
         node(parentIndex).children[edgeIndex].child_index = childIndex;
         return childIndex;
+    }
+
+    [[nodiscard]] std::size_t allocateNode(Position position,
+                                           const std::optional<std::size_t> parentIndex,
+                                           const std::optional<std::size_t> parentEdgeIndex) {
+        if (m_freeSlots.empty() && m_nodes.size() < m_maximumCapacity) {
+            const std::size_t oldCapacity = m_nodes.size();
+            const std::size_t newCapacity =
+                std::min(m_maximumCapacity, std::max(oldCapacity + 1, oldCapacity * 2));
+            m_nodes.resize(newCapacity);
+            for (std::size_t slot = newCapacity; slot > oldCapacity; --slot) {
+                m_freeSlots.push_back(slot - 1);
+            }
+        }
+        if (m_freeSlots.empty()) {
+            throw std::overflow_error("Game search tree capacity exhausted");
+        }
+        const std::size_t slot = m_freeSlots.back();
+        m_freeSlots.pop_back();
+        m_nodes[slot].emplace(
+            Node{std::move(position), {}, parentIndex, parentEdgeIndex});
+        ++m_liveNodeCount;
+        return slot;
+    }
+
+    void releaseNode(const std::size_t index) {
+        if (index == m_rootIndex) {
+            throw std::logic_error("Cannot release the active game-search root");
+        }
+        static_cast<void>(node(index));
+        m_nodes[index].reset();
+        m_freeSlots.push_back(index);
+        --m_liveNodeCount;
+    }
+
+    void reclaimSubtree(const std::size_t index) {
+        std::vector<std::pair<std::size_t, bool>> pending = {{index, false}};
+        while (!pending.empty()) {
+            const auto [currentIndex, visited] = pending.back();
+            pending.pop_back();
+            if (visited) {
+                releaseNode(currentIndex);
+                continue;
+            }
+            pending.emplace_back(currentIndex, true);
+            for (const Edge &edge : node(currentIndex).children) {
+                if (edge.child_index.has_value()) {
+                    pending.emplace_back(*edge.child_index, false);
+                }
+            }
+        }
+    }
+
+    void pruneToLiveNodeLimit(const std::size_t liveNodeLimit) {
+        if (m_liveNodeCount <= liveNodeLimit) {
+            return;
+        }
+        std::vector<std::pair<std::size_t, bool>> pending = {{m_rootIndex, false}};
+        std::vector<std::size_t> postOrder;
+        while (!pending.empty()) {
+            const auto [currentIndex, visited] = pending.back();
+            pending.pop_back();
+            if (visited) {
+                if (currentIndex != m_rootIndex) {
+                    postOrder.push_back(currentIndex);
+                }
+                continue;
+            }
+            pending.emplace_back(currentIndex, true);
+            for (const Edge &edge : node(currentIndex).children) {
+                if (edge.child_index.has_value()) {
+                    pending.emplace_back(*edge.child_index, false);
+                }
+            }
+        }
+        for (const std::size_t index : postOrder) {
+            if (m_liveNodeCount <= liveNodeLimit) {
+                break;
+            }
+            Node &pruned = node(index);
+            node(*pruned.parent_index).children[*pruned.parent_edge_index].child_index.reset();
+            releaseNode(index);
+        }
     }
 };
 
@@ -406,7 +542,9 @@ public:
         std::vector<RootTask> tasks;
         tasks.reserve(roots.size());
         for (Root &root : roots) {
-            tasks.push_back({root, root.visits() + simulations, 0, !root.tree().root().expanded()});
+            const std::uint32_t visitLimit = root.visits() + simulations;
+            root.tree().prepareForSearch(visitLimit, m_searchParameters.parallel_searches);
+            tasks.push_back({root, visitLimit, 0, !root.tree().root().expanded()});
             if (root.tree().root().expanded()) {
                 addNoise(root);
             }
