@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#include "games/chess/ChessAnalysisEngine.hpp"
+#include "games/chess/ChessAnalysis.hpp"
 #include "games/chess/ChessSelfPlaySearch.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessEncoding.hpp"
@@ -205,53 +205,34 @@ void bind_chess_game(py::module_ &m) {
         .def("inference_with_history", &inferenceWithHistory, py::arg("histories"),
              py::call_guard<py::gil_scoped_release>());
 
-    py::enum_<AnalysisMode>(m, "AnalysisMode")
-        .value("POLICY", AnalysisMode::Policy)
-        .value("MCTS", AnalysisMode::Mcts);
+    py::class_<ChessAnalysisCandidate>(m, "CandidateAnalysis")
+        .def_readonly("move_uci", &ChessAnalysisCandidate::move_uci)
+        .def_readonly("policy_prior", &ChessAnalysisCandidate::policy_prior)
+        .def_readonly("visits", &ChessAnalysisCandidate::visits)
+        .def_readonly("visit_share", &ChessAnalysisCandidate::visit_share)
+        .def_readonly("mean_value", &ChessAnalysisCandidate::mean_value);
 
-    py::class_<WdlPrediction>(m, "WdlPrediction")
-        .def_readonly("win", &WdlPrediction::win)
-        .def_readonly("draw", &WdlPrediction::draw)
-        .def_readonly("loss", &WdlPrediction::loss)
-        .def_property_readonly("value", &WdlPrediction::expectedValue);
-    m.attr("OutcomeProbabilities") = m.attr("WdlPrediction");
+    py::class_<ChessAnalysisResult>(m, "AnalysisResult")
+        .def_readonly("chosen_move_uci", &ChessAnalysisResult::chosen_move_uci)
+        .def_readonly("value", &ChessAnalysisResult::value)
+        .def_readonly("outcome", &ChessAnalysisResult::outcome)
+        .def_readonly("candidates", &ChessAnalysisResult::candidates)
+        .def_readonly("searches", &ChessAnalysisResult::searches)
+        .def_readonly("maximum_depth", &ChessAnalysisResult::maximum_depth)
+        .def_readonly("elapsed_milliseconds", &ChessAnalysisResult::elapsed_milliseconds)
+        .def_readonly("principal_variation", &ChessAnalysisResult::principal_variation);
 
-    py::class_<CandidateAnalysis>(m, "CandidateAnalysis")
-        .def_readonly("move_uci", &CandidateAnalysis::move_uci)
-        .def_readonly("policy_prior", &CandidateAnalysis::policy_prior)
-        .def_readonly("visits", &CandidateAnalysis::visits)
-        .def_readonly("visit_share", &CandidateAnalysis::visit_share)
-        .def_readonly("mean_value", &CandidateAnalysis::mean_value);
-
-    py::class_<AnalysisResult>(m, "AnalysisResult")
-        .def_readonly("chosen_move_uci", &AnalysisResult::chosen_move_uci)
-        .def_readonly("value", &AnalysisResult::value)
-        .def_readonly("outcome", &AnalysisResult::outcome)
-        .def_readonly("candidates", &AnalysisResult::candidates)
-        .def_readonly("searches", &AnalysisResult::searches)
-        .def_readonly("maximum_depth", &AnalysisResult::maximum_depth)
-        .def_readonly("elapsed_milliseconds", &AnalysisResult::elapsed_milliseconds)
-        .def_readonly("principal_variation", &AnalysisResult::principal_variation);
-
-    py::class_<ChessAnalysisParameters>(m, "ChessAnalysisParameters")
-        .def(py::init<std::uint32_t, float, std::size_t, std::size_t, std::size_t>(),
-             py::arg("parallel_searches"), py::arg("exploration_constant"),
-             py::arg("inference_workers"), py::arg("inference_batch_size"),
-             py::arg("outstanding_batches_per_worker") = 2)
-        .def_readwrite("parallel_searches", &ChessAnalysisParameters::parallel_searches)
-        .def_readwrite("exploration_constant", &ChessAnalysisParameters::exploration_constant)
-        .def_readwrite("inference_workers", &ChessAnalysisParameters::inference_workers)
-        .def_readwrite("inference_batch_size", &ChessAnalysisParameters::inference_batch_size)
-        .def_readwrite("outstanding_batches_per_worker",
-                       &ChessAnalysisParameters::outstanding_batches_per_worker);
-
-    py::class_<ChessAnalysisEngine, std::shared_ptr<ChessAnalysisEngine>>(m,
-                                                                         "ChessAnalysisEngine")
-        .def(py::init<const InferenceRuntimeParameters &, const ChessAnalysisParameters &>(),
+    py::class_<ChessAnalysis, std::shared_ptr<ChessAnalysis>>(m, "ChessAnalysis")
+        .def(py::init<const InferenceRuntimeParameters &, const AnalysisParameters &>(),
              py::arg("runtime_parameters"), py::arg("parameters"))
-        .def("new_session", &ChessAnalysisEngine::newSession, py::arg("starting_fen"),
-             py::arg("moves_uci"))
-        .def("inference_statistics", &ChessAnalysisEngine::inferenceStatistics);
+        .def(
+            "new_session",
+            [](const std::shared_ptr<ChessAnalysis> &analysis,
+               const std::string &startingFen, const std::vector<std::string> &movesUci) {
+                return std::make_shared<ChessAnalysisSession>(analysis, startingFen, movesUci);
+            },
+            py::arg("starting_fen"), py::arg("moves_uci"))
+        .def("inference_statistics", &ChessAnalysis::inferenceStatistics);
 
     py::class_<ChessAnalysisSession, std::shared_ptr<ChessAnalysisSession>>(
         m, "ChessAnalysisSession")

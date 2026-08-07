@@ -4,14 +4,15 @@ from __future__ import annotations
 
 __all__ = [
     'AnalysisMode',
+    'AnalysisParameters',
     'AnalysisResult',
+    'ActionAnalysisCandidate',
     'BatchedInferenceParameters',
     'BatchedSearchParameters',
     'CandidateAnalysis',
     'ChessSearchChild',
     'ChessSearchRoot',
-    'ChessAnalysisEngine',
-    'ChessAnalysisParameters',
+    'ChessAnalysis',
     'ChessAnalysisSession',
     'ChessSelfPlaySearch',
     'ChessSelfPlaySearchBatch',
@@ -22,7 +23,10 @@ __all__ = [
     'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
+    'GameAnalysisResult',
     'GoAreaScore',
+    'GoAnalysis7',
+    'GoAnalysis9',
     'GoBatchedSearch7',
     'GoBatchedSearch9',
     'GoPlayer',
@@ -87,6 +91,50 @@ class BatchedInferenceParameters:
         batch_size: int,
         outstanding_batches_per_worker: int,
     ) -> None: ...
+    workers: int
+    batch_size: int
+    outstanding_batches_per_worker: int
+
+class AnalysisParameters:
+    def __init__(
+        self,
+        parallel_searches: int,
+        exploration_constant: float,
+        inference: BatchedInferenceParameters,
+    ) -> None: ...
+    parallel_searches: int
+    exploration_constant: float
+    inference: BatchedInferenceParameters
+
+class ActionAnalysisCandidate:
+    @property
+    def action_id(self) -> int: ...
+    @property
+    def policy_prior(self) -> float: ...
+    @property
+    def visits(self) -> int: ...
+    @property
+    def visit_share(self) -> float: ...
+    @property
+    def mean_value(self) -> float | None: ...
+
+class GameAnalysisResult:
+    @property
+    def chosen_action_id(self) -> int: ...
+    @property
+    def value(self) -> float: ...
+    @property
+    def outcome(self) -> WdlPrediction | None: ...
+    @property
+    def candidates(self) -> list[ActionAnalysisCandidate]: ...
+    @property
+    def searches(self) -> int: ...
+    @property
+    def maximum_depth(self) -> int: ...
+    @property
+    def elapsed_milliseconds(self) -> int: ...
+    @property
+    def principal_variation(self) -> list[int]: ...
 
 class GoPlayer:
     BLACK: GoPlayer
@@ -230,6 +278,30 @@ class GoBatchedSearch9:
     @property
     def model_generation(self) -> int: ...
 
+class GoAnalysis7:
+    def __init__(
+        self,
+        runtime_parameters: InferenceRuntimeParameters,
+        parameters: AnalysisParameters,
+    ) -> None: ...
+    def new_root(self, rules: GoRules) -> GoSearchRoot7: ...
+    def analyze_policy(self, root: GoSearchRoot7) -> GameAnalysisResult: ...
+    def analyze_counted(self, root: GoSearchRoot7, searches: int) -> GameAnalysisResult: ...
+    def analyze_timed(self, root: GoSearchRoot7, seconds: int) -> GameAnalysisResult: ...
+    def inference_statistics(self) -> InferenceStatistics: ...
+
+class GoAnalysis9:
+    def __init__(
+        self,
+        runtime_parameters: InferenceRuntimeParameters,
+        parameters: AnalysisParameters,
+    ) -> None: ...
+    def new_root(self, rules: GoRules) -> GoSearchRoot9: ...
+    def analyze_policy(self, root: GoSearchRoot9) -> GameAnalysisResult: ...
+    def analyze_counted(self, root: GoSearchRoot9, searches: int) -> GameAnalysisResult: ...
+    def analyze_timed(self, root: GoSearchRoot9, seconds: int) -> GameAnalysisResult: ...
+    def inference_statistics(self) -> InferenceStatistics: ...
+
 class AnalysisMode:
     POLICY: AnalysisMode
     MCTS: AnalysisMode
@@ -279,26 +351,11 @@ class InferenceDevice:
     CPU: InferenceDevice
     CUDA: InferenceDevice
 
-class ChessAnalysisParameters:
-    def __init__(
-        self,
-        parallel_searches: int,
-        exploration_constant: float,
-        inference_workers: int,
-        inference_batch_size: int,
-        outstanding_batches_per_worker: int = 2,
-    ) -> None: ...
-    parallel_searches: int
-    exploration_constant: float
-    inference_workers: int
-    inference_batch_size: int
-    outstanding_batches_per_worker: int
-
-class ChessAnalysisEngine:
+class ChessAnalysis:
     def __init__(
         self,
         runtime_parameters: InferenceRuntimeParameters,
-        parameters: ChessAnalysisParameters,
+        parameters: AnalysisParameters,
     ) -> None: ...
     def new_session(self, starting_fen: str, moves_uci: tuple[str, ...]) -> ChessAnalysisSession: ...
     def inference_statistics(self) -> InferenceStatistics: ...

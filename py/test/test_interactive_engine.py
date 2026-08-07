@@ -11,7 +11,7 @@ import torch
 from torch import Tensor, nn
 
 pytest.importorskip('AlphaZeroCpp')
-from AlphaZeroCpp import ChessAnalysisParameters
+from AlphaZeroCpp import AnalysisParameters, BatchedInferenceParameters
 
 from src.interactive.analysis import (
     AnalysisResult,
@@ -123,9 +123,9 @@ def test_outstanding_batch_limit_is_validated(model_path: Path) -> None:
 
 
 def test_native_search_params_default_to_pipelined_inference() -> None:
-    search_parameters = ChessAnalysisParameters(2, 1.0, 2, 64)
+    search_parameters = AnalysisParameters(2, 1.0, BatchedInferenceParameters(2, 64, 2))
 
-    assert search_parameters.outstanding_batches_per_worker == 2
+    assert search_parameters.inference.outstanding_batches_per_worker == 2
 
 
 def test_fixed_search_reuses_selected_subtree_and_recovers_from_history(

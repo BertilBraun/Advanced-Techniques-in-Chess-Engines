@@ -5,8 +5,9 @@ from dataclasses import dataclass
 import chess
 from AlphaZeroCpp import (
     AnalysisMode,
-    ChessAnalysisEngine as BoundChessAnalysisEngine,
-    ChessAnalysisParameters,
+    AnalysisParameters,
+    BatchedInferenceParameters,
+    ChessAnalysis as BoundChessAnalysis,
     ChessAnalysisSession as BoundChessAnalysisSession,
     InferenceDevice,
     InferenceRuntimeParameters,
@@ -51,22 +52,24 @@ class InteractiveEngine:
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
         )
-        self._bound_engine = BoundChessAnalysisEngine(
+        self._bound_analysis = BoundChessAnalysis(
             runtime_parameters,
-            ChessAnalysisParameters(
+            AnalysisParameters(
                 parallel_searches=configuration.parallel_searches,
                 exploration_constant=configuration.exploration_constant,
-                inference_workers=configuration.inference_workers,
-                inference_batch_size=batch_size,
-                outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
+                inference=BatchedInferenceParameters(
+                    workers=configuration.inference_workers,
+                    batch_size=batch_size,
+                    outstanding_batches_per_worker=configuration.outstanding_batches_per_worker,
+                ),
             ),
         )
 
     def new_game(self, starting_fen: str, moves_uci: tuple[str, ...]) -> InteractiveGame:
-        return InteractiveGame(self._bound_engine.new_session(starting_fen, moves_uci))
+        return InteractiveGame(self._bound_analysis.new_session(starting_fen, moves_uci))
 
     def inference_metrics(self) -> InferenceMetrics:
-        statistics = self._bound_engine.inference_statistics()
+        statistics = self._bound_analysis.inference_statistics()
         return InferenceMetrics(
             evaluations=statistics.evaluations,
             model_calls=statistics.modelInferenceCalls,

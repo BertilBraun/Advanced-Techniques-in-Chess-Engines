@@ -173,6 +173,33 @@ def _write_pass_model(path: Path, outcome: tuple[float, float, float]) -> None:
     torch.jit.save(traced, path)
 
 
+def test_go_uses_shared_policy_and_counted_analysis(tmp_path: Path) -> None:
+    model_path = tmp_path / 'analysis.jit.pt'
+    _write_pass_model(model_path, (0.6, 0.2, 0.2))
+    analysis = AlphaZeroCpp.GoAnalysis7(
+        AlphaZeroCpp.InferenceRuntimeParameters(
+            device_id=0,
+            model_path=str(model_path),
+            device=AlphaZeroCpp.InferenceDevice.CPU,
+        ),
+        AlphaZeroCpp.AnalysisParameters(
+            parallel_searches=2,
+            exploration_constant=1.0,
+            inference=AlphaZeroCpp.BatchedInferenceParameters(1, 4, 2),
+        ),
+    )
+    root = analysis.new_root(AlphaZeroCpp.GoRules(15, 196))
+
+    policy = analysis.analyze_policy(root)
+    searched = analysis.analyze_counted(root, 4)
+
+    assert policy.chosen_action_id == 49
+    assert policy.searches == 0
+    assert searched.chosen_action_id == 49
+    assert searched.searches == 4
+    assert searched.principal_variation
+
+
 def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) -> None:
     configuration = _configuration()
     search = configuration.training.self_play.search.validated_copy(

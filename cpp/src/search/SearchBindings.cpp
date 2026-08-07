@@ -1,5 +1,6 @@
 #include "search/SearchBindings.hpp"
 
+#include "search/Analysis.hpp"
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchTypes.hpp"
 #include "util/TimeItGuard.h"
@@ -10,6 +11,10 @@
 namespace py = pybind11;
 
 void bind_search(py::module_ &module) {
+    py::enum_<AnalysisMode>(module, "AnalysisMode")
+        .value("POLICY", AnalysisMode::Policy)
+        .value("MCTS", AnalysisMode::Mcts);
+
     py::enum_<InferenceDevice>(module, "InferenceDevice")
         .value("AUTO", InferenceDevice::Auto)
         .value("CPU", InferenceDevice::Cpu)
@@ -50,6 +55,13 @@ void bind_search(py::module_ &module) {
                       &InferenceStatistics::directInferenceNanoseconds)
         .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
 
+    py::class_<WdlPrediction>(module, "WdlPrediction")
+        .def_readonly("win", &WdlPrediction::win)
+        .def_readonly("draw", &WdlPrediction::draw)
+        .def_readonly("loss", &WdlPrediction::loss)
+        .def_property_readonly("value", &WdlPrediction::expectedValue);
+    module.attr("OutcomeProbabilities") = module.attr("WdlPrediction");
+
     py::class_<FunctionTimeInfo>(module, "FunctionTimeInfo")
         .def_readonly("name", &FunctionTimeInfo::name)
         .def_readonly("percent", &FunctionTimeInfo::percent)
@@ -74,5 +86,31 @@ void bind_search(py::module_ &module) {
              py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
     py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
         .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
-             py::arg("batch_size"), py::arg("outstanding_batches_per_worker"));
+             py::arg("batch_size"), py::arg("outstanding_batches_per_worker"))
+        .def_readonly("workers", &BatchedInferenceParameters::workers)
+        .def_readonly("batch_size", &BatchedInferenceParameters::batch_size)
+        .def_readonly("outstanding_batches_per_worker",
+                      &BatchedInferenceParameters::outstanding_batches_per_worker);
+    py::class_<AnalysisParameters>(module, "AnalysisParameters")
+        .def(py::init<std::uint32_t, float, BatchedInferenceParameters>(),
+             py::arg("parallel_searches"), py::arg("exploration_constant"),
+             py::arg("inference"))
+        .def_readonly("parallel_searches", &AnalysisParameters::parallel_searches)
+        .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
+        .def_readonly("inference", &AnalysisParameters::inference);
+    py::class_<AnalysisCandidate>(module, "ActionAnalysisCandidate")
+        .def_readonly("action_id", &AnalysisCandidate::action_id)
+        .def_readonly("policy_prior", &AnalysisCandidate::policy_prior)
+        .def_readonly("visits", &AnalysisCandidate::visits)
+        .def_readonly("visit_share", &AnalysisCandidate::visit_share)
+        .def_readonly("mean_value", &AnalysisCandidate::mean_value);
+    py::class_<GameAnalysisResult>(module, "GameAnalysisResult")
+        .def_readonly("chosen_action_id", &GameAnalysisResult::chosen_action_id)
+        .def_readonly("value", &GameAnalysisResult::value)
+        .def_readonly("outcome", &GameAnalysisResult::outcome)
+        .def_readonly("candidates", &GameAnalysisResult::candidates)
+        .def_readonly("searches", &GameAnalysisResult::searches)
+        .def_readonly("maximum_depth", &GameAnalysisResult::maximum_depth)
+        .def_readonly("elapsed_milliseconds", &GameAnalysisResult::elapsed_milliseconds)
+        .def_readonly("principal_variation", &GameAnalysisResult::principal_variation);
 }

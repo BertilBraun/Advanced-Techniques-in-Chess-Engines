@@ -1,9 +1,11 @@
 #include "games/go/GoBindings.hpp"
 
-#include "search/SearchEngine.hpp"
 #include "games/go/GoGameContract.hpp"
+#include "search/Analysis.hpp"
+#include "search/SearchEngine.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -65,10 +67,12 @@ restore_position(const std::vector<std::vector<int>> &black_history,
 }
 
 template <std::size_t BoardSize>
-void bind_go_search(py::module_ &module, const char *rootName, const char *searchName) {
+void bind_go_search(py::module_ &module, const char *rootName, const char *searchName,
+                    const char *analysisName) {
     using Contract = GoGameContract<BoardSize, 8>;
     using Root = GameSearchRoot<Contract>;
     using Search = BatchedGameSearch<Contract>;
+    using Analysis = GameAnalysis<Contract>;
     constexpr InferenceDimensions dimensions = Contract::inferenceDimensions();
 
     py::class_<Root>(module, rootName)
@@ -110,6 +114,27 @@ void bind_go_search(py::module_ &module, const char *rootName, const char *searc
         .def("refresh_model", &Search::refreshModel, py::arg("model_generation"),
              py::arg("model_path"), py::call_guard<py::gil_scoped_release>())
         .def_property_readonly("model_generation", &Search::modelGeneration);
+
+    py::class_<Analysis, std::shared_ptr<Analysis>>(module, analysisName)
+        .def(py::init<const InferenceRuntimeParameters &, const AnalysisParameters &>(),
+             py::arg("runtime_parameters"), py::arg("parameters"))
+        .def(
+            "new_root",
+            [](Analysis &analysis, const GoRules rules) {
+                return analysis.newRoot(Contract::initialPosition(rules));
+            },
+            py::arg("rules"))
+        .def("analyze_policy", &Analysis::analyzePolicy, py::arg("root"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("analyze_counted", &Analysis::analyzeCounted, py::arg("root"),
+             py::arg("searches"), py::call_guard<py::gil_scoped_release>())
+        .def(
+            "analyze_timed",
+            [](Analysis &analysis, Root &root, const int seconds) {
+                return analysis.analyzeTimed(root, std::chrono::seconds(seconds));
+            },
+            py::arg("root"), py::arg("seconds"), py::call_guard<py::gil_scoped_release>())
+        .def("inference_statistics", &Analysis::inferenceStatistics);
 }
 
 template <std::size_t BoardSize, std::size_t HistoryLength>
@@ -249,6 +274,6 @@ void bind_go_game(py::module_ &module) {
         .def(py::self == py::self);
     bind_position<7, 8>(module, "GoPosition7");
     bind_position<9, 8>(module, "GoPosition9");
-    bind_go_search<7>(module, "GoSearchRoot7", "GoBatchedSearch7");
-    bind_go_search<9>(module, "GoSearchRoot9", "GoBatchedSearch9");
+    bind_go_search<7>(module, "GoSearchRoot7", "GoBatchedSearch7", "GoAnalysis7");
+    bind_go_search<9>(module, "GoSearchRoot9", "GoBatchedSearch9", "GoAnalysis9");
 }
