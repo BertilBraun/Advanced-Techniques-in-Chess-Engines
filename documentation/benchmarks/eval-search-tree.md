@@ -1,9 +1,8 @@
 # Evaluation search-tree microbenchmark
 
 `EvalSearchTreeBenchmark` isolates serial MCTS tree mechanics from neural inference. It
-uses the same deterministic legal-move policy and board-derived value for all variants:
+uses the same deterministic legal-move policy and board-derived value for both variants:
 
-- `pointer`: the current `shared_ptr`/`weak_ptr` evaluation tree;
 - `arena-new-delete`: indexed nodes with actual `std::vector` child blocks;
 - `arena-pool`: the same indexed nodes with child blocks allocated from a tree-owned
   `std::pmr::unsynchronized_pool_resource`.
@@ -14,7 +13,6 @@ when comparing resident memory because standard and PMR allocators can retain re
 pages:
 
 ```powershell
-.\EvalSearchTreeBenchmark pointer 100000
 .\EvalSearchTreeBenchmark arena-new-delete 100000
 .\EvalSearchTreeBenchmark arena-pool 100000
 ```
@@ -31,11 +29,9 @@ returns their child blocks to the pool for reuse. The pool may retain its high-w
 allocation for later searches, but repeated re-rooting does not accumulate live nodes
 or request new blocks indefinitely for a stable workload.
 
-The indexed representation still follows one child-block pointer per visited node. The
-important difference from the pointer tree is that scanning candidate edges is
-contiguous and does not dereference or reference-count a separately allocated child node
-for every candidate. A separate edge-span arena is only justified if profiling shows
-that the remaining one-block-per-expanded-node lookup is material after this change.
+The indexed representation follows one child-block pointer per visited node. Scanning
+candidate edges is contiguous. A separate edge-span arena is only justified if profiling
+shows that the remaining one-block-per-expanded-node lookup is material.
 
 ## Local prototype result (2026-07-22)
 
@@ -64,12 +60,7 @@ child nodes, even though their boards remain lazy. The arena reports one full no
 traversed edge and stores untraversed moves only as compact edges. This is the principal
 memory and locality improvement.
 
-## Integration seam
-
-The prototype intentionally does not modify inference. `EvalMCTS` can replace leaf
-`shared_ptr`s with generation-tagged node indices and pass each selected node's inline
-board to the evaluator. Arena growth preserves indices but can relocate node objects, so
-callers must not retain `Board*` values across a growth operation. The planned direct
-encoder naturally satisfies this by encoding each selected board immediately; an
-interim batched-client integration would need to reserve sufficient node capacity before
-collecting board pointers.
+The historical pointer-tree comparison remains recorded above, but its superseded
+implementation is no longer built. Arena growth preserves indices but can relocate node
+objects, so callers must encode selected positions before any operation that can grow the
+arena.

@@ -9,10 +9,6 @@ __all__ = [
     'AnalysisResult',
     'CandidateAnalysis',
     'DirectSelfPlayInferenceParams',
-    'EvalMCTS',
-    'EvalMCTSNode',
-    'EvalMCTSParams',
-    'EvalMCTSResult',
     'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
@@ -46,10 +42,7 @@ __all__ = [
     'TimeInfo',
     'WdlPrediction',
     'encode_board_packed_bytes',
-    'new_eval_root',
     'new_root',
-    'test_eval_mcts_speed_cpp',
-    'test_mcts_speed_cpp',
 ]
 
 class InferenceDimensions:
@@ -314,59 +307,6 @@ class InteractiveGame:
 def encode_board_packed_bytes(fen: str) -> bytes:
     """Encode a FEN into the canonical packed plane-major byte layout."""
 
-class EvalMCTS:
-    def __init__(self, client_args: InferenceClientParams, mcts_args: EvalMCTSParams) -> None: ...
-    def eval_search(self, root: EvalMCTSNode, searches: int) -> EvalMCTSResult:
-        """
-        Run evaluation MCTS search on a given root node.
-        Returns an `EvalMCTSResult` object containing the result, visits, and root node.
-        """
-
-class EvalMCTSNode:
-    def best_child(self, c_param: float) -> EvalMCTSNode:
-        """
-        Get the best child node based on UCB score.
-        `c_param` is the exploration constant.
-        """
-    def make_new_root(self, child_index: int) -> EvalMCTSNode:
-        """
-        Prune the old tree and return a new root node.
-        `child_index` is the index of the child to make the new root.
-        """
-    @property
-    def children(self) -> list[EvalMCTSNode]: ...
-    @property
-    def encoded_move(self) -> int: ...
-    @property
-    def fen(self) -> str: ...
-    @property
-    def max_depth(self) -> int: ...
-    @property
-    def move(self) -> str: ...
-    @property
-    def outcome_prediction(self) -> WdlPrediction | None: ...
-    @property
-    def policy(self) -> float: ...
-    @property
-    def repetition_count(self) -> int: ...
-    @property
-    def result_sum(self) -> float: ...
-    @property
-    def visits(self) -> int: ...
-
-class EvalMCTSParams:
-    c_param: float
-    num_threads: int
-    def __init__(self, c_param: float, num_threads: int) -> None: ...
-
-class EvalMCTSResult:
-    @property
-    def result(self) -> float: ...
-    @property
-    def root(self) -> EvalMCTSNode: ...
-    @property
-    def visits(self) -> list[tuple[int, int]]: ...
-
 class FunctionTimeInfo:
     @property
     def invocations(self) -> int: ...
@@ -581,18 +521,6 @@ class TimeInfo:
     @property
     def totalTime(self) -> float: ...
 
-def new_eval_root(fen: str) -> EvalMCTSNode:
-    """
-    Create a new root node for evaluation MCTS with the given FEN string.
-    Returns a shared pointer to the new EvalMCTSNode.
-    """
-
-def new_eval_root_with_history(
-    starting_fen: str,
-    moves_uci: tuple[str, ...],
-) -> EvalMCTSNode:
-    """Create an evaluation MCTS root by replaying a bounded UCI move history."""
-
 def new_root(fen: str, arena_capacity: int) -> MCTSRoot:
     """
     Create a self-play MCTS root with an explicit fixed arena capacity.
@@ -604,29 +532,3 @@ def new_root_with_history(
     arena_capacity: int,
 ) -> MCTSRoot:
     """Create a fixed-capacity MCTS root by replaying bounded UCI history."""
-
-def test_eval_mcts_speed_cpp(
-    numBoards: int = 100,
-    numIterations: int = 10,
-    numSearchesPerTurn: int = 100,
-    numParallelSearches: int = 1,
-    numThreads: int = 1,
-) -> None:
-    """
-    Test the Eval MCTS search speed.
-    Runs Eval MCTS search on a specified number of boards for a given number of iterations.
-    Prints the average time taken per iteration and per board.
-    """
-
-def test_mcts_speed_cpp(
-    numBoards: int = 100,
-    numIterations: int = 10,
-    numSearchesPerTurn: int = 100,
-    numParallelSearches: int = 1,
-    numThreads: int = 1,
-) -> None:
-    """
-    Test the MCTS search speed.
-    Runs MCTS search on a specified number of boards for a given number of iterations.
-    Prints the average time taken per iteration and per board.
-    """

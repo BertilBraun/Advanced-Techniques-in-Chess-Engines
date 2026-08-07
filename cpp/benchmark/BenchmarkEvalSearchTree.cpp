@@ -10,7 +10,6 @@
 #include <unistd.h>
 #endif
 
-#include "MCTS/EvalMCTSNode.h"
 #include "MCTS/EvalSearchTree.hpp"
 #include "games/chess/ChessEncoding.hpp"
 
@@ -57,45 +56,6 @@ std::size_t residentBytes() {
 #endif
 }
 
-std::pair<std::size_t, std::size_t> pointerTreeSize(const std::shared_ptr<EvalMCTSNode> &root) {
-    std::size_t nodes = 0;
-    std::size_t edges = 0;
-    std::vector<std::shared_ptr<EvalMCTSNode>> pending{root};
-    while (!pending.empty()) {
-        const std::shared_ptr<EvalMCTSNode> current = pending.back();
-        pending.pop_back();
-        ++nodes;
-        const EvalMCTSNode::ChildSnapshot children = current->children();
-        if (children != nullptr) {
-            edges += children->size();
-            pending.insert(pending.end(), children->begin(), children->end());
-        }
-    }
-    return {nodes, edges};
-}
-
-BenchmarkResult benchmarkPointerTree(const std::uint64_t searches) {
-    const std::shared_ptr<EvalMCTSNode> root = EvalMCTSNode::createRoot(Board{});
-    const auto startedAt = std::chrono::steady_clock::now();
-    for (std::uint64_t search = 0; search < searches; ++search) {
-        std::shared_ptr<EvalMCTSNode> leaf = root;
-        while (leaf->isExpanded()) {
-            leaf = leaf->bestChild(2.0F);
-        }
-        leaf->materializeBoard();
-        if (leaf->isTerminal()) {
-            leaf->backPropagate(getBoardResultScore(leaf->board()));
-        } else {
-            leaf->expand(uniformPolicy(leaf->board()));
-            leaf->backPropagate(deterministicValue(leaf->board()));
-        }
-    }
-    const double elapsed =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - startedAt).count();
-    const auto [nodes, edges] = pointerTreeSize(root);
-    return {"pointer", searches, elapsed, nodes, edges, residentBytes()};
-}
-
 BenchmarkResult benchmarkArena(const std::uint64_t searches, const EvalEdgeStorage storage,
                                std::string variant) {
     EvalSearchTree tree(Board{}, 1'024, storage);
@@ -127,8 +87,7 @@ void printProvenance() {
     std::cout << "compiler=" << __VERSION__ << " cxx_standard=" << __cplusplus
               << " hardware_threads=" << std::thread::hardware_concurrency()
               << " sizeof_eval_edge=" << sizeof(EvalSearchEdge)
-              << " sizeof_eval_node=" << sizeof(EvalSearchNode)
-              << " sizeof_pointer_node=" << sizeof(EvalMCTSNode) << '\n';
+              << " sizeof_eval_node=" << sizeof(EvalSearchNode) << '\n';
 }
 } // namespace
 
@@ -141,19 +100,14 @@ int main(const int argumentCount, const char *const arguments[]) {
     }
 
     printProvenance();
-    if (variant == "pointer" || variant == "all") {
-        printResult(benchmarkPointerTree(searches));
-    }
     if (variant == "arena-new-delete" || variant == "all") {
         printResult(benchmarkArena(searches, EvalEdgeStorage::NewDelete, "arena-new-delete"));
     }
     if (variant == "arena-pool" || variant == "all") {
         printResult(benchmarkArena(searches, EvalEdgeStorage::UnsynchronizedPool, "arena-pool"));
     }
-    if (variant != "all" && variant != "pointer" && variant != "arena-new-delete" &&
-        variant != "arena-pool") {
-        throw std::invalid_argument(
-            "variant must be pointer, arena-new-delete, arena-pool, or all");
+    if (variant != "all" && variant != "arena-new-delete" && variant != "arena-pool") {
+        throw std::invalid_argument("variant must be arena-new-delete, arena-pool, or all");
     }
     return 0;
 }

@@ -7,8 +7,6 @@
 #include "games/chess/ChessGameContract.hpp"
 #include "games/go/GoBindings.hpp"
 
-#include "MCTS/EvalMCTS.hpp"
-
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -24,106 +22,6 @@ static void init() {
     setenv("OMP_NUM_THREADS", "1", 1); // for MKL / OpenBLAS just in case
     setenv("MKL_NUM_THREADS", "1", 1);
     setenv("OPENBLAS_NUM_THREADS", "1", 1);
-}
-
-Board *newBoard() {
-    Board *board = new Board();
-    for (int i = 0; i < 30; ++i) {
-        const std::vector<Move> &moves = board->validMoves();
-        if (moves.empty())
-            break; // No more valid moves, stop early
-        board->makeMove(moves[rand() % moves.size()]);
-    }
-    if (board->isGameOver()) {
-        delete board;      // Clean up if the game is over
-        return newBoard(); // Create a new board if the game is over
-    }
-    return board;
-}
-
-std::vector<const Board *> newBoards(const int numBoards) {
-    std::vector<const Board *> boards;
-    boards.reserve(numBoards);
-    for (int _ : range(numBoards))
-        boards.push_back(newBoard());
-
-    return boards;
-}
-
-void testMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
-                   int numParallelSearches, int numThreads) {
-    const MCTSParams mctsParams(numParallelSearches, numSearchesPerTurn, numSearchesPerTurn, 1.0,
-                                0.3, 0.0, 0, numThreads);
-
-    const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100);
-
-    MCTS mcts(inferenceParams, mctsParams);
-
-    float totalTime = 0.0f;
-
-    for (int i = 0; i < numIterations; ++i) {
-        std::vector<MCTSBoard> boards;
-        boards.reserve(numBoards);
-        for (auto &&board : newBoards(numBoards)) {
-            boards.emplace_back(mcts.newRoot(board->fen()), true);
-        }
-
-        auto start = std::chrono::high_resolution_clock::now();
-        auto _ = mcts.search(boards);
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<float> duration = end - start;
-
-        std::cout << "Iteration " << i + 1 << ": MCTS search time: " << duration.count()
-                  << " seconds\n";
-
-        totalTime += duration.count();
-    }
-
-    std::cout << "Total MCTS time: " << totalTime << " seconds\n";
-    std::cout << "Average MCTS time per iteration: " << (totalTime / numIterations) << " seconds\n";
-    std::cout << "Average MCTS time per board: " << (totalTime / (numIterations * numBoards))
-              << " seconds\n";
-}
-
-void testEvalMCTSSpeed(int numBoards, int numIterations, int numSearchesPerTurn,
-                       int numParallelSearches, int numThreads) {
-    const EvalMCTSParams mctsParams(1.0, numThreads);
-
-    const InferenceClientParams inferenceParams(0, "training_data/chess/model_0.pt",
-                                                numBoards * numParallelSearches, 100);
-
-    EvalMCTS mcts(inferenceParams, mctsParams);
-
-    float totalTime = 0.0f;
-
-    for (int i = 0; i < numIterations; ++i) {
-        std::vector<std::shared_ptr<EvalMCTSNode>> roots;
-        roots.reserve(numBoards);
-        for (auto &&board : newBoards(numBoards)) {
-            // Create a root node for each board
-            roots.emplace_back(EvalMCTSNode::createRoot(board->fen()));
-        }
-
-        auto start = std::chrono::high_resolution_clock::now();
-        for (const auto &root : roots) {
-            // Run Eval MCTS search on each root node
-            auto _ = mcts.evalSearch(root, numSearchesPerTurn);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<float> duration = end - start;
-
-        std::cout << "Iteration " << i + 1 << ": Eval MCTS search time: " << duration.count()
-                  << " seconds\n";
-
-        totalTime += duration.count();
-    }
-
-    std::cout << "Total Eval MCTS time: " << totalTime << " seconds\n";
-    std::cout << "Average Eval MCTS time per iteration: " << (totalTime / numIterations)
-              << " seconds\n";
-    std::cout << "Average Eval MCTS time per board: " << (totalTime / (numIterations * numBoards))
-              << " seconds\n";
 }
 
 std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
@@ -230,26 +128,6 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
         },
         py::arg("fen"),
         R"pbdoc(Encode a FEN into the canonical packed plane-major byte layout.)pbdoc");
-
-    m.def("test_mcts_speed_cpp", &testMCTSSpeed, "Test the MCTS search speed",
-          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
-          py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
-          py::arg("numThreads") = 1,
-          R"pbdoc(
-            Test the MCTS search speed.
-            Runs MCTS search on a specified number of boards for a given number of iterations.
-            Prints the average time taken per iteration and per board.
-          )pbdoc");
-
-    m.def("test_eval_mcts_speed_cpp", &testEvalMCTSSpeed, "Test the Eval MCTS search speed",
-          py::arg("numBoards") = 100, py::arg("numIterations") = 10,
-          py::arg("numSearchesPerTurn") = 100, py::arg("numParallelSearches") = 1,
-          py::arg("numThreads") = 1,
-          R"pbdoc(
-            Test the Eval MCTS search speed.
-            Runs Eval MCTS search on a specified number of boards for a given number of iterations.
-            Prints the average time taken per iteration and per board.
-          )pbdoc");
 
     // --- (2.1) MCTSParams ---
     py::class_<MCTSParams>(m, "MCTSParams")
@@ -390,88 +268,6 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
                  The encoded moves are pairs of (encoded_move: int, score: float).
              )pbdoc");
-
-    // Expose EvalMCTSNode and EvalMCTS
-    py::class_<EvalMCTSResult>(m, "EvalMCTSResult")
-        .def_readonly("result", &EvalMCTSResult::result)
-        .def_readonly("visits", &EvalMCTSResult::visits)
-        // EvalMCTSNode, the root node of the search tree
-        .def_readonly("root", &EvalMCTSResult::root);
-
-    py::class_<EvalMCTSParams>(m, "EvalMCTSParams")
-        .def(py::init<float, uint8>(), py::arg("c_param"), py::arg("num_threads"))
-        .def_readwrite("c_param", &EvalMCTSParams::c_param)
-        .def_readwrite("num_threads", &EvalMCTSParams::num_threads);
-
-    py::class_<EvalMCTSNode, std::shared_ptr<EvalMCTSNode>>(m, "EvalMCTSNode")
-        .def_property_readonly("fen",
-                               [](EvalMCTSNode &node) {
-                                   node.materializeBoard();
-                                   return node.board().fen();
-                               })
-        .def_property_readonly("is_terminal", &EvalMCTSNode::isTerminal)
-        .def_property_readonly("repetition_count",
-                               [](EvalMCTSNode &node) {
-                                   node.materializeBoard();
-                                   return node.board().repetitionCount();
-                               })
-        .def_property_readonly("children",
-                               [](const EvalMCTSNode &node) {
-                                   const auto children = node.children();
-                                   return children == nullptr ? EvalMCTSNode::ChildVector{}
-                                                              : *children;
-                               })
-        .def("best_child", &EvalMCTSNode::bestChild, py::arg("c_param"),
-             R"pbdoc(
-            Get the best child node based on UCB score.
-            `c_param` is the exploration constant.
-            )pbdoc")
-        .def_property_readonly("visits",
-                               [](const EvalMCTSNode &n) {
-                                   return n.number_of_visits.load(std::memory_order_acquire);
-                               })
-        .def_property_readonly("move",
-                               [](const EvalMCTSNode &n) { return toString(n.moveToGetHere); })
-        .def_property_readonly("encoded_move",
-                               [](const EvalMCTSNode &n) {
-                                   return encodeMove(n.moveToGetHere, &n.parent.lock()->board());
-                               })
-        .def_property_readonly(
-            "result_sum",
-            [](const EvalMCTSNode &n) { return n.result_sum.load(std::memory_order_acquire); })
-        .def_readonly("policy", &EvalMCTSNode::policy)
-        .def_property_readonly("outcome_prediction", &EvalMCTSNode::outcomePrediction)
-        .def_property_readonly("max_depth", &EvalMCTSNode::maxDepth)
-        .def("make_new_root", &EvalMCTSNode::makeNewRoot, py::arg("child_index"),
-             R"pbdoc(
-            Prune the old tree and return a new root node.
-            `child_index` is the index of the child to make the new root.
-            )pbdoc");
-
-    py::class_<EvalMCTS>(m, "EvalMCTS")
-        .def(py::init<const InferenceClientParams &, const EvalMCTSParams &>(),
-             py::arg("client_args"), py::arg("mcts_args"))
-        .def("eval_search", &EvalMCTS::evalSearch, py::arg("root"), py::arg("searches"),
-             R"pbdoc(
-                 Run evaluation MCTS search on a given root node.
-                 Returns an `EvalMCTSResult` object containing the result, visits, and root node.
-             )pbdoc");
-
-    m.def(
-        "new_eval_root", [](const std::string &fen) { return EvalMCTSNode::createRoot(fen); },
-        py::arg("fen"),
-        R"pbdoc(
-            Create a new root node for evaluation MCTS with the given FEN string.
-            Returns a shared pointer to the new EvalMCTSNode.
-          )pbdoc");
-    m.def(
-        "new_eval_root_with_history",
-        [](const std::string &startingFen, const std::vector<std::string> &movesUci) {
-            return EvalMCTSNode::createRoot(
-                ChessGameContract::replayPosition(startingFen, movesUci));
-        },
-        py::arg("starting_fen"), py::arg("moves_uci"),
-        R"pbdoc(Create an evaluation MCTS root by replaying a bounded UCI move history.)pbdoc");
 
     py::enum_<AnalysisMode>(m, "AnalysisMode")
         .value("POLICY", AnalysisMode::Policy)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import pytest
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
@@ -28,22 +26,9 @@ EIGHT_PLY_CYCLE = (
 )
 
 
-@pytest.mark.parametrize(
-    'root_factory',
-    (
-        lambda starting_fen, moves_uci: AlphaZeroCpp.new_root_with_history(
-            starting_fen,
-            moves_uci,
-            1,
-        ),
-        AlphaZeroCpp.new_eval_root_with_history,
-    ),
-)
-def test_native_threefold_ends_on_third_occurrence(
-    root_factory: Callable[[str, tuple[str, ...]], object],
-) -> None:
-    second_occurrence = root_factory(STARTING_FEN, KNIGHT_CYCLE)
-    third_occurrence = root_factory(STARTING_FEN, KNIGHT_CYCLE * 2)
+def test_native_threefold_ends_on_third_occurrence() -> None:
+    second_occurrence = AlphaZeroCpp.new_root_with_history(STARTING_FEN, KNIGHT_CYCLE, 1)
+    third_occurrence = AlphaZeroCpp.new_root_with_history(STARTING_FEN, KNIGHT_CYCLE * 2, 1)
 
     assert second_occurrence.repetition_count == 1
     assert not second_occurrence.is_terminal

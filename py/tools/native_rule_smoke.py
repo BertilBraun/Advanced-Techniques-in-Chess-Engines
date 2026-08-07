@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from typing import Protocol
 
-from AlphaZeroCpp import new_eval_root_with_history, new_root_with_history
+from AlphaZeroCpp import new_root_with_history
 
 STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 KNIGHT_CYCLE = (
@@ -53,8 +53,7 @@ def verify_root_factory(root_factory: RootFactory) -> None:
 
 
 def main() -> None:
-    verify_root_factory(new_root_with_history)
-    verify_root_factory(new_eval_root_with_history)
+    verify_root_factory(lambda starting_fen, moves_uci: new_root_with_history(starting_fen, moves_uci, 1))
     print(
         json.dumps(
             {
