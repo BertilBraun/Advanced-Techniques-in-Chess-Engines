@@ -10,11 +10,11 @@ import torch.nn.functional as F
 from torch import nn
 from torch.amp import GradScaler, autocast
 
-from src.Network import Network
-from src.experiment.chess_experiment import GoTrainingObjectiveConfiguration
+from src.neural_network import Network
+from src.experiment.configuration import GoTrainingObjectiveConfiguration
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
-from src.settings import log_scalar
+from src.util.tensorboard import log_scalar
 from src.train.TrainingArgs import TrainingParams
 from src.train.TrainingStats import (
     EXPECTED_SCORE_CALIBRATION_BINS,

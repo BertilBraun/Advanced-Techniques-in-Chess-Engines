@@ -16,8 +16,8 @@ if not hasattr(AlphaZeroCpp, 'GoSelfPlaySearch7'):
 
 import src.train.GoReplay as go_replay_module
 
-from src.experiment.chess_experiment import GoExperimentConfiguration, load_experiment_configuration
-from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
+from src.experiment.configuration import GoExperimentConfiguration, load_experiment_configuration
+from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
 from src.games.go.training import calculate_go_loss, create_go_model

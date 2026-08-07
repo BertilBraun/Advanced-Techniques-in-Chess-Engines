@@ -6,7 +6,7 @@ T = TypeVar('T')
 
 
 def try_compile(element: T) -> T:
-    from src.settings import USE_GPU
+    from src.runtime import USE_GPU
 
     if not USE_GPU:
         return element

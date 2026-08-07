@@ -18,14 +18,18 @@ from torch.nn.parallel import DistributedDataParallel
 
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.games.training_contract import TrainingGameImplementation
-from src.Network import Network
+from src.neural_network import Network
 from src.train.Replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
 from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import TrainerTopologyParams, TrainingArgs, TrainingParams
 from src.train.TrainingStats import TrainingStats
 from src.util.log import configure_logging, log
 from src.util.profiler import start_cpu_usage_logger
-from src.util.save_paths import checkpoint_manifest_path, load_model_and_optimizer, save_model_and_optimizer
+from src.util.save_paths import (
+    checkpoint_manifest_path,
+    load_model_and_optimizer,
+    save_model_and_optimizer,
+)
 
 
 PROCESS_GROUP_TIMEOUT = timedelta(minutes=5)
@@ -569,10 +573,7 @@ def _train_quantum(
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
     optimizer_started_at = time.perf_counter()
-    training_stats = trainer.train(
-        batches,
-        command.global_step,
-    )
+    training_stats = trainer.train(batches, command.global_step)
     decode_seconds = torch.tensor(
         batches.preparation_seconds,
         device=model.device,

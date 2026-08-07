@@ -12,7 +12,8 @@ from src.experiment.evaluation_protocol import (
 )
 from src.eval.evaluation_types import EvaluationMove, EvaluationTerminal, Results
 from src.eval.paired_match import play_paired_models
-from src.settings import CurrentBoard, CurrentGame
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 
 OPENING_SUITE_PATH = Path('reference/pilot-openings.tsv')
@@ -98,8 +99,10 @@ def test_match_summary_rejects_unpaired_opening() -> None:
         summarize_match(records, bootstrap_seed=7, bootstrap_samples=100)
 
 
-def first_legal_move(boards: list[CurrentBoard]) -> list[EvaluationMove]:
-    return [EvaluationMove(CurrentGame.encode_moves([board.get_valid_moves()[0]], board)) for board in boards]
+def first_legal_move(boards: list[ChessBoard]) -> list[EvaluationMove]:
+    return [
+        EvaluationMove(CHESS_STATE_CONTRACT.game.encode_moves([board.get_valid_moves()[0]], board)) for board in boards
+    ]
 
 
 def test_paired_match_reuses_opening_with_colors_swapped() -> None:
@@ -128,7 +131,7 @@ def test_paired_match_adjudicates_native_terminal_decision_as_draw() -> None:
     opening = load_opening_suite(OPENING_SUITE_PATH)[0]
     schedule = build_paired_schedule((opening,))
 
-    def terminal_decision(boards: list[CurrentBoard]) -> list[EvaluationTerminal]:
+    def terminal_decision(boards: list[ChessBoard]) -> list[EvaluationTerminal]:
         return [EvaluationTerminal() for _ in boards]
 
     results, records = play_paired_models(

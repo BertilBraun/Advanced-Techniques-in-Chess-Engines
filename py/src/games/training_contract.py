@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Protocol
 
-from src.Network import NetworkDimensions
-from src.experiment.chess_experiment import ExperimentConfiguration
+from src.neural_network import NetworkDimensions
+from src.experiment.configuration import ExperimentConfiguration
 from src.self_play.chess_completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
 from src.self_play.go_completed_game import GoCompletedGame

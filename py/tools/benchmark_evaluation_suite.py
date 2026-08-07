@@ -10,7 +10,7 @@ import torch.multiprocessing as multiprocessing
 
 from src.cluster.EvaluationProcess import EvaluationProcess
 from src.cluster.EvaluationProcess import EvaluationRunProvenance
-from src.experiment.chess_experiment import load_chess_experiment_configuration
+from src.experiment.configuration import load_chess_experiment_configuration
 
 
 class EvaluationSuiteBenchmarkResult(BaseModel):

@@ -6,7 +6,15 @@ import numpy as np
 import pytest
 import torch
 
-from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, decode_board_states, encode_board_state
+from src.games.chess.encoding import (
+    BINARY_CHANNELS,
+    C,
+    H,
+    SCALAR_CHANNELS,
+    W,
+    decode_board_states,
+    encode_board_state,
+)
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.SelfPlayDataset import (
     ReplaySchemaVersionError,

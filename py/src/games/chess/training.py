@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from src.Network import CHESS_NETWORK_DIMENSIONS, NetworkDimensions
-from src.experiment.chess_experiment import ChessExperimentConfiguration
+from src.neural_network import NetworkDimensions
+from src.experiment.configuration import ChessExperimentConfiguration
 from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
 from src.self_play.SelfPlay import SelfPlay
 from src.self_play.chess_completed_game import ChessCompletedGame
@@ -21,7 +21,7 @@ class ChessTrainingGame(TrainingGameImplementation):
 
     @property
     def network_dimensions(self) -> NetworkDimensions:
-        return CHESS_NETWORK_DIMENSIONS
+        return self.configuration.network_dimensions
 
     @property
     def replay(self) -> ReplayGameImplementation[ChessCompletedGame]:

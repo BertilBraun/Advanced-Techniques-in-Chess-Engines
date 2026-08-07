@@ -23,11 +23,12 @@ from src.self_play.SelfPlay import SelfPlay
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.chess_completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
-from src.settings import TRAINING_ARGS
+from src.experiment.configuration import load_chess_experiment_configuration
 
 
 @dataclass(frozen=True)
 class Arguments:
+    run_config: Path
     model: Path
     device: int
     games: int
@@ -117,6 +118,7 @@ def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser(
         description='Benchmark the production stochastic C++ self-play game-generation path.'
     )
+    parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--model', required=True, type=Path)
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--games', type=int, default=96)
@@ -132,18 +134,19 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--direct-inference-batch-size', type=int, default=64)
     parser.add_argument('--direct-outstanding-batches-per-worker', type=int, default=2)
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument(
-        '--iteration',
-        type=int,
-        default=max(
-            TRAINING_ARGS.self_play.search_warmup_model_versions,
-            TRAINING_ARGS.self_play.endgame_shortcut_fade_model_versions,
-        ),
-    )
+    parser.add_argument('--iteration', type=int)
     parser.add_argument('--ready-file', type=Path)
     parser.add_argument('--start-barrier', type=Path)
     namespace = parser.parse_args()
+    training = load_chess_experiment_configuration(namespace.run_config).training
+    iteration = namespace.iteration
+    if iteration is None:
+        iteration = max(
+            training.self_play.search_warmup_model_versions,
+            training.self_play.endgame_shortcut_fade_model_versions,
+        )
     return Arguments(
+        run_config=namespace.run_config,
         model=namespace.model,
         device=namespace.device,
         games=namespace.games,
@@ -158,7 +161,7 @@ def parse_arguments() -> Arguments:
         direct_inference_batch_size=namespace.direct_inference_batch_size,
         direct_outstanding_batches_per_worker=namespace.direct_outstanding_batches_per_worker,
         seed=namespace.seed,
-        iteration=namespace.iteration,
+        iteration=iteration,
         ready_file=namespace.ready_file,
         start_barrier=namespace.start_barrier,
     )
@@ -211,18 +214,19 @@ def seed_python_libraries(seed: int, device: int) -> None:
 
 
 def create_self_play(arguments: Arguments) -> SelfPlay:
-    search = TRAINING_ARGS.self_play.search.validated_copy(
+    training = load_chess_experiment_configuration(arguments.run_config).training
+    search = training.self_play.search.validated_copy(
         update={
             'num_searches_per_turn': arguments.searches,
             'num_parallel_searches': arguments.parallel_searches,
         }
     )
-    self_play_configuration = TRAINING_ARGS.self_play.validated_copy(update={'search': search.model_dump(mode='json')})
-    self_play_topology = TRAINING_ARGS.topology.self_play.validated_copy(
+    self_play_configuration = training.self_play.validated_copy(update={'search': search.model_dump(mode='json')})
+    self_play_topology = training.topology.self_play.validated_copy(
         update={'parallel_games_per_process': arguments.games}
     )
-    topology = TRAINING_ARGS.topology.validated_copy(update={'self_play': self_play_topology.model_dump(mode='json')})
-    configuration = TRAINING_ARGS.validated_copy(
+    topology = training.topology.validated_copy(update={'self_play': self_play_topology.model_dump(mode='json')})
+    configuration = training.validated_copy(
         update={
             'random_seed': arguments.seed,
             'self_play': self_play_configuration.model_dump(mode='json'),

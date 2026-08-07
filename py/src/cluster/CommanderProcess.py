@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generator, Protocol
+from typing import Protocol
 import time
 from dataclasses import dataclass
 import torch
@@ -12,10 +12,9 @@ from time import monotonic
 from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
-from src.experiment.chess_experiment import ChessExperimentConfiguration
+from src.experiment.configuration import ChessExperimentConfiguration
 from src.games.training_contract import TrainingGameImplementation
 from src.train.TrainingArgs import CreditTrainingParams
-from src.train.TrainingStats import TrainingStats
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
     Communication,
@@ -141,14 +140,14 @@ class CommanderProcess:
         self.final_stop_reason: str | None = None
         self.latest_completed_model_version = 0
 
-    def run(self) -> Generator[tuple[int, TrainingStats], None, None]:
+    def run(self) -> None:
         Path(self.args.save_path).mkdir(parents=True, exist_ok=True)
-        yield from self._run_training_lifecycle(self.args.lifecycle.credit)
+        self._run_training_lifecycle(self.args.lifecycle.credit)
 
     def _run_training_lifecycle(
         self,
         parameters: CreditTrainingParams,
-    ) -> Generator[tuple[int, TrainingStats], None, None]:
+    ) -> None:
         lifecycle: TrainingLifecycle | None = None
         try:
             with TensorboardWriter(self.run_id, 'credit_training', postfix_pid=False):
@@ -168,13 +167,6 @@ class CommanderProcess:
                     completed = self._run_optimizer_quantum(lifecycle, observation)
                     self._record_quantum_telemetry(lifecycle, observation, completed)
                     self._advance_lifecycle(lifecycle, observation, completed.progress)
-                    yield (
-                        credit_training_progress_axis(
-                            completed.progress,
-                            self.args.trainer.global_batch_size,
-                        ),
-                        completed.result.training_stats,
-                    )
         finally:
             try:
                 if lifecycle is not None:

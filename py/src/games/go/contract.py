@@ -8,7 +8,7 @@ import numpy.typing as npt
 
 from AlphaZeroCpp import GoPlayer, GoPosition7, GoPosition9, GoRules
 
-from src.Network import NetworkDimensions
+from src.neural_network import NetworkDimensions
 from src.games.contracts import GameStateContract, RepresentationDimensions
 from src.packed_planes import (
     PackedPlaneLayout,

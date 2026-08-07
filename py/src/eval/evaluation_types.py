@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from src.games.Game import Player
-from src.settings import CurrentBoard
+from src.games.chess.ChessBoard import ChessBoard
 
 
 @dataclass
@@ -44,7 +44,7 @@ class Results:
         return f'W/D/L: {self.wins}/{self.draws}/{self.losses}'
 
 
-EvaluationModel = Callable[[list[CurrentBoard]], list[np.ndarray]]
+EvaluationModel = Callable[[list[ChessBoard]], list[np.ndarray]]
 
 
 @dataclass(frozen=True)
@@ -58,4 +58,4 @@ class EvaluationTerminal:
 
 
 PairedEvaluationDecision = EvaluationMove | EvaluationTerminal
-PairedEvaluationModel = Callable[[list[CurrentBoard]], list[PairedEvaluationDecision]]
+PairedEvaluationModel = Callable[[list[ChessBoard]], list[PairedEvaluationDecision]]

@@ -13,7 +13,8 @@ from src.eval.evaluation_types import (
 )
 from src.experiment.evaluation_protocol import GameOutcome, GameRecord, PlayerColor, ScheduledGame
 from src.games.Game import Player
-from src.settings import CurrentBoard, CurrentGame
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.util.tensorboard import log_text
 
 
@@ -23,7 +24,7 @@ class _ActivePairedGame:
     opening_id: str
     starting_fen: str
     candidate_color: PlayerColor
-    board: CurrentBoard
+    board: ChessBoard
     moves_uci: list[str]
 
     @property
@@ -60,7 +61,7 @@ def play_paired_models(
             opening_id=scheduled_game.opening_id,
             starting_fen=scheduled_game.fen,
             candidate_color=scheduled_game.candidate_color,
-            board=CurrentBoard.from_fen(scheduled_game.fen),
+            board=ChessBoard.from_fen(scheduled_game.fen),
             moves_uci=[],
         )
         for scheduled_game in schedule
@@ -116,7 +117,7 @@ def play_paired_models(
             if not np.all(np.isfinite(policy)) or float(np.sum(policy)) <= 0:
                 raise ValueError('Evaluation move policy must be finite and have positive mass.')
             encoded_move = int(np.argmax(policy).item())
-            move = CurrentGame.decode_move(encoded_move, active_game.board)
+            move = CHESS_STATE_CONTRACT.decode_move(encoded_move, active_game.board)
             active_game.board.make_move(move)
             active_game.moves_uci.append(str(move))
 

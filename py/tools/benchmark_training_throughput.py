@@ -12,10 +12,11 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import default_collate
 
 from src.train.TrainingDataLoader import training_dataloader
-from src.experiment.chess_experiment import load_chess_experiment_configuration
+from src.experiment.configuration import load_chess_experiment_configuration
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import TRAINING_ARGS
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.train.Trainer import Trainer, prefetch_training_batches
+from src.train.TrainingArgs import TrainingArgs
 from src.util.save_paths import load_model_and_optimizer
 
 
@@ -44,15 +45,15 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_iteration_dataset(save_path: str, iteration: int) -> SelfPlayDataset:
+def load_iteration_dataset(save_path: str, iteration: int, training: TrainingArgs) -> SelfPlayDataset:
     dataset = SelfPlayDataset.load_iteration(save_path, iteration)
-    if len(dataset) < TRAINING_ARGS.trainer.global_batch_size:
+    if len(dataset) < training.trainer.global_batch_size:
         raise ValueError(f'Iteration {iteration} contains only {len(dataset)} samples.')
     return dataset
 
 
-def benchmark_decode(dataset: SelfPlayDataset, batches: int) -> tuple[float, float]:
-    batch_size = TRAINING_ARGS.trainer.global_batch_size
+def benchmark_decode(dataset: SelfPlayDataset, batches: int, training: TrainingArgs) -> tuple[float, float]:
+    batch_size = training.trainer.global_batch_size
     indices = list(range(batch_size))
 
     started_at = perf_counter()
@@ -88,21 +89,23 @@ def benchmark_training(
     warmup_batches: int,
     batches: int,
     dataloader_workers: int,
+    training: TrainingArgs,
 ) -> tuple[float, float, float]:
-    device = torch.device('cuda', TRAINING_ARGS.topology.trainer.rank_zero_device_id)
+    device = torch.device('cuda', training.topology.trainer.rank_zero_device_id)
     torch.cuda.set_device(device)
     model, optimizer = load_model_and_optimizer(
         iteration,
-        TRAINING_ARGS.network,
+        training.network,
         device,
-        TRAINING_ARGS.save_path,
-        TRAINING_ARGS.trainer.optimizer,
+        training.save_path,
+        training.trainer.optimizer,
+        CHESS_NETWORK_DIMENSIONS,
     )
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.trainer)
+    trainer = Trainer(model, optimizer, training.trainer)
     scaler = GradScaler()
     dataloader = training_dataloader(
         dataset,
-        TRAINING_ARGS.trainer.global_batch_size,
+        training.trainer.global_batch_size,
         num_workers=dataloader_workers,
         drop_last=True,
     )
@@ -133,20 +136,20 @@ def benchmark_training(
 
 
 def main() -> None:
-    global TRAINING_ARGS
     arguments = parse_arguments()
-    TRAINING_ARGS = load_chess_experiment_configuration(arguments.run_config).training
+    training = load_chess_experiment_configuration(arguments.run_config).training
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    dataset = load_iteration_dataset(TRAINING_ARGS.save_path, arguments.iteration)
-    legacy_decode_seconds, vectorized_decode_seconds = benchmark_decode(dataset, arguments.batches)
+    dataset = load_iteration_dataset(training.save_path, arguments.iteration, training)
+    legacy_decode_seconds, vectorized_decode_seconds = benchmark_decode(dataset, arguments.batches, training)
     loader_seconds, cuda_seconds, total_seconds = benchmark_training(
         dataset,
         arguments.iteration,
         arguments.warmup_batches,
         arguments.batches,
         arguments.dataloader_workers,
+        training,
     )
     result = ThroughputResult(
         samples=len(dataset),
@@ -159,7 +162,7 @@ def main() -> None:
         total_seconds_per_batch=total_seconds,
         estimated_gpu_duty_cycle_percent=100 * cuda_seconds / total_seconds,
         host_ram_gib=psutil.Process().memory_info().rss / 2**30,
-        gpu_memory_mib=torch.cuda.memory_allocated(TRAINING_ARGS.topology.trainer.rank_zero_device_id) / 2**20,
+        gpu_memory_mib=torch.cuda.memory_allocated(training.topology.trainer.rank_zero_device_id) / 2**20,
     )
     print(json.dumps(asdict(result), indent=2))
 

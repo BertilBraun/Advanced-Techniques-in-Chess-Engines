@@ -2,11 +2,11 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from src.settings import CurrentGame
 
-
-def action_probabilities(visit_counts: Iterable[tuple[int, int]]) -> np.ndarray:
-    probabilities = np.zeros(CurrentGame.action_size, dtype=np.float32)
+def action_probabilities(visit_counts: Iterable[tuple[int, int]], action_size: int) -> np.ndarray:
+    if action_size <= 0:
+        raise ValueError('Action size must be positive.')
+    probabilities = np.zeros(action_size, dtype=np.float32)
     for move, visit_count in visit_counts:
         probabilities[move] = visit_count
     total_visits = float(np.sum(probabilities))

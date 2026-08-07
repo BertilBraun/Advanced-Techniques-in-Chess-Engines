@@ -8,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
+from src.games.chess.encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index

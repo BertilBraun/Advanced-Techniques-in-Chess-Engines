@@ -21,7 +21,7 @@ from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVis
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, SelfPlayGameMemory
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import FinalOutcome, TerminationReason
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.train.ChessReplay import (
     CHESS_REPLAY_IMPLEMENTATION,
     CHESS_ARCHIVE_HEADER,
@@ -55,9 +55,9 @@ def completed_game(
     for ply, move_uci in enumerate(FOOLS_MATE):
         move = chess.Move.from_uci(move_uci)
         legal_actions = tuple(
-            sorted(CurrentGame.encode_move(legal_move, board) for legal_move in board.get_valid_moves())
+            sorted(CHESS_STATE_CONTRACT.encode_move(legal_move, board) for legal_move in board.get_valid_moves())
         )
-        selected_action = CurrentGame.encode_move(move, board)
+        selected_action = CHESS_STATE_CONTRACT.encode_move(move, board)
         alternative_action = next(action for action in legal_actions if action != selected_action)
         observations.append(
             ChessSearchObservation(
@@ -127,7 +127,7 @@ def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path
     game.acknowledge_model_version(0)
     for ply, move_uci in enumerate(FOOLS_MATE):
         move = chess.Move.from_uci(move_uci)
-        selected_action = CurrentGame.encode_move(move, game.board)
+        selected_action = CHESS_STATE_CONTRACT.encode_move(move, game.board)
         game.memory.append(SelfPlayGameMemory(game.board.copy(), [(selected_action, 8)], 0.0, ply, 0, 8, True))
         game = game.expand(move)
 
@@ -192,7 +192,7 @@ def test_resignation_materializes_final_unplayed_search_position(tmp_path: Path)
     board = ChessBoard()
     for move_uci in FOOLS_MATE[:3]:
         board.make_move(chess.Move.from_uci(move_uci))
-    legal_actions = tuple(sorted(CurrentGame.encode_move(move, board) for move in board.get_valid_moves()))
+    legal_actions = tuple(sorted(CHESS_STATE_CONTRACT.encode_move(move, board) for move in board.get_valid_moves()))
     terminal_observation = ChessSearchObservation(
         ply=3,
         model_generation=3,
@@ -365,8 +365,8 @@ def test_preallocated_batch_encoding_applies_deterministic_chess_symmetry(
     monkeypatch.setattr(chess_replay_module, 'sample_is_mirrored', always_mirror)
     batch = build_chess_training_batch(snapshot, (0, 1), global_step=9, rank=0)
 
-    assert batch.states.shape == (2, *CurrentGame.representation_shape)
-    assert batch.policy_targets.shape == (2, CurrentGame.action_size)
+    assert batch.states.shape == (2, *CHESS_STATE_CONTRACT.game.representation_shape)
+    assert batch.policy_targets.shape == (2, CHESS_STATE_CONTRACT.action_size)
     torch.testing.assert_close(batch.policy_targets.sum(dim=1), torch.ones(2))
     torch.testing.assert_close(batch.sample_weights, torch.ones(2))
     torch.testing.assert_close(batch.states, torch.flip(unaugmented.states, dims=(3,)))

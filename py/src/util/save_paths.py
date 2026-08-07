@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.util.frozen_model import FrozenModel
 
-from src.Network import CHESS_NETWORK_DIMENSIONS, Network, NetworkDimensions
+from src.neural_network import Network, NetworkDimensions
 from src.train.TrainingArgs import NetworkParams, OptimizerType
 from src.util.atomic_file import write_text_atomically
 from src.util.log import LogLevel, log
@@ -104,7 +104,7 @@ def load_checkpoint_manifest(
 def create_model(
     args: NetworkParams,
     device: torch.device,
-    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+    dimensions: NetworkDimensions,
 ) -> Network:
     model = Network(args, device, dimensions)
     # Not possible with JIT and model fusion model = try_compile(model)
@@ -123,7 +123,7 @@ def load_model(
     path: str | PathLike,
     args: NetworkParams,
     device: torch.device,
-    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+    dimensions: NetworkDimensions,
 ) -> Network:
     model = create_model(args, device, dimensions)
     try:
@@ -200,7 +200,7 @@ def load_model_and_optimizer(
     device: torch.device,
     save_folder: str | PathLike,
     type: OptimizerType,
-    dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+    dimensions: NetworkDimensions,
 ) -> tuple[Network, torch.optim.Optimizer]:
     manifest_path = checkpoint_manifest_path(iteration, save_folder)
     if iteration == 0 and not manifest_path.exists():

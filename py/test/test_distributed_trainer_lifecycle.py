@@ -16,7 +16,8 @@ from src.cluster.TrainerProcess import (
     available_tcp_port,
     is_rank_zero,
 )
-from src.settings import TRAINING_ARGS
+from test_helpers.chess_configuration import CHESS_TRAINING
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.util.save_paths import create_model, create_optimizer, load_model_and_optimizer, save_model_and_optimizer
 
 
@@ -97,8 +98,8 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(
     )
     try:
         device = torch.device('cpu')
-        model = create_model(TRAINING_ARGS.network, device)
-        optimizer = create_optimizer(model, TRAINING_ARGS.trainer.optimizer)
+        model = create_model(CHESS_TRAINING.network, device, CHESS_NETWORK_DIMENSIONS)
+        optimizer = create_optimizer(model, CHESS_TRAINING.trainer.optimizer)
         wrapped_model = _wrap_distributed_model(model, device)
 
         assert not any(key.startswith('module.') for key in wrapped_model.state_dict())
@@ -122,10 +123,11 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(
         monkeypatch.setattr(torch, 'load', load_checkpoint)
         loaded_model, loaded_optimizer = load_model_and_optimizer(
             0,
-            TRAINING_ARGS.network,
+            CHESS_TRAINING.network,
             device,
             tmp_path,
-            TRAINING_ARGS.trainer.optimizer,
+            CHESS_TRAINING.trainer.optimizer,
+            CHESS_NETWORK_DIMENSIONS,
         )
     finally:
         distributed.destroy_process_group()

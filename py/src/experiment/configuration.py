@@ -1,3 +1,5 @@
+"""Typed shared experiment configuration with concrete chess and Go variants."""
+
 from __future__ import annotations
 
 import json
@@ -9,6 +11,8 @@ from pydantic import Field, TypeAdapter, model_validator
 
 from src.experiment.run_contract import EnvironmentConfiguration, HardwareConfiguration, TrainingStage
 from src.games.chess.ChessGame import BINARY_CHANNELS, SCALAR_CHANNELS
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.neural_network import NetworkDimensions
 from src.train.TrainingArgs import EvaluationParams, TrainingArgs
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
@@ -78,6 +82,10 @@ class ChessConfiguration(FrozenModel):
 class ChessExperimentConfiguration(BaseExperimentConfiguration):
     game: Literal['chess'] = 'chess'
     chess: ChessConfiguration
+
+    @property
+    def network_dimensions(self) -> NetworkDimensions:
+        return CHESS_NETWORK_DIMENSIONS
 
     @model_validator(mode='after')
     def validate_experiment(self) -> ChessExperimentConfiguration:
@@ -160,6 +168,16 @@ class GoConfiguration(FrozenModel):
 class GoExperimentConfiguration(BaseExperimentConfiguration):
     game: Literal['go'] = 'go'
     go: GoConfiguration
+
+    @property
+    def network_dimensions(self) -> NetworkDimensions:
+        representation = self.go.representation
+        return NetworkDimensions(
+            representation.channel_count,
+            representation.board_size,
+            representation.board_size,
+            representation.action_count,
+        )
 
     @model_validator(mode='after')
     def validate_experiment(self) -> GoExperimentConfiguration:

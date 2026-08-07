@@ -3,16 +3,16 @@ from types import SimpleNamespace
 import pytest
 
 from src.self_play.SelfPlay import new_game_from_encoded_prefix, policy_search_disagreement
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 
 def test_encoded_prefix_restores_complete_legal_move_history() -> None:
-    board = CurrentGame.get_initial_board()
+    board = CHESS_STATE_CONTRACT.create_initial_board()
     first_move = board.get_valid_moves()[0]
-    first_encoded = CurrentGame.encode_move(first_move, board)
+    first_encoded = CHESS_STATE_CONTRACT.encode_move(first_move, board)
     board.make_move(first_move)
     second_move = board.get_valid_moves()[0]
-    second_encoded = CurrentGame.encode_move(second_move, board)
+    second_encoded = CHESS_STATE_CONTRACT.encode_move(second_move, board)
 
     restored = new_game_from_encoded_prefix((first_encoded, second_encoded))
 

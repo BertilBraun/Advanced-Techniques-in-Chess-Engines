@@ -6,6 +6,7 @@ import numpy.typing as npt
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.ChessGame import ChessGame
 from src.games.contracts import GameStateContract, RepresentationDimensions
+from src.neural_network import NetworkDimensions
 from src.packed_planes import PackedPlaneLayout
 
 
@@ -55,3 +56,9 @@ class ChessStateContract(GameStateContract):
 
 
 CHESS_STATE_CONTRACT = ChessStateContract()
+CHESS_NETWORK_DIMENSIONS = NetworkDimensions(
+    channels=CHESS_STATE_CONTRACT.representation.channels,
+    rows=CHESS_STATE_CONTRACT.representation.rows,
+    columns=CHESS_STATE_CONTRACT.representation.columns,
+    actions=CHESS_STATE_CONTRACT.action_size,
+)

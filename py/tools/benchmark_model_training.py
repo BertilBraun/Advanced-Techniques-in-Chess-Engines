@@ -4,19 +4,23 @@ import argparse
 import json
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import torch
 from torch import nn
 from torch.amp import GradScaler, autocast
 
-from src.Network import Network
-from src.settings import CurrentGame, TRAINING_ARGS
+from src.neural_network import Network
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.experiment.configuration import load_chess_experiment_configuration
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
 @dataclass(frozen=True)
 class Arguments:
+    run_config: Path
     device_ids: tuple[int, ...]
     batch_size: int
     layers: int
@@ -38,6 +42,7 @@ class Result:
 
 def parse_arguments() -> Arguments:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--run-config', required=True, type=Path)
     parser.add_argument('--device-ids', required=True, nargs='+', type=int)
     parser.add_argument('--batch-size', required=True, type=int)
     parser.add_argument('--layers', required=True, type=int)
@@ -52,6 +57,7 @@ def parse_arguments() -> Arguments:
     parser.add_argument('--warmup-batches', default=2, type=int)
     namespace = parser.parse_args()
     return Arguments(
+        run_config=namespace.run_config,
         device_ids=tuple(namespace.device_ids),
         batch_size=namespace.batch_size,
         layers=namespace.layers,
@@ -79,6 +85,7 @@ def train_batch(
 
 def main() -> None:
     arguments = parse_arguments()
+    training = load_chess_experiment_configuration(arguments.run_config).training
     device = torch.device('cuda', arguments.device_ids[0])
     torch.cuda.set_device(device)
     model = Network(
@@ -88,6 +95,7 @@ def main() -> None:
             arguments.se_placement,
         ),
         device,
+        CHESS_NETWORK_DIMENSIONS,
     )
     optimizer = torch.optim.AdamW(model.parameters())
     logit_model = _LogitForward(model)
@@ -96,12 +104,12 @@ def main() -> None:
         if len(arguments.device_ids) > 1
         else logit_model
     )
-    trainer = Trainer(model, optimizer, TRAINING_ARGS.trainer, training_model=training_model)
+    trainer = Trainer(model, optimizer, training.trainer, training_model=training_model)
     scaler = GradScaler()
 
     batch_size = arguments.batch_size
-    state = torch.randn((batch_size, *CurrentGame.representation_shape))
-    policy = torch.zeros((batch_size, CurrentGame.action_size))
+    state = torch.randn((batch_size, *CHESS_STATE_CONTRACT.game.representation_shape))
+    policy = torch.zeros((batch_size, CHESS_STATE_CONTRACT.action_size))
     policy[:, 0] = 1
     value = torch.zeros(batch_size)
     batch = (state, policy, value)

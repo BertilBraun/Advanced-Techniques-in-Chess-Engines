@@ -40,7 +40,7 @@ def timeit(func):
 
 def reset_times():
     from src.util.log import LogLevel, log
-    from src.settings import log_scalar
+    from src.util.tensorboard import log_scalar
 
     global function_times
 

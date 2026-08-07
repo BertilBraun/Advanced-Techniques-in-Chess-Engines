@@ -5,8 +5,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as functional
 
-from src.Network import Network
-from src.experiment.chess_experiment import GoExperimentConfiguration, GoTrainingObjectiveConfiguration
+from src.neural_network import Network
+from src.experiment.configuration import GoExperimentConfiguration, GoTrainingObjectiveConfiguration
 from src.games.go.contract import GoStateContract
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome

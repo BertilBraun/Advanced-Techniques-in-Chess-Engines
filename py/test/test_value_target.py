@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from src.Network import Network
+from src.neural_network import Network
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,

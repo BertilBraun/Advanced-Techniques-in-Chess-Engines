@@ -22,7 +22,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.Network import Network
+from src.neural_network import Network
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.eval.evaluation_types import (
     Results,
     EvaluationMove,
@@ -38,9 +39,10 @@ from src.train.TrainingArgs import (
     TrainingArgs,
 )
 from src.games.chess.ChessGame import normalize_move_for_action_space
+from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.visit_policy import action_probabilities
-from src.settings import USE_GPU, CurrentBoard
+from src.runtime import USE_GPU
 from src.util.save_paths import inference_model_path, load_model, model_save_path
 from src.experiment.evaluation_protocol import (
     GameRecord,
@@ -50,7 +52,7 @@ from src.experiment.evaluation_protocol import (
 
 
 def policy_evaluator(current_model: ChessSelfPlaySearch) -> EvaluationModel:
-    def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
+    def evaluator(boards: list[ChessBoard]) -> list[np.ndarray]:
         histories = [bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES) for board in boards]
         results = current_model.inference_with_history(
             [(history.starting_fen, history.moves_uci) for history in histories]
@@ -67,12 +69,12 @@ def policy_evaluator(current_model: ChessSelfPlaySearch) -> EvaluationModel:
     return evaluator
 
 
-def history_aware_root(board: CurrentBoard, search: ChessSelfPlaySearch) -> ChessSearchRoot:
+def history_aware_root(board: ChessBoard, search: ChessSelfPlaySearch) -> ChessSearchRoot:
     history = bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES)
     return search.new_root_with_history(history.starting_fen, history.moves_uci)
 
 
-def _encoded_policy_for_moves(boards: list[CurrentBoard], moves: list[chess.Move]) -> list[np.ndarray]:
+def _encoded_policy_for_moves(boards: list[ChessBoard], moves: list[chess.Move]) -> list[np.ndarray]:
     policies: list[np.ndarray] = []
     for board, move in zip(boards, moves):
         policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
@@ -145,7 +147,12 @@ class ModelEvaluation:
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:
         device = torch.device(f'cuda:{self.device_id}' if USE_GPU else 'cpu')
-        model = load_model(model_save_path(self.iteration, self.args.save_path), self.args.network, device)
+        model = load_model(
+            model_save_path(self.iteration, self.args.save_path),
+            self.args.network,
+            device,
+            CHESS_NETWORK_DIMENSIONS,
+        )
 
         dataloader = DataLoader(
             dataset,
@@ -212,7 +219,7 @@ class ModelEvaluation:
     def play_vs_random(self) -> Results:
         # Random vs Random has a result of: 60% Wins, 28% Losses, 12% Draws
 
-        def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def random_evaluator(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             random_moves = [random.choice(board.get_valid_moves()) for board in boards]
             return [EvaluationMove(policy) for policy in _encoded_policy_for_moves(boards, random_moves)]
 
@@ -236,7 +243,7 @@ class ModelEvaluation:
 
         opponent = self._create_search(opponent_inference_path)
 
-        def opponent_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def opponent_evaluator(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             results = opponent.search(
                 [ChessSelfPlaySearchRequest(history_aware_root(board, opponent), False) for board in boards]
             )
@@ -254,10 +261,10 @@ class ModelEvaluation:
         current_model = self._create_search(inference_model_path(model_save_path(self.iteration, self.args.save_path)))
         policy_model = policy_evaluator(current_model)
 
-        def paired_policy_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def paired_policy_model(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             return [EvaluationMove(policy) for policy in policy_model(boards)]
 
-        def random_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def random_evaluator(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             random_moves = [random.choice(board.get_valid_moves()) for board in boards]
             return [EvaluationMove(policy) for policy in _encoded_policy_for_moves(boards, random_moves)]
 
@@ -277,7 +284,7 @@ class ModelEvaluation:
             raise ValueError('Stockfish skill-level evaluation requires a configured binary path.')
         engine = self._open_skill_level_stockfish(level)
 
-        def stockfish_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def stockfish_evaluator(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             nonlocal engine
             decisions: list[PairedEvaluationDecision] = []
             for board in boards:
@@ -323,7 +330,7 @@ class ModelEvaluation:
                 }
             )
 
-            def stockfish_evaluator(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+            def stockfish_evaluator(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
                 decisions: list[PairedEvaluationDecision] = []
                 for board in boards:
                     result = engine.play(
@@ -364,7 +371,7 @@ class ModelEvaluation:
             raise ValueError(f'Candidate inference model does not exist: {current_inference_path}')
         current = self._create_search(current_inference_path)
 
-        def current_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:
+        def current_model(boards: list[ChessBoard]) -> list[PairedEvaluationDecision]:
             results = current.search(
                 [ChessSelfPlaySearchRequest(history_aware_root(board, current), False) for board in boards]
             )
@@ -398,7 +405,7 @@ class ModelEvaluation:
     @staticmethod
     def _play_skill_level_stockfish(
         engine: chess.engine.SimpleEngine,
-        board: CurrentBoard,
+        board: ChessBoard,
         level: int,
     ) -> chess.Move:
         result = engine.play(
@@ -419,12 +426,5 @@ class ModelEvaluation:
                     raise RuntimeError('Evaluation MCTS returned no visits for a non-terminal root.')
                 decisions.append(EvaluationTerminal())
                 continue
-            decisions.append(EvaluationMove(action_probabilities(result.visits)))
+            decisions.append(EvaluationMove(action_probabilities(result.visits, CHESS_STATE_CONTRACT.action_size)))
         return decisions
-
-
-if __name__ == '__main__':
-    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
-
-    evaluation = ModelEvaluation(0, TRAINING_ARGS, CHESS_EXPERIMENT.chess.evaluation, 0, 100, 400)
-    print('Evaluation vs Random:', evaluation.play_vs_random())

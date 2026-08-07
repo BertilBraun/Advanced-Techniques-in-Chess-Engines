@@ -22,8 +22,8 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
 )
 
-from src.experiment.chess_experiment import GoExperimentConfiguration
-from src.settings import log_scalar
+from src.experiment.configuration import GoExperimentConfiguration
+from src.util.tensorboard import log_scalar
 from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.self_play.go_completed_game import (

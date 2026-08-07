@@ -3,7 +3,7 @@ import psutil
 import GPUtil
 from threading import Event, Thread
 
-from src.settings import log_scalar
+from src.util.tensorboard import log_scalar
 
 from src.util.tensorboard import TensorboardWriter
 from src.util.background_worker import BackgroundWorker

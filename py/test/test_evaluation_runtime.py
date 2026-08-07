@@ -20,7 +20,8 @@ from src.eval.ModelEvaluation import ModelEvaluation
 from src.eval.evaluation_types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
 from src.self_play.visit_policy import action_probabilities
-from src.settings import CurrentBoard
+from src.games.chess.ChessBoard import ChessBoard
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.train.TrainingArgs import (
     BatchedInferenceParams,
     TrainingArgs,
@@ -39,7 +40,7 @@ class _EvaluationSettings:
 @pytest.mark.parametrize('visit_counts', ([], [(1, 0), (2, 0)]))
 def test_action_probabilities_reject_zero_visit_mass(visit_counts: list[tuple[int, int]]) -> None:
     with pytest.raises(ValueError, match='at least one positive visit'):
-        action_probabilities(visit_counts)
+        action_probabilities(visit_counts, CHESS_STATE_CONTRACT.action_size)
 
 
 @dataclass(frozen=True)
@@ -384,7 +385,7 @@ def test_skill_level_stockfish_restarts_after_engine_error(
     first_engine = RecoveringStockfish(fail=True)
     second_engine = RecoveringStockfish(fail=False)
     engines = iter((first_engine, second_engine))
-    current_board = CurrentBoard()
+    current_board = ChessBoard()
 
     monkeypatch.setattr(
         evaluation_module.chess.engine.SimpleEngine,

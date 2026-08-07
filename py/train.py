@@ -1,5 +1,3 @@
-import src.environ_setup  # noqa # isort:skip # This import is necessary for setting up the environment variables
-
 import argparse
 import os
 import random
@@ -9,11 +7,11 @@ from time import monotonic
 os.environ['OMP_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for OpenMP
 os.environ['MKL_NUM_THREADS'] = '1'  # Limit the number of threads to 1 for MKL
 # os.environ['TORCH_NUM_THREADS'] = '1'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # This ensures, that the seperate processes spawned by torch.multiprocessing do not interfere with each other by using more than one core. Since we are using as many processes as cores for workers, we need to limit the number of threads to 1 for each process. Otherwise, we would use more than one core per process, which would lead to a lot of context switching and slow down the training.
 
 import numpy as np
-import torch  # noqa
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -26,8 +24,6 @@ def parse_arguments() -> argparse.Namespace:
 
 if __name__ == '__main__':
     command_line_arguments = parse_arguments()
-    os.environ['ALPHAZERO_EXPERIMENT_PATH'] = str(command_line_arguments.run_config.resolve())
-
     import torch.multiprocessing as mp
 
     mp.set_start_method('spawn')
@@ -37,32 +33,32 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.settings import EXPERIMENT, TRAINING_ARGS, USE_GPU, get_run_id
+    from src.experiment.configuration import load_experiment_configuration, write_resolved_experiment
+    from src.runtime import USE_GPU
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
-    from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
-    from src.util.tensorboard import configure_tensorboard_run_directory
-    from src.experiment.chess_experiment import write_resolved_experiment
-    from src.experiment.chess_run import prepare_experiment_training_run
+    from src.util.tensorboard import TensorboardWriter, configure_tensorboard_run_directory, get_run_id, log_text
+    from src.experiment.run import prepare_experiment_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
         RunOutcomeStatus,
         write_run_outcome,
     )
 
-    experiment = EXPERIMENT
+    experiment = load_experiment_configuration(command_line_arguments.run_config.resolve())
+    training = experiment.training
     configure_tensorboard_run_directory(experiment.run.tensorboard_run_directory)
 
-    random.seed(TRAINING_ARGS.random_seed)
-    np.random.seed(TRAINING_ARGS.random_seed)
-    torch.manual_seed(TRAINING_ARGS.random_seed)
-    torch.cuda.manual_seed_all(TRAINING_ARGS.random_seed)
+    random.seed(training.random_seed)
+    np.random.seed(training.random_seed)
+    torch.manual_seed(training.random_seed)
+    torch.cuda.manual_seed_all(training.random_seed)
 
     log('Starting training')
     log('Training on:', 'GPU' if USE_GPU else 'CPU')
     log('Training args:')
-    log(TRAINING_ARGS, use_pprint=True)
+    log(training, use_pprint=True)
 
     run = get_run_id()
     log(f'Run ID: {run}')
@@ -73,16 +69,16 @@ if __name__ == '__main__':
         command_line_arguments.expected_source_revision,
         command_line_arguments.approval_file,
     )
-    write_resolved_experiment(Path(TRAINING_ARGS.save_path) / 'resolved-experiment.json', experiment)
+    write_resolved_experiment(Path(training.save_path) / 'resolved-experiment.json', experiment)
     log('Resolved run manifest:')
     log(manifest.model_dump(), use_pprint=True)
 
     resource_telemetry = start_resource_telemetry(
-        output_path=Path(TRAINING_ARGS.save_path),
+        output_path=Path(training.save_path),
         started_at=run_started_at,
-        cost_currency=TRAINING_ARGS.limits.cost_currency,
-        hourly_price=TRAINING_ARGS.limits.hourly_price,
-        interval_seconds=TRAINING_ARGS.limits.resource_telemetry_interval_seconds,
+        cost_currency=training.limits.cost_currency,
+        hourly_price=training.limits.hourly_price,
+        interval_seconds=training.limits.resource_telemetry_interval_seconds,
     )
 
     gpu_usage_logger = start_gpu_usage_logger(run)
@@ -90,7 +86,7 @@ if __name__ == '__main__':
     with TensorboardWriter(run, 'training_args', postfix_pid=False):
         import pprint
 
-        log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
+        log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(training))
 
     if experiment.game == 'chess':
         from src.games.chess.training import ChessTrainingGame
@@ -102,7 +98,7 @@ if __name__ == '__main__':
         training_game = GoTrainingGame(experiment)
     commander = CommanderProcess(run, training_game, run_started_at)
     training_results = commander.run()
-    outcome_path = Path(TRAINING_ARGS.save_path) / 'run-outcome.json'
+    outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
         for _ in training_results:
             pass
@@ -112,8 +108,8 @@ if __name__ == '__main__':
             RunOutcomeStatus.FAILED,
             str(error),
             run_started_at,
-            TRAINING_ARGS.limits.cost_currency,
-            TRAINING_ARGS.limits.hourly_price,
+            training.limits.cost_currency,
+            training.limits.hourly_price,
             commander.latest_completed_model_version,
         )
         raise
@@ -127,8 +123,8 @@ if __name__ == '__main__':
         outcome_status,
         commander.final_stop_reason,
         run_started_at,
-        TRAINING_ARGS.limits.cost_currency,
-        TRAINING_ARGS.limits.hourly_price,
+        training.limits.cost_currency,
+        training.limits.hourly_price,
         commander.latest_completed_model_version,
     )
 

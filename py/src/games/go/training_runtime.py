@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from src.Network import NetworkDimensions
-from src.experiment.chess_experiment import GoExperimentConfiguration
+from src.neural_network import NetworkDimensions
+from src.experiment.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract
 from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
 from src.self_play.GoSelfPlay import GoSelfPlay
@@ -27,7 +27,7 @@ class GoTrainingGame(TrainingGameImplementation):
 
     @property
     def network_dimensions(self) -> NetworkDimensions:
-        return self.state.network_dimensions
+        return self.configuration.network_dimensions
 
     @property
     def replay(self) -> ReplayGameImplementation[GoCompletedGame]:

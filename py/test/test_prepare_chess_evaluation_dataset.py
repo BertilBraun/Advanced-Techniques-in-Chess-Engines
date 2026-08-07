@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.experiment.chess_experiment import load_chess_experiment_configuration
+from src.experiment.configuration import load_chess_experiment_configuration
 from tools import prepare_chess_evaluation_dataset
 
 

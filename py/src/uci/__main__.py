@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
-from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.interactive.configuration import (
+    DEFAULT_EXPLORATION_CONSTANT,
+    InferenceTarget,
+    InteractiveEngineConfiguration,
+)
 from src.interactive.engine import InteractiveEngine
-from src.settings import PLAY_C_PARAM
 from src.uci.engine import UciConfiguration, UciEngine
 from src.uci.server import UciServer
 
@@ -13,7 +16,7 @@ def parse_arguments() -> tuple[InteractiveEngineConfiguration, UciConfiguration]
     parser.add_argument('--model', required=True, help='TorchScript model path.')
     parser.add_argument('--device-id', type=int, default=0)
     parser.add_argument('--parallel-searches', type=int, default=64)
-    parser.add_argument('--c-param', type=float, default=PLAY_C_PARAM)
+    parser.add_argument('--c-param', type=float, default=DEFAULT_EXPLORATION_CONSTANT)
     parser.add_argument('--inference-workers', type=int, default=2)
     parser.add_argument('--outstanding-batches-per-worker', type=int, default=2)
     parser.add_argument('--maximum-batch-size', type=int, default=64)

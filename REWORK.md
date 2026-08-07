@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | awaiting_user_review |
+| R8 | Go pipeline integration | in_progress |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is awaiting user review after removal of the obsolete desktop visualization layer.
+Current authorization: R8 is in progress for removal of remaining chess defaults from shared Python boundaries.
 R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games

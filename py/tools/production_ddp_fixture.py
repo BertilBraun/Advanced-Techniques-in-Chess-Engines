@@ -3,11 +3,11 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from src.Encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, encode_board_state
+from src.games.chess.encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, encode_board_state
 from src.self_play.SelfPlayDataset import SelfPlayDataset
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.value_target import REPLAY_SCHEMA_VERSION, FinalOutcome, TerminationReason
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 
 
 PRODUCTION_GLOBAL_BATCH_SIZE = 1024
@@ -47,7 +47,7 @@ def write_replay_fixture(
     selected_states = tuple(templates[index % len(templates)] for index in range(sample_count))
     states = np.frombuffer(b''.join(selected_states), dtype=np.uint8).reshape(sample_count, -1)
     visit_counts = np.zeros((sample_count, 1, 2), dtype=np.int32)
-    visit_counts[:, 0, 0] = np.arange(sample_count) % CurrentGame.action_size
+    visit_counts[:, 0, 0] = np.arange(sample_count) % CHESS_STATE_CONTRACT.action_size
     visit_counts[:, 0, 1] = 600
     mcts_root_values = np.linspace(-1.0, 1.0, num=sample_count, dtype=np.float32)
     final_outcomes = np.where(

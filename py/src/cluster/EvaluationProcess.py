@@ -10,8 +10,8 @@ from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.eval.evaluation_types import Results
 
 from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.settings import log_scalar, TensorboardWriter
-from src.settings_common import USE_GPU
+from src.util.tensorboard import TensorboardWriter, log_scalar
+from src.runtime import USE_GPU
 from src.util.exceptions import log_exceptions
 from src.util.log import log
 from src.train.TrainingArgs import EvaluationParams, TrainingArgs
@@ -30,7 +30,7 @@ from src.experiment.evaluation_schedule import (
     evaluation_device_for_task,
     select_historical_model_versions,
 )
-from src.experiment.chess_run import ExperimentRunManifest
+from src.experiment.run import ExperimentRunManifest
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
@@ -665,38 +665,3 @@ class EvaluationProcess:
         except BaseException:
             _terminate_evaluation_tasks(processes)
             raise
-
-
-def evaluate_iteration(iteration: int, run_id: int) -> None:
-    from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
-    from src.util.save_paths import model_save_path
-
-    assert iteration > 0, 'Iteration must be greater than 0.'
-
-    if not model_save_path(iteration, TRAINING_ARGS.save_path).exists():
-        return
-
-    log(f'Running evaluation process for iteration {iteration}')
-    run_evaluation_process(run_id, TRAINING_ARGS, CHESS_EXPERIMENT.chess.evaluation, iteration)
-
-
-def __main() -> None:
-    import torch.multiprocessing as mp
-
-    mp.set_start_method('spawn')
-
-    import torch  # noqa
-
-    torch.set_float32_matmul_precision('high')
-    torch.backends.cuda.matmul.allow_tf32 = True
-
-    from src.settings import get_run_id
-
-    run_id = get_run_id()
-
-    for i in range(1, 100):
-        evaluate_iteration(i, run_id)
-
-
-if __name__ == '__main__':
-    __main()

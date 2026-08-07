@@ -11,12 +11,15 @@ class InferenceTarget(str, Enum):
     CUDA = 'cuda'
 
 
+DEFAULT_EXPLORATION_CONSTANT = 1.0
+
+
 @dataclass(frozen=True)
 class InteractiveEngineConfiguration:
     model_path: str
     device_id: int = 0
     parallel_searches: int = 64
-    exploration_constant: float = 1.0
+    exploration_constant: float = DEFAULT_EXPLORATION_CONSTANT
     inference_workers: int = 2
     outstanding_batches_per_worker: int = 2
     maximum_batch_size: int | None = None

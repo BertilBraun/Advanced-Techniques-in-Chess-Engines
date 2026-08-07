@@ -4,8 +4,6 @@ import time
 from enum import Enum
 from pprint import pprint
 
-from src.settings_common import LOG_FOLDER
-
 
 def datetime_str() -> str:
     return date_str() + ' ' + time_str()
@@ -27,6 +25,7 @@ class LogLevel(Enum):
     CRITICAL = 50
 
 
+LOG_FOLDER = os.environ.get('TRAINING_LOG_PATH', 'logs')
 LOG_FILE = LOG_FOLDER + f'/log_{date_str()}_{time_str()}.log'
 LOG_LEVEL = LogLevel.INFO
 os.makedirs(LOG_FOLDER, exist_ok=True)

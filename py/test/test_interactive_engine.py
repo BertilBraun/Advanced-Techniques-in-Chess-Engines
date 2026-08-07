@@ -21,7 +21,7 @@ from src.interactive.analysis import (
 )
 from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 from src.interactive.engine import InteractiveEngine
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.uci.engine import UciConfiguration, UciEngine, UciGame
 from src.uci.server import UciServer
 
@@ -52,8 +52,8 @@ class _InvalidOutcomeModel(_UniformModel):
 
 @pytest.fixture
 def model_path(tmp_path: Path) -> Path:
-    channels, rows, columns = CurrentGame.representation_shape
-    model = _UniformModel(CurrentGame.action_size).eval()
+    channels, rows, columns = CHESS_STATE_CONTRACT.game.representation_shape
+    model = _UniformModel(CHESS_STATE_CONTRACT.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
     path = tmp_path / 'interactive.jit.pt'
     traced.save(str(path))
@@ -77,8 +77,8 @@ def engine(model_path: Path) -> InteractiveEngine:
 
 @pytest.fixture
 def invalid_engine(tmp_path: Path) -> InteractiveEngine:
-    channels, rows, columns = CurrentGame.representation_shape
-    model = _InvalidOutcomeModel(CurrentGame.action_size).eval()
+    channels, rows, columns = CHESS_STATE_CONTRACT.game.representation_shape
+    model = _InvalidOutcomeModel(CHESS_STATE_CONTRACT.action_size).eval()
     traced = torch.jit.trace(model, torch.zeros((1, channels, rows, columns)))
     path = tmp_path / 'invalid-outcome.jit.pt'
     traced.save(str(path))

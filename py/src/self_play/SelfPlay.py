@@ -27,6 +27,7 @@ import numpy as np
 
 from src.games.Board import Player
 from src.games.chess.contract import CHESS_STATE_CONTRACT
+from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.chess_completed_game import (
     ChessCompletedGame,
@@ -51,12 +52,11 @@ from src.util import lerp
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
-from src.settings import CurrentBoard, CurrentGameMove, log_text
-from src.Encoding import get_board_result_score
+from src.games.chess.encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
 from src.util.save_paths import model_save_path
-from src.util.tensorboard import is_tensorboard_writer_active, log_scalar
+from src.util.tensorboard import is_tensorboard_writer_active, log_scalar, log_text
 from src.util.timing import timeit
 
 
@@ -65,7 +65,7 @@ ENDGAME_PIECE_THRESHOLD = 8
 
 @dataclass(frozen=True)
 class SelfPlayGameMemory:
-    board: CurrentBoard
+    board: ChessBoard
     visit_counts: list[tuple[int, int]]
     result_score: float
     ply: int
@@ -107,7 +107,7 @@ class SelfPlayGame:
     ) -> None:
         self.board = CHESS_STATE_CONTRACT.create_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
-        self.played_moves: list[CurrentGameMove] = []
+        self.played_moves: list[ChessMove] = []
         self.encoded_moves: list[int] = []
         self.already_expanded_node: ChessSearchRoot | None = None
         self.start_generation_time = time.time()
@@ -133,7 +133,7 @@ class SelfPlayGame:
             self.oldest_model_version = model_version
         self.newest_model_version = model_version
 
-    def expand(self, move: CurrentGameMove) -> SelfPlayGame:
+    def expand(self, move: ChessMove) -> SelfPlayGame:
         new_game = self.copy()
         new_game.encoded_moves.append(CHESS_STATE_CONTRACT.encode_move(move, new_game.board))
         new_game.board.make_move(move)
@@ -166,7 +166,7 @@ class SelfPlayGame:
         return self.board.quick_hash()
 
 
-def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: CurrentBoard) -> np.ndarray:
+def visit_count_probabilities(visit_counts: list[tuple[int, int]], board: ChessBoard) -> np.ndarray:
     """Convert visit counts to probabilities."""
     if not has_positive_visit_counts(visit_counts):
         raise ValueError(f'Visit counts must contain a positive visit for board: {board.board.fen()}')

@@ -13,7 +13,7 @@ from src.self_play.chess_completed_game import (
 )
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.self_play.value_target import TerminationReason
-from src.settings import CurrentGame
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.train.ChessReplay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
 from src.train.Replay import ReplayMaintainer
 from src.train.CreditTrainingLedger import CreditTrainingLedger
@@ -27,9 +27,9 @@ def _completed_game(publisher: CompletedGamePublisher) -> ChessCompletedGame:
     for ply, move_uci in enumerate(moves_uci):
         move = chess.Move.from_uci(move_uci)
         legal_actions = tuple(
-            sorted(CurrentGame.encode_move(candidate, board) for candidate in board.get_valid_moves())
+            sorted(CHESS_STATE_CONTRACT.encode_move(candidate, board) for candidate in board.get_valid_moves())
         )
-        selected_action = CurrentGame.encode_move(move, board)
+        selected_action = CHESS_STATE_CONTRACT.encode_move(move, board)
         observations.append(
             ChessSearchObservation(
                 ply=ply,

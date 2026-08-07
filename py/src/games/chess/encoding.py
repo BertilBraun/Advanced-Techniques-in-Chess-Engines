@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from src.games.Game import Board
+from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.packed_planes import (
     PackedPlanePayload,
@@ -12,8 +12,6 @@ from src.packed_planes import (
     decode_packed_planes_into,
     encode_packed_planes,
 )
-from src.settings import CurrentBoard
-from src.util.timing import timeit
 
 
 C = CHESS_STATE_CONTRACT.representation.channels
@@ -85,7 +83,7 @@ def decode_board_states_into(
     )
 
 
-def get_board_result_score(board: Board) -> float | None:
+def get_board_result_score(board: ChessBoard) -> float | None:
     """
     Return the terminal score from the current player's perspective.
 
@@ -100,35 +98,3 @@ def get_board_result_score(board: Board) -> float | None:
         return -1.0
 
     return 0.0
-
-
-MoveScore = tuple[int, float]
-
-
-@timeit
-def filter_policy_then_get_moves_and_probabilities(policy: np.ndarray, board: CurrentBoard) -> list[MoveScore]:
-    """Filter a policy by the legal move set and return the nonzero move scores."""
-    filtered_policy = __filter_policy_with_legal_moves(policy, board)
-    moves_with_probabilities = __map_policy_to_moves(filtered_policy)
-    return moves_with_probabilities
-
-
-def __filter_policy_with_legal_moves(policy: np.ndarray, board: CurrentBoard) -> np.ndarray:
-    """Zero illegal actions and renormalize the remaining legal policy mass."""
-    legal_moves_encoded = np.zeros(CHESS_STATE_CONTRACT.action_size)
-    for move in board.get_valid_moves():
-        legal_moves_encoded[CHESS_STATE_CONTRACT.encode_move(move, board)] = 1
-    filtered_policy = policy * legal_moves_encoded
-    policy_sum = np.sum(filtered_policy)
-    if policy_sum == 0:
-        filtered_policy = legal_moves_encoded / np.sum(legal_moves_encoded)
-    else:
-        filtered_policy /= policy_sum
-    return filtered_policy
-
-
-def __map_policy_to_moves(policy: np.ndarray) -> list[MoveScore]:
-    """Return `(action_id, probability)` pairs for the nonzero policy entries."""
-    nonzero_indices = np.nonzero(policy > 0)[0]
-    moves_with_probabilities = list(zip(nonzero_indices, policy[nonzero_indices]))
-    return moves_with_probabilities

@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 
 from src.util.frozen_model import FrozenModel
 
-from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
+from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.train.CreditTrainingLedger import CreditTrainingProgress
 from src.util.atomic_file import write_text_atomically
 from src.util.save_paths import CheckpointManifest, load_checkpoint_manifest

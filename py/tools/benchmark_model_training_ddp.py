@@ -16,10 +16,11 @@ from torch import nn
 from torch.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 
-from src.Network import Network
+from src.neural_network import Network
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
-from src.settings import CurrentGame
 from src.train.Trainer import Trainer
 from src.train.TrainingArgs import (
     ModelVersionLearningRate,
@@ -185,6 +186,7 @@ def benchmark_rank(
                 arguments.se_placement,
             ),
             device,
+            CHESS_NETWORK_DIMENSIONS,
         )
         model = DistributedDataParallel(
             LogitNetwork(network),
@@ -197,11 +199,11 @@ def benchmark_rank(
         scaler = GradScaler()
 
         state = torch.randn(
-            (arguments.local_batch_size, *CurrentGame.representation_shape),
+            (arguments.local_batch_size, *CHESS_STATE_CONTRACT.game.representation_shape),
             device=device,
         )
         policy_targets = torch.zeros(
-            (arguments.local_batch_size, CurrentGame.action_size),
+            (arguments.local_batch_size, CHESS_STATE_CONTRACT.action_size),
             device=device,
         )
         policy_targets[:, 0] = 1

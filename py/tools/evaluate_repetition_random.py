@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from src.eval.ModelEvaluation import ModelEvaluation
-from src.experiment.chess_experiment import load_chess_experiment_configuration
+from src.experiment.configuration import load_chess_experiment_configuration
 
 
 @dataclass(frozen=True)

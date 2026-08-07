@@ -5,7 +5,8 @@ from pathlib import Path
 
 import torch
 
-from src.Network import Network
+from src.neural_network import Network
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
@@ -35,6 +36,7 @@ def main() -> None:
             se_placement=arguments.se_placement,
         ),
         torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
     )
     if arguments.zero_parameters:
         with torch.no_grad():

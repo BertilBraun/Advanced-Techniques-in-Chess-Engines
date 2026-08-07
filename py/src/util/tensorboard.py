@@ -44,6 +44,17 @@ _TB_SUMMARY = ContextVar[RestartSafeSummaryWriter | None]('tensorboard_summary',
 _TB_LOGGING_ENABLED = ContextVar[bool]('tensorboard_logging_enabled', default=True)
 _HAS_PROMPTED = False
 _TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE = 'TRAINING_TENSORBOARD_RUN_DIRECTORY'
+DEFAULT_TENSORBOARD_LOG_PATH = 'logs'
+
+
+def get_run_id() -> int:
+    log_root = Path(os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', DEFAULT_TENSORBOARD_LOG_PATH))
+    for run in range(10_000):
+        run_path = log_root / f'run_{run}'
+        if not run_path.exists():
+            run_path.mkdir(parents=True)
+            return run
+    raise ValueError('Could not find a free TensorBoard run directory.')
 
 
 def configure_tensorboard_run_directory(run_directory: str) -> None:
@@ -130,9 +141,7 @@ class TensorboardWriter:
         postfix_pid: bool = True,
         enabled: bool = True,
     ) -> None:
-        from src.settings import LOG_FOLDER
-
-        log_root = os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', LOG_FOLDER)
+        log_root = os.environ.get('TRAINING_TENSORBOARD_LOG_PATH', DEFAULT_TENSORBOARD_LOG_PATH)
         run_directory = os.environ.get(_TENSORBOARD_RUN_DIRECTORY_ENVIRONMENT_VARIABLE, f'run_{run}')
         self.log_folder = str(Path(log_root) / run_directory / suffix)
         if postfix_pid:

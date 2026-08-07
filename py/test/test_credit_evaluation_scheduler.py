@@ -12,7 +12,7 @@ from src.cluster.CreditEvaluationScheduler import (
     CreditEvaluationStatus,
     credit_evaluation_arguments,
 )
-from src.settings import TRAINING_ARGS
+from test_helpers.chess_configuration import CHESS_TRAINING
 from src.train.CreditPublication import (
     CreditPublicationManifest,
     PublishedArtifact,
@@ -77,8 +77,8 @@ def _arguments(
         replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
-    trainer = TRAINING_ARGS.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 1_024})
-    schedule = TRAINING_ARGS.lifecycle.evaluation.validated_copy(
+    trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 1_024})
+    schedule = CHESS_TRAINING.lifecycle.evaluation.validated_copy(
         update={
             'interval_optimizer_steps': 1_000,
             'full_interval_optimizer_steps': 2_000,
@@ -87,13 +87,13 @@ def _arguments(
             'retry_backoff_seconds': retry_backoff_seconds,
         }
     )
-    lifecycle = TRAINING_ARGS.lifecycle.validated_copy(
+    lifecycle = CHESS_TRAINING.lifecycle.validated_copy(
         update={
             'credit': parameters.model_dump(mode='json'),
             'evaluation': schedule.model_dump(mode='json'),
         }
     )
-    return TRAINING_ARGS.validated_copy(
+    return CHESS_TRAINING.validated_copy(
         update={
             'save_path': str(run_path),
             'trainer': trainer.model_dump(mode='json'),

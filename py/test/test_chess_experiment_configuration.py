@@ -6,7 +6,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from src.experiment.chess_experiment import (
+from src.experiment.configuration import (
     BaseExperimentConfiguration,
     ChessExperimentConfiguration,
     GoExperimentConfiguration,
@@ -15,7 +15,7 @@ from src.experiment.chess_experiment import (
     validate_experiment_queue,
     write_resolved_chess_experiment,
 )
-from src.settings import CHESS_EXPERIMENT, TRAINING_ARGS
+from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
 
@@ -67,7 +67,7 @@ def test_default_chess_experiment_loads_canonical_runtime_configuration() -> Non
 
 
 def test_settings_exposes_experiment_training_without_an_adapter() -> None:
-    assert TRAINING_ARGS is CHESS_EXPERIMENT.training
+    assert CHESS_TRAINING is CHESS_EXPERIMENT.training
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from src.cluster.CommanderProcess import CommanderProcess, credit_training_progress_axis
-from src.settings import TRAINING_ARGS
+from test_helpers.chess_configuration import CHESS_TRAINING
 from src.train.CreditTrainingLedger import (
     CreditTrainingLedger,
     CreditTrainingProgress,
@@ -25,8 +25,8 @@ def _credit_training_arguments() -> TrainingArgs:
         replay_capacity_ramp_model_versions=1_000,
         retained_checkpoint_interval_steps=1_000,
     )
-    trainer = TRAINING_ARGS.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 256})
-    trainer_topology = TRAINING_ARGS.topology.trainer.validated_copy(
+    trainer = CHESS_TRAINING.trainer.validated_copy(update={'global_batch_size': 1_024, 'local_batch_size': 256})
+    trainer_topology = CHESS_TRAINING.topology.trainer.validated_copy(
         update={
             'device_type': 'cuda',
             'process_group_backend': 'nccl',
@@ -34,9 +34,9 @@ def _credit_training_arguments() -> TrainingArgs:
             'ddp_device_ids': [0, 1, 2, 3],
         }
     )
-    topology = TRAINING_ARGS.topology.validated_copy(update={'trainer': trainer_topology.model_dump(mode='json')})
-    lifecycle = TRAINING_ARGS.lifecycle.validated_copy(update={'credit': parameters.model_dump(mode='json')})
-    return TRAINING_ARGS.validated_copy(
+    topology = CHESS_TRAINING.topology.validated_copy(update={'trainer': trainer_topology.model_dump(mode='json')})
+    lifecycle = CHESS_TRAINING.lifecycle.validated_copy(update={'credit': parameters.model_dump(mode='json')})
+    return CHESS_TRAINING.validated_copy(
         update={
             'trainer': trainer.model_dump(mode='json'),
             'topology': topology.model_dump(mode='json'),

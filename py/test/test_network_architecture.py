@@ -2,7 +2,8 @@ import torch
 
 from torch import Tensor, nn
 
-from src.Network import Network, ResBlock, SqueezeExcitation
+from src.neural_network import Network, ResBlock, SqueezeExcitation
+from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.train.TrainingArgs import NetworkParams, SEPlacement
 
 
@@ -44,14 +45,19 @@ def test_squeeze_excitation_uses_reduction_sixteen() -> None:
 
 def test_squeeze_excitation_placement_modes() -> None:
     disabled = Network(
-        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.DISABLED), torch.device('cpu')
+        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.DISABLED),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
     )
     every_block = Network(
-        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_BLOCK), torch.device('cpu')
+        NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_BLOCK),
+        torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
     )
     every_second_block = Network(
         NetworkParams(num_layers=4, hidden_size=16, se_placement=SEPlacement.EVERY_SECOND_BLOCK),
         torch.device('cpu'),
+        CHESS_NETWORK_DIMENSIONS,
     )
 
     assert len(disabled.backBone) == 4

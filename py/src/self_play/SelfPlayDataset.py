@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any
 from torch.utils.data import Dataset
 
-from src.Encoding import decode_board_state, decode_board_states, encode_board_state
+from src.games.chess.encoding import decode_board_state, decode_board_states, encode_board_state
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.packed_planes import PackedPlanePayload
 from src.self_play.visit_policy import action_probabilities
-from src.settings import CurrentGame, USE_GPU
+from src.runtime import USE_GPU
 from src.util import random_id
 from src.util.timing import timeit
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
@@ -83,8 +83,9 @@ def replay_aggregation_key(
 
 
 def chess_sample_metadata(state: npt.NDArray[np.int8], ply: int) -> ReplaySampleMetadata:
-    if state.shape != CurrentGame.representation_shape:
-        raise ValueError(f'Expected chess state shape {CurrentGame.representation_shape}, got {state.shape}.')
+    expected_shape = CHESS_STATE_CONTRACT.game.representation_shape
+    if state.shape != expected_shape:
+        raise ValueError(f'Expected chess state shape {expected_shape}, got {state.shape}.')
     return ReplaySampleMetadata(
         ply=ply,
         current_player_piece_count=int(np.count_nonzero(state[:6])),
@@ -103,7 +104,7 @@ def training_batch_from_raw_samples(
         raise ValueError('Training batch inputs must contain the same number of samples.')
 
     states = torch.from_numpy(decode_board_states(encoded_states)).to(dtype=torch.float32)
-    policies = np.zeros((batch_size, CurrentGame.action_size), dtype=np.float32)
+    policies = np.zeros((batch_size, CHESS_STATE_CONTRACT.action_size), dtype=np.float32)
     visit_lengths = np.fromiter((len(counts) for counts in visit_counts), dtype=np.int64, count=batch_size)
     if np.any(visit_lengths == 0):
         raise ValueError('Visit counts must not be empty.')
@@ -208,7 +209,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
 
     def __getitem__(self, idx: int) -> TrainingSample:
         state = decode_board_state(self.encoded_states[idx])
-        probabilities = action_probabilities(self.visit_counts[idx])
+        probabilities = action_probabilities(self.visit_counts[idx], CHESS_STATE_CONTRACT.action_size)
 
         assert 1 - 1e-2 <= np.sum(probabilities) <= 1 + 1e-2, 'Probabilities must sum to 1'
 
@@ -780,7 +781,7 @@ class SelfPlayDataset(Dataset[TrainingSample]):
     def _get_current_metadata() -> dict[str, Any]:
         # metadata information about current game, action size, representation shape, etc.
         return {
-            'action_size': str(CurrentGame.action_size),
-            'representation_shape': str(CurrentGame.representation_shape),
-            'game': CurrentGame.__class__.__name__,
+            'action_size': str(CHESS_STATE_CONTRACT.action_size),
+            'representation_shape': str(CHESS_STATE_CONTRACT.game.representation_shape),
+            'game': CHESS_STATE_CONTRACT.name,
         }

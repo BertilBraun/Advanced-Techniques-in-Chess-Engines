@@ -4,7 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.settings import TensorboardWriter, USE_GPU
+from src.runtime import USE_GPU
+from src.util.tensorboard import TensorboardWriter
 from src.util.communication import (
     Communication,
     LATEST_SELF_PLAY_MODEL_VERSION,

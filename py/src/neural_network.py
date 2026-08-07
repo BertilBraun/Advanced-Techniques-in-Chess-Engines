@@ -4,7 +4,6 @@ import torch
 
 from torch import nn, Tensor
 
-from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.value_target import FinalOutcome
 from src.train.TrainingArgs import NetworkParams
 from src.util.log import log
@@ -23,14 +22,6 @@ class NetworkDimensions:
             raise ValueError('Network dimensions must be positive.')
 
 
-CHESS_NETWORK_DIMENSIONS = NetworkDimensions(
-    channels=CHESS_STATE_CONTRACT.representation.channels,
-    rows=CHESS_STATE_CONTRACT.representation.rows,
-    columns=CHESS_STATE_CONTRACT.representation.columns,
-    actions=CHESS_STATE_CONTRACT.action_size,
-)
-
-
 class Network(nn.Module):
     """
     The neural network model for the AlphaZero bot.
@@ -46,7 +37,7 @@ class Network(nn.Module):
         self,
         args: NetworkParams,
         device: torch.device,
-        dimensions: NetworkDimensions = CHESS_NETWORK_DIMENSIONS,
+        dimensions: NetworkDimensions,
     ) -> None:
         super().__init__()
 

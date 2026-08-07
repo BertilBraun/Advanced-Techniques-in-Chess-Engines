@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.experiment.chess_experiment import load_chess_experiment_configuration
-from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
+from src.experiment.configuration import load_chess_experiment_configuration
+from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.train.CreditPublication import (
     PublicationValidationScope,
