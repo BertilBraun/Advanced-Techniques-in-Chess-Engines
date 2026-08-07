@@ -8,7 +8,7 @@ int runChessEncodingTests() {
     const CompressedEncodedBoard compressed = encodeBoard(board);
     const torch::Tensor expected = tensorEncoding(compressed);
     std::vector<std::int8_t> actual(static_cast<size_t>(expected.numel()));
-    encodeBoardInto(board, actual.data());
+    ChessEncoding::encodeInputInto(board, actual.data());
     const torch::Tensor actualTensor = torch::from_blob(actual.data(), expected.sizes(),
                                                         torch::TensorOptions().dtype(torch::kInt8));
     if (!torch::equal(expected, actualTensor)) {

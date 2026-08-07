@@ -129,12 +129,6 @@ void bind_position(py::module_ &module, const char *name) {
         .def("terminal_result", &Position::terminal_result)
         .def("terminal_value",
              [](const Position &position) { return Contract::terminalValue(position); })
-        .def("action_id",
-             [](const Position &position, const int action_id) {
-                 return Contract::Encoding::actionId(GoAction<BoardSize>(action_id), position);
-             })
-        .def("decode_actions",
-             [](const Position &, const std::vector<int> &action_ids) { return action_ids; })
         .def("state_hash", &Position::hash)
         .def("packed_encoding",
              [](const Position &position) {

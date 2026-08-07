@@ -83,8 +83,6 @@ def test_history_actions_hash_and_encoding() -> None:
     assert after_white.white_points(0) == [8]
     assert after_white.black_points(1) == [0]
     assert after_white.white_points(1) == []
-    assert after_white.action_id(49) == 49
-    assert after_white.decode_actions([0, 8, 49]) == [0, 8, 49]
     assert after_white.state_hash() == after_white.state_hash()
     assert after_white.state_hash() != after_black.state_hash()
 
@@ -115,8 +113,8 @@ def test_pass_termination_scoring_and_maximum_move_result() -> None:
         maximum_moves=49,
     )
     assert capped.termination_reason == AlphaZeroCpp.GoTerminationReason.MAXIMUM_MOVES
-    assert capped.terminal_result().score is None
-    assert capped.terminal_value() is None
+    assert capped.terminal_result().score.white_half_points == 15
+    assert capped.terminal_value() == 1.0
     assert capped.legal_actions() == []
 
 

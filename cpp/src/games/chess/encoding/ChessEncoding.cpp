@@ -164,10 +164,6 @@ void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *
     }
 }
 
-void encodeBoardInto(const Board &board, std::int8_t *destination) {
-    writeTensorEncoding(encodeBoard(board), destination);
-}
-
 void ChessEncoding::encodeInputInto(const Board &state, std::int8_t *destination) {
-    encodeBoardInto(state, destination);
+    writeTensorEncoding(encodeBoard(state), destination);
 }

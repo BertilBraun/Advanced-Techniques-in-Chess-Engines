@@ -12,15 +12,27 @@
 
 #include <torch/torch.h>
 
-struct ChessEncoding {
+struct ChessRepresentationDimensions {
+    static constexpr int board_length = 8;
+    static constexpr int channel_count = 29;
+    static constexpr int binary_channel_count = 22;
+    static constexpr int scalar_channel_count = 7;
     static constexpr int action_count = 1880;
+};
+
+static_assert(ChessRepresentationDimensions::channel_count ==
+              ChessRepresentationDimensions::binary_channel_count +
+                  ChessRepresentationDimensions::scalar_channel_count);
+
+struct ChessEncoding {
+    static constexpr int action_count = ChessRepresentationDimensions::action_count;
 
     [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
         return {
-            .channels = 29,
-            .rows = 8,
-            .columns = 8,
-            .actions = action_count,
+            .channels = ChessRepresentationDimensions::channel_count,
+            .rows = ChessRepresentationDimensions::board_length,
+            .columns = ChessRepresentationDimensions::board_length,
+            .actions = ChessRepresentationDimensions::action_count,
             .outcomes = 3,
         };
     }
@@ -29,18 +41,6 @@ struct ChessEncoding {
     [[nodiscard]] static ChessAction decodeAction(int actionId, const Board &state);
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
-
-struct ChessRepresentationDimensions {
-    static constexpr int board_length = 8;
-    static constexpr int channel_count = 29;
-    static constexpr int binary_channel_count = 22;
-    static constexpr int scalar_channel_count = 7;
-    static constexpr int action_count = ChessEncoding::action_count;
-};
-
-static_assert(ChessRepresentationDimensions::channel_count ==
-              ChessRepresentationDimensions::binary_channel_count +
-                  ChessRepresentationDimensions::scalar_channel_count);
 
 struct CompressedEncodedBoard {
     static constexpr std::size_t packed_binary_bytes =
@@ -78,4 +78,3 @@ struct BoardFingerprintHash {
 
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
 void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
-void encodeBoardInto(const Board &board, std::int8_t *destination);
