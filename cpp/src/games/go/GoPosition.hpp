@@ -14,7 +14,6 @@
 
 template <std::size_t BoardSize, std::size_t HistoryLength = 8> class GoPosition {
 public:
-    static_assert(BoardSize == 7 || BoardSize == 9);
     static_assert(HistoryLength >= 2);
 
     using Board = GoBoard<BoardSize>;

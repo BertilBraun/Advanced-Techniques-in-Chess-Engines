@@ -4,7 +4,6 @@
 #include <stdexcept>
 
 template <std::size_t BoardSize> struct GoAction {
-    static_assert(BoardSize == 7 || BoardSize == 9);
     static constexpr int pass_id = static_cast<int>(BoardSize * BoardSize);
     static constexpr int action_count = pass_id + 1;
 

@@ -197,6 +197,8 @@ int main() {
     try {
         test_initial_and_actions<7>();
         test_initial_and_actions<9>();
+        test_initial_and_actions<13>();
+        test_initial_and_actions<19>();
         test_capture_suicide_and_ko();
         test_history_encoding_hash_and_symmetries();
         test_termination_and_scoring();
