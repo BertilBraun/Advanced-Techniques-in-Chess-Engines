@@ -9,7 +9,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from src.Network import Network
-from src.self_play.SelfPlayDataset import TrainingBatch
+from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import (
     FinalOutcome,
     ReplayValueTarget,

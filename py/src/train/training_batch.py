@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import torch
+
+
+@dataclass(frozen=True)
+class TrainingBatch:
+    states: torch.Tensor
+    policy_targets: torch.Tensor
+    final_outcomes: torch.Tensor
+    mcts_root_values: torch.Tensor
+    outcome_target_eligible: torch.Tensor
+    material_result_scores: torch.Tensor
+    material_target_eligible: torch.Tensor
+    termination_reasons: torch.Tensor
+    plies: torch.Tensor
+    current_player_piece_counts: torch.Tensor
+    opponent_piece_counts: torch.Tensor
+    occurrence_counts: torch.Tensor
+    sample_weights: torch.Tensor
+
+    def __len__(self) -> int:
+        return int(self.states.shape[0])
+
+    def row_view(self, start: int, stop: int) -> TrainingBatch:
+        if not 0 <= start < stop <= len(self):
+            raise ValueError(f'Batch row view [{start}, {stop}) is outside [0, {len(self)}).')
+        rows = slice(start, stop)
+        return TrainingBatch(
+            states=self.states[rows],
+            policy_targets=self.policy_targets[rows],
+            final_outcomes=self.final_outcomes[rows],
+            mcts_root_values=self.mcts_root_values[rows],
+            outcome_target_eligible=self.outcome_target_eligible[rows],
+            material_result_scores=self.material_result_scores[rows],
+            material_target_eligible=self.material_target_eligible[rows],
+            termination_reasons=self.termination_reasons[rows],
+            plies=self.plies[rows],
+            current_player_piece_counts=self.current_player_piece_counts[rows],
+            opponent_piece_counts=self.opponent_piece_counts[rows],
+            occurrence_counts=self.occurrence_counts[rows],
+            sample_weights=self.sample_weights[rows],
+        )
+
+    def pin_memory(self) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.pin_memory(),
+            policy_targets=self.policy_targets.pin_memory(),
+            final_outcomes=self.final_outcomes.pin_memory(),
+            mcts_root_values=self.mcts_root_values.pin_memory(),
+            outcome_target_eligible=self.outcome_target_eligible.pin_memory(),
+            material_result_scores=self.material_result_scores.pin_memory(),
+            material_target_eligible=self.material_target_eligible.pin_memory(),
+            termination_reasons=self.termination_reasons.pin_memory(),
+            plies=self.plies.pin_memory(),
+            current_player_piece_counts=self.current_player_piece_counts.pin_memory(),
+            opponent_piece_counts=self.opponent_piece_counts.pin_memory(),
+            occurrence_counts=self.occurrence_counts.pin_memory(),
+            sample_weights=self.sample_weights.pin_memory(),
+        )
+
+    def to_device(self, device: torch.device, non_blocking: bool) -> TrainingBatch:
+        return TrainingBatch(
+            states=self.states.to(device=device, non_blocking=non_blocking),
+            policy_targets=self.policy_targets.to(device=device, non_blocking=non_blocking),
+            final_outcomes=self.final_outcomes.to(device=device, non_blocking=non_blocking),
+            mcts_root_values=self.mcts_root_values.to(device=device, non_blocking=non_blocking),
+            outcome_target_eligible=self.outcome_target_eligible.to(device=device, non_blocking=non_blocking),
+            material_result_scores=self.material_result_scores.to(device=device, non_blocking=non_blocking),
+            material_target_eligible=self.material_target_eligible.to(device=device, non_blocking=non_blocking),
+            termination_reasons=self.termination_reasons.to(device=device, non_blocking=non_blocking),
+            plies=self.plies.to(device=device, non_blocking=non_blocking),
+            current_player_piece_counts=self.current_player_piece_counts.to(device=device, non_blocking=non_blocking),
+            opponent_piece_counts=self.opponent_piece_counts.to(device=device, non_blocking=non_blocking),
+            occurrence_counts=self.occurrence_counts.to(device=device, non_blocking=non_blocking),
+            sample_weights=self.sample_weights.to(device=device, non_blocking=non_blocking),
+        )
+
+
+@dataclass(frozen=True)
+class ReplaySampleMetadata:
+    ply: int
+    current_player_piece_count: int
+    opponent_piece_count: int
+    occurrence_count: int = 1
+    starting_fen: str | None = None
+    moves_uci: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.ply < 0:
+            raise ValueError('Sample ply must be nonnegative.')
+        if not 0 <= self.current_player_piece_count <= 127:
+            raise ValueError('Current-player piece count must fit a signed int8.')
+        if not 0 <= self.opponent_piece_count <= 127:
+            raise ValueError('Opponent piece count must fit a signed int8.')
+        if self.occurrence_count <= 0:
+            raise ValueError('Replay occurrence count must be positive.')
+        if self.moves_uci and self.starting_fen is None:
+            raise ValueError('UCI move history requires a starting FEN.')

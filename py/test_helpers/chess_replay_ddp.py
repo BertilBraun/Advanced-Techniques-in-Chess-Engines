@@ -10,27 +10,29 @@ import torch.distributed as distributed
 sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
 from src.cluster.TrainerProcess import MaintainReplayCommand, _maintain_replay
-from src.self_play.SelfPlayDataset import ReplaySampleMetadata
+from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.ChessReplay import ChessReplayMetrics, ChessReplaySample, ChessReplaySnapshot, pack_chess_visits
+from src.train.ChessReplay import pack_chess_visits
+from src.train.Replay import PackedReplaySample, ReplayMetrics, ReplaySnapshot
+from src.train.training_batch import ReplaySampleMetadata
 
 
 WORLD_SIZE = 2
 
 
 class SnapshotMaintainer:
-    def __init__(self, snapshot: ChessReplaySnapshot, metrics: ChessReplayMetrics) -> None:
+    def __init__(self, snapshot: ReplaySnapshot, metrics: ReplayMetrics) -> None:
         self.snapshot = snapshot
         self.metrics = metrics
 
-    def maintain(self, capacity: int) -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
+    def maintain(self, capacity: int) -> tuple[ReplaySnapshot, ReplayMetrics]:
         assert capacity == len(self.snapshot.samples)
         return self.snapshot, self.metrics
 
 
-def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
-    sample = ChessReplaySample(
-        encoded_state=b'',
+def replay_snapshot() -> tuple[ReplaySnapshot, ReplayMetrics]:
+    sample = PackedReplaySample(
+        encoded_state=CHESS_STATE_CONTRACT.representation.packed_planes.empty_value(),
         visits=pack_chess_visits(((0, 1),)),
         value_target=ReplayValueTarget.from_scores(0.0, 0.0, TerminationReason.NATURAL),
         metadata=ReplaySampleMetadata(ply=0, current_player_piece_count=16, opponent_piece_count=16),
@@ -39,7 +41,7 @@ def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
         source_created_at_seconds=1.0,
     )
     samples = (sample,) * 8
-    snapshot = ChessReplaySnapshot(
+    snapshot = ReplaySnapshot(
         samples=samples,
         credited_samples=12,
         credited_completed_searches=96,
@@ -51,7 +53,7 @@ def replay_snapshot() -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
         projected_capacity_bytes=1_024,
         projected_review_capacity_bytes=1_024,
     )
-    metrics = ChessReplayMetrics(
+    metrics = ReplayMetrics(
         credited_samples=12,
         credited_completed_searches=96,
         live_samples=8,

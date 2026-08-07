@@ -17,12 +17,9 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
 from src.cluster.CudaProcess import start_process_on_cuda_device
+from src.games.training_contract import TrainingGameImplementation
 from src.Network import Network
-from src.train.ChessReplay import (
-    ChessReplayMaintainer,
-    ChessReplaySnapshot,
-    training_batch_loader,
-)
+from src.train.Replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
 from src.train.Trainer import Trainer, _LogitForward
 from src.train.TrainingArgs import TrainerTopologyParams, TrainingArgs, TrainingParams
 from src.train.TrainingStats import TrainingStats
@@ -104,6 +101,7 @@ def _load_rank_model_and_optimizer(
     args: TrainingArgs,
     model_version: int,
     device: torch.device,
+    game: TrainingGameImplementation,
 ) -> tuple[Network, torch.optim.Optimizer]:
     return load_model_and_optimizer(
         model_version,
@@ -111,6 +109,7 @@ def _load_rank_model_and_optimizer(
         device,
         args.save_path,
         args.trainer.optimizer,
+        game.network_dimensions,
     )
 
 
@@ -125,8 +124,11 @@ def _training_device(args: TrainingArgs, rank: int) -> torch.device:
 def _wrap_distributed_model(
     model: Network,
     device: torch.device,
-) -> DistributedDataParallel:
+    world_size: int = 1,
+) -> nn.Module:
     logit_model: nn.Module = _LogitForward(model)
+    if world_size == 1:
+        return logit_model
     if device.type == 'cuda':
         assert device.index is not None
         return DistributedDataParallel(
@@ -242,23 +244,18 @@ class TrainerProcess:
 
     def __init__(
         self,
-        args: TrainingArgs,
+        game: TrainingGameImplementation,
         run_id: int,
         starting_model_version: int,
     ) -> None:
-        parameters = args.lifecycle.credit
+        args = game.training
         validate_distributed_training_configuration(
             args.topology.trainer,
             args.trainer,
             torch.cuda.device_count(),
         )
-        if len(args.topology.trainer.ddp_device_ids) != 4:
-            raise ValueError('Credit-driven production training requires exactly four DDP ranks.')
-        if parameters.maximum_optimizer_steps != 500_000:
-            raise ValueError('Credit-driven production training requires a 500,000 optimizer-step limit.')
-        if parameters.retained_checkpoint_interval_steps != 1_000:
-            raise ValueError('Credit-driven production training requires retained checkpoints every 1,000 steps.')
         self.args = args
+        self.game = game
         self.run_id = run_id
         self.world_size = len(args.topology.trainer.ddp_device_ids)
         self._phase_id = 0
@@ -383,7 +380,7 @@ class TrainerProcess:
                 target=run_trainer_rank,
                 args=(
                     rank,
-                    self.args,
+                    self.game,
                     self.run_id,
                     starting_model_version,
                     initialization_method,
@@ -479,26 +476,24 @@ class TrainerProcess:
 
 def _maintain_replay(
     command: MaintainReplayCommand,
-    replay_maintainer: ChessReplayMaintainer | None,
+    replay_maintainer: ReplayMaintainer | None,
     rank: int,
     device: torch.device,
-) -> tuple[RankReplayMaintained, ChessReplaySnapshot]:
-    distributed.barrier()
-    snapshot: ChessReplaySnapshot | None = None
+) -> tuple[RankReplayMaintained, ReplaySnapshot]:
+    if distributed.is_initialized():
+        distributed.barrier()
+    snapshot: ReplaySnapshot | None = None
     metrics = None
     if is_rank_zero(rank):
         if replay_maintainer is None:
-            raise RuntimeError('Rank zero must own the chess replay maintainer.')
+            raise RuntimeError('Rank zero must own the replay maintainer.')
         snapshot, metrics = replay_maintainer.maintain(command.replay_capacity_unique_positions)
-    objects: list[ChessReplaySnapshot | None] = [snapshot]
-    distributed.broadcast_object_list(
-        objects,
-        src=0,
-        device=device,
-    )
+    objects: list[ReplaySnapshot | None] = [snapshot]
+    if distributed.is_initialized():
+        distributed.broadcast_object_list(objects, src=0, device=device)
     received_snapshot = objects[0]
     if received_snapshot is None:
-        raise RuntimeError('DDP rank did not receive a frozen chess replay snapshot.')
+        raise RuntimeError('Trainer rank did not receive a frozen replay snapshot.')
     if metrics is None:
         samples = received_snapshot.samples
         generations = tuple(sample.source_model_generation for sample in samples)
@@ -542,11 +537,13 @@ def _train_quantum(
     rank: int,
     model: Network,
     optimizer: torch.optim.Optimizer,
-    training_model: DistributedDataParallel,
-    replay_snapshot: ChessReplaySnapshot,
+    training_model: nn.Module,
+    replay_snapshot: ReplaySnapshot,
+    game: TrainingGameImplementation,
 ) -> RankQuantumComplete:
     parameters = args.lifecycle.credit
-    batches = training_batch_loader(
+    batches = ReplayTrainingBatchLoader(
+        game.replay,
         replay_snapshot,
         global_step=command.global_step,
         optimizer_steps=parameters.optimizer_steps_per_quantum,
@@ -558,7 +555,8 @@ def _train_quantum(
     selected_rows = len(batches.indices)
     if len(batches) != parameters.optimizer_steps_per_quantum:
         raise RuntimeError('Decoded replay quantum has the wrong optimizer-step count.')
-    distributed.barrier()
+    if distributed.is_initialized():
+        distributed.barrier()
 
     trainer = Trainer(
         model,
@@ -566,6 +564,7 @@ def _train_quantum(
         args.trainer,
         training_model=training_model,
         rank=rank,
+        objective=game.objective(command.global_step),
     )
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
@@ -579,13 +578,15 @@ def _train_quantum(
         device=model.device,
         dtype=torch.float64,
     )
-    distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
+    if distributed.is_initialized():
+        distributed.all_reduce(decode_seconds, op=distributed.ReduceOp.MAX)
     transfer_seconds = torch.tensor(
         trainer.last_transfer_seconds,
         device=model.device,
         dtype=torch.float64,
     )
-    distributed.all_reduce(transfer_seconds, op=distributed.ReduceOp.MAX)
+    if distributed.is_initialized():
+        distributed.all_reduce(transfer_seconds, op=distributed.ReduceOp.MAX)
     if model.device.type == 'cuda':
         torch.cuda.synchronize(model.device)
     elapsed_seconds = torch.tensor(
@@ -593,7 +594,8 @@ def _train_quantum(
         device=model.device,
         dtype=torch.float64,
     )
-    distributed.all_reduce(elapsed_seconds, op=distributed.ReduceOp.MAX)
+    if distributed.is_initialized():
+        distributed.all_reduce(elapsed_seconds, op=distributed.ReduceOp.MAX)
 
     manifest: Path | None = None
     if is_rank_zero(rank):
@@ -608,7 +610,8 @@ def _train_quantum(
             f'Prepared credit quantum {command.model_version} at optimizer step '
             f'{command.global_step + parameters.optimizer_steps_per_quantum}.'
         )
-    distributed.barrier()
+    if distributed.is_initialized():
+        distributed.barrier()
     return RankQuantumComplete(
         rank=rank,
         phase_id=command.phase_id,
@@ -629,25 +632,27 @@ def _train_quantum(
 
 def run_trainer_rank(
     rank: int,
-    args: TrainingArgs,
+    game: TrainingGameImplementation,
     run_id: int,
     starting_model_version: int,
     initialization_method: str,
     connection: Connection,
 ) -> None:
+    args = game.training
     configure_logging(enabled=is_rank_zero(rank))
     current_phase_id: int | None = None
     parameters = args.lifecycle.credit
     replay_maintainer = (
-        ChessReplayMaintainer(
+        ReplayMaintainer(
             Path(args.save_path),
+            game.replay,
             capacity=parameters.replay_capacity_for_model_version(starting_model_version),
             sampler_seed=args.random_seed,
         )
         if is_rank_zero(rank)
         else None
     )
-    replay_snapshot: ChessReplaySnapshot | None = None
+    replay_snapshot: ReplaySnapshot | None = None
     usage_logger = start_cpu_usage_logger(run_id, 'trainer') if is_rank_zero(rank) else None
     process_group_initialized = False
     normal_shutdown = False
@@ -659,21 +664,24 @@ def run_trainer_rank(
         os.environ['MKL_NUM_THREADS'] = str(trainer_cpu_threads)
         os.environ['OPENBLAS_NUM_THREADS'] = str(trainer_cpu_threads)
         device = _training_device(args, rank)
-        distributed.init_process_group(
-            backend=args.topology.trainer.process_group_backend,
-            init_method=initialization_method,
-            rank=rank,
-            world_size=len(args.topology.trainer.ddp_device_ids),
-            timeout=PROCESS_GROUP_TIMEOUT,
-        )
-        process_group_initialized = True
+        world_size = len(args.topology.trainer.ddp_device_ids)
+        if world_size > 1:
+            distributed.init_process_group(
+                backend=args.topology.trainer.process_group_backend,
+                init_method=initialization_method,
+                rank=rank,
+                world_size=world_size,
+                timeout=PROCESS_GROUP_TIMEOUT,
+            )
+            process_group_initialized = True
         torch.manual_seed(args.random_seed)
         model, optimizer = _load_rank_model_and_optimizer(
             args,
             starting_model_version,
             device,
+            game,
         )
-        training_model = _wrap_distributed_model(model, device)
+        training_model = _wrap_distributed_model(model, device, world_size)
         connection.send(RankReady(rank))
 
         while True:
@@ -691,7 +699,7 @@ def run_trainer_rank(
                 case TrainQuantumCommand():
                     current_phase_id = command.phase_id
                     if replay_snapshot is None:
-                        raise RuntimeError('Training requires a frozen chess replay snapshot.')
+                        raise RuntimeError('Training requires a frozen replay snapshot.')
                     connection.send(
                         _train_quantum(
                             command,
@@ -701,6 +709,7 @@ def run_trainer_rank(
                             optimizer,
                             training_model,
                             replay_snapshot,
+                            game,
                         )
                     )
                 case StopTrainerCommand():

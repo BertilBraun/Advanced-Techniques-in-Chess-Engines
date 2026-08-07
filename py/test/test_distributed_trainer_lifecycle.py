@@ -101,7 +101,7 @@ def test_unwrapped_checkpoint_remains_single_rank_compatible(
         optimizer = create_optimizer(model, TRAINING_ARGS.trainer.optimizer)
         wrapped_model = _wrap_distributed_model(model, device)
 
-        assert any(key.startswith('module.') for key in wrapped_model.state_dict())
+        assert not any(key.startswith('module.') for key in wrapped_model.state_dict())
         assert all(not key.startswith('module.') for key in model.state_dict())
 
         save_model_and_optimizer(model, optimizer, 0, tmp_path)

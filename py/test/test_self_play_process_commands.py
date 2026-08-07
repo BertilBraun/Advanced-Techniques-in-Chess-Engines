@@ -43,6 +43,10 @@ class _FakeSelfPlay:
         self.refreshes.append((model_version, model_path))
         self.roots = []
 
+    def refresh_published_model(self, model_version: int, model_path: Path) -> None:
+        self.update_search_schedule(self.search_schedule(model_version))
+        self.refresh_model(model_version, model_path)
+
     def search_schedule(self, schedule_version: int) -> SearchScheduleState:
         return SearchScheduleState(
             schedule_version=schedule_version,

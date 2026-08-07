@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import torch
+import src.train.Replay as replay_module
 
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
@@ -17,27 +18,27 @@ from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
 from src.games.go.training import calculate_go_loss, create_go_model
-from src.cluster.GoTrainingLifecycle import GoTrainingLifecycle
-from src.self_play.chess_completed_game import SparseSearchVisit
+from src.games.go.training_runtime import GoTrainingGame
+from src.cluster.TrainerProcess import TrainerProcess
+from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
+from src.self_play.completed_game_record import completed_game_from_path
 from src.self_play.go_completed_game import (
     GoCompletedGame,
-    GoCompletedGamePublisher,
-    GoGameIdentity,
     GoMoveSelectionMode,
     GoRepresentationMetadata,
     GoRulesMetadata,
     GoSearchObservation,
     GoTerminationReason,
-    go_completed_game_from_path,
 )
 from src.self_play.GoSelfPlay import GoSelfPlay
 from src.self_play.value_target import FinalOutcome
 from src.train.GoReplay import (
-    GoReplayMaintainer,
+    GoReplayImplementation,
     build_go_training_batch,
     materialize_go_game,
     rebuild_go_replay,
 )
+from src.train.Replay import ReplayMaintainer, ReplaySnapshot
 from src.util.save_paths import create_optimizer, save_model_and_optimizer
 
 
@@ -47,7 +48,7 @@ def _configuration() -> GoExperimentConfiguration:
     return configuration
 
 
-def _two_pass_game(identity: GoGameIdentity = GoGameIdentity(run_id=1, worker_id=2, game_number=0)) -> GoCompletedGame:
+def _two_pass_game(identity: GameIdentity = GameIdentity(run_id=1, worker_id=2, game_number=0)) -> GoCompletedGame:
     legal_actions = tuple(range(50))
     observations = tuple(
         GoSearchObservation(
@@ -97,10 +98,15 @@ def test_go_encoding_targets_and_symmetries_match_deterministic_fixture() -> Non
 
 
 def test_go_archive_rebuild_matches_live_ingestion(tmp_path: Path) -> None:
-    publisher = GoCompletedGamePublisher(tmp_path, run_id=1, worker_id=2)
+    publisher = CompletedGamePublisher(tmp_path, run_id=1, worker_id=2)
     publisher.publish(_two_pass_game(publisher.reserve_identity()))
     contract = GoStateContract(7)
-    live = GoReplayMaintainer(tmp_path, contract, capacity=10, sampler_seed=7).maintain(10)
+    live, _ = ReplayMaintainer(
+        tmp_path,
+        GoReplayImplementation(contract),
+        capacity=10,
+        sampler_seed=7,
+    ).maintain(10)
     rebuilt = rebuild_go_replay(tmp_path, contract, capacity=10, sampler_seed=7)
 
     assert live.samples == rebuilt.samples
@@ -108,25 +114,51 @@ def test_go_archive_rebuild_matches_live_ingestion(tmp_path: Path) -> None:
     assert live.credited_completed_searches == rebuilt.credited_completed_searches == 20
 
 
+def test_go_archive_restart_materializes_only_capacity_tail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publisher = CompletedGamePublisher(tmp_path, run_id=3, worker_id=0)
+    for _ in range(5):
+        publisher.publish(_two_pass_game(publisher.reserve_identity()))
+    contract = GoStateContract(7)
+    implementation = GoReplayImplementation(contract)
+    ReplayMaintainer(tmp_path, implementation, capacity=20, sampler_seed=13).maintain(20)
+    original_reader = replay_module.read_frame_payload
+    read_sequences: list[int] = []
+
+    def track_read(frame_index: replay_module.ArchiveFrameIndex) -> bytes:
+        read_sequences.append(frame_index.ingestion_sequence)
+        return original_reader(frame_index)
+
+    monkeypatch.setattr(replay_module, 'read_frame_payload', track_read)
+    snapshot, _ = ReplayMaintainer(tmp_path, implementation, capacity=3, sampler_seed=13).maintain(3)
+
+    assert read_sequences == [3, 4]
+    assert len(snapshot.samples) == 3
+    assert snapshot.credited_samples == 10
+
+
 def test_go_ddp_batch_and_optimizer_smoke() -> None:
     configuration = _configuration()
     game = _two_pass_game()
     samples = materialize_go_game(game)
-    from src.train.GoReplay import GoReplaySnapshot
-
-    snapshot = GoReplaySnapshot(
-        contract=GoStateContract(7),
+    snapshot = ReplaySnapshot(
         samples=samples * 2,
         credited_samples=4,
         credited_completed_searches=40,
         sampler_seed=11,
         frozen_at_seconds=101.0,
         evicted_samples=0,
+        estimated_sample_bytes=0,
+        encoded_state_value_overhead_bytes=0,
+        projected_capacity_bytes=0,
+        projected_review_capacity_bytes=0,
     )
     rank_zero = snapshot.rank_indices(0, 1, 4, 2, 0)
     rank_one = snapshot.rank_indices(0, 1, 4, 2, 1)
     assert set(rank_zero).isdisjoint(rank_one)
-    batch = build_go_training_batch(snapshot, rank_zero, global_step=0, rank=0)
+    batch = build_go_training_batch(GoStateContract(7), snapshot, rank_zero, global_step=0, rank=0)
     assert batch.states.shape == (2, 17, 7, 7)
     assert torch.allclose(batch.policy_targets.sum(dim=1), torch.ones(2))
 
@@ -222,11 +254,12 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     refreshed_model = tmp_path / 'model-1.jit.pt'
     _write_pass_model(initial_model, (0.2, 0.6, 0.2))
     _write_pass_model(refreshed_model, (0.6, 0.2, 0.2))
-    publisher = GoCompletedGamePublisher(tmp_path, run_id=5, worker_id=0)
+    publisher = CompletedGamePublisher(tmp_path, run_id=5, worker_id=0)
     self_play = GoSelfPlay(configuration, initial_model, 0, publisher, device_id=0)
 
     published = self_play.generate(1)
-    completed = go_completed_game_from_path(published[0])
+    completed = completed_game_from_path(published[0])
+    assert isinstance(completed, GoCompletedGame)
     assert completed.actions == (49, 49)
     assert completed.termination_reason is GoTerminationReason.TWO_PASSES
 
@@ -334,7 +367,7 @@ def _write_go_run_manifest(run_path: Path, configuration: GoExperimentConfigurat
     (run_path / 'run_manifest.json').write_text(manifest.model_dump_json(indent=2) + '\n', encoding='utf-8')
 
 
-def test_go_credit_lifecycle_publication_and_recovery(tmp_path: Path) -> None:
+def test_go_shared_trainer_process_publishes_checkpoint(tmp_path: Path) -> None:
     configuration = _smoke_configuration(tmp_path)
     model = create_go_model(configuration, torch.device('cpu'))
     policy_output = model.policyHead[-1]
@@ -347,13 +380,15 @@ def test_go_credit_lifecycle_publication_and_recovery(tmp_path: Path) -> None:
     save_model_and_optimizer(model, optimizer, 0, tmp_path)
     _write_go_run_manifest(tmp_path, configuration)
 
-    lifecycle = GoTrainingLifecycle(run_id=9, configuration=configuration)
-    result = lifecycle.run_one_quantum()
-    assert result.progress.model_version == 1
-    assert result.progress.completed_optimizer_steps == 1
-    assert (tmp_path / 'credit-publications' / 'model-version-0000000001.json').is_file()
-
-    recovered = GoTrainingLifecycle(run_id=9, configuration=configuration)
-    assert recovered.ledger.progress == result.progress
-    assert recovered.self_play_workers[0].search.model_generation == 1
-    assert recovered.replay.maintain(10).credited_samples >= 2
+    publisher = CompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
+    publisher.publish(_two_pass_game(publisher.reserve_identity()))
+    trainer = TrainerProcess(GoTrainingGame(configuration), run_id=9, starting_model_version=0)
+    try:
+        replay_state = trainer.maintain_replay(10)
+        assert replay_state.credited_unique_samples == 2
+        result = trainer.train_quantum(global_step=0, model_version=1)
+        assert result.model_version == 1
+        assert result.global_step == 1
+    finally:
+        trainer.close()
+    assert (tmp_path / 'checkpoint_1.json').is_file()

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
-from src.self_play.chess_completed_game import ChessCompletedGamePublisher
+from src.self_play.completed_game import CompletedGamePublisher
 from src.settings import TRAINING_ARGS
 from src.train.TrainingArgs import BatchedInferenceParams
 
@@ -140,7 +140,7 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     self_play = SelfPlay(
         device_id=0,
         args=training_args,
-        completed_game_publisher=ChessCompletedGamePublisher(tmp_path, 0, 0),
+        completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
     self_play._set_mcts(iteration=50)
@@ -176,7 +176,7 @@ def test_self_play_constructs_direct_inference_pipeline(
     self_play = SelfPlay(
         device_id=0,
         args=training_args,
-        completed_game_publisher=ChessCompletedGamePublisher(tmp_path, 0, 0),
+        completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
     self_play._set_mcts(iteration=50)
@@ -199,6 +199,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     self_play.search_schedule_state = self_play.search_schedule(0)
     root = _LifecycleRoot(events)
     game = SimpleNamespace(already_expanded_node=root)
+    self_play.active_games = SimpleNamespace(games=[])
     self_play.self_play_games = [game]
     self_play.completed_searches = 19
     self_play.search_engine = _LifecycleSearch(events, self_play.search_schedule_state.arena_capacity)
@@ -226,6 +227,7 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]
     self_play.search_schedule_state = self_play.search_schedule(0)
+    self_play.active_games = SimpleNamespace(games=[])
     self_play.self_play_games = [SimpleNamespace(already_expanded_node=object())]
     self_play.search_engine = _LifecycleSearch([], self_play.search_schedule_state.arena_capacity)
 

@@ -9,6 +9,7 @@ import numpy.typing as npt
 from AlphaZeroCpp import GoPlayer, GoPosition7, GoPosition9, GoRules
 
 from src.Network import NetworkDimensions
+from src.games.contracts import GameStateContract, RepresentationDimensions
 from src.packed_planes import (
     PackedPlaneLayout,
     PackedPlanePayload,
@@ -33,7 +34,7 @@ class GoSymmetryIndex(IntEnum):
 
 
 @dataclass(frozen=True)
-class GoStateContract:
+class GoStateContract(GameStateContract):
     board_size: int
     history_length: int = 8
 
@@ -70,6 +71,21 @@ class GoStateContract:
     @property
     def network_dimensions(self) -> NetworkDimensions:
         return NetworkDimensions(self.channels, self.board_size, self.board_size, self.action_size)
+
+    @property
+    def name(self) -> str:
+        return 'go'
+
+    @property
+    def representation(self) -> RepresentationDimensions:
+        return RepresentationDimensions(
+            channels=self.channels,
+            rows=self.board_size,
+            columns=self.board_size,
+            binary_channels=self.binary_channels,
+            scalar_channels=self.scalar_channels,
+            packed_planes=self.packed_planes,
+        )
 
     def initial_position(self, rules: GoRules) -> NativeGoPosition:
         return GoPosition7(rules) if self.board_size == 7 else GoPosition9(rules)

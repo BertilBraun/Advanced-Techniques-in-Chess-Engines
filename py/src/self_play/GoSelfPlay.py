@@ -23,10 +23,11 @@ from AlphaZeroCpp import (
 )
 
 from src.experiment.chess_experiment import GoExperimentConfiguration
-from src.self_play.chess_completed_game import SparseSearchVisit
+from src.settings import log_scalar
+from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
+from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.self_play.go_completed_game import (
     GoCompletedGame,
-    GoCompletedGamePublisher,
     GoMoveSelectionMode,
     GoRepresentationMetadata,
     GoRulesMetadata,
@@ -49,13 +50,13 @@ class _ActiveGoGame:
     observations: list[GoSearchObservation] = field(default_factory=list)
 
 
-class GoSelfPlay:
+class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGoSearchResult]):
     def __init__(
         self,
         configuration: GoExperimentConfiguration,
         model_path: Path,
         model_generation: int,
-        publisher: GoCompletedGamePublisher,
+        publisher: CompletedGamePublisher,
         device_id: int,
     ) -> None:
         self.configuration = configuration
@@ -112,39 +113,60 @@ class GoSelfPlay:
             model_generation,
         )
         self.random = np.random.default_rng(configuration.training.random_seed + publisher.worker_id)
+        pool_size = min(
+            configuration.training.topology.self_play.parallel_games_per_process,
+            configuration.training.self_play.inference.inference_batch_size,
+        )
+        self.active_games = ActiveGamePool(self, pool_size)
+        self._published: list[Path] = []
 
     def generate(self, game_count: int) -> tuple[Path, ...]:
         if game_count <= 0:
             raise ValueError('Go self-play game count must be positive.')
-        parallel_games = min(
-            game_count,
-            self.configuration.training.topology.self_play.parallel_games_per_process,
-            self.configuration.training.self_play.inference.inference_batch_size,
-        )
-        active = [self._new_game() for _ in range(parallel_games)]
-        published: list[Path] = []
-        while len(published) < game_count:
-            batch = self.search.search([self.search_request_type(game.root, True) for game in active])
-            results = batch.results
-            completed_indices: list[int] = []
-            for index, (game, result) in enumerate(zip(active, results, strict=True)):
-                self._play_move(game, result)
-                if game.root.is_terminal:
-                    published.append(self._publish(game))
-                    completed_indices.append(index)
-            for index in reversed(completed_indices):
-                if len(published) + len(active) - 1 < game_count:
-                    active[index] = self._new_game()
-                else:
-                    del active[index]
-        return tuple(published)
+        start = len(self._published)
+        while len(self._published) - start < game_count:
+            self.active_games.run_turn()
+        return tuple(self._published[start:])
 
     def refresh_model(self, model_generation: int, model_path: Path) -> None:
         self.search.refresh_model(model_generation, str(model_path))
         self.model_generation = model_generation
 
-    def _new_game(self) -> _ActiveGoGame:
+    def run_batch(self) -> None:
+        self.generate(self.configuration.training.topology.self_play.parallel_games_per_process)
+
+    def refresh_published_model(self, model_generation: int, model_path: Path) -> None:
+        self.refresh_model(model_generation, model_path)
+
+    def snapshot_statistics(self, tensorboard_step: int) -> None:
+        inference, timing = self.search.inference_statistics()
+        log_scalar(
+            'inference/average_number_of_positions_in_inference_call',
+            inference.averageNumberOfPositionsInInferenceCall,
+            tensorboard_step,
+        )
+        log_scalar('timing/total_time_cpp', timing.totalTime, tensorboard_step)
+
+    def new_game(self) -> _ActiveGoGame:
         return _ActiveGoGame(self.search.new_root(self.rules), time.time())
+
+    def build_search_request(self, game: _ActiveGoGame) -> NativeGoSearchRequest:
+        return self.search_request_type(game.root, True)
+
+    def search_active_games(self, requests: tuple[NativeGoSearchRequest, ...]) -> tuple[NativeGoSearchResult, ...]:
+        return tuple(self.search.search(list(requests)).results)
+
+    def advance_game(
+        self,
+        game: _ActiveGoGame,
+        request: NativeGoSearchRequest,
+        result: NativeGoSearchResult,
+    ) -> _ActiveGoGame:
+        self._play_move(game, result)
+        if not game.root.is_terminal:
+            return game
+        self._published.append(self._publish(game))
+        return self.new_game()
 
     def _play_move(self, game: _ActiveGoGame, result: NativeGoSearchResult) -> None:
         positive_visits = tuple(

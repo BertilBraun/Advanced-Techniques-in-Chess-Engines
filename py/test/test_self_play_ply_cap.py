@@ -6,7 +6,7 @@ import chess
 import pytest
 
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.statistics import SelfPlayStatistics
 
 
 def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> SelfPlay:
@@ -22,7 +22,7 @@ def self_play_client(iteration: int, final_maximum_game_plies: int | None = None
         low_material_termination_probability=0.0,
     )
     client.iteration = iteration
-    client.dataset = SelfPlayDataset()
+    client.statistics = SelfPlayStatistics()
     return client
 
 
@@ -53,8 +53,8 @@ def test_iteration_49_caps_game_at_200_plies_with_material_result(monkeypatch: p
 
     assert client._finish_game_after_move(game, native_game_over=False) is replacement
     assert handled_outcomes == [0.0]
-    assert client.dataset.stats.num_too_long_games == 1
-    assert client.dataset.stats.capped_game_material_scores == [0.0]
+    assert client.statistics.stats.num_too_long_games == 1
+    assert client.statistics.stats.capped_game_material_scores == [0.0]
 
 
 def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,8 +73,8 @@ def test_cap_uses_material_result(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(client, '_handle_end_of_game', handle_end_of_game)
 
     assert client._finish_game_after_move(game, native_game_over=False) is replacement
-    assert client.dataset.stats.num_too_long_games == 1
-    assert client.dataset.stats.capped_game_material_scores == [0.5]
+    assert client.statistics.stats.num_too_long_games == 1
+    assert client.statistics.stats.capped_game_material_scores == [0.5]
     assert [reason.value for reason in handled_reasons] == ['material_adjudication']
 
 

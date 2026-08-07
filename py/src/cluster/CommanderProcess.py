@@ -1,4 +1,6 @@
-from typing import Generator
+from __future__ import annotations
+
+from typing import Generator, Protocol
 import time
 from dataclasses import dataclass
 import torch
@@ -10,7 +12,9 @@ from time import monotonic
 from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
-from src.train.TrainingArgs import CreditTrainingParams, EvaluationParams, TrainingArgs
+from src.experiment.chess_experiment import ChessExperimentConfiguration
+from src.games.training_contract import TrainingGameImplementation
+from src.train.TrainingArgs import CreditTrainingParams
 from src.train.TrainingStats import TrainingStats
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -71,7 +75,7 @@ class PublicationResult:
 class TrainingLifecycle:
     ledger: CreditTrainingLedger
     trainer: TrainerProcess
-    evaluation_scheduler: CreditEvaluationScheduler
+    evaluation_scheduler: EvaluationScheduler
     previous_progress: CreditTrainingProgress
     previous_credited_completed_searches: int
     credit_wait_started_at: float
@@ -95,19 +99,38 @@ class CompletedQuantum:
     publication: PublicationResult
 
 
+class EvaluationScheduler(Protocol):
+    def offer(self, publication: CreditPublicationManifest) -> None: ...
+
+    def poll(self) -> None: ...
+
+    def close(self) -> None: ...
+
+
+class NoEvaluationScheduler:
+    def offer(self, publication: CreditPublicationManifest) -> None:
+        return None
+
+    def poll(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
 class CommanderProcess:
     """Coordinate persistent self-play, replay, training, publication, and evaluation."""
 
     def __init__(
         self,
         run: int,
-        args: TrainingArgs,
-        evaluation_args: EvaluationParams,
+        game: TrainingGameImplementation,
         started_at: float,
     ) -> None:
         self.run_id = run
-        self.args = args
-        self.evaluation_args = evaluation_args
+        self.game = game
+        self.configuration = game.configuration
+        self.args = game.training
 
         self.communication_folder = f'communication/{self.run_id}'
         self.communication = Communication(self.communication_folder)
@@ -183,7 +206,11 @@ class CommanderProcess:
         self.communication.boardcast(START_CONTINUOUS_SELF_PLAY)
         if ledger.prepared_quantum is not None:
             self._finish_prepared_publication(ledger, ledger.prepared_quantum)
-        evaluation_scheduler = CreditEvaluationScheduler(self.run_id, self.args, self.evaluation_args)
+        evaluation_scheduler: EvaluationScheduler = (
+            CreditEvaluationScheduler(self.run_id, self.args, self.configuration.chess.evaluation)
+            if isinstance(self.configuration, ChessExperimentConfiguration)
+            else NoEvaluationScheduler()
+        )
         evaluation_scheduler.offer(
             create_credit_publication_manifest(
                 ledger.run_path,
@@ -195,7 +222,7 @@ class CommanderProcess:
         previous_telemetry = load_last_credit_training_telemetry(ledger.run_path / 'credit-training-telemetry.jsonl')
         started_at = monotonic()
         try:
-            trainer = TrainerProcess(self.args, self.run_id, ledger.progress.model_version)
+            trainer = TrainerProcess(self.game, self.run_id, ledger.progress.model_version)
         except BaseException:
             evaluation_scheduler.close()
             raise
@@ -536,7 +563,7 @@ class CommanderProcess:
         """Starts a SelfPlay process for the given node_id and returns the process."""
         process = Process(
             target=run_self_play_process,
-            args=(self.run_id, self.args, self.communication_folder, 0, node_id),
+            args=(self.run_id, self.game, self.communication_folder, 0, node_id),
         )
         start_process_on_cuda_device(process, device_id)
         return process
@@ -571,6 +598,7 @@ class CommanderProcess:
                 ),
                 self.args.save_path,
                 self.args.trainer.optimizer,
+                self.game.network_dimensions,
             )
             return
         model, optimizer = load_model_and_optimizer(
@@ -582,5 +610,6 @@ class CommanderProcess:
             ),
             self.args.save_path,
             self.args.trainer.optimizer,
+            self.game.network_dimensions,
         )
         save_model_and_optimizer(model, optimizer, starting_model_version, self.args.save_path)

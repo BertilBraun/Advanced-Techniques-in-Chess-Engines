@@ -43,11 +43,7 @@ if __name__ == '__main__':
     from src.settings import TensorboardWriter, log_text
     from src.cluster.CommanderProcess import CommanderProcess
     from src.util.tensorboard import configure_tensorboard_run_directory
-    from src.experiment.chess_experiment import (
-        ChessExperimentConfiguration,
-        GoExperimentConfiguration,
-        write_resolved_experiment,
-    )
+    from src.experiment.chess_experiment import write_resolved_experiment
     from src.experiment.chess_run import prepare_experiment_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
@@ -97,21 +93,16 @@ if __name__ == '__main__':
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(TRAINING_ARGS))
 
-    go_lifecycle = None
-    if isinstance(experiment, ChessExperimentConfiguration):
-        commander = CommanderProcess(
-            run,
-            TRAINING_ARGS,
-            experiment.chess.evaluation,
-            run_started_at,
-        )
-        training_results = commander.run()
-    elif isinstance(experiment, GoExperimentConfiguration):
-        from src.cluster.GoTrainingLifecycle import GoTrainingLifecycle
+    if experiment.game == 'chess':
+        from src.games.chess.training import ChessTrainingGame
 
-        go_lifecycle = GoTrainingLifecycle(run, experiment)
-        training_results = go_lifecycle.run()
-        commander = None
+        training_game = ChessTrainingGame(experiment)
+    else:
+        from src.games.go.training_runtime import GoTrainingGame
+
+        training_game = GoTrainingGame(experiment)
+    commander = CommanderProcess(run, training_game, run_started_at)
+    training_results = commander.run()
     outcome_path = Path(TRAINING_ARGS.save_path) / 'run-outcome.json'
     try:
         for _ in training_results:
@@ -124,30 +115,22 @@ if __name__ == '__main__':
             run_started_at,
             TRAINING_ARGS.limits.cost_currency,
             TRAINING_ARGS.limits.hourly_price,
-            commander.latest_completed_model_version
-            if commander is not None
-            else go_lifecycle.ledger.progress.model_version,
+            commander.latest_completed_model_version,
         )
         raise
     finally:
         gpu_usage_logger.stop()
         resource_telemetry.stop()
 
-    outcome_status = (
-        RunOutcomeStatus.STOPPED
-        if commander is not None and commander.final_stop_reason is not None
-        else RunOutcomeStatus.COMPLETED
-    )
+    outcome_status = RunOutcomeStatus.STOPPED if commander.final_stop_reason is not None else RunOutcomeStatus.COMPLETED
     write_run_outcome(
         outcome_path,
         outcome_status,
-        commander.final_stop_reason if commander is not None else None,
+        commander.final_stop_reason,
         run_started_at,
         TRAINING_ARGS.limits.cost_currency,
         TRAINING_ARGS.limits.hourly_price,
-        commander.latest_completed_model_version
-        if commander is not None
-        else go_lifecycle.ledger.progress.model_version,
+        commander.latest_completed_model_version,
     )
 
     log('Training finished')

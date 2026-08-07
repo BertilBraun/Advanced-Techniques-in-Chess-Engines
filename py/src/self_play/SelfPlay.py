@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import time
+from pathlib import Path
 import uuid
 
 from dataclasses import dataclass
@@ -29,14 +30,13 @@ from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.chess_completed_game import (
     ChessCompletedGame,
-    ChessCompletedGamePublisher,
     ChessMoveSelectionMode,
     ChessRepresentationMetadata,
     ChessRulesMetadata,
     ChessSearchObservation,
-    ChessGameIdentity,
-    SparseSearchVisit,
 )
+from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
+from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
 from src.self_play.resignation import (
@@ -48,7 +48,7 @@ from src.self_play.resignation import (
     best_child_value_from_root_perspective,
 )
 from src.util import lerp
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
 from src.self_play.curriculum import curriculum_fade, curriculum_progress
 from src.settings import CurrentBoard, CurrentGameMove, log_text
@@ -103,7 +103,7 @@ class SelfPlayGame:
         is_resignation_audit: bool = False,
         production_resignation_enabled: bool = False,
         resignation_threshold: float | None = None,
-        identity: ChessGameIdentity | None = None,
+        identity: GameIdentity | None = None,
     ) -> None:
         self.board = CHESS_STATE_CONTRACT.create_initial_board()
         self.memory: list[SelfPlayGameMemory] = []
@@ -186,12 +186,12 @@ def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
     )
 
 
-class SelfPlay:
+class SelfPlay(ActiveGamePolicy):
     def __init__(
         self,
         device_id: int,
         args: TrainingArgs,
-        completed_game_publisher: ChessCompletedGamePublisher,
+        completed_game_publisher: CompletedGamePublisher,
     ) -> None:
         self.device_id = device_id
         self.args = args.self_play
@@ -208,8 +208,8 @@ class SelfPlay:
         self.model_version: int | None = None
         self.model_refresh_acknowledgements: list[int] = []
         self.search_schedule_state: SearchScheduleState | None = None
-        self.dataset = SelfPlayDataset()
-        self.self_play_games: list[SelfPlayGame] = [self._new_game() for _ in range(self.num_parallel_games)]
+        self.statistics = SelfPlayStatistics()
+        self.active_games = ActiveGamePool(self, self.num_parallel_games)
 
         self.search_engine: ChessSelfPlaySearch | None = None
         self.num_searches_per_turn = 0
@@ -224,6 +224,21 @@ class SelfPlay:
             iteration,
             model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
         )
+
+    def run_batch(self) -> None:
+        self.self_play()
+
+    @property
+    def self_play_games(self) -> list[SelfPlayGame]:
+        return self.active_games.games
+
+    @self_play_games.setter
+    def self_play_games(self, games: list[SelfPlayGame]) -> None:
+        self.active_games.games = games
+
+    def refresh_published_model(self, model_version: int, model_path: Path) -> None:
+        self.update_search_schedule(self.search_schedule(model_version))
+        self.refresh_model(model_version, model_path)
 
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
         if self.search_engine is None:
@@ -379,31 +394,30 @@ class SelfPlay:
         return results
 
     def self_play(self) -> None:
+        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
+        self.active_games.run_turn()
+
+    def new_game(self) -> SelfPlayGame:
+        return self._new_game()
+
+    def build_search_request(self, game: SelfPlayGame) -> ChessSelfPlaySearchRequest:
         from AlphaZeroCpp import ChessSelfPlaySearchRequest
 
-        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
-        boards: list[ChessSelfPlaySearchRequest] = []
-        for spg in self.self_play_games:
-            if self.model_version is None:
-                raise RuntimeError('A model must be refreshed before self-play starts.')
-            spg.acknowledge_model_version(self.model_version)
-            force_fast_endgame_playout = self._should_force_fast_endgame_playout(spg)
-            should_run_full_search = self._should_run_full_search(
-                spg,
-                force_fast_endgame_playout,
-            )
+        if self.model_version is None:
+            raise RuntimeError('A model must be refreshed before self-play starts.')
+        game.acknowledge_model_version(self.model_version)
+        force_fast_endgame_playout = self._should_force_fast_endgame_playout(game)
+        should_run_full_search = self._should_run_full_search(game, force_fast_endgame_playout)
+        self._prepare_search_root(game)
+        if should_run_full_search:
+            game.already_expanded_node.discount(self.args.search.percentage_of_node_visits_to_keep)
+        return ChessSelfPlaySearchRequest(game.already_expanded_node, should_run_full_search)
 
-            self._prepare_search_root(spg)
-
-            if should_run_full_search:
-                # Do not reuse the node if it is a full search - Per KataGo's "RPC" (Randomized Playout Cap)
-                # NOTE: Disabled for now - think about whether to re-enable this (probably not necessary for amateur games)
-                # Instead - if we should run a full search, discount the visits
-                spg.already_expanded_node.discount(self.args.search.percentage_of_node_visits_to_keep)
-
-            boards.append(ChessSelfPlaySearchRequest(spg.already_expanded_node, should_run_full_search))
-
-        mcts_results = self.search(boards)
+    def search_active_games(
+        self,
+        requests: tuple[ChessSelfPlaySearchRequest, ...],
+    ) -> tuple[ChessSelfPlaySearchResult, ...]:
+        mcts_results = self.search(list(requests))
 
         stats = mcts_results.statistics
         log_scalar('mcts/average_search_depth', stats.average_depth)
@@ -415,61 +429,56 @@ class SelfPlay:
         )
         log_scalar('mcts/top_move_disagreement', stats.top_action_disagreement)
         log_scalar('mcts/search_selected_move_prior_rank', stats.selected_action_prior_rank)
+        return tuple(mcts_results.results)
 
-        for i, (spg, mcts_result) in enumerate(zip(self.self_play_games, mcts_results.results)):
-            if not mcts_result.visits:
-                self.self_play_games[i] = self._finish_terminal_search_root(spg, mcts_result.root)
-                continue
-
-            if not has_positive_visit_counts(mcts_result.visits):
-                log(f'Discarding self-play game after zero-visit MCTS root: {spg.board.board.fen()}')
-                self.self_play_games[i] = self._new_game()
-                continue
-
-            was_full_searched = boards[i].full_search
-            search_schedule = self.search_schedule_state
-            if search_schedule is None:
-                raise RuntimeError('Search schedule must be initialized during self-play.')
-            spg.memory.append(
-                SelfPlayGameMemory(
-                    spg.board.copy(),
-                    mcts_result.visits,
-                    mcts_result.root_value,
-                    len(spg.played_moves),
-                    self.model_version,
-                    search_schedule.num_full_searches if was_full_searched else search_schedule.num_fast_searches,
-                    was_full_searched,
-                )
+    def advance_game(
+        self,
+        game: SelfPlayGame,
+        request: ChessSelfPlaySearchRequest,
+        result: ChessSelfPlaySearchResult,
+    ) -> SelfPlayGame:
+        if not result.visits:
+            return self._finish_terminal_search_root(game, result.root)
+        if not has_positive_visit_counts(result.visits):
+            log(f'Discarding self-play game after zero-visit MCTS root: {game.board.board.fen()}')
+            return self._new_game()
+        search_schedule = self.search_schedule_state
+        if search_schedule is None or self.model_version is None:
+            raise RuntimeError('Search schedule and model must be initialized during self-play.')
+        game.memory.append(
+            SelfPlayGameMemory(
+                game.board.copy(),
+                result.visits,
+                result.root_value,
+                len(game.played_moves),
+                self.model_version,
+                search_schedule.num_full_searches if request.full_search else search_schedule.num_fast_searches,
+                request.full_search,
             )
-            if was_full_searched:
-                self._archive_disagreement_prefix(spg, mcts_result.root)
-                if self._record_resignation_observation(spg, mcts_result):
-                    if spg.is_resignation_audit:
-                        self.dataset.stats += SelfPlayDatasetStats(hypothetical_resignations=1)
-                    else:
-                        self.dataset.stats += SelfPlayDatasetStats(actual_resignations=1)
-                        self.self_play_games[i] = self._handle_resignation(spg)
-                        continue
-
-            if self._should_terminate_low_material_game(spg):
-                approximate_result = spg.board.get_approximate_result_score() * spg.board.current_player
-                self.dataset.stats += SelfPlayDatasetStats(
+        )
+        if request.full_search:
+            self._archive_disagreement_prefix(game, result.root)
+            if self._record_resignation_observation(game, result):
+                if game.is_resignation_audit:
+                    self.statistics.add(SelfPlayDatasetStats(hypothetical_resignations=1))
+                else:
+                    self.statistics.add(SelfPlayDatasetStats(actual_resignations=1))
+                    return self._handle_resignation(game)
+        if self._should_terminate_low_material_game(game):
+            approximate_result = game.board.get_approximate_result_score() * game.board.current_player
+            self.statistics.add(
+                SelfPlayDatasetStats(
                     low_material_termination_evaluations=1,
                     low_material_terminations=1,
                     low_material_termination_material_scores=[approximate_result],
                 )
-                self.self_play_games[i] = self._handle_end_of_game(
-                    spg,
-                    approximate_result,
-                    ResignationTerminationReason.LOW_MATERIAL,
-                )
-                continue
-
-            self.self_play_games[i] = self._sample_self_play_game(
-                spg,
-                mcts_result.root,
-                mcts_result.visits,
             )
+            return self._handle_end_of_game(
+                game,
+                approximate_result,
+                ResignationTerminationReason.LOW_MATERIAL,
+            )
+        return self._sample_self_play_game(game, result.root, result.visits)
 
     def _finish_terminal_search_root(self, game: SelfPlayGame, root: ChessSearchRoot) -> SelfPlayGame:
         if not root.is_terminal:
@@ -546,7 +555,7 @@ class SelfPlay:
                 resignation_threshold=assignment.governing_threshold,
             )
         if game.is_resignation_audit:
-            self.dataset.stats += SelfPlayDatasetStats(resignation_audit_games_started=1)
+            self.statistics.add(SelfPlayDatasetStats(resignation_audit_games_started=1))
         game.identity = self.completed_game_publisher.reserve_identity()
         return game
 
@@ -642,9 +651,11 @@ class SelfPlay:
         game.low_material_termination_evaluated = True
         if random.random() < self.args.low_material_termination_probability:
             return True
-        self.dataset.stats += SelfPlayDatasetStats(
-            low_material_termination_evaluations=1,
-            low_material_termination_declines=1,
+        self.statistics.add(
+            SelfPlayDatasetStats(
+                low_material_termination_evaluations=1,
+                low_material_termination_declines=1,
+            )
         )
         return False
 
@@ -704,9 +715,11 @@ class SelfPlay:
                 if self.args.endgame_continuation_start_plies is not None
                 else ResignationTerminationReason.PLY_CAP
             )
-            self.dataset.stats += SelfPlayDatasetStats(
-                num_too_long_games=1,
-                capped_game_material_scores=[capped_game_outcome],
+            self.statistics.add(
+                SelfPlayDatasetStats(
+                    num_too_long_games=1,
+                    capped_game_material_scores=[capped_game_outcome],
+                )
             )
             return self._handle_end_of_game(
                 game,
@@ -771,25 +784,29 @@ class SelfPlay:
             is_false_non_loss = is_natural_trigger and recovered_outcome >= 0.0
             continuation_plies = len(spg.played_moves) - audit_trigger.ply if audit_trigger is not None else 0
             fast_searches = int(self.num_searches_per_turn * self.args.search.fast_searches_proportion_of_full_searches)
-            self.dataset.stats += SelfPlayDatasetStats(
-                resignation_audit_games_completed=1,
-                resignation_audit_natural_triggers=int(is_natural_trigger),
-                resignation_audit_capped_triggers=int(
-                    audit_trigger is not None and termination_reason is not ResignationTerminationReason.NATURAL
-                ),
-                resignation_audit_recovered_wins=int(is_natural_trigger and recovered_outcome == 1.0),
-                resignation_audit_recovered_draws=int(is_natural_trigger and recovered_outcome == 0.0),
-                resignation_audit_recovered_losses=int(is_natural_trigger and recovered_outcome == -1.0),
-                resignation_audit_white_triggers=int(is_natural_trigger and audit_trigger.side_to_move == 1),
-                resignation_audit_black_triggers=int(is_natural_trigger and audit_trigger.side_to_move == -1),
-                resignation_audit_white_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == 1),
-                resignation_audit_black_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == -1),
-                resignation_audit_root_value_abs_sum=sum(
-                    abs(observation.root_value) for observation in spg.resignation_observations
-                ),
-                resignation_audit_root_value_count=len(spg.resignation_observations),
-                resignation_audit_continuation_plies=continuation_plies,
-                resignation_audit_estimated_searches_saved=continuation_plies * fast_searches,
+            self.statistics.add(
+                SelfPlayDatasetStats(
+                    resignation_audit_games_completed=1,
+                    resignation_audit_natural_triggers=int(is_natural_trigger),
+                    resignation_audit_capped_triggers=int(
+                        audit_trigger is not None and termination_reason is not ResignationTerminationReason.NATURAL
+                    ),
+                    resignation_audit_recovered_wins=int(is_natural_trigger and recovered_outcome == 1.0),
+                    resignation_audit_recovered_draws=int(is_natural_trigger and recovered_outcome == 0.0),
+                    resignation_audit_recovered_losses=int(is_natural_trigger and recovered_outcome == -1.0),
+                    resignation_audit_white_triggers=int(is_natural_trigger and audit_trigger.side_to_move == 1),
+                    resignation_audit_black_triggers=int(is_natural_trigger and audit_trigger.side_to_move == -1),
+                    resignation_audit_white_false_non_losses=int(is_false_non_loss and audit_trigger.side_to_move == 1),
+                    resignation_audit_black_false_non_losses=int(
+                        is_false_non_loss and audit_trigger.side_to_move == -1
+                    ),
+                    resignation_audit_root_value_abs_sum=sum(
+                        abs(observation.root_value) for observation in spg.resignation_observations
+                    ),
+                    resignation_audit_root_value_count=len(spg.resignation_observations),
+                    resignation_audit_continuation_plies=continuation_plies,
+                    resignation_audit_estimated_searches_saved=continuation_plies * fast_searches,
+                )
             )
 
         return self._new_game()
@@ -806,11 +823,13 @@ class SelfPlay:
         self._log_game(spg, game_outcome)
         if spg.oldest_model_version is None or spg.newest_model_version is None:
             raise RuntimeError('Completed game has no acknowledged inference model.')
-        self.dataset.stats += SelfPlayDatasetStats(
-            game_model_version_ranges=[(spg.oldest_model_version, spg.newest_model_version)],
+        self.statistics.add(
+            SelfPlayDatasetStats(
+                game_model_version_ranges=[(spg.oldest_model_version, spg.newest_model_version)],
+            )
         )
 
-        self.dataset.add_generation_stats(
+        self.statistics.record_completed_game(
             game_length=len(spg.played_moves),
             generation_time=time.time() - spg.start_generation_time,
         )

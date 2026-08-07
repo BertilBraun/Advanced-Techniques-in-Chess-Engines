@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 from pathlib import Path
 
-from src.self_play.SelfPlayDataset import ReplaySampleMetadata, SelfPlayDataset
+from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.train.training_batch import ReplaySampleMetadata
 from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT

@@ -7,7 +7,7 @@ import pytest
 
 from src.games.chess.ChessBoard import ChessBoard
 from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.self_play.statistics import SelfPlayStatistics
 
 
 def self_play_client(shortcut_strength: float) -> SelfPlay:
@@ -19,7 +19,7 @@ def self_play_client(shortcut_strength: float) -> SelfPlay:
         low_material_termination_piece_threshold_per_player=4,
         low_material_termination_probability=0.7,
     )
-    client.dataset = SelfPlayDataset()
+    client.statistics = SelfPlayStatistics()
     client.endgame_shortcut_strength = shortcut_strength
     client.iteration = 0
     return client

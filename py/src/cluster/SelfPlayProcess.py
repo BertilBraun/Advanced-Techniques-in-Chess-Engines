@@ -18,17 +18,22 @@ from src.util.communication import (
 )
 from src.util.log import log
 from src.util.exceptions import log_exceptions
-from src.train.TrainingArgs import TrainingArgs
+from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
 from src.train.CreditPublication import PublicationValidationScope, load_credit_publication_pointer
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
-from src.self_play.SelfPlay import SelfPlay
-from src.self_play.chess_completed_game import ChessCompletedGamePublisher
+from src.self_play.completed_game import CompletedGamePublisher
+from src.util.save_paths import inference_model_path, model_save_path
 
 
 def run_self_play_process(
-    run: int, args: TrainingArgs, communication_folder: str, device_id: int, node_id: int
+    run: int,
+    game: TrainingGameImplementation,
+    communication_folder: str,
+    device_id: int,
+    node_id: int,
 ) -> None:
+    args = game.training
     if USE_GPU:
         # torch.cuda.set_per_process_memory_fraction(1 / 64, device=device_id)
         torch.cuda.set_device(device_id)
@@ -38,7 +43,13 @@ def run_self_play_process(
     torch.manual_seed(worker_seed)
     np.random.seed(worker_seed)
 
-    self_play_process = SelfPlayProcess(args, communication_folder, device_id=device_id, node_id=node_id, run_id=run)
+    self_play_process = SelfPlayProcess(
+        game,
+        communication_folder,
+        device_id=device_id,
+        node_id=node_id,
+        run_id=run,
+    )
     with (
         log_exceptions(f'Self play process {node_id} crashed.'),
         TensorboardWriter(
@@ -55,15 +66,27 @@ class SelfPlayProcess:
     """This class provides functionality to run the self play process. It runs self play games and saves the dataset to disk. It listens to the commander for messages to start and stop the self play process."""
 
     def __init__(
-        self, args: TrainingArgs, communication_folder: str, device_id: int, node_id: int, run_id: int
+        self,
+        game: TrainingGameImplementation,
+        communication_folder: str,
+        device_id: int,
+        node_id: int,
+        run_id: int,
     ) -> None:
+        args = game.training
         self.args = args
-        self.completed_game_publisher = ChessCompletedGamePublisher(
+        self.completed_game_publisher = CompletedGamePublisher(
             Path(args.save_path),
             run_id,
             node_id,
         )
-        self.self_play = SelfPlay(device_id, args, self.completed_game_publisher)
+        initial_model_path = inference_model_path(model_save_path(0, args.save_path))
+        self.self_play: SelfPlayWorker = game.create_self_play(
+            device_id,
+            0,
+            initial_model_path,
+            self.completed_game_publisher,
+        )
         self.communication = Communication(communication_folder)
         self.node_id = node_id
         self.run_id = run_id
@@ -80,7 +103,7 @@ class SelfPlayProcess:
             while True:
                 if running:
                     with log_exceptions('Self playing failed'):
-                        self.self_play.self_play()
+                        self.self_play.run_batch()
 
                 else:
                     time.sleep(0.1)  # Sleep to avoid busy waiting
@@ -136,8 +159,7 @@ class SelfPlayProcess:
             if self.loaded_credit_jit_sha256 != publication.jit_model.sha256:
                 raise ValueError('Published model version changed immutable JIT identity.')
             return current_model_version
-        self.self_play.update_search_schedule(self.self_play.search_schedule(model_version))
-        self.self_play.refresh_model(
+        self.self_play.refresh_published_model(
             model_version,
             Path(self.args.save_path) / publication.jit_model.path,
         )

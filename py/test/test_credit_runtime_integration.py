@@ -6,21 +6,21 @@ import chess
 from src.games.chess.ChessBoard import ChessBoard
 from src.self_play.chess_completed_game import (
     ChessCompletedGame,
-    ChessCompletedGamePublisher,
     ChessMoveSelectionMode,
     ChessRepresentationMetadata,
     ChessRulesMetadata,
     ChessSearchObservation,
-    SparseSearchVisit,
 )
+from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.self_play.value_target import TerminationReason
 from src.settings import CurrentGame
-from src.train.ChessReplay import ChessReplayMaintainer, training_batch_loader
+from src.train.ChessReplay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
+from src.train.Replay import ReplayMaintainer
 from src.train.CreditTrainingLedger import CreditTrainingLedger
 from src.train.TrainingArgs import CreditTrainingParams
 
 
-def _completed_game(publisher: ChessCompletedGamePublisher) -> ChessCompletedGame:
+def _completed_game(publisher: CompletedGamePublisher) -> ChessCompletedGame:
     moves_uci = ('f2f3', 'e7e5', 'g2g4', 'd8h4')
     board = ChessBoard()
     observations: list[ChessSearchObservation] = []
@@ -64,10 +64,10 @@ def _completed_game(publisher: ChessCompletedGamePublisher) -> ChessCompletedGam
 
 
 def test_credit_runtime_rebuilds_fifo_and_rank_batches_after_restart(tmp_path: Path) -> None:
-    publisher = ChessCompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
+    publisher = CompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
     for _ in range(3):
         publisher.publish(_completed_game(publisher))
-    maintainer = ChessReplayMaintainer(tmp_path, capacity=10, sampler_seed=51)
+    maintainer = ReplayMaintainer(tmp_path, CHESS_REPLAY_IMPLEMENTATION, capacity=10, sampler_seed=51)
     snapshot, _ = maintainer.maintain(10)
     parameters = CreditTrainingParams(
         replay_ratio=Decimal(4),
@@ -81,7 +81,12 @@ def test_credit_runtime_rebuilds_fifo_and_rank_batches_after_restart(tmp_path: P
     ledger = CreditTrainingLedger(tmp_path, parameters, global_batch_size=8)
 
     progress = ledger.reconcile_credited_samples(snapshot.credited_samples)
-    restarted, _ = ChessReplayMaintainer(tmp_path, capacity=10, sampler_seed=51).maintain(10)
+    restarted, _ = ReplayMaintainer(
+        tmp_path,
+        CHESS_REPLAY_IMPLEMENTATION,
+        capacity=10,
+        sampler_seed=51,
+    ).maintain(10)
     rank_zero = training_batch_loader(restarted, 0, 1, 8, 2, 0, pin_memory=False)
     rank_one = training_batch_loader(restarted, 0, 1, 8, 2, 1, pin_memory=False)
 

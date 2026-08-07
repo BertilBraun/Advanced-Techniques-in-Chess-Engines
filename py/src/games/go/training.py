@@ -8,7 +8,7 @@ import torch.nn.functional as functional
 from src.Network import Network
 from src.experiment.chess_experiment import GoExperimentConfiguration, GoTrainingObjectiveConfiguration
 from src.games.go.contract import GoStateContract
-from src.self_play.SelfPlayDataset import TrainingBatch
+from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome
 from src.value import scalar_to_wdl
 

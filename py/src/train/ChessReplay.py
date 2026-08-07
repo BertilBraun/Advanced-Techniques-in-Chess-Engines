@@ -1,15 +1,7 @@
 from __future__ import annotations
 
-import hashlib
-import os
-import sys
-from collections import deque
-from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
-from enum import Enum
+from collections.abc import Sequence
 from pathlib import Path
-import struct
-import time
 
 import chess
 import numpy as np
@@ -18,546 +10,124 @@ import torch
 
 from src.Encoding import decode_board_states_into, encode_board_state, get_board_result_score
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.packed_planes import PackedPlanePayload
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import BOARD_LENGTH, ChessGame, DictMove, index_to_square, square_to_index
-from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
-from src.self_play.chess_completed_game import ChessCompletedGame, ChessGameIdentity, completed_game_from_path
+from src.train.training_batch import ReplaySampleMetadata, TrainingBatch
+from src.self_play.chess_completed_game import ChessCompletedGame
+from src.self_play.completed_game_record import completed_game_from_path
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
-from src.util.atomic_file import fsync_directory, write_bytes_atomically
-from src.train.replay_sampling import deterministic_rank_indices
+from src.train.Replay import (
+    ARCHIVE_HEADER,
+    ArchiveFrameIndex,
+    ArchiveInspection,
+    PackedReplaySample,
+    ReplayGameImplementation,
+    ReplayMaintainer,
+    ReplayPhase,
+    ReplaySnapshot,
+    ReplayTrainingBatchLoader,
+    append_archive_record,
+    canonical_game_payload,
+    index_archive,
+    pack_visits,
+    read_frame_payload,
+)
 
 
-CHESS_ARCHIVE_HEADER = b'AZ-CHESS-GAMES\x00\x03\n'
-_FRAME_HEADER = struct.Struct('>QQQQQQQQ32s')
-_ARCHIVE_FILE_PATTERN = 'model-generation-*.games'
-_MAXIMUM_PACKED_VISIT_VALUE = int(np.iinfo(np.uint16).max)
-_PACKED_REPLAY_REVIEW_CAPACITY = 2_500_000
+CHESS_ARCHIVE_HEADER = ARCHIVE_HEADER
+
+__all__ = [
+    'CHESS_ARCHIVE_HEADER',
+    'ChessArchiveFrameIndex',
+    'ReplayPhase',
+    'append_chess_archive_record',
+    'build_chess_training_batch',
+    'canonical_game_payload',
+    'inspect_chess_archives',
+    'materialize_chess_game',
+    'pack_chess_visits',
+    'read_chess_archive',
+    'rebuild_chess_replay',
+    'training_batch_loader',
+]
 
 
 def pack_chess_visits(visits: Sequence[tuple[int, int]]) -> npt.NDArray[np.uint16]:
-    if not visits:
-        raise ValueError('Packed chess visits must not be empty.')
-    if any(
-        action_id < 0
-        or action_id > _MAXIMUM_PACKED_VISIT_VALUE
-        or visit_count <= 0
-        or visit_count > _MAXIMUM_PACKED_VISIT_VALUE
-        for action_id, visit_count in visits
-    ):
-        raise ValueError('Packed chess actions must be nonnegative and visit counts positive uint16 values.')
-    packed = np.asarray(visits, dtype=np.uint16)
-    packed.flags.writeable = False
-    return packed
+    return pack_visits(visits, CHESS_STATE_CONTRACT.action_size)
 
 
-def _estimated_sample_bytes(sample: ChessReplaySample) -> int:
-    return sample.encoded_state.memory_bytes() + sample.visits.nbytes + sys.getsizeof(sample)
-
-
-def _encoded_state_value_overhead_bytes(samples: Sequence[ChessReplaySample]) -> int:
-    if not samples:
-        return CHESS_STATE_CONTRACT.representation.packed_planes.empty_value().memory_bytes()
-    payload_bytes = CHESS_STATE_CONTRACT.representation.packed_planes.payload_bytes
-    return max(0, int(np.mean(tuple(sample.encoded_state.memory_bytes() - payload_bytes for sample in samples))))
-
-
-def _projected_capacity_bytes(samples: Sequence[ChessReplaySample], capacity: int) -> int:
-    if capacity < 0:
-        raise ValueError('Replay capacity must be nonnegative.')
-    if not samples:
-        empty_state = CHESS_STATE_CONTRACT.representation.packed_planes.empty_value()
-        per_sample_bytes = empty_state.memory_bytes() + sys.getsizeof(np.zeros((1, 2), dtype=np.uint16))
-        return per_sample_bytes * capacity
-    return int(round(np.mean(tuple(_estimated_sample_bytes(sample) for sample in samples)) * capacity))
-
-
-@dataclass(frozen=True, eq=False)
-class ChessReplaySample:
-    encoded_state: PackedPlanePayload
-    visits: npt.NDArray[np.uint16]
-    value_target: ReplayValueTarget
-    metadata: ReplaySampleMetadata
-    sample_weight: float
-    source_model_generation: int
-    source_created_at_seconds: float
-
-    def __post_init__(self) -> None:
-        if self.visits.dtype != np.uint16 or self.visits.ndim != 2 or self.visits.shape[1] != 2:
-            raise ValueError('Packed chess visits must have shape (N, 2) and uint16 dtype.')
-        if self.visits.flags.writeable:
-            raise ValueError('Packed chess visits must be read-only.')
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ChessReplaySample):
-            return NotImplemented
-        return (
-            self.encoded_state == other.encoded_state
-            and np.array_equal(self.visits, other.visits)
-            and self.value_target == other.value_target
-            and self.metadata == other.metadata
-            and self.sample_weight == other.sample_weight
-            and self.source_model_generation == other.source_model_generation
-            and self.source_created_at_seconds == other.source_created_at_seconds
-        )
-
-
-@dataclass(frozen=True)
-class ChessReplaySnapshot:
-    samples: tuple[ChessReplaySample, ...]
-    credited_samples: int
-    credited_completed_searches: int
-    sampler_seed: int
-    frozen_at_seconds: float
-    evicted_samples: int
-    estimated_sample_bytes: int
-    encoded_state_value_overhead_bytes: int
-    projected_capacity_bytes: int
-    projected_review_capacity_bytes: int
-
-    def rank_indices(
-        self,
-        global_step: int,
-        optimizer_steps: int,
-        global_batch_size: int,
-        world_size: int,
-        rank: int,
-    ) -> tuple[int, ...]:
-        return deterministic_rank_indices(
-            len(self.samples),
-            self.sampler_seed,
-            global_step,
-            optimizer_steps,
-            global_batch_size,
-            world_size,
-            rank,
-        )
-
-
-class ChessTrainingBatchLoader:
-    def __init__(
-        self,
-        snapshot: ChessReplaySnapshot,
-        global_step: int,
-        optimizer_steps: int,
-        global_batch_size: int,
-        world_size: int,
-        rank: int,
-        pin_memory: bool,
-    ) -> None:
-        self.snapshot = snapshot
-        self.global_step = global_step
-        self.optimizer_steps = optimizer_steps
-        self.rank = rank
-        self.local_batch_size = global_batch_size // world_size
-        self.indices = snapshot.rank_indices(
-            global_step,
-            optimizer_steps,
-            global_batch_size,
-            world_size,
-            rank,
-        )
-        self.pin_memory = pin_memory
-        self.preparation_seconds = 0.0
-
-    def __iter__(self) -> Iterator[TrainingBatch]:
-        for offset in range(0, len(self.indices), self.local_batch_size):
-            started_at = time.perf_counter()
-            batch = build_chess_training_batch(
-                self.snapshot,
-                self.indices[offset : offset + self.local_batch_size],
-                self.global_step,
-                self.rank,
-                sample_position_offset=offset,
-            )
-            if self.pin_memory:
-                batch = batch.pin_memory()
-            self.preparation_seconds += time.perf_counter() - started_at
-            yield batch
-
-    def __len__(self) -> int:
-        return self.optimizer_steps
-
-
-class ReplayPhase(str, Enum):
-    INGESTING = 'ingesting'
-    FROZEN = 'frozen'
-
-
-@dataclass(frozen=True)
-class ChessReplayMetrics:
-    credited_samples: int
-    credited_completed_searches: int
-    live_samples: int
-    evicted_samples: int
-    oldest_source_model_generation: int | None
-    newest_source_model_generation: int | None
-    mean_source_model_generation: float | None
-    oldest_sample_age_seconds: float | None
-    mean_sample_age_seconds: float | None
-    estimated_sample_bytes: int
-    encoded_state_value_overhead_bytes: int
-    projected_capacity_bytes: int
-    projected_review_capacity_bytes: int
-
-
-@dataclass(frozen=True)
-class ChessArchiveInspection:
-    path: Path
-    model_generation: int
-    game_count: int
-    eligible_sample_count: int
-    completed_searches: int
-    byte_count: int
-
-
-@dataclass(frozen=True)
-class ChessArchiveFrameIndex:
-    path: Path
-    ingestion_sequence: int
-    payload_offset: int
-    payload_length: int
-    payload_digest: bytes
-    identity: ChessGameIdentity
-    model_generation: int
-    eligible_sample_count: int
-    completed_searches: int
-
-
-class ChessReplay:
-    def __init__(self, capacity: int, sampler_seed: int) -> None:
-        if capacity <= 0:
-            raise ValueError('Chess replay capacity must be positive.')
-        self.capacity = capacity
-        self.sampler_seed = sampler_seed
-        self.phase = ReplayPhase.INGESTING
-        self._samples: deque[ChessReplaySample] = deque()
-        self._credited_samples = 0
-        self._credited_completed_searches = 0
-        self._evicted_samples = 0
-
-    def begin_ingestion(self, capacity: int) -> None:
-        if capacity <= 0:
-            raise ValueError('Chess replay capacity must be positive.')
-        self.phase = ReplayPhase.INGESTING
-        self.capacity = capacity
-        self._evict_to_capacity()
-
-    def ingest_game(self, game: ChessCompletedGame) -> int:
-        if self.phase is not ReplayPhase.INGESTING:
-            raise RuntimeError('Chess replay ingestion is allowed only during the ingestion phase.')
-        samples = materialize_chess_game(game)
-        self._samples.extend(samples)
-        self._credited_samples += len(samples)
-        self._credited_completed_searches += sum(observation.search_budget for observation in game.observations)
-        self._evict_to_capacity()
-        return len(samples)
-
-    def rebuild(
-        self,
-        games: Iterable[ChessCompletedGame],
-        credited_samples: int,
-        credited_completed_searches: int,
-    ) -> None:
-        if (
-            self.phase is not ReplayPhase.INGESTING
-            or self._samples
-            or self._credited_samples
-            or self._credited_completed_searches
-        ):
-            raise RuntimeError('Chess replay rebuild requires a new replay in the ingestion phase.')
-        for game in games:
-            self._samples.extend(materialize_chess_game(game))
-            self._evict_to_capacity()
-        if credited_samples < len(self._samples) or credited_completed_searches < 0:
-            raise ValueError('Chess replay recovery totals are inconsistent with the retained samples.')
-        self._credited_samples = credited_samples
-        self._credited_completed_searches = credited_completed_searches
-        self._evicted_samples = credited_samples - len(self._samples)
-
-    def freeze(self) -> ChessReplaySnapshot:
-        if self.phase is not ReplayPhase.INGESTING:
-            raise RuntimeError('Chess replay is already frozen.')
-        self.phase = ReplayPhase.FROZEN
-        samples = tuple(self._samples)
-        return ChessReplaySnapshot(
-            samples=samples,
-            credited_samples=self._credited_samples,
-            credited_completed_searches=self._credited_completed_searches,
-            sampler_seed=self.sampler_seed,
-            frozen_at_seconds=time.time(),
-            evicted_samples=self._evicted_samples,
-            estimated_sample_bytes=sum(_estimated_sample_bytes(sample) for sample in samples),
-            encoded_state_value_overhead_bytes=_encoded_state_value_overhead_bytes(samples),
-            projected_capacity_bytes=_projected_capacity_bytes(samples, self.capacity),
-            projected_review_capacity_bytes=_projected_capacity_bytes(samples, _PACKED_REPLAY_REVIEW_CAPACITY),
-        )
-
-    def metrics(self, measured_at_seconds: float) -> ChessReplayMetrics:
-        samples = tuple(self._samples)
-        generations = tuple(sample.source_model_generation for sample in samples)
-        ages = tuple(max(0.0, measured_at_seconds - sample.source_created_at_seconds) for sample in samples)
-        estimated_sample_bytes = sum(_estimated_sample_bytes(sample) for sample in samples)
-        return ChessReplayMetrics(
-            credited_samples=self._credited_samples,
-            credited_completed_searches=self._credited_completed_searches,
-            live_samples=len(samples),
-            evicted_samples=self._evicted_samples,
-            oldest_source_model_generation=min(generations) if generations else None,
-            newest_source_model_generation=max(generations) if generations else None,
-            mean_source_model_generation=float(np.mean(generations)) if generations else None,
-            oldest_sample_age_seconds=max(ages) if ages else None,
-            mean_sample_age_seconds=float(np.mean(ages)) if ages else None,
-            estimated_sample_bytes=estimated_sample_bytes,
-            encoded_state_value_overhead_bytes=_encoded_state_value_overhead_bytes(samples),
-            projected_capacity_bytes=_projected_capacity_bytes(samples, self.capacity),
-            projected_review_capacity_bytes=_projected_capacity_bytes(samples, _PACKED_REPLAY_REVIEW_CAPACITY),
-        )
-
-    def _evict_to_capacity(self) -> None:
-        while len(self._samples) > self.capacity:
-            self._samples.popleft()
-            self._evicted_samples += 1
-
-
-class ChessReplayMaintainer:
-    def __init__(self, run_path: Path, capacity: int, sampler_seed: int) -> None:
-        self.run_path = run_path
-        self.inbox_path = run_path / 'completed-games' / 'inbox'
-        self.archive_path = run_path / 'completed-games' / 'archive'
-        self.replay = ChessReplay(capacity, sampler_seed)
-        self._archived_digests: dict[ChessGameIdentity, bytes] = {}
-        self._next_ingestion_sequence = 0
-        self._recover_and_rebuild()
-
-    def maintain(self, capacity: int) -> tuple[ChessReplaySnapshot, ChessReplayMetrics]:
-        self.replay.begin_ingestion(capacity)
-        for inbox_file in sorted(self.inbox_path.glob('*.json')):
-            game = completed_game_from_path(inbox_file)
-            payload = canonical_game_payload(game)
-            payload_digest = hashlib.sha256(payload).digest()
-            archived_digest = self._archived_digests.get(game.identity)
-            if archived_digest is None:
-                _append_recovered_chess_archive_record(
-                    self.archive_file(game.model_generation),
-                    payload,
-                    self._next_ingestion_sequence,
-                    game,
-                )
-                self._archived_digests[game.identity] = payload_digest
-                self.replay.ingest_game(game)
-                self._next_ingestion_sequence += 1
-            elif archived_digest != payload_digest:
-                raise ValueError(f'Archived completed game has conflicting identity {game.identity.archive_key}.')
-            inbox_file.unlink()
-            fsync_directory(inbox_file.parent)
-        snapshot = self.replay.freeze()
-        return snapshot, self.replay.metrics(snapshot.frozen_at_seconds)
-
-    def archive_file(self, model_generation: int) -> Path:
-        return self.archive_path / f'model-generation-{model_generation:020d}.games'
-
-    def _recover_and_rebuild(self) -> None:
-        frame_indexes: list[ChessArchiveFrameIndex] = []
-        for archive_file in sorted(self.archive_path.glob(_ARCHIVE_FILE_PATTERN)):
-            for frame_index in _index_chess_archive(archive_file, recover_incomplete=True):
-                expected_archive = self.archive_file(frame_index.model_generation)
-                if archive_file != expected_archive:
-                    raise ValueError(f'Completed game is stored in the wrong model-generation archive: {archive_file}')
-                previous_digest = self._archived_digests.setdefault(frame_index.identity, frame_index.payload_digest)
-                if previous_digest != frame_index.payload_digest:
-                    raise ValueError(f'Archive contains conflicting game identity {frame_index.identity.archive_key}.')
-                frame_indexes.append(frame_index)
-        sequences = tuple(frame.ingestion_sequence for frame in frame_indexes)
-        if len(set(sequences)) != len(sequences):
-            raise ValueError('Chess archives contain duplicate ingestion sequence numbers.')
-        ordered_indexes = tuple(sorted(frame_indexes, key=lambda item: item.ingestion_sequence))
-        for expected_sequence, frame_index in enumerate(ordered_indexes):
-            if frame_index.ingestion_sequence != expected_sequence:
-                raise ValueError('Chess archive ingestion sequence is not contiguous.')
-        retained_indexes: list[ChessArchiveFrameIndex] = []
-        retained_sample_count = 0
-        for frame_index in reversed(ordered_indexes):
-            if retained_sample_count >= self.replay.capacity:
-                break
-            if frame_index.eligible_sample_count:
-                retained_indexes.append(frame_index)
-                retained_sample_count += frame_index.eligible_sample_count
-        self.replay.rebuild(
-            (_read_indexed_chess_archive_frame(frame_index) for frame_index in reversed(retained_indexes)),
-            credited_samples=sum(frame_index.eligible_sample_count for frame_index in ordered_indexes),
-            credited_completed_searches=sum(frame_index.completed_searches for frame_index in ordered_indexes),
-        )
-        self._next_ingestion_sequence = len(frame_indexes)
-
-
-def canonical_game_payload(game: ChessCompletedGame) -> bytes:
-    return game.model_dump_json().encode('utf-8')
+ChessArchiveInspection = ArchiveInspection
+ChessArchiveFrameIndex = ArchiveFrameIndex
 
 
 def append_chess_archive_record(path: Path, payload: bytes, ingestion_sequence: int) -> None:
-    if ingestion_sequence < 0:
-        raise ValueError('Chess archive ingestion sequence must be nonnegative.')
     game = ChessCompletedGame.model_validate_json(payload)
-    if not path.exists():
-        write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
-    read_chess_archive(path, recover_incomplete=True)
-    _append_recovered_chess_archive_record(path, payload, ingestion_sequence, game)
-
-
-def _append_recovered_chess_archive_record(
-    path: Path,
-    payload: bytes,
-    ingestion_sequence: int,
-    game: ChessCompletedGame,
-) -> None:
-    if not path.exists():
-        write_bytes_atomically(path, CHESS_ARCHIVE_HEADER)
-    eligible_sample_count, completed_searches = _game_archive_counts(game)
-    frame = (
-        _FRAME_HEADER.pack(
-            ingestion_sequence,
-            len(payload),
-            game.model_generation,
-            eligible_sample_count,
-            completed_searches,
-            game.identity.run_id,
-            game.identity.worker_id,
-            game.identity.game_number,
-            hashlib.sha256(payload).digest(),
-        )
-        + payload
+    eligible_sample_count, completed_searches = _chess_archive_counts(game)
+    append_archive_record(
+        path,
+        payload,
+        ingestion_sequence,
+        game.identity,
+        game.model_generation,
+        eligible_sample_count,
+        completed_searches,
     )
-    with path.open('ab') as archive:
-        archive.write(frame)
-        archive.flush()
-        os.fsync(archive.fileno())
 
 
 def read_chess_archive(path: Path, recover_incomplete: bool = False) -> tuple[ChessCompletedGame, ...]:
-    return tuple(
-        _read_indexed_chess_archive_frame(frame_index) for frame_index in _index_chess_archive(path, recover_incomplete)
-    )
+    return tuple(_read_indexed_chess_archive_frame(frame) for frame in index_archive(path, recover_incomplete))
 
 
-def _game_archive_counts(game: ChessCompletedGame) -> tuple[int, int]:
+def _chess_archive_counts(game: ChessCompletedGame) -> tuple[int, int]:
     return (
         sum(observation.sample_eligible for observation in game.observations),
         sum(observation.search_budget for observation in game.observations),
     )
 
 
-def _index_chess_archive(path: Path, recover_incomplete: bool) -> tuple[ChessArchiveFrameIndex, ...]:
-    if not path.is_file():
-        raise ValueError(f'Chess archive does not exist: {path}')
-    frame_indexes: list[ChessArchiveFrameIndex] = []
-    mode = 'r+b' if recover_incomplete else 'rb'
-    with path.open(mode) as archive:
-        header = archive.read(len(CHESS_ARCHIVE_HEADER))
-        if header != CHESS_ARCHIVE_HEADER:
-            raise ValueError(f'Unsupported chess archive header: {path}')
-        archive_size = os.fstat(archive.fileno()).st_size
-        valid_end = len(CHESS_ARCHIVE_HEADER)
-        while True:
-            frame_header = archive.read(_FRAME_HEADER.size)
-            if not frame_header:
-                break
-            if len(frame_header) < _FRAME_HEADER.size:
-                if not recover_incomplete:
-                    raise ValueError(f'Chess archive has an incomplete final frame header: {path}')
-                archive.truncate(valid_end)
-                break
-            (
-                ingestion_sequence,
-                payload_length,
-                model_generation,
-                eligible_sample_count,
-                completed_searches,
-                run_id,
-                worker_id,
-                game_number,
-                payload_digest,
-            ) = _FRAME_HEADER.unpack(frame_header)
-            payload_offset = archive.tell()
-            payload_end = payload_offset + payload_length
-            if payload_end > archive_size:
-                if not recover_incomplete:
-                    raise ValueError(f'Chess archive has an incomplete final frame payload: {path}')
-                archive.truncate(valid_end)
-                break
-            archive.seek(payload_end)
-            frame_indexes.append(
-                ChessArchiveFrameIndex(
-                    path=path,
-                    ingestion_sequence=ingestion_sequence,
-                    payload_offset=payload_offset,
-                    payload_length=payload_length,
-                    payload_digest=payload_digest,
-                    identity=ChessGameIdentity(run_id=run_id, worker_id=worker_id, game_number=game_number),
-                    model_generation=model_generation,
-                    eligible_sample_count=eligible_sample_count,
-                    completed_searches=completed_searches,
-                )
-            )
-            valid_end = payload_end
-        if recover_incomplete:
-            archive.flush()
-            os.fsync(archive.fileno())
-    return tuple(frame_indexes)
-
-
 def _read_indexed_chess_archive_frame(frame_index: ChessArchiveFrameIndex) -> ChessCompletedGame:
-    with frame_index.path.open('rb') as archive:
-        archive.seek(frame_index.payload_offset)
-        payload = archive.read(frame_index.payload_length)
-    if len(payload) != frame_index.payload_length or hashlib.sha256(payload).digest() != frame_index.payload_digest:
-        raise ValueError(f'Chess archive frame checksum failed: {frame_index.path}')
-    game = ChessCompletedGame.model_validate_json(payload)
-    eligible_sample_count, completed_searches = _game_archive_counts(game)
+    game = ChessCompletedGame.model_validate_json(read_frame_payload(frame_index))
     if (
         game.identity != frame_index.identity
         or game.model_generation != frame_index.model_generation
-        or eligible_sample_count != frame_index.eligible_sample_count
-        or completed_searches != frame_index.completed_searches
+        or _chess_archive_counts(game) != (frame_index.eligible_sample_count, frame_index.completed_searches)
     ):
-        raise ValueError(f'Chess archive frame metadata disagrees with its payload: {frame_index.path}')
+        raise ValueError(f'Archive frame metadata disagrees with its payload: {frame_index.path}')
     return game
 
 
 def inspect_chess_archives(run_path: Path) -> tuple[ChessArchiveInspection, ...]:
-    archive_path = run_path / 'completed-games' / 'archive'
     inspections: list[ChessArchiveInspection] = []
-    for path in sorted(archive_path.glob(_ARCHIVE_FILE_PATTERN)):
-        frame_indexes = _index_chess_archive(path, recover_incomplete=False)
+    for path in sorted((run_path / 'completed-games' / 'archive').glob('model-generation-*.games')):
+        frame_indexes = index_archive(path, recover_incomplete=False)
         for frame_index in frame_indexes:
             _read_indexed_chess_archive_frame(frame_index)
         generations = {frame_index.model_generation for frame_index in frame_indexes}
         if len(generations) != 1:
             raise ValueError(f'Chess archive mixes model generations: {path}')
-        model_generation = generations.pop()
         inspections.append(
             ChessArchiveInspection(
                 path=path,
-                model_generation=model_generation,
+                model_generation=generations.pop(),
                 game_count=len(frame_indexes),
-                eligible_sample_count=sum(frame_index.eligible_sample_count for frame_index in frame_indexes),
-                completed_searches=sum(frame_index.completed_searches for frame_index in frame_indexes),
+                eligible_sample_count=sum(frame.eligible_sample_count for frame in frame_indexes),
+                completed_searches=sum(frame.completed_searches for frame in frame_indexes),
                 byte_count=path.stat().st_size,
             )
         )
     return tuple(inspections)
 
 
-def rebuild_chess_replay(run_path: Path, capacity: int, sampler_seed: int) -> ChessReplaySnapshot:
-    maintainer = ChessReplayMaintainer(run_path, capacity, sampler_seed)
+def rebuild_chess_replay(run_path: Path, capacity: int, sampler_seed: int) -> ReplaySnapshot:
+    maintainer = ReplayMaintainer(run_path, CHESS_REPLAY_IMPLEMENTATION, capacity, sampler_seed)
     snapshot, _ = maintainer.maintain(capacity)
     return snapshot
 
 
-def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample, ...]:
+def materialize_chess_game(game: ChessCompletedGame) -> tuple[PackedReplaySample, ...]:
     board = ChessBoard.from_fen(game.initial_fen)
     observations_by_ply = {observation.ply: observation for observation in game.observations}
-    materialized_by_ply: dict[int, ChessReplaySample] = {}
+    materialized_by_ply: dict[int, PackedReplaySample] = {}
     for ply in range(len(game.moves_uci) + 1):
         observation = observations_by_ply.get(ply)
         if observation is not None:
@@ -585,7 +155,7 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
                     final_current_player=game.final_current_player,
                     sample_current_player=board.current_player,
                 )
-                materialized_by_ply[ply] = ChessReplaySample(
+                materialized_by_ply[ply] = PackedReplaySample(
                     encoded_state=encode_board_state(canonical_state),
                     visits=pack_chess_visits(visits),
                     value_target=ReplayValueTarget.from_scores(
@@ -623,7 +193,7 @@ def materialize_chess_game(game: ChessCompletedGame) -> tuple[ChessReplaySample,
 
 
 def build_chess_training_batch(
-    snapshot: ChessReplaySnapshot,
+    snapshot: ReplaySnapshot,
     sample_indices: Sequence[int],
     global_step: int,
     rank: int,
@@ -692,15 +262,16 @@ def build_chess_training_batch(
 
 
 def training_batch_loader(
-    snapshot: ChessReplaySnapshot,
+    snapshot: ReplaySnapshot,
     global_step: int,
     optimizer_steps: int,
     global_batch_size: int,
     world_size: int,
     rank: int,
     pin_memory: bool,
-) -> ChessTrainingBatchLoader:
-    return ChessTrainingBatchLoader(
+) -> ReplayTrainingBatchLoader[ChessCompletedGame]:
+    return ReplayTrainingBatchLoader(
+        CHESS_REPLAY_IMPLEMENTATION,
         snapshot,
         global_step,
         optimizer_steps,
@@ -741,3 +312,50 @@ def _chess_mirror_action_map() -> np.ndarray:
 
 
 CHESS_MIRROR_ACTION_MAP = _chess_mirror_action_map()
+
+
+class ChessReplayImplementation(ReplayGameImplementation[ChessCompletedGame]):
+    @property
+    def name(self) -> str:
+        return 'chess'
+
+    @property
+    def action_size(self) -> int:
+        return CHESS_STATE_CONTRACT.action_size
+
+    def parse_file(self, path: Path) -> ChessCompletedGame:
+        game = completed_game_from_path(path)
+        if not isinstance(game, ChessCompletedGame):
+            raise ValueError(f'Expected a chess completed game: {path}')
+        return game
+
+    def parse_payload(self, payload: bytes) -> ChessCompletedGame:
+        return ChessCompletedGame.model_validate_json(payload)
+
+    def model_generation(self, game: ChessCompletedGame) -> int:
+        return game.model_generation
+
+    def archive_counts(self, game: ChessCompletedGame) -> tuple[int, int]:
+        return _chess_archive_counts(game)
+
+    def materialize(self, game: ChessCompletedGame) -> tuple[PackedReplaySample, ...]:
+        return materialize_chess_game(game)
+
+    def build_batch(
+        self,
+        snapshot: ReplaySnapshot,
+        sample_indices: Sequence[int],
+        global_step: int,
+        rank: int,
+        sample_position_offset: int,
+    ) -> TrainingBatch:
+        return build_chess_training_batch(
+            snapshot,
+            sample_indices,
+            global_step,
+            rank,
+            sample_position_offset,
+        )
+
+
+CHESS_REPLAY_IMPLEMENTATION = ChessReplayImplementation()

@@ -20,8 +20,9 @@ from AlphaZeroCpp import (
     InferenceStatistics,
 )
 from src.self_play.SelfPlay import SelfPlay
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.chess_completed_game import ChessCompletedGame, ChessCompletedGamePublisher
+from src.self_play.statistics import SelfPlayStatistics
+from src.self_play.chess_completed_game import ChessCompletedGame
+from src.self_play.completed_game import CompletedGamePublisher
 from src.settings import TRAINING_ARGS
 
 
@@ -89,7 +90,7 @@ class BenchmarkResult:
     inference_average_batch_size: float
 
 
-class BenchmarkCompletedGamePublisher(ChessCompletedGamePublisher):
+class BenchmarkCompletedGamePublisher(CompletedGamePublisher):
     def __init__(self, run_path: Path, run_id: int) -> None:
         super().__init__(run_path, run_id, worker_id=0)
         self.published_games: list[ChessCompletedGame] = []
@@ -267,7 +268,7 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
 def run_warmup(self_play: SelfPlay, steps: int) -> None:
     for _ in range(steps):
         self_play.self_play()
-    self_play.dataset = SelfPlayDataset()
+    self_play.statistics = SelfPlayStatistics()
     publisher = self_play.completed_game_publisher
     assert isinstance(publisher, BenchmarkCompletedGamePublisher)
     publisher.reset_measurement()
@@ -304,7 +305,7 @@ def build_result(
     self_play_steps: int,
     initial_completed_searches: int,
 ) -> BenchmarkResult:
-    dataset = self_play.dataset
+    statistics = self_play.statistics
     publisher = self_play.completed_game_publisher
     assert isinstance(publisher, BenchmarkCompletedGamePublisher)
     generated_samples = sum(len(game.observations) for game in publisher.published_games)
@@ -357,8 +358,8 @@ def build_result(
         searches_per_second=searches_completed / elapsed_seconds,
         self_play_steps=self_play_steps,
         game_updates=self_play_steps * arguments.games,
-        completed_games=dataset.stats.num_games,
-        completed_game_plies=sum(dataset.stats.game_lengths),
+        completed_games=statistics.stats.num_games,
+        completed_game_plies=sum(statistics.stats.game_lengths),
         active_game_plies_at_end=sum(len(game.played_moves) for game in self_play.self_play_games),
         generated_samples=generated_samples,
         retained_samples=retained_samples,
