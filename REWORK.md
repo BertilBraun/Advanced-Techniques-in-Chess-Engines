@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | in_progress |
+| R8 | Go pipeline integration | awaiting_user_review |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 native game-structure cleanup is in progress after user review.
+Current authorization: R8 is awaiting user review after native game-structure cleanup.
 R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
@@ -827,6 +827,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-07 | R8 | Native game-structure handoff | Chess and Go now expose one compile-time-verified `SearchGame` composition surface, but retain their natural internal state implementations. Their implementation, encoding, binding, and chess-presentation files have uniform ownership; superseded `GameContract`, `GoTypes`, policy-mapping wrappers, and identity-only Go bindings are removed. Maximum-move Go endings now produce scored, replay-eligible adjudications under the configured area scoring rule. | Return R8 to `awaiting_user_review`. The extension compile check and unified native suite pass, focused native-backed Go tests pass, Ruff passes, and the complete Python suite passes 351 tests with one unrelated failure retained from pre-restructure checkpoint `62f8517`: its scalar-to-WDL formula changed without updating the existing expected-distribution test. |
 | 2026-08-07 | R8 | Review authorization | The native chess and Go implementations expose the same search semantics through unverified static contracts, but their rules, state, action, policy mapping, encoding, and binding ownership remain inconsistently structured. Maximum-move Go games are expected to be common during early training, so discarding their positions would also discard a material part of the initial learning signal. | Continue R8 with a C++-only structural cleanup: define compile-time game concepts; give chess and Go the same implementation, encoding, and binding topology; expose each game to search through one canonical composition type; remove superseded contracts and adapters rather than retaining compatibility layers; leave Python chess on python-chess and retain only required native Go and coarse search/root bindings. Score a maximum-move Go position with the configured area scoring and record the ending as a safety adjudication with a winner or draw. |
 | 2026-08-07 | R8 | Native dead-code cleanup | Shared search still exposed unused convenience searches, test-only tree diagnostics, duplicate model-generation state, broad game-contract helpers, a stateless chess action codec, and a separate Go symmetry-type header; executor selection/completion was deeply nested and inference consumption required an accessor callback. | Remove the dead APIs and duplicate state, keep only operations consumed by generic search in each game contract, put chess encoding/decoding/UCI on `ChessAction`, construct `GoAction` from points, colocate `GoSymmetry` with its operations, add `InferenceDimensions::encodedSize`, pass typed position ranges through inference, name the live leaf reservation `inference_pending`, extract executor stages, and make `InferenceStatistics` the executor's cumulative telemetry representation. Retain the bounded C++20 atomic wait/notify slot state machine because it parks rather than spins and safely reuses preallocated inference buffers. |
 | 2026-08-07 | R8 | Readability cleanup | Indexed native loops inconsistently used verbose loop syntax, raw inference tensors escaped into the search executor for legal-policy processing, component ownership was undocumented, and repeated clock arithmetic obscured the optimized search flow. | Use the zero-overhead `range` utility for numeric iteration, make `InferencePipeline` return validated game-legal inference results and own wait/processing telemetry, delete `SearchInference`, document each search/inference component at its header, and centralize monotonic timing in `Timing.hpp`. |
