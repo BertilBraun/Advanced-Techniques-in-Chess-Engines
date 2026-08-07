@@ -371,14 +371,14 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | awaiting_user_review |
+| R8 | Go pipeline integration | in_progress |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is awaiting user review. R1 through R7 are accepted.
-No later phase is authorized.
+Current authorization: R8 C++ ownership cleanup following user review. R1
+through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -830,6 +830,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-07 | R8 | Review rejection | The shared optimized search is functionally complete, but `BatchedSearch.hpp` combines the arena, root ownership, request/result types, scheduling, inference dispatch, execution, refresh, and statistics in one thousand-line template header; inference infrastructure also remains scattered at the native source root, and analysis is exposed as a chess-owned engine rather than a shared workload with chess presentation. | Return R8 to `in_progress`. Split cohesive template components into focused headers, move search/inference infrastructure under `search`, introduce a shared analysis facade usable by each game contract, and reduce chess units to chess rules, self-play policy, and FEN/UCI presentation. |
 | 2026-08-07 | R8 | Shared-search completion | Chess self-play, Go 7x7/9x9 self-play, and retained-tree chess analysis previously reached the optimized arena through overlapping but separately owned scheduling layers. | Make `BatchedGameSearch<Game>` and `GameSearchTree<Game>` authoritative for every native workload, preserve multi-worker/outstanding-batch overlap, let chess analysis select one retained root with parallel leaf searches, and remove `MCTS`, `EvalMCTS`, `EvalSearchTree`, `DirectSelfPlaySearch`, and the duplicate analysis scheduler. |
 | 2026-08-07 | R8 | Boundary cleanup | Generic inference and module registration still carried names and files inherited from the chess-only implementation. | Keep `DirectInference` as the dimension-explicit tensor/model/slot runtime, isolate shared bindings under `search`, isolate chess and Go registrations under their game directories, remove the unused inference client and result-processing layers, and keep only FEN/UCI/candidate/PV presentation in `ChessAnalysisEngine`. |
 | 2026-08-07 | R8 | Review rejection | The first R8 implementation added a simplified game-generic Go search beside the optimized chess search; production chess continued through chess-specific `MCTS`, `DirectSelfPlaySearch`, and `SearchTree`, so the result was not one shared pipeline. | Return R8 to `in_progress`. Generalize the optimized chess direct-search implementation and mature arena over game contracts, preserve separate typed batched-game and single-tree analysis workloads, and remove the simplified and legacy parallel implementations after migration. |
