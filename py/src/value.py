@@ -17,5 +17,5 @@ def scalar_to_wdl(scores: Tensor) -> Tensor:
     """Represent expected scores in [-1, 1] as maximally drawn WDL distributions."""
     wins = torch.clamp(scores, min=0.0)
     losses = torch.clamp(-scores, min=0.0)
-    draws = 1.0 - torch.abs(scores)
-    return torch.stack((wins, draws, losses), dim=-1)
+    remainders = 1.0 - torch.abs(scores)
+    return torch.stack((wins + remainders / 3, remainders / 3, losses + remainders / 3), dim=-1)
