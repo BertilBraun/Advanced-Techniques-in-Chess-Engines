@@ -7,7 +7,6 @@ from src.settings_common import *
 from src.experiment.chess_experiment import ChessExperimentConfiguration, load_experiment_configuration
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.ChessGame import ChessGame, ChessMove
-from src.games.chess.ChessVisuals import ChessVisuals
 
 
 DEFAULT_CHESS_EXPERIMENT_PATH = Path(__file__).resolve().parents[1] / 'configs' / 'chess-default-experiment.yaml'
@@ -21,8 +20,6 @@ def _default_experiment_path() -> Path:
 CurrentGameMove = ChessMove
 CurrentGame = ChessGame()
 CurrentBoard = ChessBoard
-CurrentGameVisuals = ChessVisuals()
-
 EXPERIMENT = load_experiment_configuration(_default_experiment_path())
 CHESS_EXPERIMENT = EXPERIMENT if isinstance(EXPERIMENT, ChessExperimentConfiguration) else None
 TRAINING_ARGS = EXPERIMENT.training

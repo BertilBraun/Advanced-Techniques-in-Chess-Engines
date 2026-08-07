@@ -1,7 +1,6 @@
 tqdm
 h5py
 chess
-pygame
 GPUtil
 requests
 psutil
