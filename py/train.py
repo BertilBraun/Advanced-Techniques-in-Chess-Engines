@@ -52,8 +52,7 @@ if __name__ == '__main__':
     )
 
     experiment = EXPERIMENT
-    run_configuration = experiment.run
-    configure_tensorboard_run_directory(run_configuration.tensorboard_run_directory)
+    configure_tensorboard_run_directory(experiment.run.tensorboard_run_directory)
 
     random.seed(TRAINING_ARGS.random_seed)
     np.random.seed(TRAINING_ARGS.random_seed)

@@ -14,7 +14,10 @@ While computationally intensive search and inference are handled in C++ (`cpp/`)
   Train the neural network on generated self-play data, with full support for multi-process parallelization.
 
 - **Evaluation Suite**  
-  Evaluate model performance via bot tournaments, human interaction, or matches against Stockfish.
+  Evaluate published chess models against configured baselines and previous generations.
+
+- **UCI Engine**
+  Run a published chess model in UCI-compatible chess interfaces.
 
 ## Main Scripts
 
@@ -25,12 +28,9 @@ While computationally intensive search and inference are handled in C++ (`cpp/`)
   - Trains optimizer quanta when replay presentation credits are available.
   - Logs training progress and metrics to TensorBoard (`logs/`).
 
-- **`eval.py`**  
-  - Evaluates trained models.
-  - Supports:
-    - **Bot vs. Bot** tournaments
-    - **Human vs. Bot** interactive play
-    - **Bot vs. Stockfish** matches
+- **`python -m src.uci`**
+  - Serves a published chess model through the UCI protocol.
+  - Supports policy and retained-tree MCTS analysis modes.
 
 ## Shell Scripts
 
@@ -38,20 +38,13 @@ While computationally intensive search and inference are handled in C++ (`cpp/`)
   - Submits a Slurm job to train the model on a compute cluster.
   - Preconfigured for reasonable resource allocation.
 
-- **`dataset_train.sh`**
-  - Submits a Slurm job focused on pre-training from external datasets (e.g., grandmaster games).
-
-These scripts automate distributed training job submissions.
+The training script automates distributed training job submission.
 
 ## Technologies
 
 - **Programming Language**: Python 3.10
 - **Machine Learning**: PyTorch
 - **Visualization**: TensorBoard
-
-Optional dependencies for evaluation:
-
-- `stockfish` (for engine evaluation)
 
 ## Workflow Overview
 
@@ -78,18 +71,16 @@ Optional dependencies for evaluation:
     tensorboard --logdir logs/
     ```
 
-5. **Evaluate Models**:
+5. **Run a Chess Model Through UCI**:
 
     ```bash
-    python eval.py
+    python -m src.uci --model <model.jit.pt>
     ```
 
 6. **Optional: Submit Training to Cluster**:
 
     ```bash
     sbatch train.sh
-    # or
-    sbatch dataset_train.sh
     ```
 
 ## Notes

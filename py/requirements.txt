@@ -1,6 +1,5 @@
 tqdm
 h5py
-optuna
 chess
 pygame
 GPUtil

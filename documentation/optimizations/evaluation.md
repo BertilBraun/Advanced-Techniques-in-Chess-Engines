@@ -32,4 +32,4 @@ The model is played against the previous evaluation iteration to evaluate the pe
 
 The model is evaluated without search against a database of (near)-optimal moves. The model should achieve a policy accuracy in the high 90s. This is a good indicator of the model's performance.
 
-As a baseline performance reference, you can use the `src.eval.DatasetTrainer` to train a model on the Pro-Database and evaluate it against the Pro-Database. This way, you can see how well the model trained on perfect data performs. This way, you can see wheather the self-play games even come close to the Pro-Database in terms of policy accuracy.
+The retained evaluation-dataset tooling measures policy accuracy on the Pro-Database so self-play models can be compared with near-optimal moves.
