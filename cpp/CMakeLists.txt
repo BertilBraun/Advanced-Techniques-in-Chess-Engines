@@ -254,7 +254,6 @@ add_executable(
         test/TestChessGameContract.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessHistory.cpp
         src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -274,7 +273,6 @@ add_executable(
         GameHistoryTest
         test/TestGameHistory.cpp
         src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessHistory.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"
@@ -290,7 +288,6 @@ add_executable(
         test/TestGameSearchTree.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessHistory.cpp
         src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"

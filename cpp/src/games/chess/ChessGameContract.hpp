@@ -4,7 +4,6 @@
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"
-#include "games/chess/ChessHistory.hpp"
 
 #include <optional>
 
@@ -22,7 +21,7 @@ public:
 
     [[nodiscard]] static Position replayPosition(const std::string &starting_fen,
                                                  const std::vector<std::string> &moves_uci) {
-        return replayMoves(starting_fen, moves_uci);
+        return Board::replay(starting_fen, moves_uci);
     }
 
     [[nodiscard]] static Position childPosition(const Position &parent, const Action action) {

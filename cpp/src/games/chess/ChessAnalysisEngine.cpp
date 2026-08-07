@@ -99,7 +99,7 @@ ChessAnalysisSession::ChessAnalysisSession(std::shared_ptr<ChessAnalysisEngine> 
 }
 
 void ChessAnalysisSession::reconstructRoot() {
-    m_tree = std::make_unique<ChessSearchTree>(replayMoves(m_startingFen, m_movesUci), 1'024,
+    m_tree = std::make_unique<ChessSearchTree>(Board::replay(m_startingFen, m_movesUci), 1'024,
                                                std::numeric_limits<uint32>::max(), 1.0F);
 }
 
@@ -107,7 +107,7 @@ void ChessAnalysisSession::applyMove(const std::string &moveUci) {
     if (m_tree->root().position.isGameOver()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
-    const Move move = findLegalMove(m_tree->root().position, moveUci);
+    const Move move = m_tree->root().position.legalMoveFromUci(moveUci);
     const ChessSearchNode &root = m_tree->node(m_tree->rootIndex());
     if (root.expanded()) {
         for (std::uint32_t index = 0; index < root.children.size(); ++index) {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "games/chess/ChessAnalysisSearch.hpp"
-#include "games/chess/ChessHistory.hpp"
 
 enum class AnalysisMode { Policy, Mcts };
 

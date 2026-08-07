@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "games/chess/ChessHistory.hpp"
+#include "games/chess/ChessBoard.hpp"
 
 namespace {
 void require(const bool condition, const std::string &message) {
@@ -16,7 +16,7 @@ void require(const bool condition, const std::string &message) {
 
 void requireInvalidHistory(const std::vector<std::string> &moves) {
     try {
-        static_cast<void>(replayMoves(Board{}.fen(), moves));
+        static_cast<void>(Board::replay(Board{}.fen(), moves));
     } catch (const std::invalid_argument &) {
         return;
     }
@@ -27,7 +27,7 @@ void testReplayPreservesRepetition() {
     const std::vector<std::string> moves{
         "g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8",
     };
-    const Board board = replayMoves(Board{}.fen(), moves);
+    const Board board = Board::replay(Board{}.fen(), moves);
     require(board.repetitionCount() == 2, "replay did not preserve two earlier occurrences");
     require(board.isGameOver(), "third occurrence was not terminal");
 }

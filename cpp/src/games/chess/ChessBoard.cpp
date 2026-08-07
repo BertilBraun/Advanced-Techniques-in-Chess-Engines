@@ -38,6 +38,14 @@ Board &Board::operator=(const Board &other) {
     return *this;
 }
 
+Board Board::replay(const std::string &startingFen, const std::vector<std::string> &movesUci) {
+    Board board(startingFen);
+    for (const std::string &moveUci : movesUci) {
+        board.makeMove(board.legalMoveFromUci(moveUci));
+    }
+    return board;
+}
+
 void Board::makeMove(Move m) {
     TIMEIT("Board::makeMove");
 
@@ -145,6 +153,17 @@ const std::vector<Move> &Board::validMoves() const {
     }
     m_validMoves.emplace(std::move(legalMoves));
     return *m_validMoves;
+}
+
+Move Board::legalMoveFromUci(const std::string &moveUci) const {
+    const std::vector<Move> &legalMoves = validMoves();
+    const auto matchingMove =
+        std::find_if(legalMoves.begin(), legalMoves.end(),
+                     [&moveUci](const Move move) { return toString(move) == moveUci; });
+    if (matchingMove == legalMoves.end()) {
+        throw std::invalid_argument("Illegal UCI move " + moveUci + " in position " + fen());
+    }
+    return *matchingMove;
 }
 
 double Board::approximateResultScore() const {

@@ -23,6 +23,9 @@ public:
     Board &operator=(const Board &other);
     Board &operator=(Board &&) noexcept = default;
 
+    [[nodiscard]] static Board replay(const std::string &startingFen,
+                                      const std::vector<std::string> &movesUci);
+
     /// Returns +1 if White to move, -1 if Black to move.
     [[nodiscard]] int currentPlayer() const { return (m_pos.side_to_move() == WHITE) ? +1 : -1; }
 
@@ -41,6 +44,7 @@ public:
 
     /// Returns every legal move, including all promotion choices.
     [[nodiscard]] const std::vector<Move> &validMoves() const;
+    [[nodiscard]] Move legalMoveFromUci(const std::string &moveUci) const;
 
     /// Returns a 64‐bit Zobrist hash of the current position.
     [[nodiscard]] std::uint64_t quickHash() const { return m_pos.key(); }
