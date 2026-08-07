@@ -37,32 +37,6 @@ float inferenceValue(MCTS &search) {
     return search.inferenceBatch(boards).front().value();
 }
 
-void requireRefreshSemantics(const std::filesystem::path &initialModel,
-                             const std::filesystem::path &updatedModel,
-                             const std::filesystem::path &invalidModel) {
-    const InferenceClientParams clientParameters(0, initialModel.string(), 4, 0,
-                                                 InferenceDevice::Cpu);
-    const MCTSParams searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0, 1);
-    MCTS search(clientParameters, searchParameters, std::nullopt, 4);
-    require(std::abs(inferenceValue(search)) < 0.001F,
-            "queued client initial model returned the wrong value");
-    search.refreshModel(5, updatedModel.string());
-    require(search.modelVersion() == 5, "queued client did not publish refreshed model version");
-    require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-            "queued client retained old model output after refresh");
-    const InferenceStatistics beforeFailure = search.getInferenceStatistics().first;
-    try {
-        search.refreshModel(6, invalidModel.string());
-        throw std::runtime_error("invalid queued model refresh unexpectedly succeeded");
-    } catch (const std::invalid_argument &) {
-    }
-    require(search.modelVersion() == 5,
-            "failed queued refresh published an unvalidated model version");
-    require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-            "failed queued refresh changed the active model");
-    require(search.getInferenceStatistics().first.evaluations > beforeFailure.evaluations,
-            "queued model refresh reset cumulative inference statistics");
-}
 } // namespace
 
 int main() {
@@ -190,7 +164,6 @@ int main() {
         require(search.directWorkerIdentityTokens() == workerIdentities,
                 "schedule update reconstructed direct inference workers");
 
-        requireRefreshSemantics(modelPath, updatedModelPath, invalidModelPath);
     } catch (...) {
         std::filesystem::remove(modelPath);
         std::filesystem::remove(updatedModelPath);

@@ -11,7 +11,14 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from AlphaZeroCpp import InferenceClientParams, MCTS, MCTSBoard, MCTSParams, MCTSRoot
+from AlphaZeroCpp import (
+    DirectSelfPlayInferenceParams,
+    InferenceClientParams,
+    MCTS,
+    MCTSBoard,
+    MCTSParams,
+    MCTSRoot,
+)
 
 
 @dataclass(frozen=True)
@@ -187,6 +194,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             0,
             args.threads,
         ),
+        DirectSelfPlayInferenceParams(1, args.maximum_batch_size, 1),
     )
     openings = load_openings(args.openings, args.games)
     roots = [mcts.new_root(fen) for fen in openings]

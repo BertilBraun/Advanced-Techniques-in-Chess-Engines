@@ -357,7 +357,7 @@ class MCTS:
         self,
         client_args: InferenceClientParams,
         mcts_args: MCTSParams,
-        direct_inference_params: DirectSelfPlayInferenceParams | None = None,
+        direct_inference_params: DirectSelfPlayInferenceParams,
         initial_model_version: int = 0,
     ) -> None: ...
     @property

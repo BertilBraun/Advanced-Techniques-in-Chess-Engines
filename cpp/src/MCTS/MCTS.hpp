@@ -4,8 +4,7 @@
 
 #include "SearchTree.hpp"
 
-#include "../InferenceClient.hpp"
-#include "util/ThreadPool.h"
+#include "InferenceClientTypes.hpp"
 #include <shared_mutex>
 
 class DirectSelfPlaySearch;
@@ -71,7 +70,7 @@ struct MCTSBoard {
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-         std::optional<DirectSelfPlayInferenceParams> directInferenceParams = std::nullopt,
+         DirectSelfPlayInferenceParams directInferenceParams,
          uint64 initialModelVersion = 0);
     ~MCTS();
 
@@ -90,21 +89,14 @@ public:
     [[nodiscard]] std::vector<std::uintptr_t> directWorkerIdentityTokens() const;
 
 private:
-    std::unique_ptr<InferenceClient> m_client;
     InferenceClientParams m_clientArgs;
     MCTSParams m_args;
-    ThreadPool m_threadPool;
     uint32 m_arenaCapacity;
     uint64 m_modelVersion;
-    std::optional<DirectSelfPlayInferenceParams> m_directInferenceParams;
+    DirectSelfPlayInferenceParams m_directInferenceParams;
     std::unique_ptr<DirectSelfPlaySearch> m_directSearch;
     mutable std::shared_mutex m_operationMutex;
 
-    [[nodiscard]] MCTSResults searchGames(const std::vector<MCTSBoard> &boards);
     [[nodiscard]] std::vector<InferenceResult>
     inferenceBatchUnlocked(const std::vector<const Board *> &boards);
-    void parallelIterate(const std::vector<MCTSRoot> &roots);
-    void addNoise(MCTSRoot &root) const;
-    [[nodiscard]] std::optional<NodeIndex> getBestChildOrBackPropagate(MCTSRoot &root,
-                                                                       float cParam) const;
 };

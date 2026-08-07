@@ -1,5 +1,4 @@
 #include "DirectInference.hpp"
-#include "InferenceClient.hpp"
 #include "SearchInference.hpp"
 #include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"
@@ -149,8 +148,10 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
         const float *policyData = output.policies.data_ptr<float>();
         const float *outcomeData = output.outcomes.data_ptr<float>();
         for (size_t position = 0; position < arguments.batchSize; ++position) {
-            const InferenceResult result = processSearchInference<ChessGameContract>(
-                policyData + position * ACTION_SIZE, outcomeData + position * 3, boards[position]);
+            const SearchInferenceResult<ChessGameContract> result =
+                processSearchInference<ChessGameContract>(policyData + position * ACTION_SIZE,
+                                                          outcomeData + position * 3,
+                                                          boards[position]);
             checksum += result.value() + static_cast<double>(result.actions.size());
         }
     }
@@ -288,9 +289,10 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
                 const float *outcomeData = outputs[worker].outcomes.data_ptr<float>();
                 for (size_t position = 0; position < arguments.batchSize; ++position) {
                     const size_t boardIndex = worker * arguments.batchSize + position;
-                    const InferenceResult result = processSearchInference<ChessGameContract>(
-                        policyData + position * ACTION_SIZE, outcomeData + position * 3,
-                        boards[boardIndex]);
+                    const SearchInferenceResult<ChessGameContract> result =
+                        processSearchInference<ChessGameContract>(
+                            policyData + position * ACTION_SIZE, outcomeData + position * 3,
+                            boards[boardIndex]);
                     checksums[worker] += result.value() + static_cast<double>(result.actions.size());
                 }
             }
@@ -307,36 +309,6 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
             {"checksum", std::accumulate(checksums.begin(), checksums.end(), 0.0)}};
 }
 
-template <typename Client>
-nlohmann::json runClient(const Arguments &arguments, const std::vector<Board> &boards) {
-    const InferenceClientParams parameters(
-        0, arguments.modelPath, static_cast<int>(arguments.batchSize), 0, arguments.device);
-    Client client(parameters);
-    double checksum = 0.0;
-    std::vector<const Board *> warmupBatch;
-    warmupBatch.reserve(arguments.batchSize);
-    for (size_t index = 0; index < arguments.batchSize; ++index) {
-        warmupBatch.push_back(&boards[index]);
-    }
-    for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
-        static_cast<void>(client.inferenceBatch(warmupBatch));
-    }
-    const auto startedAt = std::chrono::steady_clock::now();
-    for (size_t iteration = 0; iteration < arguments.iterations; ++iteration) {
-        std::vector<const Board *> batch;
-        batch.reserve(arguments.batchSize);
-        for (size_t index = 0; index < arguments.batchSize; ++index) {
-            batch.push_back(&boards[(iteration * arguments.batchSize + index) % boards.size()]);
-        }
-        const std::vector<InferenceResult> results = client.inferenceBatch(batch);
-        for (const InferenceResult &result : results) {
-            checksum += result.outcome.expectedValue();
-        }
-    }
-    const double seconds =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - startedAt).count();
-    return {{"elapsed_seconds", seconds}, {"checksum", checksum}};
-}
 } // namespace
 
 int main(const int argumentCount, char **argumentValues) {
@@ -371,12 +343,10 @@ int main(const int argumentCount, char **argumentValues) {
             result = runReplicas(arguments, encodings);
         } else if (arguments.mode == "processed_replicas") {
             result = runProcessedReplicas(arguments, boards, encodings);
-        } else if (arguments.mode == "client") {
-            result = runClient<InferenceClient>(arguments, boards);
         } else {
             throw std::invalid_argument(
-                "Mode must be direct, processed_direct, pipeline, replicas, processed_replicas, "
-                "or client");
+                "Mode must be direct, processed_direct, pipeline, replicas, or "
+                "processed_replicas");
         }
 
         const double elapsedSeconds = result.at("elapsed_seconds").get<double>();

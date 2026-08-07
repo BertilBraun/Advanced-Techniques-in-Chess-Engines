@@ -231,9 +231,9 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<const InferenceClientParams &, const MCTSParams &,
-                      std::optional<DirectSelfPlayInferenceParams>, uint64>(),
+                      DirectSelfPlayInferenceParams, uint64>(),
              py::arg("client_args"), py::arg("mcts_args"),
-             py::arg("direct_inference_params") = std::nullopt,
+             py::arg("direct_inference_params"),
              py::arg("initial_model_version") = 0)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
         .def_property_readonly("model_version", &MCTS::modelVersion)
