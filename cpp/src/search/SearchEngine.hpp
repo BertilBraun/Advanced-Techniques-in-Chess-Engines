@@ -26,7 +26,7 @@ public:
           m_searchParameters(searchParameters), m_modelGeneration(modelGeneration),
           m_resetTreesOnRefresh(resetTreesOnRefresh), m_turnDiscount(turnDiscount) {}
 
-    [[nodiscard]] Root newRoot(typename Game::Position position,
+    [[nodiscard]] Root newRoot(typename Game::State position,
                                const std::size_t maximumCapacity = 0) {
         Root root(std::move(position), m_searchParameters.tree_capacity, maximumCapacity,
                   m_turnDiscount);
@@ -40,7 +40,7 @@ public:
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
-    evaluate(const std::vector<typename Game::Position> &positions) {
+    evaluate(const std::vector<typename Game::State> &positions) {
         return m_executor.evaluate(positions);
     }
 

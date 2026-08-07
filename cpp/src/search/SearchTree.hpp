@@ -27,7 +27,7 @@ template <typename Action> struct GameSearchEdge {
     std::optional<std::size_t> child_index;
 };
 template <typename Game> struct GameSearchNode {
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Action = typename Game::Action;
 
     Position position;
@@ -45,7 +45,7 @@ template <typename Game> struct GameSearchNode {
 
 template <typename Game> class GameSearchTree {
 public:
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Action = typename Game::Action;
     using Node = GameSearchNode<Game>;
     using Edge = GameSearchEdge<Action>;
@@ -187,7 +187,8 @@ public:
     [[nodiscard]] std::size_t actionIdToEdgeIndex(const int actionId) const {
         const Node &selected = root();
         for (const auto index : range(selected.children.size())) {
-            if (Game::actionId(selected.children[index].action, selected.position) == actionId) {
+            if (Game::Encoding::actionId(selected.children[index].action, selected.position) ==
+                actionId) {
                 return index;
             }
         }
@@ -393,7 +394,7 @@ private:
         if (edge.child_index.has_value()) {
             return *edge.child_index;
         }
-        const Position child = Game::childPosition(node(parentIndex).position, edge.action);
+        const Position child = Game::childState(node(parentIndex).position, edge.action);
         const std::size_t childIndex = allocateNode(child, parentIndex, edgeIndex);
         node(parentIndex).children[edgeIndex].child_index = childIndex;
         return childIndex;
@@ -496,7 +497,7 @@ private:
 
 template <typename Game> class GameSearchRoot {
 public:
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Tree = GameSearchTree<Game>;
 
     GameSearchRoot(Position position, const std::size_t initialCapacity,

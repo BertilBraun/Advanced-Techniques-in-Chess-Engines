@@ -1,7 +1,7 @@
 #pragma once
 
-#include "games/go/GoEncoding.hpp"
-#include "games/go/GoTypes.hpp"
+#include "games/go/encoding/GoEncoding.hpp"
+#include "games/go/implementation/GoAction.hpp"
 #include "util/py.hpp"
 
 #include <cstddef>

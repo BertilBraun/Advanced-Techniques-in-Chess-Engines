@@ -1,6 +1,6 @@
-#include "games/chess/ChessBoard.hpp"
-#include "games/chess/ChessEncoding.hpp"
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
+#include "games/chess/encoding/ChessEncoding.hpp"
+#include "games/chess/implementation/ChessBoard.hpp"
 #include "search/InferencePipeline.hpp"
 #include "util/py.hpp"
 
@@ -117,7 +117,7 @@ double outputChecksum(const InferenceOutput &output) {
 nlohmann::json runDirect(const Arguments &arguments,
                          const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
-                           ChessGameContract::inferenceDimensions());
+                           ChessGame::Encoding::inferenceDimensions());
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -138,7 +138,7 @@ nlohmann::json runDirect(const Arguments &arguments,
 nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<Board> &boards,
                                   const std::vector<CompressedEncodedBoard> &encodings) {
     InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize, true,
-                           ChessGameContract::inferenceDimensions());
+                           ChessGame::Encoding::inferenceDimensions());
     torch::Tensor input = runner.createInputBuffer();
     InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
@@ -155,10 +155,9 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
         const float *policyData = output.policies.data_ptr<float>();
         const float *outcomeData = output.outcomes.data_ptr<float>();
         for (const auto position : range(arguments.batchSize)) {
-            const SearchInferenceResult<ChessGameContract> result =
-                processInferencePosition<ChessGameContract>(
-                    policyData + position * ChessAction::action_count, outcomeData + position * 3,
-                    boards[position]);
+            const SearchInferenceResult<ChessGame> result = processInferencePosition<ChessGame>(
+                policyData + position * ChessEncoding::action_count, outcomeData + position * 3,
+                boards[position]);
             checksum += result.value() + static_cast<double>(result.actions.size());
         }
     }
@@ -170,7 +169,7 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
 nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> &boards,
                            const std::vector<CompressedEncodedBoard> &encodings) {
     InferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
-                               arguments.slots, true, ChessGameContract::inferenceDimensions());
+                               arguments.slots, true, ChessGame::Encoding::inferenceDimensions());
     std::vector<std::pair<size_t, size_t>> pendingBatches;
     pendingBatches.reserve(arguments.slots);
     constexpr size_t ENCODED_BOARD_BYTES = ChessRepresentationDimensions::channel_count *
@@ -184,7 +183,7 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
                                 warmup.data + index * ENCODED_BOARD_BYTES);
         }
         pipeline.submit(warmup.slotIndex, arguments.batchSize);
-        static_cast<void>(pipeline.consume<ChessGameContract>(
+        static_cast<void>(pipeline.consume<ChessGame>(
             warmup.slotIndex, std::span<const Board>(boards).first(arguments.batchSize)));
     }
     double checksum = 0.0;
@@ -192,11 +191,10 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
     for (const auto iteration : range(arguments.iterations)) {
         if (pendingBatches.size() == arguments.slots) {
             const auto [slotIndex, firstBoard] = pendingBatches.front();
-            const std::vector<SearchInferenceResult<ChessGameContract>> results =
-                pipeline.consume<ChessGameContract>(
-                    slotIndex,
-                    std::span<const Board>(boards).subspan(firstBoard, arguments.batchSize));
-            for (const SearchInferenceResult<ChessGameContract> &result : results) {
+            const std::vector<SearchInferenceResult<ChessGame>> results =
+                pipeline.consume<ChessGame>(slotIndex, std::span<const Board>(boards).subspan(
+                                                           firstBoard, arguments.batchSize));
+            for (const SearchInferenceResult<ChessGame> &result : results) {
                 checksum += result.value() + static_cast<double>(result.actions.size());
             }
             pendingBatches.erase(pendingBatches.begin());
@@ -211,10 +209,9 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
         pendingBatches.emplace_back(writable.slotIndex, iteration * arguments.batchSize);
     }
     for (const auto [slotIndex, firstBoard] : pendingBatches) {
-        const std::vector<SearchInferenceResult<ChessGameContract>> results =
-            pipeline.consume<ChessGameContract>(
-                slotIndex, std::span<const Board>(boards).subspan(firstBoard, arguments.batchSize));
-        for (const SearchInferenceResult<ChessGameContract> &result : results) {
+        const std::vector<SearchInferenceResult<ChessGame>> results = pipeline.consume<ChessGame>(
+            slotIndex, std::span<const Board>(boards).subspan(firstBoard, arguments.batchSize));
+        for (const SearchInferenceResult<ChessGame> &result : results) {
             checksum += result.value() + static_cast<double>(result.actions.size());
         }
     }
@@ -234,7 +231,7 @@ nlohmann::json runReplicas(const Arguments &arguments,
     for (const auto worker : range(arguments.workers)) {
         auto runner = std::make_unique<InferenceRunner>(arguments.modelPath, arguments.device, 0,
                                                         arguments.batchSize, true,
-                                                        ChessGameContract::inferenceDimensions());
+                                                        ChessGame::Encoding::inferenceDimensions());
         torch::Tensor input = runner->createInputBuffer();
         InferenceOutput output = runner->createOutputBuffer();
         fillInput(input, encodings, worker * arguments.batchSize, arguments.batchSize);
@@ -284,7 +281,7 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
     for (const auto worker : range(arguments.workers)) {
         auto runner = std::make_unique<InferenceRunner>(arguments.modelPath, arguments.device, 0,
                                                         arguments.batchSize, true,
-                                                        ChessGameContract::inferenceDimensions());
+                                                        ChessGame::Encoding::inferenceDimensions());
         torch::Tensor input = runner->createInputBuffer();
         InferenceOutput output = runner->createOutputBuffer();
         fillInput(input, encodings, worker * arguments.batchSize, arguments.batchSize);
@@ -311,9 +308,9 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
                 const float *outcomeData = outputs[worker].outcomes.data_ptr<float>();
                 for (const auto position : range(arguments.batchSize)) {
                     const size_t boardIndex = worker * arguments.batchSize + position;
-                    const SearchInferenceResult<ChessGameContract> result =
-                        processInferencePosition<ChessGameContract>(
-                            policyData + position * ChessAction::action_count,
+                    const SearchInferenceResult<ChessGame> result =
+                        processInferencePosition<ChessGame>(
+                            policyData + position * ChessEncoding::action_count,
                             outcomeData + position * 3, boards[boardIndex]);
                     checksums[worker] +=
                         result.value() + static_cast<double>(result.actions.size());

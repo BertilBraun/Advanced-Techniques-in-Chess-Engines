@@ -1,4 +1,4 @@
-#include "games/chess/ChessAnalysis.hpp"
+#include "games/chess/presentation/ChessAnalysis.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -6,7 +6,7 @@
 
 namespace {
 Stockfish::Move decodeAction(const Board &position, const int actionId) {
-    return ChessAction::decode(actionId, position).move;
+    return ChessEncoding::decodeAction(actionId, position).move;
 }
 
 ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &rootPosition) {
@@ -70,11 +70,11 @@ void ChessAnalysisSession::applyMove(const std::string &moveUci) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
     const Stockfish::Move move = m_root.position().legalMoveFromUci(moveUci);
-    const GameSearchNode<ChessGameContract> &root = m_root.tree().root();
+    const GameSearchNode<ChessGame> &root = m_root.tree().root();
     if (root.expanded()) {
         for (const GameSearchEdge<ChessAction> &edge : root.children) {
             if (edge.action.move == move) {
-                m_root.play(ChessGameContract::actionId(ChessAction(move), m_root.position()));
+                m_root.play(ChessEncoding::actionId(ChessAction(move), m_root.position()));
                 m_movesUci.push_back(moveUci);
                 return;
             }

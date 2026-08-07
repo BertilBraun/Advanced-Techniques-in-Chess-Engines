@@ -1,6 +1,6 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessGameContract.hpp"
-#include "games/go/GoGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
+#include "games/go/GoGame.hpp"
 #include "search/SearchTree.hpp"
 
 #include <cstdlib>
@@ -16,7 +16,7 @@ void require(const bool condition, const char *message) {
     }
 }
 
-template <typename Game> void exercise_tree(typename Game::Position position) {
+template <typename Game> void exercise_tree(typename Game::State position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
     SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
@@ -34,7 +34,7 @@ template <typename Game> void exercise_tree(typename Game::Position position) {
     require(tree.liveNodeCount() == 2, "Shared game tree created an unexpected node count");
     require(tree.capacity() >= 2, "Shared game tree did not grow its reusable arena");
     const auto &leafNode = tree.node(leaf);
-    const int selectedAction = Game::actionId(
+    const int selectedAction = Game::Encoding::actionId(
         tree.root().children[*leafNode.parent_edge_index].action, tree.root().position);
     tree.reroot(selectedAction);
     require(tree.root().visits == 1, "Shared game tree discarded retained child statistics");
@@ -49,10 +49,10 @@ int runGameSearchTreeTests() {
     try {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();
-        exercise_tree<ChessGameContract>(Board{});
-        exercise_tree<Go7GameContract>(
+        exercise_tree<ChessGame>(Board{});
+        exercise_tree<Go7Game>(
             GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
-        exercise_tree<Go9GameContract>(
+        exercise_tree<Go9Game>(
             GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         std::cout << "Shared chess and Go search-tree tests passed\n";
         return EXIT_SUCCESS;

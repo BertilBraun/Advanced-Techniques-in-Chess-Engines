@@ -57,7 +57,7 @@ struct GameAnalysisResult {
 
 template <typename Game> class GameAnalysis {
 public:
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;
     using Tree = GameSearchTree<Game>;
     using Node = GameSearchNode<Game>;
@@ -130,7 +130,7 @@ private:
         candidates.reserve(inference.actions.size());
         for (const auto &[action, prior] : inference.actions) {
             candidates.push_back({
-                .action_id = Game::actionId(action, position),
+                .action_id = Game::Encoding::actionId(action, position),
                 .policy_prior = prior,
                 .visits = 0,
                 .visit_share = 0.0F,
@@ -161,7 +161,7 @@ private:
                     ? std::nullopt
                     : std::optional<float>{-child.value_sum / static_cast<float>(child.visits)};
             candidates.push_back({
-                .action_id = Game::actionId(child.action, root.position),
+                .action_id = Game::Encoding::actionId(child.action, root.position),
                 .policy_prior = child.raw_prior,
                 .visits = child.visits,
                 .visit_share = totalChildVisits == 0 ? 0.0F
@@ -199,13 +199,13 @@ private:
                     if (left.prior != right.prior) {
                         return left.prior < right.prior;
                     }
-                    return Game::actionId(left.action, node.position) >
-                           Game::actionId(right.action, node.position);
+                    return Game::Encoding::actionId(left.action, node.position) >
+                           Game::Encoding::actionId(right.action, node.position);
                 });
             if (best->visits == 0 || !best->child_index.has_value()) {
                 break;
             }
-            variation.push_back(Game::actionId(best->action, node.position));
+            variation.push_back(Game::Encoding::actionId(best->action, node.position));
             nodeIndex = *best->child_index;
         }
         return variation;

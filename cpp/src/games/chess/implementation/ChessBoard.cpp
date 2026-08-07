@@ -1,7 +1,7 @@
-#include "games/chess/ChessBoard.hpp"
+#include "games/chess/implementation/ChessBoard.hpp"
 #include "util/py.hpp"
 
-#include "games/chess/ChessAction.hpp"
+#include "games/chess/implementation/ChessAction.hpp"
 #include "util/TimeItGuard.h"
 
 #include "bitboard.h"

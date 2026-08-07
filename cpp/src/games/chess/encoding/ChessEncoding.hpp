@@ -1,7 +1,8 @@
 #pragma once
 
-#include "games/chess/ChessAction.hpp"
-#include "games/chess/ChessBoard.hpp"
+#include "games/chess/implementation/ChessAction.hpp"
+#include "games/chess/implementation/ChessBoard.hpp"
+#include "search/InferenceTypes.hpp"
 #include "util/BitBoard.hpp"
 #include "util/PackedPlane.hpp"
 
@@ -11,12 +12,30 @@
 
 #include <torch/torch.h>
 
+struct ChessEncoding {
+    static constexpr int action_count = 1880;
+
+    [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
+        return {
+            .channels = 29,
+            .rows = 8,
+            .columns = 8,
+            .actions = action_count,
+            .outcomes = 3,
+        };
+    }
+
+    [[nodiscard]] static int actionId(ChessAction action, const Board &state);
+    [[nodiscard]] static ChessAction decodeAction(int actionId, const Board &state);
+    static void encodeInputInto(const Board &state, std::int8_t *destination);
+};
+
 struct ChessRepresentationDimensions {
     static constexpr int board_length = 8;
     static constexpr int channel_count = 29;
     static constexpr int binary_channel_count = 22;
     static constexpr int scalar_channel_count = 7;
-    static constexpr int action_count = ChessAction::action_count;
+    static constexpr int action_count = ChessEncoding::action_count;
 };
 
 static_assert(ChessRepresentationDimensions::channel_count ==
@@ -60,5 +79,3 @@ struct BoardFingerprintHash {
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
 void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
 void encodeBoardInto(const Board &board, std::int8_t *destination);
-
-[[nodiscard]] float chessTerminalValue(const Board &board);

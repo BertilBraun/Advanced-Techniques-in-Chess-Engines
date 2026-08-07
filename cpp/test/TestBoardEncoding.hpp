@@ -2,7 +2,7 @@
 
 #include "common.hpp"
 
-#include "games/chess/ChessEncoding.hpp"
+#include "games/chess/encoding/ChessEncoding.hpp"
 
 std::vector<std::vector<std::vector<float>>> testEncode(std::string fen) {
     // Encode the board to tensor, then return it

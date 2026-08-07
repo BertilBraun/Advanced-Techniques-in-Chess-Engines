@@ -1,5 +1,5 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessEncoding.hpp"
+#include "games/chess/encoding/ChessEncoding.hpp"
 
 int runChessEncodingTests() {
     Stockfish::Bitboards::init();

@@ -1,5 +1,5 @@
-#include "games/chess/ChessBindings.hpp"
-#include "games/go/GoBindings.hpp"
+#include "games/chess/bindings/ChessBindings.hpp"
+#include "games/go/bindings/GoBindings.hpp"
 #include "search/SearchBindings.hpp"
 
 #include <cstdlib>

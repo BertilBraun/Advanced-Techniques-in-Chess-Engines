@@ -1,5 +1,5 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
 #include "search/InferencePipeline.hpp"
 #include "util/py.hpp"
 
@@ -25,8 +25,8 @@ void require(const bool condition, const std::string &message) {
 }
 
 std::vector<float> positivePolicy() {
-    std::vector<float> policy(ChessAction::action_count);
-    for (const int actionId : range(ChessAction::action_count)) {
+    std::vector<float> policy(ChessEncoding::action_count);
+    for (const int actionId : range(ChessEncoding::action_count)) {
         policy[actionId] = static_cast<float>(actionId + 1);
     }
     return policy;
@@ -34,12 +34,12 @@ std::vector<float> positivePolicy() {
 
 void requireNormalized(const Board &board, const std::vector<float> &policy,
                        const std::string &description) {
-    const SearchInferenceResult<ChessGameContract> result =
-        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    const SearchInferenceResult<ChessGame> result =
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), board);
     float sum = 0.0F;
     int previousActionId = -1;
     for (const auto &[action, probability] : result.actions) {
-        const int actionId = ChessGameContract::actionId(action, board);
+        const int actionId = ChessGame::Encoding::actionId(action, board);
         require(actionId > previousActionId, description + ": actions are not ordered by id");
         require(probability > 0.0F, description + ": retained non-positive probability");
         previousActionId = actionId;
@@ -64,9 +64,9 @@ void testRepresentativePositions() {
 
 void testUniformFallbackAndSparsePolicy() {
     const Board board;
-    std::vector<float> policy(ChessAction::action_count, 0.0F);
-    SearchInferenceResult<ChessGameContract> uniform =
-        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    std::vector<float> policy(ChessEncoding::action_count, 0.0F);
+    SearchInferenceResult<ChessGame> uniform =
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), board);
     require(uniform.actions.size() == board.validMoves().size(),
             "uniform fallback omitted legal actions");
     const float expected = 1.0F / static_cast<float>(uniform.actions.size());
@@ -76,20 +76,19 @@ void testUniformFallbackAndSparsePolicy() {
                 "uniform fallback returned a non-uniform probability");
     }
 
-    policy[ChessAction(board.validMoves()[0]).encode(board)] = 1.0F;
-    policy[ChessAction(board.validMoves()[1]).encode(board)] = 2.0F;
-    const SearchInferenceResult<ChessGameContract> sparse =
-        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    policy[ChessEncoding::actionId(ChessAction(board.validMoves()[0]), board)] = 1.0F;
+    policy[ChessEncoding::actionId(ChessAction(board.validMoves()[1]), board)] = 2.0F;
+    const SearchInferenceResult<ChessGame> sparse =
+        processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), board);
     require(sparse.actions.size() == 2, "zero-probability legal actions were retained");
 }
 
 void testTerminalAndOutcomeValidation() {
     const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     const std::vector<float> policy = positivePolicy();
-    require(
-        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), terminal)
-            .actions.empty(),
-        "terminal position returned policy actions");
+    require(processInferencePosition<ChessGame>(policy.data(), validOutcome.data(), terminal)
+                .actions.empty(),
+            "terminal position returned policy actions");
 
     const std::array<std::array<float, 3>, 4> invalidOutcomes = {
         std::array<float, 3>{NAN, 0.5F, 0.5F},
@@ -100,8 +99,8 @@ void testTerminalAndOutcomeValidation() {
     for (const auto &outcome : invalidOutcomes) {
         bool rejected = false;
         try {
-            static_cast<void>(processInferencePosition<ChessGameContract>(policy.data(),
-                                                                          outcome.data(), Board{}));
+            static_cast<void>(
+                processInferencePosition<ChessGame>(policy.data(), outcome.data(), Board{}));
         } catch (const std::runtime_error &) {
             rejected = true;
         }

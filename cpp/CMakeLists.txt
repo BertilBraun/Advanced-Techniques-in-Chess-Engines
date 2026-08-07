@@ -218,17 +218,18 @@ if (BUILD_TESTING)
             test/TestBitBoard.cpp
             test/TestBoardLegalMovesCache.cpp
             test/TestChessEncoding.cpp
-            test/TestChessGameContract.cpp
+            test/TestChessGame.cpp
             test/TestGameHistory.cpp
             test/TestGameSearchTree.cpp
-            test/TestGoGameContract.cpp
+            test/TestGoGame.cpp
             test/TestInferencePipeline.cpp
             test/TestMovePolicyProcessing.cpp
             test/TestPackedPlaneFixtures.cpp
-            src/games/chess/ChessAction.cpp
-            src/games/chess/ChessBoard.cpp
-            src/games/chess/ChessEncoding.cpp
-            src/games/chess/ChessSearchPresentation.cpp
+            src/games/chess/implementation/ChessAction.cpp
+            src/games/chess/implementation/ChessBoard.cpp
+            src/games/chess/encoding/ChessEncoding.cpp
+            src/games/chess/encoding/ChessPolicyEncoding.cpp
+            src/games/chess/presentation/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
             src/util/Log.cpp
             src/util/TimeItGuard.cpp
@@ -248,10 +249,11 @@ if (BUILD_BENCHMARKS)
 add_executable(
         InferenceBenchmark
         benchmark/InferenceBenchmark.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
+        src/games/chess/implementation/ChessBoard.cpp
+        src/games/chess/encoding/ChessEncoding.cpp
+        src/games/chess/encoding/ChessPolicyEncoding.cpp
         src/search/InferencePipeline.cpp
-        src/games/chess/ChessAction.cpp
+        src/games/chess/implementation/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
         "${stockfish_SOURCE_DIR}/src/misc.cpp"

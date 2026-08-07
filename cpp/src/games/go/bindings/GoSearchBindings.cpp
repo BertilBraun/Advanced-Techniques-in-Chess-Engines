@@ -1,4 +1,4 @@
-#include "games/go/GoGameContract.hpp"
+#include "games/go/GoGame.hpp"
 #include "search/Analysis.hpp"
 #include "search/SelfPlay.hpp"
 
@@ -19,31 +19,31 @@ template <std::size_t BoardSize>
 void bindGoSearch(py::module_ &module, const char *rootName, const char *searchName,
                   const char *requestName, const char *resultName, const char *batchName,
                   const char *analysisName) {
-    using Contract = GoGameContract<BoardSize, 8>;
-    using Position = typename Contract::Position;
+    using Contract = GoGame<BoardSize, 8>;
+    using Position = typename Contract::State;
     using Root = GameSearchRoot<Contract>;
     using Search = GameSelfPlaySearch<Contract>;
     using Request = SelfPlaySearchRequest<Contract>;
     using Result = SelfPlaySearchResult<Contract>;
     using Batch = SelfPlaySearchBatch<Contract>;
     using Analysis = GameAnalysis<Contract>;
-    constexpr InferenceDimensions dimensions = Contract::inferenceDimensions();
+    constexpr InferenceDimensions dimensions = Contract::Encoding::inferenceDimensions();
 
     py::class_<Root>(module, rootName)
         .def_property_readonly("position", &Root::position)
         .def_property_readonly("is_terminal", &Root::isTerminal)
         .def_property_readonly("visits", &Root::visits)
         .def_property_readonly("live_nodes", &Root::liveNodeCount)
-        .def_property_readonly("children",
-                               [](const Root &root) {
-                                   std::vector<std::pair<int, std::uint32_t>> children;
-                                   for (const auto &edge : root.tree().root().children) {
-                                       children.emplace_back(
-                                           Contract::actionId(edge.action, root.position()),
-                                           edge.visits);
-                                   }
-                                   return children;
-                               })
+        .def_property_readonly(
+            "children",
+            [](const Root &root) {
+                std::vector<std::pair<int, std::uint32_t>> children;
+                for (const auto &edge : root.tree().root().children) {
+                    children.emplace_back(
+                        Contract::Encoding::actionId(edge.action, root.position()), edge.visits);
+                }
+                return children;
+            })
         .def("play", &Root::play, py::arg("action_id"));
 
     py::class_<Request>(module, requestName)

@@ -1,13 +1,13 @@
 #pragma once
 
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
 #include "search/SearchTree.hpp"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-using ChessSearchRoot = GameSearchRoot<ChessGameContract>;
+using ChessSearchRoot = GameSearchRoot<ChessGame>;
 
 struct ChessSearchChild {
     std::string move;

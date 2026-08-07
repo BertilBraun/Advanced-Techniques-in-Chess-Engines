@@ -1,5 +1,5 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -12,13 +12,13 @@ void require(const bool condition, const std::string &message) {
 }
 } // namespace
 
-int runChessGameContractTests() {
+int runChessGameTests() {
     Stockfish::Bitboards::init();
     Stockfish::Position::init();
 
     const Board initial;
-    require(!ChessGameContract::isTerminal(initial), "Initial chess position must not be terminal");
-    require(static_cast<int>(ChessGameContract::legalActions(initial).size()) == 20,
+    require(!ChessGame::isTerminal(initial), "Initial chess position must not be terminal");
+    require(static_cast<int>(ChessGame::legalActions(initial).size()) == 20,
             "Initial chess position must expose 20 legal actions");
 
     const CompressedEncodedBoard encoded = encodeBoard(initial);
@@ -29,24 +29,20 @@ int runChessGameContractTests() {
                 static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count),
             "Chess contract scalar channel count disagrees with the encoded position");
 
-    const ChessAction firstAction = ChessGameContract::legalActions(initial).front();
-    const int actionId = ChessGameContract::actionId(firstAction, initial);
+    const ChessAction firstAction = ChessGame::legalActions(initial).front();
+    const int actionId = ChessGame::Encoding::actionId(firstAction, initial);
     require(0 <= actionId && actionId < ChessRepresentationDimensions::action_count,
             "Chess contract action id is outside the configured action space");
-    require(ChessAction::decode(actionId, initial) == firstAction,
+    require(ChessEncoding::decodeAction(actionId, initial) == firstAction,
             "Chess action decode did not invert encoding");
 
-    const Board child = ChessGameContract::childPosition(initial, firstAction);
+    const Board child = ChessGame::childState(initial, firstAction);
     require(child.fen() != initial.fen(), "Chess child position must differ from its parent");
 
     const Board terminal = Board::replay(Board{}.fen(), {"f2f3", "e7e5", "g2g4", "d8h4"});
-    require(ChessGameContract::isTerminal(terminal),
-            "Checkmate sequence must produce a terminal position");
-    require(ChessGameContract::terminalValue(terminal) == -1.0F,
+    require(ChessGame::isTerminal(terminal), "Checkmate sequence must produce a terminal position");
+    require(ChessGame::terminalValue(terminal) == -1.0F,
             "Terminal chess value must preserve the existing result");
-    require(!ChessGameContract::terminalValue(initial).has_value(),
-            "Non-terminal chess positions must not expose a terminal value");
-
-    std::cout << "Chess game contract tests passed\n";
+    std::cout << "Chess game tests passed\n";
     return 0;
 }

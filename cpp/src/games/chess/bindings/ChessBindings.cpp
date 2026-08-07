@@ -1,7 +1,7 @@
-#include "games/chess/ChessBindings.hpp"
+#include "games/chess/bindings/ChessBindings.hpp"
 
-#include "games/chess/ChessEncoding.hpp"
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
+#include "games/chess/encoding/ChessEncoding.hpp"
 
 #include "bitboard.h"
 #include "position.h"

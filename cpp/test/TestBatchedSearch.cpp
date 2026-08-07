@@ -1,14 +1,14 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessSearchPresentation.hpp"
+#include "games/chess/presentation/ChessSearchPresentation.hpp"
 #include "position.h"
 #include "search/SelfPlay.hpp"
 
 namespace {
-using ChessSelfPlaySearch = GameSelfPlaySearch<ChessGameContract>;
+using ChessSelfPlaySearch = GameSelfPlaySearch<ChessGame>;
 using ChessSelfPlaySearchParameters = SelfPlaySearchParameters;
-using ChessSelfPlaySearchRequest = SelfPlaySearchRequest<ChessGameContract>;
-using ChessSelfPlaySearchBatch = SelfPlaySearchBatch<ChessGameContract>;
-using ChessInferenceResult = SearchInferenceResult<ChessGameContract>;
+using ChessSelfPlaySearchRequest = SelfPlaySearchRequest<ChessGame>;
+using ChessSelfPlaySearchBatch = SelfPlaySearchBatch<ChessGame>;
+using ChessInferenceResult = SearchInferenceResult<ChessGame>;
 
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
                                       const float loss, const bool validOutput = true) {

@@ -10,7 +10,7 @@
 #include <vector>
 
 #define private public
-#include "games/chess/ChessBoard.hpp"
+#include "games/chess/implementation/ChessBoard.hpp"
 #undef private
 
 namespace {

@@ -1,4 +1,4 @@
-#include "games/chess/ChessEncoding.hpp"
+#include "games/chess/encoding/ChessEncoding.hpp"
 #include "util/py.hpp"
 
 #include "util/TimeItGuard.h"
@@ -168,13 +168,6 @@ void encodeBoardInto(const Board &board, std::int8_t *destination) {
     writeTensorEncoding(encodeBoard(board), destination);
 }
 
-float chessTerminalValue(const Board &board) {
-    assert(board.isGameOver() && "Game was not over!");
-
-    if (const auto winner = board.checkWinner()) {
-        assert(winner.value() != board.currentPlayer());
-        return -1.0f; // The side to move is checkmated.
-    }
-
-    return 0.0f;
+void ChessEncoding::encodeInputInto(const Board &state, std::int8_t *destination) {
+    encodeBoardInto(state, destination);
 }

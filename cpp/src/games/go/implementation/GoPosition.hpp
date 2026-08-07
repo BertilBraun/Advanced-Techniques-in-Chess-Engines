@@ -1,6 +1,7 @@
 #pragma once
 
-#include "games/go/GoTypes.hpp"
+#include "games/go/implementation/GoAction.hpp"
+#include "games/go/implementation/GoRules.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -10,6 +11,13 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+template <std::size_t BoardSize> struct GoBoard {
+    BitBoard<BoardSize> black;
+    BitBoard<BoardSize> white;
+
+    [[nodiscard]] bool operator==(const GoBoard &) const noexcept = default;
+};
 
 template <std::size_t BoardSize, std::size_t HistoryLength = 8> class GoPosition {
 public:
@@ -168,13 +176,8 @@ public:
 
     [[nodiscard]] GoTerminalResult terminal_result() const {
         const GoTerminationReason reason = termination_reason();
-        if (reason == GoTerminationReason::ongoing ||
-            reason == GoTerminationReason::maximum_moves) {
-            return GoTerminalResult{
-                .reason = reason,
-                .score = std::nullopt,
-                .winner = std::nullopt,
-            };
+        if (reason == GoTerminationReason::ongoing) {
+            throw std::logic_error("Ongoing Go positions do not have a terminal result");
         }
         const GoAreaScore score = area_score();
         return GoTerminalResult{

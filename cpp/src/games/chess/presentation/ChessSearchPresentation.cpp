@@ -1,22 +1,21 @@
-#include "games/chess/ChessSearchPresentation.hpp"
+#include "games/chess/presentation/ChessSearchPresentation.hpp"
 
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
 ChessSearchRoot createChessSearchRoot(Board board, const std::uint32_t arenaCapacity) {
-    return ChessSearchRoot(std::move(board), arenaCapacity, 0,
-                           ChessGameContract::searchTurnDiscount());
+    return ChessSearchRoot(std::move(board), arenaCapacity, 0, ChessGame::searchTurnDiscount());
 }
 
 std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {
-    const GameSearchNode<ChessGameContract> &rootNode = root.tree().root();
+    const GameSearchNode<ChessGame> &rootNode = root.tree().root();
     std::vector<ChessSearchChild> children;
     children.reserve(rootNode.children.size());
     for (const GameSearchEdge<ChessAction> &child : rootNode.children) {
         children.push_back({
             .move = child.action.toUci(),
-            .encoded_move = ChessGameContract::actionId(child.action, rootNode.position),
+            .encoded_move = ChessGame::Encoding::actionId(child.action, rootNode.position),
             .raw_policy = child.raw_prior,
             .policy = child.prior,
             .visits = child.visits,
@@ -29,11 +28,11 @@ std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {
 }
 
 ChessSearchRoot rerootChessSearch(ChessSearchRoot root, const std::uint32_t childIndex) {
-    const GameSearchNode<ChessGameContract> &rootNode = root.tree().root();
+    const GameSearchNode<ChessGame> &rootNode = root.tree().root();
     if (childIndex >= rootNode.children.size()) {
         throw std::out_of_range("Cannot reroot to a missing chess action");
     }
-    root.play(ChessGameContract::actionId(rootNode.children[childIndex].action, root.position()));
+    root.play(ChessGame::Encoding::actionId(rootNode.children[childIndex].action, root.position()));
     return root;
 }
 

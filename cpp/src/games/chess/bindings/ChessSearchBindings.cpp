@@ -1,7 +1,7 @@
 #include "common.hpp"
 
-#include "games/chess/ChessGameContract.hpp"
-#include "games/chess/ChessSearchPresentation.hpp"
+#include "games/chess/ChessGame.hpp"
+#include "games/chess/presentation/ChessSearchPresentation.hpp"
 #include "search/SelfPlay.hpp"
 #include "util/py.hpp"
 
@@ -17,11 +17,11 @@
 namespace py = pybind11;
 
 namespace {
-using Search = GameSelfPlaySearch<ChessGameContract>;
-using Request = SelfPlaySearchRequest<ChessGameContract>;
-using Result = SelfPlaySearchResult<ChessGameContract>;
-using Batch = SelfPlaySearchBatch<ChessGameContract>;
-using InferenceResult = SearchInferenceResult<ChessGameContract>;
+using Search = GameSelfPlaySearch<ChessGame>;
+using Request = SelfPlaySearchRequest<ChessGame>;
+using Result = SelfPlaySearchResult<ChessGame>;
+using Batch = SelfPlaySearchBatch<ChessGame>;
+using InferenceResult = SearchInferenceResult<ChessGame>;
 using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
 
 [[nodiscard]] EncodedInference encodeInference(const Board &board,
@@ -29,7 +29,7 @@ using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
     std::vector<std::pair<int, float>> encodedMoves;
     encodedMoves.reserve(inferenceResult.actions.size());
     for (const auto &[action, score] : inferenceResult.actions) {
-        encodedMoves.emplace_back(ChessGameContract::actionId(action, board), score);
+        encodedMoves.emplace_back(ChessGame::Encoding::actionId(action, board), score);
     }
     return {encodedMoves, inferenceResult.value()};
 }

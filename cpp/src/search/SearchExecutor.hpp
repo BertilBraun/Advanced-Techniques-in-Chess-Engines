@@ -24,7 +24,7 @@
 
 template <typename Game> class BatchedSearchExecutor {
 public:
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;
     using Tree = GameSearchTree<Game>;
 
@@ -40,7 +40,7 @@ public:
             m_workers[workerIndex] = std::make_unique<InferencePipeline>(
                 modelPath, device, deviceId, inferenceParameters.batch_size,
                 std::max<std::size_t>(2, inferenceParameters.outstanding_batches_per_worker), true,
-                Game::inferenceDimensions());
+                Game::Encoding::inferenceDimensions());
         }
     }
 
@@ -89,7 +89,7 @@ public:
             result.visits.reserve(node.children.size());
             for (const auto &edge : node.children) {
                 result.visits.push_back({
-                    .action_id = Game::actionId(edge.action, node.position),
+                    .action_id = Game::Encoding::actionId(edge.action, node.position),
                     .visit_count = edge.visits,
                 });
             }
@@ -112,13 +112,14 @@ public:
         results.reserve(positions.size());
         std::size_t offset = 0;
         InferencePipeline &worker = *m_workers.front();
-        constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
+        constexpr std::size_t encodedSize = Game::Encoding::inferenceDimensions().encodedSize();
         while (offset < positions.size()) {
             const std::size_t batchSize =
                 std::min(m_inferenceParameters.batch_size, positions.size() - offset);
             const InferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
             for (const auto row : range(batchSize)) {
-                Game::encodeInputInto(positions[offset + row], writable.data + row * encodedSize);
+                Game::Encoding::encodeInputInto(positions[offset + row],
+                                                writable.data + row * encodedSize);
             }
             worker.submit(writable.slotIndex, batchSize);
             const std::span<const Position> batchPositions(positions.data() + offset, batchSize);
@@ -296,8 +297,7 @@ private:
             ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
             if (!tree.root().expanded()) {
                 if (Game::isTerminal(tree.root().position)) {
-                    tree.backPropagate(tree.rootIndex(),
-                                       Game::terminalValue(tree.root().position).value_or(0.0F));
+                    tree.backPropagate(tree.rootIndex(), Game::terminalValue(tree.root().position));
                     return true;
                 }
                 leaf = tree.rootIndex();
@@ -311,18 +311,17 @@ private:
                     return false;
                 }
                 if (Game::isTerminal(tree.node(*leaf).position)) {
-                    tree.backPropagate(
-                        *leaf, Game::terminalValue(tree.node(*leaf).position).value_or(0.0F));
+                    tree.backPropagate(*leaf, Game::terminalValue(tree.node(*leaf).position));
                     return true;
                 }
                 tree.reserve(*leaf);
             }
         }
-        constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
+        constexpr std::size_t encodedSize = Game::Encoding::inferenceDimensions().encodedSize();
         {
             ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
-            Game::encodeInputInto(tree.node(*leaf).position,
-                                  writable.data + leaves.size() * encodedSize);
+            Game::Encoding::encodeInputInto(tree.node(*leaf).position,
+                                            writable.data + leaves.size() * encodedSize);
         }
         ++task.in_flight;
         leaves.push_back({

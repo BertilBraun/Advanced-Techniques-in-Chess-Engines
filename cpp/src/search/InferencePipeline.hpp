@@ -27,7 +27,7 @@ struct InferenceOutput {
 template <typename Game>
 [[nodiscard]] SearchInferenceResult<Game>
 processInferencePosition(const float *policy, const float *outcome,
-                         const typename Game::Position &position) {
+                         const typename Game::State &position) {
     const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
     const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
     const float loss = outcome[static_cast<std::size_t>(WdlIndex::Loss)];
@@ -41,9 +41,9 @@ processInferencePosition(const float *policy, const float *outcome,
     actions.reserve(legalActions.size());
     float legalPolicySum = 0.0F;
     for (const typename Game::Action action : legalActions) {
-        const int actionId = Game::actionId(action, position);
+        const int actionId = Game::Encoding::actionId(action, position);
         if (actionId < 0 ||
-            static_cast<std::size_t>(actionId) >= Game::inferenceDimensions().actions) {
+            static_cast<std::size_t>(actionId) >= Game::Encoding::inferenceDimensions().actions) {
             throw std::logic_error("Game contract produced an action outside its policy space");
         }
         const float probability = policy[actionId];
@@ -54,7 +54,7 @@ processInferencePosition(const float *policy, const float *outcome,
         legalPolicySum += probability;
     }
     std::ranges::sort(actions, {}, [&position](const auto &actionProbability) {
-        return Game::actionId(actionProbability.first, position);
+        return Game::Encoding::actionId(actionProbability.first, position);
     });
     if (!actions.empty() && legalPolicySum < 1e-5F) {
         const float uniformProbability = 1.0F / static_cast<float>(actions.size());
@@ -135,7 +135,7 @@ public:
             results.reserve(positions.size());
             const float *policies = output.policies.data_ptr<float>();
             const float *outcomes = output.outcomes.data_ptr<float>();
-            const InferenceDimensions dimensions = Game::inferenceDimensions();
+            const InferenceDimensions dimensions = Game::Encoding::inferenceDimensions();
             for (const auto row : range(positions.size())) {
                 results.push_back(processInferencePosition<Game>(
                     policies + row * dimensions.actions, outcomes + row * dimensions.outcomes,

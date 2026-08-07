@@ -1,6 +1,6 @@
 #pragma once
 
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
 #include "search/Analysis.hpp"
 
 #include <memory>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-using ChessAnalysis = GameAnalysis<ChessGameContract>;
+using ChessAnalysis = GameAnalysis<ChessGame>;
 
 struct ChessAnalysisCandidate {
     std::string move_uci;
@@ -36,9 +36,8 @@ public:
                          std::vector<std::string> movesUci);
 
     void applyMove(const std::string &moveUci);
-    [[nodiscard]] ChessAnalysisResult analyze(AnalysisMode mode,
-                                               std::optional<int> timeLimitSeconds,
-                                               std::optional<int> searchLimit);
+    [[nodiscard]] ChessAnalysisResult
+    analyze(AnalysisMode mode, std::optional<int> timeLimitSeconds, std::optional<int> searchLimit);
 
     [[nodiscard]] std::string fen() const { return m_root.position().fen(); }
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
@@ -49,7 +48,7 @@ private:
     std::shared_ptr<ChessAnalysis> m_analysis;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
-    GameSearchRoot<ChessGameContract> m_root;
+    GameSearchRoot<ChessGame> m_root;
 
     void reconstructRoot();
 };

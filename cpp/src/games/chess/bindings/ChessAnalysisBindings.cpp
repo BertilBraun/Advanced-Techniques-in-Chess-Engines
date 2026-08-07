@@ -1,4 +1,4 @@
-#include "games/chess/ChessAnalysis.hpp"
+#include "games/chess/presentation/ChessAnalysis.hpp"
 
 #include <memory>
 #include <optional>

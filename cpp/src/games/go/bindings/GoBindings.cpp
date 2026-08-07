@@ -1,7 +1,7 @@
-#include "games/go/GoBindings.hpp"
+#include "games/go/bindings/GoBindings.hpp"
 
-#include "games/go/GoGameContract.hpp"
-#include "games/go/GoSymmetry.hpp"
+#include "games/go/GoGame.hpp"
+#include "games/go/encoding/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -69,8 +69,8 @@ restore_position(const std::vector<std::vector<int>> &black_history,
 
 template <std::size_t BoardSize, std::size_t HistoryLength>
 void bind_position(py::module_ &module, const char *name) {
-    using Contract = GoGameContract<BoardSize, HistoryLength>;
-    using Position = typename Contract::Position;
+    using Contract = GoGame<BoardSize, HistoryLength>;
+    using Position = typename Contract::State;
     using Encoded = EncodedGoPosition<BoardSize, HistoryLength>;
 
     py::class_<Position>(module, name)
@@ -131,7 +131,7 @@ void bind_position(py::module_ &module, const char *name) {
              [](const Position &position) { return Contract::terminalValue(position); })
         .def("action_id",
              [](const Position &position, const int action_id) {
-                 return Contract::actionId(GoAction<BoardSize>(action_id), position);
+                 return Contract::Encoding::actionId(GoAction<BoardSize>(action_id), position);
              })
         .def("decode_actions",
              [](const Position &, const std::vector<int> &action_ids) { return action_ids; })
@@ -148,7 +148,7 @@ void bind_position(py::module_ &module, const char *name) {
                  std::vector<std::int8_t> values(
                      GoRepresentationDimensions<BoardSize, HistoryLength>::channel_count *
                      BitBoard<BoardSize>::bit_count);
-                 Contract::encodeInputInto(position, values.data());
+                 Contract::Encoding::encodeInputInto(position, values.data());
                  return values;
              })
         .def_static("transform_action",

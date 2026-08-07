@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "games/chess/ChessBoard.hpp"
+#include "games/chess/implementation/ChessBoard.hpp"
 
 namespace {
 void require(const bool condition, const std::string &message) {

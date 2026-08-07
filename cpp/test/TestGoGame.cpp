@@ -1,6 +1,6 @@
 #include "TestRunner.hpp"
-#include "games/go/GoGameContract.hpp"
-#include "games/go/GoSymmetry.hpp"
+#include "games/go/GoGame.hpp"
+#include "games/go/encoding/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -37,12 +37,12 @@ std::array<GoBoard<BoardSize>, 8> history_with_current(const GoBoard<BoardSize> 
 }
 
 template <std::size_t BoardSize> void test_initial_and_actions() {
-    using Contract = GoGameContract<BoardSize, 8>;
+    using Contract = GoGame<BoardSize, 8>;
     const GoRules rules{
         .komi_half_points = 15,
         .maximum_moves = static_cast<int>(BoardSize * BoardSize * 4),
     };
-    const typename Contract::Position initial(rules);
+    const typename Contract::State initial(rules);
     require(initial.player() == GoPlayer::black, "Black must move first");
     require(initial.board().black.none() && initial.board().white.none(),
             "Initial Go board must be empty");
@@ -56,14 +56,14 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
     require(legal.front().point() == BitBoard<BoardSize>::point(0),
             "Go action point must decode its board coordinate");
     for (const auto action : legal) {
-        require(GoAction<BoardSize>(Contract::actionId(action, initial)) == action,
+        require(GoAction<BoardSize>(Contract::Encoding::actionId(action, initial)) == action,
                 "Go action encoding must round trip");
     }
 }
 
 void test_capture_suicide_and_ko() {
-    using Contract = Go7GameContract;
-    using Position = Contract::Position;
+    using Contract = Go7Game;
+    using Position = Contract::State;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
 
     const auto capture_board = board_with<7>({1, 7, 9}, {8});
@@ -91,9 +91,9 @@ void test_capture_suicide_and_ko() {
 }
 
 void test_history_encoding_hash_and_symmetries() {
-    using Contract = Go7GameContract;
+    using Contract = Go7Game;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
-    const typename Contract::Position initial(rules);
+    const typename Contract::State initial(rules);
     const auto black_played = initial.child(GoAction<7>(0));
     const auto white_played = black_played.child(GoAction<7>(8));
     const auto white_to_move_encoding = encode_go_position(black_played);
@@ -121,7 +121,7 @@ void test_history_encoding_hash_and_symmetries() {
     require((static_cast<std::uint8_t>(packed[0]) & 1U) != 0,
             "Packed Go encoding must use canonical point mapping");
     std::array<std::int8_t, GoRepresentationDimensions<7>::channel_count * 49> tensor{};
-    Contract::encodeInputInto(white_played, tensor.data());
+    Contract::Encoding::encodeInputInto(white_played, tensor.data());
     require(tensor[0] == 1 && tensor[49 + 8] == 1,
             "Expanded Go tensor must match packed plane semantics");
 
@@ -149,7 +149,7 @@ void test_history_encoding_hash_and_symmetries() {
 }
 
 void test_termination_and_scoring() {
-    using Position = Go7GameContract::Position;
+    using Position = Go7Game::State;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const auto scoring_board = board_with<7>({1, 7}, {});
     const Position scoring = Position::restore(history_with_current(scoring_board), GoPlayer::black,
@@ -163,7 +163,7 @@ void test_termination_and_scoring() {
             "Two passes must terminate Go");
     require(twice.terminal_result().score == scoring.area_score(),
             "Two-pass result must contain the final area score");
-    require(Go7GameContract::terminalValue(twice) == 1.0F,
+    require(Go7Game::terminalValue(twice) == 1.0F,
             "Terminal value must use the side-to-move perspective");
     require(twice.legal_actions().empty(), "Terminal Go positions must have no legal actions");
 
@@ -172,9 +172,11 @@ void test_termination_and_scoring() {
                                               std::nullopt, 0, 49, capped_rules);
     require(capped.termination_reason() == GoTerminationReason::maximum_moves,
             "Maximum move bound must terminate Go");
-    require(!capped.terminal_result().score.has_value() &&
-                !Go7GameContract::terminalValue(capped).has_value(),
-            "Maximum-move termination must not invent a score or value");
+    require(capped.terminal_result().score ==
+                GoAreaScore{.black_half_points = 0, .white_half_points = 15},
+            "Maximum-move adjudication must use the configured area score");
+    require(Go7Game::terminalValue(capped) == 1.0F,
+            "Maximum-move adjudication must produce a value from the side-to-move perspective");
 }
 
 void test_invalid_boundaries() {
@@ -197,7 +199,7 @@ void test_invalid_boundaries() {
 
 } // namespace
 
-int runGoGameContractTests() {
+int runGoGameTests() {
     try {
         test_initial_and_actions<7>();
         test_initial_and_actions<9>();
@@ -207,7 +209,7 @@ int runGoGameContractTests() {
         test_history_encoding_hash_and_symmetries();
         test_termination_and_scoring();
         test_invalid_boundaries();
-        std::cout << "Go game contract tests passed\n";
+        std::cout << "Go game tests passed\n";
         return 0;
     } catch (const std::exception &exception) {
         std::cerr << exception.what() << '\n';

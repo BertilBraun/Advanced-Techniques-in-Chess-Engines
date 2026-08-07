@@ -79,7 +79,7 @@ template <typename Game> struct SelfPlaySearchBatch {
 
 template <typename Game> class GameSelfPlaySearch {
 public:
-    using Position = typename Game::Position;
+    using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;
     using Request = SelfPlaySearchRequest<Game>;
     using Result = SelfPlaySearchResult<Game>;

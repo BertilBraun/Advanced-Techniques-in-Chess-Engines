@@ -1,5 +1,5 @@
 #include "TestRunner.hpp"
-#include "games/chess/ChessGameContract.hpp"
+#include "games/chess/ChessGame.hpp"
 #include "search/InferencePipeline.hpp"
 
 namespace {
@@ -31,7 +31,7 @@ int runInferencePipelineTests() {
     const std::filesystem::path modelPath = createTestModel();
     try {
         InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
-                               ChessGameContract::inferenceDimensions());
+                               ChessGame::Encoding::inferenceDimensions());
         torch::Tensor input = runner.createInputBuffer();
         input.zero_();
         InferenceOutput output = runner.createOutputBuffer();
@@ -41,7 +41,7 @@ int runInferencePipelineTests() {
                 "runner returned invalid policy");
 
         InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false,
-                                   ChessGameContract::inferenceDimensions());
+                                   ChessGame::Encoding::inferenceDimensions());
         const InferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
         std::memset(first.data, 0,
                     first.capacity * ChessRepresentationDimensions::channel_count *
@@ -56,8 +56,8 @@ int runInferencePipelineTests() {
         require(pipeline.isCompleted(first.slotIndex),
                 "pipeline did not publish nonblocking completion readiness");
         const std::vector<Board> firstPositions(2);
-        const std::vector<SearchInferenceResult<ChessGameContract>> completed =
-            pipeline.consume<ChessGameContract>(first.slotIndex, firstPositions);
+        const std::vector<SearchInferenceResult<ChessGame>> completed =
+            pipeline.consume<ChessGame>(first.slotIndex, firstPositions);
         require(completed.size() == 2, "pipeline returned wrong processed batch size");
 
         const InferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();
