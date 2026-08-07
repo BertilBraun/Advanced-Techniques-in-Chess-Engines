@@ -367,12 +367,9 @@ class MCTS:
     def get_inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
     def update_search_schedule(self, mcts_args: MCTSParams) -> bool: ...
-    def inference(self, fen: str) -> tuple[list[tuple[int, float]], float]:
-        """
-        Run inference on a given FEN string.
-        Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
-        The encoded moves are pairs of (encoded_move: int, score: float).
-        """
+    def inference_with_history(
+        self, histories: list[tuple[str, list[str]]]
+    ) -> list[tuple[list[tuple[int, float]], float]]: ...
     def search(
         self,
         boards: list[MCTSBoard],

@@ -32,7 +32,6 @@ from src.train.TrainingArgs import (
     EvaluationParams,
     TrainingArgs,
 )
-from src.cluster.InferenceClient import InferenceClient
 from src.games.chess.ChessGame import normalize_move_for_action_space
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
 from src.self_play.visit_policy import action_probabilities
@@ -45,9 +44,12 @@ from src.experiment.evaluation_protocol import (
 )
 
 
-def policy_evaluator(current_model: InferenceClient) -> EvaluationModel:
+def policy_evaluator(current_model: MCTS) -> EvaluationModel:
     def evaluator(boards: list[CurrentBoard]) -> list[np.ndarray]:
-        results = current_model.inference_batch(boards)
+        histories = [bounded_repetition_history(board.board, REPETITION_HISTORY_PLIES) for board in boards]
+        results = current_model.inference_with_history(
+            [(history.starting_fen, history.moves_uci) for history in histories]
+        )
         policies = []
         for board, (visit_counts, _) in zip(boards, results):
             policy = np.zeros(CHESS_STATE_CONTRACT.action_size, dtype=np.float32)
@@ -248,9 +250,7 @@ class ModelEvaluation:
 
     def play_policy_vs_random(self) -> Results:
         evaluation = self.evaluation_args
-        current_model = InferenceClient(self.device_id, self.args.network, self.args.save_path)
-        current_model.update_iteration(self.iteration)
-
+        current_model = self._create_mcts(inference_model_path(model_save_path(self.iteration, self.args.save_path)))
         policy_model = policy_evaluator(current_model)
 
         def paired_policy_model(boards: list[CurrentBoard]) -> list[PairedEvaluationDecision]:

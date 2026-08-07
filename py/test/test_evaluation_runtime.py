@@ -243,21 +243,21 @@ def test_direct_evaluation_provenance_records_scheduler_topology() -> None:
     }
 
 
-def test_policy_evaluation_uses_inference_client(
+def test_policy_evaluation_uses_native_batched_inference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    created_clients: list[tuple[int, str, str]] = []
-    updated_iterations: list[int] = []
+    inference_paths: list[Path] = []
 
-    class FakeInferenceClient:
-        def __init__(self, device_id: int, network_args: str, save_path: str) -> None:
-            created_clients.append((device_id, network_args, save_path))
+    class FakeNativeSearch:
+        def inference_with_history(
+            self,
+            histories: list[tuple[str, tuple[str, ...]]],
+        ) -> list[tuple[list[tuple[int, float]], float]]:
+            raise AssertionError(f'No games should be evaluated in this unit test: {histories}')
 
-        def update_iteration(self, iteration: int) -> None:
-            updated_iterations.append(iteration)
-
-        def inference_batch(self, boards: list[object]) -> list[tuple[list[tuple[int, float]], float]]:
-            raise AssertionError(f'No games should be evaluated in this unit test: {boards}')
+    def create_native_search(_: ModelEvaluation, inference_path: Path) -> FakeNativeSearch:
+        inference_paths.append(inference_path)
+        return FakeNativeSearch()
 
     def finish_without_games(
         iteration: int,
@@ -275,11 +275,7 @@ def test_policy_evaluation_uses_inference_client(
         assert name == 'policy_vs_random_paired'
         return Results(0, 0, 0), ()
 
-    monkeypatch.setattr(
-        evaluation_module,
-        'InferenceClient',
-        FakeInferenceClient,
-    )
+    monkeypatch.setattr(ModelEvaluation, '_create_mcts', create_native_search)
     monkeypatch.setattr(evaluation_module, 'play_paired_models', finish_without_games)
 
     model_evaluation = ModelEvaluation.__new__(ModelEvaluation)
@@ -304,8 +300,7 @@ def test_policy_evaluation_uses_inference_client(
     model_evaluation.evaluation_args = model_evaluation.args.evaluation
 
     assert model_evaluation.play_policy_vs_random() == Results(0, 0, 0)
-    assert created_clients == [(2, 'network-settings', 'training-output')]
-    assert updated_iterations == [7]
+    assert inference_paths == [Path('training-output/model_7.jit.pt')]
 
 
 class _FakeStockfish:

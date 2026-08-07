@@ -24,23 +24,37 @@ static void init() {
     setenv("OPENBLAS_NUM_THREADS", "1", 1);
 }
 
-std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const std::string &fen) {
-    const Board board(fen);
+using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
 
-    std::vector<const Board *> boards;
-    boards.push_back(&board);
-
-    const auto result = self.inferenceBatch(boards);
-    assert(result.size() == 1 && "Inference should return exactly one result for one board");
-    const InferenceResult &inferenceResult = result[0];
-
+EncodedInference encodeInference(const Board &board, const InferenceResult &inferenceResult) {
     std::vector<std::pair<int, float>> encodedMoves;
     encodedMoves.reserve(inferenceResult.actions.size());
     for (const auto &[move, score] : inferenceResult.actions) {
         encodedMoves.emplace_back(encodeMove(move, &board), score);
     }
-
     return {encodedMoves, inferenceResult.value()};
+}
+
+std::vector<EncodedInference> inferenceWithHistory(
+    MCTS &search,
+    const std::vector<std::pair<std::string, std::vector<std::string>>> &histories) {
+    std::vector<Board> boards;
+    boards.reserve(histories.size());
+    for (const auto &[startingFen, movesUci] : histories) {
+        boards.push_back(ChessGameContract::replayPosition(startingFen, movesUci));
+    }
+    std::vector<const Board *> boardPointers;
+    boardPointers.reserve(boards.size());
+    for (const Board &board : boards) {
+        boardPointers.push_back(&board);
+    }
+    const std::vector<InferenceResult> inferenceResults = search.inferenceBatch(boardPointers);
+    std::vector<EncodedInference> encodedResults;
+    encodedResults.reserve(boards.size());
+    for (std::size_t index = 0; index < boards.size(); ++index) {
+        encodedResults.push_back(encodeInference(boards[index], inferenceResults[index]));
+    }
+    return encodedResults;
 }
 
 // ——————————————————————————————————————————————
@@ -262,12 +276,8 @@ PYBIND11_MODULE(AlphaZeroCpp, m) {
                  When `collect_statistics` is true, `.mctsStats` contains
                  depth/entropy/KL for one representative root.
              )pbdoc")
-        .def("inference", &inference, py::arg("fen"),
-             R"pbdoc(
-                 Run inference on a given FEN string.
-                 Returns a tuple of (encoded_moves: List[Tuple[int, float]], value: float).
-                 The encoded moves are pairs of (encoded_move: int, score: float).
-             )pbdoc");
+        .def("inference_with_history", &inferenceWithHistory, py::arg("histories"),
+             py::call_guard<py::gil_scoped_release>());
 
     py::enum_<AnalysisMode>(m, "AnalysisMode")
         .value("POLICY", AnalysisMode::Policy)
