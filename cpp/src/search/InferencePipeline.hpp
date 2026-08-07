@@ -1,7 +1,7 @@
 #pragma once
 
+#include "common.hpp"
 #include "games/GameConcepts.hpp"
-#include "search/InferenceModel.hpp"
 #include "search/InferenceTypes.hpp"
 #include "util/Timing.hpp"
 #include "util/py.hpp"
@@ -28,55 +28,9 @@ struct InferenceOutput {
 template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
 processInferencePosition(const float *policy, const float *outcome,
-                         const typename Game::State &position) {
-    const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
-    const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
-    const float loss = outcome[static_cast<std::size_t>(WdlIndex::Loss)];
-    if (!std::isfinite(win) || !std::isfinite(draw) || !std::isfinite(loss) || win < 0.0F ||
-        draw < 0.0F || loss < 0.0F || std::abs(win + draw + loss - 1.0F) > 1e-2F) {
-        throw std::runtime_error("Inference model WDL output must be three probabilities");
-    }
+                         const typename Game::State &position);
 
-    const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
-    std::vector<std::pair<typename Game::Action, float>> actions;
-    actions.reserve(legalActions.size());
-    float legalPolicySum = 0.0F;
-    for (const typename Game::Action action : legalActions) {
-        const int actionId = Game::Encoding::actionId(action, position);
-        if (actionId < 0 ||
-            static_cast<std::size_t>(actionId) >= Game::Encoding::inferenceDimensions().actions) {
-            throw std::logic_error("Game contract produced an action outside its policy space");
-        }
-        const float probability = policy[actionId];
-        if (!std::isfinite(probability) || probability < 0.0F) {
-            throw std::runtime_error("Inference model policy must contain finite probabilities");
-        }
-        actions.emplace_back(action, probability);
-        legalPolicySum += probability;
-    }
-    std::ranges::sort(actions, {}, [&position](const auto &actionProbability) {
-        return Game::Encoding::actionId(actionProbability.first, position);
-    });
-    if (!actions.empty() && legalPolicySum < 1e-5F) {
-        const float uniformProbability = 1.0F / static_cast<float>(actions.size());
-        for (auto &[action, probability] : actions) {
-            static_cast<void>(action);
-            probability = uniformProbability;
-        }
-    } else if (legalPolicySum >= 1e-5F) {
-        for (auto &[action, probability] : actions) {
-            static_cast<void>(action);
-            probability /= legalPolicySum;
-        }
-        std::erase_if(actions, [](const auto &actionProbability) {
-            return !(actionProbability.second > 0.0F);
-        });
-    }
-    return {
-        .actions = std::move(actions),
-        .outcome = {.win = win, .draw = draw, .loss = loss},
-    };
-}
+using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
 
 class InferenceRunner {
 public:
@@ -193,3 +147,56 @@ private:
     [[nodiscard]] Slot &slotAt(size_t slotIndex);
     [[nodiscard]] const Slot &slotAt(size_t slotIndex) const;
 };
+
+template <SearchGame Game>
+[[nodiscard]] SearchInferenceResult<Game>
+processInferencePosition(const float *policy, const float *outcome,
+                         const typename Game::State &position) {
+    const float win = outcome[static_cast<std::size_t>(WdlIndex::Win)];
+    const float draw = outcome[static_cast<std::size_t>(WdlIndex::Draw)];
+    const float loss = outcome[static_cast<std::size_t>(WdlIndex::Loss)];
+    if (!std::isfinite(win) || !std::isfinite(draw) || !std::isfinite(loss) || win < 0.0F ||
+        draw < 0.0F || loss < 0.0F || std::abs(win + draw + loss - 1.0F) > 1e-2F) {
+        throw std::runtime_error("Inference model WDL output must be three probabilities");
+    }
+
+    const std::vector<typename Game::Action> legalActions = Game::legalActions(position);
+    std::vector<std::pair<typename Game::Action, float>> actions;
+    actions.reserve(legalActions.size());
+    float legalPolicySum = 0.0F;
+    for (const typename Game::Action action : legalActions) {
+        const int actionId = Game::Encoding::actionId(action, position);
+        if (actionId < 0 ||
+            static_cast<std::size_t>(actionId) >= Game::Encoding::inferenceDimensions().actions) {
+            throw std::logic_error("Game contract produced an action outside its policy space");
+        }
+        const float probability = policy[actionId];
+        if (!std::isfinite(probability) || probability < 0.0F) {
+            throw std::runtime_error("Inference model policy must contain finite probabilities");
+        }
+        actions.emplace_back(action, probability);
+        legalPolicySum += probability;
+    }
+    std::ranges::sort(actions, {}, [&position](const auto &actionProbability) {
+        return Game::Encoding::actionId(actionProbability.first, position);
+    });
+    if (!actions.empty() && legalPolicySum < 1e-5F) {
+        const float uniformProbability = 1.0F / static_cast<float>(actions.size());
+        for (auto &[action, probability] : actions) {
+            static_cast<void>(action);
+            probability = uniformProbability;
+        }
+    } else if (legalPolicySum >= 1e-5F) {
+        for (auto &[action, probability] : actions) {
+            static_cast<void>(action);
+            probability /= legalPolicySum;
+        }
+        std::erase_if(actions, [](const auto &actionProbability) {
+            return !(actionProbability.second > 0.0F);
+        });
+    }
+    return {
+        .actions = std::move(actions),
+        .outcome = {.win = win, .draw = draw, .loss = loss},
+    };
+}
