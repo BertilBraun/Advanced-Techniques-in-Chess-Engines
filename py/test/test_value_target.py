@@ -152,7 +152,7 @@ def test_equal_expected_scalar_can_represent_different_wdl_distributions() -> No
     assert not torch.equal(first, second)
 
 
-def test_scalar_to_wdl_places_positive_and_negative_mass_on_decisive_result() -> None:
+def test_scalar_to_wdl_distributes_non_decisive_mass_uniformly() -> None:
     targets = scalar_to_wdl(torch.tensor((-1.0, -0.25, 0.0, 0.4, 1.0)))
 
     torch.testing.assert_close(
@@ -160,9 +160,9 @@ def test_scalar_to_wdl_places_positive_and_negative_mass_on_decisive_result() ->
         torch.tensor(
             (
                 (0.0, 0.0, 1.0),
-                (0.0, 0.75, 0.25),
-                (0.0, 1.0, 0.0),
-                (0.4, 0.6, 0.0),
+                (0.25, 0.25, 0.5),
+                (1 / 3, 1 / 3, 1 / 3),
+                (0.6, 0.2, 0.2),
                 (1.0, 0.0, 0.0),
             )
         ),
@@ -352,7 +352,7 @@ def test_expected_score_calibration_compares_binned_predictions_to_outcomes() ->
 
     stats = trainer((0.0, 0.0, 0.0))._train_epoch(FixedBatchLoader(batch))
 
-    assert stats.value_metrics.expected_score_calibration_error == pytest.approx(1.0)
+    assert stats.value_metrics.expected_score_calibration_error == pytest.approx(0.85)
 
 
 def test_value_metrics_are_sliced_by_ply_and_total_material() -> None:

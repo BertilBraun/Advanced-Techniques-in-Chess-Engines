@@ -14,7 +14,7 @@ def wdl_to_scalar(probabilities: Tensor) -> Tensor:
 
 
 def scalar_to_wdl(scores: Tensor) -> Tensor:
-    """Represent expected scores in [-1, 1] as maximally drawn WDL distributions."""
+    """Represent scores in [-1, 1] with residual probability shared across WDL."""
     wins = torch.clamp(scores, min=0.0)
     losses = torch.clamp(-scores, min=0.0)
     remainders = 1.0 - torch.abs(scores)
