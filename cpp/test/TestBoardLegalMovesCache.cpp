@@ -20,17 +20,17 @@ void require(const bool condition, const std::string &message) {
 }
 
 void initializeStockfish() {
-    Bitboards::init();
-    Position::init();
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
 }
 
 void testRepeatedAccessReusesCache() {
     Board board;
     require(!board.m_validMoves.has_value(), "new board unexpectedly has cached moves");
 
-    const std::vector<Move> &first = board.validMoves();
+    const std::vector<Stockfish::Move> &first = board.validMoves();
     require(board.m_validMoves.has_value(), "first access did not populate cache");
-    const std::vector<Move> &second = board.validMoves();
+    const std::vector<Stockfish::Move> &second = board.validMoves();
 
     require(&first == &second, "repeated access returned a different vector");
     require(first.data() == second.data(), "repeated access replaced cached storage");
@@ -39,7 +39,7 @@ void testRepeatedAccessReusesCache() {
 
 void testMutationInvalidatesCache() {
     Board board;
-    const Move move = board.validMoves().front();
+    const Stockfish::Move move = board.validMoves().front();
     require(board.m_validMoves.has_value(), "move lookup did not populate cache");
 
     board.makeMove(move);
@@ -47,7 +47,7 @@ void testMutationInvalidatesCache() {
     require(board.validMoves().size() == 20, "position after first move had unexpected move count");
 
     Board resetBoard;
-    const std::vector<Move> movesBeforeReset = resetBoard.validMoves();
+    const std::vector<Stockfish::Move> movesBeforeReset = resetBoard.validMoves();
     resetBoard.setFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
     require(!resetBoard.m_validMoves.has_value(), "setFen did not invalidate cache");
     require(resetBoard.validMoves() != movesBeforeReset, "setFen returned stale cached moves");
@@ -64,12 +64,12 @@ void testMutationInvalidatesCache() {
 
 void testCopiesStartWithoutCache() {
     Board source;
-    const std::vector<Move> &sourceMoves = source.validMoves();
+    const std::vector<Stockfish::Move> &sourceMoves = source.validMoves();
     require(source.m_validMoves.has_value(), "source cache was not populated");
 
     Board copied(source);
     require(!copied.m_validMoves.has_value(), "copy constructor copied legal-move cache");
-    const std::vector<Move> &copiedMoves = copied.validMoves();
+    const std::vector<Stockfish::Move> &copiedMoves = copied.validMoves();
     require(copiedMoves == sourceMoves, "copied board generated different moves");
     require(copiedMoves.data() != sourceMoves.data(), "copied board reused source cache storage");
 

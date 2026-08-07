@@ -7,8 +7,8 @@
 std::vector<std::vector<std::vector<float>>> testEncode(std::string fen) {
     // Encode the board to tensor, then return it
     const Board board(fen);
-    CompressedEncodedBoard encodedBoard = encodeBoard(&board);
-    torch::Tensor tensor = toTensor(encodedBoard);
+    CompressedEncodedBoard encodedBoard = encodeBoard(board);
+    torch::Tensor tensor = tensorEncoding(encodedBoard);
     std::vector<std::vector<std::vector<float>>> result;
     for (int i : range(tensor.size(0))) {
         std::vector<std::vector<float>> channel;

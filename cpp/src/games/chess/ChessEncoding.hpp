@@ -1,44 +1,48 @@
 #pragma once
 
-#include "common.hpp"
+#include "games/chess/ChessAction.hpp"
+#include "games/chess/ChessBoard.hpp"
 #include "util/BitBoard.hpp"
 #include "util/PackedPlane.hpp"
 
-// ------------ board layout --------------------------------------------------
-// 12 piece-type bit-boards  (6 white + 6 black)
-// 4  castling-rights planes
-// 2  occupancy planes       (all white pieces, all black pieces)
-// 1  "checkers" plane
-// 1  en-passant target plane
-// 2  repetition planes      (second and third occurrence)
-// 6  material-difference scalar planes
-// 1  halfmove-clock scalar plane
-static constexpr int BOARD_LEN = 8;
-static constexpr int BOARD_C = 29;
-static constexpr int BINARY_C = 22;
-static constexpr int SCALAR_C = 7;
-static_assert(BOARD_C == BINARY_C + SCALAR_C);
+#include <array>
+#include <cstddef>
+#include <cstdint>
 
-// ---------------------------------------------------------------------------
-// in-memory compressed format
-// ---------------------------------------------------------------------------
+#include <torch/torch.h>
+
+struct ChessRepresentationDimensions {
+    static constexpr int board_length = 8;
+    static constexpr int channel_count = 29;
+    static constexpr int binary_channel_count = 22;
+    static constexpr int scalar_channel_count = 7;
+    static constexpr int action_count = ChessAction::action_count;
+};
+
+static_assert(ChessRepresentationDimensions::channel_count ==
+              ChessRepresentationDimensions::binary_channel_count +
+                  ChessRepresentationDimensions::scalar_channel_count);
+
 struct CompressedEncodedBoard {
-    std::array<BitBoard<BOARD_LEN>, BINARY_C> bits;
-    std::array<int8, SCALAR_C> scal;
+    static constexpr std::size_t packed_binary_bytes =
+        packed_binary_plane_bytes<ChessRepresentationDimensions::board_length,
+                                  ChessRepresentationDimensions::binary_channel_count>;
+    static constexpr std::size_t packed_bytes =
+        packed_binary_bytes + ChessRepresentationDimensions::scalar_channel_count;
+
+    std::array<BitBoard<ChessRepresentationDimensions::board_length>,
+               ChessRepresentationDimensions::binary_channel_count>
+        bits;
+    std::array<std::int8_t, ChessRepresentationDimensions::scalar_channel_count> scal;
 
     [[nodiscard]] bool operator==(const CompressedEncodedBoard &other) const noexcept {
         return bits == other.bits && scal == other.scal;
     }
 };
 
-inline constexpr std::size_t CHESS_PACKED_BINARY_BYTES =
-    packed_binary_plane_bytes<BOARD_LEN, BINARY_C>;
-inline constexpr std::size_t CHESS_PACKED_BYTES =
-    CHESS_PACKED_BINARY_BYTES + static_cast<std::size_t>(SCALAR_C) * sizeof(int8);
-
 struct BoardFingerprint {
-    uint64 first;
-    uint64 second;
+    std::uint64_t first;
+    std::uint64_t second;
 
     [[nodiscard]] bool operator==(const BoardFingerprint &other) const noexcept {
         return first == other.first && second == other.second;
@@ -49,34 +53,12 @@ struct BoardFingerprintHash {
     [[nodiscard]] std::size_t operator()(const BoardFingerprint &fingerprint) const noexcept;
 };
 
-[[nodiscard]] CompressedEncodedBoard encodeBoard(const Board *board);
-
+[[nodiscard]] CompressedEncodedBoard encodeBoard(const Board &board);
 [[nodiscard]] BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed);
+[[nodiscard]] torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed);
 
-[[nodiscard]] torch::Tensor toTensor(const CompressedEncodedBoard &compressed);
+void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
+void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
+void encodeBoardInto(const Board &board, std::int8_t *destination);
 
-void writeTensorEncoding(const CompressedEncodedBoard &compressed, int8 *destination);
-
-void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, int8 *destination);
-
-void encodeBoardInto(const Board &board, int8 *destination);
-
-[[nodiscard]] float getBoardResultScore(const Board &board);
-
-struct ChessRepresentationDimensions {
-    static constexpr int board_length = BOARD_LEN;
-    static constexpr int channel_count = BOARD_C;
-    static constexpr int binary_channel_count = BINARY_C;
-    static constexpr int scalar_channel_count = SCALAR_C;
-    static constexpr int action_count = ACTION_SIZE;
-};
-
-using EncodedChessPosition = CompressedEncodedBoard;
-
-[[nodiscard]] inline EncodedChessPosition encode_chess_position(const Board &position) {
-    return encodeBoard(&position);
-}
-
-inline void encode_chess_position_into(const Board &position, int8 *destination) {
-    encodeBoardInto(position, destination);
-}
+[[nodiscard]] float chessTerminalValue(const Board &board);

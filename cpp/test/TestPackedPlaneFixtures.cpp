@@ -37,8 +37,8 @@ std::string toHex(const std::vector<std::int8_t> &payload) {
 
 int main() {
     try {
-        Bitboards::init();
-        Position::init();
+        Stockfish::Bitboards::init();
+        Stockfish::Position::init();
 
         const std::string fixturePath =
             std::string(SOURCE_ROOT) + "/../py/test/fixtures/chess_packed_plane_fixtures.json";
@@ -50,8 +50,8 @@ int main() {
         const nlohmann::json fixtures = nlohmann::json::parse(fixtureStream);
         for (const nlohmann::json &fixture : fixtures) {
             const Board board(fixture.at("fen").get<std::string>());
-            const CompressedEncodedBoard encoded = encodeBoard(&board);
-            std::vector<std::int8_t> actualPayload(CHESS_PACKED_BYTES);
+            const CompressedEncodedBoard encoded = encodeBoard(board);
+            std::vector<std::int8_t> actualPayload(CompressedEncodedBoard::packed_bytes);
             writePackedPlaneEncoding(encoded, actualPayload.data());
             const std::vector<std::int8_t> expectedPayload =
                 parseHexPayload(fixture.at("packed_hex").get<std::string>());

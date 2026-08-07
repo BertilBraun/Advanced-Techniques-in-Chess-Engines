@@ -17,15 +17,15 @@ void bind_chess_search(py::module_ &module);
 void bind_chess_analysis(py::module_ &module);
 
 void bind_chess_game(py::module_ &module) {
-    Bitboards::init();
-    Position::init();
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
 
     module.def(
         "encode_board_packed_bytes",
         [](const std::string &fen) {
             const Board board(fen);
             const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
-            std::string payload(CHESS_PACKED_BYTES, '\0');
+            std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
             writePackedPlaneEncoding(encoded, reinterpret_cast<std::int8_t *>(payload.data()));
             return py::bytes(payload);
         },

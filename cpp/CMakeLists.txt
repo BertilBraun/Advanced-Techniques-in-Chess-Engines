@@ -315,8 +315,8 @@ target_link_libraries(MovePolicyProcessingTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME MovePolicyProcessingTest COMMAND MovePolicyProcessingTest)
 
 add_executable(
-        DirectBoardEncodingTest
-        test/TestDirectBoardEncoding.cpp
+        ChessEncodingTest
+        test/TestChessEncoding.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
@@ -325,9 +325,9 @@ add_executable(
         "${stockfish_SOURCE_DIR}/src/movegen.cpp"
         "${stockfish_SOURCE_DIR}/src/position.cpp"
 )
-target_include_directories(DirectBoardEncodingTest PRIVATE src)
-target_link_libraries(DirectBoardEncodingTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME DirectBoardEncodingTest COMMAND DirectBoardEncodingTest)
+target_include_directories(ChessEncodingTest PRIVATE src)
+target_link_libraries(ChessEncodingTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME ChessEncodingTest COMMAND ChessEncodingTest)
 
 add_executable(
         InferencePipelineTest

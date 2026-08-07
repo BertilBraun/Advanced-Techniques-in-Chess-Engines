@@ -1,6 +1,6 @@
-#include "search/SearchTree.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/go/GoGameContract.hpp"
+#include "search/SearchTree.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -15,8 +15,7 @@ void require(const bool condition, const char *message) {
     }
 }
 
-template <typename Game>
-void exercise_tree(typename Game::Position position) {
+template <typename Game> void exercise_tree(typename Game::Position position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
     SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
@@ -47,8 +46,8 @@ void exercise_tree(typename Game::Position position) {
 
 int main() {
     try {
-        Bitboards::init();
-        Position::init();
+        Stockfish::Bitboards::init();
+        Stockfish::Position::init();
         exercise_tree<ChessGameContract>(ChessGameContract::initialPosition());
         exercise_tree<Go7GameContract>(Go7GameContract::initialPosition(GoRules{15, 196}));
         exercise_tree<Go9GameContract>(Go9GameContract::initialPosition(GoRules{15, 324}));

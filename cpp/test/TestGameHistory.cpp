@@ -36,8 +36,8 @@ void testReplayRejectsInvalidMoves() { requireInvalidHistory({"e2e5"}); }
 } // namespace
 
 int main() {
-    Bitboards::init();
-    Position::init();
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
     testReplayPreservesRepetition();
     testReplayRejectsInvalidMoves();
     std::cout << "Game history tests passed\n";

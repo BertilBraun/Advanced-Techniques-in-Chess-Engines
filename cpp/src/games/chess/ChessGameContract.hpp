@@ -11,10 +11,12 @@ class ChessGameContract {
 public:
     using Position = Board;
     using Action = ChessAction;
-    using EncodedPosition = EncodedChessPosition;
+    using EncodedPosition = CompressedEncodedBoard;
 
     [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
-        return {BOARD_C, BOARD_LEN, BOARD_LEN, ACTION_SIZE, 3};
+        return {ChessRepresentationDimensions::channel_count,
+                ChessRepresentationDimensions::board_length,
+                ChessRepresentationDimensions::board_length, ChessAction::action_count, 3};
     }
 
     [[nodiscard]] static constexpr float searchTurnDiscount() noexcept { return 0.99F; }
@@ -35,7 +37,7 @@ public:
     [[nodiscard]] static std::vector<Action> legalActions(const Position &position) {
         std::vector<Action> actions;
         actions.reserve(position.validMoves().size());
-        for (const Move move : position.validMoves()) {
+        for (const Stockfish::Move move : position.validMoves()) {
             actions.emplace_back(move);
         }
         return actions;
@@ -44,7 +46,7 @@ public:
     [[nodiscard]] static bool isTerminal(const Position &position) { return position.isGameOver(); }
 
     [[nodiscard]] static float terminalResult(const Position &position) {
-        return getBoardResultScore(position);
+        return chessTerminalValue(position);
     }
 
     [[nodiscard]] static std::optional<float> terminalValue(const Position &position) {
@@ -64,10 +66,10 @@ public:
     }
 
     [[nodiscard]] static EncodedPosition encodeInput(const Position &position) {
-        return encode_chess_position(position);
+        return encodeBoard(position);
     }
 
-    static void encodeInputInto(const Position &position, int8 *destination) {
-        encode_chess_position_into(position, destination);
+    static void encodeInputInto(const Position &position, std::int8_t *destination) {
+        encodeBoardInto(position, destination);
     }
 };

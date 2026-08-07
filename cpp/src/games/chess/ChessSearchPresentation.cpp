@@ -14,7 +14,7 @@ std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {
     std::vector<ChessSearchChild> children;
     children.reserve(rootNode.children.size());
     for (const GameSearchEdge<ChessAction> &child : rootNode.children) {
-        children.push_back({toString(child.action.move),
+        children.push_back({ChessActionCodec::toUci(child.action),
                             ChessGameContract::actionId(child.action, rootNode.position),
                             child.raw_prior, child.prior, child.visits, child.value_sum,
                             child.virtual_loss, child.child_index.has_value()});

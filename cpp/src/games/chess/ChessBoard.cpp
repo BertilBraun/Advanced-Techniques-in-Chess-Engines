@@ -1,9 +1,17 @@
 #include "games/chess/ChessBoard.hpp"
 
+#include "games/chess/ChessAction.hpp"
+#include "util/TimeItGuard.h"
+
 #include "bitboard.h"
 #include "movegen.h"
 
-#include "common.hpp"
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <ranges>
+
+using namespace Stockfish;
 
 // Material values matching the Python implementation
 static constexpr int PIECE_VALUE[PIECE_TYPE_NB] = {
@@ -21,6 +29,15 @@ static constexpr int MAX_MATERIAL_VALUE = PIECE_VALUE[PAWN] * 8 + PIECE_VALUE[KN
                                           PIECE_VALUE[BISHOP] * 2 + PIECE_VALUE[ROOK] * 2 +
                                           PIECE_VALUE[QUEEN] * 1;
 static constexpr Bitboard DARK_SQUARES = 0xAA55AA55AA55AA55ULL;
+static constexpr int BOARD_LENGTH = 8;
+static constexpr std::array PIECE_TYPES = {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP,
+                                           PieceType::ROOK, PieceType::QUEEN,  PieceType::KING};
+
+[[nodiscard]] static Square boardSquare(const int file, const int rank) {
+    assert(file >= 0 && file < BOARD_LENGTH);
+    assert(rank >= 0 && rank < BOARD_LENGTH);
+    return static_cast<Square>(rank * BOARD_LENGTH + file);
+}
 
 Board::Board(const std::string &fen) {
     // Initialize Position and StateInfo with the standard start position.
@@ -49,7 +66,8 @@ Board Board::replay(const std::string &startingFen, const std::vector<std::strin
 void Board::makeMove(Move m) {
     TIMEIT("Board::makeMove");
 
-    assert(contains(validMoves(), m) && "Attempting to push an illegal move");
+    assert(std::ranges::find(validMoves(), m) != validMoves().end() &&
+           "Attempting to push an illegal move");
     const bool pawnMove = type_of(m_pos.moved_piece(m)) == PAWN;
     const bool capture = m_pos.capture(m);
     const std::uint8_t castlingRightsBeforeMove = castlingRightsMask();
@@ -160,8 +178,9 @@ const std::vector<Move> &Board::validMoves() const {
 Move Board::legalMoveFromUci(const std::string &moveUci) const {
     const std::vector<Move> &legalMoves = validMoves();
     const auto matchingMove =
-        std::find_if(legalMoves.begin(), legalMoves.end(),
-                     [&moveUci](const Move move) { return toString(move) == moveUci; });
+        std::find_if(legalMoves.begin(), legalMoves.end(), [&moveUci](const Move move) {
+            return ChessActionCodec::toUci(ChessAction(move)) == moveUci;
+        });
     if (matchingMove == legalMoves.end()) {
         throw std::invalid_argument("Illegal UCI move " + moveUci + " in position " + fen());
     }
@@ -192,7 +211,7 @@ std::string Board::repr() const {
         int rank = i + 1;
         oss << rank << " ";
         for (int file = 0; file < BOARD_LENGTH; ++file) {
-            const Piece pc = m_pos.piece_on(square(file, i));
+            const Piece pc = m_pos.piece_on(boardSquare(file, i));
             if (pc != NO_PIECE) {
                 oss << pieceSymbol(type_of(pc), color_of(pc));
             } else {

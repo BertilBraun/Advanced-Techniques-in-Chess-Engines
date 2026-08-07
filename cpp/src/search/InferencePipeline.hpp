@@ -16,13 +16,12 @@ struct InferenceOutput {
 class InferenceRunner {
 public:
     InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
-                          size_t maximumBatchSize, bool useDedicatedCudaStream,
-                          InferenceDimensions dimensions);
+                    size_t maximumBatchSize, bool useDedicatedCudaStream,
+                    InferenceDimensions dimensions);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] InferenceOutput createOutputBuffer() const;
-    void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
-                     InferenceOutput &output);
+    void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize, InferenceOutput &output);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
 
@@ -46,13 +45,13 @@ class InferencePipeline {
 public:
     struct WritableBatch {
         size_t slotIndex;
-        int8 *data;
+        std::int8_t *data;
         size_t capacity;
     };
 
     InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
-                            size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
-                            InferenceDimensions dimensions);
+                      size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
+                      InferenceDimensions dimensions);
     ~InferencePipeline();
 
     InferencePipeline(const InferencePipeline &) = delete;

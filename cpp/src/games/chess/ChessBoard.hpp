@@ -10,8 +10,6 @@
 #include <string>
 #include <vector>
 
-using namespace Stockfish;
-
 class Board {
 public:
     static constexpr std::uint16_t MAX_REVERSIBLE_HISTORY_PLIES = 100;
@@ -27,10 +25,12 @@ public:
                                       const std::vector<std::string> &movesUci);
 
     /// Returns +1 if White to move, -1 if Black to move.
-    [[nodiscard]] int currentPlayer() const { return (m_pos.side_to_move() == WHITE) ? +1 : -1; }
+    [[nodiscard]] int currentPlayer() const {
+        return (m_pos.side_to_move() == Stockfish::WHITE) ? +1 : -1;
+    }
 
-    /// Pushes a move onto the internal Position. Assumes move is legal.
-    void makeMove(Move m);
+    /// Pushes a move onto the internal Stockfish::Position. Assumes move is legal.
+    void makeMove(Stockfish::Move m);
 
     /// Returns true if no legal moves are available (checkmate or stalemate).
     [[nodiscard]] bool isGameOver() const;
@@ -43,8 +43,8 @@ public:
     [[nodiscard]] std::optional<int> checkWinner() const;
 
     /// Returns every legal move, including all promotion choices.
-    [[nodiscard]] const std::vector<Move> &validMoves() const;
-    [[nodiscard]] Move legalMoveFromUci(const std::string &moveUci) const;
+    [[nodiscard]] const std::vector<Stockfish::Move> &validMoves() const;
+    [[nodiscard]] Stockfish::Move legalMoveFromUci(const std::string &moveUci) const;
 
     /// Returns a 64‐bit Zobrist hash of the current position.
     [[nodiscard]] std::uint64_t quickHash() const { return m_pos.key(); }
@@ -60,11 +60,11 @@ public:
     /// Returns the FEN string representation of the current position.
     [[nodiscard]] std::string fen() const { return m_pos.fen(); }
 
-    /// Sets the internal Position from a FEN string.
+    /// Sets the internal Stockfish::Position from a FEN string.
     void setFen(const std::string &fen);
 
-    /// Returns a reference to the internal Position object.
-    [[nodiscard]] const Position &position() const { return m_pos; }
+    /// Returns a reference to the internal Stockfish::Position object.
+    [[nodiscard]] const Stockfish::Position &position() const { return m_pos; }
 
     /// Returns the number of earlier occurrences of the current position.
     [[nodiscard]] int repetitionCount() const;
@@ -97,11 +97,12 @@ private:
         const std::uint16_t retainedPreviousPositions;
     };
 
-    Position m_pos;
+    Stockfish::Position m_pos;
     std::shared_ptr<const PositionHistory> m_history;
-    mutable std::optional<std::vector<Move>> m_validMoves;
+    mutable std::optional<std::vector<Stockfish::Move>> m_validMoves;
 
-    [[nodiscard]] static constexpr const char *pieceSymbol(PieceType pt, Color c);
+    [[nodiscard]] static constexpr const char *pieceSymbol(Stockfish::PieceType pt,
+                                                           Stockfish::Color c);
 
     [[nodiscard]] bool drawByInsufficientMaterial() const;
     [[nodiscard]] std::uint8_t castlingRightsMask() const;

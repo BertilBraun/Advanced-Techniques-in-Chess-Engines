@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 namespace {
-Move decodeAction(const Board &position, const int actionId) {
+Stockfish::Move decodeAction(const Board &position, const int actionId) {
     return ChessGameContract::decodeActions({actionId}, position).front().move;
 }
 
@@ -13,9 +13,10 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
     std::vector<ChessAnalysisCandidate> candidates;
     candidates.reserve(analysis.candidates.size());
     for (const AnalysisCandidate &candidate : analysis.candidates) {
-        candidates.push_back({toString(decodeAction(rootPosition, candidate.action_id)),
-                              candidate.policy_prior, static_cast<int>(candidate.visits),
-                              candidate.visit_share, candidate.mean_value});
+        candidates.push_back(
+            {ChessActionCodec::toUci(ChessAction(decodeAction(rootPosition, candidate.action_id))),
+             candidate.policy_prior, static_cast<int>(candidate.visits), candidate.visit_share,
+             candidate.mean_value});
     }
     std::ranges::sort(candidates,
                       [](const ChessAnalysisCandidate &left, const ChessAnalysisCandidate &right) {
@@ -32,8 +33,8 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
     std::vector<std::string> variation;
     variation.reserve(analysis.principal_variation.size());
     for (const int actionId : analysis.principal_variation) {
-        const Move move = decodeAction(variationPosition, actionId);
-        variation.push_back(toString(move));
+        const Stockfish::Move move = decodeAction(variationPosition, actionId);
+        variation.push_back(ChessActionCodec::toUci(ChessAction(move)));
         variationPosition.makeMove(move);
     }
 
@@ -63,7 +64,7 @@ void ChessAnalysisSession::applyMove(const std::string &moveUci) {
     if (m_root.position().isGameOver()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
-    const Move move = m_root.position().legalMoveFromUci(moveUci);
+    const Stockfish::Move move = m_root.position().legalMoveFromUci(moveUci);
     const GameSearchNode<ChessGameContract> &root = m_root.tree().root();
     if (root.expanded()) {
         for (const GameSearchEdge<ChessAction> &edge : root.children) {

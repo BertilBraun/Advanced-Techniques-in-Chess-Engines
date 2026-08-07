@@ -47,8 +47,8 @@ float inferenceValue(ChessSelfPlaySearch &search) {
 } // namespace
 
 int main() {
-    Bitboards::init();
-    Position::init();
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
     const std::filesystem::path modelPath =
         createTestModel("initial", 1.0F / 3.0F, 1.0F / 3.0F, 1.0F / 3.0F);
     const std::filesystem::path updatedModelPath = createTestModel("updated", 0.8F, 0.15F, 0.05F);
@@ -60,10 +60,10 @@ int main() {
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
         const std::vector<std::uintptr_t> workerIdentities = search.workerIdentityTokens();
-        require(workerIdentities.size() == 2, "direct search created the wrong worker count");
+        require(workerIdentities.size() == 2, "search created the wrong worker count");
         require(search.modelGeneration() == 7, "search lost its initial model generation");
         require(std::abs(inferenceValue(search)) < 0.001F,
-                "direct initial model returned the wrong value");
+                "initial model returned the wrong value");
         const std::uint64_t evaluationsBeforeSearch =
             search.inferenceStatistics().first.evaluations;
 
@@ -73,9 +73,8 @@ int main() {
         };
         const ChessSelfPlaySearchBatch results = search.search(boards, true);
 
-        require(results.simulations_completed == 24,
-                "direct scheduler completed the wrong search count");
-        require(results.results.size() == 2, "direct scheduler returned the wrong root count");
+        require(results.simulations_completed == 24, "scheduler completed the wrong search count");
+        require(results.results.size() == 2, "scheduler returned the wrong root count");
         require(results.results[0].root.visits() == 16, "full root missed its exact visit limit");
         require(results.results[1].root.visits() == 8, "fast root missed its exact visit limit");
         require(results.results[0].root.tree().root().virtual_loss == 0.0F,
@@ -88,10 +87,10 @@ int main() {
         const auto [statistics, timing] = search.inferenceStatistics();
         static_cast<void>(timing);
         require(statistics.evaluations == evaluationsBeforeSearch + 26,
-                "direct scheduler did not distinguish root initialization from searches");
+                "scheduler did not distinguish root initialization from searches");
         require(statistics.modelInferencePositions == statistics.evaluations,
-                "direct model-position accounting diverged from evaluations");
-        require(statistics.modelInferenceCalls > 0, "direct scheduler recorded no model calls");
+                "model-position accounting diverged from evaluations");
+        require(statistics.modelInferenceCalls > 0, "scheduler recorded no model calls");
 
         const std::vector<ChessSelfPlaySearchRequest> completedBoards = {
             ChessSelfPlaySearchRequest(results.results[0].root, true),
@@ -105,11 +104,11 @@ int main() {
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
         require(search.workerIdentityTokens() == workerIdentities,
-                "direct refresh reconstructed inference workers");
+                "refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-                "direct refresh retained old model output");
+                "refresh retained old model output");
         require(search.inferenceStatistics().first.evaluations > beforeRefresh.evaluations,
-                "direct refresh reset cumulative statistics");
+                "refresh reset cumulative statistics");
         require(completedBoards[0].root.visits() == 0 && completedBoards[1].root.visits() == 0,
                 "model refresh retained stale search trees");
         const ChessSelfPlaySearchBatch refreshedResults = search.search(completedBoards, false);
@@ -118,15 +117,15 @@ int main() {
 
         try {
             search.refreshModel(9, invalidModelPath.string());
-            throw std::runtime_error("invalid direct model refresh unexpectedly succeeded");
+            throw std::runtime_error("invalid model refresh unexpectedly succeeded");
         } catch (const std::invalid_argument &) {
         }
         require(search.modelGeneration() == 8,
-                "failed direct refresh published an unvalidated model version");
+                "failed refresh published an unvalidated model version");
         require(search.workerIdentityTokens() == workerIdentities,
-                "failed direct refresh reconstructed inference workers");
+                "failed refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
-                "failed direct refresh changed active weights");
+                "failed refresh changed active weights");
 
         std::vector<Board> concurrentBoards(200);
         std::atomic<bool> concurrentBatchStarted = false;
@@ -151,12 +150,12 @@ int main() {
                     "one accepted batch crossed model generations");
         }
 
-        for (uint64 version = 10; version < 29; ++version) {
+        for (std::uint64_t version = 10; version < 29; ++version) {
             const std::filesystem::path &refreshPath =
                 version % 2 == 0 ? updatedModelPath : modelPath;
             search.refreshModel(version, refreshPath.string());
             require(search.workerIdentityTokens() == workerIdentities,
-                    "repeated direct refresh changed worker identity");
+                    "repeated refresh changed worker identity");
         }
         require(search.modelGeneration() == 28, "repeated refresh lost model generation");
 
@@ -167,7 +166,7 @@ int main() {
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
         require(search.workerIdentityTokens() == workerIdentities,
-                "schedule update reconstructed direct inference workers");
+                "schedule update reconstructed inference workers");
 
     } catch (...) {
         std::filesystem::remove(modelPath);

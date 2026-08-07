@@ -23,8 +23,8 @@ void require(const bool condition, const std::string &message) {
 }
 
 std::vector<float> positivePolicy() {
-    std::vector<float> policy(ACTION_SIZE);
-    for (int actionId = 0; actionId < ACTION_SIZE; ++actionId) {
+    std::vector<float> policy(ChessAction::action_count);
+    for (int actionId = 0; actionId < ChessAction::action_count; ++actionId) {
         policy[actionId] = static_cast<float>(actionId + 1);
     }
     return policy;
@@ -53,14 +53,16 @@ void testRepresentativePositions() {
                       positivePolicy(), "black-to-move position");
     const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
     require(std::ranges::count_if(promotion.validMoves(),
-                                  [](const Move move) { return move.type_of() == PROMOTION; }) == 4,
+                                  [](const Stockfish::Move move) {
+                                      return move.type_of() == Stockfish::PROMOTION;
+                                  }) == 4,
             "promotion position did not contain four promotion choices");
     requireNormalized(promotion, positivePolicy(), "promotion position");
 }
 
 void testUniformFallbackAndSparsePolicy() {
     const Board board;
-    std::vector<float> policy(ACTION_SIZE, 0.0F);
+    std::vector<float> policy(ChessAction::action_count, 0.0F);
     SearchInferenceResult<ChessGameContract> uniform =
         processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
     require(uniform.actions.size() == board.validMoves().size(),
@@ -106,8 +108,8 @@ void testTerminalAndOutcomeValidation() {
 } // namespace
 
 int main() {
-    Bitboards::init();
-    Position::init();
+    Stockfish::Bitboards::init();
+    Stockfish::Position::init();
     testRepresentativePositions();
     testUniformFallbackAndSparsePolicy();
     testTerminalAndOutcomeValidation();
