@@ -67,7 +67,9 @@ void Board::makeMove(Move m) {
 }
 
 void Board::setFen(const std::string &fen) {
-    m_pos.set(fen, false);
+    Position position;
+    position.set(fen, false);
+    m_pos = std::move(position);
     m_history = std::make_shared<const PositionHistory>(m_pos.repetition_key(), nullptr);
     m_validMoves.reset();
     validateHistory();
