@@ -39,5 +39,12 @@ cmake --build ~/advanced-chess-tests --parallel "$(nproc)"
 ctest --test-dir ~/advanced-chess-tests --output-on-failure
 ```
 
+All native unit-test suites belong to the single `NativeTests` executable and
+run together through its one CTest entry. Do not create a standalone executable
+or CTest entry for an individual suite. A new suite exposes a named runner in
+`test/TestRunner.hpp`, registers it in `test/TestMain.cpp`, and adds its source
+to the `NativeTests` target in `CMakeLists.txt`. Shared production dependencies
+must be linked into that target once rather than repeated per suite.
+
 Production artifacts still require an explicit Release build; a CompileCheck
 artifact must never be deployed or used for performance measurements.
