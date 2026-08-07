@@ -6,7 +6,7 @@
 
 namespace {
 Stockfish::Move decodeAction(const Board &position, const int actionId) {
-    return ChessGameContract::decodeActions({actionId}, position).front().move;
+    return ChessAction::decode(actionId, position).move;
 }
 
 ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &rootPosition) {
@@ -14,8 +14,7 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
     candidates.reserve(analysis.candidates.size());
     for (const AnalysisCandidate &candidate : analysis.candidates) {
         candidates.push_back({
-            .move_uci = ChessActionCodec::toUci(
-                ChessAction(decodeAction(rootPosition, candidate.action_id))),
+            .move_uci = ChessAction(decodeAction(rootPosition, candidate.action_id)).toUci(),
             .policy_prior = candidate.policy_prior,
             .visits = static_cast<int>(candidate.visits),
             .visit_share = candidate.visit_share,
@@ -38,7 +37,7 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
     variation.reserve(analysis.principal_variation.size());
     for (const int actionId : analysis.principal_variation) {
         const Stockfish::Move move = decodeAction(variationPosition, actionId);
-        variation.push_back(ChessActionCodec::toUci(ChessAction(move)));
+        variation.push_back(ChessAction(move).toUci());
         variationPosition.makeMove(move);
     }
 

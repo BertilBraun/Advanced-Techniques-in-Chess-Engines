@@ -18,15 +18,18 @@ static void testMoveEncoding() {
 
             std::vector<int> moveIndices;
             for (const auto &move : moves) {
-                moveIndices.push_back(ChessActionCodec::encode(ChessAction(move), board));
+                moveIndices.push_back(ChessAction(move).encode(board));
                 if (moveIndices.back() < 0 || moveIndices.back() >= ChessAction::action_count) {
                     std::cerr << "Encoded move index out of bounds: " << moveIndices.back()
-                              << " for move: " << ChessActionCodec::toUci(ChessAction(move))
-                              << std::endl;
+                              << " for move: " << ChessAction(move).toUci() << std::endl;
                 }
             }
             // Decode the moves to get the actual Move objects
-            const auto decodedActions = ChessActionCodec::decode(moveIndices, board);
+            std::vector<ChessAction> decodedActions;
+            decodedActions.reserve(moveIndices.size());
+            for (const int moveIndex : moveIndices) {
+                decodedActions.push_back(ChessAction::decode(moveIndex, board));
+            }
 
             bool anyMismatch = false;
             for (auto [real, decoded] : zip(moves, decodedActions)) {
@@ -39,13 +42,12 @@ static void testMoveEncoding() {
                 std::cerr << "Missmatch of decoded moves in Board: " << board.fen() << std::endl;
                 std::cerr << "Valid moves:\n";
                 for (const auto &move : moves) {
-                    std::cerr << "  " << ChessActionCodec::toUci(ChessAction(move)) << " ("
-                              << ChessActionCodec::encode(ChessAction(move), board) << ")\n";
+                    std::cerr << "  " << ChessAction(move).toUci() << " ("
+                              << ChessAction(move).encode(board) << ")\n";
                 }
                 std::cerr << "Decoded moves:\n";
                 for (const ChessAction decoded : decodedActions) {
-                    std::cerr << "  " << ChessActionCodec::toUci(decoded) << " ("
-                              << ChessActionCodec::encode(decoded, board) << ")\n";
+                    std::cerr << "  " << decoded.toUci() << " (" << decoded.encode(board) << ")\n";
                 }
             }
 

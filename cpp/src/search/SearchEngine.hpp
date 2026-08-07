@@ -34,11 +34,6 @@ public:
         return root;
     }
 
-    [[nodiscard]] std::vector<GameSearchResult> search(std::vector<Root> &roots,
-                                                       const std::uint32_t simulations) {
-        return m_executor.search(roots, simulations);
-    }
-
     [[nodiscard]] GameSearchBatchResult
     searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
         return m_executor.searchDetailed(requests);
@@ -56,10 +51,6 @@ public:
     void updateSearchParameters(const BatchedSearchParameters parameters) {
         m_searchParameters = parameters;
         m_executor.updateSearchParameters(parameters);
-    }
-
-    [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const {
-        return m_executor.workerIdentityTokens();
     }
 
     void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {

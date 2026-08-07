@@ -31,7 +31,8 @@ public:
                           const BatchedSearchParameters searchParameters)
         : m_inferenceParameters(inferenceParameters), m_searchParameters(searchParameters),
           m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()),
-          m_batchHistogram(inferenceParameters.batch_size + 1, 0) {
+          m_statistics{.modelBatchSizeHistogram =
+                           std::vector<std::size_t>(inferenceParameters.batch_size + 1, 0)} {
         m_workers.resize(inferenceParameters.workers);
         for (const auto workerIndex : range(inferenceParameters.workers)) {
             m_workers[workerIndex] = std::make_unique<InferencePipeline>(
@@ -41,23 +42,9 @@ public:
         }
     }
 
-    [[nodiscard]] std::vector<GameSearchResult> search(std::vector<Root> &roots,
-                                                       const std::uint32_t simulations) {
-        std::vector<GameSearchRequest<Game>> requests;
-        requests.reserve(roots.size());
-        for (Root &root : roots) {
-            requests.push_back({
-                .root = root,
-                .visit_limit = root.visits() + simulations,
-                .add_root_noise = true,
-            });
-        }
-        return searchDetailed(requests).results;
-    }
-
     [[nodiscard]] GameSearchBatchResult
     searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
-        ScopedNanosecondTimer searchTimer(m_timing.search_wall);
+        ScopedNanosecondTimer searchTimer(m_searchWallNanoseconds);
         const bool hasInvalidRequest =
             std::ranges::any_of(requests, [](const GameSearchRequest<Game> &request) {
                 return request.visit_limit == 0;
@@ -144,9 +131,7 @@ public:
         results.reserve(positions.size());
         std::size_t offset = 0;
         InferencePipeline &worker = *m_workers.front();
-        constexpr std::size_t encodedSize = Game::inferenceDimensions().channels *
-                                            Game::inferenceDimensions().rows *
-                                            Game::inferenceDimensions().columns;
+        constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
         while (offset < positions.size()) {
             const std::size_t batchSize =
                 std::min(m_inferenceParameters.batch_size, positions.size() - offset);
@@ -169,25 +154,19 @@ public:
     }
 
     [[nodiscard]] InferenceStatistics inferenceStatistics() const {
-        InferenceStatistics statistics;
-        statistics.evaluations = m_evaluations;
-        statistics.modelInferenceCalls = m_modelCalls;
-        statistics.modelInferencePositions = m_modelPositions;
-        statistics.modelBatchSizeHistogram = m_batchHistogram;
+        InferenceStatistics statistics = m_statistics;
         statistics.averageNumberOfPositionsInInferenceCall =
-            m_modelCalls == 0
+            statistics.modelInferenceCalls == 0
                 ? 0.0F
-                : static_cast<float>(m_modelPositions) / static_cast<float>(m_modelCalls);
-        statistics.treeSelectionNanoseconds = m_timing.selection;
-        statistics.boardEncodingNanoseconds = m_timing.encoding;
-        statistics.treeBackupNanoseconds = m_timing.backup;
+                : static_cast<float>(statistics.modelInferencePositions) /
+                      static_cast<float>(statistics.modelInferenceCalls);
         for (const std::unique_ptr<InferencePipeline> &worker : m_workers) {
             statistics.inferenceNanoseconds += worker->inferenceNanoseconds();
             statistics.resultProcessingNanoseconds += worker->resultProcessingNanoseconds();
             statistics.treeOwnerWaitNanoseconds += worker->consumerWaitNanoseconds();
         }
         const std::uint64_t availableWorkerNanoseconds =
-            m_timing.search_wall * static_cast<std::uint64_t>(m_workers.size());
+            m_searchWallNanoseconds * static_cast<std::uint64_t>(m_workers.size());
         statistics.workerUtilization =
             availableWorkerNanoseconds == 0
                 ? 0.0F
@@ -198,15 +177,6 @@ public:
 
     void updateSearchParameters(const BatchedSearchParameters parameters) {
         m_searchParameters = parameters;
-    }
-
-    [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const {
-        std::vector<std::uintptr_t> identities;
-        identities.reserve(m_workers.size());
-        for (const std::unique_ptr<InferencePipeline> &worker : m_workers) {
-            identities.push_back(reinterpret_cast<std::uintptr_t>(worker.get()));
-        }
-        return identities;
     }
 
     void refreshModel(const std::string &modelPath) {
@@ -247,13 +217,6 @@ private:
         std::vector<PendingLeaf> leaves;
     };
 
-    struct SearchTiming {
-        std::uint64_t search_wall = 0;
-        std::uint64_t selection = 0;
-        std::uint64_t encoding = 0;
-        std::uint64_t backup = 0;
-    };
-
     BatchedInferenceParameters m_inferenceParameters;
     BatchedSearchParameters m_searchParameters;
     std::vector<std::unique_ptr<InferencePipeline>> m_workers;
@@ -261,11 +224,8 @@ private:
     std::size_t m_nextWorker = 0;
     std::size_t m_nextTask = 0;
     std::mt19937 m_randomEngine;
-    std::uint64_t m_evaluations = 0;
-    std::uint64_t m_modelCalls = 0;
-    std::uint64_t m_modelPositions = 0;
-    std::vector<std::size_t> m_batchHistogram;
-    SearchTiming m_timing;
+    InferenceStatistics m_statistics;
+    std::uint64_t m_searchWallNanoseconds = 0;
 
     [[nodiscard]] std::optional<std::size_t> freeWorker() const {
         for (const auto offset : range(m_workers.size())) {
@@ -321,7 +281,7 @@ private:
                 bool rootInitialization = false;
                 std::optional<std::size_t> leaf;
                 {
-                    ScopedNanosecondTimer selectionTimer(m_timing.selection);
+                    ScopedNanosecondTimer selectionTimer(m_statistics.treeSelectionNanoseconds);
                     if (!tree.root().expanded()) {
                         if (Game::isTerminal(tree.root().position)) {
                             tree.backPropagate(
@@ -348,11 +308,9 @@ private:
                         tree.reserve(*leaf);
                     }
                 }
-                constexpr std::size_t encodedSize = Game::inferenceDimensions().channels *
-                                                    Game::inferenceDimensions().rows *
-                                                    Game::inferenceDimensions().columns;
+                constexpr std::size_t encodedSize = Game::inferenceDimensions().encodedSize();
                 {
-                    ScopedNanosecondTimer encodingTimer(m_timing.encoding);
+                    ScopedNanosecondTimer encodingTimer(m_statistics.boardEncodingNanoseconds);
                     Game::encodeInputInto(tree.node(*leaf).position,
                                           writable.data + leaves.size() * encodedSize);
                 }
@@ -401,7 +359,7 @@ private:
                 Tree &tree = task.root.tree();
                 const SearchInferenceResult<Game> &inference = inferenceResults[leafIndex];
                 {
-                    ScopedNanosecondTimer backupTimer(m_timing.backup);
+                    ScopedNanosecondTimer backupTimer(m_statistics.treeBackupNanoseconds);
                     tree.expand(pendingLeaf.node_index, inference);
                     if (pendingLeaf.root_initialization) {
                         tree.node(pendingLeaf.node_index).evaluating = false;
@@ -470,9 +428,9 @@ private:
     }
 
     void recordBatch(const std::size_t batchSize) {
-        m_evaluations += batchSize;
-        ++m_modelCalls;
-        m_modelPositions += batchSize;
-        ++m_batchHistogram[batchSize];
+        m_statistics.evaluations += batchSize;
+        ++m_statistics.modelInferenceCalls;
+        m_statistics.modelInferencePositions += batchSize;
+        ++m_statistics.modelBatchSizeHistogram[batchSize];
     }
 };

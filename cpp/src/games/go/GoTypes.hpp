@@ -28,6 +28,8 @@ template <std::size_t BoardSize> struct GoAction {
             throw std::invalid_argument("Go action id is outside the action space");
         }
     }
+    explicit constexpr GoAction(const Point point)
+        : id(static_cast<int>(BitBoard<BoardSize>::index(point))) {}
 
     [[nodiscard]] static constexpr GoAction pass() { return GoAction(pass_id); }
     [[nodiscard]] constexpr bool is_pass() const noexcept { return id == pass_id; }

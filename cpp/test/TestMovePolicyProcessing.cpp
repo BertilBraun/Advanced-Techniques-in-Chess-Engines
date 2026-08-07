@@ -76,8 +76,8 @@ void testUniformFallbackAndSparsePolicy() {
                 "uniform fallback returned a non-uniform probability");
     }
 
-    policy[ChessActionCodec::encode(ChessAction(board.validMoves()[0]), board)] = 1.0F;
-    policy[ChessActionCodec::encode(ChessAction(board.validMoves()[1]), board)] = 2.0F;
+    policy[ChessAction(board.validMoves()[0]).encode(board)] = 1.0F;
+    policy[ChessAction(board.validMoves()[1]).encode(board)] = 2.0F;
     const SearchInferenceResult<ChessGameContract> sparse =
         processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
     require(sparse.actions.size() == 2, "zero-probability legal actions were retained");

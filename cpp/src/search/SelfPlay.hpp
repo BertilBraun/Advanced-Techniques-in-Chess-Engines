@@ -91,7 +91,6 @@ public:
                        const std::uint64_t initialModelGeneration = 0)
         : m_runtimeParameters(runtimeParameters), m_searchParameters(searchParameters),
           m_arenaCapacity(searchParameters.arenaCapacity()),
-          m_modelGeneration(initialModelGeneration),
           m_inferenceParameters(std::move(inferenceParameters)),
           m_search(std::make_unique<BatchedGameSearch<Game>>(
               m_runtimeParameters.model_path, m_runtimeParameters.device,
@@ -154,7 +153,7 @@ public:
 
     [[nodiscard]] std::uint64_t modelGeneration() const {
         const std::shared_lock lock(m_operationMutex);
-        return m_modelGeneration;
+        return m_search->modelGeneration();
     }
 
     [[nodiscard]] std::pair<InferenceStatistics, TimeInfo> inferenceStatistics() {
@@ -166,7 +165,6 @@ public:
         const std::unique_lock lock(m_operationMutex);
         m_search->refreshModel(modelGeneration, modelPath);
         m_runtimeParameters.model_path = modelPath;
-        m_modelGeneration = modelGeneration;
     }
 
     [[nodiscard]] bool updateSearchSchedule(const SelfPlaySearchParameters &parameters) {
@@ -185,16 +183,10 @@ public:
         return m_search->evaluate(positions);
     }
 
-    [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const {
-        const std::shared_lock lock(m_operationMutex);
-        return m_search->workerIdentityTokens();
-    }
-
 private:
     InferenceConfiguration m_runtimeParameters;
     SelfPlaySearchParameters m_searchParameters;
     std::uint32_t m_arenaCapacity;
-    std::uint64_t m_modelGeneration;
     BatchedInferenceParameters m_inferenceParameters;
     std::unique_ptr<BatchedGameSearch<Game>> m_search;
     mutable std::shared_mutex m_operationMutex;

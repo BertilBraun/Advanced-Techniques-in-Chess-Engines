@@ -24,7 +24,7 @@ void bind_chess_game(py::module_ &module) {
         "encode_board_packed_bytes",
         [](const std::string &fen) {
             const Board board(fen);
-            const CompressedEncodedBoard encoded = ChessGameContract::encodeInput(board);
+            const CompressedEncodedBoard encoded = encodeBoard(board);
             std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
             writePackedPlaneEncoding(encoded, reinterpret_cast<std::int8_t *>(payload.data()));
             return py::bytes(payload);

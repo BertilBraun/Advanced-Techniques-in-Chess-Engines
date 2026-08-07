@@ -49,11 +49,11 @@ int runGameSearchTreeTests() {
     try {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();
-        exercise_tree<ChessGameContract>(ChessGameContract::initialPosition());
-        exercise_tree<Go7GameContract>(Go7GameContract::initialPosition(
-            GoRules{.komi_half_points = 15, .maximum_moves = 196}));
-        exercise_tree<Go9GameContract>(Go9GameContract::initialPosition(
-            GoRules{.komi_half_points = 15, .maximum_moves = 324}));
+        exercise_tree<ChessGameContract>(Board{});
+        exercise_tree<Go7GameContract>(
+            GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 196}));
+        exercise_tree<Go9GameContract>(
+            GoPosition<9>(GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         std::cout << "Shared chess and Go search-tree tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception &error) {

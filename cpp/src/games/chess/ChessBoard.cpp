@@ -179,9 +179,8 @@ const std::vector<Move> &Board::validMoves() const {
 Move Board::legalMoveFromUci(const std::string &moveUci) const {
     const std::vector<Move> &legalMoves = validMoves();
     const auto matchingMove =
-        std::find_if(legalMoves.begin(), legalMoves.end(), [&moveUci](const Move move) {
-            return ChessActionCodec::toUci(ChessAction(move)) == moveUci;
-        });
+        std::find_if(legalMoves.begin(), legalMoves.end(),
+                     [&moveUci](const Move move) { return ChessAction(move).toUci() == moveUci; });
     if (matchingMove == legalMoves.end()) {
         throw std::invalid_argument("Illegal UCI move " + moveUci + " in position " + fen());
     }

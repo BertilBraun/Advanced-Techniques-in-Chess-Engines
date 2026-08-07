@@ -1,5 +1,6 @@
 #include "TestRunner.hpp"
 #include "games/go/GoGameContract.hpp"
+#include "games/go/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -41,7 +42,7 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
         .komi_half_points = 15,
         .maximum_moves = static_cast<int>(BoardSize * BoardSize * 4),
     };
-    const auto initial = Contract::initialPosition(rules);
+    const typename Contract::Position initial(rules);
     require(initial.player() == GoPlayer::black, "Black must move first");
     require(initial.board().black.none() && initial.board().white.none(),
             "Initial Go board must be empty");
@@ -55,9 +56,7 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
     require(legal.front().point() == BitBoard<BoardSize>::point(0),
             "Go action point must decode its board coordinate");
     for (const auto action : legal) {
-        const int action_id = Contract::actionId(action, initial);
-        const auto decoded = Contract::decodeActions({action_id}, initial);
-        require(decoded.size() == 1 && decoded.front() == action,
+        require(GoAction<BoardSize>(Contract::actionId(action, initial)) == action,
                 "Go action encoding must round trip");
     }
 }
@@ -94,10 +93,10 @@ void test_capture_suicide_and_ko() {
 void test_history_encoding_hash_and_symmetries() {
     using Contract = Go7GameContract;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
-    const auto initial = Contract::initialPosition(rules);
+    const typename Contract::Position initial(rules);
     const auto black_played = initial.child(GoAction<7>(0));
     const auto white_played = black_played.child(GoAction<7>(8));
-    const auto white_to_move_encoding = Contract::encodeInput(black_played);
+    const auto white_to_move_encoding = encode_go_position(black_played);
     require(white_to_move_encoding.binary_planes[0].none() &&
                 white_to_move_encoding.binary_planes[1].test(0) &&
                 white_to_move_encoding.scalar_planes[0] == 0,
@@ -112,13 +111,13 @@ void test_history_encoding_hash_and_symmetries() {
                 white_played.hash() != black_played.hash(),
             "Go hashes must be stable and state-sensitive");
 
-    const auto encoded = Contract::encodeInput(white_played);
+    const auto encoded = encode_go_position(white_played);
     require(encoded.binary_planes[0].test(0), "Current-player black stone plane is incorrect");
     require(encoded.binary_planes[1].test(8), "Opponent white stone plane is incorrect");
     require(encoded.binary_planes[2].test(0), "Older current-player plane is incorrect");
     require(encoded.scalar_planes[0] == 1, "Black-to-move scalar plane is incorrect");
     std::array<std::int8_t, decltype(encoded)::packed_bytes> packed{};
-    Contract::writePackedInput(encoded, packed.data());
+    write_packed_go_position(encoded, packed.data());
     require((static_cast<std::uint8_t>(packed[0]) & 1U) != 0,
             "Packed Go encoding must use canonical point mapping");
     std::array<std::int8_t, GoRepresentationDimensions<7>::channel_count * 49> tensor{};
@@ -139,14 +138,12 @@ void test_history_encoding_hash_and_symmetries() {
     for (const GoSymmetry symmetry : symmetries) {
         for (const int action_id : range(GoAction<7>::action_count)) {
             const GoAction<7> action(action_id);
-            const auto transformed = Contract::transformAction(action, symmetry);
-            const auto restored =
-                Contract::transformAction(transformed, Contract::inverseSymmetry(symmetry));
+            const auto transformed = transform_go_action(action, symmetry);
+            const auto restored = transform_go_action(transformed, inverse_go_symmetry(symmetry));
             require(restored == action, "Go action symmetry must be invertible");
         }
-        const auto transformed = Contract::transformEncoding(encoded, symmetry);
-        const auto restored =
-            Contract::transformEncoding(transformed, Contract::inverseSymmetry(symmetry));
+        const auto transformed = transform_go_encoding(encoded, symmetry);
+        const auto restored = transform_go_encoding(transformed, inverse_go_symmetry(symmetry));
         require(restored == encoded, "Go encoding symmetry must be invertible");
     }
 }
@@ -183,8 +180,7 @@ void test_termination_and_scoring() {
 void test_invalid_boundaries() {
     bool rejected_rules = false;
     try {
-        (void) Go7GameContract::initialPosition(
-            GoRules{.komi_half_points = 15, .maximum_moves = 48});
+        (void) GoPosition<7>(GoRules{.komi_half_points = 15, .maximum_moves = 48});
     } catch (const std::invalid_argument &) {
         rejected_rules = true;
     }

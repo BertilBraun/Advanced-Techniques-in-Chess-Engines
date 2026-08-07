@@ -20,6 +20,7 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
                   const char *requestName, const char *resultName, const char *batchName,
                   const char *analysisName) {
     using Contract = GoGameContract<BoardSize, 8>;
+    using Position = typename Contract::Position;
     using Root = GameSearchRoot<Contract>;
     using Search = GameSelfPlaySearch<Contract>;
     using Request = SelfPlaySearchRequest<Contract>;
@@ -66,9 +67,7 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
         .def_static("inference_dimensions", []() { return dimensions; })
         .def(
             "new_root",
-            [](Search &search, const GoRules rules) {
-                return search.newRoot(Contract::initialPosition(rules));
-            },
+            [](Search &search, const GoRules rules) { return search.newRoot(Position(rules)); },
             py::arg("rules"))
         .def("search", &Search::search, py::arg("requests"), py::arg("collect_statistics") = false,
              py::call_guard<py::gil_scoped_release>())
@@ -83,7 +82,7 @@ void bindGoSearch(py::module_ &module, const char *rootName, const char *searchN
         .def(
             "new_root",
             [](Analysis &analysis, const GoRules rules) {
-                return analysis.newRoot(Contract::initialPosition(rules));
+                return analysis.newRoot(Position(rules));
             },
             py::arg("rules"))
         .def("analyze_policy", &Analysis::analyzePolicy, py::arg("root"),

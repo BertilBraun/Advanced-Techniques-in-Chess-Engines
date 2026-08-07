@@ -60,8 +60,6 @@ int runBatchedSearchTests() {
         const ChessSelfPlaySearchParameters searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0);
         const BatchedInferenceParameters inferenceParameters(2, 4, 1);
         ChessSelfPlaySearch search(runtimeParameters, searchParameters, inferenceParameters, 7);
-        const std::vector<std::uintptr_t> workerIdentities = search.workerIdentityTokens();
-        require(workerIdentities.size() == 2, "search created the wrong worker count");
         require(search.modelGeneration() == 7, "search lost its initial model generation");
         require(std::abs(inferenceValue(search)) < 0.001F,
                 "initial model returned the wrong value");
@@ -104,8 +102,6 @@ int runBatchedSearchTests() {
         const InferenceStatistics beforeRefresh = search.inferenceStatistics().first;
         search.refreshModel(8, updatedModelPath.string());
         require(search.modelGeneration() == 8, "refresh did not publish its model generation");
-        require(search.workerIdentityTokens() == workerIdentities,
-                "refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "refresh retained old model output");
         require(search.inferenceStatistics().first.evaluations > beforeRefresh.evaluations,
@@ -123,8 +119,6 @@ int runBatchedSearchTests() {
         }
         require(search.modelGeneration() == 8,
                 "failed refresh published an unvalidated model version");
-        require(search.workerIdentityTokens() == workerIdentities,
-                "failed refresh reconstructed inference workers");
         require(std::abs(inferenceValue(search) - 0.75F) < 0.001F,
                 "failed refresh changed active weights");
 
@@ -155,8 +149,6 @@ int runBatchedSearchTests() {
             const std::filesystem::path &refreshPath =
                 version % 2 == 0 ? updatedModelPath : modelPath;
             search.refreshModel(version, refreshPath.string());
-            require(search.workerIdentityTokens() == workerIdentities,
-                    "repeated refresh changed worker identity");
         }
         require(search.modelGeneration() == 28, "repeated refresh lost model generation");
 
@@ -166,8 +158,6 @@ int runBatchedSearchTests() {
         const ChessSelfPlaySearchParameters largerSchedule(1, 24, 8, 1.25F, 0.3F, 0.25F, 0);
         require(search.updateSearchSchedule(largerSchedule),
                 "larger schedule did not report an arena-capacity change");
-        require(search.workerIdentityTokens() == workerIdentities,
-                "schedule update reconstructed inference workers");
 
     } catch (...) {
         std::filesystem::remove(modelPath);

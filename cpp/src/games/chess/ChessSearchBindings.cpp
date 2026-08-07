@@ -40,7 +40,7 @@ using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
     std::vector<Board> boards;
     boards.reserve(histories.size());
     for (const auto &[startingFen, movesUci] : histories) {
-        boards.push_back(ChessGameContract::replayPosition(startingFen, movesUci));
+        boards.push_back(Board::replay(startingFen, movesUci));
     }
     const std::vector<InferenceResult> inferenceResults = search.evaluate(boards);
     std::vector<EncodedInference> encodedResults;
@@ -113,8 +113,7 @@ void bind_chess_search(py::module_ &module) {
         "new_root_with_history",
         [](const std::string &startingFen, const std::vector<std::string> &movesUci,
            const std::uint32_t arenaCapacity) {
-            return createChessSearchRoot(ChessGameContract::replayPosition(startingFen, movesUci),
-                                         arenaCapacity);
+            return createChessSearchRoot(Board::replay(startingFen, movesUci), arenaCapacity);
         },
         py::arg("starting_fen"), py::arg("moves_uci"), py::arg("arena_capacity"));
 
@@ -152,7 +151,7 @@ void bind_chess_search(py::module_ &module) {
             "new_root_with_history",
             [](const Search &search, const std::string &startingFen,
                const std::vector<std::string> &movesUci) {
-                return search.newRoot(ChessGameContract::replayPosition(startingFen, movesUci));
+                return search.newRoot(Board::replay(startingFen, movesUci));
             },
             py::arg("starting_fen"), py::arg("moves_uci"))
         .def("inference_statistics", &Search::inferenceStatistics)

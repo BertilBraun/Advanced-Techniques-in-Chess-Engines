@@ -1,6 +1,7 @@
 #include "games/go/GoBindings.hpp"
 
 #include "games/go/GoGameContract.hpp"
+#include "games/go/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -70,7 +71,7 @@ template <std::size_t BoardSize, std::size_t HistoryLength>
 void bind_position(py::module_ &module, const char *name) {
     using Contract = GoGameContract<BoardSize, HistoryLength>;
     using Position = typename Contract::Position;
-    using Encoded = typename Contract::EncodedPosition;
+    using Encoded = EncodedGoPosition<BoardSize, HistoryLength>;
 
     py::class_<Position>(module, name)
         .def(py::init<GoRules>())
@@ -133,21 +134,13 @@ void bind_position(py::module_ &module, const char *name) {
                  return Contract::actionId(GoAction<BoardSize>(action_id), position);
              })
         .def("decode_actions",
-             [](const Position &position, const std::vector<int> &action_ids) {
-                 std::vector<int> decoded;
-                 for (const GoAction<BoardSize> action :
-                      Contract::decodeActions(action_ids, position)) {
-                     decoded.push_back(action.id);
-                 }
-                 return decoded;
-             })
+             [](const Position &, const std::vector<int> &action_ids) { return action_ids; })
         .def("state_hash", &Position::hash)
         .def("packed_encoding",
              [](const Position &position) {
-                 const Encoded encoded = Contract::encodeInput(position);
+                 const Encoded encoded = encode_go_position(position);
                  std::string payload(Encoded::packed_bytes, '\0');
-                 Contract::writePackedInput(encoded,
-                                            reinterpret_cast<std::int8_t *>(payload.data()));
+                 write_packed_go_position(encoded, reinterpret_cast<std::int8_t *>(payload.data()));
                  return py::bytes(payload);
              })
         .def("tensor_encoding",
@@ -158,12 +151,11 @@ void bind_position(py::module_ &module, const char *name) {
                  Contract::encodeInputInto(position, values.data());
                  return values;
              })
-        .def_static(
-            "transform_action",
-            [](const int action_id, const GoSymmetry symmetry) {
-                return Contract::transformAction(GoAction<BoardSize>(action_id), symmetry).id;
-            })
-        .def_static("inverse_symmetry", &Contract::inverseSymmetry)
+        .def_static("transform_action",
+                    [](const int action_id, const GoSymmetry symmetry) {
+                        return transform_go_action(GoAction<BoardSize>(action_id), symmetry).id;
+                    })
+        .def_static("inverse_symmetry", &inverse_go_symmetry)
         .def(py::self == py::self);
 }
 

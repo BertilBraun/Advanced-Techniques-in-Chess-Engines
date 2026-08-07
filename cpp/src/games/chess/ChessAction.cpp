@@ -108,11 +108,11 @@ const MoveMapping moveMappings = calculateMoveMappings();
 const ReverseMoveMapping reverseMoveMappings = calculateReverseMoveMappings(moveMappings);
 } // namespace
 
-int ChessActionCodec::encode(const ChessAction action, const Board &position) {
-    Stockfish::Square fromSquare = action.move.from_sq();
-    Stockfish::Square toSquare = action.move.to_sq();
-    const Stockfish::PieceType promotionType = action.move.type_of() == Stockfish::PROMOTION
-                                                   ? action.move.promotion_type()
+int ChessAction::encode(const Board &position) const {
+    Stockfish::Square fromSquare = move.from_sq();
+    Stockfish::Square toSquare = move.to_sq();
+    const Stockfish::PieceType promotionType = move.type_of() == Stockfish::PROMOTION
+                                                   ? move.promotion_type()
                                                    : Stockfish::PieceType::NO_PIECE_TYPE;
     if (position.currentPlayer() == -1) {
         fromSquare = Stockfish::flip_rank(fromSquare);
@@ -123,28 +123,45 @@ int ChessActionCodec::encode(const ChessAction action, const Board &position) {
     return actionId;
 }
 
-std::vector<ChessAction> ChessActionCodec::decode(const std::vector<int> &actionIds,
-                                                  const Board &position) {
+ChessAction ChessAction::decode(const int actionId, const Board &position) {
+    assert(0 <= actionId && actionId < action_count);
     const std::vector<Stockfish::Move> &legalMoves = position.validMoves();
-    std::vector<ChessAction> actions;
-    actions.reserve(actionIds.size());
-    for (const int actionId : actionIds) {
-        assert(0 <= actionId && actionId < ChessAction::action_count);
-        auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
-        if (position.currentPlayer() == -1) {
-            fromSquare = Stockfish::flip_rank(fromSquare);
-            toSquare = Stockfish::flip_rank(toSquare);
-        }
-        const auto legal = std::ranges::find_if(legalMoves, [&](const Stockfish::Move move) {
-            const bool correctSquares = move.from_sq() == fromSquare && move.to_sq() == toSquare;
-            const bool correctPromotion =
-                move.type_of() == Stockfish::PROMOTION
-                    ? move.promotion_type() == promotionType
-                    : promotionType == Stockfish::PieceType::NO_PIECE_TYPE;
-            return correctSquares && correctPromotion;
-        });
-        assert(legal != legalMoves.end());
-        actions.emplace_back(*legal);
+    auto [fromSquare, toSquare, promotionType] = reverseMoveMappings[actionId];
+    if (position.currentPlayer() == -1) {
+        fromSquare = Stockfish::flip_rank(fromSquare);
+        toSquare = Stockfish::flip_rank(toSquare);
     }
-    return actions;
+    const auto legal = std::ranges::find_if(legalMoves, [&](const Stockfish::Move candidate) {
+        const bool correctSquares =
+            candidate.from_sq() == fromSquare && candidate.to_sq() == toSquare;
+        const bool correctPromotion = candidate.type_of() == Stockfish::PROMOTION
+                                          ? candidate.promotion_type() == promotionType
+                                          : promotionType == Stockfish::PieceType::NO_PIECE_TYPE;
+        return correctSquares && correctPromotion;
+    });
+    assert(legal != legalMoves.end());
+    return ChessAction(*legal);
+}
+
+std::string ChessAction::toUci() const {
+    if (move == Stockfish::Move::null()) {
+        return "null";
+    }
+    const auto appendSquare = [](std::string &uci, const Stockfish::Square square) {
+        uci += static_cast<char>('a' + Stockfish::file_of(square));
+        uci += static_cast<char>('1' + Stockfish::rank_of(square));
+    };
+    const Stockfish::Square from = move.from_sq();
+    const Stockfish::Square to = move.type_of() == Stockfish::CASTLING
+                                     ? static_cast<Stockfish::Square>(
+                                           static_cast<int>(from) + (move.to_sq() > from ? 2 : -2))
+                                     : move.to_sq();
+    std::string uci;
+    uci.reserve(5);
+    appendSquare(uci, from);
+    appendSquare(uci, to);
+    if (move.type_of() == Stockfish::PROMOTION) {
+        uci += "  nbrqk"[move.promotion_type()];
+    }
+    return uci;
 }

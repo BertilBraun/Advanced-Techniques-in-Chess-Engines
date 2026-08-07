@@ -1,13 +1,23 @@
 #pragma once
 
 #include "games/go/GoEncoding.hpp"
-#include "games/go/GoSymmetryTypes.hpp"
 #include "games/go/GoTypes.hpp"
 #include "util/py.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+
+enum class GoSymmetry : std::uint8_t {
+    identity = 0,
+    rotate_90 = 1,
+    rotate_180 = 2,
+    rotate_270 = 3,
+    reflect = 4,
+    reflect_rotate_90 = 5,
+    reflect_rotate_180 = 6,
+    reflect_rotate_270 = 7,
+};
 
 template <std::size_t BoardSize>
 [[nodiscard]] typename BitBoard<BoardSize>::Point
@@ -65,8 +75,7 @@ template <std::size_t BoardSize>
     if (action.is_pass()) {
         return action;
     }
-    return GoAction<BoardSize>(static_cast<int>(
-        BitBoard<BoardSize>::index(transform_go_point<BoardSize>(action.point(), symmetry))));
+    return GoAction<BoardSize>(transform_go_point<BoardSize>(action.point(), symmetry));
 }
 
 template <std::size_t BoardSize, std::size_t HistoryLength>
