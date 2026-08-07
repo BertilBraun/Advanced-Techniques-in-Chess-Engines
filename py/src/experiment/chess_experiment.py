@@ -39,6 +39,11 @@ class ExperimentRunConfiguration(FrozenModel):
     environment: EnvironmentConfiguration
 
 
+class BaseExperimentConfiguration(FrozenModel):
+    run: ExperimentRunConfiguration
+    training: TrainingArgs
+
+
 class ChessRulesConfiguration(FrozenModel):
     variant: Literal['standard'] = 'standard'
     chess960: bool = False
@@ -70,27 +75,14 @@ class ChessConfiguration(FrozenModel):
     evaluation: EvaluationParams
 
 
-class ChessExperimentConfiguration(FrozenModel):
+class ChessExperimentConfiguration(BaseExperimentConfiguration):
     game: Literal['chess'] = 'chess'
-    run: ExperimentRunConfiguration
-    training: TrainingArgs
     chess: ChessConfiguration
 
     @model_validator(mode='after')
     def validate_experiment(self) -> ChessExperimentConfiguration:
-        training = self.training
-        world_size = len(training.topology.trainer.ddp_device_ids)
-        expected_global_batch_size = training.trainer.local_batch_size * world_size
-        if training.trainer.global_batch_size != expected_global_batch_size:
-            raise ValueError(
-                f'Global training batch size {training.trainer.global_batch_size} must equal '
-                f'local batch size {training.trainer.local_batch_size} times world size {world_size}.'
-            )
-        training.lifecycle.evaluation.validate_for_optimizer_quantum(
-            training.lifecycle.credit.optimizer_steps_per_quantum
-        )
         evaluation = self.chess.evaluation
-        retention = training.lifecycle.inference_retention
+        retention = self.training.lifecycle.inference_retention
         if evaluation.previous_model_offsets and (
             max(evaluation.previous_model_offsets) >= retention.recent_checkpoint_count
         ):
@@ -165,10 +157,8 @@ class GoConfiguration(FrozenModel):
         return self
 
 
-class GoExperimentConfiguration(FrozenModel):
+class GoExperimentConfiguration(BaseExperimentConfiguration):
     game: Literal['go'] = 'go'
-    run: ExperimentRunConfiguration
-    training: TrainingArgs
     go: GoConfiguration
 
     @model_validator(mode='after')

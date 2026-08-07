@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from src.experiment.chess_experiment import (
+    BaseExperimentConfiguration,
     ChessExperimentConfiguration,
     GoExperimentConfiguration,
     load_experiment_configuration,
@@ -19,6 +20,30 @@ from src.util.frozen_model import JsonValue
 
 
 DEFAULT_EXPERIMENT_PATH = Path('configs/chess-default-experiment.yaml')
+
+
+def test_game_experiments_extend_the_shared_run_and_training_configuration() -> None:
+    assert set(BaseExperimentConfiguration.model_fields) == {'run', 'training'}
+    assert issubclass(ChessExperimentConfiguration, BaseExperimentConfiguration)
+    assert issubclass(GoExperimentConfiguration, BaseExperimentConfiguration)
+
+
+@pytest.mark.parametrize(
+    ('configuration_type', 'path'),
+    (
+        (ChessExperimentConfiguration, DEFAULT_EXPERIMENT_PATH),
+        (GoExperimentConfiguration, Path('configs/go-7x7-default-experiment.yaml')),
+    ),
+)
+def test_base_configuration_validates_shared_training_arguments(
+    configuration_type: type[BaseExperimentConfiguration],
+    path: Path,
+) -> None:
+    candidate = yaml.safe_load(path.read_text(encoding='utf-8'))
+    candidate['training']['trainer']['global_batch_size'] += 1
+
+    with pytest.raises(ValidationError, match='Global batch size must equal'):
+        configuration_type.model_validate(candidate)
 
 
 def test_default_chess_experiment_loads_canonical_runtime_configuration() -> None:
