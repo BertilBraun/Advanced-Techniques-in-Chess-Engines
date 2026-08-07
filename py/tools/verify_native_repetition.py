@@ -9,9 +9,9 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    ChessSelfPlaySearchParameters,
+    SelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
-    InferenceRuntimeParameters,
+    InferenceConfiguration,
     new_root,
     new_root_with_history,
 )
@@ -67,8 +67,8 @@ def main() -> None:
         board_before_third_occurrence.push_uci(move)
 
     search = ChessSelfPlaySearch(
-        InferenceRuntimeParameters(args.device, str(args.model)),
-        ChessSelfPlaySearchParameters(1, 8, 8, 1.0, 0.3, 0.0, 0),
+        InferenceConfiguration(args.device, str(args.model)),
+        SelfPlaySearchParameters(1, 8, 8, 1.0, 0.3, 0.0, 0),
         BatchedInferenceParameters(1, 16, 1),
     )
     blind_parent = search.new_root(board_before_third_occurrence.fen())

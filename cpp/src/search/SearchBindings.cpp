@@ -3,6 +3,7 @@
 #include "search/Analysis.hpp"
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchTypes.hpp"
+#include "search/SelfPlay.hpp"
 #include "util/TimeItGuard.h"
 
 #include <pybind11/operators.h>
@@ -20,12 +21,12 @@ void bind_search(py::module_ &module) {
         .value("CPU", InferenceDevice::Cpu)
         .value("CUDA", InferenceDevice::Cuda);
 
-    py::class_<InferenceRuntimeParameters>(module, "InferenceRuntimeParameters")
+    py::class_<InferenceConfiguration>(module, "InferenceConfiguration")
         .def(py::init<int, std::string, InferenceDevice>(), py::arg("device_id"),
              py::arg("model_path"), py::arg("device") = InferenceDevice::Auto)
-        .def_readwrite("device_id", &InferenceRuntimeParameters::device_id)
-        .def_readwrite("model_path", &InferenceRuntimeParameters::model_path)
-        .def_readwrite("device", &InferenceRuntimeParameters::device);
+        .def_readwrite("device_id", &InferenceConfiguration::device_id)
+        .def_readwrite("model_path", &InferenceConfiguration::model_path)
+        .def_readwrite("device", &InferenceConfiguration::device);
 
     py::class_<InferenceDimensions>(module, "InferenceDimensions")
         .def(py::init<int, int, int, int, int>(), py::arg("channels"), py::arg("rows"),
@@ -51,9 +52,8 @@ void bind_search(py::module_ &module) {
                       &InferenceStatistics::resultProcessingNanoseconds)
         .def_readonly("treeBackupNanoseconds", &InferenceStatistics::treeBackupNanoseconds)
         .def_readonly("treeOwnerWaitNanoseconds", &InferenceStatistics::treeOwnerWaitNanoseconds)
-        .def_readonly("directInferenceNanoseconds",
-                      &InferenceStatistics::directInferenceNanoseconds)
-        .def_readonly("directWorkerUtilization", &InferenceStatistics::directWorkerUtilization);
+        .def_readonly("inferenceNanoseconds", &InferenceStatistics::inferenceNanoseconds)
+        .def_readonly("workerUtilization", &InferenceStatistics::workerUtilization);
 
     py::class_<WdlPrediction>(module, "WdlPrediction")
         .def_readonly("win", &WdlPrediction::win)
@@ -93,11 +93,32 @@ void bind_search(py::module_ &module) {
                       &BatchedInferenceParameters::outstanding_batches_per_worker);
     py::class_<AnalysisParameters>(module, "AnalysisParameters")
         .def(py::init<std::uint32_t, float, BatchedInferenceParameters>(),
-             py::arg("parallel_searches"), py::arg("exploration_constant"),
-             py::arg("inference"))
+             py::arg("parallel_searches"), py::arg("exploration_constant"), py::arg("inference"))
         .def_readonly("parallel_searches", &AnalysisParameters::parallel_searches)
         .def_readonly("exploration_constant", &AnalysisParameters::exploration_constant)
         .def_readonly("inference", &AnalysisParameters::inference);
+    py::class_<SelfPlaySearchParameters>(module, "SelfPlaySearchParameters")
+        .def(py::init<std::uint32_t, std::uint32_t, std::uint32_t, float, float, float,
+                      std::uint32_t>(),
+             py::arg("parallel_searches"), py::arg("full_searches"), py::arg("fast_searches"),
+             py::arg("exploration_constant"), py::arg("dirichlet_alpha"),
+             py::arg("dirichlet_epsilon"), py::arg("minimum_root_visits"))
+        .def_readwrite("parallel_searches", &SelfPlaySearchParameters::parallel_searches)
+        .def_readwrite("full_searches", &SelfPlaySearchParameters::full_searches)
+        .def_readwrite("fast_searches", &SelfPlaySearchParameters::fast_searches)
+        .def_readwrite("exploration_constant", &SelfPlaySearchParameters::exploration_constant)
+        .def_readwrite("dirichlet_alpha", &SelfPlaySearchParameters::dirichlet_alpha)
+        .def_readwrite("dirichlet_epsilon", &SelfPlaySearchParameters::dirichlet_epsilon)
+        .def_readwrite("minimum_root_visits", &SelfPlaySearchParameters::minimum_root_visits);
+    py::class_<SelfPlaySearchStatistics>(module, "SelfPlaySearchStatistics")
+        .def_readonly("average_depth", &SelfPlaySearchStatistics::average_depth)
+        .def_readonly("average_entropy", &SelfPlaySearchStatistics::average_entropy)
+        .def_readonly("average_kl_divergence", &SelfPlaySearchStatistics::average_kl_divergence)
+        .def_readonly("average_policy_search_kl_divergence",
+                      &SelfPlaySearchStatistics::average_policy_search_kl_divergence)
+        .def_readonly("top_action_disagreement", &SelfPlaySearchStatistics::top_action_disagreement)
+        .def_readonly("selected_action_prior_rank",
+                      &SelfPlaySearchStatistics::selected_action_prior_rank);
     py::class_<AnalysisCandidate>(module, "ActionAnalysisCandidate")
         .def_readonly("action_id", &AnalysisCandidate::action_id)
         .def_readonly("policy_prior", &AnalysisCandidate::policy_prior)

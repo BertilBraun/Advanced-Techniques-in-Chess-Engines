@@ -39,13 +39,13 @@ def test_game_tracks_model_version_range_across_copies() -> None:
 
 
 @dataclass(frozen=True)
-class _FakeInferenceRuntimeParameters:
+class _FakeInferenceConfiguration:
     device_id: int
     model_path: str
 
 
 @dataclass(frozen=True)
-class _FakeChessSelfPlaySearchParameters:
+class _FakeSelfPlaySearchParameters:
     parallel_searches: int
     full_searches: int
     fast_searches: int
@@ -67,8 +67,8 @@ class _FakeChessSelfPlaySearch:
 
     def __init__(
         self,
-        runtime_parameters: _FakeInferenceRuntimeParameters,
-        search_parameters: _FakeChessSelfPlaySearchParameters,
+        runtime_parameters: _FakeInferenceConfiguration,
+        search_parameters: _FakeSelfPlaySearchParameters,
         inference_parameters: _FakeBatchedInferenceParameters | None,
         initial_model_version: int,
     ) -> None:
@@ -97,7 +97,7 @@ class _LifecycleSearch:
     def refresh_model(self, model_version: int, model_path: str) -> None:
         self.events.append(f'refresh:{model_version}:{model_path}')
 
-    def update_search_schedule(self, parameters: _FakeChessSelfPlaySearchParameters) -> bool:
+    def update_search_schedule(self, parameters: _FakeSelfPlaySearchParameters) -> bool:
         previous_capacity = self.arena_capacity
         self.events.append(f'schedule:{parameters.full_searches}')
         self.arena_capacity = max(parameters.full_searches, parameters.fast_searches) + parameters.parallel_searches + 1
@@ -120,10 +120,10 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     tmp_path: Path,
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
+    fake_alpha_zero_cpp.InferenceConfiguration = _FakeInferenceConfiguration
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
-    fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
+    fake_alpha_zero_cpp.SelfPlaySearchParameters = _FakeSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
     search = TRAINING_ARGS.self_play.search.validated_copy(update={'num_searches_per_turn': 600})
@@ -156,10 +156,10 @@ def test_self_play_constructs_direct_inference_pipeline(
     tmp_path: Path,
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
+    fake_alpha_zero_cpp.InferenceConfiguration = _FakeInferenceConfiguration
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = _FakeChessSelfPlaySearch
-    fake_alpha_zero_cpp.ChessSelfPlaySearchParameters = _FakeChessSelfPlaySearchParameters
+    fake_alpha_zero_cpp.SelfPlaySearchParameters = _FakeSelfPlaySearchParameters
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
 
     batched_inference = BatchedInferenceParams(

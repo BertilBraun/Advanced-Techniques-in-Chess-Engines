@@ -204,7 +204,7 @@ def test_timed_search_drains_direct_workers(engine: InteractiveEngine) -> None:
     assert 900 <= result.elapsed_milliseconds <= 1_100
     assert game.root_visits == result.searches
     assert 0 < metrics.model_positions <= result.searches
-    assert 0.0 < metrics.direct_worker_utilization <= 1.0
+    assert 0.0 < metrics.worker_utilization <= 1.0
     assert metrics.tree_selection_nanoseconds > 0
     assert metrics.board_encoding_nanoseconds > 0
 

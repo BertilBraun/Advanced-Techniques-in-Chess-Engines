@@ -15,8 +15,8 @@ import torch
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSelfPlaySearch,
-    ChessSelfPlaySearchParameters,
-    InferenceRuntimeParameters,
+    SelfPlaySearchParameters,
+    InferenceConfiguration,
     InferenceStatistics,
 )
 from src.self_play.SelfPlay import SelfPlay
@@ -109,7 +109,7 @@ class BenchmarkCompletedGamePublisher(ChessCompletedGamePublisher):
     tree_backup_seconds: float
     tree_owner_wait_seconds: float
     direct_inference_seconds: float
-    direct_worker_utilization_percent: float
+    worker_utilization_percent: float
 
 
 def parse_arguments() -> Arguments:
@@ -243,8 +243,8 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
         )
     self_play.search_engine = ChessSelfPlaySearch(
-        InferenceRuntimeParameters(arguments.device, str(arguments.model.resolve())),
-        ChessSelfPlaySearchParameters(
+        InferenceConfiguration(arguments.device, str(arguments.model.resolve())),
+        SelfPlaySearchParameters(
             arguments.parallel_searches,
             arguments.searches,
             fast_searches,
@@ -316,9 +316,9 @@ def build_result(
         final_statistics.modelInferencePositions,
         initial_statistics.modelInferencePositions,
     )
-    direct_inference_nanoseconds = difference(
-        final_statistics.directInferenceNanoseconds,
-        initial_statistics.directInferenceNanoseconds,
+    inference_nanoseconds = difference(
+        final_statistics.inferenceNanoseconds,
+        initial_statistics.inferenceNanoseconds,
     )
     batch_size_distribution = tuple(
         BatchSizeCount(
@@ -398,9 +398,9 @@ def build_result(
             initial_statistics.treeOwnerWaitNanoseconds,
         )
         / 1e9,
-        direct_inference_seconds=direct_inference_nanoseconds / 1e9,
-        direct_worker_utilization_percent=(
-            100 * direct_inference_nanoseconds / (elapsed_seconds * 1e9 * arguments.direct_inference_workers)
+        direct_inference_seconds=inference_nanoseconds / 1e9,
+        worker_utilization_percent=(
+            100 * inference_nanoseconds / (elapsed_seconds * 1e9 * arguments.direct_inference_workers)
         ),
     )
 

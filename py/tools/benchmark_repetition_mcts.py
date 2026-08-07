@@ -15,9 +15,9 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    ChessSelfPlaySearchParameters,
+    SelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
-    InferenceRuntimeParameters,
+    InferenceConfiguration,
 )
 
 
@@ -176,8 +176,8 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
         raise ValueError('GPU sampling interval cannot be negative.')
 
     search = ChessSelfPlaySearch(
-        InferenceRuntimeParameters(args.device, str(args.model)),
-        ChessSelfPlaySearchParameters(
+        InferenceConfiguration(args.device, str(args.model)),
+        SelfPlaySearchParameters(
             args.parallel_searches,
             args.searches,
             args.searches,

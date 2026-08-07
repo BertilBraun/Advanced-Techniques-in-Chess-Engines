@@ -16,9 +16,9 @@ from AlphaZeroCpp import (
     BatchedInferenceParameters,
     ChessSearchRoot,
     ChessSelfPlaySearch,
-    ChessSelfPlaySearchParameters,
+    SelfPlaySearchParameters,
     ChessSelfPlaySearchRequest,
-    InferenceRuntimeParameters,
+    InferenceConfiguration,
 )
 
 
@@ -206,11 +206,11 @@ def file_sha256(path: Path) -> str:
 
 
 def create_search(arguments: Arguments) -> ChessSelfPlaySearch:
-    runtime_parameters = InferenceRuntimeParameters(
+    runtime_parameters = InferenceConfiguration(
         device_id=arguments.device_id,
         model_path=str(arguments.model_path),
     )
-    search_parameters = ChessSelfPlaySearchParameters(
+    search_parameters = SelfPlaySearchParameters(
         parallel_searches=arguments.parallel_searches,
         full_searches=arguments.searches,
         fast_searches=arguments.searches,

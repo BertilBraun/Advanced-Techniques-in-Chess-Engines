@@ -97,8 +97,8 @@ class BenchmarkRecord(BaseModel):
     result_processing_nanoseconds: int
     tree_backup_nanoseconds: int
     tree_owner_wait_nanoseconds: int
-    direct_inference_nanoseconds: int
-    direct_worker_utilization: float
+    inference_nanoseconds: int
+    worker_utilization: float
     peak_cuda_memory_mib: float
 
 
@@ -324,8 +324,8 @@ def _completed_record(
         result_processing_nanoseconds=inference_metrics.result_processing_nanoseconds,
         tree_backup_nanoseconds=inference_metrics.tree_backup_nanoseconds,
         tree_owner_wait_nanoseconds=inference_metrics.tree_owner_wait_nanoseconds,
-        direct_inference_nanoseconds=inference_metrics.direct_inference_nanoseconds,
-        direct_worker_utilization=inference_metrics.direct_worker_utilization,
+        inference_nanoseconds=inference_metrics.inference_nanoseconds,
+        worker_utilization=inference_metrics.worker_utilization,
         peak_cuda_memory_mib=peak_cuda_memory_mib,
     )
 
@@ -358,8 +358,8 @@ def _skipped_record(configuration: BenchmarkConfiguration, reason: str) -> Bench
         result_processing_nanoseconds=0,
         tree_backup_nanoseconds=0,
         tree_owner_wait_nanoseconds=0,
-        direct_inference_nanoseconds=0,
-        direct_worker_utilization=0.0,
+        inference_nanoseconds=0,
+        worker_utilization=0.0,
         peak_cuda_memory_mib=0.0,
     )
 

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "search/InferenceTypes.hpp"
 #include "games/go/GoAction.hpp"
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoPosition.hpp"
 #include "games/go/GoSymmetry.hpp"
+#include "search/InferenceTypes.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +27,8 @@ public:
             3,
         };
     }
+
+    [[nodiscard]] static constexpr float searchTurnDiscount() noexcept { return 1.0F; }
 
     [[nodiscard]] static Position initialPosition(const GoRules rules) { return Position(rules); }
     [[nodiscard]] static Position childPosition(const Position &parent, const Action action) {

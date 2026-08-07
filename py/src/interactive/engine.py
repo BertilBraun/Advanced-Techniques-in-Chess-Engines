@@ -10,7 +10,7 @@ from AlphaZeroCpp import (
     ChessAnalysis as BoundChessAnalysis,
     ChessAnalysisSession as BoundChessAnalysisSession,
     InferenceDevice,
-    InferenceRuntimeParameters,
+    InferenceConfiguration,
 )
 from src.interactive.analysis import (
     AnalysisRequest,
@@ -35,8 +35,8 @@ class InferenceMetrics:
     result_processing_nanoseconds: int
     tree_backup_nanoseconds: int
     tree_owner_wait_nanoseconds: int
-    direct_inference_nanoseconds: int
-    direct_worker_utilization: float
+    inference_nanoseconds: int
+    worker_utilization: float
 
 
 class InteractiveEngine:
@@ -47,7 +47,7 @@ class InteractiveEngine:
             InferenceTarget.CUDA: InferenceDevice.CUDA,
         }
         batch_size = configuration.resolved_batch_size
-        runtime_parameters = InferenceRuntimeParameters(
+        runtime_parameters = InferenceConfiguration(
             device_id=configuration.device_id,
             model_path=configuration.model_path,
             device=target_mapping[configuration.inference_target],
@@ -80,8 +80,8 @@ class InteractiveEngine:
             result_processing_nanoseconds=statistics.resultProcessingNanoseconds,
             tree_backup_nanoseconds=statistics.treeBackupNanoseconds,
             tree_owner_wait_nanoseconds=statistics.treeOwnerWaitNanoseconds,
-            direct_inference_nanoseconds=statistics.directInferenceNanoseconds,
-            direct_worker_utilization=statistics.directWorkerUtilization,
+            inference_nanoseconds=statistics.inferenceNanoseconds,
+            worker_utilization=statistics.workerUtilization,
         )
 
 

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from AlphaZeroCpp import (
         ChessSearchRoot,
         ChessSelfPlaySearch,
-        ChessSelfPlaySearchParameters,
+        SelfPlaySearchParameters,
         ChessSelfPlaySearchResult,
     )
 
@@ -115,10 +115,10 @@ class ModelEvaluation:
                 )
 
     @property
-    def self_play_search_parameters(self) -> ChessSelfPlaySearchParameters:
-        from AlphaZeroCpp import ChessSelfPlaySearchParameters
+    def self_play_search_parameters(self) -> SelfPlaySearchParameters:
+        from AlphaZeroCpp import SelfPlaySearchParameters
 
-        return ChessSelfPlaySearchParameters(
+        return SelfPlaySearchParameters(
             parallel_searches=self.evaluation_args.parallel_searches,
             exploration_constant=self.evaluation_args.search_exploration_constant,
             dirichlet_epsilon=0.0,
@@ -129,7 +129,7 @@ class ModelEvaluation:
         )
 
     def _create_search(self, inference_path: Path) -> ChessSelfPlaySearch:
-        from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceRuntimeParameters
+        from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceConfiguration
 
         inference = self.evaluation_args.inference
         inference_parameters = BatchedInferenceParameters(
@@ -138,7 +138,7 @@ class ModelEvaluation:
             inference.outstanding_batches_per_worker,
         )
         return ChessSelfPlaySearch(
-            InferenceRuntimeParameters(self.device_id, str(inference_path)),
+            InferenceConfiguration(self.device_id, str(inference_path)),
             self.self_play_search_parameters,
             inference_parameters=inference_parameters,
         )

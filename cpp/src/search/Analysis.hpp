@@ -60,26 +60,23 @@ public:
     using Node = GameSearchNode<Game>;
     using Edge = GameSearchEdge<typename Game::Action>;
 
-    GameAnalysis(const InferenceRuntimeParameters &runtimeParameters,
+    GameAnalysis(const InferenceConfiguration &runtimeParameters,
                  const AnalysisParameters &parameters)
         : m_parameters(parameters),
           m_search(runtimeParameters.model_path, runtimeParameters.device,
                    runtimeParameters.device_id, parameters.inference,
                    BatchedSearchParameters(parameters.parallel_searches,
-                                           parameters.exploration_constant, 0, 1.0F, 0.0F,
-                                           1'024),
+                                           parameters.exploration_constant, 0, 1.0F, 0.0F, 1'024),
                    0, false, 1.0F) {}
 
     [[nodiscard]] Root newRoot(Position position) {
-        return m_search.newRoot(std::move(position),
-                                std::numeric_limits<std::uint32_t>::max());
+        return m_search.newRoot(std::move(position), std::numeric_limits<std::uint32_t>::max());
     }
 
     [[nodiscard]] GameAnalysisResult analyzePolicy(const Root &root) {
         rejectTerminal(root);
         const auto startedAt = std::chrono::steady_clock::now();
-        const SearchInferenceResult<Game> inference =
-            m_search.evaluate({root.position()}).front();
+        const SearchInferenceResult<Game> inference = m_search.evaluate({root.position()}).front();
         std::vector<AnalysisCandidate> candidates = policyCandidates(inference, root.position());
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");
@@ -94,16 +91,14 @@ public:
                 {}};
     }
 
-    [[nodiscard]] GameAnalysisResult analyzeCounted(Root &root,
-                                                    const std::uint32_t searches) {
+    [[nodiscard]] GameAnalysisResult analyzeCounted(Root &root, const std::uint32_t searches) {
         if (searches == 0) {
             throw std::invalid_argument("Analysis search count must be positive");
         }
         return analyzeSearch(root, searches, std::nullopt);
     }
 
-    [[nodiscard]] GameAnalysisResult analyzeTimed(Root &root,
-                                                  const std::chrono::seconds duration) {
+    [[nodiscard]] GameAnalysisResult analyzeTimed(Root &root, const std::chrono::seconds duration) {
         if (duration < std::chrono::seconds(1) || duration > std::chrono::seconds(30)) {
             throw std::invalid_argument("Analysis duration must be between 1 and 30 seconds");
         }
@@ -136,16 +131,15 @@ private:
         std::vector<AnalysisCandidate> candidates;
         candidates.reserve(inference.actions.size());
         for (const auto &[action, prior] : inference.actions) {
-            candidates.push_back(
-                {Game::actionId(action, position), prior, 0, 0.0F, std::nullopt});
+            candidates.push_back({Game::actionId(action, position), prior, 0, 0.0F, std::nullopt});
         }
-        std::ranges::sort(candidates, [](const AnalysisCandidate &left,
-                                        const AnalysisCandidate &right) {
-            if (left.policy_prior != right.policy_prior) {
-                return left.policy_prior > right.policy_prior;
-            }
-            return left.action_id < right.action_id;
-        });
+        std::ranges::sort(candidates,
+                          [](const AnalysisCandidate &left, const AnalysisCandidate &right) {
+                              if (left.policy_prior != right.policy_prior) {
+                                  return left.policy_prior > right.policy_prior;
+                              }
+                              return left.action_id < right.action_id;
+                          });
         return candidates;
     }
 
@@ -161,26 +155,24 @@ private:
             const std::optional<float> meanValue =
                 child.visits == 0
                     ? std::nullopt
-                    : std::optional<float>{-child.value_sum /
-                                           static_cast<float>(child.visits)};
+                    : std::optional<float>{-child.value_sum / static_cast<float>(child.visits)};
             candidates.push_back(
                 {Game::actionId(child.action, root.position), child.raw_prior, child.visits,
                  totalChildVisits == 0
                      ? 0.0F
-                     : static_cast<float>(child.visits) /
-                           static_cast<float>(totalChildVisits),
+                     : static_cast<float>(child.visits) / static_cast<float>(totalChildVisits),
                  meanValue});
         }
-        std::ranges::sort(candidates, [](const AnalysisCandidate &left,
-                                        const AnalysisCandidate &right) {
-            if (left.visits != right.visits) {
-                return left.visits > right.visits;
-            }
-            if (left.policy_prior != right.policy_prior) {
-                return left.policy_prior > right.policy_prior;
-            }
-            return left.action_id < right.action_id;
-        });
+        std::ranges::sort(candidates,
+                          [](const AnalysisCandidate &left, const AnalysisCandidate &right) {
+                              if (left.visits != right.visits) {
+                                  return left.visits > right.visits;
+                              }
+                              if (left.policy_prior != right.policy_prior) {
+                                  return left.policy_prior > right.policy_prior;
+                              }
+                              return left.action_id < right.action_id;
+                          });
         return candidates;
     }
 
@@ -224,8 +216,8 @@ private:
                     ? *searchLimit - static_cast<std::uint32_t>(completedSearches)
                     : m_parameters.parallel_searches;
             const std::uint32_t chunk = std::min(remaining, m_parameters.parallel_searches);
-            const GameSearchBatchResult batch = m_search.searchDetailed(
-                {{root, root.visits() + chunk, false, true}});
+            const GameSearchBatchResult batch =
+                m_search.searchDetailed({{root, root.visits() + chunk, false, true}});
             completedSearches += batch.simulations_completed;
         } while ((!searchLimit.has_value() || completedSearches < *searchLimit) &&
                  (!deadline.has_value() || std::chrono::steady_clock::now() < *deadline));
@@ -237,9 +229,8 @@ private:
         }
         const Node &rootNode = tree.root();
         return {candidates.front().action_id,
-                rootNode.visits == 0
-                    ? 0.0F
-                    : rootNode.value_sum / static_cast<float>(rootNode.visits),
+                rootNode.visits == 0 ? 0.0F
+                                     : rootNode.value_sum / static_cast<float>(rootNode.visits),
                 rootNode.network_outcome,
                 std::move(candidates),
                 completedSearches,

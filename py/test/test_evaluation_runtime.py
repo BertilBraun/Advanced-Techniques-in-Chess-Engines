@@ -50,7 +50,7 @@ class _EvaluationTrainingArguments:
 
 
 @dataclass(frozen=True)
-class _FakeInferenceRuntimeParameters:
+class _FakeInferenceConfiguration:
     device_id: int
     model_path: str
 
@@ -142,7 +142,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     class FakeChessSelfPlaySearch:
         def __init__(
             self,
-            runtime_parameters: _FakeInferenceRuntimeParameters,
+            runtime_parameters: _FakeInferenceConfiguration,
             search_parameters: str,
             inference_parameters: _FakeBatchedInferenceParameters | None,
         ) -> None:
@@ -171,7 +171,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
         return 'search-parameters'
 
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
-    fake_alpha_zero_cpp.InferenceRuntimeParameters = _FakeInferenceRuntimeParameters
+    fake_alpha_zero_cpp.InferenceConfiguration = _FakeInferenceConfiguration
     fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.ChessSelfPlaySearch = FakeChessSelfPlaySearch
     fake_alpha_zero_cpp.ChessSelfPlaySearchRequest = _FakeChessSelfPlaySearchRequest

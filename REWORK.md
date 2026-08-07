@@ -621,17 +621,17 @@ baseline and must become game-agnostic; the current `GameSearch` implementation
 must not replace it without retaining its mature batching and overlap behavior.
 
 The final native design has one game-parameterized search engine and tree with
-two typed workloads:
+two typed facades:
 
-- `searchGames(GameBatchRequest)` maximizes throughput across independent game
-  roots. Self-play and multi-game model evaluation normally keep per-root
-  concurrency low so inference batches come from different games rather than
-  stale parallel searches in one tree. Training requests additionally own
-  deterministic full/fast visit budgets and root-noise settings.
-- `analyze(AnalysisRequest)` maximizes throughput for one retained tree. It
-  obtains inference batches from multiple reserved leaves in that tree and
-  supports explicit visit and deadline stopping, cancellation, principal
-  variation data, candidate statistics, and no training noise.
+- `GameSelfPlaySearch<Game>` owns full/fast training schedules and submits
+  typed root requests to `BatchedGameSearch<Game>`, maximizing throughput
+  across independent games. Per-root concurrency remains configurable, so
+  training can prefer batches from different games while analysis can reserve
+  several leaves from one tree.
+- `GameAnalysis<Game>` owns one retained root and exposes policy-only, counted,
+  and deadline-limited analysis. It uses the same `BatchedGameSearch<Game>`
+  executor without training noise and returns action IDs, candidate statistics,
+  outcome/value data, depth, and principal variation records.
 
 Both workloads use the same game contract, arena tree, selection, expansion,
 backup, inference batch dispatcher, model refresh, and statistics. They are
@@ -652,12 +652,12 @@ The authoritative implementation is built by generalizing the current
 - full/fast search schedules, root noise, model refresh, and detailed timing and
   throughput statistics.
 
-The optimized implementation is separated into focused hot-path components
-without virtual dispatch: a game-parameterized `SearchTree`, an
-`InferenceBatchDispatcher`, a `RootWorkScheduler`, a `BatchedSearchExecutor`,
-and the typed `SearchEngine` facade. The existing simplified `GameSearch` is a
-contract prototype only and is removed after its Go callers use the optimized
-engine.
+The optimized implementation is separated into focused template components
+without virtual dispatch: `SearchTypes`, `SearchTree`, `SearchInference`, the
+hot-loop `BatchedSearchExecutor`, the lifecycle-owning `BatchedGameSearch`
+facade, `GameSelfPlaySearch`, and `GameAnalysis`. `InferencePipeline` owns
+preallocated tensor slots, device execution, completion, and refresh. The
+simplified `GameSearch` and all legacy MCTS trees are removed.
 
 Raw inference owns only explicit dimensions, policy tensors, outcome tensors,
 device execution, batching, and refresh. Dimensions are required at every
@@ -668,14 +668,12 @@ contracts own positions, legal actions, action IDs, child construction,
 terminal values, packed encoding, and outcome perspective. Shared result types
 must not contain chess `Board`, `Move`, or `MoveScore` values.
 
-Interactive presentation is not generalized speculatively in R8. A thin
-`ChessAnalysisEngine` and retained `ChessAnalysisSession` own FEN/UCI replay,
-legal move application, root retention, and translation of shared analysis
-results into chess actions. Chess presentation owns UCI move and PV conversion,
-candidate ordering, policy-only records, WDL/value exposure, and protocol
-formatting; it does not own search, inference scheduling, or tree storage. A
-future Go protocol adapter can provide its own presentation without changing
-the search engine.
+Analysis search is game-generic in R8 and is bound for chess, Go 7x7, and Go
+9x9. `ChessAnalysisSession` is only the chess presentation layer: it owns
+FEN/UCI replay, legal move application, retained-root navigation, and
+translation of generic action IDs and principal variations to UCI. Go exposes
+the same generic analysis facade with typed Go roots; a future Go protocol UI
+can add its own coordinate presentation without changing search or inference.
 
 Implementation sequence:
 
@@ -684,19 +682,18 @@ Implementation sequence:
    production-bound speed helpers that have no runtime caller.
 2. Split bindings into common inference/search, concrete chess, concrete Go,
    and chess-analysis registration units; benchmarks remain standalone targets.
-3. Define the complete native game contract and make direct inference require
+3. Define the complete native game contract and make inference require
    explicit dimensions. Split generic inference configuration/statistics from
    game-specific decoded results.
 4. Generalize the mature chess arena `SearchTree` over the game contract and
    validate identical chess behavior plus 7x7 and 9x9 Go behavior.
-5. Extract the inference-worker, pending-batch, and root-work machinery from
-   `DirectSelfPlaySearch` without changing its issue/complete scheduling.
-6. Route chess and Go self-play and multi-game model evaluation through the
-   optimized `searchGames` workload. Remove the simplified `GameSearch` after
-   parity and model-refresh tests pass.
-7. Route chess interactive analysis through the shared tree, executor, and
-   inference runtime using the `analyze` workload while retaining the thin
-   chess session and presentation boundary.
+5. Extract the inference-worker, pending-batch, and root-work machinery into
+   `BatchedSearchExecutor` without changing its issue/complete scheduling.
+6. Route chess and Go self-play and multi-game model evaluation through
+   `GameSelfPlaySearch<Game>`. Remove the simplified `GameSearch` after parity
+   and model-refresh tests pass.
+7. Route chess and Go analysis through `GameAnalysis<Game>` while retaining the
+   thin chess session and FEN/UCI presentation boundary.
 8. Remove superseded `MCTS`, `DirectSelfPlaySearch`, `InteractiveSearch`,
    `EvalSearchTree`, legacy C++ `InferenceClient`, standalone
    `InferenceResultProcessing`, duplicate trees, and the Python cluster
@@ -832,7 +829,8 @@ task.
 | --- | --- | --- | --- | --- |
 | 2026-08-07 | R8 | Review rejection | The shared optimized search is functionally complete, but `BatchedSearch.hpp` combines the arena, root ownership, request/result types, scheduling, inference dispatch, execution, refresh, and statistics in one thousand-line template header; inference infrastructure also remains scattered at the native source root, and analysis is exposed as a chess-owned engine rather than a shared workload with chess presentation. | Return R8 to `in_progress`. Split cohesive template components into focused headers, move search/inference infrastructure under `search`, introduce a shared analysis facade usable by each game contract, and reduce chess units to chess rules, self-play policy, and FEN/UCI presentation. |
 | 2026-08-07 | R8 | Shared-search completion | Chess self-play, Go 7x7/9x9 self-play, and retained-tree chess analysis previously reached the optimized arena through overlapping but separately owned scheduling layers. | Make `BatchedGameSearch<Game>` and `GameSearchTree<Game>` authoritative for every native workload, preserve multi-worker/outstanding-batch overlap, let chess analysis select one retained root with parallel leaf searches, and remove `MCTS`, `EvalMCTS`, `EvalSearchTree`, `DirectSelfPlaySearch`, and the duplicate analysis scheduler. |
-| 2026-08-07 | R8 | Boundary cleanup | Generic inference and module registration still carried names and files inherited from the chess-only implementation. | Keep `DirectInference` as the dimension-explicit tensor/model/slot runtime, isolate shared bindings under `search`, isolate chess and Go registrations under their game directories, remove the unused inference client and result-processing layers, and keep only FEN/UCI/candidate/PV presentation in `ChessAnalysisEngine`. |
+| 2026-08-07 | R8 | Boundary cleanup | Generic inference and module registration still carried names and files inherited from the chess-only implementation. | Replace the `DirectInference` layer with dimension-explicit `InferenceModel` and `InferencePipeline` components under `search`; isolate common, chess, Go, self-play, and analysis bindings; remove unused clients/result-processing layers; and keep only FEN/UCI/candidate/PV translation in `ChessAnalysisSession`. |
+| 2026-08-07 | R8 | Native ownership cleanup | The first shared implementation left search lifecycle, optimized scheduling, inference, bindings, and chess aliases grouped into broad or misleading units. | Split the public `BatchedGameSearch` lifecycle from `BatchedSearchExecutor`, make `GameSelfPlaySearch<Game>` and `GameAnalysis<Game>` the only workload facades, rename the canonical runtime input to `InferenceConfiguration`, remove `direct` metric names, move Stockfish initialization into chess registration, and keep game-specific binding files as presentation only. |
 | 2026-08-07 | R8 | Review rejection | The first R8 implementation added a simplified game-generic Go search beside the optimized chess search; production chess continued through chess-specific `MCTS`, `DirectSelfPlaySearch`, and `SearchTree`, so the result was not one shared pipeline. | Return R8 to `in_progress`. Generalize the optimized chess direct-search implementation and mature arena over game contracts, preserve separate typed batched-game and single-tree analysis workloads, and remove the simplified and legacy parallel implementations after migration. |
 | 2026-08-05 | R8 | Design decision | A Go game terminated by the maximum-move safety bound has no result target and produces no eligible replay samples or credits; its completed-game record remains archived for telemetry and recovery. | Use R7's explicit terminal-without-value contract rather than inventing a training label. |
 | 2026-08-06 | R8 | Contract adjustment | Chess's compile-time inference dimensions prevented resolved 7x7 and 9x9 Go experiments from sharing the direct-inference artifact boundary. | Make inference artifacts carry explicit channel, row, column, action, and outcome dimensions; validate resolved Go configuration against the selected native template before starting self-play. |

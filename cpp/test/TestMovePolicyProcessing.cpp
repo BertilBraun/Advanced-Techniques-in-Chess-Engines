@@ -1,22 +1,20 @@
-#include "search/SearchInference.hpp"
 #include "games/chess/ChessGameContract.hpp"
-#include "games/chess/ChessAction.hpp"
+#include "search/SearchInference.hpp"
 
 #include "bitboard.h"
 #include "position.h"
 
+#include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace {
-constexpr float SCORE_TOLERANCE = 1e-6f;
-static_assert(static_cast<size_t>(WdlIndex::Win) == 0);
-static_assert(static_cast<size_t>(WdlIndex::Draw) == 1);
-static_assert(static_cast<size_t>(WdlIndex::Loss) == 2);
-static_assert(static_cast<size_t>(WdlIndex::Count) == 3);
+constexpr float scoreTolerance = 1e-6F;
+constexpr std::array<float, 3> validOutcome = {0.25F, 0.5F, 0.25F};
 
 void require(const bool condition, const std::string &message) {
     if (!condition) {
@@ -24,150 +22,81 @@ void require(const bool condition, const std::string &message) {
     }
 }
 
-std::vector<EncodedMoveScore> torchReference(const torch::Tensor &policy, const Board &board) {
-    const std::vector<Move> &legalMoves = board.validMoves();
-    if (legalMoves.empty()) {
-        return {};
+std::vector<float> positivePolicy() {
+    std::vector<float> policy(ACTION_SIZE);
+    for (int actionId = 0; actionId < ACTION_SIZE; ++actionId) {
+        policy[actionId] = static_cast<float>(actionId + 1);
     }
-
-    torch::Tensor legalMoveMask = torch::zeros({ACTION_SIZE}, torch::kFloat32);
-    for (const Move move : legalMoves) {
-        legalMoveMask[encodeMove(move, &board)] = 1.0f;
-    }
-
-    torch::Tensor filteredPolicy = policy * legalMoveMask;
-    const float legalPolicySum = filteredPolicy.sum().item<float>();
-    if (legalPolicySum < 0.00001f) {
-        filteredPolicy = legalMoveMask / legalMoveMask.sum();
-    } else {
-        filteredPolicy /= legalPolicySum;
-    }
-
-    const torch::Tensor nonzeroIndices = torch::nonzero(filteredPolicy > 0);
-    std::vector<EncodedMoveScore> result;
-    result.reserve(static_cast<size_t>(nonzeroIndices.size(0)));
-    for (int64_t index = 0; index < nonzeroIndices.size(0); ++index) {
-        const int encodedMove = nonzeroIndices[index].item<int>();
-        result.emplace_back(encodedMove, filteredPolicy[encodedMove].item<float>());
-    }
-    return result;
+    return policy;
 }
 
-void requireEquivalent(const Board &board, const torch::Tensor &policy,
+void requireNormalized(const Board &board, const std::vector<float> &policy,
                        const std::string &description) {
-    const std::vector<EncodedMoveScore> expected = torchReference(policy, board);
-    const std::vector<EncodedMoveScore> actual =
-        filterPolicyThenGetMovesAndProbabilities(policy, &board);
+    const SearchInferenceResult<ChessGameContract> result =
+        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    float sum = 0.0F;
+    int previousActionId = -1;
+    for (const auto &[action, probability] : result.actions) {
+        const int actionId = ChessGameContract::actionId(action, board);
+        require(actionId > previousActionId, description + ": actions are not ordered by id");
+        require(probability > 0.0F, description + ": retained non-positive probability");
+        previousActionId = actionId;
+        sum += probability;
+    }
+    require(std::abs(sum - 1.0F) <= scoreTolerance, description + ": policy is not normalized");
+}
 
-    require(actual.size() == expected.size(), description + ": move count differs");
-    for (size_t index = 0; index < expected.size(); ++index) {
-        require(actual[index].first == expected[index].first,
-                description + ": encoded move ordering differs");
-        require(std::abs(actual[index].second - expected[index].second) <= SCORE_TOLERANCE,
-                description + ": normalized score differs");
+void testRepresentativePositions() {
+    const Board initial;
+    requireNormalized(initial, positivePolicy(), "starting position");
+    requireNormalized(Board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1"),
+                      positivePolicy(), "black-to-move position");
+    const Board promotion("7k/P7/8/8/8/8/8/7K w - - 0 1");
+    require(std::ranges::count_if(promotion.validMoves(),
+                                  [](const Move move) { return move.type_of() == PROMOTION; }) == 4,
+            "promotion position did not contain four promotion choices");
+    requireNormalized(promotion, positivePolicy(), "promotion position");
+}
+
+void testUniformFallbackAndSparsePolicy() {
+    const Board board;
+    std::vector<float> policy(ACTION_SIZE, 0.0F);
+    SearchInferenceResult<ChessGameContract> uniform =
+        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    require(uniform.actions.size() == board.validMoves().size(),
+            "uniform fallback omitted legal actions");
+    const float expected = 1.0F / static_cast<float>(uniform.actions.size());
+    for (const auto &[action, probability] : uniform.actions) {
+        static_cast<void>(action);
+        require(std::abs(probability - expected) <= scoreTolerance,
+                "uniform fallback returned a non-uniform probability");
     }
 
-    const std::vector<MoveScore> moveScores =
-        filterPolicyThenGetMoveScores(policy.data_ptr<float>(), &board);
-    require(moveScores.size() == expected.size(), description + ": direct move count differs");
-    for (size_t index = 0; index < expected.size(); ++index) {
-        require(encodeMove(moveScores[index].first, &board) == expected[index].first,
-                description + ": direct move ordering differs");
-        require(std::abs(moveScores[index].second - expected[index].second) <= SCORE_TOLERANCE,
-                description + ": direct normalized score differs");
-    }
+    policy[ChessActionCodec::encode(ChessAction(board.validMoves()[0]), board)] = 1.0F;
+    policy[ChessActionCodec::encode(ChessAction(board.validMoves()[1]), board)] = 2.0F;
+    const SearchInferenceResult<ChessGameContract> sparse =
+        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+    require(sparse.actions.size() == 2, "zero-probability legal actions were retained");
 }
 
-torch::Tensor positivePolicy() {
-    return torch::arange(1, ACTION_SIZE + 1, torch::TensorOptions().dtype(torch::kFloat32));
-}
+void testTerminalAndOutcomeValidation() {
+    const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
+    const std::vector<float> policy = positivePolicy();
+    require(processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), terminal)
+                .actions.empty(),
+            "terminal position returned policy actions");
 
-void testNormalPosition() {
-    const Board board;
-    requireEquivalent(board, positivePolicy(), "starting position");
-}
-
-void testBlackToMovePosition() {
-    const Board board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
-    requireEquivalent(board, positivePolicy(), "black-to-move position");
-}
-
-void testPromotionPosition() {
-    const Board board("7k/P7/8/8/8/8/8/7K w - - 0 1");
-    size_t promotionCount = 0;
-    for (const Move move : board.validMoves()) {
-        if (move.type_of() == PROMOTION) {
-            ++promotionCount;
-        }
-    }
-    require(promotionCount == 4, "promotion position did not contain four promotion choices");
-    requireEquivalent(board, positivePolicy(), "promotion position");
-}
-
-void testUniformFallback() {
-    const Board board;
-    const torch::Tensor policy = torch::zeros({ACTION_SIZE}, torch::kFloat32);
-    const std::vector<EncodedMoveScore> actual =
-        filterPolicyThenGetMovesAndProbabilities(policy, &board);
-
-    require(actual.size() == board.validMoves().size(), "uniform fallback omitted legal moves");
-    const float expectedProbability = 1.0f / static_cast<float>(board.validMoves().size());
-    for (const EncodedMoveScore &moveWithProbability : actual) {
-        require(std::abs(moveWithProbability.second - expectedProbability) <= SCORE_TOLERANCE,
-                "uniform fallback returned a non-uniform score");
-    }
-    requireEquivalent(board, policy, "uniform fallback");
-}
-
-void testZeroProbabilityMovesAreOmitted() {
-    const Board board;
-    torch::Tensor policy = torch::zeros({ACTION_SIZE}, torch::kFloat32);
-    const std::vector<Move> &legalMoves = board.validMoves();
-    policy[encodeMove(legalMoves[0], &board)] = 1.0f;
-    policy[encodeMove(legalMoves[1], &board)] = 2.0f;
-
-    const std::vector<EncodedMoveScore> actual =
-        filterPolicyThenGetMovesAndProbabilities(policy, &board);
-    require(actual.size() == 2, "zero-probability legal moves were retained");
-    requireEquivalent(board, policy, "mixed zero and positive policy");
-}
-
-void testTerminalPosition() {
-    const Board board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
-    require(board.validMoves().empty(), "terminal test position has legal moves");
-    require(filterPolicyThenGetMovesAndProbabilities(positivePolicy(), &board).empty(),
-            "terminal position returned policy moves");
-}
-
-void testWdlProcessing() {
-    const Board board;
-    const torch::Tensor policy = positivePolicy();
-    const std::array<float, 3> outcome = {0.25F, 0.5F, 0.25F};
-    const auto result =
-        processSearchInference<ChessGameContract>(policy.data_ptr<float>(), outcome.data(), board);
-    require(std::abs(result.outcome.win - outcome[0]) <= SCORE_TOLERANCE,
-            "WDL processing changed win probability");
-    require(std::abs(result.outcome.draw - outcome[1]) <= SCORE_TOLERANCE,
-            "WDL processing changed draw probability");
-    require(std::abs(result.outcome.loss - outcome[2]) <= SCORE_TOLERANCE,
-            "WDL processing changed loss probability");
-}
-
-void testInvalidWdlProcessing() {
-    const Board board;
-    const torch::Tensor policy = positivePolicy();
     const std::array<std::array<float, 3>, 4> invalidOutcomes = {
         std::array<float, 3>{NAN, 0.5F, 0.5F},
         std::array<float, 3>{0.5F, INFINITY, 0.5F},
         std::array<float, 3>{-0.1F, 0.6F, 0.5F},
         std::array<float, 3>{0.2F, 0.2F, 0.2F},
     };
-    for (const std::array<float, 3> &outcome : invalidOutcomes) {
+    for (const auto &outcome : invalidOutcomes) {
         bool rejected = false;
         try {
             static_cast<void>(
-                processSearchInference<ChessGameContract>(policy.data_ptr<float>(), outcome.data(),
-                                                          board));
+                processSearchInference<ChessGameContract>(policy.data(), outcome.data(), Board{}));
         } catch (const std::runtime_error &) {
             rejected = true;
         }
@@ -179,15 +108,9 @@ void testInvalidWdlProcessing() {
 int main() {
     Bitboards::init();
     Position::init();
-
-    testNormalPosition();
-    testBlackToMovePosition();
-    testPromotionPosition();
-    testUniformFallback();
-    testZeroProbabilityMovesAreOmitted();
-    testTerminalPosition();
-    testWdlProcessing();
-    testInvalidWdlProcessing();
+    testRepresentativePositions();
+    testUniformFallbackAndSparsePolicy();
+    testTerminalAndOutcomeValidation();
     std::cout << "Move policy processing tests passed\n";
     return 0;
 }

@@ -42,6 +42,6 @@ struct InferenceStatistics {
     std::uint64_t resultProcessingNanoseconds = 0;
     std::uint64_t treeBackupNanoseconds = 0;
     std::uint64_t treeOwnerWaitNanoseconds = 0;
-    std::uint64_t directInferenceNanoseconds = 0;
-    float directWorkerUtilization = 0.0F;
+    std::uint64_t inferenceNanoseconds = 0;
+    float workerUtilization = 0.0F;
 };

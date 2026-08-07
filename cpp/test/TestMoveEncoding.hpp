@@ -18,18 +18,18 @@ static void testMoveEncoding() {
 
             std::vector<int> moveIndices;
             for (const auto &move : moves) {
-                moveIndices.push_back(encodeMove(move, &board));
+                moveIndices.push_back(ChessActionCodec::encode(ChessAction(move), board));
                 if (moveIndices.back() < 0 || moveIndices.back() >= ACTION_SIZE) {
                     std::cerr << "Encoded move index out of bounds: " << moveIndices.back()
                               << " for move: " << toString(move) << std::endl;
                 }
             }
             // Decode the moves to get the actual Move objects
-            const auto decodedMoves = decodeMoves(moveIndices, &board);
+            const auto decodedActions = ChessActionCodec::decode(moveIndices, board);
 
             bool anyMismatch = false;
-            for (auto [real, decoded] : zip(moves, decodedMoves)) {
-                if (real.raw() != decoded.raw()) {
+            for (auto [real, decoded] : zip(moves, decodedActions)) {
+                if (real.raw() != decoded.move.raw()) {
                     anyMismatch = true;
                 }
             }
@@ -38,13 +38,13 @@ static void testMoveEncoding() {
                 std::cerr << "Missmatch of decoded moves in Board: " << board.fen() << std::endl;
                 std::cerr << "Valid moves:\n";
                 for (const auto &move : moves) {
-                    std::cerr << "  " << toString(move) << " (" << encodeMove(move, &board)
-                              << ")\n";
+                    std::cerr << "  " << toString(move) << " ("
+                              << ChessActionCodec::encode(ChessAction(move), board) << ")\n";
                 }
                 std::cerr << "Decoded moves:\n";
-                for (const auto &decoded : decodedMoves) {
-                    std::cerr << "  " << toString(decoded) << " (" << encodeMove(decoded, &board)
-                              << ")\n";
+                for (const ChessAction decoded : decodedActions) {
+                    std::cerr << "  " << toString(decoded.move) << " ("
+                              << ChessActionCodec::encode(decoded, board) << ")\n";
                 }
             }
 

@@ -1,25 +1,19 @@
 #pragma once
 
-#include "common.hpp"
+#include "games/chess/ChessBoard.hpp"
 
-[[nodiscard]] int encodeMove(Move move, const Board *board);
+#include <vector>
 
-[[nodiscard]] std::vector<Move> decodeMoves(const std::vector<int> &moveIndices,
-                                            const Board *board);
+struct ChessAction {
+    Move move;
 
-[[nodiscard]] std::vector<EncodedMoveScore>
-filterPolicyThenGetMovesAndProbabilities(const torch::Tensor &policy, const Board *board);
+    explicit ChessAction(const Move chessMove) : move(chessMove) {}
+    [[nodiscard]] bool operator==(const ChessAction &) const noexcept = default;
+};
 
-[[nodiscard]] std::vector<MoveScore> filterPolicyThenGetMoveScores(const float *policyData,
-                                                                   const Board *board);
-
-using ChessAction = Move;
-
-[[nodiscard]] inline int chess_action_id(const ChessAction action, const Board &position) {
-    return encodeMove(action, &position);
-}
-
-[[nodiscard]] inline std::vector<ChessAction>
-decode_chess_actions(const std::vector<int> &action_ids, const Board &position) {
-    return decodeMoves(action_ids, &position);
-}
+class ChessActionCodec {
+public:
+    [[nodiscard]] static int encode(ChessAction action, const Board &position);
+    [[nodiscard]] static std::vector<ChessAction> decode(const std::vector<int> &actionIds,
+                                                         const Board &position);
+};

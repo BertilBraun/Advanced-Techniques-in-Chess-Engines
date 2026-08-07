@@ -7,15 +7,19 @@ from pathlib import Path
 import numpy as np
 from AlphaZeroCpp import (
     BatchedInferenceParameters,
-    BatchedSearchParameters,
-    GameSearchResult,
-    GoBatchedSearch7,
-    GoBatchedSearch9,
+    GoSelfPlaySearch7,
+    GoSelfPlaySearch9,
+    GoSelfPlaySearchRequest7,
+    GoSelfPlaySearchRequest9,
+    GoSelfPlaySearchResult7,
+    GoSelfPlaySearchResult9,
     GoPlayer,
     GoRules,
     GoSearchRoot7,
     GoSearchRoot9,
     InferenceDevice,
+    InferenceConfiguration,
+    SelfPlaySearchParameters,
 )
 
 from src.experiment.chess_experiment import GoExperimentConfiguration
@@ -31,8 +35,10 @@ from src.self_play.go_completed_game import (
 )
 
 
-NativeGoSearch = GoBatchedSearch7 | GoBatchedSearch9
+NativeGoSearch = GoSelfPlaySearch7 | GoSelfPlaySearch9
 NativeGoSearchRoot = GoSearchRoot7 | GoSearchRoot9
+NativeGoSearchRequest = GoSelfPlaySearchRequest7 | GoSelfPlaySearchRequest9
+NativeGoSearchResult = GoSelfPlaySearchResult7 | GoSelfPlaySearchResult9
 
 
 @dataclass
@@ -59,7 +65,9 @@ class GoSelfPlay:
             configuration.go.rules.komi_half_points,
             configuration.go.rules.maximum_moves,
         )
-        search_type = GoBatchedSearch7 if configuration.go.representation.board_size == 7 else GoBatchedSearch9
+        seven_by_seven = configuration.go.representation.board_size == 7
+        search_type = GoSelfPlaySearch7 if seven_by_seven else GoSelfPlaySearch9
+        self.search_request_type = GoSelfPlaySearchRequest7 if seven_by_seven else GoSelfPlaySearchRequest9
         device = (
             InferenceDevice.CPU
             if configuration.training.topology.trainer.device_type == 'cpu'
@@ -86,21 +94,20 @@ class GoSelfPlay:
         if actual_dimensions != expected_dimensions:
             raise ValueError('Resolved Go representation disagrees with the native template dimensions.')
         self.search: NativeGoSearch = search_type(
-            str(model_path),
-            device,
-            device_id,
+            InferenceConfiguration(device_id, str(model_path), device),
+            SelfPlaySearchParameters(
+                search.num_parallel_searches,
+                search.num_searches_per_turn,
+                search.num_searches_per_turn,
+                search.c_param,
+                search.dirichlet_alpha,
+                search.dirichlet_epsilon,
+                search.min_visit_count,
+            ),
             BatchedInferenceParameters(
                 inference.inference_workers,
                 inference.inference_batch_size,
                 inference.outstanding_batches_per_worker,
-            ),
-            BatchedSearchParameters(
-                search.num_parallel_searches,
-                search.c_param,
-                search.min_visit_count,
-                search.dirichlet_alpha,
-                search.dirichlet_epsilon,
-                search.num_searches_per_turn + search.num_parallel_searches + 2,
             ),
             model_generation,
         )
@@ -117,10 +124,8 @@ class GoSelfPlay:
         active = [self._new_game() for _ in range(parallel_games)]
         published: list[Path] = []
         while len(published) < game_count:
-            results = self.search.search(
-                [game.root for game in active],
-                self.configuration.training.self_play.search.num_searches_per_turn,
-            )
+            batch = self.search.search([self.search_request_type(game.root, True) for game in active])
+            results = batch.results
             completed_indices: list[int] = []
             for index, (game, result) in enumerate(zip(active, results, strict=True)):
                 self._play_move(game, result)
@@ -141,7 +146,7 @@ class GoSelfPlay:
     def _new_game(self) -> _ActiveGoGame:
         return _ActiveGoGame(self.search.new_root(self.rules), time.time())
 
-    def _play_move(self, game: _ActiveGoGame, result: GameSearchResult) -> None:
+    def _play_move(self, game: _ActiveGoGame, result: NativeGoSearchResult) -> None:
         positive_visits = tuple(
             (visit.action_id, visit.visit_count) for visit in result.visits if visit.visit_count > 0
         )

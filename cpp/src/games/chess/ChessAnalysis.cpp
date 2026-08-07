@@ -6,7 +6,7 @@
 
 namespace {
 Move decodeAction(const Board &position, const int actionId) {
-    return ChessGameContract::decodeActions({actionId}, position).front();
+    return ChessGameContract::decodeActions({actionId}, position).front().move;
 }
 
 ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &rootPosition) {
@@ -17,16 +17,16 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
                               candidate.policy_prior, static_cast<int>(candidate.visits),
                               candidate.visit_share, candidate.mean_value});
     }
-    std::ranges::sort(candidates, [](const ChessAnalysisCandidate &left,
-                                    const ChessAnalysisCandidate &right) {
-        if (left.visits != right.visits) {
-            return left.visits > right.visits;
-        }
-        if (left.policy_prior != right.policy_prior) {
-            return left.policy_prior > right.policy_prior;
-        }
-        return left.move_uci < right.move_uci;
-    });
+    std::ranges::sort(candidates,
+                      [](const ChessAnalysisCandidate &left, const ChessAnalysisCandidate &right) {
+                          if (left.visits != right.visits) {
+                              return left.visits > right.visits;
+                          }
+                          if (left.policy_prior != right.policy_prior) {
+                              return left.policy_prior > right.policy_prior;
+                          }
+                          return left.move_uci < right.move_uci;
+                      });
 
     Board variationPosition(rootPosition);
     std::vector<std::string> variation;
@@ -66,9 +66,9 @@ void ChessAnalysisSession::applyMove(const std::string &moveUci) {
     const Move move = m_root.position().legalMoveFromUci(moveUci);
     const GameSearchNode<ChessGameContract> &root = m_root.tree().root();
     if (root.expanded()) {
-        for (const GameSearchEdge<Move> &edge : root.children) {
-            if (edge.action == move) {
-                m_root.play(ChessGameContract::actionId(move, m_root.position()));
+        for (const GameSearchEdge<ChessAction> &edge : root.children) {
+            if (edge.action.move == move) {
+                m_root.play(ChessGameContract::actionId(ChessAction(move), m_root.position()));
                 m_movesUci.push_back(moveUci);
                 return;
             }
@@ -89,9 +89,8 @@ ChessAnalysisResult ChessAnalysisSession::analyze(const AnalysisMode mode,
             "MCTS analysis requires exactly one time limit or search limit");
     }
     if (timeLimitSeconds.has_value()) {
-        return present(
-            m_analysis->analyzeTimed(m_root, std::chrono::seconds(*timeLimitSeconds)),
-            m_root.position());
+        return present(m_analysis->analyzeTimed(m_root, std::chrono::seconds(*timeLimitSeconds)),
+                       m_root.position());
     }
     if (*searchLimit <= 0) {
         throw std::invalid_argument("search_limit must be positive");

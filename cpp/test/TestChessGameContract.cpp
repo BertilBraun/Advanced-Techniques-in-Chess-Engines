@@ -28,15 +28,17 @@ int main() {
                 static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count),
             "Chess contract scalar channel count disagrees with the encoded position");
 
-    const Move firstMove = ChessGameContract::legalActions(initial).front();
-    const int actionId = ChessGameContract::actionId(firstMove, initial);
+    const ChessAction firstAction = ChessGameContract::legalActions(initial).front();
+    const int actionId = ChessGameContract::actionId(firstAction, initial);
     require(0 <= actionId && actionId < ChessRepresentationDimensions::action_count,
             "Chess contract action id is outside the configured action space");
-    const std::vector<Move> decodedMoves = ChessGameContract::decodeActions({actionId}, initial);
-    require(decodedMoves.size() == 1, "Chess contract failed to decode the encoded action");
-    require(decodedMoves.front() == firstMove, "Chess contract changed the encoded chess action");
+    const std::vector<ChessAction> decodedActions =
+        ChessGameContract::decodeActions({actionId}, initial);
+    require(decodedActions.size() == 1, "Chess contract failed to decode the encoded action");
+    require(decodedActions.front() == firstAction,
+            "Chess contract changed the encoded chess action");
 
-    const Board child = ChessGameContract::childPosition(initial, firstMove);
+    const Board child = ChessGameContract::childPosition(initial, firstAction);
     require(child.fen() != initial.fen(), "Chess child position must differ from its parent");
 
     const Board terminal =

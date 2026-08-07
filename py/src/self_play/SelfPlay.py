@@ -13,7 +13,7 @@ if TYPE_CHECKING:
         ChessSearchRoot,
         ChessSelfPlaySearch,
         ChessSelfPlaySearchBatch,
-        ChessSelfPlaySearchParameters,
+        SelfPlaySearchParameters,
         ChessSelfPlaySearchRequest,
         ChessSelfPlaySearchResult,
         InferenceStatistics,
@@ -310,10 +310,10 @@ class SelfPlay:
                 for game in self.self_play_games:
                     game.already_expanded_node = None
 
-    def _native_mcts_params(self, schedule: SearchScheduleState) -> ChessSelfPlaySearchParameters:
-        from AlphaZeroCpp import ChessSelfPlaySearchParameters
+    def _native_mcts_params(self, schedule: SearchScheduleState) -> SelfPlaySearchParameters:
+        from AlphaZeroCpp import SelfPlaySearchParameters
 
-        return ChessSelfPlaySearchParameters(
+        return SelfPlaySearchParameters(
             parallel_searches=self.args.search.num_parallel_searches,
             full_searches=schedule.num_full_searches,
             fast_searches=schedule.num_fast_searches,
@@ -336,7 +336,7 @@ class SelfPlay:
         if schedule is None:
             raise RuntimeError('Search schedule must be initialized before loading a model.')
         if self.search_engine is None:
-            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceRuntimeParameters
+            from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceConfiguration
 
             inference = self.args.inference
             inference_parameters = BatchedInferenceParameters(
@@ -344,7 +344,7 @@ class SelfPlay:
                 inference.inference_batch_size,
                 inference.outstanding_batches_per_worker,
             )
-            runtime_parameters = InferenceRuntimeParameters(
+            runtime_parameters = InferenceConfiguration(
                 device_id=self.device_id,
                 model_path=str(model_path),
             )

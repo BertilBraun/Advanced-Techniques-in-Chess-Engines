@@ -16,10 +16,10 @@ __all__ = [
     'ChessAnalysisSession',
     'ChessSelfPlaySearch',
     'ChessSelfPlaySearchBatch',
-    'ChessSelfPlaySearchParameters',
+    'SelfPlaySearchParameters',
     'ChessSelfPlaySearchRequest',
     'ChessSelfPlaySearchResult',
-    'ChessSelfPlaySearchStatistics',
+    'SelfPlaySearchStatistics',
     'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
@@ -27,8 +27,14 @@ __all__ = [
     'GoAreaScore',
     'GoAnalysis7',
     'GoAnalysis9',
-    'GoBatchedSearch7',
-    'GoBatchedSearch9',
+    'GoSelfPlaySearch7',
+    'GoSelfPlaySearch9',
+    'GoSelfPlaySearchRequest7',
+    'GoSelfPlaySearchRequest9',
+    'GoSelfPlaySearchResult7',
+    'GoSelfPlaySearchResult9',
+    'GoSelfPlaySearchBatch7',
+    'GoSelfPlaySearchBatch9',
     'GoPlayer',
     'GoPosition7',
     'GoPosition9',
@@ -40,7 +46,7 @@ __all__ = [
     'GoTerminationReason',
     'InferenceDimensions',
     'InferenceDevice',
-    'InferenceRuntimeParameters',
+    'InferenceConfiguration',
     'InferenceStatistics',
     'TimeInfo',
     'WdlPrediction',
@@ -242,38 +248,68 @@ class GoSearchRoot9:
     def children(self) -> list[tuple[int, int]]: ...
     def play(self, action_id: int) -> None: ...
 
-class GoBatchedSearch7:
+class GoSelfPlaySearchRequest7:
+    def __init__(self, root: GoSearchRoot7, full_search: bool) -> None: ...
+    root: GoSearchRoot7
+    full_search: bool
+
+class GoSelfPlaySearchResult7:
+    root_value: float
+    visits: list[GameSearchVisit]
+    root: GoSearchRoot7
+
+class GoSelfPlaySearchBatch7:
+    results: list[GoSelfPlaySearchResult7]
+    statistics: SelfPlaySearchStatistics
+    simulations_completed: int
+
+class GoSelfPlaySearch7:
     def __init__(
         self,
-        model_path: str,
-        device: InferenceDevice,
-        device_id: int,
+        runtime_parameters: InferenceConfiguration,
+        search_parameters: SelfPlaySearchParameters,
         inference_parameters: BatchedInferenceParameters,
-        search_parameters: BatchedSearchParameters,
-        model_generation: int,
+        initial_model_generation: int = 0,
     ) -> None: ...
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot7: ...
-    def search(self, roots: list[GoSearchRoot7], simulations: int) -> list[GameSearchResult]: ...
+    def search(
+        self, requests: list[GoSelfPlaySearchRequest7], collect_statistics: bool = False
+    ) -> GoSelfPlaySearchBatch7: ...
     def refresh_model(self, model_generation: int, model_path: str) -> None: ...
     @property
     def model_generation(self) -> int: ...
 
-class GoBatchedSearch9:
+class GoSelfPlaySearchRequest9:
+    def __init__(self, root: GoSearchRoot9, full_search: bool) -> None: ...
+    root: GoSearchRoot9
+    full_search: bool
+
+class GoSelfPlaySearchResult9:
+    root_value: float
+    visits: list[GameSearchVisit]
+    root: GoSearchRoot9
+
+class GoSelfPlaySearchBatch9:
+    results: list[GoSelfPlaySearchResult9]
+    statistics: SelfPlaySearchStatistics
+    simulations_completed: int
+
+class GoSelfPlaySearch9:
     def __init__(
         self,
-        model_path: str,
-        device: InferenceDevice,
-        device_id: int,
+        runtime_parameters: InferenceConfiguration,
+        search_parameters: SelfPlaySearchParameters,
         inference_parameters: BatchedInferenceParameters,
-        search_parameters: BatchedSearchParameters,
-        model_generation: int,
+        initial_model_generation: int = 0,
     ) -> None: ...
     @staticmethod
     def inference_dimensions() -> InferenceDimensions: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot9: ...
-    def search(self, roots: list[GoSearchRoot9], simulations: int) -> list[GameSearchResult]: ...
+    def search(
+        self, requests: list[GoSelfPlaySearchRequest9], collect_statistics: bool = False
+    ) -> GoSelfPlaySearchBatch9: ...
     def refresh_model(self, model_generation: int, model_path: str) -> None: ...
     @property
     def model_generation(self) -> int: ...
@@ -281,7 +317,7 @@ class GoBatchedSearch9:
 class GoAnalysis7:
     def __init__(
         self,
-        runtime_parameters: InferenceRuntimeParameters,
+        runtime_parameters: InferenceConfiguration,
         parameters: AnalysisParameters,
     ) -> None: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot7: ...
@@ -293,7 +329,7 @@ class GoAnalysis7:
 class GoAnalysis9:
     def __init__(
         self,
-        runtime_parameters: InferenceRuntimeParameters,
+        runtime_parameters: InferenceConfiguration,
         parameters: AnalysisParameters,
     ) -> None: ...
     def new_root(self, rules: GoRules) -> GoSearchRoot9: ...
@@ -354,7 +390,7 @@ class InferenceDevice:
 class ChessAnalysis:
     def __init__(
         self,
-        runtime_parameters: InferenceRuntimeParameters,
+        runtime_parameters: InferenceConfiguration,
         parameters: AnalysisParameters,
     ) -> None: ...
     def new_session(self, starting_fen: str, moves_uci: tuple[str, ...]) -> ChessAnalysisSession: ...
@@ -390,7 +426,7 @@ class FunctionTimeInfo:
     @property
     def total(self) -> float: ...
 
-class InferenceRuntimeParameters:
+class InferenceConfiguration:
     device_id: int
     model_path: str
     device: InferenceDevice
@@ -417,8 +453,8 @@ class InferenceStatistics:
 class ChessSelfPlaySearch:
     def __init__(
         self,
-        runtime_parameters: InferenceRuntimeParameters,
-        search_parameters: ChessSelfPlaySearchParameters,
+        runtime_parameters: InferenceConfiguration,
+        search_parameters: SelfPlaySearchParameters,
         inference_parameters: BatchedInferenceParameters,
         initial_model_version: int = 0,
     ) -> None: ...
@@ -428,7 +464,7 @@ class ChessSelfPlaySearch:
     def model_version(self) -> int: ...
     def inference_statistics(self) -> tuple[InferenceStatistics, TimeInfo]: ...
     def refresh_model(self, model_version: int, model_path: str) -> None: ...
-    def update_search_schedule(self, search_parameters: ChessSelfPlaySearchParameters) -> bool: ...
+    def update_search_schedule(self, search_parameters: SelfPlaySearchParameters) -> bool: ...
     def inference_with_history(
         self, histories: list[tuple[str, list[str]]]
     ) -> list[tuple[list[tuple[int, float]], float]]: ...
@@ -464,7 +500,6 @@ class ChessSearchChild:
     @property
     def is_materialized(self) -> bool: ...
     @property
-    def move(self) -> str: ...
     @property
     def policy(self) -> float: ...
     @property
@@ -513,7 +548,7 @@ class ChessSearchRoot:
     @property
     def visits(self) -> int: ...
 
-class ChessSelfPlaySearchParameters:
+class SelfPlaySearchParameters:
     exploration_constant: float
     dirichlet_alpha: float
     dirichlet_epsilon: float
@@ -542,13 +577,13 @@ class ChessSelfPlaySearchResult:
 
 class ChessSelfPlaySearchBatch:
     @property
-    def statistics(self) -> ChessSelfPlaySearchStatistics: ...
+    def statistics(self) -> SelfPlaySearchStatistics: ...
     @property
     def results(self) -> list[ChessSelfPlaySearchResult]: ...
     @property
     def simulations_completed(self) -> int: ...
 
-class ChessSelfPlaySearchStatistics:
+class SelfPlaySearchStatistics:
     @property
     def average_depth(self) -> float: ...
     @property

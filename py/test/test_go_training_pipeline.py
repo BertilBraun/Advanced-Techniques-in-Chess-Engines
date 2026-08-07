@@ -9,7 +9,7 @@ import torch
 
 AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
-if not hasattr(AlphaZeroCpp, 'GoBatchedSearch7'):
+if not hasattr(AlphaZeroCpp, 'GoSelfPlaySearch7'):
     pytest.skip('AlphaZeroCpp must be rebuilt with the R8 Go pipeline.', allow_module_level=True)
 
 from src.experiment.chess_experiment import GoExperimentConfiguration, load_experiment_configuration
@@ -177,7 +177,7 @@ def test_go_uses_shared_policy_and_counted_analysis(tmp_path: Path) -> None:
     model_path = tmp_path / 'analysis.jit.pt'
     _write_pass_model(model_path, (0.6, 0.2, 0.2))
     analysis = AlphaZeroCpp.GoAnalysis7(
-        AlphaZeroCpp.InferenceRuntimeParameters(
+        AlphaZeroCpp.InferenceConfiguration(
             device_id=0,
             model_path=str(model_path),
             device=AlphaZeroCpp.InferenceDevice.CPU,
@@ -235,7 +235,7 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     assert completed.termination_reason is GoTerminationReason.TWO_PASSES
 
     root = self_play.search.new_root(self_play.rules)
-    self_play.search.search([root], 4)
+    self_play.search.search([self_play.search_request_type(root, True)])
     assert root.visits > 0
     self_play.refresh_model(1, refreshed_model)
     assert root.visits == 0
