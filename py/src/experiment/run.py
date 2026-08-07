@@ -91,7 +91,7 @@ def _open_file_soft_limit() -> int:
         raise ValueError(f'Could not parse the open-file soft limit: {completed.stdout!r}') from error
 
 
-def _validate_hardware(experiment: ChessExperimentConfiguration, hardware: ResolvedHardware) -> None:
+def _validate_hardware(experiment: ExperimentConfiguration, hardware: ResolvedHardware) -> None:
     requested = experiment.run.hardware
     topology = experiment.training.topology
     if hardware.visible_gpu_count != requested.gpu_count:
