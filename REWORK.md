@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | in_progress |
+| R8 | Go pipeline integration | awaiting_user_review |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is in progress for shared experiment configuration ownership and legacy Python cleanup.
+Current authorization: R8 is awaiting user review after shared experiment configuration ownership and legacy Python cleanup.
 R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
@@ -827,6 +827,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-07 | R8 | Python configuration and legacy cleanup | Chess and Go experiment variants duplicated ownership and validation of the shared run and training configuration, while manually removed legacy bot, tournament, dataset-training, inspection, and optimization entrypoints left stale imports, dependencies, and documentation. | Introduce `BaseExperimentConfiguration` as the canonical owner of `ExperimentRunConfiguration` and `TrainingArgs`, leaving concrete variants to validate only game-specific fields. Retain the production chess evaluation/database path and its `SelfPlayDataset` consumer, colocate the sole UCI legal-move selection helper with the server, remove the orphan legacy graph and unused Optuna dependency, and update entrypoint documentation. The exact Windows suite passes 314 tests with 6 native-dependent skips, the fresh-extension suite passes all 356 tests, the focused UCI suite passes 17 tests, and Ruff passes. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Inference ownership review | `InferenceModel.hpp` contained implementation-only TorchScript loading and refresh validation despite having no independent owner, while `InferencePipeline.hpp` opened with the full game-result processing implementation before declaring the pipeline. | Delete the model header and keep its private implementation beside `InferenceRunner` in `InferencePipeline.cpp`; retain only the prepared-model ownership type in the public pipeline interface. Forward-declare `processInferencePosition` near its result type and place its required template implementation after the pipeline declaration. Native extension, test, and benchmark targets compile; native tests and Ruff pass. Return R8 to `awaiting_user_review`. |
 | 2026-08-07 | R8 | Review revision | Chess and Go duplicated the mechanical expansion and packing of binary and scalar planes; `SearchGame` verified only the concrete composition types instead of constraining their generic consumers; native Go symmetry code was reachable only through tests and Python bindings while Python already owns training augmentation. | Introduce one `EncodedPlanes` representation for shared packed and tensor mechanics, constrain every game-generic search and inference consumer with `SearchGame`, and delete the native Go symmetry implementation, binding surface, stubs, and tests. Retain Python's Go symmetry implementation as the sole training-augmentation owner. Return R8 to `awaiting_user_review`; native targets and tests, focused Go tests, and Ruff pass. The complete Python suite passes 350 tests with the same unrelated scalar-to-WDL expectation failure retained from checkpoint `62f8517`. |
 | 2026-08-07 | R8 | Native game-structure handoff | Chess and Go now expose one compile-time-verified `SearchGame` composition surface, but retain their natural internal state implementations. Their implementation, encoding, binding, and chess-presentation files have uniform ownership; superseded `GameContract`, `GoTypes`, policy-mapping wrappers, and identity-only Go bindings are removed. Maximum-move Go endings now produce scored, replay-eligible adjudications under the configured area scoring rule. | Return R8 to `awaiting_user_review`. The extension compile check and unified native suite pass, focused native-backed Go tests pass, Ruff passes, and the complete Python suite passes 351 tests with one unrelated failure retained from pre-restructure checkpoint `62f8517`: its scalar-to-WDL formula changed without updating the existing expected-distribution test. |
