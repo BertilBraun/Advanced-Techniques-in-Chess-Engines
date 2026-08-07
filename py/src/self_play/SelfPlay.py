@@ -337,10 +337,10 @@ class SelfPlay:
         if schedule is None:
             raise RuntimeError('Search schedule must be initialized before loading a model.')
         if self.mcts is None:
-            from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
+            from AlphaZeroCpp import BatchedInferenceParameters, InferenceClientParams, MCTS
 
             inference = self.args.inference
-            direct_inference_params = DirectSelfPlayInferenceParams(
+            inference_parameters = BatchedInferenceParameters(
                 inference.inference_workers,
                 inference.inference_batch_size,
                 inference.outstanding_batches_per_worker,
@@ -354,7 +354,7 @@ class SelfPlay:
             self.mcts = MCTS(
                 client_args,
                 self._native_mcts_params(schedule),
-                direct_inference_params=direct_inference_params,
+                inference_parameters=inference_parameters,
                 initial_model_version=model_version,
             )
         else:

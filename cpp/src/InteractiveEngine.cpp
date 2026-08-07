@@ -11,26 +11,26 @@ bool candidatePreference(const CandidateAnalysis &left, const CandidateAnalysis 
     return left.move_uci < right.move_uci;
 }
 
-std::vector<CandidateAnalysis> gatherMctsCandidates(const SearchTree &tree) {
-    const SearchNode &root = tree.node(tree.rootIndex());
-    if (!root.isExpanded()) {
+std::vector<CandidateAnalysis> gatherMctsCandidates(const ChessSearchTree &tree) {
+    const ChessSearchNode &root = tree.node(tree.rootIndex());
+    if (!root.expanded()) {
         return {};
     }
 
     int totalChildVisits = 0;
-    for (const Child &child : root.children) {
-        totalChildVisits += static_cast<int>(child.number_of_visits);
+    for (const ChessSearchEdge &child : root.children) {
+        totalChildVisits += static_cast<int>(child.visits);
     }
 
     std::vector<CandidateAnalysis> candidates;
     candidates.reserve(root.children.size());
-    for (const Child &child : root.children) {
-        const int visits = static_cast<int>(child.number_of_visits);
+    for (const ChessSearchEdge &child : root.children) {
+        const int visits = static_cast<int>(child.visits);
         const std::optional<float> meanValue =
             visits == 0
                 ? std::nullopt
-                : std::optional<float>{-child.result_sum / static_cast<float>(visits)};
-        candidates.push_back({toString(child.move), child.raw_policy, visits,
+                : std::optional<float>{-child.value_sum / static_cast<float>(visits)};
+        candidates.push_back({toString(child.action), child.raw_prior, visits,
                               totalChildVisits == 0 ? 0.0f
                                                     : static_cast<float>(visits) /
                                                           static_cast<float>(totalChildVisits),
@@ -56,29 +56,29 @@ std::vector<CandidateAnalysis> gatherPolicyCandidates(const InferenceResult &inf
     return candidates;
 }
 
-std::vector<std::string> principalVariation(const SearchTree &tree) {
+std::vector<std::string> principalVariation(const ChessSearchTree &tree) {
     std::vector<std::string> variation;
     NodeIndex nodeIndex = tree.rootIndex();
     while (true) {
-        const SearchNode &node = tree.node(nodeIndex);
-        if (!node.isExpanded()) {
+        const ChessSearchNode &node = tree.node(nodeIndex);
+        if (!node.expanded()) {
             break;
         }
         const auto best = std::ranges::max_element(
-            node.children, [](const Child &left, const Child &right) {
-                if (left.number_of_visits != right.number_of_visits) {
-                    return left.number_of_visits < right.number_of_visits;
+            node.children, [](const ChessSearchEdge &left, const ChessSearchEdge &right) {
+                if (left.visits != right.visits) {
+                    return left.visits < right.visits;
                 }
-                if (left.policy != right.policy) {
-                    return left.policy < right.policy;
+                if (left.prior != right.prior) {
+                    return left.prior < right.prior;
                 }
-                return toString(left.move) > toString(right.move);
+                return toString(left.action) > toString(right.action);
             });
-        if (best->number_of_visits == 0 || best->node_index == INVALID_NODE_INDEX) {
+        if (best->visits == 0 || !best->child_index.has_value()) {
             break;
         }
-        variation.push_back(toString(best->move));
-        nodeIndex = best->node_index;
+        variation.push_back(toString(best->action));
+        nodeIndex = *best->child_index;
     }
     return variation;
 }
@@ -98,20 +98,20 @@ InteractiveGame::InteractiveGame(std::shared_ptr<InteractiveEngine> engine, std:
 }
 
 void InteractiveGame::reconstructRoot() {
-    m_tree = std::make_unique<SearchTree>(replayMoves(m_startingFen, m_movesUci), 1'024,
-                                          std::numeric_limits<uint32>::max(), 1.0F);
+    m_tree = std::make_unique<ChessSearchTree>(replayMoves(m_startingFen, m_movesUci), 1'024,
+                                               std::numeric_limits<uint32>::max(), 1.0F);
 }
 
 void InteractiveGame::applyMove(const std::string &moveUci) {
-    if (m_tree->rootBoard().isGameOver()) {
+    if (m_tree->root().position.isGameOver()) {
         throw std::invalid_argument("Cannot apply move after game over: " + moveUci);
     }
-    const Move move = findLegalMove(m_tree->rootBoard(), moveUci);
-    const SearchNode &root = m_tree->node(m_tree->rootIndex());
-    if (root.isExpanded()) {
+    const Move move = findLegalMove(m_tree->root().position, moveUci);
+    const ChessSearchNode &root = m_tree->node(m_tree->rootIndex());
+    if (root.expanded()) {
         for (std::uint32_t index = 0; index < root.children.size(); ++index) {
-            if (root.children[index].move == move) {
-                static_cast<void>(m_tree->reroot(index));
+            if (root.children[index].action == move) {
+                m_tree->rerootEdge(index);
                 m_movesUci.push_back(moveUci);
                 return;
             }
@@ -126,12 +126,13 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
                                         const std::optional<int> timeLimitSeconds,
                                         const std::optional<int> searchLimit) {
     const auto startedAt = std::chrono::steady_clock::now();
-    if (m_tree->rootBoard().isGameOver()) {
+    if (m_tree->root().position.isGameOver()) {
         throw std::invalid_argument("Cannot analyze a terminal position");
     }
 
     if (mode == AnalysisMode::Policy) {
-        const InferenceResult inferenceResult = m_engine->m_search.evaluate(m_tree->rootBoard());
+        const InferenceResult inferenceResult =
+            m_engine->m_search.evaluate(m_tree->root().position);
         std::vector<CandidateAnalysis> candidates = gatherPolicyCandidates(inferenceResult);
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");
@@ -175,7 +176,7 @@ AnalysisResult InteractiveGame::analyze(const AnalysisMode mode,
         m_tree->node(m_tree->rootIndex()).network_outcome,
             std::move(candidates),
             searchResult.completed_searches,
-            m_tree->maxDepth(),
+            m_tree->maximumDepth(),
             elapsed.count(),
             principalVariation(*m_tree)};
 }

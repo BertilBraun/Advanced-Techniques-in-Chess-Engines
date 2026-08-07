@@ -145,13 +145,13 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
     class FakeMcts:
         def __init__(
             self,
-            inference_parameters: _FakeInferenceClientParameters,
+            runtime_parameters: _FakeInferenceClientParameters,
             mcts_parameters: str,
-            direct_inference_params: _FakeDirectInferenceParameters | None,
+            inference_parameters: _FakeDirectInferenceParameters | None,
         ) -> None:
             assert mcts_parameters == 'mcts-parameters'
-            assert inference_parameters.maximum_batch_size == 64
-            inference_clients.append(direct_inference_params)
+            assert runtime_parameters.maximum_batch_size == 64
+            inference_clients.append(inference_parameters)
 
     def fake_paired_match(
         *,
@@ -175,7 +175,7 @@ def test_model_comparison_uses_configured_inference_client_for_both_models(
 
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParameters
-    fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectInferenceParameters
+    fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeDirectInferenceParameters
     fake_alpha_zero_cpp.MCTS = FakeMcts
     fake_alpha_zero_cpp.MCTSBoard = _FakeMctsBoard
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import chess
 from AlphaZeroCpp import (
-    DirectSelfPlayInferenceParams,
+    BatchedInferenceParameters,
     InferenceClientParams,
     MCTS,
     MCTSBoard,
@@ -69,7 +69,7 @@ def main() -> None:
     mcts = MCTS(
         InferenceClientParams(args.device, str(args.model), 16, 500),
         MCTSParams(1, 8, 8, 1.0, 0.3, 0.0, 0, 1),
-        DirectSelfPlayInferenceParams(1, 16, 1),
+        BatchedInferenceParameters(1, 16, 1),
     )
     blind_parent = mcts.new_root(board_before_third_occurrence.fen())
     aware_parent = mcts.new_root_with_history(chess.STARTING_FEN, moves_before_third_occurrence)

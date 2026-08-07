@@ -4,7 +4,7 @@
 namespace {
 std::filesystem::path createTestModel(const std::string &name, const float win, const float draw,
                                       const float loss, const bool validOutput = true) {
-    torch::jit::script::Module model("direct_self_play_test");
+    torch::jit::script::Module model("batched_search_test");
     model.register_parameter("outcome_parameter",
                              validOutput ? torch::tensor({win, draw}) : torch::tensor({win}),
                              false);
@@ -20,7 +20,7 @@ std::filesystem::path createTestModel(const std::string &name, const float win, 
     const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() /
-        ("direct-self-play-test-" + name + "-" + std::to_string(uniqueSuffix) + ".jit.pt");
+        ("batched-search-test-" + name + "-" + std::to_string(uniqueSuffix) + ".jit.pt");
     model.save(path.string());
     return path;
 }
@@ -51,8 +51,8 @@ int main() {
         const InferenceClientParams clientParameters(0, modelPath.string(), 4, 0,
                                                      InferenceDevice::Cpu);
         const MCTSParams searchParameters(1, 16, 8, 1.5F, 0.3F, 0.25F, 0, 1);
-        const DirectSelfPlayInferenceParams directParameters(2, 4, 1);
-        MCTS search(clientParameters, searchParameters, directParameters, 7);
+        const BatchedInferenceParameters inferenceParameters(2, 4, 1);
+        MCTS search(clientParameters, searchParameters, inferenceParameters, 7);
         const std::vector<std::uintptr_t> workerIdentities = search.directWorkerIdentityTokens();
         require(workerIdentities.size() == 2, "direct search created the wrong worker count");
         require(search.modelVersion() == 7, "direct search lost its initial model version");

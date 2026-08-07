@@ -207,14 +207,6 @@ void bind_chess_game(py::module_ &m) {
         .def_readonly("mctsStats", &MCTSResults::mctsStats) // PyMCTSStatistics
         .def_readonly("searchesCompleted", &MCTSResults::searchesCompleted);
 
-    py::class_<DirectSelfPlayInferenceParams>(m, "DirectSelfPlayInferenceParams")
-        .def(py::init<int, int, int>(), py::arg("inference_workers"),
-             py::arg("inference_batch_size"), py::arg("outstanding_batches_per_worker") = 2)
-        .def_readwrite("inference_workers", &DirectSelfPlayInferenceParams::inference_workers)
-        .def_readwrite("inference_batch_size", &DirectSelfPlayInferenceParams::inference_batch_size)
-        .def_readwrite("outstanding_batches_per_worker",
-                       &DirectSelfPlayInferenceParams::outstanding_batches_per_worker);
-
     py::class_<FunctionTimeInfo>(m, "FunctionTimeInfo")
         .def_readonly("name", &FunctionTimeInfo::name)
         .def_readonly("percent", &FunctionTimeInfo::percent)
@@ -229,9 +221,9 @@ void bind_chess_game(py::module_ &m) {
     // --- (4) MCTS class itself ---
     py::class_<MCTS>(m, "MCTS")
         .def(py::init<const InferenceClientParams &, const MCTSParams &,
-                      DirectSelfPlayInferenceParams, uint64>(),
+                      BatchedInferenceParameters, uint64>(),
              py::arg("client_args"), py::arg("mcts_args"),
-             py::arg("direct_inference_params"),
+             py::arg("inference_parameters"),
              py::arg("initial_model_version") = 0)
         .def_property_readonly("arena_capacity", &MCTS::arenaCapacity)
         .def_property_readonly("model_version", &MCTS::modelVersion)

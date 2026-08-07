@@ -2,7 +2,7 @@
 
 #include "DirectInference.hpp"
 #include "InferenceClientTypes.hpp"
-#include "MCTS/SearchTree.hpp"
+#include "games/chess/ChessSearch.hpp"
 
 #include <deque>
 
@@ -31,7 +31,7 @@ public:
 
     [[nodiscard]] InferenceResult evaluate(const Board &board);
     [[nodiscard]] InteractiveSearchResult
-    search(SearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
+    search(ChessSearchTree &tree, std::optional<std::chrono::steady_clock::time_point> deadline,
            std::optional<int> searchLimit);
     [[nodiscard]] InferenceStatistics inferenceStatistics() const;
 
@@ -65,7 +65,7 @@ private:
              const std::optional<int> &searchLimit, int claimed) const;
     [[nodiscard]] std::optional<std::size_t> freeWorker() const;
     [[nodiscard]] std::optional<std::size_t> readyWorker(std::size_t firstWorker) const;
-    void completeWorker(SearchTree &tree, std::size_t workerIndex, int &completed);
-    void cancelPending(SearchTree &tree) noexcept;
+    void completeWorker(ChessSearchTree &tree, std::size_t workerIndex, int &completed);
+    void cancelPending(ChessSearchTree &tree) noexcept;
     void recordBatch(std::size_t batchSize, std::chrono::steady_clock::duration inferenceDuration);
 };

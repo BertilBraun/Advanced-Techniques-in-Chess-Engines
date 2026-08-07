@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from AlphaZeroCpp import (
-    DirectSelfPlayInferenceParams,
+    BatchedInferenceParameters,
     InferenceClientParams,
     InferenceStatistics,
     MCTS,
@@ -269,8 +269,8 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             configuration.self_play.search.min_visit_count,
             arguments.threads,
         ),
-        direct_inference_params=(
-            DirectSelfPlayInferenceParams(
+        inference_parameters=(
+            BatchedInferenceParameters(
                 arguments.direct_inference_workers,
                 arguments.direct_inference_batch_size,
                 arguments.direct_outstanding_batches_per_worker,

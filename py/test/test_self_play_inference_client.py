@@ -59,25 +59,25 @@ class _FakeMctsParams:
 
 
 @dataclass(frozen=True)
-class _FakeDirectSelfPlayInferenceParams:
+class _FakeBatchedInferenceParameters:
     inference_workers: int
     inference_batch_size: int
     outstanding_batches_per_worker: int
 
 
 class _FakeMcts:
-    direct_inference_params: _FakeDirectSelfPlayInferenceParams | None = None
+    inference_parameters: _FakeBatchedInferenceParameters | None = None
 
     def __init__(
         self,
         client_args: _FakeInferenceClientParams,
         mcts_args: _FakeMctsParams,
-        direct_inference_params: _FakeDirectSelfPlayInferenceParams | None,
+        inference_parameters: _FakeBatchedInferenceParameters | None,
         initial_model_version: int,
     ) -> None:
         assert client_args.maxBatchSize == 64
         assert mcts_args.num_full_searches > mcts_args.num_parallel_searches
-        _FakeMcts.direct_inference_params = direct_inference_params
+        _FakeMcts.inference_parameters = inference_parameters
         assert initial_model_version >= 0
         self.arena_capacity = (
             max(mcts_args.num_full_searches, mcts_args.num_fast_searches) + mcts_args.num_parallel_searches + 1
@@ -124,7 +124,7 @@ def test_self_play_constructs_direct_inference_client_during_search_warmup(
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
-    fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectSelfPlayInferenceParams
+    fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.MCTS = _FakeMcts
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
@@ -148,7 +148,7 @@ def test_self_play_constructs_direct_inference_client_during_search_warmup(
 
     self_play._set_mcts(iteration=50)
 
-    assert _FakeMcts.direct_inference_params == _FakeDirectSelfPlayInferenceParams(2, 64, 2)
+    assert _FakeMcts.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 2)
     assert self_play.search_schedule(0).num_full_searches == 100
     assert self_play.search_schedule(1).num_full_searches == 105
     assert self_play.search_schedule(100).num_full_searches == 600
@@ -160,7 +160,7 @@ def test_self_play_constructs_direct_inference_pipeline(
 ) -> None:
     fake_alpha_zero_cpp = ModuleType('AlphaZeroCpp')
     fake_alpha_zero_cpp.InferenceClientParams = _FakeInferenceClientParams
-    fake_alpha_zero_cpp.DirectSelfPlayInferenceParams = _FakeDirectSelfPlayInferenceParams
+    fake_alpha_zero_cpp.BatchedInferenceParameters = _FakeBatchedInferenceParameters
     fake_alpha_zero_cpp.MCTS = _FakeMcts
     fake_alpha_zero_cpp.MCTSParams = _FakeMctsParams
     monkeypatch.setitem(sys.modules, 'AlphaZeroCpp', fake_alpha_zero_cpp)
@@ -184,7 +184,7 @@ def test_self_play_constructs_direct_inference_pipeline(
 
     self_play._set_mcts(iteration=50)
 
-    assert _FakeMcts.direct_inference_params == _FakeDirectSelfPlayInferenceParams(2, 64, 1)
+    assert _FakeMcts.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 1)
 
 
 def test_model_refresh_retains_game_state_and_resets_search_tree(

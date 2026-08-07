@@ -2,12 +2,10 @@
 
 #include "common.hpp"
 
-#include "SearchTree.hpp"
+#include "games/chess/ChessSearch.hpp"
 
 #include "InferenceClientTypes.hpp"
 #include <shared_mutex>
-
-class DirectSelfPlaySearch;
 
 using VisitCount = std::pair<int, int>;
 using VisitCounts = std::vector<VisitCount>;
@@ -27,15 +25,6 @@ struct MCTSParams {
                uint8 num_threads);
 
     [[nodiscard]] uint32 arenaCapacity() const;
-};
-
-struct DirectSelfPlayInferenceParams {
-    int inference_workers;
-    int inference_batch_size;
-    int outstanding_batches_per_worker;
-
-    DirectSelfPlayInferenceParams(int inferenceWorkers, int inferenceBatchSize,
-                                  int outstandingBatchesPerWorker = 2);
 };
 
 struct MCTSResult {
@@ -70,7 +59,7 @@ struct MCTSBoard {
 class MCTS {
 public:
     MCTS(const InferenceClientParams &clientArgs, const MCTSParams &mctsArgs,
-         DirectSelfPlayInferenceParams directInferenceParams,
+         BatchedInferenceParameters inferenceParameters,
          uint64 initialModelVersion = 0);
     ~MCTS();
 
@@ -93,8 +82,8 @@ private:
     MCTSParams m_args;
     uint32 m_arenaCapacity;
     uint64 m_modelVersion;
-    DirectSelfPlayInferenceParams m_directInferenceParams;
-    std::unique_ptr<DirectSelfPlaySearch> m_directSearch;
+    BatchedInferenceParameters m_inferenceParameters;
+    std::unique_ptr<BatchedGameSearch<ChessGameContract>> m_search;
     mutable std::shared_mutex m_operationMutex;
 
     [[nodiscard]] std::vector<InferenceResult>

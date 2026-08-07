@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from AlphaZeroCpp import (
-    DirectSelfPlayInferenceParams,
+    BatchedInferenceParameters,
     InferenceClientParams,
     MCTS,
     MCTSBoard,
@@ -194,7 +194,7 @@ def run_benchmark(args: Arguments) -> BenchmarkResult:
             0,
             args.threads,
         ),
-        DirectSelfPlayInferenceParams(1, args.maximum_batch_size, 1),
+        BatchedInferenceParameters(1, args.maximum_batch_size, 1),
     )
     openings = load_openings(args.openings, args.games)
     roots = [mcts.new_root(fen) for fen in openings]

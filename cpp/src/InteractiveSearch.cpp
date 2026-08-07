@@ -132,7 +132,7 @@ void InteractiveSearch::recordBatch(const std::size_t batchSize,
     }
 }
 
-void InteractiveSearch::completeWorker(SearchTree &tree, const std::size_t workerIndex,
+void InteractiveSearch::completeWorker(ChessSearchTree &tree, const std::size_t workerIndex,
                                        int &completed) {
     std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
     if (pendingBatches.empty()) {
@@ -154,18 +154,18 @@ void InteractiveSearch::completeWorker(SearchTree &tree, const std::size_t worke
         const float *outcomeData = output.outcomes.data_ptr<float>();
         for (; processed < pending.leaves.size(); ++processed) {
             const NodeIndex leafIndex = pending.leaves[processed];
-            SearchNode &leaf = tree.node(leafIndex);
+            ChessSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult =
                 processSearchInference<ChessGameContract>(
                     policyData + processed * ACTION_SIZE,
-                    outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
+                    outcomeData + processed * WDL_OUTPUT_SIZE, leaf.position);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)
                     .count());
             const auto backupStartedAt = std::chrono::steady_clock::now();
-            tree.expand(leafIndex, inferenceResult.actions, inferenceResult.outcome);
+            tree.expand(leafIndex, inferenceResult);
             tree.completeReservation(leafIndex, inferenceResult.value());
             m_backupNanoseconds +=
                 static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -188,7 +188,7 @@ void InteractiveSearch::completeWorker(SearchTree &tree, const std::size_t worke
     }
 }
 
-void InteractiveSearch::cancelPending(SearchTree &tree) noexcept {
+void InteractiveSearch::cancelPending(ChessSearchTree &tree) noexcept {
     for (std::size_t workerIndex = 0; workerIndex < m_pending.size(); ++workerIndex) {
         std::deque<PendingBatch> &pendingBatches = m_pending[workerIndex];
         while (!pendingBatches.empty()) {
@@ -210,7 +210,7 @@ void InteractiveSearch::cancelPending(SearchTree &tree) noexcept {
 }
 
 InteractiveSearchResult
-InteractiveSearch::search(SearchTree &tree,
+InteractiveSearch::search(ChessSearchTree &tree,
                           const std::optional<std::chrono::steady_clock::time_point> deadline,
                           const std::optional<int> searchLimit) {
     if (searchLimit.has_value() && *searchLimit <= 0) {
@@ -238,24 +238,26 @@ InteractiveSearch::search(SearchTree &tree,
                                static_cast<std::size_t>(m_parameters.inference_batch_size) &&
                            mayIssue(deadline, searchLimit, claimed)) {
                         const auto selectionStartedAt = std::chrono::steady_clock::now();
-                        const NodeIndex leaf =
+                        const std::optional<NodeIndex> selectedLeaf =
                             tree.selectAvailableLeaf(m_parameters.exploration_constant);
                         m_selectionNanoseconds += static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 std::chrono::steady_clock::now() - selectionStartedAt)
                                 .count());
-                        if (leaf == INVALID_NODE_INDEX) {
+                        if (!selectedLeaf.has_value()) {
                             break;
                         }
-                        if (tree.node(leaf).isTerminal()) {
-                            tree.backPropagate(leaf, getBoardResultScore(tree.node(leaf).board));
+                        const NodeIndex leaf = *selectedLeaf;
+                        if (ChessGameContract::isTerminal(tree.node(leaf).position)) {
+                            tree.backPropagate(
+                                leaf, ChessGameContract::terminalResult(tree.node(leaf).position));
                             ++claimed;
                             ++completed;
                             continue;
                         }
-                        tree.reserveLeaf(leaf);
+                        tree.reserve(leaf);
                         const auto encodingStartedAt = std::chrono::steady_clock::now();
-                        encodeBoardInto(tree.node(leaf).board,
+                        encodeBoardInto(tree.node(leaf).position,
                                         writable.data + leaves.size() * ENCODED_BOARD_SIZE);
                         m_encodingNanoseconds += static_cast<std::uint64_t>(
                             std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -307,21 +309,19 @@ InteractiveSearch::search(SearchTree &tree,
     } catch (...) {
         cancelPending(tree);
         assert(tree.evaluatingNodeCount() == 0);
-        assert(tree.totalVirtualLoss() == 0);
+        assert(tree.totalVirtualLoss() == 0.0F);
         throw;
     }
 
     assert(tree.evaluatingNodeCount() == 0);
-    assert(tree.totalVirtualLoss() == 0);
+    assert(tree.totalVirtualLoss() == 0.0F);
     m_searchWallNanoseconds +=
         static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                        std::chrono::steady_clock::now() - searchStartedAt)
                                        .count());
-    const RootStatistics &statistics = tree.rootStatistics();
-    const float result = statistics.number_of_visits == 0
-                             ? 0.0F
-                             : statistics.result_sum /
-                                   static_cast<float>(statistics.number_of_visits);
+    const ChessSearchNode &root = tree.root();
+    const float result =
+        root.visits == 0 ? 0.0F : root.value_sum / static_cast<float>(root.visits);
     return {result, completed};
 }
 

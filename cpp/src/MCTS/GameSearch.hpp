@@ -10,6 +10,7 @@
 #include <deque>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <random>
 #include <stdexcept>
@@ -38,6 +39,7 @@ template <typename Game> struct GameSearchNode {
     float value_sum = 0.0F;
     float virtual_loss = 0.0F;
     bool evaluating = false;
+    std::optional<WdlPrediction> network_outcome;
 
     [[nodiscard]] bool expanded() const noexcept { return !children.empty(); }
 };
@@ -50,13 +52,16 @@ public:
     using Edge = GameSearchEdge<Action>;
 
     GameSearchTree(Position rootPosition, const std::size_t initialCapacity,
-                   const std::size_t maximumCapacity = 0)
+                   const std::size_t maximumCapacity = 0, const float turnDiscount = 1.0F)
         : m_maximumCapacity(maximumCapacity == 0 ? initialCapacity : maximumCapacity),
-          m_initialPosition(rootPosition) {
+          m_initialPosition(rootPosition), m_turnDiscount(turnDiscount) {
         if (initialCapacity == 0 || m_maximumCapacity < initialCapacity) {
             throw std::invalid_argument("Game search tree capacity must be positive");
         }
-        m_nodes.reserve(m_maximumCapacity);
+        if (turnDiscount <= 0.0F || turnDiscount > 1.0F) {
+            throw std::invalid_argument("Game search turn discount must be in (0, 1]");
+        }
+        m_nodes.reserve(initialCapacity);
         m_nodes.resize(initialCapacity);
         for (std::size_t slot = initialCapacity; slot > 0; --slot) {
             m_freeSlots.push_back(slot - 1);
@@ -79,12 +84,21 @@ public:
     [[nodiscard]] std::size_t liveNodeCount() const noexcept { return m_liveNodeCount; }
     [[nodiscard]] std::size_t capacity() const noexcept { return m_nodes.size(); }
     [[nodiscard]] std::size_t maximumCapacity() const noexcept { return m_maximumCapacity; }
+    [[nodiscard]] std::size_t totalChildCount() const noexcept {
+        std::size_t count = 0;
+        for (const std::optional<Node> &slot : m_nodes) {
+            if (slot.has_value()) {
+                count += slot->children.size();
+            }
+        }
+        return count;
+    }
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const float explorationConstant, const std::uint32_t minimumRootVisits = 0) {
-        Node &rootNode = root();
-        for (std::size_t edgeIndex = 0; edgeIndex < rootNode.children.size(); ++edgeIndex) {
-            if (rootNode.children[edgeIndex].visits >= minimumRootVisits) {
+        const std::size_t edgeCount = root().children.size();
+        for (std::size_t edgeIndex = 0; edgeIndex < edgeCount; ++edgeIndex) {
+            if (root().children[edgeIndex].visits >= minimumRootVisits) {
                 continue;
             }
             const std::optional<std::size_t> leaf = selectAvailableLeaf(
@@ -103,6 +117,7 @@ public:
             return;
         }
         selected.children.reserve(inferenceResult.actions.size());
+        selected.network_outcome = inferenceResult.outcome;
         for (const auto &[action, prior] : inferenceResult.actions) {
             selected.children.push_back({action, prior, prior});
         }
@@ -120,7 +135,7 @@ public:
             Edge &incoming = parent.children.at(*selected.parent_edge_index);
             ++incoming.visits;
             incoming.value_sum += value;
-            value = -value;
+            value = -value * m_turnDiscount;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -183,14 +198,14 @@ public:
     }
 
     void rerootEdge(const std::size_t edgeIndex) {
-        Node &oldRoot = root();
-        if (edgeIndex >= oldRoot.children.size()) {
+        if (edgeIndex >= root().children.size()) {
             throw std::out_of_range("Cannot reroot to a missing game-search edge");
         }
         const std::size_t oldRootIndex = m_rootIndex;
         const std::size_t retainedIndex = materializeChild(oldRootIndex, edgeIndex);
-        for (std::size_t index = 0; index < oldRoot.children.size(); ++index) {
-            Edge &discarded = oldRoot.children[index];
+        const std::size_t edgeCount = node(oldRootIndex).children.size();
+        for (std::size_t index = 0; index < edgeCount; ++index) {
+            Edge &discarded = node(oldRootIndex).children[index];
             if (index != edgeIndex && discarded.child_index.has_value()) {
                 reclaimSubtree(*discarded.child_index);
                 discarded.child_index.reset();
@@ -232,6 +247,80 @@ public:
             std::max<std::size_t>(1, capacity() - static_cast<std::size_t>(maximumNewNodes) - 1));
     }
 
+    void discount(const float retainedFraction) {
+        if (retainedFraction < 0.0F || retainedFraction > 1.0F) {
+            throw std::invalid_argument("Game search discount must be in [0, 1]");
+        }
+        for (std::optional<Node> &slot : m_nodes) {
+            if (!slot.has_value()) {
+                continue;
+            }
+            discountStatistics(slot->visits, slot->value_sum, retainedFraction);
+            for (Edge &edge : slot->children) {
+                discountStatistics(edge.visits, edge.value_sum, retainedFraction);
+            }
+        }
+        const std::size_t liveNodeLimit = static_cast<std::size_t>(root().visits) + 1;
+        pruneToLiveNodeLimit(std::max<std::size_t>(1, liveNodeLimit));
+    }
+
+    [[nodiscard]] int maximumDepth() const {
+        int result = 1;
+        std::vector<std::pair<std::size_t, int>> pending = {{m_rootIndex, 1}};
+        while (!pending.empty()) {
+            const auto [nodeIndex, depth] = pending.back();
+            pending.pop_back();
+            result = std::max(result, depth);
+            for (const Edge &edge : node(nodeIndex).children) {
+                if (edge.child_index.has_value()) {
+                    pending.emplace_back(*edge.child_index, depth + 1);
+                }
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::uint32_t evaluatingNodeCount() const {
+        return static_cast<std::uint32_t>(
+            std::ranges::count_if(m_nodes, [](const std::optional<Node> &slot) {
+                return slot.has_value() && slot->evaluating;
+            }));
+    }
+
+    [[nodiscard]] float totalVirtualLoss() const {
+        float result = root().virtual_loss;
+        for (const std::optional<Node> &slot : m_nodes) {
+            if (!slot.has_value()) {
+                continue;
+            }
+            for (const Edge &edge : slot->children) {
+                result += edge.virtual_loss;
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::size_t preferredRootEdge() const {
+        const Node &rootNode = root();
+        if (rootNode.children.empty()) {
+            throw std::logic_error("Cannot choose an action from an unexpanded root");
+        }
+        std::size_t preferred = 0;
+        for (std::size_t index = 1; index < rootNode.children.size(); ++index) {
+            const Edge &candidate = rootNode.children[index];
+            const Edge &current = rootNode.children[preferred];
+            if (candidate.visits > current.visits ||
+                (candidate.visits == current.visits &&
+                 (candidate.prior > current.prior ||
+                  (candidate.prior == current.prior &&
+                   Game::actionId(candidate.action, rootNode.position) <
+                       Game::actionId(current.action, rootNode.position))))) {
+                preferred = index;
+            }
+        }
+        return preferred;
+    }
+
 private:
     std::size_t m_maximumCapacity;
     Position m_initialPosition;
@@ -239,6 +328,7 @@ private:
     std::vector<std::size_t> m_freeSlots;
     std::size_t m_liveNodeCount = 0;
     std::size_t m_rootIndex;
+    float m_turnDiscount;
 
     [[nodiscard]] std::size_t bestEdgeIndex(const std::size_t nodeIndex,
                                             const float explorationConstant) const {
@@ -263,22 +353,22 @@ private:
 
     [[nodiscard]] std::optional<std::size_t>
     selectAvailableLeaf(const std::size_t nodeIndex, const float explorationConstant) {
-        const Node &selected = node(nodeIndex);
-        if (!selected.expanded()) {
-            return selected.evaluating ? std::nullopt
+        if (!node(nodeIndex).expanded()) {
+            return node(nodeIndex).evaluating ? std::nullopt
                                        : std::optional<std::size_t>(nodeIndex);
         }
-        std::vector<bool> attempted(selected.children.size(), false);
-        for (std::size_t attempt = 0; attempt < selected.children.size(); ++attempt) {
+        const std::size_t edgeCount = node(nodeIndex).children.size();
+        std::vector<bool> attempted(edgeCount, false);
+        for (std::size_t attempt = 0; attempt < edgeCount; ++attempt) {
             float bestScore = -std::numeric_limits<float>::infinity();
             std::size_t bestIndex = 0;
             const float parentScale =
-                std::sqrt(static_cast<float>(std::max(1U, selected.visits)));
-            for (std::size_t index = 0; index < selected.children.size(); ++index) {
+                std::sqrt(static_cast<float>(std::max(1U, node(nodeIndex).visits)));
+            for (std::size_t index = 0; index < edgeCount; ++index) {
                 if (attempted[index]) {
                     continue;
                 }
-                const Edge &edge = selected.children[index];
+                const Edge &edge = node(nodeIndex).children[index];
                 const float meanValue = edge.visits == 0
                                             ? 0.0F
                                             : (edge.value_sum + edge.virtual_loss) / edge.visits;
@@ -316,7 +406,7 @@ private:
                 static_cast<std::int64_t>(incoming.visits) + visitDelta);
             incoming.value_sum += value;
             incoming.virtual_loss += virtualLossDelta;
-            value = -value;
+            value = -value * m_turnDiscount;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -333,7 +423,7 @@ private:
                 node(*selected.parent_index).children.at(*selected.parent_edge_index);
             incoming.value_sum += value;
             incoming.virtual_loss -= 1.0F;
-            value = -value;
+            value = -value * m_turnDiscount;
             nodeIndex = *selected.parent_index;
         }
     }
@@ -432,6 +522,14 @@ private:
             releaseNode(index);
         }
     }
+
+    static void discountStatistics(std::uint32_t &visits, float &valueSum,
+                                   const float retainedFraction) {
+        visits = static_cast<std::uint32_t>(static_cast<float>(visits) * retainedFraction);
+        valueSum *= retainedFraction;
+        valueSum = std::clamp(valueSum, -static_cast<float>(visits),
+                              static_cast<float>(visits));
+    }
 };
 
 template <typename Game> class GameSearchRoot {
@@ -439,8 +537,10 @@ public:
     using Position = typename Game::Position;
     using Tree = GameSearchTree<Game>;
 
-    GameSearchRoot(Position position, const std::size_t capacity)
-        : m_tree(std::make_shared<Tree>(std::move(position), capacity)) {}
+    GameSearchRoot(Position position, const std::size_t initialCapacity,
+                   const std::size_t maximumCapacity = 0, const float turnDiscount = 1.0F)
+        : m_tree(std::make_shared<Tree>(std::move(position), initialCapacity, maximumCapacity,
+                                       turnDiscount)) {}
 
     [[nodiscard]] const Position &position() const { return m_tree->root().position; }
     [[nodiscard]] bool isTerminal() const { return Game::isTerminal(position()); }
@@ -464,6 +564,17 @@ struct GameSearchVisit {
 struct GameSearchResult {
     float root_value;
     std::vector<GameSearchVisit> visits;
+};
+
+template <typename Game> struct GameSearchRequest {
+    GameSearchRoot<Game> root;
+    std::uint32_t visit_limit;
+    bool add_root_noise;
+};
+
+struct GameSearchBatchResult {
+    std::vector<GameSearchResult> results;
+    std::uint64_t simulations_completed;
 };
 
 struct BatchedSearchParameters {
@@ -515,10 +626,13 @@ public:
     BatchedGameSearch(const std::string &modelPath, const InferenceDevice device,
                       const int deviceId, const BatchedInferenceParameters inferenceParameters,
                       const BatchedSearchParameters searchParameters,
-                      const std::uint64_t modelGeneration)
+                      const std::uint64_t modelGeneration, const bool resetTreesOnRefresh = true,
+                      const float turnDiscount = 1.0F)
         : m_inferenceParameters(inferenceParameters), m_searchParameters(searchParameters),
           m_dimensions(Game::inferenceDimensions()), m_modelGeneration(modelGeneration),
-          m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()) {
+          m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()),
+          m_batchHistogram(inferenceParameters.batch_size + 1, 0),
+          m_resetTreesOnRefresh(resetTreesOnRefresh), m_turnDiscount(turnDiscount) {
         m_workers.reserve(inferenceParameters.workers);
         for (std::size_t worker = 0; worker < inferenceParameters.workers; ++worker) {
             m_workers.push_back(std::make_unique<DirectInferencePipeline>(
@@ -529,24 +643,41 @@ public:
     }
 
     [[nodiscard]] Root newRoot(typename Game::Position position) {
-        Root root(std::move(position), m_searchParameters.tree_capacity);
+        Root root(std::move(position), m_searchParameters.tree_capacity, 0, m_turnDiscount);
         m_trees.push_back(root.sharedTree());
         return root;
     }
 
     [[nodiscard]] std::vector<GameSearchResult> search(std::vector<Root> &roots,
                                                        const std::uint32_t simulations) {
-        if (roots.empty() || simulations == 0) {
+        std::vector<GameSearchRequest<Game>> requests;
+        requests.reserve(roots.size());
+        for (Root &root : roots) {
+            requests.push_back({root, root.visits() + simulations, true});
+        }
+        return searchDetailed(requests).results;
+    }
+
+    [[nodiscard]] GameSearchBatchResult
+    searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
+        const bool hasInvalidRequest = std::ranges::any_of(
+            requests, [](const GameSearchRequest<Game> &request) {
+                return request.visit_limit == 0;
+            });
+        if (requests.empty() || hasInvalidRequest) {
             throw std::invalid_argument("Batched search requires roots and simulations");
         }
         std::vector<RootTask> tasks;
-        tasks.reserve(roots.size());
-        for (Root &root : roots) {
-            const std::uint32_t visitLimit = root.visits() + simulations;
+        tasks.reserve(requests.size());
+        for (const GameSearchRequest<Game> &request : requests) {
+            Root root = request.root;
+            const std::uint32_t startingVisits = root.visits();
+            const std::uint32_t visitLimit = request.visit_limit;
             root.tree().prepareForSearch(visitLimit, m_searchParameters.parallel_searches);
-            tasks.push_back({root, visitLimit, 0, !root.tree().root().expanded()});
-            if (root.tree().root().expanded()) {
-                addNoise(root);
+            tasks.push_back({root, startingVisits, visitLimit, 0,
+                             request.add_root_noise && !root.tree().root().expanded()});
+            if (request.add_root_noise && root.tree().root().expanded()) {
+                addNoise(tasks.back().root);
             }
         }
         std::size_t completionCursor = 0;
@@ -586,7 +717,85 @@ public:
             }
             results.push_back(std::move(result));
         }
+        const std::uint64_t completed = std::accumulate(
+            tasks.begin(), tasks.end(), std::uint64_t{0},
+            [](const std::uint64_t count, const RootTask &task) {
+                return count + task.root.visits() - task.starting_visits;
+            });
+        return {std::move(results), completed};
+    }
+
+    [[nodiscard]] std::vector<SearchInferenceResult<Game>>
+    evaluate(const std::vector<typename Game::Position> &positions) {
+        std::vector<SearchInferenceResult<Game>> results;
+        results.reserve(positions.size());
+        std::size_t offset = 0;
+        DirectInferencePipeline &worker = *m_workers.front();
+        constexpr std::size_t encodedSize =
+            static_cast<std::size_t>(Game::inferenceDimensions().channels) *
+            static_cast<std::size_t>(Game::inferenceDimensions().rows) *
+            static_cast<std::size_t>(Game::inferenceDimensions().columns);
+        while (offset < positions.size()) {
+            const std::size_t batchSize =
+                std::min(m_inferenceParameters.batch_size, positions.size() - offset);
+            const DirectInferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
+            for (std::size_t row = 0; row < batchSize; ++row) {
+                Game::encodeInputInto(positions[offset + row],
+                                      writable.data + row * encodedSize);
+            }
+            worker.submit(writable.slotIndex, batchSize);
+            bool outputReady = false;
+            try {
+                const DirectInferenceOutput output = worker.waitCompleted(writable.slotIndex);
+                outputReady = true;
+                const float *policies = output.policies.data_ptr<float>();
+                const float *outcomes = output.outcomes.data_ptr<float>();
+                for (std::size_t row = 0; row < batchSize; ++row) {
+                    results.push_back(processSearchInference<Game>(
+                        policies + row * static_cast<std::size_t>(m_dimensions.actions),
+                        outcomes + row * static_cast<std::size_t>(m_dimensions.outcomes),
+                        positions[offset + row]));
+                }
+                worker.release(writable.slotIndex);
+                recordBatch(batchSize);
+            } catch (...) {
+                if (outputReady) {
+                    worker.release(writable.slotIndex);
+                }
+                throw;
+            }
+            offset += batchSize;
+        }
         return results;
+    }
+
+    [[nodiscard]] InferenceStatistics inferenceStatistics() const {
+        InferenceStatistics statistics;
+        statistics.evaluations = m_evaluations;
+        statistics.modelInferenceCalls = m_modelCalls;
+        statistics.modelInferencePositions = m_modelPositions;
+        statistics.modelBatchSizeHistogram = m_batchHistogram;
+        statistics.averageNumberOfPositionsInInferenceCall =
+            m_modelCalls == 0
+                ? 0.0F
+                : static_cast<float>(m_modelPositions) / static_cast<float>(m_modelCalls);
+        for (const std::unique_ptr<DirectInferencePipeline> &worker : m_workers) {
+            statistics.directInferenceNanoseconds += worker->inferenceNanoseconds();
+        }
+        return statistics;
+    }
+
+    void updateSearchParameters(const BatchedSearchParameters parameters) {
+        m_searchParameters = parameters;
+    }
+
+    [[nodiscard]] std::vector<std::uintptr_t> workerIdentityTokens() const {
+        std::vector<std::uintptr_t> identities;
+        identities.reserve(m_workers.size());
+        for (const std::unique_ptr<DirectInferencePipeline> &worker : m_workers) {
+            identities.push_back(reinterpret_cast<std::uintptr_t>(worker.get()));
+        }
+        return identities;
     }
 
     void refreshModel(const std::uint64_t modelGeneration, const std::string &modelPath) {
@@ -605,9 +814,11 @@ public:
             m_workers[index]->commitModelRefresh(std::move(preparedModels[index]));
         }
         m_modelGeneration = modelGeneration;
-        for (const std::weak_ptr<Tree> &tree : m_trees) {
-            if (const std::shared_ptr<Tree> active = tree.lock()) {
-                active->reset();
+        if (m_resetTreesOnRefresh) {
+            for (const std::weak_ptr<Tree> &tree : m_trees) {
+                if (const std::shared_ptr<Tree> active = tree.lock()) {
+                    active->reset();
+                }
             }
         }
     }
@@ -617,6 +828,7 @@ public:
 private:
     struct RootTask {
         Root root;
+        std::uint32_t starting_visits;
         std::uint32_t visit_limit;
         std::uint32_t in_flight;
         bool noise_pending;
@@ -643,6 +855,12 @@ private:
     std::size_t m_nextWorker = 0;
     std::size_t m_nextTask = 0;
     std::mt19937 m_randomEngine;
+    std::uint64_t m_evaluations = 0;
+    std::uint64_t m_modelCalls = 0;
+    std::uint64_t m_modelPositions = 0;
+    std::vector<std::size_t> m_batchHistogram;
+    bool m_resetTreesOnRefresh;
+    float m_turnDiscount;
 
     [[nodiscard]] std::optional<std::size_t> freeWorker() const {
         for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
@@ -776,6 +994,7 @@ private:
                 --task.in_flight;
             }
             worker.release(pending.slot_index);
+            recordBatch(pending.leaves.size());
         } catch (...) {
             if (outputReady) {
                 worker.release(pending.slot_index);
@@ -829,5 +1048,12 @@ private:
     void addNoise(Root &root) {
         root.tree().addRootNoise(m_searchParameters.dirichlet_alpha,
                                  m_searchParameters.dirichlet_epsilon, m_randomEngine);
+    }
+
+    void recordBatch(const std::size_t batchSize) {
+        m_evaluations += batchSize;
+        ++m_modelCalls;
+        m_modelPositions += batchSize;
+        ++m_batchHistogram[batchSize];
     }
 };

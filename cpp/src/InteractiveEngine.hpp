@@ -54,18 +54,18 @@ public:
     [[nodiscard]] AnalysisResult analyze(AnalysisMode mode, std::optional<int> timeLimitSeconds,
                                          std::optional<int> searchLimit);
 
-    [[nodiscard]] std::string fen() const { return m_tree->rootBoard().fen(); }
+    [[nodiscard]] std::string fen() const { return m_tree->root().position.fen(); }
     [[nodiscard]] const std::string &startingFen() const { return m_startingFen; }
     [[nodiscard]] const std::vector<std::string> &movesUci() const { return m_movesUci; }
     [[nodiscard]] int rootVisits() const {
-        return static_cast<int>(m_tree->rootStatistics().number_of_visits);
+        return static_cast<int>(m_tree->root().visits);
     }
 
 private:
     std::shared_ptr<InteractiveEngine> m_engine;
     std::string m_startingFen;
     std::vector<std::string> m_movesUci;
-    std::unique_ptr<SearchTree> m_tree;
+    std::unique_ptr<ChessSearchTree> m_tree;
 
     void reconstructRoot();
 };

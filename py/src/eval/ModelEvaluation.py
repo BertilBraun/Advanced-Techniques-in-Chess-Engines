@@ -125,10 +125,10 @@ class ModelEvaluation:
         )
 
     def _create_mcts(self, inference_path: Path) -> MCTS:
-        from AlphaZeroCpp import DirectSelfPlayInferenceParams, InferenceClientParams, MCTS
+        from AlphaZeroCpp import BatchedInferenceParameters, InferenceClientParams, MCTS
 
         inference = self.evaluation_args.inference
-        direct_parameters = DirectSelfPlayInferenceParams(
+        inference_parameters = BatchedInferenceParameters(
             inference.inference_workers,
             inference.inference_batch_size,
             inference.outstanding_batches_per_worker,
@@ -141,7 +141,7 @@ class ModelEvaluation:
                 500,
             ),
             self.mcts_args,
-            direct_inference_params=direct_parameters,
+            inference_parameters=inference_parameters,
         )
 
     def evaluate_model_vs_dataset(self, dataset: SelfPlayDataset) -> tuple[float, float, float, float]:

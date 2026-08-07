@@ -250,24 +250,6 @@ target_link_libraries(BoardLegalMovesCacheTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME BoardLegalMovesCacheTest COMMAND BoardLegalMovesCacheTest)
 
 add_executable(
-        SearchTreeInteractiveTest
-        test/TestSearchTreeInteractive.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessHistory.cpp
-        src/games/chess/ChessAction.cpp
-        src/MCTS/SearchTree.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(SearchTreeInteractiveTest PRIVATE src)
-target_link_libraries(SearchTreeInteractiveTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME SearchTreeInteractiveTest COMMAND SearchTreeInteractiveTest)
-
-add_executable(
         ChessGameContractTest
         test/TestChessGameContract.cpp
         src/games/chess/ChessBoard.cpp
@@ -302,23 +284,6 @@ add_executable(
 target_include_directories(GameHistoryTest PRIVATE src)
 target_link_libraries(GameHistoryTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME GameHistoryTest COMMAND GameHistoryTest)
-
-add_executable(
-        SearchTreeArenaTest
-        test/TestSearchTreeArena.cpp
-        src/games/chess/ChessBoard.cpp
-        src/games/chess/ChessEncoding.cpp
-        src/games/chess/ChessAction.cpp
-        src/MCTS/SearchTree.cpp
-        "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
-        "${stockfish_SOURCE_DIR}/src/memory.cpp"
-        "${stockfish_SOURCE_DIR}/src/misc.cpp"
-        "${stockfish_SOURCE_DIR}/src/movegen.cpp"
-        "${stockfish_SOURCE_DIR}/src/position.cpp"
-)
-target_include_directories(SearchTreeArenaTest PRIVATE src)
-target_link_libraries(SearchTreeArenaTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME SearchTreeArenaTest COMMAND SearchTreeArenaTest)
 
 add_executable(
         GameSearchTreeTest
@@ -377,14 +342,13 @@ target_link_libraries(DirectInferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME DirectInferencePipelineTest COMMAND DirectInferencePipelineTest)
 
 add_executable(
-        DirectSelfPlaySearchTest
-        test/TestDirectSelfPlaySearch.cpp
+        BatchedSearchTest
+        test/TestBatchedSearch.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
-        src/MCTS/DirectSelfPlaySearch.cpp
         src/MCTS/MCTS.cpp
-        src/MCTS/SearchTree.cpp
+        src/games/chess/ChessSearch.cpp
         src/games/chess/ChessAction.cpp
         src/util/Log.cpp
         src/util/ThreadPool.cpp
@@ -395,9 +359,9 @@ add_executable(
         "${stockfish_SOURCE_DIR}/src/movegen.cpp"
         "${stockfish_SOURCE_DIR}/src/position.cpp"
 )
-target_include_directories(DirectSelfPlaySearchTest PRIVATE src)
-target_link_libraries(DirectSelfPlaySearchTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME DirectSelfPlaySearchTest COMMAND DirectSelfPlaySearchTest)
+target_include_directories(BatchedSearchTest PRIVATE src)
+target_link_libraries(BatchedSearchTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME BatchedSearchTest COMMAND BatchedSearchTest)
 endif ()
 
 if (BUILD_BENCHMARKS)

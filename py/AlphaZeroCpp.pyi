@@ -10,7 +10,6 @@ __all__ = [
     'BatchedInferenceParameters',
     'BatchedSearchParameters',
     'CandidateAnalysis',
-    'DirectSelfPlayInferenceParams',
     'FunctionTimeInfo',
     'GameSearchResult',
     'GameSearchVisit',
@@ -374,7 +373,7 @@ class MCTS:
         self,
         client_args: InferenceClientParams,
         mcts_args: MCTSParams,
-        direct_inference_params: DirectSelfPlayInferenceParams,
+        inference_parameters: BatchedInferenceParameters,
         initial_model_version: int = 0,
     ) -> None: ...
     @property
@@ -415,17 +414,6 @@ class MCTSBoard:
     def root(self) -> MCTSRoot: ...
     @property
     def should_run_full_search(self) -> bool: ...
-
-class DirectSelfPlayInferenceParams:
-    def __init__(
-        self,
-        inference_workers: int,
-        inference_batch_size: int,
-        outstanding_batches_per_worker: int = 2,
-    ) -> None: ...
-    inference_workers: int
-    inference_batch_size: int
-    outstanding_batches_per_worker: int
 
 class MCTSChild:
     @property

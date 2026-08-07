@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 
 from AlphaZeroCpp import (
-    DirectSelfPlayInferenceParams,
+    BatchedInferenceParameters,
     InferenceClientParams,
     MCTS,
     MCTSBoard,
@@ -225,7 +225,7 @@ def create_search(arguments: Arguments) -> MCTS:
         min_visit_count=0,
         num_threads=arguments.threads,
     )
-    direct_parameters = DirectSelfPlayInferenceParams(
+    inference_parameters = BatchedInferenceParameters(
         arguments.direct_workers,
         arguments.direct_batch_size,
         arguments.direct_outstanding_batches,
@@ -233,7 +233,7 @@ def create_search(arguments: Arguments) -> MCTS:
     return MCTS(
         client_parameters,
         search_parameters,
-        direct_inference_params=direct_parameters,
+        inference_parameters=inference_parameters,
         initial_model_version=0,
     )
 
