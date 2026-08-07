@@ -22,10 +22,10 @@ int runChessGameTests() {
             "Initial chess position must expose 20 legal actions");
 
     const CompressedEncodedBoard encoded = encodeBoard(initial);
-    require(encoded.bits.size() ==
+    require(encoded.binary_planes.size() ==
                 static_cast<std::size_t>(ChessRepresentationDimensions::binary_channel_count),
             "Chess contract binary channel count disagrees with the encoded position");
-    require(encoded.scal.size() ==
+    require(encoded.scalar_planes.size() ==
                 static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count),
             "Chess contract scalar channel count disagrees with the encoded position");
 

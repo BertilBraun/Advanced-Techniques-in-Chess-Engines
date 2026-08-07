@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
 #include "search/SearchTree.hpp"
 
@@ -19,7 +20,7 @@ struct GameSearchResult {
     std::vector<GameSearchVisit> visits;
 };
 
-template <typename Game> struct GameSearchRequest {
+template <SearchGame Game> struct GameSearchRequest {
     GameSearchRoot<Game> root;
     std::uint32_t visit_limit;
     bool add_root_noise;

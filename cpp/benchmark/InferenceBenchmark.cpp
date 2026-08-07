@@ -105,8 +105,8 @@ void fillInput(torch::Tensor &input, const std::vector<CompressedEncodedBoard> &
                                            ChessRepresentationDimensions::board_length *
                                            ChessRepresentationDimensions::board_length;
     for (const auto index : range(batchSize)) {
-        writeTensorEncoding(encodings[(firstEncoding + index) % encodings.size()],
-                            destination + index * ENCODED_BOARD_BYTES);
+        encodings[(firstEncoding + index) % encodings.size()].writeTensorInto(
+            std::span(destination + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
     }
 }
 
@@ -179,8 +179,8 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
         static_cast<void>(warmupIteration);
         const InferencePipeline::WritableBatch warmup = pipeline.acquireWritableBatch();
         for (const auto index : range(arguments.batchSize)) {
-            writeTensorEncoding(encodings[index % encodings.size()],
-                                warmup.data + index * ENCODED_BOARD_BYTES);
+            encodings[index % encodings.size()].writeTensorInto(
+                std::span(warmup.data + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
         }
         pipeline.submit(warmup.slotIndex, arguments.batchSize);
         static_cast<void>(pipeline.consume<ChessGame>(
@@ -201,9 +201,8 @@ nlohmann::json runPipeline(const Arguments &arguments, const std::vector<Board> 
         }
         const InferencePipeline::WritableBatch writable = pipeline.acquireWritableBatch();
         for (const auto index : range(arguments.batchSize)) {
-            writeTensorEncoding(
-                encodings[(iteration * arguments.batchSize + index) % encodings.size()],
-                writable.data + index * ENCODED_BOARD_BYTES);
+            encodings[(iteration * arguments.batchSize + index) % encodings.size()].writeTensorInto(
+                std::span(writable.data + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
         }
         pipeline.submit(writable.slotIndex, arguments.batchSize);
         pendingBatches.emplace_back(writable.slotIndex, iteration * arguments.batchSize);
@@ -347,8 +346,8 @@ int main(const int argumentCount, char **argumentValues) {
         std::vector<std::int8_t> packedEncodings(positions * ENCODED_BOARD_BYTES);
         const auto packingStartedAt = std::chrono::steady_clock::now();
         for (const auto index : range(positions)) {
-            writeTensorEncoding(encodings[index],
-                                packedEncodings.data() + index * ENCODED_BOARD_BYTES);
+            encodings[index].writeTensorInto(std::span(
+                packedEncodings.data() + index * ENCODED_BOARD_BYTES, ENCODED_BOARD_BYTES));
         }
         const double packingMilliseconds = std::chrono::duration<double, std::milli>(
                                                std::chrono::steady_clock::now() - packingStartedAt)

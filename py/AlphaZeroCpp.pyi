@@ -41,7 +41,6 @@ __all__ = [
     'GoRules',
     'GoSearchRoot7',
     'GoSearchRoot9',
-    'GoSymmetry',
     'GoTerminalResult',
     'GoTerminationReason',
     'InferenceDimensions',
@@ -152,16 +151,6 @@ class GoTerminationReason:
     MAXIMUM_MOVES: GoTerminationReason
     @property
     def name(self) -> str: ...
-
-class GoSymmetry:
-    IDENTITY: GoSymmetry
-    ROTATE_90: GoSymmetry
-    ROTATE_180: GoSymmetry
-    ROTATE_270: GoSymmetry
-    REFLECT: GoSymmetry
-    REFLECT_ROTATE_90: GoSymmetry
-    REFLECT_ROTATE_180: GoSymmetry
-    REFLECT_ROTATE_270: GoSymmetry
 
 class GoRules:
     def __init__(self, komi_half_points: int, maximum_moves: int) -> None: ...

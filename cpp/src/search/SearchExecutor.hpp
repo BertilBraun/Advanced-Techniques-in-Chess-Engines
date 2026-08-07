@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferencePipeline.hpp"
 #include "search/SearchTree.hpp"
 #include "search/SearchTypes.hpp"
@@ -22,7 +23,7 @@
 
 // Runs the optimized multi-root MCTS loop, overlapping tree work with inference batches.
 
-template <typename Game> class BatchedSearchExecutor {
+template <SearchGame Game> class BatchedSearchExecutor {
 public:
     using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;

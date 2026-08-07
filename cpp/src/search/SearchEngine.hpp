@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/SearchExecutor.hpp"
 
 #include <cstddef>
@@ -12,7 +13,7 @@
 
 // Owns search lifecycle, retained trees, model generations, and the optimized executor.
 
-template <typename Game> class BatchedGameSearch {
+template <SearchGame Game> class BatchedGameSearch {
 public:
     using Root = GameSearchRoot<Game>;
     using Tree = GameSearchTree<Game>;

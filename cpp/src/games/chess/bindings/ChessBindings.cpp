@@ -7,6 +7,7 @@
 #include "position.h"
 
 #include <cstdint>
+#include <span>
 #include <string>
 
 #include <pybind11/pybind11.h>
@@ -26,7 +27,8 @@ void bind_chess_game(py::module_ &module) {
             const Board board(fen);
             const CompressedEncodedBoard encoded = encodeBoard(board);
             std::string payload(CompressedEncodedBoard::packed_bytes, '\0');
-            writePackedPlaneEncoding(encoded, reinterpret_cast<std::int8_t *>(payload.data()));
+            encoded.writePackedInto(
+                std::span(reinterpret_cast<std::int8_t *>(payload.data()), payload.size()));
             return py::bytes(payload);
         },
         py::arg("fen"),

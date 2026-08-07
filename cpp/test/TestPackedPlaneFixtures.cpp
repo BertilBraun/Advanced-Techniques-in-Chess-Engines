@@ -53,7 +53,7 @@ int runPackedPlaneFixtureTests() {
             const Board board(fixture.at("fen").get<std::string>());
             const CompressedEncodedBoard encoded = encodeBoard(board);
             std::vector<std::int8_t> actualPayload(CompressedEncodedBoard::packed_bytes);
-            writePackedPlaneEncoding(encoded, actualPayload.data());
+            encoded.writePackedInto(actualPayload);
             const std::vector<std::int8_t> expectedPayload =
                 parseHexPayload(fixture.at("packed_hex").get<std::string>());
             if (actualPayload != expectedPayload) {

@@ -116,21 +116,3 @@ def test_pass_termination_scoring_and_maximum_move_result() -> None:
     assert capped.terminal_result().score.white_half_points == 15
     assert capped.terminal_value() == 1.0
     assert capped.legal_actions() == []
-
-
-def test_action_symmetries_are_invertible() -> None:
-    symmetries = [
-        AlphaZeroCpp.GoSymmetry.IDENTITY,
-        AlphaZeroCpp.GoSymmetry.ROTATE_90,
-        AlphaZeroCpp.GoSymmetry.ROTATE_180,
-        AlphaZeroCpp.GoSymmetry.ROTATE_270,
-        AlphaZeroCpp.GoSymmetry.REFLECT,
-        AlphaZeroCpp.GoSymmetry.REFLECT_ROTATE_90,
-        AlphaZeroCpp.GoSymmetry.REFLECT_ROTATE_180,
-        AlphaZeroCpp.GoSymmetry.REFLECT_ROTATE_270,
-    ]
-    for symmetry in symmetries:
-        inverse = AlphaZeroCpp.GoPosition7.inverse_symmetry(symmetry)
-        for action in range(50):
-            transformed = AlphaZeroCpp.GoPosition7.transform_action(action, symmetry)
-            assert AlphaZeroCpp.GoPosition7.transform_action(transformed, inverse) == action

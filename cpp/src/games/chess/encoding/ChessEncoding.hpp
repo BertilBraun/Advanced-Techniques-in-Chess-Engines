@@ -6,7 +6,6 @@
 #include "util/BitBoard.hpp"
 #include "util/PackedPlane.hpp"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -42,22 +41,9 @@ struct ChessEncoding {
     static void encodeInputInto(const Board &state, std::int8_t *destination);
 };
 
-struct CompressedEncodedBoard {
-    static constexpr std::size_t packed_binary_bytes =
-        packed_binary_plane_bytes<ChessRepresentationDimensions::board_length,
-                                  ChessRepresentationDimensions::binary_channel_count>;
-    static constexpr std::size_t packed_bytes =
-        packed_binary_bytes + ChessRepresentationDimensions::scalar_channel_count;
-
-    std::array<BitBoard<ChessRepresentationDimensions::board_length>,
-               ChessRepresentationDimensions::binary_channel_count>
-        bits;
-    std::array<std::int8_t, ChessRepresentationDimensions::scalar_channel_count> scal;
-
-    [[nodiscard]] bool operator==(const CompressedEncodedBoard &other) const noexcept {
-        return bits == other.bits && scal == other.scal;
-    }
-};
+using CompressedEncodedBoard = EncodedPlanes<ChessRepresentationDimensions::board_length,
+                                             ChessRepresentationDimensions::binary_channel_count,
+                                             ChessRepresentationDimensions::scalar_channel_count>;
 
 struct BoardFingerprint {
     std::uint64_t first;
@@ -75,6 +61,3 @@ struct BoardFingerprintHash {
 [[nodiscard]] CompressedEncodedBoard encodeBoard(const Board &board);
 [[nodiscard]] BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed);
 [[nodiscard]] torch::Tensor tensorEncoding(const CompressedEncodedBoard &compressed);
-
-void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);
-void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination);

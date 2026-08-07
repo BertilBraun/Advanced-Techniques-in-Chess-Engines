@@ -1,6 +1,6 @@
 #pragma once
 
-#include "search/InferenceTypes.hpp"
+#include "search/InferenceDimensions.hpp"
 
 #include <concepts>
 #include <cstdint>

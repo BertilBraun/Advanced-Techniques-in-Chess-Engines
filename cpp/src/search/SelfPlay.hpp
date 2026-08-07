@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchEngine.hpp"
 #include "util/TimeItGuard.h"
@@ -60,24 +61,24 @@ struct SelfPlaySearchStatistics {
     float selected_action_prior_rank = 0.0F;
 };
 
-template <typename Game> struct SelfPlaySearchRequest {
+template <SearchGame Game> struct SelfPlaySearchRequest {
     GameSearchRoot<Game> root;
     bool full_search;
 };
 
-template <typename Game> struct SelfPlaySearchResult {
+template <SearchGame Game> struct SelfPlaySearchResult {
     float root_value;
     std::vector<GameSearchVisit> visits;
     GameSearchRoot<Game> root;
 };
 
-template <typename Game> struct SelfPlaySearchBatch {
+template <SearchGame Game> struct SelfPlaySearchBatch {
     std::vector<SelfPlaySearchResult<Game>> results;
     SelfPlaySearchStatistics statistics;
     std::uint64_t simulations_completed;
 };
 
-template <typename Game> class GameSelfPlaySearch {
+template <SearchGame Game> class GameSelfPlaySearch {
 public:
     using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;

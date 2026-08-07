@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchEngine.hpp"
 #include "util/Timing.hpp"
@@ -55,7 +56,7 @@ struct GameAnalysisResult {
     std::vector<int> principal_variation;
 };
 
-template <typename Game> class GameAnalysis {
+template <SearchGame Game> class GameAnalysis {
 public:
     using Position = typename Game::State;
     using Root = GameSearchRoot<Game>;

@@ -1,6 +1,5 @@
 #include "TestRunner.hpp"
 #include "games/go/GoGame.hpp"
-#include "games/go/encoding/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
@@ -90,7 +89,7 @@ void test_capture_suicide_and_ko() {
             "Ko recapture must become legal after an intervening move");
 }
 
-void test_history_encoding_hash_and_symmetries() {
+void test_history_encoding_and_hash() {
     using Contract = Go7Game;
     const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const typename Contract::State initial(rules);
@@ -117,35 +116,13 @@ void test_history_encoding_hash_and_symmetries() {
     require(encoded.binary_planes[2].test(0), "Older current-player plane is incorrect");
     require(encoded.scalar_planes[0] == 1, "Black-to-move scalar plane is incorrect");
     std::array<std::int8_t, decltype(encoded)::packed_bytes> packed{};
-    write_packed_go_position(encoded, packed.data());
+    encoded.writePackedInto(packed);
     require((static_cast<std::uint8_t>(packed[0]) & 1U) != 0,
             "Packed Go encoding must use canonical point mapping");
     std::array<std::int8_t, GoRepresentationDimensions<7>::channel_count * 49> tensor{};
     Contract::Encoding::encodeInputInto(white_played, tensor.data());
     require(tensor[0] == 1 && tensor[49 + 8] == 1,
             "Expanded Go tensor must match packed plane semantics");
-
-    constexpr std::array symmetries{
-        GoSymmetry::identity,
-        GoSymmetry::rotate_90,
-        GoSymmetry::rotate_180,
-        GoSymmetry::rotate_270,
-        GoSymmetry::reflect,
-        GoSymmetry::reflect_rotate_90,
-        GoSymmetry::reflect_rotate_180,
-        GoSymmetry::reflect_rotate_270,
-    };
-    for (const GoSymmetry symmetry : symmetries) {
-        for (const int action_id : range(GoAction<7>::action_count)) {
-            const GoAction<7> action(action_id);
-            const auto transformed = transform_go_action(action, symmetry);
-            const auto restored = transform_go_action(transformed, inverse_go_symmetry(symmetry));
-            require(restored == action, "Go action symmetry must be invertible");
-        }
-        const auto transformed = transform_go_encoding(encoded, symmetry);
-        const auto restored = transform_go_encoding(transformed, inverse_go_symmetry(symmetry));
-        require(restored == encoded, "Go encoding symmetry must be invertible");
-    }
 }
 
 void test_termination_and_scoring() {
@@ -206,7 +183,7 @@ int runGoGameTests() {
         test_initial_and_actions<13>();
         test_initial_and_actions<19>();
         test_capture_suicide_and_ko();
-        test_history_encoding_hash_and_symmetries();
+        test_history_encoding_and_hash();
         test_termination_and_scoring();
         test_invalid_boundaries();
         std::cout << "Go game tests passed\n";

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferenceTypes.hpp"
 #include "util/py.hpp"
 
@@ -26,7 +27,7 @@ template <typename Action> struct GameSearchEdge {
     float virtual_loss = 0.0F;
     std::optional<std::size_t> child_index;
 };
-template <typename Game> struct GameSearchNode {
+template <SearchGame Game> struct GameSearchNode {
     using Position = typename Game::State;
     using Action = typename Game::Action;
 
@@ -43,7 +44,7 @@ template <typename Game> struct GameSearchNode {
     [[nodiscard]] bool expanded() const noexcept { return !children.empty(); }
 };
 
-template <typename Game> class GameSearchTree {
+template <SearchGame Game> class GameSearchTree {
 public:
     using Position = typename Game::State;
     using Action = typename Game::Action;
@@ -495,7 +496,7 @@ private:
     }
 };
 
-template <typename Game> class GameSearchRoot {
+template <SearchGame Game> class GameSearchRoot {
 public:
     using Position = typename Game::State;
     using Tree = GameSearchTree<Game>;

@@ -1,13 +1,13 @@
 #include "games/go/bindings/GoBindings.hpp"
 
 #include "games/go/GoGame.hpp"
-#include "games/go/encoding/GoSymmetry.hpp"
 #include "util/py.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -134,7 +134,8 @@ void bind_position(py::module_ &module, const char *name) {
              [](const Position &position) {
                  const Encoded encoded = encode_go_position(position);
                  std::string payload(Encoded::packed_bytes, '\0');
-                 write_packed_go_position(encoded, reinterpret_cast<std::int8_t *>(payload.data()));
+                 encoded.writePackedInto(
+                     std::span(reinterpret_cast<std::int8_t *>(payload.data()), payload.size()));
                  return py::bytes(payload);
              })
         .def("tensor_encoding",
@@ -145,11 +146,6 @@ void bind_position(py::module_ &module, const char *name) {
                  Contract::Encoding::encodeInputInto(position, values.data());
                  return values;
              })
-        .def_static("transform_action",
-                    [](const int action_id, const GoSymmetry symmetry) {
-                        return transform_go_action(GoAction<BoardSize>(action_id), symmetry).id;
-                    })
-        .def_static("inverse_symmetry", &inverse_go_symmetry)
         .def(py::self == py::self);
 }
 
@@ -163,15 +159,6 @@ void bind_go_game(py::module_ &module) {
         .value("ONGOING", GoTerminationReason::ongoing)
         .value("TWO_PASSES", GoTerminationReason::two_passes)
         .value("MAXIMUM_MOVES", GoTerminationReason::maximum_moves);
-    py::enum_<GoSymmetry>(module, "GoSymmetry")
-        .value("IDENTITY", GoSymmetry::identity)
-        .value("ROTATE_90", GoSymmetry::rotate_90)
-        .value("ROTATE_180", GoSymmetry::rotate_180)
-        .value("ROTATE_270", GoSymmetry::rotate_270)
-        .value("REFLECT", GoSymmetry::reflect)
-        .value("REFLECT_ROTATE_90", GoSymmetry::reflect_rotate_90)
-        .value("REFLECT_ROTATE_180", GoSymmetry::reflect_rotate_180)
-        .value("REFLECT_ROTATE_270", GoSymmetry::reflect_rotate_270);
     py::class_<GoRules>(module, "GoRules")
         .def(py::init<int, int>(), py::arg("komi_half_points"), py::arg("maximum_moves"))
         .def_readonly("komi_half_points", &GoRules::komi_half_points)

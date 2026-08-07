@@ -1,5 +1,6 @@
 #pragma once
 
+#include "games/GameConcepts.hpp"
 #include "search/InferenceModel.hpp"
 #include "search/InferenceTypes.hpp"
 #include "util/Timing.hpp"
@@ -24,7 +25,7 @@ struct InferenceOutput {
     torch::Tensor outcomes;
 };
 
-template <typename Game>
+template <SearchGame Game>
 [[nodiscard]] SearchInferenceResult<Game>
 processInferencePosition(const float *policy, const float *outcome,
                          const typename Game::State &position) {
@@ -125,7 +126,7 @@ public:
     void discardWritableBatch(size_t slotIndex);
     void submit(size_t slotIndex, size_t batchSize);
     [[nodiscard]] bool isCompleted(size_t slotIndex) const;
-    template <typename Game, typename Positions>
+    template <SearchGame Game, typename Positions>
     [[nodiscard]] std::vector<SearchInferenceResult<Game>> consume(size_t slotIndex,
                                                                    const Positions &positions) {
         const InferenceOutput output = waitCompletedOutput(slotIndex);

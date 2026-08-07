@@ -16,7 +16,7 @@ void require(const bool condition, const char *message) {
     }
 }
 
-template <typename Game> void exercise_tree(typename Game::State position) {
+template <SearchGame Game> void exercise_tree(typename Game::State position) {
     GameSearchTree<Game> tree(std::move(position), 1, 16);
     const auto legalActions = Game::legalActions(tree.root().position);
     SearchInferenceResult<Game> inference{{}, {0.5F, 0.0F, 0.5F}};
