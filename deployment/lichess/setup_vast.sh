@@ -96,7 +96,7 @@ cd "${engine_repository_root}/py"
     ./test/test_run_cutechess_gauntlet.py \
     ./test/test_validate_uci_transcript.py \
     -q
-"${virtual_environment_root}/bin/python" -m src.uci --help >/dev/null
+"${virtual_environment_root}/bin/python" -m src.games.chess.uci --help >/dev/null
 
 echo "[8/8] Installing the UCI launcher and pinned lichess-bot"
 install -m 0755 \

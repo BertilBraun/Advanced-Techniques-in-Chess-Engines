@@ -22,11 +22,11 @@ from AlphaZeroCpp import (
     SelfPlaySearchParameters,
 )
 
-from src.experiment.configuration import GoExperimentConfiguration
+from src.games.go.configuration import GoExperimentConfiguration
 from src.util.tensorboard import log_scalar
 from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
-from src.self_play.go_completed_game import (
+from src.games.go.completed_game import (
     GoCompletedGame,
     GoMoveSelectionMode,
     GoRepresentationMetadata,

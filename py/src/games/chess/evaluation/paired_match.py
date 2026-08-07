@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from src.eval.evaluation_types import (
+from src.games.chess.evaluation.types import (
     EvaluationMove,
     EvaluationTerminal,
     PairedEvaluationDecision,

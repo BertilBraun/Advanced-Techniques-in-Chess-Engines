@@ -14,9 +14,10 @@ AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 if not hasattr(AlphaZeroCpp, 'GoSelfPlaySearch7'):
     pytest.skip('AlphaZeroCpp must be rebuilt with the R8 Go pipeline.', allow_module_level=True)
 
-import src.train.GoReplay as go_replay_module
+import src.games.go.replay as go_replay_module
 
-from src.experiment.configuration import GoExperimentConfiguration, load_experiment_configuration
+from src.experiment.configuration import load_experiment_configuration
+from src.games.go.configuration import GoExperimentConfiguration
 from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
@@ -25,7 +26,7 @@ from src.games.go.training_runtime import GoTrainingGame
 from src.cluster.TrainerProcess import TrainerProcess
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
 from src.self_play.completed_game_record import completed_game_from_path
-from src.self_play.go_completed_game import (
+from src.games.go.completed_game import (
     GoCompletedGame,
     GoMoveSelectionMode,
     GoRepresentationMetadata,
@@ -33,9 +34,9 @@ from src.self_play.go_completed_game import (
     GoSearchObservation,
     GoTerminationReason,
 )
-from src.self_play.GoSelfPlay import GoSelfPlay
+from src.games.go.self_play import GoSelfPlay
 from src.self_play.value_target import FinalOutcome
-from src.train.GoReplay import (
+from src.games.go.replay import (
     GoReplayImplementation,
     build_go_training_batch,
     materialize_go_game,

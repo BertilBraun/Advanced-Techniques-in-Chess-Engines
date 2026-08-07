@@ -12,7 +12,7 @@ from AlphaZeroCpp import (
     InferenceDevice,
     InferenceConfiguration,
 )
-from src.interactive.analysis import (
+from src.games.chess.interactive.analysis import (
     AnalysisRequest,
     AnalysisResult,
     CandidateAnalysis,
@@ -21,7 +21,7 @@ from src.interactive.analysis import (
     PolicyAnalysis,
     TimedMctsAnalysis,
 )
-from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
 
 
 @dataclass(frozen=True)

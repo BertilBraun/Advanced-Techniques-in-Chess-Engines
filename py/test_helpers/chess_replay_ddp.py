@@ -12,7 +12,7 @@ sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 from src.cluster.TrainerProcess import MaintainReplayCommand, _maintain_replay
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.self_play.value_target import ReplayValueTarget, TerminationReason
-from src.train.ChessReplay import pack_chess_visits
+from src.games.chess.replay import pack_chess_visits
 from src.train.Replay import PackedReplaySample, ReplayMetrics, ReplaySnapshot
 from src.train.training_batch import ReplaySampleMetadata
 

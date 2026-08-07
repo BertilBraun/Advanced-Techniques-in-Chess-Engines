@@ -161,7 +161,7 @@ lichess-bot.py                         account, challenges, games, PGNs
 /usr/local/bin/alphazero-uci          small shell wrapper
     | execs Python with model arguments
     v
-python -m src.uci                     UCI stdin/stdout server
+python -m src.games.chess.uci                     UCI stdin/stdout server
     | imports
     v
 AlphaZeroCpp.so + TorchScript model   native board/MCTS and GPU inference
@@ -172,10 +172,10 @@ AlphaZeroCpp.so + TorchScript model   native board/MCTS and GPU inference
 `alphazero-uci` is not another network service. It changes to `/workspace/py` and runs:
 
 ```text
-python3.10 -m src.uci --model "$MODEL_PATH" ...
+python3.10 -m src.games.chess.uci --model "$MODEL_PATH" ...
 ```
 
-That Python module owns the shared `src.interactive.InteractiveEngine` for the UCI process. The UCI adapter adds only stop-aware time slicing over the native indexed search tree and direct inference pipeline, with two CUDA model workers and pipelined batches of 64 by default. It loads `AlphaZeroCpp.so` and the TorchScript model once, then answers the `uci`, `position`, `go movetime`, `stop`, and other UCI commands sent by `lichess-bot`. Timed UCI searches use native chunks of up to five seconds by default so GPU batching reaches the measured production throughput; `stop` is observed between chunks. Override the bounded chunk with `--search-slice-seconds` when lower stop latency matters more than throughput. With `challenge.concurrency: 1`, one game uses one UCI process serially. A new game may cause `lichess-bot` to launch a new process, so model and worker lifetime currently spans one game process, not the entire life of the public-bot supervisor.
+That Python module owns the shared `src.games.chess.interactive.InteractiveEngine` for the UCI process. The UCI adapter adds only stop-aware time slicing over the native indexed search tree and direct inference pipeline, with two CUDA model workers and pipelined batches of 64 by default. It loads `AlphaZeroCpp.so` and the TorchScript model once, then answers the `uci`, `position`, `go movetime`, `stop`, and other UCI commands sent by `lichess-bot`. Timed UCI searches use native chunks of up to five seconds by default so GPU batching reaches the measured production throughput; `stop` is observed between chunks. Override the bounded chunk with `--search-slice-seconds` when lower stop latency matters more than throughput. With `challenge.concurrency: 1`, one game uses one UCI process serially. A new game may cause `lichess-bot` to launch a new process, so model and worker lifetime currently spans one game process, not the entire life of the public-bot supervisor.
 
 `SearchMode` is a UCI option advertised by our server. The config causes `lichess-bot` to send `setoption name SearchMode value mcts`. `mcts` chooses the most-visited root move after search. `policy` skips tree search and chooses the highest network prior; it is useful for diagnostics but is not the recommended strength measurement.
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.games.chess.evaluation.model import ModelEvaluation
 from src.experiment.configuration import load_chess_experiment_configuration
 
 

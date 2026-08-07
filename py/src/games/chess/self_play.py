@@ -29,7 +29,7 @@ from src.games.Board import Player
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.games.chess.ChessBoard import ChessBoard, ChessMove
 from src.games.chess.repetition_history import REPETITION_HISTORY_PLIES, bounded_repetition_history
-from src.self_play.chess_completed_game import (
+from src.games.chess.completed_game import (
     ChessCompletedGame,
     ChessMoveSelectionMode,
     ChessRepresentationMetadata,
@@ -38,9 +38,9 @@ from src.self_play.chess_completed_game import (
 )
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
 from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
-from src.self_play.resignation import (
+from src.games.chess.resignation import (
     CompletedResignationAudit,
     ResignationCalibrationState,
     ResignationManager,
@@ -51,7 +51,7 @@ from src.self_play.resignation import (
 from src.util import lerp
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import TerminationReason
-from src.self_play.curriculum import curriculum_fade, curriculum_progress
+from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 from src.games.chess.encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log

@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from src.experiment.cost_accounting import CostCurrency
-from src.self_play.resignation import ResignationParams
+from src.games.chess.resignation import ResignationParams
 from src.util.frozen_model import FrozenModel
 
 

@@ -6,7 +6,10 @@ import torch
 import torch.nn.functional as functional
 
 from src.neural_network import Network
-from src.experiment.configuration import GoExperimentConfiguration, GoTrainingObjectiveConfiguration
+from src.games.go.configuration import (
+    GoExperimentConfiguration,
+    GoTrainingObjectiveConfiguration,
+)
 from src.games.go.contract import GoStateContract
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome

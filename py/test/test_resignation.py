@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
-from src.self_play.resignation import (
+from src.games.chess.self_play import SelfPlay, SelfPlayGame
+from src.games.chess.resignation import (
     CompletedResignationAudit,
     ExternalResignationSafetyApproval,
     ResignationManager,
@@ -125,7 +125,7 @@ def test_post_cutoff_audit_positions_cannot_enter_ordinary_replay(
     client.args = SimpleNamespace(search=SimpleNamespace(playout_cap_randomization=1.0))
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=-0.97)
     game.resignation_trigger_ply = 80
-    monkeypatch.setattr('src.self_play.SelfPlay.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.self_play.random.random', lambda: 0.0)
 
     assert client._should_run_full_search(game, force_fast_endgame_playout=False) is False
 
@@ -153,7 +153,7 @@ def test_audit_assignment_can_never_enable_production_resignation(
         production_enabled=True,
         audit_cutoff_threshold=-0.97,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
 
     assignment = ResignationManager(str(tmp_path), parameters).assignment(model_version=100)
 
@@ -173,7 +173,7 @@ def test_audit_cutoff_increases_until_calibration_selects_threshold(
         threshold_candidate_maximum=-0.80,
         threshold_candidate_resolution=0.01,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     manager = ResignationManager(str(tmp_path), parameters)
 
     assert manager.assignment(model_version=29).is_audit_game is False
@@ -203,7 +203,7 @@ def test_production_resignation_uses_bootstrap_cutoff_until_calibration(
         production_resignation_fade_versions=0,
         require_external_safety_approval=False,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     manager = ResignationManager(str(tmp_path), parameters)
 
     assert manager.assignment(model_version=29).production_resignation_enabled is False
@@ -239,7 +239,7 @@ def test_safe_bootstrap_evidence_keeps_increasing_aggressiveness(
         production_resignation_fade_versions=0,
         require_external_safety_approval=False,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     manager = ResignationManager(str(tmp_path), parameters)
 
     for index in range(100):
@@ -268,7 +268,7 @@ def test_first_observed_false_non_loss_stops_bootstrap_immediately(
         production_resignation_fade_versions=0,
         require_external_safety_approval=False,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     manager = ResignationManager(str(tmp_path), parameters)
 
     state = manager.record_completed_audit(
@@ -388,7 +388,7 @@ def test_enabling_production_preserves_compatible_audit_calibration(
         production_resignation_fade_versions=0,
         require_external_safety_approval=False,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     restarted = ResignationManager(str(tmp_path), production_parameters)
     assignment = restarted.assignment(model_version=40)
 
@@ -413,7 +413,7 @@ def test_external_safety_approval_can_disable_production_without_self_play_metri
         production_resignation_fade_versions=0,
         require_external_safety_approval=True,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     production_manager = ResignationManager(str(tmp_path), production_parameters)
     assert production_manager.assignment(model_version=40).production_resignation_enabled is False
 
@@ -575,7 +575,7 @@ def test_restart_recovers_safety_state_before_production_assignment(
         production_resignation_fade_versions=0,
         require_external_safety_approval=False,
     )
-    monkeypatch.setattr('src.self_play.resignation.random.random', lambda: 0.0)
+    monkeypatch.setattr('src.games.chess.resignation.random.random', lambda: 0.0)
     restarted = ResignationManager(str(tmp_path), production_parameters)
 
     assert restarted.state.total_completed_trigger_count == 2

@@ -1,6 +1,6 @@
 import pytest
 
-from src.self_play.curriculum import curriculum_fade, curriculum_progress
+from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 
 
 @pytest.mark.parametrize(

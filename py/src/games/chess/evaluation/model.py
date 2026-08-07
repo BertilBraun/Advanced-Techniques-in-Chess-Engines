@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 from src.neural_network import Network
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
-from src.eval.evaluation_types import (
+from src.games.chess.evaluation.types import (
     Results,
     EvaluationMove,
     EvaluationTerminal,
@@ -32,8 +32,8 @@ from src.eval.evaluation_types import (
     PairedEvaluationDecision,
     PairedEvaluationModel,
 )
-from src.eval.paired_match import play_paired_models
-from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
+from src.games.chess.evaluation.paired_match import play_paired_models
+from src.games.chess.dataset import SelfPlayDataset, preserve_prebatched_samples
 from src.train.TrainingArgs import (
     EvaluationParams,
     TrainingArgs,

@@ -8,16 +8,16 @@ from typing import cast
 import pytest
 from torch import multiprocessing as mp
 
-import src.cluster.EvaluationProcess as evaluation_process_module
-import src.eval.ModelEvaluation as evaluation_module
-from src.cluster.EvaluationProcess import (
+import src.games.chess.evaluation.process as evaluation_process_module
+import src.games.chess.evaluation.model as evaluation_module
+from src.games.chess.evaluation.process import (
     _activate_evaluation_device,
     _model_engine_condition,
     _reap_evaluation_tasks,
     _terminate_evaluation_tasks,
 )
-from src.eval.ModelEvaluation import ModelEvaluation
-from src.eval.evaluation_types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
+from src.games.chess.evaluation.model import ModelEvaluation
+from src.games.chess.evaluation.types import EvaluationModel, EvaluationMove, PairedEvaluationModel, Results
 from src.experiment.evaluation_protocol import GameRecord, ScheduledGame
 from src.self_play.visit_policy import action_probabilities
 from src.games.chess.ChessBoard import ChessBoard

@@ -13,7 +13,7 @@ from torch.utils.data import default_collate
 
 from src.train.TrainingDataLoader import training_dataloader
 from src.experiment.configuration import load_chess_experiment_configuration
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.games.chess.dataset import SelfPlayDataset
 from src.games.chess.contract import CHESS_NETWORK_DIMENSIONS
 from src.train.Trainer import Trainer, prefetch_training_batches
 from src.train.TrainingArgs import TrainingArgs

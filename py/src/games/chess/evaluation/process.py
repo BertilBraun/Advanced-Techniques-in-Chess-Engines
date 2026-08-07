@@ -5,11 +5,11 @@ import subprocess
 import torch
 from torch import multiprocessing as mp
 
-from src.eval.ModelEvaluation import ModelEvaluation
+from src.games.chess.evaluation.model import ModelEvaluation
 from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.eval.evaluation_types import Results
+from src.games.chess.evaluation.types import Results
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.games.chess.dataset import SelfPlayDataset
 from src.util.tensorboard import TensorboardWriter, log_scalar
 from src.runtime import USE_GPU
 from src.util.exceptions import log_exceptions

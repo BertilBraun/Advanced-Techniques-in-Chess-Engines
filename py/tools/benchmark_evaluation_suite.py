@@ -8,8 +8,8 @@ import time
 from pydantic import BaseModel, ConfigDict, Field
 import torch.multiprocessing as multiprocessing
 
-from src.cluster.EvaluationProcess import EvaluationProcess
-from src.cluster.EvaluationProcess import EvaluationRunProvenance
+from src.games.chess.evaluation.process import EvaluationProcess
+from src.games.chess.evaluation.process import EvaluationRunProvenance
 from src.experiment.configuration import load_chess_experiment_configuration
 
 

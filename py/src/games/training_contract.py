@@ -6,9 +6,9 @@ from typing import Protocol
 
 from src.neural_network import NetworkDimensions
 from src.experiment.configuration import ExperimentConfiguration
-from src.self_play.chess_completed_game import ChessCompletedGame
+from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
-from src.self_play.go_completed_game import GoCompletedGame
+from src.games.go.completed_game import GoCompletedGame
 from src.train.Replay import ReplayGameImplementation
 from src.train.Trainer import TrainingObjective
 from src.train.TrainingArgs import TrainingArgs

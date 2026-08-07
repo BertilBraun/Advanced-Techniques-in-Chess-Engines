@@ -13,7 +13,7 @@ sys.modules.setdefault('GPUtil', ModuleType('GPUtil'))
 
 import src.cluster.CommanderProcess as commander_module
 from src.cluster.CommanderProcess import CommanderProcess, TrainingLifecycle
-from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
+from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
 from src.train.CreditTrainingLedger import CreditTrainingLedger
 from src.train.TrainingArgs import CreditTrainingParams, TrainingArgs

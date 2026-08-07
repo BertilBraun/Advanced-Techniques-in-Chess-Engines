@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, TextIO
 
 import chess
 
-from src.interactive.analysis import AnalysisRequest, PolicyAnalysis, TimedMctsAnalysis
+from src.games.chess.interactive.analysis import AnalysisRequest, PolicyAnalysis, TimedMctsAnalysis
 
 if TYPE_CHECKING:
-    from src.uci.engine import UciEngine, UciGame
+    from src.games.chess.uci.engine import UciEngine, UciGame
 
 ENGINE_NAME = 'AlphaZeroCpp'
 ENGINE_AUTHOR = 'AlphaZeroCpp contributors'

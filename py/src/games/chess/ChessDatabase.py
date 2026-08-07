@@ -41,7 +41,7 @@ def games_iterator(year: int, month: int, num_games_per_month: int):
 def process_month(year: int, month: int, num_games_per_month: int) -> list[Path]:
     from src.games.chess.ChessBoard import ChessBoard
     from src.games.chess.ChessGame import ChessGame
-    from src.self_play.SelfPlayDataset import SelfPlayDataset, chess_sample_metadata
+    from src.games.chess.dataset import SelfPlayDataset, chess_sample_metadata
     from src.self_play.value_target import ReplayValueTarget, TerminationReason
 
     chess_game = ChessGame()

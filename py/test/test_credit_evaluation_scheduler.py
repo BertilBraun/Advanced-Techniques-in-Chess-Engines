@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import src.cluster.CreditEvaluationScheduler as scheduler_module
-from src.cluster.CreditEvaluationScheduler import (
+import src.games.chess.evaluation.scheduler as scheduler_module
+from src.games.chess.evaluation.scheduler import (
     CreditEvaluationScheduler,
     CreditEvaluationStatus,
     credit_evaluation_arguments,

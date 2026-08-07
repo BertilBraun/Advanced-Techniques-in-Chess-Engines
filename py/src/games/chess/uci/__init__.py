@@ -1,0 +1,1 @@
+"""Chess UCI transport."""

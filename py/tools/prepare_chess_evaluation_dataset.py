@@ -5,7 +5,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.experiment.configuration import ChessExperimentConfiguration, load_chess_experiment_configuration
+from src.experiment.configuration import load_chess_experiment_configuration
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.chess.evaluation_dataset import ensure_evaluation_dataset_exists
 
 

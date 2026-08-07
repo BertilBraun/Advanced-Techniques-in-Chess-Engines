@@ -20,7 +20,7 @@ from src.self_play.visit_policy import action_probabilities
 from src.runtime import USE_GPU
 from src.util import random_id
 from src.util.timing import timeit
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.self_play.value_target import (
     REPLAY_SCHEMA_VERSION,
     FinalOutcome,

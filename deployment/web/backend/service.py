@@ -14,10 +14,10 @@ from deployment.web.backend.contracts import (
     PlayTurnResponse,
     SideToMove,
 )
-from src.interactive.analysis import AnalysisResult
+from src.games.chess.interactive.analysis import AnalysisResult
 
 if TYPE_CHECKING:
-    from src.interactive.engine import InteractiveEngine, InteractiveGame
+    from src.games.chess.interactive.engine import InteractiveEngine, InteractiveGame
 
 
 @dataclass

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from deployment.web.backend.api import create_app
 from deployment.web.backend.service import GameService
-from src.interactive.analysis import (
+from src.games.chess.interactive.analysis import (
     AnalysisRequest,
     AnalysisResult,
     CandidateAnalysis,

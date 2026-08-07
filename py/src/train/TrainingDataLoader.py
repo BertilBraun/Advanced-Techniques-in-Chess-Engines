@@ -2,7 +2,7 @@ import os
 
 import torch
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset, preserve_prebatched_samples
+from src.games.chess.dataset import SelfPlayDataset, preserve_prebatched_samples
 
 
 def training_dataloader(

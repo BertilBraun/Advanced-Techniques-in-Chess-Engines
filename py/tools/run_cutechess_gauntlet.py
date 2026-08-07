@@ -102,7 +102,7 @@ def command_for_opponent(configuration: GauntletConfiguration, stockfish_elo: in
         f'dir={Path(__file__).parents[1]}',
         'proto=uci',
         'arg=-m',
-        'arg=src.uci',
+        'arg=src.games.chess.uci',
         'arg=--model',
         f'arg={configuration.model}',
         '-engine',

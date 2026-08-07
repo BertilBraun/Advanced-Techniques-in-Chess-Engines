@@ -15,14 +15,14 @@ import chess
 import torch
 from pydantic import BaseModel, ConfigDict
 
-from src.interactive.analysis import (
+from src.games.chess.interactive.analysis import (
     AnalysisResult,
     CountedMctsAnalysis,
     PolicyAnalysis,
     TimedMctsAnalysis,
 )
-from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
-from src.interactive.engine import InferenceMetrics, InteractiveEngine, InteractiveGame
+from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+from src.games.chess.interactive.engine import InferenceMetrics, InteractiveEngine, InteractiveGame
 
 
 class RunStatus(str, Enum):

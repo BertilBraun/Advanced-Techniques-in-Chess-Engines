@@ -4,8 +4,8 @@ import h5py
 import numpy as np
 
 from src.games.chess.encoding import BINARY_CHANNELS, C, H, SCALAR_CHANNELS, W, encode_board_state
-from src.self_play.SelfPlayDataset import SelfPlayDataset
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.games.chess.dataset import SelfPlayDataset
+from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.self_play.value_target import REPLAY_SCHEMA_VERSION, FinalOutcome, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 

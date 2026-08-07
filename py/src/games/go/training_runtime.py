@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from src.neural_network import NetworkDimensions
-from src.experiment.configuration import GoExperimentConfiguration
+from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract
 from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
-from src.self_play.GoSelfPlay import GoSelfPlay
+from src.games.go.self_play import GoSelfPlay
 from src.self_play.completed_game import CompletedGamePublisher
-from src.self_play.go_completed_game import GoCompletedGame
-from src.train.GoReplay import GoReplayImplementation
+from src.games.go.completed_game import GoCompletedGame
+from src.games.go.replay import GoReplayImplementation
 from src.train.Replay import ReplayGameImplementation
 from src.train.Trainer import GoTrainingObjective, TrainingObjective
 

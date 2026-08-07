@@ -28,7 +28,7 @@ While computationally intensive search and inference are handled in C++ (`cpp/`)
   - Trains optimizer quanta when replay presentation credits are available.
   - Logs training progress and metrics to TensorBoard (`logs/`).
 
-- **`python -m src.uci`**
+- **`python -m src.games.chess.uci`**
   - Serves a published chess model through the UCI protocol.
   - Supports policy and retained-tree MCTS analysis modes.
 
@@ -77,7 +77,7 @@ The training script automates distributed training job submission.
 5. **Run a Chess Model Through UCI**:
 
     ```bash
-    python -m src.uci --model <model.jit.pt>
+    python -m src.games.chess.uci --model <model.jit.pt>
     ```
 
 6. **Optional: Submit Training to Cluster**:

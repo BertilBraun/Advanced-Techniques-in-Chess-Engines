@@ -11,7 +11,7 @@ from torch import nn
 from torch.amp import GradScaler, autocast
 
 from src.neural_network import Network
-from src.experiment.configuration import GoTrainingObjectiveConfiguration
+from src.games.go.configuration import GoTrainingObjectiveConfiguration
 from src.train.training_batch import TrainingBatch
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.util.tensorboard import log_scalar

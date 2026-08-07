@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from threading import Event
 from typing import TYPE_CHECKING
 
-from src.interactive.analysis import (
+from src.games.chess.interactive.analysis import (
     AnalysisRequest,
     AnalysisResult,
     PolicyAnalysis,
@@ -12,7 +12,7 @@ from src.interactive.analysis import (
 )
 
 if TYPE_CHECKING:
-    from src.interactive.engine import InteractiveEngine, InteractiveGame
+    from src.games.chess.interactive.engine import InteractiveEngine, InteractiveGame
 
 
 @dataclass(frozen=True)

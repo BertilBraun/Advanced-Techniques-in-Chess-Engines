@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, has_positive_visit_counts
+from src.games.chess.self_play import SelfPlay, SelfPlayGame, has_positive_visit_counts
 from src.self_play.completed_game import CompletedGamePublisher
 from test_helpers.chess_configuration import CHESS_TRAINING
 from src.train.TrainingArgs import BatchedInferenceParams
@@ -204,7 +204,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     self_play.completed_searches = 19
     self_play.search_engine = _LifecycleSearch(events, self_play.search_schedule_state.arena_capacity)
     previous_search = self_play.search_engine
-    monkeypatch.setattr('src.self_play.SelfPlay.log_scalar', lambda *_args: None)
+    monkeypatch.setattr('src.games.chess.self_play.log_scalar', lambda *_args: None)
 
     self_play.refresh_model(1, 'updated.jit.pt')
 

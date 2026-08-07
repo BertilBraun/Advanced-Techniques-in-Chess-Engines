@@ -9,10 +9,10 @@ from torch.multiprocessing import Process
 from pathlib import Path
 from time import monotonic
 
-from src.cluster.CreditEvaluationScheduler import CreditEvaluationScheduler
+from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
-from src.experiment.configuration import ChessExperimentConfiguration
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.training_contract import TrainingGameImplementation
 from src.train.TrainingArgs import CreditTrainingParams
 from src.util.communication import (

@@ -19,9 +19,9 @@ from AlphaZeroCpp import (
     InferenceConfiguration,
     InferenceStatistics,
 )
-from src.self_play.SelfPlay import SelfPlay
+from src.games.chess.self_play import SelfPlay
 from src.self_play.statistics import SelfPlayStatistics
-from src.self_play.chess_completed_game import ChessCompletedGame
+from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
 from src.experiment.configuration import load_chess_experiment_configuration
 

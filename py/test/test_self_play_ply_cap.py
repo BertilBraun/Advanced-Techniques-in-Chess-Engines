@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import chess
 import pytest
 
-from src.self_play.SelfPlay import SelfPlay, SelfPlayGame
+from src.games.chess.self_play import SelfPlay, SelfPlayGame
 from src.self_play.statistics import SelfPlayStatistics
 
 

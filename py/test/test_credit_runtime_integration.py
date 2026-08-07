@@ -4,7 +4,7 @@ from pathlib import Path
 import chess
 
 from src.games.chess.ChessBoard import ChessBoard
-from src.self_play.chess_completed_game import (
+from src.games.chess.completed_game import (
     ChessCompletedGame,
     ChessMoveSelectionMode,
     ChessRepresentationMetadata,
@@ -14,7 +14,7 @@ from src.self_play.chess_completed_game import (
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
 from src.self_play.value_target import TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.train.ChessReplay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
+from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION, training_batch_loader
 from src.train.Replay import ReplayMaintainer
 from src.train.CreditTrainingLedger import CreditTrainingLedger
 from src.train.TrainingArgs import CreditTrainingParams

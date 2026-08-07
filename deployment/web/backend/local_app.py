@@ -4,8 +4,8 @@ import os
 
 from deployment.web.backend.api import create_app
 from deployment.web.backend.service import GameService
-from src.interactive.configuration import InteractiveEngineConfiguration
-from src.interactive.engine import InteractiveEngine
+from src.games.chess.interactive.configuration import InteractiveEngineConfiguration
+from src.games.chess.interactive.engine import InteractiveEngine
 
 
 def _required_environment(name: str) -> str:

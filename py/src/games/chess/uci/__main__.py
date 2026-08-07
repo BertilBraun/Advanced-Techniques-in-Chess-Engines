@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import argparse
-from src.interactive.configuration import (
+from src.games.chess.interactive.configuration import (
     DEFAULT_EXPLORATION_CONSTANT,
     InferenceTarget,
     InteractiveEngineConfiguration,
 )
-from src.interactive.engine import InteractiveEngine
-from src.uci.engine import UciConfiguration, UciEngine
-from src.uci.server import UciServer
+from src.games.chess.interactive.engine import InteractiveEngine
+from src.games.chess.uci.engine import UciConfiguration, UciEngine
+from src.games.chess.uci.server import UciServer
 
 
 def parse_arguments() -> tuple[InteractiveEngineConfiguration, UciConfiguration]:

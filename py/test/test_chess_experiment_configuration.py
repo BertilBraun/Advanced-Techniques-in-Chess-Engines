@@ -7,15 +7,15 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from src.experiment.base_configuration import BaseExperimentConfiguration
 from src.experiment.configuration import (
-    BaseExperimentConfiguration,
-    ChessExperimentConfiguration,
-    GoExperimentConfiguration,
     load_experiment_configuration,
     load_chess_experiment_configuration,
     validate_experiment_queue,
     write_resolved_chess_experiment,
 )
+from src.games.chess.configuration import ChessExperimentConfiguration
+from src.games.go.configuration import GoExperimentConfiguration
 from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 

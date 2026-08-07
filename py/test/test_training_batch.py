@@ -16,7 +16,7 @@ from src.games.chess.encoding import (
     encode_board_state,
 )
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.self_play.SelfPlayDataset import (
+from src.games.chess.dataset import (
     ReplaySchemaVersionError,
     ReplaySampleMetadata,
     SelfPlayDataset,

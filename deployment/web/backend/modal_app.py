@@ -79,9 +79,9 @@ class ChessWebPlay:
             download_model_artifacts,
         )
         from deployment.web.backend.service import GameService
-        from src.interactive.analysis import CountedMctsAnalysis
-        from src.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
-        from src.interactive.engine import InteractiveEngine
+        from src.games.chess.interactive.analysis import CountedMctsAnalysis
+        from src.games.chess.interactive.configuration import InferenceTarget, InteractiveEngineConfiguration
+        from src.games.chess.interactive.engine import InteractiveEngine
 
         configuration = DeploymentConfiguration.from_environment(os.environ)
         hugging_face_token = os.environ.get('HF_TOKEN')

@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from src.neural_network import NetworkDimensions
-from src.experiment.configuration import ChessExperimentConfiguration
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
-from src.self_play.SelfPlay import SelfPlay
-from src.self_play.chess_completed_game import ChessCompletedGame
+from src.games.chess.self_play import SelfPlay
+from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
-from src.train.ChessReplay import CHESS_REPLAY_IMPLEMENTATION
+from src.games.chess.replay import CHESS_REPLAY_IMPLEMENTATION
 from src.train.Replay import ReplayGameImplementation
 from src.train.Trainer import ChessTrainingObjective, TrainingObjective
 

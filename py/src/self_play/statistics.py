@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from src.self_play.SelfPlayDatasetStats import SelfPlayDatasetStats
+from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 
 
 @dataclass

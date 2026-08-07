@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from src.train.ChessReplay import inspect_chess_archives, rebuild_chess_replay
+from src.games.chess.replay import inspect_chess_archives, rebuild_chess_replay
 
 
 def parse_arguments() -> argparse.Namespace:

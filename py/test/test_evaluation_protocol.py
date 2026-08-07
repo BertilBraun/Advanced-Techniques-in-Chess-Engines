@@ -10,8 +10,8 @@ from src.experiment.evaluation_protocol import (
     load_opening_suite,
     summarize_match,
 )
-from src.eval.evaluation_types import EvaluationMove, EvaluationTerminal, Results
-from src.eval.paired_match import play_paired_models
+from src.games.chess.evaluation.types import EvaluationMove, EvaluationTerminal, Results
+from src.games.chess.evaluation.paired_match import play_paired_models
 from src.games.chess.ChessBoard import ChessBoard
 from src.games.chess.contract import CHESS_STATE_CONTRACT
 

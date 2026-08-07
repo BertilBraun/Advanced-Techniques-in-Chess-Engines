@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.interactive.analysis import AnalysisRequest, AnalysisResult
+from src.games.chess.interactive.analysis import AnalysisRequest, AnalysisResult
 
 
 class FrozenModel(BaseModel):

@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from src.util.frozen_model import FrozenModel
 from torch.multiprocessing import Process
 
-from src.cluster.EvaluationProcess import EvaluationTier, run_evaluation_process
+from src.games.chess.evaluation.process import EvaluationTier, run_evaluation_process
 from src.experiment.credit_telemetry import CreditEvaluationTelemetryStatus
 from src.train.CreditPublication import (
     CreditPublicationManifest,

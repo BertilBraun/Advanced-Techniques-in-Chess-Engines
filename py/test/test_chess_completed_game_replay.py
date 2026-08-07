@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 import torch
 
-import src.train.ChessReplay as chess_replay_module
+import src.games.chess.replay as chess_replay_module
 import src.train.Replay as replay_module
 from src.games.chess.ChessBoard import ChessBoard
-from src.self_play.chess_completed_game import (
+from src.games.chess.completed_game import (
     ChessCompletedGame,
     ChessMoveSelectionMode,
     ChessRepresentationMetadata,
@@ -18,11 +18,11 @@ from src.self_play.chess_completed_game import (
     ChessSearchObservation,
 )
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
-from src.self_play.SelfPlay import SelfPlay, SelfPlayGame, SelfPlayGameMemory
+from src.games.chess.self_play import SelfPlay, SelfPlayGame, SelfPlayGameMemory
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
-from src.train.ChessReplay import (
+from src.games.chess.replay import (
     CHESS_REPLAY_IMPLEMENTATION,
     CHESS_ARCHIVE_HEADER,
     ReplayPhase,

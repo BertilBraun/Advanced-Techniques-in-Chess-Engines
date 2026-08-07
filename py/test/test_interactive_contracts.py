@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from src.interactive.analysis import AnalysisRequest, CountedMctsAnalysis, PolicyAnalysis, TimedMctsAnalysis
-from src.interactive.configuration import InteractiveEngineConfiguration
+from src.games.chess.interactive.analysis import AnalysisRequest, CountedMctsAnalysis, PolicyAnalysis, TimedMctsAnalysis
+from src.games.chess.interactive.configuration import InteractiveEngineConfiguration
 
 
 def test_configuration_resolves_batch_size_from_parallel_searches() -> None:

@@ -12,14 +12,14 @@ from pathlib import Path
 import psutil
 import torch
 
-from src.experiment.configuration import (
-    ChessExperimentConfiguration,
-    ExperimentConfiguration,
+from src.experiment.base_configuration import (
     RandomInitializationResumeConfiguration,
     WeightsOnlyResumeConfiguration,
 )
+from src.experiment.configuration import ExperimentConfiguration
 from src.experiment.evaluation_protocol import load_opening_suite
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware, load_approval_record
+from src.games.chess.configuration import ChessExperimentConfiguration
 from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 from src.util.save_paths import create_model, create_optimizer, load_model, model_save_path, save_model_and_optimizer

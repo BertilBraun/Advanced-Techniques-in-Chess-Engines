@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.self_play.SelfPlayDataset import SelfPlayDataset
+from src.games.chess.dataset import SelfPlayDataset
 from src.self_play.value_target import TerminationReason
 from tools.production_ddp_fixture import PRODUCTION_GLOBAL_BATCH_SIZE, write_replay_fixture
 
