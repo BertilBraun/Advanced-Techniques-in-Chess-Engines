@@ -343,15 +343,34 @@ def test_fifo_phase_capacity_and_deterministic_nonoverlapping_rank_sampling(tmp_
     assert ranks == tuple(snapshot.rank_indices(7, 1, 4, 2, rank) for rank in range(2))
 
 
-def test_preallocated_batch_encoding_applies_deterministic_chess_symmetry(tmp_path: Path) -> None:
+def test_preallocated_batch_encoding_applies_deterministic_chess_symmetry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     publisher = CompletedGamePublisher(tmp_path, 7, 0)
     replay = Replay(CHESS_REPLAY_IMPLEMENTATION, capacity=10, sampler_seed=41)
     replay.ingest_game(completed_game(publisher))
     snapshot = replay.freeze()
 
+    def never_mirror(sampler_seed: int, global_step: int, rank: int, sample_position: int) -> bool:
+        del sampler_seed, global_step, rank, sample_position
+        return False
+
+    def always_mirror(sampler_seed: int, global_step: int, rank: int, sample_position: int) -> bool:
+        del sampler_seed, global_step, rank, sample_position
+        return True
+
+    monkeypatch.setattr(chess_replay_module, 'sample_is_mirrored', never_mirror)
+    unaugmented = build_chess_training_batch(snapshot, (0, 1), global_step=9, rank=0)
+    monkeypatch.setattr(chess_replay_module, 'sample_is_mirrored', always_mirror)
     batch = build_chess_training_batch(snapshot, (0, 1), global_step=9, rank=0)
 
     assert batch.states.shape == (2, *CurrentGame.representation_shape)
     assert batch.policy_targets.shape == (2, CurrentGame.action_size)
     torch.testing.assert_close(batch.policy_targets.sum(dim=1), torch.ones(2))
     torch.testing.assert_close(batch.sample_weights, torch.ones(2))
+    torch.testing.assert_close(batch.states, torch.flip(unaugmented.states, dims=(3,)))
+    torch.testing.assert_close(
+        batch.policy_targets[:, chess_replay_module.CHESS_MIRROR_ACTION_MAP],
+        unaugmented.policy_targets,
+    )

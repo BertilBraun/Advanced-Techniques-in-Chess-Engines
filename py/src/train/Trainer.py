@@ -265,9 +265,9 @@ class GoTrainingObjective(TrainingObjective):
         policy_logits, value_logits = training_model(states)
         policy_rows = F.cross_entropy(policy_logits, policy_targets, reduction='none')
         policy_loss = (policy_rows * sample_weights).mean()
-        outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(value_logits.dtype) - final_outcomes.eq(
+        outcome_scores = final_outcomes.eq(int(FinalOutcome.WIN)).to(mcts_root_values.dtype) - final_outcomes.eq(
             int(FinalOutcome.LOSS)
-        ).to(value_logits.dtype)
+        ).to(mcts_root_values.dtype)
         target_expected_scores = torch.lerp(
             outcome_scores,
             mcts_root_values,

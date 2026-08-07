@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,8 @@ AlphaZeroCpp = pytest.importorskip('AlphaZeroCpp')
 
 if not hasattr(AlphaZeroCpp, 'GoSelfPlaySearch7'):
     pytest.skip('AlphaZeroCpp must be rebuilt with the R8 Go pipeline.', allow_module_level=True)
+
+import src.train.GoReplay as go_replay_module
 
 from src.experiment.chess_experiment import GoExperimentConfiguration, load_experiment_configuration
 from src.experiment.chess_run import ExperimentRunManifest, experiment_sha256
@@ -36,6 +39,7 @@ from src.train.GoReplay import (
     GoReplayImplementation,
     build_go_training_batch,
     materialize_go_game,
+    pack_go_visits,
     rebuild_go_replay,
 )
 from src.train.Replay import ReplayMaintainer, ReplaySnapshot
@@ -95,6 +99,50 @@ def test_go_encoding_targets_and_symmetries_match_deterministic_fixture() -> Non
 
     rotated = contract.transform_state(samples[1].encoded_state, GoSymmetryIndex.ROTATE_90)
     assert rotated == samples[1].encoded_state
+
+
+@pytest.mark.parametrize('symmetry', tuple(GoSymmetryIndex))
+def test_go_batch_applies_one_selected_symmetry_to_state_and_policy(
+    symmetry: GoSymmetryIndex,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = GoStateContract(7)
+    rules = AlphaZeroCpp.GoRules(komi_half_points=15, maximum_moves=196)
+    encoded_state = contract.packed_position(contract.initial_position(rules).child(0))
+    sample = replace(
+        materialize_go_game(_two_pass_game())[0],
+        encoded_state=encoded_state,
+        visits=pack_go_visits(((0, 10),), contract.action_size),
+    )
+    snapshot = ReplaySnapshot(
+        samples=(sample,),
+        credited_samples=1,
+        credited_completed_searches=10,
+        sampler_seed=11,
+        frozen_at_seconds=101.0,
+        evicted_samples=0,
+        estimated_sample_bytes=0,
+        encoded_state_value_overhead_bytes=0,
+        projected_capacity_bytes=0,
+        projected_review_capacity_bytes=0,
+    )
+
+    def selected_symmetry(
+        sampler_seed: int,
+        global_step: int,
+        rank: int,
+        sample_position: int,
+    ) -> GoSymmetryIndex:
+        del sampler_seed, global_step, rank, sample_position
+        return symmetry
+
+    monkeypatch.setattr(go_replay_module, '_symmetry_index', selected_symmetry)
+    batch = build_go_training_batch(contract, snapshot, (0,), global_step=4, rank=0)
+
+    expected_states = torch.empty_like(batch.states).numpy()
+    contract.decode_batch_into((contract.transform_state(encoded_state, symmetry),), expected_states)
+    torch.testing.assert_close(batch.states, torch.from_numpy(expected_states))
+    assert batch.policy_targets.argmax(dim=1).item() == contract.transform_action(0, symmetry)
 
 
 def test_go_archive_rebuild_matches_live_ingestion(tmp_path: Path) -> None:

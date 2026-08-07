@@ -659,7 +659,8 @@ def run_trainer_rank(
     try:
         trainer_cpu_threads = args.topology.trainer.cpu_threads
         torch.set_num_threads(trainer_cpu_threads)
-        torch.set_num_interop_threads(args.topology.trainer.interop_threads)
+        if torch.get_num_interop_threads() != args.topology.trainer.interop_threads:
+            torch.set_num_interop_threads(args.topology.trainer.interop_threads)
         os.environ['OMP_NUM_THREADS'] = str(trainer_cpu_threads)
         os.environ['MKL_NUM_THREADS'] = str(trainer_cpu_threads)
         os.environ['OPENBLAS_NUM_THREADS'] = str(trainer_cpu_threads)
