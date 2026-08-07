@@ -33,12 +33,20 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
     torch.backends.cuda.matmul.allow_tf32 = True
 
-    from src.experiment.configuration import load_experiment_configuration, write_resolved_experiment
+    from src.experiment.configuration import (
+        load_experiment_configuration,
+        write_resolved_experiment,
+    )
     from src.runtime import USE_GPU
     from src.util.log import log
     from src.util.profiler import start_gpu_usage_logger
     from src.cluster.CommanderProcess import CommanderProcess
-    from src.util.tensorboard import TensorboardWriter, configure_tensorboard_run_directory, get_run_id, log_text
+    from src.util.tensorboard import (
+        TensorboardWriter,
+        configure_tensorboard_run_directory,
+        get_run_id,
+        log_text,
+    )
     from src.experiment.run import prepare_experiment_training_run
     from src.experiment.resource_telemetry import start_resource_telemetry
     from src.experiment.progress_telemetry import (
@@ -60,8 +68,8 @@ if __name__ == '__main__':
     log('Training args:')
     log(training, use_pprint=True)
 
-    run = get_run_id()
-    log(f'Run ID: {run}')
+    run_id = get_run_id()
+    log(f'Run ID: {run_id}')
 
     run_started_at = monotonic()
     manifest = prepare_experiment_training_run(
@@ -81,27 +89,25 @@ if __name__ == '__main__':
         interval_seconds=training.limits.resource_telemetry_interval_seconds,
     )
 
-    gpu_usage_logger = start_gpu_usage_logger(run)
+    gpu_usage_logger = start_gpu_usage_logger(run_id)
 
-    with TensorboardWriter(run, 'training_args', postfix_pid=False):
+    with TensorboardWriter(run_id, 'training_args', postfix_pid=False):
         import pprint
 
         log_text('TrainingArgs', pprint.PrettyPrinter(indent=4).pformat(training))
 
     if experiment.game == 'chess':
-        from src.games.chess.training import ChessTrainingGame
+        from src.games.chess.training import ChessImplementation
 
-        training_game = ChessTrainingGame(experiment)
+        game = ChessImplementation(experiment)
     else:
-        from src.games.go.training_runtime import GoTrainingGame
+        from src.games.go.training_runtime import GoImplementation
 
-        training_game = GoTrainingGame(experiment)
-    commander = CommanderProcess(run, training_game, run_started_at)
-    training_results = commander.run()
+        game = GoImplementation(experiment)
+    commander = CommanderProcess(run_id, game, run_started_at)
     outcome_path = Path(training.save_path) / 'run-outcome.json'
     try:
-        for _ in training_results:
-            pass
+        commander.run()
     except Exception as error:
         write_run_outcome(
             outcome_path,

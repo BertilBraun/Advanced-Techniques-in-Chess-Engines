@@ -17,7 +17,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
 from src.cluster.CudaProcess import start_process_on_cuda_device
-from src.games.training_contract import TrainingGameImplementation
+from src.games.training_contract import GameImplementation
 from src.neural_network import Network
 from src.train.Replay import ReplayMaintainer, ReplaySnapshot, ReplayTrainingBatchLoader
 from src.train.Trainer import Trainer, _LogitForward
@@ -105,7 +105,7 @@ def _load_rank_model_and_optimizer(
     args: TrainingArgs,
     model_version: int,
     device: torch.device,
-    game: TrainingGameImplementation,
+    game: GameImplementation,
 ) -> tuple[Network, torch.optim.Optimizer]:
     return load_model_and_optimizer(
         model_version,
@@ -248,7 +248,7 @@ class TrainerProcess:
 
     def __init__(
         self,
-        game: TrainingGameImplementation,
+        game: GameImplementation,
         run_id: int,
         starting_model_version: int,
     ) -> None:
@@ -543,7 +543,7 @@ def _train_quantum(
     optimizer: torch.optim.Optimizer,
     training_model: nn.Module,
     replay_snapshot: ReplaySnapshot,
-    game: TrainingGameImplementation,
+    game: GameImplementation,
 ) -> RankQuantumComplete:
     parameters = args.lifecycle.credit
     batches = ReplayTrainingBatchLoader(
@@ -633,7 +633,7 @@ def _train_quantum(
 
 def run_trainer_rank(
     rank: int,
-    game: TrainingGameImplementation,
+    game: GameImplementation,
     run_id: int,
     starting_model_version: int,
     initialization_method: str,

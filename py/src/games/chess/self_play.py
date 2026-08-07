@@ -6,7 +6,6 @@ from pathlib import Path
 import uuid
 
 from dataclasses import dataclass
-from os import PathLike
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,7 +36,7 @@ from src.games.chess.completed_game import (
     ChessSearchObservation,
 )
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
-from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
+from src.self_play.worker import GameSelfPlayPolicy
 from src.games.chess.dataset_statistics import SelfPlayDatasetStats
 from src.self_play.model_refresh import SearchScheduleState
 from src.games.chess.resignation import (
@@ -55,7 +54,6 @@ from src.games.chess.curriculum import curriculum_fade, curriculum_progress
 from src.games.chess.encoding import get_board_result_score
 from src.train.TrainingArgs import TrainingArgs
 from src.util.log import log
-from src.util.save_paths import model_save_path
 from src.util.tensorboard import is_tensorboard_writer_active, log_scalar, log_text
 from src.util.timing import timeit
 
@@ -186,7 +184,14 @@ def has_positive_visit_counts(visit_counts: list[tuple[int, int]]) -> bool:
     )
 
 
-class SelfPlay(ActiveGamePolicy):
+class ChessSelfPlayPolicy(
+    GameSelfPlayPolicy[
+        SelfPlayGame,
+        'ChessSelfPlaySearchRequest',
+        'ChessSelfPlaySearchResult',
+        SelfPlayStatisticsSnapshot | None,
+    ]
+):
     def __init__(
         self,
         device_id: int,
@@ -197,7 +202,6 @@ class SelfPlay(ActiveGamePolicy):
         self.args = args.self_play
         self.search_warmup_iterations = self.args.search_warmup_model_versions
         self.endgame_shortcut_fade_iterations = self.args.endgame_shortcut_fade_model_versions
-        self.num_parallel_games = args.topology.self_play.parallel_games_per_process
         self.save_path = args.save_path
         self.completed_game_publisher = completed_game_publisher
         self.resignation_manager = ResignationManager(self.save_path, self.args.resignation)
@@ -209,36 +213,10 @@ class SelfPlay(ActiveGamePolicy):
         self.model_refresh_acknowledgements: list[int] = []
         self.search_schedule_state: SearchScheduleState | None = None
         self.statistics = SelfPlayStatistics()
-        self.active_games = ActiveGamePool(self, self.num_parallel_games)
-
         self.search_engine: ChessSelfPlaySearch | None = None
         self.num_searches_per_turn = 0
         self.endgame_shortcut_strength = 0.0
         self.completed_searches = 0
-
-    def update_iteration(self, iteration: int) -> None:
-        self.snapshot_statistics(iteration - 1)
-        self.iteration = iteration
-        self.update_search_schedule(self.search_schedule(iteration))
-        self.refresh_model(
-            iteration,
-            model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
-        )
-
-    def run_batch(self) -> None:
-        self.self_play()
-
-    @property
-    def self_play_games(self) -> list[SelfPlayGame]:
-        return self.active_games.games
-
-    @self_play_games.setter
-    def self_play_games(self, games: list[SelfPlayGame]) -> None:
-        self.active_games.games = games
-
-    def refresh_published_model(self, model_version: int, model_path: Path) -> None:
-        self.update_search_schedule(self.search_schedule(model_version))
-        self.refresh_model(model_version, model_path)
 
     def snapshot_statistics(self, tensorboard_step: int) -> SelfPlayStatisticsSnapshot | None:
         if self.search_engine is None:
@@ -322,8 +300,6 @@ class SelfPlay(ActiveGamePolicy):
             arena_capacity_changed = self.search_engine.update_search_schedule(self._native_mcts_params(schedule))
             if arena_capacity_changed:
                 assert previous_arena_capacity != schedule.arena_capacity
-                for game in self.self_play_games:
-                    game.already_expanded_node = None
 
     def _native_mcts_params(self, schedule: SearchScheduleState) -> SelfPlaySearchParameters:
         from AlphaZeroCpp import SelfPlaySearchParameters
@@ -341,15 +317,16 @@ class SelfPlay(ActiveGamePolicy):
     def refresh_model(
         self,
         model_version: int,
-        model_path: str | PathLike[str],
+        model_path: Path,
+        active_games: tuple[SelfPlayGame, ...],
     ) -> None:
         if model_version < 0:
             raise ValueError('Model version must be nonnegative.')
         if self.model_version is not None and model_version <= self.model_version:
             raise ValueError('Model version must increase on every refresh.')
+        self.update_search_schedule(self.search_schedule(model_version))
         schedule = self.search_schedule_state
-        if schedule is None:
-            raise RuntimeError('Search schedule must be initialized before loading a model.')
+        assert schedule is not None
         if self.search_engine is None:
             from AlphaZeroCpp import BatchedInferenceParameters, ChessSelfPlaySearch, InferenceConfiguration
 
@@ -374,16 +351,9 @@ class SelfPlay(ActiveGamePolicy):
         self.model_version = model_version
         self.model_refresh_acknowledgements.append(model_version)
         log_scalar('inference/acknowledged_model_version', model_version)
-        for game in self.self_play_games:
+        for game in active_games:
             if game.already_expanded_node is not None:
                 game.already_expanded_node.reset()
-
-    def _set_mcts(self, iteration: int) -> None:
-        self.update_search_schedule(self.search_schedule(iteration))
-        self.refresh_model(
-            iteration,
-            model_save_path(iteration, self.save_path).with_suffix('.jit.pt'),
-        )
 
     @timeit
     def search(self, boards: list[ChessSelfPlaySearchRequest]) -> ChessSelfPlaySearchBatch:
@@ -392,10 +362,6 @@ class SelfPlay(ActiveGamePolicy):
         results = self.search_engine.search(boards, collect_statistics=is_tensorboard_writer_active())
         self.completed_searches += results.simulations_completed
         return results
-
-    def self_play(self) -> None:
-        assert self.search_engine is not None, 'Search must be initialized before self-play can run.'
-        self.active_games.run_turn()
 
     def new_game(self) -> SelfPlayGame:
         return self._new_game()

@@ -18,7 +18,7 @@ from src.games.chess.completed_game import (
     ChessSearchObservation,
 )
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
-from src.games.chess.self_play import SelfPlay, SelfPlayGame, SelfPlayGameMemory
+from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, SelfPlayGameMemory
 from src.self_play.statistics import SelfPlayStatistics
 from src.self_play.value_target import FinalOutcome, TerminationReason
 from src.games.chess.contract import CHESS_STATE_CONTRACT
@@ -114,7 +114,7 @@ def test_concurrent_publishers_create_complete_unique_game_files(tmp_path: Path)
 
 def test_self_play_completion_publishes_game_instead_of_writing_samples(tmp_path: Path) -> None:
     publisher = CompletedGamePublisher(tmp_path, 18, 2)
-    self_play = object.__new__(SelfPlay)
+    self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=30,
         search=SimpleNamespace(min_visit_count=0),

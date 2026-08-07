@@ -1,28 +1,36 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Protocol
+from typing import Generic, TypeVar
 
-from src.neural_network import NetworkDimensions
 from src.experiment.configuration import ExperimentConfiguration
-from src.games.chess.completed_game import ChessCompletedGame
-from src.self_play.completed_game import CompletedGamePublisher
-from src.games.go.completed_game import GoCompletedGame
+from src.neural_network import NetworkDimensions
+from src.self_play.completed_game import CompletedGamePublisher, CompletedGameRecord
+from src.self_play.worker import GameSelfPlayPolicy
 from src.train.Replay import ReplayGameImplementation
 from src.train.Trainer import TrainingObjective
 from src.train.TrainingArgs import TrainingArgs
 
 
-class SelfPlayWorker(Protocol):
-    def run_batch(self) -> None: ...
+CompletedGameT = TypeVar('CompletedGameT', bound=CompletedGameRecord)
+ActiveGameT = TypeVar('ActiveGameT')
+SearchRequestT = TypeVar('SearchRequestT')
+SearchResultT = TypeVar('SearchResultT')
+StatisticsT = TypeVar('StatisticsT')
 
-    def refresh_published_model(self, model_generation: int, model_path: Path) -> None: ...
 
-    def snapshot_statistics(self, tensorboard_step: int) -> object: ...
+class GameImplementation(
+    ABC,
+    Generic[
+        CompletedGameT,
+        ActiveGameT,
+        SearchRequestT,
+        SearchResultT,
+        StatisticsT,
+    ],
+):
+    """Compose the game-owned components consumed by shared training infrastructure."""
 
-
-class TrainingGameImplementation(ABC):
     @property
     @abstractmethod
     def configuration(self) -> ExperimentConfiguration:
@@ -39,9 +47,7 @@ class TrainingGameImplementation(ABC):
 
     @property
     @abstractmethod
-    def replay(
-        self,
-    ) -> ReplayGameImplementation[ChessCompletedGame] | ReplayGameImplementation[GoCompletedGame]:
+    def replay(self) -> ReplayGameImplementation[CompletedGameT]:
         raise NotImplementedError
 
     @abstractmethod
@@ -49,11 +55,14 @@ class TrainingGameImplementation(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def create_self_play(
+    def create_self_play_policy(
         self,
         device_id: int,
-        model_generation: int,
-        model_path: Path,
         publisher: CompletedGamePublisher,
-    ) -> SelfPlayWorker:
+    ) -> GameSelfPlayPolicy[
+        ActiveGameT,
+        SearchRequestT,
+        SearchResultT,
+        StatisticsT,
+    ]:
         raise NotImplementedError

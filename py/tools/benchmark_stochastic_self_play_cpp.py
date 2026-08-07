@@ -13,13 +13,10 @@ import numpy as np
 import torch
 
 from AlphaZeroCpp import (
-    BatchedInferenceParameters,
-    ChessSelfPlaySearch,
-    SelfPlaySearchParameters,
-    InferenceConfiguration,
     InferenceStatistics,
 )
-from src.games.chess.self_play import SelfPlay
+from src.games.chess.self_play import ChessSelfPlayPolicy
+from src.self_play.worker import SelfPlayWorker
 from src.self_play.statistics import SelfPlayStatistics
 from src.games.chess.completed_game import ChessCompletedGame
 from src.self_play.completed_game import CompletedGamePublisher
@@ -213,7 +210,9 @@ def seed_python_libraries(seed: int, device: int) -> None:
     np.random.seed(seed)
 
 
-def create_self_play(arguments: Arguments) -> SelfPlay:
+def create_self_play(
+    arguments: Arguments,
+) -> tuple[SelfPlayWorker, ChessSelfPlayPolicy]:
     training = load_chess_experiment_configuration(arguments.run_config).training
     search = training.self_play.search.validated_copy(
         update={
@@ -221,7 +220,33 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
             'num_parallel_searches': arguments.parallel_searches,
         }
     )
-    self_play_configuration = training.self_play.validated_copy(update={'search': search.model_dump(mode='json')})
+    fast_searches = (
+        arguments.fast_searches
+        if arguments.fast_searches is not None
+        else int(arguments.searches * training.self_play.search.fast_searches_proportion_of_full_searches)
+    )
+    if fast_searches <= arguments.parallel_searches:
+        raise ValueError(
+            f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
+        )
+    inference = training.self_play.inference.validated_copy(
+        update={
+            'inference_workers': arguments.direct_inference_workers,
+            'inference_batch_size': arguments.direct_inference_batch_size,
+            'outstanding_batches_per_worker': arguments.direct_outstanding_batches_per_worker,
+        }
+    )
+    search = search.validated_copy(
+        update={
+            'fast_searches_proportion_of_full_searches': fast_searches / arguments.searches,
+        }
+    )
+    self_play_configuration = training.self_play.validated_copy(
+        update={
+            'search': search.model_dump(mode='json'),
+            'inference': inference.model_dump(mode='json'),
+        }
+    )
     self_play_topology = training.topology.self_play.validated_copy(
         update={'parallel_games_per_process': arguments.games}
     )
@@ -235,45 +260,21 @@ def create_self_play(arguments: Arguments) -> SelfPlay:
     )
 
     publisher = BenchmarkCompletedGamePublisher(Path(configuration.save_path), arguments.seed)
-    self_play = SelfPlay(arguments.device, configuration, publisher)
-    self_play.update_search_schedule(self_play.search_schedule(arguments.iteration))
-
-    fast_searches = (
-        arguments.fast_searches
-        if arguments.fast_searches is not None
-        else int(arguments.searches * configuration.self_play.search.fast_searches_proportion_of_full_searches)
-    )
-    if fast_searches <= arguments.parallel_searches:
-        raise ValueError(
-            f'Fast searches ({fast_searches}) must exceed parallel searches ({arguments.parallel_searches}).'
-        )
-    self_play.search_engine = ChessSelfPlaySearch(
-        InferenceConfiguration(arguments.device, str(arguments.model.resolve())),
-        SelfPlaySearchParameters(
-            arguments.parallel_searches,
-            arguments.searches,
-            fast_searches,
-            configuration.self_play.search.c_param,
-            configuration.self_play.search.dirichlet_alpha,
-            configuration.self_play.search.dirichlet_epsilon,
-            configuration.self_play.search.min_visit_count,
-        ),
-        inference_parameters=BatchedInferenceParameters(
-            arguments.direct_inference_workers,
-            arguments.direct_inference_batch_size,
-            arguments.direct_outstanding_batches_per_worker,
-        ),
-        initial_model_version=arguments.iteration,
-    )
-    self_play.model_version = arguments.iteration
-    return self_play
+    policy = ChessSelfPlayPolicy(arguments.device, configuration, publisher)
+    worker = SelfPlayWorker(policy, arguments.games)
+    worker.refresh_published_model(arguments.iteration, arguments.model.resolve())
+    return worker, policy
 
 
-def run_warmup(self_play: SelfPlay, steps: int) -> None:
+def run_warmup(
+    worker: SelfPlayWorker,
+    policy: ChessSelfPlayPolicy,
+    steps: int,
+) -> None:
     for _ in range(steps):
-        self_play.self_play()
-    self_play.statistics = SelfPlayStatistics()
-    publisher = self_play.completed_game_publisher
+        worker.run_batch()
+    policy.statistics = SelfPlayStatistics()
+    publisher = policy.completed_game_publisher
     assert isinstance(publisher, BenchmarkCompletedGamePublisher)
     publisher.reset_measurement()
 
@@ -301,7 +302,8 @@ def difference(current: int, initial: int) -> int:
 
 def build_result(
     arguments: Arguments,
-    self_play: SelfPlay,
+    worker: SelfPlayWorker,
+    policy: ChessSelfPlayPolicy,
     initial_statistics: InferenceStatistics,
     final_statistics: InferenceStatistics,
     elapsed_seconds: float,
@@ -309,8 +311,8 @@ def build_result(
     self_play_steps: int,
     initial_completed_searches: int,
 ) -> BenchmarkResult:
-    statistics = self_play.statistics
-    publisher = self_play.completed_game_publisher
+    statistics = policy.statistics
+    publisher = policy.completed_game_publisher
     assert isinstance(publisher, BenchmarkCompletedGamePublisher)
     generated_samples = sum(len(game.observations) for game in publisher.published_games)
     retained_samples = generated_samples
@@ -334,10 +336,10 @@ def build_result(
         if calls > initial_statistics.modelBatchSizeHistogram[batch_size]
     )
     active_roots = [
-        game.already_expanded_node for game in self_play.self_play_games if game.already_expanded_node is not None
+        game.already_expanded_node for game in worker.active_games if game.already_expanded_node is not None
     ]
-    assert self_play.search_engine is not None
-    searches_completed = self_play.completed_searches - initial_completed_searches
+    assert policy.search_engine is not None
+    searches_completed = policy.completed_searches - initial_completed_searches
     assert searches_completed >= 0
     return BenchmarkResult(
         process_id=os.getpid(),
@@ -354,7 +356,7 @@ def build_result(
         target_fast_searches_per_ply=(
             arguments.fast_searches
             if arguments.fast_searches is not None
-            else int(arguments.searches * self_play.args.search.fast_searches_proportion_of_full_searches)
+            else int(arguments.searches * policy.args.search.fast_searches_proportion_of_full_searches)
         ),
         parallel_searches=arguments.parallel_searches,
         elapsed_seconds=elapsed_seconds,
@@ -364,13 +366,13 @@ def build_result(
         game_updates=self_play_steps * arguments.games,
         completed_games=statistics.stats.num_games,
         completed_game_plies=sum(statistics.stats.game_lengths),
-        active_game_plies_at_end=sum(len(game.played_moves) for game in self_play.self_play_games),
+        active_game_plies_at_end=sum(len(game.played_moves) for game in worker.active_games),
         generated_samples=generated_samples,
         retained_samples=retained_samples,
         retained_sample_proportion=1.0,
         live_materialized_nodes=sum(root.live_nodes for root in active_roots),
         total_child_records=sum(root.total_child_records for root in active_roots),
-        arena_capacity_per_game=self_play.search_engine.arena_capacity,
+        arena_capacity_per_game=policy.search_engine.arena_capacity,
         process_cpu_percent=100 * process_seconds / elapsed_seconds,
         peak_rss_mib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
         inference_evaluations=evaluations,
@@ -414,27 +416,28 @@ def main() -> None:
     arguments = parse_arguments()
     validate_arguments(arguments)
     seed_python_libraries(arguments.seed, arguments.device)
-    self_play = create_self_play(arguments)
-    assert self_play.search_engine is not None
+    worker, policy = create_self_play(arguments)
+    assert policy.search_engine is not None
 
-    run_warmup(self_play, arguments.warmup_steps)
-    initial_completed_searches = self_play.completed_searches
-    initial_statistics, _ = self_play.search_engine.inference_statistics()
+    run_warmup(worker, policy, arguments.warmup_steps)
+    initial_completed_searches = policy.completed_searches
+    initial_statistics, _ = policy.search_engine.inference_statistics()
     wait_for_synchronized_start(arguments)
 
     process_started_at = time.process_time()
     started_at = time.perf_counter()
     self_play_steps = 0
     while should_continue(arguments, self_play_steps, started_at):
-        self_play.self_play()
+        worker.run_batch()
         self_play_steps += 1
     elapsed_seconds = time.perf_counter() - started_at
     process_seconds = time.process_time() - process_started_at
 
-    final_statistics, _ = self_play.search_engine.inference_statistics()
+    final_statistics, _ = policy.search_engine.inference_statistics()
     result = build_result(
         arguments,
-        self_play,
+        worker,
+        policy,
         initial_statistics,
         final_statistics,
         elapsed_seconds,

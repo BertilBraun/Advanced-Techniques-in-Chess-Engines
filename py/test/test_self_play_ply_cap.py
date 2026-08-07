@@ -5,12 +5,12 @@ from types import SimpleNamespace
 import chess
 import pytest
 
-from src.games.chess.self_play import SelfPlay, SelfPlayGame
+from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame
 from src.self_play.statistics import SelfPlayStatistics
 
 
-def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> SelfPlay:
-    client = object.__new__(SelfPlay)
+def self_play_client(iteration: int, final_maximum_game_plies: int | None = None) -> ChessSelfPlayPolicy:
+    client = object.__new__(ChessSelfPlayPolicy)
     client.args = SimpleNamespace(
         maximum_game_plies=200,
         maximum_game_plies_hold_until_model_version=0,

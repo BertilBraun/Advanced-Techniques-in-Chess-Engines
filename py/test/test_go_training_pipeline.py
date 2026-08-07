@@ -22,7 +22,7 @@ from src.experiment.run import ExperimentRunManifest, experiment_sha256
 from src.experiment.run_contract import ApprovalRecord, ResolvedHardware
 from src.games.go.contract import GoStateContract, GoSymmetryIndex
 from src.games.go.training import calculate_go_loss, create_go_model
-from src.games.go.training_runtime import GoTrainingGame
+from src.games.go.training_runtime import GoImplementation
 from src.cluster.TrainerProcess import TrainerProcess
 from src.self_play.completed_game import CompletedGamePublisher, GameIdentity, SparseSearchVisit
 from src.self_play.completed_game_record import completed_game_from_path
@@ -34,7 +34,8 @@ from src.games.go.completed_game import (
     GoSearchObservation,
     GoTerminationReason,
 )
-from src.games.go.self_play import GoSelfPlay
+from src.games.go.self_play import GoSelfPlayPolicy
+from src.self_play.worker import SelfPlayWorker
 from src.self_play.value_target import FinalOutcome
 from src.games.go.replay import (
     GoReplayImplementation,
@@ -304,20 +305,25 @@ def test_cpu_go_self_play_publication_and_model_refresh_reset(tmp_path: Path) ->
     _write_pass_model(initial_model, (0.2, 0.6, 0.2))
     _write_pass_model(refreshed_model, (0.6, 0.2, 0.2))
     publisher = CompletedGamePublisher(tmp_path, run_id=5, worker_id=0)
-    self_play = GoSelfPlay(configuration, initial_model, 0, publisher, device_id=0)
+    policy = GoSelfPlayPolicy(configuration, publisher, device_id=0)
+    self_play = SelfPlayWorker(policy, parallel_game_count=1)
+    self_play.refresh_published_model(0, initial_model)
 
-    published = self_play.generate(1)
+    while not tuple(publisher.inbox_path.glob('*.json')):
+        self_play.run_batch()
+    published = tuple(publisher.inbox_path.glob('*.json'))
     completed = completed_game_from_path(published[0])
     assert isinstance(completed, GoCompletedGame)
     assert completed.actions == (49, 49)
     assert completed.termination_reason is GoTerminationReason.TWO_PASSES
 
-    root = self_play.search.new_root(self_play.rules)
-    self_play.search.search([self_play.search_request_type(root, True)])
+    assert policy.search is not None
+    root = policy.search.new_root(policy.rules)
+    policy.search.search([policy.search_request_type(root, True)])
     assert root.visits > 0
-    self_play.refresh_model(1, refreshed_model)
+    self_play.refresh_published_model(1, refreshed_model)
     assert root.visits == 0
-    assert self_play.search.model_generation == 1
+    assert policy.search.model_generation == 1
 
 
 def _smoke_configuration(tmp_path: Path) -> GoExperimentConfiguration:
@@ -431,7 +437,7 @@ def test_go_shared_trainer_process_publishes_checkpoint(tmp_path: Path) -> None:
 
     publisher = CompletedGamePublisher(tmp_path, run_id=9, worker_id=0)
     publisher.publish(_two_pass_game(publisher.reserve_identity()))
-    trainer = TrainerProcess(GoTrainingGame(configuration), run_id=9, starting_model_version=0)
+    trainer = TrainerProcess(GoImplementation(configuration), run_id=9, starting_model_version=0)
     try:
         replay_state = trainer.maintain_replay(10)
         assert replay_state.credited_unique_samples == 2

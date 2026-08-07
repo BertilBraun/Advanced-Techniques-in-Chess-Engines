@@ -19,17 +19,17 @@ from src.util.communication import (
 )
 from src.util.log import log
 from src.util.exceptions import log_exceptions
-from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
+from src.games.training_contract import GameImplementation
 from src.train.CreditPublication import PublicationValidationScope, load_credit_publication_pointer
 from src.util.profiler import start_cpu_usage_logger
 from src.util.background_worker import BackgroundWorker
 from src.self_play.completed_game import CompletedGamePublisher
-from src.util.save_paths import inference_model_path, model_save_path
+from src.self_play.worker import SelfPlayWorker
 
 
 def run_self_play_process(
     run: int,
-    game: TrainingGameImplementation,
+    game: GameImplementation,
     communication_folder: str,
     device_id: int,
     node_id: int,
@@ -68,7 +68,7 @@ class SelfPlayProcess:
 
     def __init__(
         self,
-        game: TrainingGameImplementation,
+        game: GameImplementation,
         communication_folder: str,
         device_id: int,
         node_id: int,
@@ -81,12 +81,13 @@ class SelfPlayProcess:
             run_id,
             node_id,
         )
-        initial_model_path = inference_model_path(model_save_path(0, args.save_path))
-        self.self_play: SelfPlayWorker = game.create_self_play(
+        policy = game.create_self_play_policy(
             device_id,
-            0,
-            initial_model_path,
             self.completed_game_publisher,
+        )
+        self.self_play = SelfPlayWorker(
+            policy,
+            args.topology.self_play.parallel_games_per_process,
         )
         self.communication = Communication(communication_folder)
         self.node_id = node_id

@@ -24,8 +24,8 @@ from AlphaZeroCpp import (
 
 from src.games.go.configuration import GoExperimentConfiguration
 from src.util.tensorboard import log_scalar
-from src.self_play.active_game import ActiveGamePolicy, ActiveGamePool
 from src.self_play.completed_game import CompletedGamePublisher, SparseSearchVisit
+from src.self_play.worker import GameSelfPlayPolicy
 from src.games.go.completed_game import (
     GoCompletedGame,
     GoMoveSelectionMode,
@@ -43,40 +43,45 @@ NativeGoSearchResult = GoSelfPlaySearchResult7 | GoSelfPlaySearchResult9
 
 
 @dataclass
-class _ActiveGoGame:
+class GoSelfPlayGame:
     root: NativeGoSearchRoot
     started_at_seconds: float
     actions: list[int] = field(default_factory=list)
     observations: list[GoSearchObservation] = field(default_factory=list)
 
 
-class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGoSearchResult]):
+class GoSelfPlayPolicy(
+    GameSelfPlayPolicy[
+        GoSelfPlayGame,
+        NativeGoSearchRequest,
+        NativeGoSearchResult,
+        None,
+    ]
+):
     def __init__(
         self,
         configuration: GoExperimentConfiguration,
-        model_path: Path,
-        model_generation: int,
         publisher: CompletedGamePublisher,
         device_id: int,
     ) -> None:
         self.configuration = configuration
         self.publisher = publisher
-        self.model_generation = model_generation
+        self.model_generation: int | None = None
         self.rules = GoRules(
             configuration.go.rules.komi_half_points,
             configuration.go.rules.maximum_moves,
         )
         seven_by_seven = configuration.go.representation.board_size == 7
-        search_type = GoSelfPlaySearch7 if seven_by_seven else GoSelfPlaySearch9
+        self.search_type = GoSelfPlaySearch7 if seven_by_seven else GoSelfPlaySearch9
         self.search_request_type = GoSelfPlaySearchRequest7 if seven_by_seven else GoSelfPlaySearchRequest9
-        device = (
+        self.device = (
             InferenceDevice.CPU
             if configuration.training.topology.trainer.device_type == 'cpu'
             else InferenceDevice.CUDA
         )
         search = configuration.training.self_play.search
         inference = configuration.training.self_play.inference
-        dimensions = search_type.inference_dimensions()
+        dimensions = self.search_type.inference_dimensions()
         representation = configuration.go.representation
         expected_dimensions = (
             representation.channel_count,
@@ -94,52 +99,44 @@ class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGo
         )
         if actual_dimensions != expected_dimensions:
             raise ValueError('Resolved Go representation disagrees with the native template dimensions.')
-        self.search: NativeGoSearch = search_type(
-            InferenceConfiguration(device_id, str(model_path), device),
-            SelfPlaySearchParameters(
-                search.num_parallel_searches,
-                search.num_searches_per_turn,
-                search.num_searches_per_turn,
-                search.c_param,
-                search.dirichlet_alpha,
-                search.dirichlet_epsilon,
-                search.min_visit_count,
-            ),
-            BatchedInferenceParameters(
-                inference.inference_workers,
-                inference.inference_batch_size,
-                inference.outstanding_batches_per_worker,
-            ),
-            model_generation,
+        self.device_id = device_id
+        self.search_parameters = SelfPlaySearchParameters(
+            search.num_parallel_searches,
+            search.num_searches_per_turn,
+            search.num_searches_per_turn,
+            search.c_param,
+            search.dirichlet_alpha,
+            search.dirichlet_epsilon,
+            search.min_visit_count,
         )
+        self.inference_parameters = BatchedInferenceParameters(
+            inference.inference_workers,
+            inference.inference_batch_size,
+            inference.outstanding_batches_per_worker,
+        )
+        self.search: NativeGoSearch | None = None
         self.random = np.random.default_rng(configuration.training.random_seed + publisher.worker_id)
-        pool_size = min(
-            configuration.training.topology.self_play.parallel_games_per_process,
-            configuration.training.self_play.inference.inference_batch_size,
-        )
-        self.active_games = ActiveGamePool(self, pool_size)
-        self._published: list[Path] = []
 
-    def generate(self, game_count: int) -> tuple[Path, ...]:
-        if game_count <= 0:
-            raise ValueError('Go self-play game count must be positive.')
-        start = len(self._published)
-        while len(self._published) - start < game_count:
-            remaining_games = game_count - (len(self._published) - start)
-            self.active_games.run_turn(remaining_games)
-        return tuple(self._published[start:])
-
-    def refresh_model(self, model_generation: int, model_path: Path) -> None:
-        self.search.refresh_model(model_generation, str(model_path))
+    def refresh_model(
+        self,
+        model_generation: int,
+        model_path: Path,
+        active_games: tuple[GoSelfPlayGame, ...],
+    ) -> None:
+        if self.search is None:
+            self.search = self.search_type(
+                InferenceConfiguration(self.device_id, str(model_path), self.device),
+                self.search_parameters,
+                self.inference_parameters,
+                model_generation,
+            )
+        else:
+            self.search.refresh_model(model_generation, str(model_path))
         self.model_generation = model_generation
 
-    def run_batch(self) -> None:
-        self.generate(self.configuration.training.topology.self_play.parallel_games_per_process)
-
-    def refresh_published_model(self, model_generation: int, model_path: Path) -> None:
-        self.refresh_model(model_generation, model_path)
-
     def snapshot_statistics(self, tensorboard_step: int) -> None:
+        if self.search is None:
+            return
         inference, timing = self.search.inference_statistics()
         log_scalar(
             'inference/average_number_of_positions_in_inference_call',
@@ -148,28 +145,34 @@ class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGo
         )
         log_scalar('timing/total_time_cpp', timing.totalTime, tensorboard_step)
 
-    def new_game(self) -> _ActiveGoGame:
-        return _ActiveGoGame(self.search.new_root(self.rules), time.time())
+    def new_game(self) -> GoSelfPlayGame:
+        if self.search is None:
+            raise RuntimeError('A model must be loaded before creating a Go game.')
+        return GoSelfPlayGame(self.search.new_root(self.rules), time.time())
 
-    def build_search_request(self, game: _ActiveGoGame) -> NativeGoSearchRequest:
+    def build_search_request(self, game: GoSelfPlayGame) -> NativeGoSearchRequest:
         return self.search_request_type(game.root, True)
 
     def search_active_games(self, requests: tuple[NativeGoSearchRequest, ...]) -> tuple[NativeGoSearchResult, ...]:
+        if self.search is None:
+            raise RuntimeError('A model must be loaded before Go search starts.')
         return tuple(self.search.search(list(requests)).results)
 
     def advance_game(
         self,
-        game: _ActiveGoGame,
+        game: GoSelfPlayGame,
         request: NativeGoSearchRequest,
         result: NativeGoSearchResult,
-    ) -> _ActiveGoGame:
+    ) -> GoSelfPlayGame:
         self._play_move(game, result)
         if not game.root.is_terminal:
             return game
-        self._published.append(self._publish(game))
+        self._publish(game)
         return self.new_game()
 
-    def _play_move(self, game: _ActiveGoGame, result: NativeGoSearchResult) -> None:
+    def _play_move(self, game: GoSelfPlayGame, result: NativeGoSearchResult) -> None:
+        if self.model_generation is None:
+            raise RuntimeError('A model must be loaded before recording a Go move.')
         positive_visits = tuple(
             (visit.action_id, visit.visit_count) for visit in result.visits if visit.visit_count > 0
         )
@@ -206,7 +209,9 @@ class GoSelfPlay(ActiveGamePolicy[_ActiveGoGame, NativeGoSearchRequest, NativeGo
         game.actions.append(selected_action)
         game.root.play(selected_action)
 
-    def _publish(self, game: _ActiveGoGame) -> Path:
+    def _publish(self, game: GoSelfPlayGame) -> Path:
+        if self.model_generation is None:
+            raise RuntimeError('A model must be loaded before publishing a Go game.')
         terminal = game.root.position.terminal_result()
         safety_cap = terminal.reason.name == 'MAXIMUM_MOVES'
         observations = tuple(game.observations)

@@ -1,10 +1,13 @@
-from pathlib import Path
-
 from src.neural_network import NetworkDimensions
 from src.games.go.configuration import GoExperimentConfiguration
 from src.games.go.contract import GoStateContract
-from src.games.training_contract import SelfPlayWorker, TrainingGameImplementation
-from src.games.go.self_play import GoSelfPlay
+from src.games.training_contract import GameImplementation
+from src.games.go.self_play import (
+    GoSelfPlayGame,
+    GoSelfPlayPolicy,
+    NativeGoSearchRequest,
+    NativeGoSearchResult,
+)
 from src.self_play.completed_game import CompletedGamePublisher
 from src.games.go.completed_game import GoCompletedGame
 from src.games.go.replay import GoReplayImplementation
@@ -12,7 +15,15 @@ from src.train.Replay import ReplayGameImplementation
 from src.train.Trainer import GoTrainingObjective, TrainingObjective
 
 
-class GoTrainingGame(TrainingGameImplementation):
+class GoImplementation(
+    GameImplementation[
+        GoCompletedGame,
+        GoSelfPlayGame,
+        NativeGoSearchRequest,
+        NativeGoSearchResult,
+        None,
+    ]
+):
     def __init__(self, configuration: GoExperimentConfiguration) -> None:
         self._configuration = configuration
         self.state = GoStateContract(
@@ -36,17 +47,13 @@ class GoTrainingGame(TrainingGameImplementation):
     def objective(self, optimizer_step: int) -> TrainingObjective:
         return GoTrainingObjective(self.configuration.go.objective)
 
-    def create_self_play(
+    def create_self_play_policy(
         self,
         device_id: int,
-        model_generation: int,
-        model_path: Path,
         publisher: CompletedGamePublisher,
-    ) -> SelfPlayWorker:
-        return GoSelfPlay(
+    ) -> GoSelfPlayPolicy:
+        return GoSelfPlayPolicy(
             self.configuration,
-            model_path,
-            model_generation,
             publisher,
             device_id,
         )

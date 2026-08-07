@@ -7,8 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.games.chess.self_play import SelfPlay, SelfPlayGame, has_positive_visit_counts
+from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame, has_positive_visit_counts
 from src.self_play.completed_game import CompletedGamePublisher
+from src.self_play.model_refresh import SearchScheduleState
 from test_helpers.chess_configuration import CHESS_TRAINING
 from src.train.TrainingArgs import BatchedInferenceParams
 
@@ -115,6 +116,18 @@ class _LifecycleRoot:
         self.events.append('release_root')
 
 
+def _fake_search_parameters(schedule: SearchScheduleState) -> _FakeSelfPlaySearchParameters:
+    return _FakeSelfPlaySearchParameters(
+        parallel_searches=schedule.num_parallel_searches,
+        full_searches=schedule.num_full_searches,
+        fast_searches=schedule.num_fast_searches,
+        dirichlet_alpha=0.3,
+        dirichlet_epsilon=0.25,
+        exploration_constant=1.0,
+        minimum_root_visits=0,
+    )
+
+
 def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -137,13 +150,13 @@ def test_self_play_constructs_batched_inference_runtime_during_search_warmup(
     training_args = CHESS_TRAINING.validated_copy(
         update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
     )
-    self_play = SelfPlay(
+    self_play = ChessSelfPlayPolicy(
         device_id=0,
         args=training_args,
         completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
-    self_play._set_mcts(iteration=50)
+    self_play.refresh_model(50, tmp_path / 'model-50.jit.pt', ())
 
     assert _FakeChessSelfPlaySearch.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 2)
     assert self_play.search_schedule(0).num_full_searches == 100
@@ -173,13 +186,13 @@ def test_self_play_constructs_direct_inference_pipeline(
     training_args = CHESS_TRAINING.validated_copy(
         update={'self_play': self_play_args.model_dump(mode='json'), 'save_path': str(tmp_path)}
     )
-    self_play = SelfPlay(
+    self_play = ChessSelfPlayPolicy(
         device_id=0,
         args=training_args,
         completed_game_publisher=CompletedGamePublisher(tmp_path, 0, 0),
     )
 
-    self_play._set_mcts(iteration=50)
+    self_play.refresh_model(50, tmp_path / 'model-50.jit.pt', ())
 
     assert _FakeChessSelfPlaySearch.inference_parameters == _FakeBatchedInferenceParameters(2, 64, 1)
 
@@ -188,7 +201,7 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
-    self_play = object.__new__(SelfPlay)
+    self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = copy.deepcopy(CHESS_TRAINING.self_play)
     self_play.search_warmup_iterations = CHESS_TRAINING.self_play.search_warmup_model_versions
     self_play.endgame_shortcut_fade_iterations = CHESS_TRAINING.self_play.endgame_shortcut_fade_model_versions
@@ -199,27 +212,30 @@ def test_model_refresh_retains_game_state_and_resets_search_tree(
     self_play.search_schedule_state = self_play.search_schedule(0)
     root = _LifecycleRoot(events)
     game = SimpleNamespace(already_expanded_node=root)
-    self_play.active_games = SimpleNamespace(games=[])
-    self_play.self_play_games = [game]
     self_play.completed_searches = 19
     self_play.search_engine = _LifecycleSearch(events, self_play.search_schedule_state.arena_capacity)
     previous_search = self_play.search_engine
     monkeypatch.setattr('src.games.chess.self_play.log_scalar', lambda *_args: None)
+    monkeypatch.setattr(self_play, '_native_mcts_params', _fake_search_parameters)
 
-    self_play.refresh_model(1, 'updated.jit.pt')
+    self_play.refresh_model(1, Path('updated.jit.pt'), (game,))
 
     assert self_play.search_engine is previous_search
     assert game.already_expanded_node is root
     assert len(self_play.dataset) == 1
     assert self_play.completed_searches == 19
-    assert self_play.search_schedule_state == self_play.search_schedule(0)
+    assert self_play.search_schedule_state == self_play.search_schedule(1)
     assert self_play.model_version == 1
     assert self_play.model_refresh_acknowledgements == [0, 1]
-    assert events == ['refresh:1:updated.jit.pt', 'reset_root']
+    assert events == [
+        f'schedule:{self_play.search_schedule(1).num_full_searches}',
+        'refresh:1:updated.jit.pt',
+        'reset_root',
+    ]
 
 
 def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) -> None:
-    self_play = object.__new__(SelfPlay)
+    self_play = object.__new__(ChessSelfPlayPolicy)
     self_play.args = copy.deepcopy(CHESS_TRAINING.self_play)
     self_play.search_warmup_iterations = CHESS_TRAINING.self_play.search_warmup_model_versions
     self_play.endgame_shortcut_fade_iterations = CHESS_TRAINING.self_play.endgame_shortcut_fade_model_versions
@@ -227,9 +243,9 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
     self_play.model_version = 7
     self_play.model_refresh_acknowledgements = [7]
     self_play.search_schedule_state = self_play.search_schedule(0)
-    self_play.active_games = SimpleNamespace(games=[])
-    self_play.self_play_games = [SimpleNamespace(already_expanded_node=object())]
+    game = SimpleNamespace(already_expanded_node=object())
     self_play.search_engine = _LifecycleSearch([], self_play.search_schedule_state.arena_capacity)
+    monkeypatch.setattr(self_play, '_native_mcts_params', _fake_search_parameters)
 
     def fail_refresh(_model_version: int, _model_path: str) -> None:
         raise RuntimeError('invalid checkpoint')
@@ -237,7 +253,7 @@ def test_failed_model_refresh_is_transactional(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(self_play.search_engine, 'refresh_model', fail_refresh)
 
     with pytest.raises(RuntimeError, match='invalid checkpoint'):
-        self_play.refresh_model(8, 'broken.jit.pt')
+        self_play.refresh_model(8, Path('broken.jit.pt'), (game,))
 
     assert self_play.model_version == 7
     assert self_play.model_refresh_acknowledgements == [7]

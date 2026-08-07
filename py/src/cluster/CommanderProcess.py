@@ -13,7 +13,7 @@ from src.games.chess.evaluation.scheduler import CreditEvaluationScheduler
 from src.cluster.CudaProcess import start_process_on_cuda_device
 from src.cluster.TrainerProcess import QuantumResult, ReplayState, TrainerProcess
 from src.games.chess.configuration import ChessExperimentConfiguration
-from src.games.training_contract import TrainingGameImplementation
+from src.games.training_contract import GameImplementation
 from src.train.TrainingArgs import CreditTrainingParams
 from src.util.communication import (
     START_CONTINUOUS_SELF_PLAY,
@@ -123,7 +123,7 @@ class CommanderProcess:
     def __init__(
         self,
         run: int,
-        game: TrainingGameImplementation,
+        game: GameImplementation,
         started_at: float,
     ) -> None:
         self.run_id = run

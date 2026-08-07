@@ -6,12 +6,12 @@ import chess
 import pytest
 
 from src.games.chess.ChessBoard import ChessBoard
-from src.games.chess.self_play import SelfPlay, SelfPlayGame
+from src.games.chess.self_play import ChessSelfPlayPolicy, SelfPlayGame
 from src.self_play.statistics import SelfPlayStatistics
 
 
-def self_play_client(shortcut_strength: float) -> SelfPlay:
-    client = object.__new__(SelfPlay)
+def self_play_client(shortcut_strength: float) -> ChessSelfPlayPolicy:
+    client = object.__new__(ChessSelfPlayPolicy)
     client.args = SimpleNamespace(
         num_moves_after_which_to_play_greedy=50,
         endgame_continuation_start_plies=None,
