@@ -1,5 +1,6 @@
 #pragma once
 
+#include "InferenceTypes.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessPosition.hpp"
@@ -11,6 +12,10 @@ public:
     using Position = ChessPosition;
     using Action = ChessAction;
     using EncodedPosition = EncodedChessPosition;
+
+    [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
+        return {BOARD_C, BOARD_LEN, BOARD_LEN, ACTION_SIZE, 3};
+    }
 
     [[nodiscard]] static Position initialPosition() { return Position{}; }
 

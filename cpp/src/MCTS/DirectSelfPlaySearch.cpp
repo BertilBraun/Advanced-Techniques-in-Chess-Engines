@@ -89,7 +89,7 @@ DirectSelfPlaySearch::DirectSelfPlaySearch(const InferenceClientParams &clientPa
             static_cast<std::size_t>(inferenceParameters.inference_batch_size),
             static_cast<std::size_t>(
                 std::max(2, inferenceParameters.outstanding_batches_per_worker)),
-            true));
+            true, ChessGameContract::inferenceDimensions()));
     }
 }
 

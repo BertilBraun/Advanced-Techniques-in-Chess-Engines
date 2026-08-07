@@ -1,6 +1,7 @@
 #include "InteractiveSearch.hpp"
 
 #include "InferenceResultProcessing.hpp"
+#include "games/chess/ChessGameContract.hpp"
 #include "games/chess/ChessAction.hpp"
 
 namespace {
@@ -39,7 +40,7 @@ InteractiveSearch::InteractiveSearch(const InferenceClientParams &clientParamete
             clientParameters.currentModelPath, clientParameters.device, clientParameters.device_id,
             static_cast<std::size_t>(searchParameters.inference_batch_size),
             static_cast<std::size_t>(std::max(2, searchParameters.outstanding_batches_per_worker)),
-            true));
+            true, ChessGameContract::inferenceDimensions()));
     }
 }
 

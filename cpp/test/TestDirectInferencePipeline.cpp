@@ -1,4 +1,5 @@
 #include "DirectInference.hpp"
+#include "games/chess/ChessGameContract.hpp"
 
 namespace {
 std::filesystem::path createTestModel() {
@@ -28,7 +29,8 @@ void require(const bool condition, const std::string &message) {
 int main() {
     const std::filesystem::path modelPath = createTestModel();
     try {
-        DirectInferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false);
+        DirectInferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
+                                     ChessGameContract::inferenceDimensions());
         torch::Tensor input = runner.createInputBuffer();
         input.zero_();
         DirectInferenceOutput output = runner.createOutputBuffer();
@@ -37,7 +39,8 @@ int main() {
         require(std::abs(output.policies[0].sum().item<float>() - 1.0F) < 0.001F,
                 "runner returned invalid policy");
 
-        DirectInferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false);
+        DirectInferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false,
+                                         ChessGameContract::inferenceDimensions());
         const DirectInferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
         std::memset(first.data, 0, first.capacity * BOARD_C * BOARD_LEN * BOARD_LEN);
         pipeline.submit(first.slotIndex, 2);

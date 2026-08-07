@@ -69,13 +69,7 @@ void bind_go_search(py::module_ &module, const char *rootName, const char *searc
     using Contract = GoGameContract<BoardSize, 8>;
     using Root = GameSearchRoot<Contract>;
     using Search = BatchedGameSearch<Contract>;
-    constexpr InferenceDimensions dimensions{
-        GoRepresentationDimensions<BoardSize, 8>::channel_count,
-        GoRepresentationDimensions<BoardSize, 8>::board_length,
-        GoRepresentationDimensions<BoardSize, 8>::board_length,
-        GoRepresentationDimensions<BoardSize, 8>::action_count,
-        static_cast<int>(WDL_OUTPUT_SIZE),
-    };
+    constexpr InferenceDimensions dimensions = Contract::inferenceDimensions();
 
     py::class_<Root>(module, rootName)
         .def_property_readonly("position", &Root::position)

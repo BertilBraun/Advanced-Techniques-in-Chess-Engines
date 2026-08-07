@@ -1,5 +1,6 @@
 #pragma once
 
+#include "InferenceTypes.hpp"
 #include "common.hpp"
 
 enum class WdlIndex : size_t { Win = 0, Draw = 1, Loss = 2, Count = 3 };
@@ -22,23 +23,6 @@ struct InferenceResult {
     WdlPrediction outcome;
 
     [[nodiscard]] float value() const { return outcome.expectedValue(); }
-};
-
-enum class InferenceDevice { Auto, Cpu, Cuda };
-
-struct InferenceStatistics {
-    size_t evaluations = 0;
-    size_t modelInferenceCalls = 0;
-    size_t modelInferencePositions = 0;
-    std::vector<size_t> modelBatchSizeHistogram;
-    float averageNumberOfPositionsInInferenceCall = 0.0f;
-    std::uint64_t treeSelectionNanoseconds = 0;
-    std::uint64_t boardEncodingNanoseconds = 0;
-    std::uint64_t resultProcessingNanoseconds = 0;
-    std::uint64_t treeBackupNanoseconds = 0;
-    std::uint64_t treeOwnerWaitNanoseconds = 0;
-    std::uint64_t directInferenceNanoseconds = 0;
-    float directWorkerUtilization = 0.0F;
 };
 
 struct InferenceClientParams {

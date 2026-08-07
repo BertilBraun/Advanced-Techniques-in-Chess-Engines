@@ -1,8 +1,7 @@
 #pragma once
 
-#include "InferenceClientTypes.hpp"
+#include "InferenceTypes.hpp"
 #include "InferenceModel.hpp"
-#include "games/chess/ChessEncoding.hpp"
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>
@@ -14,24 +13,11 @@ struct DirectInferenceOutput {
     torch::Tensor outcomes;
 };
 
-struct InferenceDimensions {
-    int channels;
-    int rows;
-    int columns;
-    int actions;
-    int outcomes;
-
-    [[nodiscard]] bool operator==(const InferenceDimensions &) const noexcept = default;
-};
-
-inline constexpr InferenceDimensions CHESS_INFERENCE_DIMENSIONS{
-    BOARD_C, BOARD_LEN, BOARD_LEN, ACTION_SIZE, static_cast<int>(WDL_OUTPUT_SIZE)};
-
 class DirectInferenceRunner {
 public:
     DirectInferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
                           size_t maximumBatchSize, bool useDedicatedCudaStream,
-                          InferenceDimensions dimensions = CHESS_INFERENCE_DIMENSIONS);
+                          InferenceDimensions dimensions);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
     [[nodiscard]] DirectInferenceOutput createOutputBuffer() const;
@@ -66,7 +52,7 @@ public:
 
     DirectInferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                             size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
-                            InferenceDimensions dimensions = CHESS_INFERENCE_DIMENSIONS);
+                            InferenceDimensions dimensions);
     ~DirectInferencePipeline();
 
     DirectInferencePipeline(const DirectInferencePipeline &) = delete;

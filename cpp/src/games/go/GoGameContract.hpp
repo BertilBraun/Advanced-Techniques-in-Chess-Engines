@@ -1,5 +1,6 @@
 #pragma once
 
+#include "InferenceTypes.hpp"
 #include "games/go/GoAction.hpp"
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoPosition.hpp"
@@ -16,6 +17,16 @@ public:
     using Action = GoAction<BoardSize>;
     using EncodedPosition = EncodedGoPosition<BoardSize, HistoryLength>;
     using Point = typename Position::Point;
+
+    [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
+        return {
+            GoRepresentationDimensions<BoardSize, HistoryLength>::channel_count,
+            GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
+            GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
+            GoRepresentationDimensions<BoardSize, HistoryLength>::action_count,
+            3,
+        };
+    }
 
     [[nodiscard]] static Position initialPosition(const GoRules rules) { return Position(rules); }
     [[nodiscard]] static Position childPosition(const Position &parent, const Action action) {
