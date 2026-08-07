@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InferenceTypes.hpp"
+#include "search/InferenceTypes.hpp"
 
 #include <stdexcept>
 #include <string>

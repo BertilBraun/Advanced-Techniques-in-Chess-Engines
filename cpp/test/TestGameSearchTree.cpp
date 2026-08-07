@@ -1,4 +1,4 @@
-#include "search/BatchedSearch.hpp"
+#include "search/SearchTree.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/go/GoGameContract.hpp"
 

@@ -1,4 +1,4 @@
-#include "SearchInference.hpp"
+#include "search/SearchInference.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/chess/ChessAction.hpp"
 

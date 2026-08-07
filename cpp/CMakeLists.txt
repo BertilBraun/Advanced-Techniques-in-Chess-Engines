@@ -330,20 +330,20 @@ target_link_libraries(DirectBoardEncodingTest PRIVATE "${TORCH_LIBRARIES}")
 add_test(NAME DirectBoardEncodingTest COMMAND DirectBoardEncodingTest)
 
 add_executable(
-        DirectInferencePipelineTest
-        test/TestDirectInferencePipeline.cpp
-        src/DirectInference.cpp
+        InferencePipelineTest
+        test/TestInferencePipeline.cpp
+        src/search/InferencePipeline.cpp
 )
-target_include_directories(DirectInferencePipelineTest PRIVATE src)
-target_link_libraries(DirectInferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
-add_test(NAME DirectInferencePipelineTest COMMAND DirectInferencePipelineTest)
+target_include_directories(InferencePipelineTest PRIVATE src)
+target_link_libraries(InferencePipelineTest PRIVATE "${TORCH_LIBRARIES}")
+add_test(NAME InferencePipelineTest COMMAND InferencePipelineTest)
 
 add_executable(
         BatchedSearchTest
         test/TestBatchedSearch.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
-        src/DirectInference.cpp
+        src/search/InferencePipeline.cpp
         src/games/chess/ChessSelfPlaySearch.cpp
         src/games/chess/ChessSearch.cpp
         src/games/chess/ChessAction.cpp
@@ -363,11 +363,11 @@ endif ()
 
 if (BUILD_BENCHMARKS)
 add_executable(
-        DirectInferenceBenchmark
-        benchmark/DirectInferenceBenchmark.cpp
+        InferenceBenchmark
+        benchmark/InferenceBenchmark.cpp
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
-        src/DirectInference.cpp
+        src/search/InferencePipeline.cpp
         src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -375,8 +375,8 @@ add_executable(
         "${stockfish_SOURCE_DIR}/src/movegen.cpp"
         "${stockfish_SOURCE_DIR}/src/position.cpp"
 )
-target_include_directories(DirectInferenceBenchmark PRIVATE src)
-target_link_libraries(DirectInferenceBenchmark PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
+target_include_directories(InferenceBenchmark PRIVATE src)
+target_link_libraries(InferenceBenchmark PRIVATE "${TORCH_LIBRARIES}" nlohmann_json::nlohmann_json)
 endif ()
 
 set_target_properties(AlphaZeroCpp PROPERTIES

@@ -1,28 +1,28 @@
 #pragma once
 
-#include "InferenceTypes.hpp"
-#include "InferenceModel.hpp"
+#include "search/InferenceModel.hpp"
+#include "search/InferenceTypes.hpp"
 
 #ifdef USE_CUDA
 #include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAGuard.h>
 #endif
 
-struct DirectInferenceOutput {
+struct InferenceOutput {
     torch::Tensor policies;
     torch::Tensor outcomes;
 };
 
-class DirectInferenceRunner {
+class InferenceRunner {
 public:
-    DirectInferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
+    InferenceRunner(const std::string &modelPath, InferenceDevice device, int deviceId,
                           size_t maximumBatchSize, bool useDedicatedCudaStream,
                           InferenceDimensions dimensions);
 
     [[nodiscard]] torch::Tensor createInputBuffer() const;
-    [[nodiscard]] DirectInferenceOutput createOutputBuffer() const;
+    [[nodiscard]] InferenceOutput createOutputBuffer() const;
     void forwardInto(const torch::Tensor &encodedBoards, size_t batchSize,
-                     DirectInferenceOutput &output);
+                     InferenceOutput &output);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
 
@@ -42,7 +42,7 @@ private:
 #endif
 };
 
-class DirectInferencePipeline {
+class InferencePipeline {
 public:
     struct WritableBatch {
         size_t slotIndex;
@@ -50,19 +50,19 @@ public:
         size_t capacity;
     };
 
-    DirectInferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
+    InferencePipeline(const std::string &modelPath, InferenceDevice device, int deviceId,
                             size_t maximumBatchSize, size_t slotCount, bool useDedicatedCudaStream,
                             InferenceDimensions dimensions);
-    ~DirectInferencePipeline();
+    ~InferencePipeline();
 
-    DirectInferencePipeline(const DirectInferencePipeline &) = delete;
-    DirectInferencePipeline &operator=(const DirectInferencePipeline &) = delete;
+    InferencePipeline(const InferencePipeline &) = delete;
+    InferencePipeline &operator=(const InferencePipeline &) = delete;
 
     [[nodiscard]] WritableBatch acquireWritableBatch();
     void discardWritableBatch(size_t slotIndex);
     void submit(size_t slotIndex, size_t batchSize);
     [[nodiscard]] bool isCompleted(size_t slotIndex) const;
-    [[nodiscard]] DirectInferenceOutput waitCompleted(size_t slotIndex);
+    [[nodiscard]] InferenceOutput waitCompleted(size_t slotIndex);
     void release(size_t slotIndex);
     [[nodiscard]] PreparedInferenceModel prepareModelRefresh(const std::string &modelPath) const;
     void commitModelRefresh(PreparedInferenceModel updatedModel) noexcept;
@@ -75,13 +75,13 @@ private:
 
     struct Slot {
         torch::Tensor input;
-        DirectInferenceOutput output;
+        InferenceOutput output;
         std::exception_ptr exception;
         size_t batchSize = 0;
         std::atomic<SlotState> state = SlotState::Empty;
     };
 
-    DirectInferenceRunner m_runner;
+    InferenceRunner m_runner;
     std::vector<std::unique_ptr<Slot>> m_slots;
     size_t m_producerCursor = 0;
     size_t m_consumerCursor = 0;

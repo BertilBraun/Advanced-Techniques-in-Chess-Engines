@@ -1,7 +1,7 @@
 #include "search/SearchBindings.hpp"
 
-#include "InferenceRuntime.hpp"
-#include "search/BatchedSearch.hpp"
+#include "search/InferenceConfiguration.hpp"
+#include "search/SearchTypes.hpp"
 #include "util/TimeItGuard.h"
 
 #include <pybind11/operators.h>

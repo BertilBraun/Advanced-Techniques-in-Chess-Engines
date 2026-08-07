@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InferenceRuntime.hpp"
+#include "search/InferenceConfiguration.hpp"
 #include "games/chess/ChessSearch.hpp"
 
 #include <shared_mutex>

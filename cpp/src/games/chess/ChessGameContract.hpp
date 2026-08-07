@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InferenceTypes.hpp"
+#include "search/InferenceTypes.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"

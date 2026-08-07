@@ -1,5 +1,5 @@
-#include "DirectInference.hpp"
-#include "SearchInference.hpp"
+#include "search/InferencePipeline.hpp"
+#include "search/SearchInference.hpp"
 #include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
@@ -107,16 +107,16 @@ void fillInput(torch::Tensor &input, const std::vector<CompressedEncodedBoard> &
     }
 }
 
-double outputChecksum(const DirectInferenceOutput &output) {
+double outputChecksum(const InferenceOutput &output) {
     return output.policies.sum().item<double>() + output.outcomes.sum().item<double>();
 }
 
 nlohmann::json runDirect(const Arguments &arguments,
                          const std::vector<CompressedEncodedBoard> &encodings) {
-    DirectInferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize,
+    InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize,
                                  true, ChessGameContract::inferenceDimensions());
     torch::Tensor input = runner.createInputBuffer();
-    DirectInferenceOutput output = runner.createOutputBuffer();
+    InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
     for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
         runner.forwardInto(input, arguments.batchSize, output);
@@ -132,10 +132,10 @@ nlohmann::json runDirect(const Arguments &arguments,
 
 nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<Board> &boards,
                                   const std::vector<CompressedEncodedBoard> &encodings) {
-    DirectInferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize,
+    InferenceRunner runner(arguments.modelPath, arguments.device, 0, arguments.batchSize,
                                  true, ChessGameContract::inferenceDimensions());
     torch::Tensor input = runner.createInputBuffer();
-    DirectInferenceOutput output = runner.createOutputBuffer();
+    InferenceOutput output = runner.createOutputBuffer();
     fillInput(input, encodings, 0, arguments.batchSize);
     for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
         runner.forwardInto(input, arguments.batchSize, output);
@@ -162,14 +162,14 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
 
 nlohmann::json runPipeline(const Arguments &arguments,
                            const std::vector<CompressedEncodedBoard> &encodings) {
-    DirectInferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
+    InferencePipeline pipeline(arguments.modelPath, arguments.device, 0, arguments.batchSize,
                                      arguments.slots, true,
                                      ChessGameContract::inferenceDimensions());
     std::vector<size_t> pendingSlots;
     pendingSlots.reserve(arguments.slots);
     constexpr size_t ENCODED_BOARD_BYTES = BOARD_C * BOARD_LEN * BOARD_LEN;
     for (size_t warmupIteration = 0; warmupIteration < WARMUP_ITERATIONS; ++warmupIteration) {
-        const DirectInferencePipeline::WritableBatch warmup = pipeline.acquireWritableBatch();
+        const InferencePipeline::WritableBatch warmup = pipeline.acquireWritableBatch();
         for (size_t index = 0; index < arguments.batchSize; ++index) {
             writeTensorEncoding(encodings[index % encodings.size()],
                                 warmup.data + index * ENCODED_BOARD_BYTES);
@@ -185,7 +185,7 @@ nlohmann::json runPipeline(const Arguments &arguments,
             pipeline.release(pendingSlots.front());
             pendingSlots.erase(pendingSlots.begin());
         }
-        const DirectInferencePipeline::WritableBatch writable = pipeline.acquireWritableBatch();
+        const InferencePipeline::WritableBatch writable = pipeline.acquireWritableBatch();
         for (size_t index = 0; index < arguments.batchSize; ++index) {
             writeTensorEncoding(
                 encodings[(iteration * arguments.batchSize + index) % encodings.size()],
@@ -194,9 +194,9 @@ nlohmann::json runPipeline(const Arguments &arguments,
         pipeline.submit(writable.slotIndex, arguments.batchSize);
         pendingSlots.push_back(writable.slotIndex);
     }
-    DirectInferenceOutput finalOutput;
+    InferenceOutput finalOutput;
     for (const size_t slotIndex : pendingSlots) {
-        const DirectInferenceOutput output = pipeline.waitCompleted(slotIndex);
+        const InferenceOutput output = pipeline.waitCompleted(slotIndex);
         finalOutput = output;
         pipeline.release(slotIndex);
     }
@@ -207,18 +207,18 @@ nlohmann::json runPipeline(const Arguments &arguments,
 
 nlohmann::json runReplicas(const Arguments &arguments,
                            const std::vector<CompressedEncodedBoard> &encodings) {
-    std::vector<std::unique_ptr<DirectInferenceRunner>> runners;
+    std::vector<std::unique_ptr<InferenceRunner>> runners;
     std::vector<torch::Tensor> inputs;
-    std::vector<DirectInferenceOutput> outputs;
+    std::vector<InferenceOutput> outputs;
     runners.reserve(arguments.workers);
     inputs.reserve(arguments.workers);
     outputs.reserve(arguments.workers);
     for (size_t worker = 0; worker < arguments.workers; ++worker) {
-        auto runner = std::make_unique<DirectInferenceRunner>(arguments.modelPath, arguments.device,
+        auto runner = std::make_unique<InferenceRunner>(arguments.modelPath, arguments.device,
                                                               0, arguments.batchSize, true,
                                                               ChessGameContract::inferenceDimensions());
         torch::Tensor input = runner->createInputBuffer();
-        DirectInferenceOutput output = runner->createOutputBuffer();
+        InferenceOutput output = runner->createOutputBuffer();
         fillInput(input, encodings, worker * arguments.batchSize, arguments.batchSize);
         for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
             runner->forwardInto(input, arguments.batchSize, output);
@@ -247,7 +247,7 @@ nlohmann::json runReplicas(const Arguments &arguments,
     const double seconds =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - startedAt).count();
     double checksum = 0.0;
-    for (const DirectInferenceOutput &output : outputs) {
+    for (const InferenceOutput &output : outputs) {
         checksum += outputChecksum(output);
     }
     return {{"elapsed_seconds", seconds}, {"checksum", checksum}};
@@ -255,18 +255,18 @@ nlohmann::json runReplicas(const Arguments &arguments,
 
 nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vector<Board> &boards,
                                     const std::vector<CompressedEncodedBoard> &encodings) {
-    std::vector<std::unique_ptr<DirectInferenceRunner>> runners;
+    std::vector<std::unique_ptr<InferenceRunner>> runners;
     std::vector<torch::Tensor> inputs;
-    std::vector<DirectInferenceOutput> outputs;
+    std::vector<InferenceOutput> outputs;
     runners.reserve(arguments.workers);
     inputs.reserve(arguments.workers);
     outputs.reserve(arguments.workers);
     for (size_t worker = 0; worker < arguments.workers; ++worker) {
-        auto runner = std::make_unique<DirectInferenceRunner>(arguments.modelPath, arguments.device,
+        auto runner = std::make_unique<InferenceRunner>(arguments.modelPath, arguments.device,
                                                               0, arguments.batchSize, true,
                                                               ChessGameContract::inferenceDimensions());
         torch::Tensor input = runner->createInputBuffer();
-        DirectInferenceOutput output = runner->createOutputBuffer();
+        InferenceOutput output = runner->createOutputBuffer();
         fillInput(input, encodings, worker * arguments.batchSize, arguments.batchSize);
         for (size_t iteration = 0; iteration < WARMUP_ITERATIONS; ++iteration) {
             runner->forwardInto(input, arguments.batchSize, output);

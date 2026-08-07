@@ -1,6 +1,6 @@
 #pragma once
 
-#include "InferenceTypes.hpp"
+#include "search/InferenceTypes.hpp"
 #include "games/go/GoAction.hpp"
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoPosition.hpp"

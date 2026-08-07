@@ -1,4 +1,4 @@
-#include "DirectInference.hpp"
+#include "search/InferencePipeline.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 namespace {
@@ -29,19 +29,19 @@ void require(const bool condition, const std::string &message) {
 int main() {
     const std::filesystem::path modelPath = createTestModel();
     try {
-        DirectInferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
+        InferenceRunner runner(modelPath.string(), InferenceDevice::Cpu, 0, 4, false,
                                      ChessGameContract::inferenceDimensions());
         torch::Tensor input = runner.createInputBuffer();
         input.zero_();
-        DirectInferenceOutput output = runner.createOutputBuffer();
+        InferenceOutput output = runner.createOutputBuffer();
         runner.forwardInto(input, 3, output);
         require(output.policies.size(0) == 4, "runner changed reusable policy capacity");
         require(std::abs(output.policies[0].sum().item<float>() - 1.0F) < 0.001F,
                 "runner returned invalid policy");
 
-        DirectInferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false,
+        InferencePipeline pipeline(modelPath.string(), InferenceDevice::Cpu, 0, 4, 2, false,
                                          ChessGameContract::inferenceDimensions());
-        const DirectInferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
+        const InferencePipeline::WritableBatch first = pipeline.acquireWritableBatch();
         std::memset(first.data, 0, first.capacity * BOARD_C * BOARD_LEN * BOARD_LEN);
         pipeline.submit(first.slotIndex, 2);
         const auto readinessDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -51,12 +51,12 @@ int main() {
         }
         require(pipeline.isCompleted(first.slotIndex),
                 "pipeline did not publish nonblocking completion readiness");
-        const DirectInferenceOutput completed = pipeline.waitCompleted(first.slotIndex);
+        const InferenceOutput completed = pipeline.waitCompleted(first.slotIndex);
         require(completed.policies.size(0) == 2, "pipeline returned wrong policy batch size");
         require(completed.outcomes.size(0) == 2, "pipeline returned wrong outcome batch size");
         pipeline.release(first.slotIndex);
 
-        const DirectInferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();
+        const InferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();
         require(second.slotIndex != first.slotIndex, "pipeline did not advance through its slots");
         std::memset(second.data, 0, second.capacity * BOARD_C * BOARD_LEN * BOARD_LEN);
         pipeline.submit(second.slotIndex, 4);

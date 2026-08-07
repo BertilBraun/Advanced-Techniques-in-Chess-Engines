@@ -1,7 +1,7 @@
 #pragma once
 
-#include "SearchInference.hpp"
-#include "search/BatchedSearch.hpp"
+#include "search/SearchEngine.hpp"
+#include "search/SearchInference.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
 #include <memory>

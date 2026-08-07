@@ -1,6 +1,6 @@
-#include "DirectInference.hpp"
+#include "search/InferencePipeline.hpp"
 
-#include "InferenceModel.hpp"
+#include "search/InferenceModel.hpp"
 
 namespace {
 torch::Device resolveDevice(const InferenceDevice requestedDevice, const int deviceId) {
@@ -23,7 +23,7 @@ torch::Dtype dtypeForDevice(const torch::Device &device) {
 }
 } // namespace
 
-DirectInferenceRunner::DirectInferenceRunner(const std::string &modelPath,
+InferenceRunner::InferenceRunner(const std::string &modelPath,
                                              const InferenceDevice device, const int deviceId,
                                              const size_t maximumBatchSize,
                                              const bool useDedicatedCudaStream,
@@ -53,14 +53,14 @@ DirectInferenceRunner::DirectInferenceRunner(const std::string &modelPath,
                                  torch::TensorOptions().device(m_device).dtype(m_torchDtype));
 }
 
-torch::Tensor DirectInferenceRunner::createInputBuffer() const {
+torch::Tensor InferenceRunner::createInputBuffer() const {
     return torch::empty(
         {static_cast<int64_t>(m_maximumBatchSize), m_dimensions.channels, m_dimensions.rows,
          m_dimensions.columns},
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kInt8).pinned_memory(usesCuda()));
 }
 
-DirectInferenceOutput DirectInferenceRunner::createOutputBuffer() const {
+InferenceOutput InferenceRunner::createOutputBuffer() const {
     const torch::TensorOptions options =
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32).pinned_memory(usesCuda());
     return {
@@ -68,8 +68,8 @@ DirectInferenceOutput DirectInferenceRunner::createOutputBuffer() const {
         torch::empty({static_cast<int64_t>(m_maximumBatchSize), m_dimensions.outcomes}, options)};
 }
 
-void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
-                                        DirectInferenceOutput &output) {
+void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
+                                        InferenceOutput &output) {
     if (batchSize == 0 || batchSize > m_maximumBatchSize) {
         throw std::invalid_argument("Direct inference batch size is outside runner capacity");
     }
@@ -118,7 +118,7 @@ void DirectInferenceRunner::forwardInto(const torch::Tensor &encodedBoards, cons
 }
 
 PreparedInferenceModel
-DirectInferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
+InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
     const torch::Tensor validationInput =
         torch::zeros({1, m_dimensions.channels, m_dimensions.rows, m_dimensions.columns},
                      torch::TensorOptions().device(m_device).dtype(m_torchDtype));
@@ -126,11 +126,11 @@ DirectInferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
                                        m_dimensions.actions, m_dimensions.outcomes);
 }
 
-void DirectInferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
+void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     commitInferenceModelUpdate(m_model, std::move(updatedModel));
 }
 
-DirectInferencePipeline::DirectInferencePipeline(const std::string &modelPath,
+InferencePipeline::InferencePipeline(const std::string &modelPath,
                                                  const InferenceDevice device, const int deviceId,
                                                  const size_t maximumBatchSize,
                                                  const size_t slotCount,
@@ -147,10 +147,10 @@ DirectInferencePipeline::DirectInferencePipeline(const std::string &modelPath,
         slot->output = m_runner.createOutputBuffer();
         m_slots.push_back(std::move(slot));
     }
-    m_inferenceThread = std::thread(&DirectInferencePipeline::inferenceLoop, this);
+    m_inferenceThread = std::thread(&InferencePipeline::inferenceLoop, this);
 }
 
-DirectInferencePipeline::~DirectInferencePipeline() {
+InferencePipeline::~InferencePipeline() {
     m_stopping.store(true, std::memory_order_release);
     for (const std::unique_ptr<Slot> &slot : m_slots) {
         slot->state.store(SlotState::Stopped, std::memory_order_release);
@@ -161,7 +161,7 @@ DirectInferencePipeline::~DirectInferencePipeline() {
     }
 }
 
-DirectInferencePipeline::WritableBatch DirectInferencePipeline::acquireWritableBatch() {
+InferencePipeline::WritableBatch InferencePipeline::acquireWritableBatch() {
     Slot &slot = slotAt(m_producerCursor);
     SlotState state = slot.state.load(std::memory_order_acquire);
     while (state != SlotState::Empty) {
@@ -175,7 +175,7 @@ DirectInferencePipeline::WritableBatch DirectInferencePipeline::acquireWritableB
     return {m_producerCursor, slot.input.data_ptr<int8>(), m_runner.maximumBatchSize()};
 }
 
-void DirectInferencePipeline::discardWritableBatch(const size_t slotIndex) {
+void InferencePipeline::discardWritableBatch(const size_t slotIndex) {
     if (slotIndex != m_producerCursor) {
         throw std::invalid_argument("Direct inference batches must be discarded in order");
     }
@@ -187,7 +187,7 @@ void DirectInferencePipeline::discardWritableBatch(const size_t slotIndex) {
     slot.state.notify_one();
 }
 
-void DirectInferencePipeline::submit(const size_t slotIndex, const size_t batchSize) {
+void InferencePipeline::submit(const size_t slotIndex, const size_t batchSize) {
     if (slotIndex != m_producerCursor) {
         throw std::invalid_argument("Direct inference batches must be submitted in order");
     }
@@ -204,7 +204,7 @@ void DirectInferencePipeline::submit(const size_t slotIndex, const size_t batchS
     m_producerCursor = (m_producerCursor + 1) % m_slots.size();
 }
 
-bool DirectInferencePipeline::isCompleted(const size_t slotIndex) const {
+bool InferencePipeline::isCompleted(const size_t slotIndex) const {
     if (slotIndex != m_consumerCursor) {
         return false;
     }
@@ -212,7 +212,7 @@ bool DirectInferencePipeline::isCompleted(const size_t slotIndex) const {
     return state == SlotState::Complete || state == SlotState::Failed;
 }
 
-DirectInferenceOutput DirectInferencePipeline::waitCompleted(const size_t slotIndex) {
+InferenceOutput InferencePipeline::waitCompleted(const size_t slotIndex) {
     if (slotIndex != m_consumerCursor) {
         throw std::invalid_argument("Direct inference completions must be consumed in order");
     }
@@ -237,7 +237,7 @@ DirectInferenceOutput DirectInferencePipeline::waitCompleted(const size_t slotIn
             slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize))};
 }
 
-void DirectInferencePipeline::release(const size_t slotIndex) {
+void InferencePipeline::release(const size_t slotIndex) {
     if (slotIndex != m_consumerCursor) {
         throw std::invalid_argument("Direct inference completions must be released in order");
     }
@@ -251,7 +251,7 @@ void DirectInferencePipeline::release(const size_t slotIndex) {
 }
 
 PreparedInferenceModel
-DirectInferencePipeline::prepareModelRefresh(const std::string &modelPath) const {
+InferencePipeline::prepareModelRefresh(const std::string &modelPath) const {
     for (const std::unique_ptr<Slot> &slot : m_slots) {
         if (slot->state.load(std::memory_order_acquire) != SlotState::Empty) {
             throw std::logic_error("Direct inference pipeline must be idle during model refresh");
@@ -260,11 +260,11 @@ DirectInferencePipeline::prepareModelRefresh(const std::string &modelPath) const
     return m_runner.prepareModelRefresh(modelPath);
 }
 
-void DirectInferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
+void InferencePipeline::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
     m_runner.commitModelRefresh(std::move(updatedModel));
 }
 
-void DirectInferencePipeline::inferenceLoop() {
+void InferencePipeline::inferenceLoop() {
     size_t slotIndex = 0;
     while (!m_stopping.load(std::memory_order_acquire)) {
         Slot &slot = slotAt(slotIndex);
@@ -295,14 +295,14 @@ void DirectInferencePipeline::inferenceLoop() {
     }
 }
 
-DirectInferencePipeline::Slot &DirectInferencePipeline::slotAt(const size_t slotIndex) {
+InferencePipeline::Slot &InferencePipeline::slotAt(const size_t slotIndex) {
     if (slotIndex >= m_slots.size()) {
         throw std::invalid_argument("Direct inference slot index is out of range");
     }
     return *m_slots[slotIndex];
 }
 
-const DirectInferencePipeline::Slot &DirectInferencePipeline::slotAt(const size_t slotIndex) const {
+const InferencePipeline::Slot &InferencePipeline::slotAt(const size_t slotIndex) const {
     if (slotIndex >= m_slots.size()) {
         throw std::invalid_argument("Direct inference slot index is out of range");
     }
