@@ -91,7 +91,7 @@ def test_root_and_best_child_must_both_cross_the_governing_threshold() -> None:
     client.iteration = 40
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=-0.90)
     result = SimpleNamespace(
-        result=-0.95,
+        root_value=-0.95,
         root=SimpleNamespace(children=[SimpleNamespace(visits=10, result_sum=-9.5)]),
     )
 
@@ -109,7 +109,7 @@ def test_audit_without_cutoff_records_full_trajectory_without_stopping_replay() 
     client.iteration = 40
     game = SelfPlayGame(is_resignation_audit=True, resignation_threshold=None)
     result = SimpleNamespace(
-        result=-0.99,
+        root_value=-0.99,
         root=SimpleNamespace(children=[SimpleNamespace(visits=10, result_sum=9.9)]),
     )
 
