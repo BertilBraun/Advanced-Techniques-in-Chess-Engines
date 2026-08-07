@@ -47,7 +47,7 @@ from src.util.save_paths import create_optimizer, save_model_and_optimizer
 
 
 def _configuration() -> GoExperimentConfiguration:
-    configuration = load_experiment_configuration(Path('configs/go-7x7-default-experiment.yaml'))
+    configuration = load_experiment_configuration(Path('configs/go-7x7-experiment-template.yaml'))
     assert isinstance(configuration, GoExperimentConfiguration)
     return configuration
 

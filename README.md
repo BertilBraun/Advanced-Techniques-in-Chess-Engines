@@ -175,7 +175,7 @@ compiler, and the required NVIDIA driver and CUDA toolkit.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BertilBraun/Advanced-Techniques-in-Chess-Engines/master/deployment/setup_remote.sh \
   | bash -s -- bash -c 'python py/train.py \
-      --run-config py/configs/chess-default-experiment.yaml \
+      --run-config /data/approved-experiment.yaml \
       --expected-source-revision "$ENGINE_SOURCE_REVISION" \
       --approval-file /data/run-approval.json'
 ```
@@ -185,6 +185,10 @@ Set `ENGINE_REPOSITORY_REF`, `ENGINE_REPOSITORY_DIRECTORY`,
 checkout and environment locations. The approval record and run configuration
 remain explicit inputs so a bootstrap cannot silently start an unapproved
 production run.
+
+The files under `py/configs/*-experiment-template.yaml` are validated templates,
+not runnable production configurations. Resolve their hardware, environment,
+artifact, and approval fields for the selected compute node before launch.
 
 ### **Project Structure**
 

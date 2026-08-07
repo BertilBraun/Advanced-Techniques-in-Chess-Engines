@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,19 @@ from test_helpers.chess_configuration import CHESS_EXPERIMENT, CHESS_TRAINING
 from src.util.frozen_model import JsonValue
 
 
-DEFAULT_EXPERIMENT_PATH = Path('configs/chess-default-experiment.yaml')
+CHESS_EXPERIMENT_TEMPLATE_PATH = Path('configs/chess-experiment-template.yaml')
+
+
+def test_every_checked_in_experiment_uses_the_current_contract_and_dependency_lock() -> None:
+    paths = tuple(sorted(Path('configs').glob('*-experiment-template.yaml')))
+    configurations = validate_experiment_queue(paths)
+    dependency_lock_sha256 = hashlib.sha256(Path('requirements-training.lock').read_bytes()).hexdigest()
+
+    assert tuple(configuration.game for configuration in configurations) == ('chess', 'go', 'go')
+    assert all(
+        configuration.run.environment.dependency_lock_sha256 == dependency_lock_sha256
+        for configuration in configurations
+    )
 
 
 def test_game_experiments_extend_the_shared_run_and_training_configuration() -> None:
@@ -31,8 +44,8 @@ def test_game_experiments_extend_the_shared_run_and_training_configuration() -> 
 @pytest.mark.parametrize(
     ('configuration_type', 'path'),
     (
-        (ChessExperimentConfiguration, DEFAULT_EXPERIMENT_PATH),
-        (GoExperimentConfiguration, Path('configs/go-7x7-default-experiment.yaml')),
+        (ChessExperimentConfiguration, CHESS_EXPERIMENT_TEMPLATE_PATH),
+        (GoExperimentConfiguration, Path('configs/go-7x7-experiment-template.yaml')),
     ),
 )
 def test_base_configuration_validates_shared_training_arguments(
@@ -46,8 +59,8 @@ def test_base_configuration_validates_shared_training_arguments(
         configuration_type.model_validate(candidate)
 
 
-def test_default_chess_experiment_loads_canonical_runtime_configuration() -> None:
-    configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
+def test_chess_experiment_template_loads_canonical_runtime_configuration() -> None:
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 
     assert isinstance(configuration, ChessExperimentConfiguration)
     assert configuration.game == 'chess'
@@ -66,12 +79,12 @@ def test_default_chess_experiment_loads_canonical_runtime_configuration() -> Non
     assert configuration.chess.evaluation.stockfish_skill_levels == (0, 1, 2, 3)
 
 
-def test_settings_exposes_experiment_training_without_an_adapter() -> None:
+def test_experiment_owns_training_configuration_without_an_adapter() -> None:
     assert CHESS_TRAINING is CHESS_EXPERIMENT.training
 
 
 def test_experiment_queue_validation_loads_multiple_experiments() -> None:
-    configurations = validate_experiment_queue((DEFAULT_EXPERIMENT_PATH, DEFAULT_EXPERIMENT_PATH))
+    configurations = validate_experiment_queue((CHESS_EXPERIMENT_TEMPLATE_PATH, CHESS_EXPERIMENT_TEMPLATE_PATH))
 
     assert len(configurations) == 2
     assert configurations[0] == configurations[1]
@@ -80,8 +93,8 @@ def test_experiment_queue_validation_loads_multiple_experiments() -> None:
 @pytest.mark.parametrize(
     ('path', 'board_size', 'action_count'),
     (
-        (Path('configs/go-7x7-default-experiment.yaml'), 7, 50),
-        (Path('configs/go-9x9-default-experiment.yaml'), 9, 82),
+        (Path('configs/go-7x7-experiment-template.yaml'), 7, 50),
+        (Path('configs/go-9x9-experiment-template.yaml'), 9, 82),
     ),
 )
 def test_go_experiments_resolve_deterministically(path: Path, board_size: int, action_count: int) -> None:
@@ -96,9 +109,9 @@ def test_go_experiments_resolve_deterministically(path: Path, board_size: int, a
 def test_queue_validation_supports_both_games() -> None:
     configurations = validate_experiment_queue(
         (
-            DEFAULT_EXPERIMENT_PATH,
-            Path('configs/go-7x7-default-experiment.yaml'),
-            Path('configs/go-9x9-default-experiment.yaml'),
+            CHESS_EXPERIMENT_TEMPLATE_PATH,
+            Path('configs/go-7x7-experiment-template.yaml'),
+            Path('configs/go-9x9-experiment-template.yaml'),
         )
     )
 
@@ -115,7 +128,7 @@ def test_queue_validation_supports_both_games() -> None:
     ),
 )
 def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], value: JsonValue, message: str) -> None:
-    candidate = yaml.safe_load(Path('configs/go-7x7-default-experiment.yaml').read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(Path('configs/go-7x7-experiment-template.yaml').read_text(encoding='utf-8'))
     owner = candidate
     for segment in field_path[:-1]:
         owner = owner[segment]
@@ -126,7 +139,7 @@ def test_invalid_go_combinations_fail_precisely(field_path: tuple[str, ...], val
 
 
 def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> None:
-    configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
     resolved_path = tmp_path / 'resolved-chess-experiment.json'
 
     write_resolved_chess_experiment(resolved_path, configuration)
@@ -135,7 +148,7 @@ def test_resolved_experiment_round_trips_as_canonical_json(tmp_path: Path) -> No
 
 
 def test_legacy_run_topology_is_rejected() -> None:
-    candidate = yaml.safe_load(DEFAULT_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     candidate['run']['topology'] = {'trainer_device_type': 'cpu'}
 
     with pytest.raises(ValidationError, match='topology'):
@@ -143,7 +156,7 @@ def test_legacy_run_topology_is_rejected() -> None:
 
 
 def test_chess_evaluation_fields_are_rejected_from_shared_training() -> None:
-    candidate = yaml.safe_load(DEFAULT_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     candidate['training']['evaluation'] = {'opening_suite_path': 'openings.tsv'}
 
     with pytest.raises(ValidationError, match='evaluation'):
@@ -151,7 +164,7 @@ def test_chess_evaluation_fields_are_rejected_from_shared_training() -> None:
 
 
 def test_network_rejects_unknown_parameters() -> None:
-    candidate = yaml.safe_load(DEFAULT_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     candidate['training']['network']['experimental_width'] = 256
 
     with pytest.raises(ValidationError, match='experimental_width'):
@@ -159,14 +172,14 @@ def test_network_rejects_unknown_parameters() -> None:
 
 
 def test_training_configuration_is_frozen() -> None:
-    configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 
     with pytest.raises(ValidationError, match='frozen'):
         configuration.training.save_path = 'different-path'
 
 
 def test_validated_copy_reruns_field_validation() -> None:
-    configuration = load_chess_experiment_configuration(DEFAULT_EXPERIMENT_PATH)
+    configuration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 
     with pytest.raises(ValidationError, match='greater than 0'):
         configuration.training.trainer.validated_copy(update={'global_batch_size': 0})
@@ -189,7 +202,7 @@ def test_removed_configuration_fields_are_rejected(
     field_name: str,
     value: JsonValue,
 ) -> None:
-    candidate = yaml.safe_load(DEFAULT_EXPERIMENT_PATH.read_text(encoding='utf-8'))
+    candidate = yaml.safe_load(CHESS_EXPERIMENT_TEMPLATE_PATH.read_text(encoding='utf-8'))
     owner = candidate
     for segment in owner_path:
         owner = owner[segment]

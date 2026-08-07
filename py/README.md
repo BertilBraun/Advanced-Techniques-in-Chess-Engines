@@ -58,10 +58,13 @@ The training script automates distributed training job submission.
 3. **Start Training**:
 
     ```bash
-    python train.py --run-config configs/chess-default-experiment.yaml \
+    python train.py --run-config <approved-experiment.yaml> \
       --expected-source-revision <git-revision> \
       --approval-file <approval.json>
     ```
+
+    The checked-in `configs/*-experiment-template.yaml` files must first be
+    resolved for the selected hardware and environment.
 
 4. **Monitor Progress**:
 

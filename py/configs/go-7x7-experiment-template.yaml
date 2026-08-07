@@ -1,9 +1,9 @@
 game: go
 run:
-  run_name: go-7x7-default
-  tensorboard_run_directory: go-7x7-default
+  run_name: go-7x7-template
+  tensorboard_run_directory: go-7x7-template
   stage: clean_retrain
-  requires_explicit_approval: false
+  requires_explicit_approval: true
   resume: {mode: random_initialization}
   hardware: {provider_name: local, offer_id: local, gpu_model: unconfirmed, gpu_count: 1, logical_cpu_count: 8, minimum_ram_gib: 8, minimum_disk_gib: 1}
   environment:
@@ -12,7 +12,7 @@ run:
     torch_version: "2.12.0+cu130"
     cuda_version: "13.0"
     dependency_lock_path: py/requirements-training.lock
-    dependency_lock_sha256: 2eb67d2a3c43b458bf66d7651c17fcafe8f180206287cc347ea09c9e0c64e250
+    dependency_lock_sha256: 55fbeff4630bd7c4f10c9af5ea081e415da15515de7ad34d140461ef21c21cfd
     stockfish_revision: cb3d4ee9b47d0c5aae855b12379378ea1439675c
     minimum_open_file_soft_limit: 1024
 training:

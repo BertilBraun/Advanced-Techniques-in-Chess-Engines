@@ -4,6 +4,6 @@ from src.experiment.configuration import ChessExperimentConfiguration, load_ches
 from src.train.TrainingArgs import TrainingArgs
 
 
-DEFAULT_CHESS_EXPERIMENT_PATH = Path(__file__).resolve().parents[1] / 'configs' / 'chess-default-experiment.yaml'
-CHESS_EXPERIMENT: ChessExperimentConfiguration = load_chess_experiment_configuration(DEFAULT_CHESS_EXPERIMENT_PATH)
+CHESS_EXPERIMENT_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / 'configs' / 'chess-experiment-template.yaml'
+CHESS_EXPERIMENT: ChessExperimentConfiguration = load_chess_experiment_configuration(CHESS_EXPERIMENT_TEMPLATE_PATH)
 CHESS_TRAINING: TrainingArgs = CHESS_EXPERIMENT.training
