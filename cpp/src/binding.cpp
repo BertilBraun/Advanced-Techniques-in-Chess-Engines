@@ -35,8 +35,8 @@ std::pair<std::vector<std::pair<int, float>>, float> inference(MCTS &self, const
     const InferenceResult &inferenceResult = result[0];
 
     std::vector<std::pair<int, float>> encodedMoves;
-    encodedMoves.reserve(inferenceResult.moves.size());
-    for (const auto &[move, score] : inferenceResult.moves) {
+    encodedMoves.reserve(inferenceResult.actions.size());
+    for (const auto &[move, score] : inferenceResult.actions) {
         encodedMoves.emplace_back(encodeMove(move, &board), score);
     }
 

@@ -4,6 +4,21 @@
 #include <cstdint>
 #include <vector>
 
+enum class WdlIndex : std::size_t { Win = 0, Draw = 1, Loss = 2, Count = 3 };
+inline constexpr std::size_t WDL_OUTPUT_SIZE = static_cast<std::size_t>(WdlIndex::Count);
+
+struct WdlPrediction {
+    float win;
+    float draw;
+    float loss;
+
+    [[nodiscard]] float expectedValue() const noexcept { return win - loss; }
+    [[nodiscard]] float value() const noexcept { return expectedValue(); }
+    [[nodiscard]] bool operator==(const WdlPrediction &) const noexcept = default;
+};
+
+using OutcomeProbabilities = WdlPrediction;
+
 enum class InferenceDevice { Auto, Cpu, Cuda };
 
 struct InferenceDimensions {

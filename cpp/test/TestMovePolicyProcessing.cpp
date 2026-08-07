@@ -1,4 +1,5 @@
-#include "InferenceResultProcessing.hpp"
+#include "SearchInference.hpp"
+#include "games/chess/ChessGameContract.hpp"
 #include "games/chess/ChessAction.hpp"
 
 #include "bitboard.h"
@@ -142,8 +143,8 @@ void testWdlProcessing() {
     const Board board;
     const torch::Tensor policy = positivePolicy();
     const std::array<float, 3> outcome = {0.25F, 0.5F, 0.25F};
-    const InferenceResult result =
-        processInferenceResult(policy.data_ptr<float>(), outcome.data(), board);
+    const auto result =
+        processSearchInference<ChessGameContract>(policy.data_ptr<float>(), outcome.data(), board);
     require(std::abs(result.outcome.win - outcome[0]) <= SCORE_TOLERANCE,
             "WDL processing changed win probability");
     require(std::abs(result.outcome.draw - outcome[1]) <= SCORE_TOLERANCE,
@@ -165,7 +166,8 @@ void testInvalidWdlProcessing() {
         bool rejected = false;
         try {
             static_cast<void>(
-                processInferenceResult(policy.data_ptr<float>(), outcome.data(), board));
+                processSearchInference<ChessGameContract>(policy.data_ptr<float>(), outcome.data(),
+                                                          board));
         } catch (const std::runtime_error &) {
             rejected = true;
         }

@@ -337,7 +337,6 @@ add_executable(
         MovePolicyProcessingTest
         test/TestMovePolicyProcessing.cpp
         src/games/chess/ChessBoard.cpp
-        src/InferenceResultProcessing.cpp
         src/games/chess/ChessAction.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
         "${stockfish_SOURCE_DIR}/src/memory.cpp"
@@ -379,7 +378,6 @@ add_executable(
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
-        src/InferenceResultProcessing.cpp
         src/MCTS/DirectSelfPlaySearch.cpp
         src/MCTS/MCTS.cpp
         src/MCTS/SearchTree.cpp
@@ -404,7 +402,6 @@ add_executable(
         src/games/chess/ChessBoard.cpp
         src/games/chess/ChessEncoding.cpp
         src/DirectInference.cpp
-        src/InferenceResultProcessing.cpp
         src/games/chess/ChessAction.cpp
         src/InferenceClient.cpp
         "${stockfish_SOURCE_DIR}/src/bitboard.cpp"

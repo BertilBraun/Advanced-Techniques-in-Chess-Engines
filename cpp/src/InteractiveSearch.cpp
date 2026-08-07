@@ -1,6 +1,6 @@
 #include "InteractiveSearch.hpp"
 
-#include "InferenceResultProcessing.hpp"
+#include "SearchInference.hpp"
 #include "games/chess/ChessGameContract.hpp"
 #include "games/chess/ChessAction.hpp"
 
@@ -55,7 +55,8 @@ InferenceResult InteractiveSearch::decode(const torch::Tensor &policy, const tor
         !outcome.is_contiguous()) {
         throw std::runtime_error("Inference model WDL output must be three probabilities");
     }
-    return processInferenceResult(policy.data_ptr<float>(), outcome.data_ptr<float>(), board);
+    return processSearchInference<ChessGameContract>(policy.data_ptr<float>(),
+                                                     outcome.data_ptr<float>(), board);
 }
 
 InferenceResult InteractiveSearch::evaluate(const Board &board) {
@@ -156,14 +157,15 @@ void InteractiveSearch::completeWorker(EvalSearchTree &tree, const std::size_t w
             EvalSearchNode &leaf = tree.node(leafIndex);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult =
-                processInferenceResult(policyData + processed * ACTION_SIZE,
-                                       outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
+                processSearchInference<ChessGameContract>(
+                    policyData + processed * ACTION_SIZE,
+                    outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)
                     .count());
             const auto backupStartedAt = std::chrono::steady_clock::now();
-            tree.expand(leafIndex, inferenceResult.moves, inferenceResult.outcome);
+            tree.expand(leafIndex, inferenceResult.actions, inferenceResult.outcome);
             tree.completeReservation(leafIndex, inferenceResult.value());
             m_backupNanoseconds +=
                 static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -1,6 +1,6 @@
 #include "DirectInference.hpp"
 #include "InferenceClient.hpp"
-#include "InferenceResultProcessing.hpp"
+#include "SearchInference.hpp"
 #include "games/chess/ChessBoard.hpp"
 #include "games/chess/ChessEncoding.hpp"
 #include "games/chess/ChessGameContract.hpp"
@@ -149,9 +149,9 @@ nlohmann::json runProcessedDirect(const Arguments &arguments, const std::vector<
         const float *policyData = output.policies.data_ptr<float>();
         const float *outcomeData = output.outcomes.data_ptr<float>();
         for (size_t position = 0; position < arguments.batchSize; ++position) {
-            const InferenceResult result = processInferenceResult(
+            const InferenceResult result = processSearchInference<ChessGameContract>(
                 policyData + position * ACTION_SIZE, outcomeData + position * 3, boards[position]);
-            checksum += result.value() + static_cast<double>(result.moves.size());
+            checksum += result.value() + static_cast<double>(result.actions.size());
         }
     }
     const double seconds =
@@ -288,10 +288,10 @@ nlohmann::json runProcessedReplicas(const Arguments &arguments, const std::vecto
                 const float *outcomeData = outputs[worker].outcomes.data_ptr<float>();
                 for (size_t position = 0; position < arguments.batchSize; ++position) {
                     const size_t boardIndex = worker * arguments.batchSize + position;
-                    const InferenceResult result =
-                        processInferenceResult(policyData + position * ACTION_SIZE,
-                                               outcomeData + position * 3, boards[boardIndex]);
-                    checksums[worker] += result.value() + static_cast<double>(result.moves.size());
+                    const InferenceResult result = processSearchInference<ChessGameContract>(
+                        policyData + position * ACTION_SIZE, outcomeData + position * 3,
+                        boards[boardIndex]);
+                    checksums[worker] += result.value() + static_cast<double>(result.actions.size());
                 }
             }
         });

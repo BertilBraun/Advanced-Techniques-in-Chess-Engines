@@ -1,6 +1,6 @@
 #include "DirectSelfPlaySearch.hpp"
 
-#include "../InferenceResultProcessing.hpp"
+#include "SearchInference.hpp"
 #include "games/chess/ChessAction.hpp"
 #include "games/chess/ChessGameContract.hpp"
 
@@ -199,14 +199,15 @@ void DirectSelfPlaySearch::completeWorker(std::vector<RootTask> &tasks,
             SearchNode &leaf = tree.node(pendingLeaf.node_index);
             const auto processingStartedAt = std::chrono::steady_clock::now();
             const InferenceResult inferenceResult =
-                processInferenceResult(policyData + processed * ACTION_SIZE,
-                                       outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
+                processSearchInference<ChessGameContract>(
+                    policyData + processed * ACTION_SIZE,
+                    outcomeData + processed * WDL_OUTPUT_SIZE, leaf.board);
             m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - processingStartedAt)
                     .count());
             const auto backupStartedAt = std::chrono::steady_clock::now();
-            tree.expand(pendingLeaf.node_index, inferenceResult.moves);
+            tree.expand(pendingLeaf.node_index, inferenceResult.actions);
             if (pendingLeaf.counts_as_search) {
                 tree.backPropagateAndRemoveVirtualLoss(pendingLeaf.node_index,
                                                        inferenceResult.value());
@@ -415,7 +416,7 @@ InferenceResult DirectSelfPlaySearch::evaluate(const Board &board) {
     try {
         DirectInferenceOutput output = worker.waitCompleted(writable.slotIndex);
         outputReady = true;
-        const InferenceResult result = processInferenceResult(
+        const InferenceResult result = processSearchInference<ChessGameContract>(
             output.policies[0].data_ptr<float>(), output.outcomes[0].data_ptr<float>(), board);
         worker.release(writable.slotIndex);
         recordBatch(1);

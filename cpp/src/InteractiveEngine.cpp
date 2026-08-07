@@ -42,8 +42,8 @@ std::vector<CandidateAnalysis> gatherMctsCandidates(const EvalSearchTree &tree) 
 
 std::vector<CandidateAnalysis> gatherPolicyCandidates(const InferenceResult &inferenceResult) {
     std::vector<CandidateAnalysis> candidates;
-    candidates.reserve(inferenceResult.moves.size());
-    for (const auto &[move, prior] : inferenceResult.moves) {
+    candidates.reserve(inferenceResult.actions.size());
+    for (const auto &[move, prior] : inferenceResult.actions) {
         candidates.push_back({toString(move), prior, 0, 0.0f, std::nullopt});
     }
     std::ranges::sort(candidates,
