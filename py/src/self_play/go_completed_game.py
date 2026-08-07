@@ -13,7 +13,7 @@ from src.util.atomic_file import write_text_atomically
 from src.util.frozen_model import FrozenModel
 
 
-GO_COMPLETED_GAME_SCHEMA_VERSION = 1
+GO_COMPLETED_GAME_SCHEMA_VERSION = 2
 _GAME_FILE_PATTERN = re.compile(r'run-(?P<run>\d+)-worker-(?P<worker>\d+)-game-(?P<game>\d+)\.json')
 
 
@@ -85,7 +85,7 @@ class GoSearchObservation(FrozenModel):
 
 
 class GoCompletedGame(FrozenModel):
-    schema_version: Literal[1] = GO_COMPLETED_GAME_SCHEMA_VERSION
+    schema_version: Literal[2] = GO_COMPLETED_GAME_SCHEMA_VERSION
     game: Literal['go'] = 'go'
     identity: GoGameIdentity
     rules: GoRulesMetadata
@@ -96,7 +96,7 @@ class GoCompletedGame(FrozenModel):
     generation_seconds: float = Field(ge=0.0)
     actions: tuple[int, ...]
     final_current_player: int
-    final_score: float | None
+    final_score: float
     termination_reason: GoTerminationReason
     observations: tuple[GoSearchObservation, ...]
 
@@ -115,11 +115,8 @@ class GoCompletedGame(FrozenModel):
             raise ValueError('Go search observations must have unique ordered plies.')
         if any(observation.ply >= len(self.actions) for observation in self.observations):
             raise ValueError('Go search observations must precede their selected action.')
-        if self.termination_reason is GoTerminationReason.TWO_PASSES:
-            if self.final_score is None or not isfinite(self.final_score) or not -1.0 <= self.final_score <= 1.0:
-                raise ValueError('Two-pass Go completion requires a finite final score in [-1, 1].')
-        elif self.final_score is not None or any(observation.sample_eligible for observation in self.observations):
-            raise ValueError('Maximum-move Go completion has no score or eligible replay samples.')
+        if not isfinite(self.final_score) or not -1.0 <= self.final_score <= 1.0:
+            raise ValueError('Completed Go game requires a finite final score in [-1, 1].')
         if any(
             not self.minimum_model_generation <= observation.model_generation <= self.model_generation
             for observation in self.observations

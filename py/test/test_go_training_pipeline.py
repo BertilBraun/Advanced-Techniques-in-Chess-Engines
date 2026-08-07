@@ -140,18 +140,14 @@ def test_go_ddp_batch_and_optimizer_smoke() -> None:
     optimizer.step()
 
 
-def test_safety_cap_game_has_no_targets_or_credits() -> None:
+def test_safety_cap_game_requires_a_scored_result() -> None:
     game = _two_pass_game().validated_copy(
         update={
-            'final_score': None,
             'termination_reason': GoTerminationReason.MAXIMUM_MOVES.value,
-            'observations': [
-                observation.validated_copy(update={'sample_eligible': False}).model_dump(mode='json')
-                for observation in _two_pass_game().observations
-            ],
         }
     )
-    assert materialize_go_game(game) == ()
+    assert game.final_score is not None
+    assert all(observation.sample_eligible for observation in game.observations)
 
 
 class _PassModel(torch.nn.Module):

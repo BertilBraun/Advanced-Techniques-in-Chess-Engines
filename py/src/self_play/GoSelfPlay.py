@@ -186,11 +186,7 @@ class GoSelfPlay:
     def _publish(self, game: _ActiveGoGame) -> Path:
         terminal = game.root.position.terminal_result()
         safety_cap = terminal.reason.name == 'MAXIMUM_MOVES'
-        observations = (
-            tuple(observation.validated_copy(update={'sample_eligible': False}) for observation in game.observations)
-            if safety_cap
-            else tuple(game.observations)
-        )
+        observations = tuple(game.observations)
         final_score = game.root.position.terminal_value()
         completed = GoCompletedGame(
             identity=self.publisher.reserve_identity(),

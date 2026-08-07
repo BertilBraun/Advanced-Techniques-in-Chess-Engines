@@ -21,7 +21,6 @@ from src.self_play.SelfPlayDataset import ReplaySampleMetadata, TrainingBatch
 from src.self_play.go_completed_game import (
     GoCompletedGame,
     GoGameIdentity,
-    GoTerminationReason,
     go_completed_game_from_path,
 )
 from src.self_play.value_target import ReplayValueTarget, TerminationReason, outcome_from_sample_perspective
@@ -289,14 +288,11 @@ def rebuild_go_replay(run_path: Path, contract: GoStateContract, capacity: int, 
 
 
 def materialize_go_game(game: GoCompletedGame) -> tuple[GoReplaySample, ...]:
-    if game.termination_reason is GoTerminationReason.MAXIMUM_MOVES:
-        return ()
     contract = GoStateContract(game.representation.board_size, game.representation.history_length)
     rules = GoRules(game.rules.komi_half_points, game.rules.maximum_moves)
     position: NativeGoPosition = contract.initial_position(rules)
     observations = {observation.ply: observation for observation in game.observations}
     samples: list[GoReplaySample] = []
-    assert game.final_score is not None
     for ply, action in enumerate(game.actions):
         observation = observations.get(ply)
         if observation is not None:
@@ -348,6 +344,8 @@ def materialize_go_game(game: GoCompletedGame) -> tuple[GoReplaySample, ...]:
     terminal = position.terminal_result()
     if terminal.reason.name.lower() != game.termination_reason.value:
         raise ValueError('Completed Go termination reason disagrees with reconstructed moves.')
+    if position.terminal_value() != game.final_score:
+        raise ValueError('Completed Go final score disagrees with the reconstructed position.')
     return tuple(reversed(samples))
 
 
