@@ -1,5 +1,6 @@
 #include "TestRunner.hpp"
 #include "games/go/GoGameContract.hpp"
+#include "util/py.hpp"
 
 #include <array>
 #include <iostream>
@@ -136,7 +137,7 @@ void test_history_encoding_hash_and_symmetries() {
         GoSymmetry::reflect_rotate_270,
     };
     for (const GoSymmetry symmetry : symmetries) {
-        for (int action_id = 0; action_id < GoAction<7>::action_count; ++action_id) {
+        for (const int action_id : range(GoAction<7>::action_count)) {
             const GoAction<7> action(action_id);
             const auto transformed = Contract::transformAction(action, symmetry);
             const auto restored =

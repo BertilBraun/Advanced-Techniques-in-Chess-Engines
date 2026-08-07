@@ -3,6 +3,7 @@
 #include "games/chess/ChessGameContract.hpp"
 #include "games/chess/ChessSearchPresentation.hpp"
 #include "search/SelfPlay.hpp"
+#include "util/py.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -44,7 +45,7 @@ using EncodedInference = std::pair<std::vector<std::pair<int, float>>, float>;
     const std::vector<InferenceResult> inferenceResults = search.evaluate(boards);
     std::vector<EncodedInference> encodedResults;
     encodedResults.reserve(boards.size());
-    for (std::size_t index = 0; index < boards.size(); ++index) {
+    for (const auto index : range(boards.size())) {
         encodedResults.push_back(encodeInference(boards[index], inferenceResults[index]));
     }
     return encodedResults;

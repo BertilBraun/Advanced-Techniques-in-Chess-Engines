@@ -2,6 +2,8 @@
 
 #include "common.hpp"
 
+// Loads, validates, and atomically refreshes the TorchScript model used for inference.
+
 namespace inference_model_detail {
 template <typename NamedTensorList>
 void validateNamedTensors(const NamedTensorList &currentTensors,

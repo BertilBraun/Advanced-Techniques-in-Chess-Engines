@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <vector>
 
+// Defines requests, results, and validated runtime parameters shared by search workloads.
+
 struct GameSearchVisit {
     int action_id;
     std::uint32_t visit_count;
@@ -46,8 +48,8 @@ struct BatchedSearchParameters {
         if (parallel_searches == 0 || tree_capacity == 0) {
             throw std::invalid_argument("Batched search counts and tree capacity must be positive");
         }
-        if (exploration_constant <= 0.0F || dirichlet_alpha <= 0.0F ||
-            dirichlet_epsilon < 0.0F || dirichlet_epsilon > 1.0F) {
+        if (exploration_constant <= 0.0F || dirichlet_alpha <= 0.0F || dirichlet_epsilon < 0.0F ||
+            dirichlet_epsilon > 1.0F) {
             throw std::invalid_argument("Batched search constants are outside their valid range");
         }
     }

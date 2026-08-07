@@ -4,6 +4,8 @@
 
 #include <stdexcept>
 #include <string>
+
+// Carries the model, device, and batching configuration for one inference pipeline.
 #include <utility>
 
 struct InferenceConfiguration {

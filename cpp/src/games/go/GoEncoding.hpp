@@ -2,6 +2,7 @@
 
 #include "games/go/GoPosition.hpp"
 #include "util/PackedPlane.hpp"
+#include "util/py.hpp"
 
 #include <algorithm>
 #include <array>
@@ -28,7 +29,7 @@ template <std::size_t BoardSize, std::size_t HistoryLength>
 [[nodiscard]] EncodedGoPosition<BoardSize, HistoryLength>
 encode_go_position(const GoPosition<BoardSize, HistoryLength> &position) {
     EncodedGoPosition<BoardSize, HistoryLength> encoded{};
-    for (std::size_t offset = 0; offset < HistoryLength; ++offset) {
+    for (const auto offset : range(HistoryLength)) {
         const GoBoard<BoardSize> &board = position.history()[offset];
         if (position.player() == GoPlayer::black) {
             encoded.binary_planes[offset * 2] = board.black;
@@ -66,7 +67,7 @@ void write_go_tensor_encoding(const EncodedGoPosition<BoardSize, HistoryLength> 
     }
     std::size_t offset = 0;
     for (const BitBoard<BoardSize> &plane : encoded.binary_planes) {
-        for (std::size_t point = 0; point < BitBoard<BoardSize>::bit_count; ++point) {
+        for (const auto point : range(BitBoard<BoardSize>::bit_count)) {
             destination[offset++] = plane.test(point) ? 1 : 0;
         }
     }

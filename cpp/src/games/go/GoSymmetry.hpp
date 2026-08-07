@@ -3,6 +3,7 @@
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoSymmetryTypes.hpp"
 #include "games/go/GoTypes.hpp"
+#include "util/py.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -73,8 +74,8 @@ template <std::size_t BoardSize, std::size_t HistoryLength>
 transform_go_encoding(const EncodedGoPosition<BoardSize, HistoryLength> &encoding,
                       const GoSymmetry symmetry) {
     EncodedGoPosition<BoardSize, HistoryLength> transformed{};
-    for (std::size_t plane = 0;
-         plane < EncodedGoPosition<BoardSize, HistoryLength>::binary_plane_count; ++plane) {
+    for (const auto plane :
+         range(EncodedGoPosition<BoardSize, HistoryLength>::binary_plane_count)) {
         for (const auto point : encoding.binary_planes[plane].set_bits()) {
             transformed.binary_planes[plane].set(transform_go_point<BoardSize>(point, symmetry));
         }

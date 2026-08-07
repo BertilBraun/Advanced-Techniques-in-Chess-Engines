@@ -1,6 +1,7 @@
 #include "games/go/GoBindings.hpp"
 
 #include "games/go/GoGameContract.hpp"
+#include "util/py.hpp"
 
 #include <array>
 #include <cstddef>
@@ -48,10 +49,10 @@ restore_position(const std::vector<std::vector<int>> &black_history,
         throw std::invalid_argument("Bound Go history exceeds the retained history length");
     }
     std::array<GoBoard<BoardSize>, HistoryLength> history{};
-    for (std::size_t offset = 0; offset < black_history.size(); ++offset) {
+    for (const auto offset : range(black_history.size())) {
         set_points(history[offset].black, black_history[offset]);
     }
-    for (std::size_t offset = 0; offset < white_history.size(); ++offset) {
+    for (const auto offset : range(white_history.size())) {
         set_points(history[offset].white, white_history[offset]);
     }
     std::optional<typename BitBoard<BoardSize>::Point> typed_ko;

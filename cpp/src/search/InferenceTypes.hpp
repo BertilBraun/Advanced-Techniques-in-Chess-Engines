@@ -2,7 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
+
+// Defines the game-independent dimensions, predictions, results, and telemetry of inference.
 
 enum class WdlIndex : std::size_t { Win = 0, Draw = 1, Loss = 2, Count = 3 };
 inline constexpr std::size_t WDL_OUTPUT_SIZE = static_cast<std::size_t>(WdlIndex::Count);
@@ -18,6 +21,15 @@ struct WdlPrediction {
 };
 
 using OutcomeProbabilities = WdlPrediction;
+
+template <typename Game> struct SearchInferenceResult {
+    using Action = typename Game::Action;
+
+    std::vector<std::pair<Action, float>> actions;
+    WdlPrediction outcome;
+
+    [[nodiscard]] float value() const noexcept { return outcome.expectedValue(); }
+};
 
 enum class InferenceDevice { Auto, Cpu, Cuda };
 

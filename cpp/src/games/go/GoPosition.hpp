@@ -1,6 +1,7 @@
 #pragma once
 
 #include "games/go/GoTypes.hpp"
+#include "util/py.hpp"
 
 #include <array>
 #include <cstddef>
@@ -77,7 +78,7 @@ public:
             return actions;
         }
         actions.reserve(GoAction<BoardSize>::action_count);
-        for (int id = 0; id < GoAction<BoardSize>::pass_id; ++id) {
+        for (const int id : range(GoAction<BoardSize>::pass_id)) {
             const GoAction<BoardSize> action(id);
             if (is_legal(action)) {
                 actions.push_back(action);
@@ -92,8 +93,9 @@ public:
             throw std::invalid_argument("Illegal Go action");
         }
         std::array<Board, HistoryLength> next_history{};
-        for (std::size_t offset = HistoryLength - 1; offset > 0; --offset) {
-            next_history[offset] = m_history[offset - 1];
+        for (const auto historyOffset : range(HistoryLength - 1)) {
+            const std::size_t destination = HistoryLength - historyOffset - 1;
+            next_history[destination] = m_history[destination - 1];
         }
         std::optional<Point> next_ko;
         int next_passes = m_consecutivePasses;

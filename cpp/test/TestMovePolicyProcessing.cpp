@@ -1,6 +1,7 @@
 #include "TestRunner.hpp"
 #include "games/chess/ChessGameContract.hpp"
-#include "search/SearchInference.hpp"
+#include "search/InferencePipeline.hpp"
+#include "util/py.hpp"
 
 #include "bitboard.h"
 #include "position.h"
@@ -25,7 +26,7 @@ void require(const bool condition, const std::string &message) {
 
 std::vector<float> positivePolicy() {
     std::vector<float> policy(ChessAction::action_count);
-    for (int actionId = 0; actionId < ChessAction::action_count; ++actionId) {
+    for (const int actionId : range(ChessAction::action_count)) {
         policy[actionId] = static_cast<float>(actionId + 1);
     }
     return policy;
@@ -34,7 +35,7 @@ std::vector<float> positivePolicy() {
 void requireNormalized(const Board &board, const std::vector<float> &policy,
                        const std::string &description) {
     const SearchInferenceResult<ChessGameContract> result =
-        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
     float sum = 0.0F;
     int previousActionId = -1;
     for (const auto &[action, probability] : result.actions) {
@@ -65,7 +66,7 @@ void testUniformFallbackAndSparsePolicy() {
     const Board board;
     std::vector<float> policy(ChessAction::action_count, 0.0F);
     SearchInferenceResult<ChessGameContract> uniform =
-        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
     require(uniform.actions.size() == board.validMoves().size(),
             "uniform fallback omitted legal actions");
     const float expected = 1.0F / static_cast<float>(uniform.actions.size());
@@ -78,16 +79,17 @@ void testUniformFallbackAndSparsePolicy() {
     policy[ChessActionCodec::encode(ChessAction(board.validMoves()[0]), board)] = 1.0F;
     policy[ChessActionCodec::encode(ChessAction(board.validMoves()[1]), board)] = 2.0F;
     const SearchInferenceResult<ChessGameContract> sparse =
-        processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), board);
+        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), board);
     require(sparse.actions.size() == 2, "zero-probability legal actions were retained");
 }
 
 void testTerminalAndOutcomeValidation() {
     const Board terminal("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     const std::vector<float> policy = positivePolicy();
-    require(processSearchInference<ChessGameContract>(policy.data(), validOutcome.data(), terminal)
-                .actions.empty(),
-            "terminal position returned policy actions");
+    require(
+        processInferencePosition<ChessGameContract>(policy.data(), validOutcome.data(), terminal)
+            .actions.empty(),
+        "terminal position returned policy actions");
 
     const std::array<std::array<float, 3>, 4> invalidOutcomes = {
         std::array<float, 3>{NAN, 0.5F, 0.5F},
@@ -98,8 +100,8 @@ void testTerminalAndOutcomeValidation() {
     for (const auto &outcome : invalidOutcomes) {
         bool rejected = false;
         try {
-            static_cast<void>(
-                processSearchInference<ChessGameContract>(policy.data(), outcome.data(), Board{}));
+            static_cast<void>(processInferencePosition<ChessGameContract>(policy.data(),
+                                                                          outcome.data(), Board{}));
         } catch (const std::runtime_error &) {
             rejected = true;
         }

@@ -55,10 +55,14 @@ int runInferencePipelineTests() {
         }
         require(pipeline.isCompleted(first.slotIndex),
                 "pipeline did not publish nonblocking completion readiness");
-        const InferenceOutput completed = pipeline.waitCompleted(first.slotIndex);
-        require(completed.policies.size(0) == 2, "pipeline returned wrong policy batch size");
-        require(completed.outcomes.size(0) == 2, "pipeline returned wrong outcome batch size");
-        pipeline.release(first.slotIndex);
+        const std::vector<Board> firstPositions(2);
+        const std::vector<SearchInferenceResult<ChessGameContract>> completed =
+            pipeline.consume<ChessGameContract>(
+                first.slotIndex, firstPositions.size(),
+                [&firstPositions](const std::size_t row) -> const Board & {
+                    return firstPositions[row];
+                });
+        require(completed.size() == 2, "pipeline returned wrong processed batch size");
 
         const InferencePipeline::WritableBatch second = pipeline.acquireWritableBatch();
         require(second.slotIndex != first.slotIndex, "pipeline did not advance through its slots");
@@ -69,8 +73,7 @@ int runInferencePipelineTests() {
         pipeline.submit(second.slotIndex, 4);
         require(!pipeline.isCompleted(first.slotIndex),
                 "pipeline reported a released slot as completed");
-        static_cast<void>(pipeline.waitCompleted(second.slotIndex));
-        pipeline.release(second.slotIndex);
+        pipeline.consumeWithoutResult(second.slotIndex);
     } catch (...) {
         std::filesystem::remove(modelPath);
         throw;

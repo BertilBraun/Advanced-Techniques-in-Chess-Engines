@@ -1,6 +1,8 @@
 #include "search/InferencePipeline.hpp"
 
 #include "search/InferenceModel.hpp"
+#include "util/Timing.hpp"
+#include "util/py.hpp"
 
 namespace {
 torch::Device resolveDevice(const InferenceDevice requestedDevice, const int deviceId) {
@@ -145,12 +147,12 @@ InferencePipeline::InferencePipeline(const std::string &modelPath, const Inferen
     if (slotCount < 2) {
         throw std::invalid_argument("Inference pipeline requires at least two slots");
     }
-    m_slots.reserve(slotCount);
-    for (size_t index = 0; index < slotCount; ++index) {
+    m_slots.resize(slotCount);
+    for (const auto index : range(slotCount)) {
         auto slot = std::make_unique<Slot>();
         slot->input = m_runner.createInputBuffer();
         slot->output = m_runner.createOutputBuffer();
-        m_slots.push_back(std::move(slot));
+        m_slots[index] = std::move(slot);
     }
     m_inferenceThread = std::thread(&InferencePipeline::inferenceLoop, this);
 }
@@ -221,7 +223,8 @@ bool InferencePipeline::isCompleted(const size_t slotIndex) const {
     return state == SlotState::Complete || state == SlotState::Failed;
 }
 
-InferenceOutput InferencePipeline::waitCompleted(const size_t slotIndex) {
+InferenceOutput InferencePipeline::waitCompletedOutput(const size_t slotIndex) {
+    ScopedNanosecondTimer waitTimer(m_consumerWaitNanoseconds);
     if (slotIndex != m_consumerCursor) {
         throw std::invalid_argument("Inference completions must be consumed in order");
     }
@@ -246,6 +249,11 @@ InferenceOutput InferencePipeline::waitCompleted(const size_t slotIndex) {
         .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
         .outcomes = slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
     };
+}
+
+void InferencePipeline::consumeWithoutResult(const size_t slotIndex) {
+    static_cast<void>(waitCompletedOutput(slotIndex));
+    release(slotIndex);
 }
 
 void InferencePipeline::release(const size_t slotIndex) {
@@ -288,13 +296,10 @@ void InferencePipeline::inferenceLoop() {
         }
         slot.state.store(SlotState::Running, std::memory_order_release);
         try {
-            const auto startedAt = std::chrono::steady_clock::now();
+            Stopwatch inferenceTimer;
             m_runner.forwardInto(slot.input, slot.batchSize, slot.output);
-            m_inferenceNanoseconds.fetch_add(
-                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                               std::chrono::steady_clock::now() - startedAt)
-                                               .count()),
-                std::memory_order_relaxed);
+            m_inferenceNanoseconds.fetch_add(inferenceTimer.elapsedNanoseconds(),
+                                             std::memory_order_relaxed);
             slot.state.store(SlotState::Complete, std::memory_order_release);
         } catch (...) {
             slot.exception = std::current_exception();

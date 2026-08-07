@@ -1,4 +1,5 @@
 #include "games/chess/ChessAction.hpp"
+#include "util/py.hpp"
 
 #include "games/chess/ChessBoard.hpp"
 
@@ -53,10 +54,10 @@ using ReverseMoveMapping =
                                                 const Stockfish::PieceType promotionType) {
         mappings[fromSquare][toSquare][static_cast<int>(promotionType)] = actionId++;
     };
-    for (int fromSquare = 0; fromSquare < boardSquareCount; ++fromSquare) {
+    for (const int fromSquare : range(boardSquareCount)) {
         const auto [row, column] = squareCoordinates(fromSquare);
         for (const auto &[rowStep, columnStep] : directions) {
-            for (int distance = 1; distance < boardLength; ++distance) {
+            for (const int distance : range(1, boardLength)) {
                 const int toRow = row + rowStep * distance;
                 const int toColumn = column + columnStep * distance;
                 if (0 <= toRow && toRow < boardLength && 0 <= toColumn && toColumn < boardLength) {
@@ -88,9 +89,9 @@ using ReverseMoveMapping =
 
 [[nodiscard]] ReverseMoveMapping calculateReverseMoveMappings(const MoveMapping &mappings) {
     ReverseMoveMapping reverseMappings{};
-    for (int fromSquare = 0; fromSquare < boardSquareCount; ++fromSquare) {
-        for (int toSquare = 0; toSquare < boardSquareCount; ++toSquare) {
-            for (int promotionType = 0; promotionType < promotionTypeCount; ++promotionType) {
+    for (const int fromSquare : range(boardSquareCount)) {
+        for (const int toSquare : range(boardSquareCount)) {
+            for (const int promotionType : range(promotionTypeCount)) {
                 const int actionId = mappings[fromSquare][toSquare][promotionType];
                 if (actionId >= 0) {
                     reverseMappings[actionId] = {static_cast<Stockfish::Square>(fromSquare),

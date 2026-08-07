@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+// Owns search lifecycle, retained trees, model generations, and the optimized executor.
+
 template <typename Game> class BatchedGameSearch {
 public:
     using Root = GameSearchRoot<Game>;

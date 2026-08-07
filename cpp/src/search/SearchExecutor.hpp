@@ -1,12 +1,12 @@
 #pragma once
 
 #include "search/InferencePipeline.hpp"
-#include "search/SearchInference.hpp"
 #include "search/SearchTree.hpp"
 #include "search/SearchTypes.hpp"
+#include "util/Timing.hpp"
+#include "util/py.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -19,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+// Runs the optimized multi-root MCTS loop, overlapping tree work with inference batches.
+
 template <typename Game> class BatchedSearchExecutor {
 public:
     using Root = GameSearchRoot<Game>;
@@ -28,15 +30,14 @@ public:
                           const int deviceId, const BatchedInferenceParameters inferenceParameters,
                           const BatchedSearchParameters searchParameters)
         : m_inferenceParameters(inferenceParameters), m_searchParameters(searchParameters),
-          m_dimensions(Game::inferenceDimensions()), m_pending(inferenceParameters.workers),
-          m_randomEngine(std::random_device{}()),
+          m_pending(inferenceParameters.workers), m_randomEngine(std::random_device{}()),
           m_batchHistogram(inferenceParameters.batch_size + 1, 0) {
-        m_workers.reserve(inferenceParameters.workers);
-        for (std::size_t worker = 0; worker < inferenceParameters.workers; ++worker) {
-            m_workers.push_back(std::make_unique<InferencePipeline>(
+        m_workers.resize(inferenceParameters.workers);
+        for (const auto workerIndex : range(inferenceParameters.workers)) {
+            m_workers[workerIndex] = std::make_unique<InferencePipeline>(
                 modelPath, device, deviceId, inferenceParameters.batch_size,
                 std::max<std::size_t>(2, inferenceParameters.outstanding_batches_per_worker), true,
-                m_dimensions));
+                Game::inferenceDimensions());
         }
     }
 
@@ -56,7 +57,7 @@ public:
 
     [[nodiscard]] GameSearchBatchResult
     searchDetailed(const std::vector<GameSearchRequest<Game>> &requests) {
-        const auto searchStartedAt = std::chrono::steady_clock::now();
+        ScopedNanosecondTimer searchTimer(m_timing.search_wall);
         const bool hasInvalidRequest =
             std::ranges::any_of(requests, [](const GameSearchRequest<Game> &request) {
                 return request.visit_limit == 0;
@@ -131,10 +132,6 @@ public:
                             [](const std::uint64_t count, const RootTask &task) {
                                 return count + task.root.visits() - task.starting_visits;
                             });
-        m_searchWallNanoseconds +=
-            static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                           std::chrono::steady_clock::now() - searchStartedAt)
-                                           .count());
         return {
             .results = std::move(results),
             .simulations_completed = completed,
@@ -154,29 +151,18 @@ public:
             const std::size_t batchSize =
                 std::min(m_inferenceParameters.batch_size, positions.size() - offset);
             const InferencePipeline::WritableBatch writable = worker.acquireWritableBatch();
-            for (std::size_t row = 0; row < batchSize; ++row) {
+            for (const auto row : range(batchSize)) {
                 Game::encodeInputInto(positions[offset + row], writable.data + row * encodedSize);
             }
             worker.submit(writable.slotIndex, batchSize);
-            bool outputReady = false;
-            try {
-                const InferenceOutput output = worker.waitCompleted(writable.slotIndex);
-                outputReady = true;
-                const float *policies = output.policies.data_ptr<float>();
-                const float *outcomes = output.outcomes.data_ptr<float>();
-                for (std::size_t row = 0; row < batchSize; ++row) {
-                    results.push_back(processSearchInference<Game>(
-                        policies + row * m_dimensions.actions,
-                        outcomes + row * m_dimensions.outcomes, positions[offset + row]));
-                }
-                worker.release(writable.slotIndex);
-                recordBatch(batchSize);
-            } catch (...) {
-                if (outputReady) {
-                    worker.release(writable.slotIndex);
-                }
-                throw;
-            }
+            std::vector<SearchInferenceResult<Game>> batch = worker.consume<Game>(
+                writable.slotIndex, batchSize,
+                [&positions, offset](const std::size_t row) -> const typename Game::Position & {
+                    return positions[offset + row];
+                });
+            results.insert(results.end(), std::make_move_iterator(batch.begin()),
+                           std::make_move_iterator(batch.end()));
+            recordBatch(batchSize);
             offset += batchSize;
         }
         return results;
@@ -192,16 +178,16 @@ public:
             m_modelCalls == 0
                 ? 0.0F
                 : static_cast<float>(m_modelPositions) / static_cast<float>(m_modelCalls);
-        statistics.treeSelectionNanoseconds = m_selectionNanoseconds;
-        statistics.boardEncodingNanoseconds = m_encodingNanoseconds;
-        statistics.resultProcessingNanoseconds = m_resultProcessingNanoseconds;
-        statistics.treeBackupNanoseconds = m_backupNanoseconds;
-        statistics.treeOwnerWaitNanoseconds = m_waitNanoseconds;
+        statistics.treeSelectionNanoseconds = m_timing.selection;
+        statistics.boardEncodingNanoseconds = m_timing.encoding;
+        statistics.treeBackupNanoseconds = m_timing.backup;
         for (const std::unique_ptr<InferencePipeline> &worker : m_workers) {
             statistics.inferenceNanoseconds += worker->inferenceNanoseconds();
+            statistics.resultProcessingNanoseconds += worker->resultProcessingNanoseconds();
+            statistics.treeOwnerWaitNanoseconds += worker->consumerWaitNanoseconds();
         }
         const std::uint64_t availableWorkerNanoseconds =
-            m_searchWallNanoseconds * static_cast<std::uint64_t>(m_workers.size());
+            m_timing.search_wall * static_cast<std::uint64_t>(m_workers.size());
         statistics.workerUtilization =
             availableWorkerNanoseconds == 0
                 ? 0.0F
@@ -232,7 +218,7 @@ public:
         for (const std::unique_ptr<InferencePipeline> &worker : m_workers) {
             preparedModels.push_back(worker->prepareModelRefresh(modelPath));
         }
-        for (std::size_t index = 0; index < m_workers.size(); ++index) {
+        for (const auto index : range(m_workers.size())) {
             m_workers[index]->commitModelRefresh(std::move(preparedModels[index]));
         }
     }
@@ -261,9 +247,15 @@ private:
         std::vector<PendingLeaf> leaves;
     };
 
+    struct SearchTiming {
+        std::uint64_t search_wall = 0;
+        std::uint64_t selection = 0;
+        std::uint64_t encoding = 0;
+        std::uint64_t backup = 0;
+    };
+
     BatchedInferenceParameters m_inferenceParameters;
     BatchedSearchParameters m_searchParameters;
-    InferenceDimensions m_dimensions;
     std::vector<std::unique_ptr<InferencePipeline>> m_workers;
     std::vector<std::deque<PendingBatch>> m_pending;
     std::size_t m_nextWorker = 0;
@@ -273,15 +265,10 @@ private:
     std::uint64_t m_modelCalls = 0;
     std::uint64_t m_modelPositions = 0;
     std::vector<std::size_t> m_batchHistogram;
-    std::uint64_t m_searchWallNanoseconds = 0;
-    std::uint64_t m_selectionNanoseconds = 0;
-    std::uint64_t m_encodingNanoseconds = 0;
-    std::uint64_t m_resultProcessingNanoseconds = 0;
-    std::uint64_t m_backupNanoseconds = 0;
-    std::uint64_t m_waitNanoseconds = 0;
+    SearchTiming m_timing;
 
     [[nodiscard]] std::optional<std::size_t> freeWorker() const {
-        for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
+        for (const auto offset : range(m_workers.size())) {
             const std::size_t index = (m_nextWorker + offset) % m_workers.size();
             if (m_pending[index].size() < m_inferenceParameters.outstanding_batches_per_worker) {
                 return index;
@@ -291,7 +278,7 @@ private:
     }
 
     [[nodiscard]] std::optional<std::size_t> readyWorker(const std::size_t first) const {
-        for (std::size_t offset = 0; offset < m_workers.size(); ++offset) {
+        for (const auto offset : range(m_workers.size())) {
             const std::size_t index = (first + offset) % m_workers.size();
             if (!m_pending[index].empty() &&
                 m_workers[index]->isCompleted(m_pending[index].front().slot_index)) {
@@ -302,7 +289,7 @@ private:
     }
 
     [[nodiscard]] std::optional<std::size_t> schedulableTask(const std::vector<RootTask> &tasks) {
-        for (std::size_t offset = 0; offset < tasks.size(); ++offset) {
+        for (const auto offset : range(tasks.size())) {
             const std::size_t index = (m_nextTask + offset) % tasks.size();
             const RootTask &task = tasks[index];
             if (!task.root.tree().root().expanded() && task.in_flight != 0) {
@@ -333,45 +320,42 @@ private:
                 bool countsAsSearch = true;
                 bool rootInitialization = false;
                 std::optional<std::size_t> leaf;
-                const auto selectionStartedAt = std::chrono::steady_clock::now();
-                if (!tree.root().expanded()) {
-                    if (Game::isTerminal(tree.root().position)) {
-                        tree.backPropagate(
-                            tree.rootIndex(),
-                            Game::terminalValue(tree.root().position).value_or(0.0F));
-                        continue;
+                {
+                    ScopedNanosecondTimer selectionTimer(m_timing.selection);
+                    if (!tree.root().expanded()) {
+                        if (Game::isTerminal(tree.root().position)) {
+                            tree.backPropagate(
+                                tree.rootIndex(),
+                                Game::terminalValue(tree.root().position).value_or(0.0F));
+                            continue;
+                        }
+                        leaf = tree.rootIndex();
+                        rootInitialization = true;
+                        countsAsSearch = task.count_root_initialization;
+                        tree.node(*leaf).evaluating = true;
+                    } else {
+                        leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
+                                                        m_searchParameters.minimum_root_visits);
+                        if (!leaf.has_value()) {
+                            break;
+                        }
+                        if (Game::isTerminal(tree.node(*leaf).position)) {
+                            tree.backPropagate(
+                                *leaf,
+                                Game::terminalValue(tree.node(*leaf).position).value_or(0.0F));
+                            continue;
+                        }
+                        tree.reserve(*leaf);
                     }
-                    leaf = tree.rootIndex();
-                    rootInitialization = true;
-                    countsAsSearch = task.count_root_initialization;
-                    tree.node(*leaf).evaluating = true;
-                } else {
-                    leaf = tree.selectAvailableLeaf(m_searchParameters.exploration_constant,
-                                                    m_searchParameters.minimum_root_visits);
-                    if (!leaf.has_value()) {
-                        break;
-                    }
-                    if (Game::isTerminal(tree.node(*leaf).position)) {
-                        tree.backPropagate(
-                            *leaf, Game::terminalValue(tree.node(*leaf).position).value_or(0.0F));
-                        continue;
-                    }
-                    tree.reserve(*leaf);
                 }
-                m_selectionNanoseconds += static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - selectionStartedAt)
-                        .count());
                 constexpr std::size_t encodedSize = Game::inferenceDimensions().channels *
                                                     Game::inferenceDimensions().rows *
                                                     Game::inferenceDimensions().columns;
-                const auto encodingStartedAt = std::chrono::steady_clock::now();
-                Game::encodeInputInto(tree.node(*leaf).position,
-                                      writable.data + leaves.size() * encodedSize);
-                m_encodingNanoseconds += static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - encodingStartedAt)
-                        .count());
+                {
+                    ScopedNanosecondTimer encodingTimer(m_timing.encoding);
+                    Game::encodeInputInto(tree.node(*leaf).position,
+                                          writable.data + leaves.size() * encodedSize);
+                }
                 ++task.in_flight;
                 leaves.push_back({
                     .task_index = *taskIndex,
@@ -402,57 +386,41 @@ private:
         PendingBatch pending = std::move(m_pending[workerIndex].front());
         m_pending[workerIndex].pop_front();
         InferencePipeline &worker = *m_workers[workerIndex];
-        bool outputReady = false;
         std::size_t processed = 0;
         try {
-            const auto waitStartedAt = std::chrono::steady_clock::now();
-            const InferenceOutput output = worker.waitCompleted(pending.slot_index);
-            m_waitNanoseconds +=
-                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                               std::chrono::steady_clock::now() - waitStartedAt)
-                                               .count());
-            outputReady = true;
-            const float *policies = output.policies.data_ptr<float>();
-            const float *outcomes = output.outcomes.data_ptr<float>();
-            for (; processed < pending.leaves.size(); ++processed) {
+            std::vector<SearchInferenceResult<Game>> inferenceResults = worker.consume<Game>(
+                pending.slot_index, pending.leaves.size(),
+                [&tasks, &pending](const std::size_t row) -> const typename Game::Position & {
+                    const PendingLeaf &leaf = pending.leaves[row];
+                    return tasks[leaf.task_index].root.tree().node(leaf.node_index).position;
+                });
+            for (const auto leafIndex : range(pending.leaves.size())) {
+                processed = leafIndex;
                 const PendingLeaf &pendingLeaf = pending.leaves[processed];
                 RootTask &task = tasks[pendingLeaf.task_index];
                 Tree &tree = task.root.tree();
-                const auto processingStartedAt = std::chrono::steady_clock::now();
-                const SearchInferenceResult<Game> inference =
-                    processSearchInference<Game>(policies + processed * m_dimensions.actions,
-                                                 outcomes + processed * m_dimensions.outcomes,
-                                                 tree.node(pendingLeaf.node_index).position);
-                m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - processingStartedAt)
-                        .count());
-                const auto backupStartedAt = std::chrono::steady_clock::now();
-                tree.expand(pendingLeaf.node_index, inference);
-                if (pendingLeaf.root_initialization) {
-                    tree.node(pendingLeaf.node_index).evaluating = false;
-                    if (pendingLeaf.counts_as_search) {
-                        tree.backPropagate(pendingLeaf.node_index, inference.value());
+                const SearchInferenceResult<Game> &inference = inferenceResults[leafIndex];
+                {
+                    ScopedNanosecondTimer backupTimer(m_timing.backup);
+                    tree.expand(pendingLeaf.node_index, inference);
+                    if (pendingLeaf.root_initialization) {
+                        tree.node(pendingLeaf.node_index).evaluating = false;
+                        if (pendingLeaf.counts_as_search) {
+                            tree.backPropagate(pendingLeaf.node_index, inference.value());
+                        }
+                        if (task.noise_pending) {
+                            addNoise(task.root);
+                            task.noise_pending = false;
+                        }
+                    } else if (pendingLeaf.counts_as_search) {
+                        tree.completeReservation(pendingLeaf.node_index, inference.value());
                     }
-                    if (task.noise_pending) {
-                        addNoise(task.root);
-                        task.noise_pending = false;
-                    }
-                } else if (pendingLeaf.counts_as_search) {
-                    tree.completeReservation(pendingLeaf.node_index, inference.value());
                 }
-                m_backupNanoseconds += static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now() - backupStartedAt)
-                        .count());
                 --task.in_flight;
+                ++processed;
             }
-            worker.release(pending.slot_index);
             recordBatch(pending.leaves.size());
         } catch (...) {
-            if (outputReady) {
-                worker.release(pending.slot_index);
-            }
             std::vector<PendingLeaf> remaining(pending.leaves.begin() +
                                                    static_cast<std::ptrdiff_t>(processed),
                                                pending.leaves.end());
@@ -478,13 +446,12 @@ private:
     }
 
     void cancelPending(std::vector<RootTask> &tasks) noexcept {
-        for (std::size_t workerIndex = 0; workerIndex < m_pending.size(); ++workerIndex) {
+        for (const auto workerIndex : range(m_pending.size())) {
             while (!m_pending[workerIndex].empty()) {
                 PendingBatch pending = std::move(m_pending[workerIndex].front());
                 m_pending[workerIndex].pop_front();
                 try {
-                    static_cast<void>(m_workers[workerIndex]->waitCompleted(pending.slot_index));
-                    m_workers[workerIndex]->release(pending.slot_index);
+                    m_workers[workerIndex]->consumeWithoutResult(pending.slot_index);
                 } catch (...) {
                 }
                 cancelLeaves(tasks, pending.leaves);

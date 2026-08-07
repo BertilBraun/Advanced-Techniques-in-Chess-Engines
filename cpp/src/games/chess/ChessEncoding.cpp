@@ -1,4 +1,5 @@
 #include "games/chess/ChessEncoding.hpp"
+#include "util/py.hpp"
 
 #include "util/TimeItGuard.h"
 
@@ -97,7 +98,7 @@ CompressedEncodedBoard encodeBoard(const Board &board) {
 
     assert(ch == ChessRepresentationDimensions::binary_channel_count);
 
-    for (int i = 0; i < 6; ++i) {
+    for (const int i : range(6)) {
         const Color whiteSource = flipForBlack ? BLACK : WHITE;
         const Color blackSource = flipForBlack ? WHITE : BLACK;
         const Bitboard white = position.pieces(whiteSource, pieceTypes[i]);
@@ -134,15 +135,13 @@ void writePackedPlaneEncoding(const CompressedEncodedBoard &compressed, std::int
 void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *destination) {
     assert(destination != nullptr);
 
-    for (std::size_t channelIndex = 0;
-         channelIndex <
-         static_cast<std::size_t>(ChessRepresentationDimensions::binary_channel_count);
-         ++channelIndex) {
+    for (const auto channelIndex :
+         range(static_cast<std::size_t>(ChessRepresentationDimensions::binary_channel_count))) {
         const std::uint64_t bits = compressed.bits[channelIndex].word(0);
         std::int8_t *planeDestination =
             destination + static_cast<std::ptrdiff_t>(channelIndex) * 64;
 
-        for (int byte = 0; byte < 8; ++byte) {
+        for (const int byte : range(8)) {
             const std::uint8_t value = (bits >> (byte * 8)) & 0xFFu;
             planeDestination[byte * 8 + 0] = value & 1;
             planeDestination[byte * 8 + 1] = (value >> 1) & 1;
@@ -155,10 +154,8 @@ void writeTensorEncoding(const CompressedEncodedBoard &compressed, std::int8_t *
         }
     }
 
-    for (std::size_t scalarIndex = 0;
-         scalarIndex <
-         static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count);
-         ++scalarIndex) {
+    for (const auto scalarIndex :
+         range(static_cast<std::size_t>(ChessRepresentationDimensions::scalar_channel_count))) {
         std::int8_t *scalarDestination =
             destination + static_cast<std::ptrdiff_t>(
                               ChessRepresentationDimensions::binary_channel_count + scalarIndex) *

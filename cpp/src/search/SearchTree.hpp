@@ -1,6 +1,7 @@
 #pragma once
 
-#include "search/SearchInference.hpp"
+#include "search/InferenceTypes.hpp"
+#include "util/py.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -13,6 +14,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+// Owns the reusable game-generic MCTS arena, selection, expansion, backup, and rerooting.
 
 template <typename Action> struct GameSearchEdge {
     Action action;
@@ -59,8 +62,8 @@ public:
         }
         m_nodes.reserve(initialCapacity);
         m_nodes.resize(initialCapacity);
-        for (std::size_t slot = initialCapacity; slot > 0; --slot) {
-            m_freeSlots.push_back(slot - 1);
+        for (const auto offset : range(initialCapacity)) {
+            m_freeSlots.push_back(initialCapacity - offset - 1);
         }
         m_rootIndex = allocateNode(std::move(rootPosition), std::nullopt, std::nullopt);
     }
@@ -94,7 +97,7 @@ public:
     selectAvailableLeaf(const float explorationConstant,
                         const std::uint32_t minimumRootVisits = 0) {
         const std::size_t edgeCount = root().children.size();
-        for (std::size_t edgeIndex = 0; edgeIndex < edgeCount; ++edgeIndex) {
+        for (const auto edgeIndex : range(edgeCount)) {
             if (root().children[edgeIndex].visits >= minimumRootVisits) {
                 continue;
             }
@@ -176,7 +179,7 @@ public:
             sample = distribution(randomEngine);
             sum += sample;
         }
-        for (std::size_t index = 0; index < rootNode.children.size(); ++index) {
+        for (const auto index : range(rootNode.children.size())) {
             rootNode.children[index].prior =
                 std::lerp(rootNode.children[index].prior, noise[index] / sum, epsilon);
         }
@@ -184,7 +187,7 @@ public:
 
     [[nodiscard]] std::size_t actionIdToEdgeIndex(const int actionId) const {
         const Node &selected = root();
-        for (std::size_t index = 0; index < selected.children.size(); ++index) {
+        for (const auto index : range(selected.children.size())) {
             if (Game::actionId(selected.children[index].action, selected.position) == actionId) {
                 return index;
             }
@@ -204,7 +207,7 @@ public:
         const std::size_t oldRootIndex = m_rootIndex;
         const std::size_t retainedIndex = materializeChild(oldRootIndex, edgeIndex);
         const std::size_t edgeCount = node(oldRootIndex).children.size();
-        for (std::size_t index = 0; index < edgeCount; ++index) {
+        for (const auto index : range(edgeCount)) {
             Edge &discarded = node(oldRootIndex).children[index];
             if (index != edgeIndex && discarded.child_index.has_value()) {
                 reclaimSubtree(*discarded.child_index);
@@ -222,9 +225,10 @@ public:
 
     void reset() {
         m_freeSlots.clear();
-        for (std::size_t slot = m_nodes.size(); slot > 0; --slot) {
-            m_nodes[slot - 1].reset();
-            m_freeSlots.push_back(slot - 1);
+        for (const auto offset : range(m_nodes.size())) {
+            const std::size_t slot = m_nodes.size() - offset - 1;
+            m_nodes[slot].reset();
+            m_freeSlots.push_back(slot);
         }
         m_liveNodeCount = 0;
         m_rootIndex = allocateNode(m_initialPosition, std::nullopt, std::nullopt);
@@ -305,7 +309,7 @@ public:
             throw std::logic_error("Cannot choose an action from an unexpanded root");
         }
         std::size_t preferred = 0;
-        for (std::size_t index = 1; index < rootNode.children.size(); ++index) {
+        for (const auto index : range(std::size_t{1}, rootNode.children.size())) {
             const Edge &candidate = rootNode.children[index];
             const Edge &current = rootNode.children[preferred];
             if (candidate.visits > current.visits ||
@@ -335,7 +339,7 @@ private:
         const float parentScale = std::sqrt(static_cast<float>(std::max(1U, parent.visits)));
         float bestScore = -std::numeric_limits<float>::infinity();
         std::size_t bestIndex = 0;
-        for (std::size_t index = 0; index < parent.children.size(); ++index) {
+        for (const auto index : range(parent.children.size())) {
             const Edge &edge = parent.children[index];
             const float meanValue =
                 edge.visits == 0 ? 0.0F : (edge.value_sum + edge.virtual_loss) / edge.visits;
@@ -358,12 +362,13 @@ private:
         }
         const std::size_t edgeCount = node(nodeIndex).children.size();
         std::vector<bool> attempted(edgeCount, false);
-        for (std::size_t attempt = 0; attempt < edgeCount; ++attempt) {
+        for (const auto attempt : range(edgeCount)) {
+            static_cast<void>(attempt);
             float bestScore = -std::numeric_limits<float>::infinity();
             std::size_t bestIndex = 0;
             const float parentScale =
                 std::sqrt(static_cast<float>(std::max(1U, node(nodeIndex).visits)));
-            for (std::size_t index = 0; index < edgeCount; ++index) {
+            for (const auto index : range(edgeCount)) {
                 if (attempted[index]) {
                     continue;
                 }
@@ -444,8 +449,8 @@ private:
             const std::size_t newCapacity =
                 std::min(m_maximumCapacity, std::max(oldCapacity + 1, oldCapacity * 2));
             m_nodes.resize(newCapacity);
-            for (std::size_t slot = newCapacity; slot > oldCapacity; --slot) {
-                m_freeSlots.push_back(slot - 1);
+            for (const auto offset : range(newCapacity - oldCapacity)) {
+                m_freeSlots.push_back(newCapacity - offset - 1);
             }
         }
         if (m_freeSlots.empty()) {

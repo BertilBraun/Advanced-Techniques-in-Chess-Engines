@@ -2,6 +2,7 @@
 
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchEngine.hpp"
+#include "util/Timing.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -14,6 +15,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+// Provides retained-root single-game analysis on the shared batched search engine.
 
 enum class AnalysisMode { Policy, Mcts };
 
@@ -75,7 +78,7 @@ public:
 
     [[nodiscard]] GameAnalysisResult analyzePolicy(const Root &root) {
         rejectTerminal(root);
-        const auto startedAt = std::chrono::steady_clock::now();
+        Stopwatch analysisTimer;
         const SearchInferenceResult<Game> inference = m_search.evaluate({root.position()}).front();
         std::vector<AnalysisCandidate> candidates = policyCandidates(inference, root.position());
         if (candidates.empty()) {
@@ -88,7 +91,7 @@ public:
             .candidates = std::move(candidates),
             .searches = 0,
             .maximum_depth = 0,
-            .elapsed_milliseconds = elapsedMilliseconds(startedAt),
+            .elapsed_milliseconds = analysisTimer.elapsedMilliseconds(),
             .principal_variation = {},
         };
     }
@@ -119,13 +122,6 @@ private:
         if (root.isTerminal()) {
             throw std::invalid_argument("Cannot analyze a terminal position");
         }
-    }
-
-    [[nodiscard]] static std::int64_t
-    elapsedMilliseconds(const std::chrono::steady_clock::time_point startedAt) {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-                   std::chrono::steady_clock::now() - startedAt)
-            .count();
     }
 
     [[nodiscard]] static std::vector<AnalysisCandidate>
@@ -219,7 +215,7 @@ private:
     analyzeSearch(Root &root, const std::optional<std::uint32_t> searchLimit,
                   const std::optional<std::chrono::steady_clock::time_point> deadline) {
         rejectTerminal(root);
-        const auto startedAt = std::chrono::steady_clock::now();
+        Stopwatch analysisTimer;
         std::uint64_t completedSearches = 0;
         do {
             const std::uint32_t remaining =
@@ -252,7 +248,7 @@ private:
             .candidates = std::move(candidates),
             .searches = completedSearches,
             .maximum_depth = tree.maximumDepth(),
-            .elapsed_milliseconds = elapsedMilliseconds(startedAt),
+            .elapsed_milliseconds = analysisTimer.elapsedMilliseconds(),
             .principal_variation = principalVariation(tree),
         };
     }

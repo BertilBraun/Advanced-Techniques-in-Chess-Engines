@@ -1,4 +1,5 @@
 #include "games/chess/ChessBoard.hpp"
+#include "util/py.hpp"
 
 #include "games/chess/ChessAction.hpp"
 #include "util/TimeItGuard.h"
@@ -207,10 +208,10 @@ std::string Board::repr() const {
     // File header
     oss << "  a b c d e f g h\n";
     // For i = 0..7, treat i as rank index 0=rank1, 7=rank8
-    for (int i = 0; i < BOARD_LENGTH; ++i) {
+    for (const int i : range(BOARD_LENGTH)) {
         int rank = i + 1;
         oss << rank << " ";
-        for (int file = 0; file < BOARD_LENGTH; ++file) {
+        for (const int file : range(BOARD_LENGTH)) {
             const Piece pc = m_pos.piece_on(boardSquare(file, i));
             if (pc != NO_PIECE) {
                 oss << pieceSymbol(type_of(pc), color_of(pc));

@@ -3,6 +3,7 @@
 #include "search/InferenceConfiguration.hpp"
 #include "search/SearchEngine.hpp"
 #include "util/TimeItGuard.h"
+#include "util/py.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
+// Applies training search schedules and root noise across games through the shared engine.
 
 struct SelfPlaySearchParameters {
     std::uint32_t parallel_searches;
@@ -128,7 +131,7 @@ public:
         GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
         std::vector<Result> results;
         results.reserve(requests.size());
-        for (std::size_t index = 0; index < requests.size(); ++index) {
+        for (const auto index : range(requests.size())) {
             results.push_back({
                 .root_value = searched.results[index].root_value,
                 .visits = std::move(searched.results[index].visits),
