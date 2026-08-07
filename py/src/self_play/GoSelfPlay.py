@@ -6,6 +6,8 @@ from pathlib import Path
 
 import numpy as np
 from AlphaZeroCpp import (
+    BatchedInferenceParameters,
+    BatchedSearchParameters,
     GameSearchResult,
     GoBatchedSearch7,
     GoBatchedSearch9,
@@ -87,10 +89,19 @@ class GoSelfPlay:
             str(model_path),
             device,
             device_id,
-            inference.inference_batch_size,
-            dimensions,
-            search.c_param,
-            search.num_searches_per_turn + search.num_parallel_searches + 2,
+            BatchedInferenceParameters(
+                inference.inference_workers,
+                inference.inference_batch_size,
+                inference.outstanding_batches_per_worker,
+            ),
+            BatchedSearchParameters(
+                search.num_parallel_searches,
+                search.c_param,
+                search.min_visit_count,
+                search.dirichlet_alpha,
+                search.dirichlet_epsilon,
+                search.num_searches_per_turn + search.num_parallel_searches + 2,
+            ),
             model_generation,
         )
         self.random = np.random.default_rng(configuration.training.random_seed + publisher.worker_id)

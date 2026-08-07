@@ -89,11 +89,11 @@ void bind_go_search(py::module_ &module, const char *rootName, const char *searc
         .def("play", &Root::play, py::arg("action_id"));
 
     py::class_<Search>(module, searchName)
-        .def(py::init<const std::string &, InferenceDevice, int, std::size_t, InferenceDimensions,
-                      float, std::size_t, std::uint64_t>(),
+        .def(py::init<const std::string &, InferenceDevice, int, BatchedInferenceParameters,
+                      BatchedSearchParameters, std::uint64_t>(),
              py::arg("model_path"), py::arg("device"), py::arg("device_id"),
-             py::arg("maximum_batch_size"), py::arg("dimensions"), py::arg("exploration_constant"),
-             py::arg("tree_capacity"), py::arg("model_generation"))
+             py::arg("inference_parameters"), py::arg("search_parameters"),
+             py::arg("model_generation"))
         .def_static("inference_dimensions", []() { return dimensions; })
         .def(
             "new_root",
@@ -231,6 +231,14 @@ void bind_go_game(py::module_ &module) {
     py::class_<GameSearchResult>(module, "GameSearchResult")
         .def_readonly("root_value", &GameSearchResult::root_value)
         .def_readonly("visits", &GameSearchResult::visits);
+    py::class_<BatchedSearchParameters>(module, "BatchedSearchParameters")
+        .def(py::init<std::uint32_t, float, std::uint32_t, float, float, std::size_t>(),
+             py::arg("parallel_searches"), py::arg("exploration_constant"),
+             py::arg("minimum_root_visits"), py::arg("dirichlet_alpha"),
+             py::arg("dirichlet_epsilon"), py::arg("tree_capacity"));
+    py::class_<BatchedInferenceParameters>(module, "BatchedInferenceParameters")
+        .def(py::init<std::size_t, std::size_t, std::size_t>(), py::arg("workers"),
+             py::arg("batch_size"), py::arg("outstanding_batches_per_worker"));
     py::enum_<GoPlayer>(module, "GoPlayer")
         .value("BLACK", GoPlayer::black)
         .value("WHITE", GoPlayer::white);

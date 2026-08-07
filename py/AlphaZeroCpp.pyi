@@ -7,6 +7,8 @@ from __future__ import annotations
 __all__ = [
     'AnalysisMode',
     'AnalysisResult',
+    'BatchedInferenceParameters',
+    'BatchedSearchParameters',
     'CandidateAnalysis',
     'DirectSelfPlayInferenceParams',
     'FunctionTimeInfo',
@@ -69,6 +71,25 @@ class GameSearchResult:
     def root_value(self) -> float: ...
     @property
     def visits(self) -> list[GameSearchVisit]: ...
+
+class BatchedSearchParameters:
+    def __init__(
+        self,
+        parallel_searches: int,
+        exploration_constant: float,
+        minimum_root_visits: int,
+        dirichlet_alpha: float,
+        dirichlet_epsilon: float,
+        tree_capacity: int,
+    ) -> None: ...
+
+class BatchedInferenceParameters:
+    def __init__(
+        self,
+        workers: int,
+        batch_size: int,
+        outstanding_batches_per_worker: int,
+    ) -> None: ...
 
 class GoPlayer:
     BLACK: GoPlayer
@@ -182,10 +203,8 @@ class GoBatchedSearch7:
         model_path: str,
         device: InferenceDevice,
         device_id: int,
-        maximum_batch_size: int,
-        dimensions: InferenceDimensions,
-        exploration_constant: float,
-        tree_capacity: int,
+        inference_parameters: BatchedInferenceParameters,
+        search_parameters: BatchedSearchParameters,
         model_generation: int,
     ) -> None: ...
     @staticmethod
@@ -202,10 +221,8 @@ class GoBatchedSearch9:
         model_path: str,
         device: InferenceDevice,
         device_id: int,
-        maximum_batch_size: int,
-        dimensions: InferenceDimensions,
-        exploration_constant: float,
-        tree_capacity: int,
+        inference_parameters: BatchedInferenceParameters,
+        search_parameters: BatchedSearchParameters,
         model_generation: int,
     ) -> None: ...
     @staticmethod
