@@ -371,13 +371,13 @@ process group and records the resulting status.
 | R5 | Chess game-contract and configuration extraction | accepted |
 | R6 | Shared bitboard and packed-plane representation | accepted |
 | R7 | Native Go game implementation | accepted |
-| R8 | Go pipeline integration | awaiting_user_review |
+| R8 | Go pipeline integration | in_progress |
 | R9 | Go evaluation and elapsed checkpoint scheduling | pending |
 | R10 | Resource-aware experiment queue | pending |
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is awaiting user review after native dead-code and readability cleanup.
+Current authorization: R8 native game-structure cleanup is in progress after user review.
 R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
@@ -827,6 +827,7 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
+| 2026-08-07 | R8 | Review authorization | The native chess and Go implementations expose the same search semantics through unverified static contracts, but their rules, state, action, policy mapping, encoding, and binding ownership remain inconsistently structured. Maximum-move Go games are expected to be common during early training, so discarding their positions would also discard a material part of the initial learning signal. | Continue R8 with a C++-only structural cleanup: define compile-time game concepts; give chess and Go the same implementation, encoding, and binding topology; expose each game to search through one canonical composition type; remove superseded contracts and adapters rather than retaining compatibility layers; leave Python chess on python-chess and retain only required native Go and coarse search/root bindings. Score a maximum-move Go position with the configured area scoring and record the ending as a safety adjudication with a winner or draw. |
 | 2026-08-07 | R8 | Native dead-code cleanup | Shared search still exposed unused convenience searches, test-only tree diagnostics, duplicate model-generation state, broad game-contract helpers, a stateless chess action codec, and a separate Go symmetry-type header; executor selection/completion was deeply nested and inference consumption required an accessor callback. | Remove the dead APIs and duplicate state, keep only operations consumed by generic search in each game contract, put chess encoding/decoding/UCI on `ChessAction`, construct `GoAction` from points, colocate `GoSymmetry` with its operations, add `InferenceDimensions::encodedSize`, pass typed position ranges through inference, name the live leaf reservation `inference_pending`, extract executor stages, and make `InferenceStatistics` the executor's cumulative telemetry representation. Retain the bounded C++20 atomic wait/notify slot state machine because it parks rather than spins and safely reuses preallocated inference buffers. |
 | 2026-08-07 | R8 | Readability cleanup | Indexed native loops inconsistently used verbose loop syntax, raw inference tensors escaped into the search executor for legal-policy processing, component ownership was undocumented, and repeated clock arithmetic obscured the optimized search flow. | Use the zero-overhead `range` utility for numeric iteration, make `InferencePipeline` return validated game-legal inference results and own wait/processing telemetry, delete `SearchInference`, document each search/inference component at its header, and centralize monotonic timing in `Timing.hpp`. |
 | 2026-08-07 | R8 | Follow-up cleanup | Native dimension arithmetic still used signed integers, Go split its small value types across separate headers, Go position members used suffix underscores, positional aggregate initialization obscured field meaning, and unused concurrency utilities remained. | Use `std::size_t` for inference dimensions with explicit conversion only at the LibTorch tensor boundary; consolidate `GoBoard` and `GoAction` in `GoTypes`, add typed non-pass `GoAction::point()`, use `m_` position members and C++20 designated initializers for semantic aggregates, and delete the unreferenced native `ThreadPool` and self-tested-only `BlockingQueue`. |
