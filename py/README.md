@@ -5,6 +5,14 @@ It includes self-play data generation, presentation-credit neural network traini
 
 While computationally intensive search and inference are handled in C++ (`cpp/`), Python provides one typed orchestration pipeline for chess and Go completed games, replay, self-play supervision, and optimization.
 
+The source tree follows the same ownership boundary as the native side:
+
+- `src/games/chess` owns chess state/encoding, configuration, completed games, replay, self-play policy, evaluation, interactive analysis, and UCI.
+- `src/games/go` owns Go state/encoding, configuration, completed games, replay, self-play policy, model, and loss behavior.
+- `src/self_play` owns the game-independent active-game pool, completed-game publication boundary, value targets, and worker lifecycle.
+- `src/training` owns shared replay storage, batch sampling, optimization, publication, and process orchestration.
+- `src/experiment` owns only cross-game experiment loading, run approval, and telemetry.
+
 ## Components
 
 - **Self-Play Engine**  
