@@ -1,8 +1,8 @@
 #pragma once
 
-#include "games/go/GoAction.hpp"
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoSymmetryTypes.hpp"
+#include "games/go/GoTypes.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -17,21 +17,21 @@ transform_go_point(const typename BitBoard<BoardSize>::Point point, const GoSymm
     case GoSymmetry::identity:
         return point;
     case GoSymmetry::rotate_90:
-        return Point{static_cast<std::uint8_t>(maximum - point.y), point.x};
+        return Point{.x = static_cast<std::uint8_t>(maximum - point.y), .y = point.x};
     case GoSymmetry::rotate_180:
-        return Point{static_cast<std::uint8_t>(maximum - point.x),
-                     static_cast<std::uint8_t>(maximum - point.y)};
+        return Point{.x = static_cast<std::uint8_t>(maximum - point.x),
+                     .y = static_cast<std::uint8_t>(maximum - point.y)};
     case GoSymmetry::rotate_270:
-        return Point{point.y, static_cast<std::uint8_t>(maximum - point.x)};
+        return Point{.x = point.y, .y = static_cast<std::uint8_t>(maximum - point.x)};
     case GoSymmetry::reflect:
-        return Point{static_cast<std::uint8_t>(maximum - point.x), point.y};
+        return Point{.x = static_cast<std::uint8_t>(maximum - point.x), .y = point.y};
     case GoSymmetry::reflect_rotate_90:
-        return Point{static_cast<std::uint8_t>(maximum - point.y),
-                     static_cast<std::uint8_t>(maximum - point.x)};
+        return Point{.x = static_cast<std::uint8_t>(maximum - point.y),
+                     .y = static_cast<std::uint8_t>(maximum - point.x)};
     case GoSymmetry::reflect_rotate_180:
-        return Point{point.x, static_cast<std::uint8_t>(maximum - point.y)};
+        return Point{.x = point.x, .y = static_cast<std::uint8_t>(maximum - point.y)};
     case GoSymmetry::reflect_rotate_270:
-        return Point{point.y, point.x};
+        return Point{.x = point.y, .y = point.x};
     }
     throw std::invalid_argument("Unknown Go symmetry");
 }
@@ -64,9 +64,8 @@ template <std::size_t BoardSize>
     if (action.is_pass()) {
         return action;
     }
-    return GoAction<BoardSize>(
-        static_cast<int>(BitBoard<BoardSize>::index(transform_go_point<BoardSize>(
-            BitBoard<BoardSize>::point(static_cast<std::size_t>(action.id)), symmetry))));
+    return GoAction<BoardSize>(static_cast<int>(
+        BitBoard<BoardSize>::index(transform_go_point<BoardSize>(action.point(), symmetry))));
 }
 
 template <std::size_t BoardSize, std::size_t HistoryLength>

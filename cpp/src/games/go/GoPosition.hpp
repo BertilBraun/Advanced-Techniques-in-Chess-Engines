@@ -1,7 +1,5 @@
 #pragma once
 
-#include "games/go/GoAction.hpp"
-#include "games/go/GoBoard.hpp"
 #include "games/go/GoTypes.hpp"
 
 #include <array>
@@ -20,8 +18,8 @@ public:
     using Point = typename BitBoard<BoardSize>::Point;
 
     explicit GoPosition(const GoRules rules)
-        : history_{}, player_(GoPlayer::black), ko_point_(std::nullopt), consecutive_passes_(0),
-          move_number_(0), rules_(rules) {
+        : m_history{}, m_player(GoPlayer::black), m_koPoint(std::nullopt), m_consecutivePasses(0),
+          m_moveNumber(0), m_rules(rules) {
         validate_rules(rules);
     }
 
@@ -50,14 +48,14 @@ public:
     }
 
     [[nodiscard]] const std::array<Board, HistoryLength> &history() const noexcept {
-        return history_;
+        return m_history;
     }
-    [[nodiscard]] const Board &board() const noexcept { return history_[0]; }
-    [[nodiscard]] GoPlayer player() const noexcept { return player_; }
-    [[nodiscard]] std::optional<Point> ko_point() const noexcept { return ko_point_; }
-    [[nodiscard]] int consecutive_passes() const noexcept { return consecutive_passes_; }
-    [[nodiscard]] int move_number() const noexcept { return move_number_; }
-    [[nodiscard]] GoRules rules() const noexcept { return rules_; }
+    [[nodiscard]] const Board &board() const noexcept { return m_history[0]; }
+    [[nodiscard]] GoPlayer player() const noexcept { return m_player; }
+    [[nodiscard]] std::optional<Point> ko_point() const noexcept { return m_koPoint; }
+    [[nodiscard]] int consecutive_passes() const noexcept { return m_consecutivePasses; }
+    [[nodiscard]] int move_number() const noexcept { return m_moveNumber; }
+    [[nodiscard]] GoRules rules() const noexcept { return m_rules; }
 
     [[nodiscard]] bool is_legal(const GoAction<BoardSize> action) const {
         if (is_terminal()) {
@@ -66,8 +64,8 @@ public:
         if (action.is_pass()) {
             return true;
         }
-        const Point point = BitBoard<BoardSize>::point(static_cast<std::size_t>(action.id));
-        if (ko_point_ == point || occupied().test(point)) {
+        const Point point = action.point();
+        if (m_koPoint == point || occupied().test(point)) {
             return false;
         }
         return placement(point).has_value();
@@ -95,29 +93,29 @@ public:
         }
         std::array<Board, HistoryLength> next_history{};
         for (std::size_t offset = HistoryLength - 1; offset > 0; --offset) {
-            next_history[offset] = history_[offset - 1];
+            next_history[offset] = m_history[offset - 1];
         }
         std::optional<Point> next_ko;
-        int next_passes = consecutive_passes_;
+        int next_passes = m_consecutivePasses;
         if (action.is_pass()) {
-            next_history[0] = history_[0];
+            next_history[0] = m_history[0];
             ++next_passes;
         } else {
-            const Point point = BitBoard<BoardSize>::point(static_cast<std::size_t>(action.id));
+            const Point point = action.point();
             const Placement placed = *placement(point);
             next_history[0] = placed.board;
             next_ko = placed.ko_point;
             next_passes = 0;
         }
-        return GoPosition(next_history, opponent(player_), next_ko, next_passes, move_number_ + 1,
-                          rules_);
+        return GoPosition(next_history, opponent(m_player), next_ko, next_passes, m_moveNumber + 1,
+                          m_rules);
     }
 
     [[nodiscard]] GoTerminationReason termination_reason() const noexcept {
-        if (consecutive_passes_ == 2) {
+        if (m_consecutivePasses == 2) {
             return GoTerminationReason::two_passes;
         }
-        if (move_number_ >= rules_.maximum_moves) {
+        if (m_moveNumber >= m_rules.maximum_moves) {
             return GoTerminationReason::maximum_moves;
         }
         return GoTerminationReason::ongoing;
@@ -160,17 +158,28 @@ public:
                 white_area += static_cast<int>(region.count());
             }
         }
-        return GoAreaScore{black_area * 2, white_area * 2 + rules_.komi_half_points};
+        return GoAreaScore{
+            .black_half_points = black_area * 2,
+            .white_half_points = white_area * 2 + m_rules.komi_half_points,
+        };
     }
 
     [[nodiscard]] GoTerminalResult terminal_result() const {
         const GoTerminationReason reason = termination_reason();
         if (reason == GoTerminationReason::ongoing ||
             reason == GoTerminationReason::maximum_moves) {
-            return GoTerminalResult{reason, std::nullopt, std::nullopt};
+            return GoTerminalResult{
+                .reason = reason,
+                .score = std::nullopt,
+                .winner = std::nullopt,
+            };
         }
         const GoAreaScore score = area_score();
-        return GoTerminalResult{reason, score, score.winner()};
+        return GoTerminalResult{
+            .reason = reason,
+            .score = score,
+            .winner = score.winner(),
+        };
     }
 
     [[nodiscard]] std::uint64_t hash() const noexcept {
@@ -179,7 +188,7 @@ public:
             value ^= item;
             value *= 1099511628211ULL;
         };
-        for (const Board &historic_board : history_) {
+        for (const Board &historic_board : m_history) {
             for (const std::uint64_t word : historic_board.black.words()) {
                 append(word);
             }
@@ -187,12 +196,12 @@ public:
                 append(word);
             }
         }
-        append(static_cast<std::uint64_t>(player_));
-        append(ko_point_.has_value() ? BitBoard<BoardSize>::index(*ko_point_) + 1 : 0);
-        append(static_cast<std::uint64_t>(consecutive_passes_));
-        append(static_cast<std::uint64_t>(move_number_));
-        append(static_cast<std::uint64_t>(static_cast<std::int64_t>(rules_.komi_half_points)));
-        append(static_cast<std::uint64_t>(rules_.maximum_moves));
+        append(static_cast<std::uint64_t>(m_player));
+        append(m_koPoint.has_value() ? BitBoard<BoardSize>::index(*m_koPoint) + 1 : 0);
+        append(static_cast<std::uint64_t>(m_consecutivePasses));
+        append(static_cast<std::uint64_t>(m_moveNumber));
+        append(static_cast<std::uint64_t>(static_cast<std::int64_t>(m_rules.komi_half_points)));
+        append(static_cast<std::uint64_t>(m_rules.maximum_moves));
         return value;
     }
 
@@ -207,8 +216,8 @@ private:
     GoPosition(const std::array<Board, HistoryLength> &history, const GoPlayer player,
                const std::optional<Point> ko_point, const int consecutive_passes,
                const int move_number, const GoRules rules)
-        : history_(history), player_(player), ko_point_(ko_point),
-          consecutive_passes_(consecutive_passes), move_number_(move_number), rules_(rules) {}
+        : m_history(history), m_player(player), m_koPoint(ko_point),
+          m_consecutivePasses(consecutive_passes), m_moveNumber(move_number), m_rules(rules) {}
 
     static void validate_rules(const GoRules rules) {
         if (rules.maximum_moves < static_cast<int>(BoardSize * BoardSize)) {
@@ -227,16 +236,16 @@ private:
     template <typename Operation>
     static void for_each_neighbor(const Point point, Operation operation) {
         if (point.x > 0) {
-            operation(Point{static_cast<std::uint8_t>(point.x - 1), point.y});
+            operation(Point{.x = static_cast<std::uint8_t>(point.x - 1), .y = point.y});
         }
         if (point.x + 1 < BoardSize) {
-            operation(Point{static_cast<std::uint8_t>(point.x + 1), point.y});
+            operation(Point{.x = static_cast<std::uint8_t>(point.x + 1), .y = point.y});
         }
         if (point.y > 0) {
-            operation(Point{point.x, static_cast<std::uint8_t>(point.y - 1)});
+            operation(Point{.x = point.x, .y = static_cast<std::uint8_t>(point.y - 1)});
         }
         if (point.y + 1 < BoardSize) {
-            operation(Point{point.x, static_cast<std::uint8_t>(point.y + 1)});
+            operation(Point{.x = point.x, .y = static_cast<std::uint8_t>(point.y + 1)});
         }
     }
 
@@ -274,8 +283,9 @@ private:
 
     [[nodiscard]] std::optional<Placement> placement(const Point point) const {
         Board candidate = board();
-        BitBoard<BoardSize> &own = player_ == GoPlayer::black ? candidate.black : candidate.white;
-        BitBoard<BoardSize> &enemy = player_ == GoPlayer::black ? candidate.white : candidate.black;
+        BitBoard<BoardSize> &own = m_player == GoPlayer::black ? candidate.black : candidate.white;
+        BitBoard<BoardSize> &enemy =
+            m_player == GoPlayer::black ? candidate.white : candidate.black;
         own.set(point);
         BitBoard<BoardSize> captured;
         for_each_neighbor(point, [&](const Point neighbor) {
@@ -297,13 +307,13 @@ private:
         if (captured.count() == 1 && placed_group.count() == 1 && placed_liberties.count() == 1) {
             next_ko = BitBoard<BoardSize>::point(captured.first_set_index());
         }
-        return Placement{candidate, next_ko};
+        return Placement{.board = candidate, .ko_point = next_ko};
     }
 
-    std::array<Board, HistoryLength> history_;
-    GoPlayer player_;
-    std::optional<Point> ko_point_;
-    int consecutive_passes_;
-    int move_number_;
-    GoRules rules_;
+    std::array<Board, HistoryLength> m_history;
+    GoPlayer m_player;
+    std::optional<Point> m_koPoint;
+    int m_consecutivePasses;
+    int m_moveNumber;
+    GoRules m_rules;
 };

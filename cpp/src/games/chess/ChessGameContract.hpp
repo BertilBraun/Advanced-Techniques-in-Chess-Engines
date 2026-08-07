@@ -14,9 +14,13 @@ public:
     using EncodedPosition = CompressedEncodedBoard;
 
     [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
-        return {ChessRepresentationDimensions::channel_count,
-                ChessRepresentationDimensions::board_length,
-                ChessRepresentationDimensions::board_length, ChessAction::action_count, 3};
+        return {
+            .channels = ChessRepresentationDimensions::channel_count,
+            .rows = ChessRepresentationDimensions::board_length,
+            .columns = ChessRepresentationDimensions::board_length,
+            .actions = ChessAction::action_count,
+            .outcomes = 3,
+        };
     }
 
     [[nodiscard]] static constexpr float searchTurnDiscount() noexcept { return 0.99F; }

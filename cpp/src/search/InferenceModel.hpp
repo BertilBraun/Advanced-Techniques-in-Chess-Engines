@@ -69,8 +69,8 @@ using PreparedInferenceModel = std::unique_ptr<torch::jit::script::Module>;
 [[nodiscard]] inline PreparedInferenceModel
 prepareInferenceModelUpdate(const torch::jit::script::Module &model, const std::string &modelPath,
                             const torch::Device &device, const torch::Dtype dataType,
-                            const torch::Tensor &validationInput, const int actionCount,
-                            const int outcomeCount) {
+                            const torch::Tensor &validationInput, const std::int64_t actionCount,
+                            const std::int64_t outcomeCount) {
     auto updatedModel = std::make_unique<torch::jit::script::Module>(
         loadInferenceModel(modelPath, device, dataType));
     const auto currentParameters = model.named_parameters();

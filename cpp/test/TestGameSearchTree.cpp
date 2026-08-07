@@ -50,8 +50,10 @@ int runGameSearchTreeTests() {
         Stockfish::Bitboards::init();
         Stockfish::Position::init();
         exercise_tree<ChessGameContract>(ChessGameContract::initialPosition());
-        exercise_tree<Go7GameContract>(Go7GameContract::initialPosition(GoRules{15, 196}));
-        exercise_tree<Go9GameContract>(Go9GameContract::initialPosition(GoRules{15, 324}));
+        exercise_tree<Go7GameContract>(Go7GameContract::initialPosition(
+            GoRules{.komi_half_points = 15, .maximum_moves = 196}));
+        exercise_tree<Go9GameContract>(Go9GameContract::initialPosition(
+            GoRules{.komi_half_points = 15, .maximum_moves = 324}));
         std::cout << "Shared chess and Go search-tree tests passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception &error) {

@@ -105,7 +105,11 @@ public:
                                const bool collectStatistics = false) {
         const std::shared_lock lock(m_operationMutex);
         if (requests.empty()) {
-            return {{}, {}, 0};
+            return {
+                .results = {},
+                .statistics = {},
+                .simulations_completed = 0,
+            };
         }
         std::vector<GameSearchRequest<Game>> engineRequests;
         engineRequests.reserve(requests.size());
@@ -114,21 +118,30 @@ public:
                 throw std::invalid_argument(
                     "Root arena capacity does not match self-play search parameters");
             }
-            engineRequests.push_back({request.root,
-                                      request.full_search ? m_searchParameters.full_searches
-                                                          : m_searchParameters.fast_searches,
-                                      request.full_search});
+            engineRequests.push_back({
+                .root = request.root,
+                .visit_limit = request.full_search ? m_searchParameters.full_searches
+                                                   : m_searchParameters.fast_searches,
+                .add_root_noise = request.full_search,
+            });
         }
         GameSearchBatchResult searched = m_search->searchDetailed(engineRequests);
         std::vector<Result> results;
         results.reserve(requests.size());
         for (std::size_t index = 0; index < requests.size(); ++index) {
-            results.push_back({searched.results[index].root_value,
-                               std::move(searched.results[index].visits), requests[index].root});
+            results.push_back({
+                .root_value = searched.results[index].root_value,
+                .visits = std::move(searched.results[index].visits),
+                .root = requests[index].root,
+            });
         }
         const SelfPlaySearchStatistics collected =
             collectStatistics ? treeStatistics(results.front().root) : SelfPlaySearchStatistics{};
-        return {std::move(results), collected, searched.simulations_completed};
+        return {
+            .results = std::move(results),
+            .statistics = collected,
+            .simulations_completed = searched.simulations_completed,
+        };
     }
 
     [[nodiscard]] std::uint32_t arenaCapacity() const {

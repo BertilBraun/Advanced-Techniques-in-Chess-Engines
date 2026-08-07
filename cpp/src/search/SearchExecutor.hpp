@@ -45,7 +45,11 @@ public:
         std::vector<GameSearchRequest<Game>> requests;
         requests.reserve(roots.size());
         for (Root &root : roots) {
-            requests.push_back({root, root.visits() + simulations, true});
+            requests.push_back({
+                .root = root,
+                .visit_limit = root.visits() + simulations,
+                .add_root_noise = true,
+            });
         }
         return searchDetailed(requests).results;
     }
@@ -67,9 +71,14 @@ public:
             const std::uint32_t startingVisits = root.visits();
             const std::uint32_t visitLimit = request.visit_limit;
             root.tree().prepareForSearch(visitLimit, m_searchParameters.parallel_searches);
-            tasks.push_back({root, startingVisits, visitLimit, 0,
-                             request.add_root_noise && !root.tree().root().expanded(),
-                             request.count_root_initialization});
+            tasks.push_back({
+                .root = root,
+                .starting_visits = startingVisits,
+                .visit_limit = visitLimit,
+                .in_flight = 0,
+                .noise_pending = request.add_root_noise && !root.tree().root().expanded(),
+                .count_root_initialization = request.count_root_initialization,
+            });
             if (request.add_root_noise && root.tree().root().expanded()) {
                 addNoise(tasks.back().root);
             }
@@ -104,10 +113,16 @@ public:
         for (const RootTask &task : tasks) {
             const Root &root = task.root;
             const auto &node = root.tree().root();
-            GameSearchResult result{node.visits == 0 ? 0.0F : node.value_sum / node.visits, {}};
+            GameSearchResult result{
+                .root_value = node.visits == 0 ? 0.0F : node.value_sum / node.visits,
+                .visits = {},
+            };
             result.visits.reserve(node.children.size());
             for (const auto &edge : node.children) {
-                result.visits.push_back({Game::actionId(edge.action, node.position), edge.visits});
+                result.visits.push_back({
+                    .action_id = Game::actionId(edge.action, node.position),
+                    .visit_count = edge.visits,
+                });
             }
             results.push_back(std::move(result));
         }
@@ -120,7 +135,10 @@ public:
             static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                            std::chrono::steady_clock::now() - searchStartedAt)
                                            .count());
-        return {std::move(results), completed};
+        return {
+            .results = std::move(results),
+            .simulations_completed = completed,
+        };
     }
 
     [[nodiscard]] std::vector<SearchInferenceResult<Game>>
@@ -129,10 +147,9 @@ public:
         results.reserve(positions.size());
         std::size_t offset = 0;
         InferencePipeline &worker = *m_workers.front();
-        constexpr std::size_t encodedSize =
-            static_cast<std::size_t>(Game::inferenceDimensions().channels) *
-            static_cast<std::size_t>(Game::inferenceDimensions().rows) *
-            static_cast<std::size_t>(Game::inferenceDimensions().columns);
+        constexpr std::size_t encodedSize = Game::inferenceDimensions().channels *
+                                            Game::inferenceDimensions().rows *
+                                            Game::inferenceDimensions().columns;
         while (offset < positions.size()) {
             const std::size_t batchSize =
                 std::min(m_inferenceParameters.batch_size, positions.size() - offset);
@@ -149,9 +166,8 @@ public:
                 const float *outcomes = output.outcomes.data_ptr<float>();
                 for (std::size_t row = 0; row < batchSize; ++row) {
                     results.push_back(processSearchInference<Game>(
-                        policies + row * static_cast<std::size_t>(m_dimensions.actions),
-                        outcomes + row * static_cast<std::size_t>(m_dimensions.outcomes),
-                        positions[offset + row]));
+                        policies + row * m_dimensions.actions,
+                        outcomes + row * m_dimensions.outcomes, positions[offset + row]));
                 }
                 worker.release(writable.slotIndex);
                 recordBatch(batchSize);
@@ -346,10 +362,9 @@ private:
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::steady_clock::now() - selectionStartedAt)
                         .count());
-                constexpr std::size_t encodedSize =
-                    static_cast<std::size_t>(Game::inferenceDimensions().channels) *
-                    static_cast<std::size_t>(Game::inferenceDimensions().rows) *
-                    static_cast<std::size_t>(Game::inferenceDimensions().columns);
+                constexpr std::size_t encodedSize = Game::inferenceDimensions().channels *
+                                                    Game::inferenceDimensions().rows *
+                                                    Game::inferenceDimensions().columns;
                 const auto encodingStartedAt = std::chrono::steady_clock::now();
                 Game::encodeInputInto(tree.node(*leaf).position,
                                       writable.data + leaves.size() * encodedSize);
@@ -358,7 +373,12 @@ private:
                         std::chrono::steady_clock::now() - encodingStartedAt)
                         .count());
                 ++task.in_flight;
-                leaves.push_back({*taskIndex, *leaf, countsAsSearch, rootInitialization});
+                leaves.push_back({
+                    .task_index = *taskIndex,
+                    .node_index = *leaf,
+                    .counts_as_search = countsAsSearch,
+                    .root_initialization = rootInitialization,
+                });
             }
         } catch (...) {
             cancelLeaves(tasks, leaves);
@@ -370,7 +390,10 @@ private:
             return false;
         }
         worker.submit(writable.slotIndex, leaves.size());
-        m_pending[workerIndex].push_back({writable.slotIndex, std::move(leaves)});
+        m_pending[workerIndex].push_back({
+            .slot_index = writable.slotIndex,
+            .leaves = std::move(leaves),
+        });
         m_nextWorker = (workerIndex + 1) % m_workers.size();
         return true;
     }
@@ -396,10 +419,10 @@ private:
                 RootTask &task = tasks[pendingLeaf.task_index];
                 Tree &tree = task.root.tree();
                 const auto processingStartedAt = std::chrono::steady_clock::now();
-                const SearchInferenceResult<Game> inference = processSearchInference<Game>(
-                    policies + processed * static_cast<std::size_t>(m_dimensions.actions),
-                    outcomes + processed * static_cast<std::size_t>(m_dimensions.outcomes),
-                    tree.node(pendingLeaf.node_index).position);
+                const SearchInferenceResult<Game> inference =
+                    processSearchInference<Game>(policies + processed * m_dimensions.actions,
+                                                 outcomes + processed * m_dimensions.outcomes,
+                                                 tree.node(pendingLeaf.node_index).position);
                 m_resultProcessingNanoseconds += static_cast<std::uint64_t>(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::steady_clock::now() - processingStartedAt)

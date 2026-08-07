@@ -13,10 +13,14 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
     std::vector<ChessAnalysisCandidate> candidates;
     candidates.reserve(analysis.candidates.size());
     for (const AnalysisCandidate &candidate : analysis.candidates) {
-        candidates.push_back(
-            {ChessActionCodec::toUci(ChessAction(decodeAction(rootPosition, candidate.action_id))),
-             candidate.policy_prior, static_cast<int>(candidate.visits), candidate.visit_share,
-             candidate.mean_value});
+        candidates.push_back({
+            .move_uci = ChessActionCodec::toUci(
+                ChessAction(decodeAction(rootPosition, candidate.action_id))),
+            .policy_prior = candidate.policy_prior,
+            .visits = static_cast<int>(candidate.visits),
+            .visit_share = candidate.visit_share,
+            .mean_value = candidate.mean_value,
+        });
     }
     std::ranges::sort(candidates,
                       [](const ChessAnalysisCandidate &left, const ChessAnalysisCandidate &right) {
@@ -38,14 +42,16 @@ ChessAnalysisResult present(const GameAnalysisResult &analysis, const Board &roo
         variationPosition.makeMove(move);
     }
 
-    return {candidates.front().move_uci,
-            analysis.value,
-            analysis.outcome,
-            std::move(candidates),
-            static_cast<int>(analysis.searches),
-            analysis.maximum_depth,
-            analysis.elapsed_milliseconds,
-            std::move(variation)};
+    return {
+        .chosen_move_uci = candidates.front().move_uci,
+        .value = analysis.value,
+        .outcome = analysis.outcome,
+        .candidates = std::move(candidates),
+        .searches = static_cast<int>(analysis.searches),
+        .maximum_depth = analysis.maximum_depth,
+        .elapsed_milliseconds = analysis.elapsed_milliseconds,
+        .principal_variation = std::move(variation),
+    };
 }
 } // namespace
 

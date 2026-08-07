@@ -22,11 +22,11 @@ using OutcomeProbabilities = WdlPrediction;
 enum class InferenceDevice { Auto, Cpu, Cuda };
 
 struct InferenceDimensions {
-    int channels;
-    int rows;
-    int columns;
-    int actions;
-    int outcomes;
+    std::size_t channels;
+    std::size_t rows;
+    std::size_t columns;
+    std::size_t actions;
+    std::size_t outcomes;
 
     [[nodiscard]] bool operator==(const InferenceDimensions &) const noexcept = default;
 };

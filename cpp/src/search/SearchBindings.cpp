@@ -29,8 +29,9 @@ void bind_search(py::module_ &module) {
         .def_readwrite("device", &InferenceConfiguration::device);
 
     py::class_<InferenceDimensions>(module, "InferenceDimensions")
-        .def(py::init<int, int, int, int, int>(), py::arg("channels"), py::arg("rows"),
-             py::arg("columns"), py::arg("actions"), py::arg("outcomes"))
+        .def(py::init<std::size_t, std::size_t, std::size_t, std::size_t, std::size_t>(),
+             py::arg("channels"), py::arg("rows"), py::arg("columns"), py::arg("actions"),
+             py::arg("outcomes"))
         .def_readonly("channels", &InferenceDimensions::channels)
         .def_readonly("rows", &InferenceDimensions::rows)
         .def_readonly("columns", &InferenceDimensions::columns)

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "games/go/GoAction.hpp"
 #include "games/go/GoEncoding.hpp"
 #include "games/go/GoPosition.hpp"
 #include "games/go/GoSymmetry.hpp"
@@ -20,11 +19,11 @@ public:
 
     [[nodiscard]] static constexpr InferenceDimensions inferenceDimensions() noexcept {
         return {
-            GoRepresentationDimensions<BoardSize, HistoryLength>::channel_count,
-            GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
-            GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
-            GoRepresentationDimensions<BoardSize, HistoryLength>::action_count,
-            3,
+            .channels = GoRepresentationDimensions<BoardSize, HistoryLength>::channel_count,
+            .rows = GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
+            .columns = GoRepresentationDimensions<BoardSize, HistoryLength>::board_length,
+            .actions = GoRepresentationDimensions<BoardSize, HistoryLength>::action_count,
+            .outcomes = 3,
         };
     }
 

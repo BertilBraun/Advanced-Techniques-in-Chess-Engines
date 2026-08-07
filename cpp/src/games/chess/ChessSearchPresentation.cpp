@@ -14,10 +14,16 @@ std::vector<ChessSearchChild> chessSearchChildren(const ChessSearchRoot &root) {
     std::vector<ChessSearchChild> children;
     children.reserve(rootNode.children.size());
     for (const GameSearchEdge<ChessAction> &child : rootNode.children) {
-        children.push_back({ChessActionCodec::toUci(child.action),
-                            ChessGameContract::actionId(child.action, rootNode.position),
-                            child.raw_prior, child.prior, child.visits, child.value_sum,
-                            child.virtual_loss, child.child_index.has_value()});
+        children.push_back({
+            .move = ChessActionCodec::toUci(child.action),
+            .encoded_move = ChessGameContract::actionId(child.action, rootNode.position),
+            .raw_policy = child.raw_prior,
+            .policy = child.prior,
+            .visits = child.visits,
+            .result_sum = child.value_sum,
+            .virtual_loss = child.virtual_loss,
+            .is_materialized = child.child_index.has_value(),
+        });
     }
     return children;
 }

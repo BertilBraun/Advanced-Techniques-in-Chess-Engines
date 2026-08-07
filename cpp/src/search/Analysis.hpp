@@ -81,14 +81,16 @@ public:
         if (candidates.empty()) {
             throw std::runtime_error("Inference returned no legal candidates");
         }
-        return {candidates.front().action_id,
-                inference.value(),
-                inference.outcome,
-                std::move(candidates),
-                0,
-                0,
-                elapsedMilliseconds(startedAt),
-                {}};
+        return {
+            .chosen_action_id = candidates.front().action_id,
+            .value = inference.value(),
+            .outcome = inference.outcome,
+            .candidates = std::move(candidates),
+            .searches = 0,
+            .maximum_depth = 0,
+            .elapsed_milliseconds = elapsedMilliseconds(startedAt),
+            .principal_variation = {},
+        };
     }
 
     [[nodiscard]] GameAnalysisResult analyzeCounted(Root &root, const std::uint32_t searches) {
@@ -131,7 +133,13 @@ private:
         std::vector<AnalysisCandidate> candidates;
         candidates.reserve(inference.actions.size());
         for (const auto &[action, prior] : inference.actions) {
-            candidates.push_back({Game::actionId(action, position), prior, 0, 0.0F, std::nullopt});
+            candidates.push_back({
+                .action_id = Game::actionId(action, position),
+                .policy_prior = prior,
+                .visits = 0,
+                .visit_share = 0.0F,
+                .mean_value = std::nullopt,
+            });
         }
         std::ranges::sort(candidates,
                           [](const AnalysisCandidate &left, const AnalysisCandidate &right) {
@@ -156,12 +164,15 @@ private:
                 child.visits == 0
                     ? std::nullopt
                     : std::optional<float>{-child.value_sum / static_cast<float>(child.visits)};
-            candidates.push_back(
-                {Game::actionId(child.action, root.position), child.raw_prior, child.visits,
-                 totalChildVisits == 0
-                     ? 0.0F
-                     : static_cast<float>(child.visits) / static_cast<float>(totalChildVisits),
-                 meanValue});
+            candidates.push_back({
+                .action_id = Game::actionId(child.action, root.position),
+                .policy_prior = child.raw_prior,
+                .visits = child.visits,
+                .visit_share = totalChildVisits == 0 ? 0.0F
+                                                     : static_cast<float>(child.visits) /
+                                                           static_cast<float>(totalChildVisits),
+                .mean_value = meanValue,
+            });
         }
         std::ranges::sort(candidates,
                           [](const AnalysisCandidate &left, const AnalysisCandidate &right) {
@@ -216,8 +227,12 @@ private:
                     ? *searchLimit - static_cast<std::uint32_t>(completedSearches)
                     : m_parameters.parallel_searches;
             const std::uint32_t chunk = std::min(remaining, m_parameters.parallel_searches);
-            const GameSearchBatchResult batch =
-                m_search.searchDetailed({{root, root.visits() + chunk, false, true}});
+            const GameSearchBatchResult batch = m_search.searchDetailed({GameSearchRequest<Game>{
+                .root = root,
+                .visit_limit = root.visits() + chunk,
+                .add_root_noise = false,
+                .count_root_initialization = true,
+            }});
             completedSearches += batch.simulations_completed;
         } while ((!searchLimit.has_value() || completedSearches < *searchLimit) &&
                  (!deadline.has_value() || std::chrono::steady_clock::now() < *deadline));
@@ -228,14 +243,17 @@ private:
             throw std::runtime_error("MCTS returned no legal candidates");
         }
         const Node &rootNode = tree.root();
-        return {candidates.front().action_id,
-                rootNode.visits == 0 ? 0.0F
-                                     : rootNode.value_sum / static_cast<float>(rootNode.visits),
-                rootNode.network_outcome,
-                std::move(candidates),
-                completedSearches,
-                tree.maximumDepth(),
-                elapsedMilliseconds(startedAt),
-                principalVariation(tree)};
+        return {
+            .chosen_action_id = candidates.front().action_id,
+            .value = rootNode.visits == 0
+                         ? 0.0F
+                         : rootNode.value_sum / static_cast<float>(rootNode.visits),
+            .outcome = rootNode.network_outcome,
+            .candidates = std::move(candidates),
+            .searches = completedSearches,
+            .maximum_depth = tree.maximumDepth(),
+            .elapsed_milliseconds = elapsedMilliseconds(startedAt),
+            .principal_variation = principalVariation(tree),
+        };
     }
 };

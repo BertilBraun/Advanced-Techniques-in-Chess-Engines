@@ -60,8 +60,10 @@ public:
     [[nodiscard]]
     static constexpr Point point(std::size_t index) noexcept {
         assert(index < bit_count);
-        return Point{static_cast<std::uint8_t>(index % BoardSize),
-                     static_cast<std::uint8_t>(index / BoardSize)};
+        return Point{
+            .x = static_cast<std::uint8_t>(index % BoardSize),
+            .y = static_cast<std::uint8_t>(index / BoardSize),
+        };
     }
 
     constexpr void set(Point point) noexcept { set(index(point)); }

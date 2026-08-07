@@ -13,18 +13,17 @@ struct NativeTestSuite {
 };
 
 constexpr std::array testSuites = {
-    NativeTestSuite{"BatchedSearch", runBatchedSearchTests},
-    NativeTestSuite{"BitBoard", runBitBoardTests},
-    NativeTestSuite{"BlockingQueue", runBlockingQueueTests},
-    NativeTestSuite{"BoardLegalMovesCache", runBoardLegalMovesCacheTests},
-    NativeTestSuite{"ChessEncoding", runChessEncodingTests},
-    NativeTestSuite{"ChessGameContract", runChessGameContractTests},
-    NativeTestSuite{"GameHistory", runGameHistoryTests},
-    NativeTestSuite{"GameSearchTree", runGameSearchTreeTests},
-    NativeTestSuite{"GoGameContract", runGoGameContractTests},
-    NativeTestSuite{"InferencePipeline", runInferencePipelineTests},
-    NativeTestSuite{"MovePolicyProcessing", runMovePolicyProcessingTests},
-    NativeTestSuite{"PackedPlaneFixture", runPackedPlaneFixtureTests},
+    NativeTestSuite{.name = "BatchedSearch", .run = runBatchedSearchTests},
+    NativeTestSuite{.name = "BitBoard", .run = runBitBoardTests},
+    NativeTestSuite{.name = "BoardLegalMovesCache", .run = runBoardLegalMovesCacheTests},
+    NativeTestSuite{.name = "ChessEncoding", .run = runChessEncodingTests},
+    NativeTestSuite{.name = "ChessGameContract", .run = runChessGameContractTests},
+    NativeTestSuite{.name = "GameHistory", .run = runGameHistoryTests},
+    NativeTestSuite{.name = "GameSearchTree", .run = runGameSearchTreeTests},
+    NativeTestSuite{.name = "GoGameContract", .run = runGoGameContractTests},
+    NativeTestSuite{.name = "InferencePipeline", .run = runInferencePipelineTests},
+    NativeTestSuite{.name = "MovePolicyProcessing", .run = runMovePolicyProcessingTests},
+    NativeTestSuite{.name = "PackedPlaneFixture", .run = runPackedPlaneFixtureTests},
 };
 } // namespace
 

@@ -91,14 +91,15 @@ public:
     }
 
     [[nodiscard]] std::optional<std::size_t>
-    selectAvailableLeaf(const float explorationConstant, const std::uint32_t minimumRootVisits = 0) {
+    selectAvailableLeaf(const float explorationConstant,
+                        const std::uint32_t minimumRootVisits = 0) {
         const std::size_t edgeCount = root().children.size();
         for (std::size_t edgeIndex = 0; edgeIndex < edgeCount; ++edgeIndex) {
             if (root().children[edgeIndex].visits >= minimumRootVisits) {
                 continue;
             }
-            const std::optional<std::size_t> leaf = selectAvailableLeaf(
-                materializeChild(m_rootIndex, edgeIndex), explorationConstant);
+            const std::optional<std::size_t> leaf =
+                selectAvailableLeaf(materializeChild(m_rootIndex, edgeIndex), explorationConstant);
             if (leaf.has_value()) {
                 return leaf;
             }
@@ -106,8 +107,7 @@ public:
         return selectAvailableLeaf(m_rootIndex, explorationConstant);
     }
 
-    void expand(const std::size_t nodeIndex,
-                const SearchInferenceResult<Game> &inferenceResult) {
+    void expand(const std::size_t nodeIndex, const SearchInferenceResult<Game> &inferenceResult) {
         Node &selected = node(nodeIndex);
         if (selected.expanded() || Game::isTerminal(selected.position)) {
             return;
@@ -115,7 +115,11 @@ public:
         selected.children.reserve(inferenceResult.actions.size());
         selected.network_outcome = inferenceResult.outcome;
         for (const auto &[action, prior] : inferenceResult.actions) {
-            selected.children.push_back({action, prior, prior});
+            selected.children.push_back({
+                .action = action,
+                .raw_prior = prior,
+                .prior = prior,
+            });
         }
     }
 
@@ -226,15 +230,14 @@ public:
         m_rootIndex = allocateNode(m_initialPosition, std::nullopt, std::nullopt);
     }
 
-    void prepareForSearch(const std::uint32_t visitLimit,
-                          const std::uint32_t parallelSearches) {
+    void prepareForSearch(const std::uint32_t visitLimit, const std::uint32_t parallelSearches) {
         if (parallelSearches == 0) {
             throw std::invalid_argument("Parallel search count must be positive");
         }
         std::uint64_t maximumNewNodes = parallelSearches;
         if (root().visits < visitLimit) {
-            maximumNewNodes = static_cast<std::uint64_t>(visitLimit - root().visits) +
-                              parallelSearches - 1U;
+            maximumNewNodes =
+                static_cast<std::uint64_t>(visitLimit - root().visits) + parallelSearches - 1U;
         }
         if (maximumNewNodes + 1U >= capacity()) {
             throw std::logic_error("Game search arena cannot reserve search and reroot slots");
@@ -347,11 +350,11 @@ private:
         return bestIndex;
     }
 
-    [[nodiscard]] std::optional<std::size_t>
-    selectAvailableLeaf(const std::size_t nodeIndex, const float explorationConstant) {
+    [[nodiscard]] std::optional<std::size_t> selectAvailableLeaf(const std::size_t nodeIndex,
+                                                                 const float explorationConstant) {
         if (!node(nodeIndex).expanded()) {
             return node(nodeIndex).evaluating ? std::nullopt
-                                       : std::optional<std::size_t>(nodeIndex);
+                                              : std::optional<std::size_t>(nodeIndex);
         }
         const std::size_t edgeCount = node(nodeIndex).children.size();
         std::vector<bool> attempted(edgeCount, false);
@@ -365,9 +368,8 @@ private:
                     continue;
                 }
                 const Edge &edge = node(nodeIndex).children[index];
-                const float meanValue = edge.visits == 0
-                                            ? 0.0F
-                                            : (edge.value_sum + edge.virtual_loss) / edge.visits;
+                const float meanValue =
+                    edge.visits == 0 ? 0.0F : (edge.value_sum + edge.virtual_loss) / edge.visits;
                 const float score = -meanValue + explorationConstant * edge.prior * parentScale /
                                                      (1.0F + edge.visits);
                 if (score > bestScore) {
@@ -389,17 +391,16 @@ private:
                     const float virtualLossDelta) {
         while (true) {
             Node &selected = node(nodeIndex);
-            selected.visits = static_cast<std::uint32_t>(
-                static_cast<std::int64_t>(selected.visits) + visitDelta);
+            selected.visits =
+                static_cast<std::uint32_t>(static_cast<std::int64_t>(selected.visits) + visitDelta);
             selected.value_sum += value;
             selected.virtual_loss += virtualLossDelta;
             if (!selected.parent_index.has_value()) {
                 break;
             }
-            Edge &incoming =
-                node(*selected.parent_index).children.at(*selected.parent_edge_index);
-            incoming.visits = static_cast<std::uint32_t>(
-                static_cast<std::int64_t>(incoming.visits) + visitDelta);
+            Edge &incoming = node(*selected.parent_index).children.at(*selected.parent_edge_index);
+            incoming.visits =
+                static_cast<std::uint32_t>(static_cast<std::int64_t>(incoming.visits) + visitDelta);
             incoming.value_sum += value;
             incoming.virtual_loss += virtualLossDelta;
             value = -value * m_turnDiscount;
@@ -415,8 +416,7 @@ private:
             if (!selected.parent_index.has_value()) {
                 break;
             }
-            Edge &incoming =
-                node(*selected.parent_index).children.at(*selected.parent_edge_index);
+            Edge &incoming = node(*selected.parent_index).children.at(*selected.parent_edge_index);
             incoming.value_sum += value;
             incoming.virtual_loss -= 1.0F;
             value = -value * m_turnDiscount;
@@ -453,8 +453,12 @@ private:
         }
         const std::size_t slot = m_freeSlots.back();
         m_freeSlots.pop_back();
-        m_nodes[slot].emplace(
-            Node{std::move(position), {}, parentIndex, parentEdgeIndex});
+        m_nodes[slot].emplace(Node{
+            .position = std::move(position),
+            .children = {},
+            .parent_index = parentIndex,
+            .parent_edge_index = parentEdgeIndex,
+        });
         ++m_liveNodeCount;
         return slot;
     }
@@ -523,8 +527,7 @@ private:
                                    const float retainedFraction) {
         visits = static_cast<std::uint32_t>(static_cast<float>(visits) * retainedFraction);
         valueSum *= retainedFraction;
-        valueSum = std::clamp(valueSum, -static_cast<float>(visits),
-                              static_cast<float>(visits));
+        valueSum = std::clamp(valueSum, -static_cast<float>(visits), static_cast<float>(visits));
     }
 };
 
@@ -536,7 +539,7 @@ public:
     GameSearchRoot(Position position, const std::size_t initialCapacity,
                    const std::size_t maximumCapacity = 0, const float turnDiscount = 1.0F)
         : m_tree(std::make_shared<Tree>(std::move(position), initialCapacity, maximumCapacity,
-                                       turnDiscount)) {}
+                                        turnDiscount)) {}
 
     [[nodiscard]] const Position &position() const { return m_tree->root().position; }
     [[nodiscard]] bool isTerminal() const { return Game::isTerminal(position()); }

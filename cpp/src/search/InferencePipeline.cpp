@@ -21,6 +21,10 @@ torch::Device resolveDevice(const InferenceDevice requestedDevice, const int dev
 torch::Dtype dtypeForDevice(const torch::Device &device) {
     return device.is_cuda() ? torch::kBFloat16 : torch::kFloat32;
 }
+
+constexpr std::int64_t tensorSize(const std::size_t size) noexcept {
+    return static_cast<std::int64_t>(size);
+}
 } // namespace
 
 InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDevice device,
@@ -34,8 +38,8 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
     if (maximumBatchSize == 0) {
         throw std::invalid_argument("Maximum inference batch size must be positive");
     }
-    if (dimensions.channels <= 0 || dimensions.rows <= 0 || dimensions.columns <= 0 ||
-        dimensions.actions <= 0 || dimensions.outcomes <= 0) {
+    if (dimensions.channels == 0 || dimensions.rows == 0 || dimensions.columns == 0 ||
+        dimensions.actions == 0 || dimensions.outcomes == 0) {
         throw std::invalid_argument("Inference dimensions must be positive");
     }
 #ifdef USE_CUDA
@@ -47,15 +51,15 @@ InferenceRunner::InferenceRunner(const std::string &modelPath, const InferenceDe
         throw std::runtime_error("Dedicated CUDA streams require a CUDA-enabled native build");
     }
 #endif
-    m_deviceInput = torch::empty({static_cast<int64_t>(maximumBatchSize), dimensions.channels,
-                                  dimensions.rows, dimensions.columns},
+    m_deviceInput = torch::empty({tensorSize(maximumBatchSize), tensorSize(dimensions.channels),
+                                  tensorSize(dimensions.rows), tensorSize(dimensions.columns)},
                                  torch::TensorOptions().device(m_device).dtype(m_torchDtype));
 }
 
 torch::Tensor InferenceRunner::createInputBuffer() const {
     return torch::empty(
-        {static_cast<int64_t>(m_maximumBatchSize), m_dimensions.channels, m_dimensions.rows,
-         m_dimensions.columns},
+        {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.channels),
+         tensorSize(m_dimensions.rows), tensorSize(m_dimensions.columns)},
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kInt8).pinned_memory(usesCuda()));
 }
 
@@ -63,8 +67,11 @@ InferenceOutput InferenceRunner::createOutputBuffer() const {
     const torch::TensorOptions options =
         torch::TensorOptions().device(torch::kCPU).dtype(torch::kFloat32).pinned_memory(usesCuda());
     return {
-        torch::empty({static_cast<int64_t>(m_maximumBatchSize), m_dimensions.actions}, options),
-        torch::empty({static_cast<int64_t>(m_maximumBatchSize), m_dimensions.outcomes}, options)};
+        .policies = torch::empty({tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.actions)},
+                                 options),
+        .outcomes = torch::empty(
+            {tensorSize(m_maximumBatchSize), tensorSize(m_dimensions.outcomes)}, options),
+    };
 }
 
 void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size_t batchSize,
@@ -74,17 +81,17 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
     }
     if (encodedBoards.device().is_cuda() || encodedBoards.scalar_type() != torch::kInt8 ||
         encodedBoards.dim() != 4 || encodedBoards.size(0) < static_cast<int64_t>(batchSize) ||
-        encodedBoards.size(1) != m_dimensions.channels ||
-        encodedBoards.size(2) != m_dimensions.rows ||
-        encodedBoards.size(3) != m_dimensions.columns) {
+        encodedBoards.size(1) != tensorSize(m_dimensions.channels) ||
+        encodedBoards.size(2) != tensorSize(m_dimensions.rows) ||
+        encodedBoards.size(3) != tensorSize(m_dimensions.columns)) {
         throw std::invalid_argument("Inference input must be a CPU int8 board batch");
     }
     if (output.policies.device().is_cuda() || output.policies.scalar_type() != torch::kFloat32 ||
         output.policies.dim() != 2 || output.policies.size(0) < static_cast<int64_t>(batchSize) ||
-        output.policies.size(1) != m_dimensions.actions || output.outcomes.device().is_cuda() ||
-        output.outcomes.scalar_type() != torch::kFloat32 || output.outcomes.dim() != 2 ||
-        output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
-        output.outcomes.size(1) != m_dimensions.outcomes) {
+        output.policies.size(1) != tensorSize(m_dimensions.actions) ||
+        output.outcomes.device().is_cuda() || output.outcomes.scalar_type() != torch::kFloat32 ||
+        output.outcomes.dim() != 2 || output.outcomes.size(0) < static_cast<int64_t>(batchSize) ||
+        output.outcomes.size(1) != tensorSize(m_dimensions.outcomes)) {
         throw std::invalid_argument("Inference output buffers have invalid shapes or types");
     }
 
@@ -118,10 +125,12 @@ void InferenceRunner::forwardInto(const torch::Tensor &encodedBoards, const size
 
 PreparedInferenceModel InferenceRunner::prepareModelRefresh(const std::string &modelPath) const {
     const torch::Tensor validationInput =
-        torch::zeros({1, m_dimensions.channels, m_dimensions.rows, m_dimensions.columns},
+        torch::zeros({1, tensorSize(m_dimensions.channels), tensorSize(m_dimensions.rows),
+                      tensorSize(m_dimensions.columns)},
                      torch::TensorOptions().device(m_device).dtype(m_torchDtype));
     return prepareInferenceModelUpdate(*m_model, modelPath, m_device, m_torchDtype, validationInput,
-                                       m_dimensions.actions, m_dimensions.outcomes);
+                                       tensorSize(m_dimensions.actions),
+                                       tensorSize(m_dimensions.outcomes));
 }
 
 void InferenceRunner::commitModelRefresh(PreparedInferenceModel updatedModel) noexcept {
@@ -168,7 +177,11 @@ InferencePipeline::WritableBatch InferencePipeline::acquireWritableBatch() {
         state = slot.state.load(std::memory_order_acquire);
     }
     slot.state.store(SlotState::Filling, std::memory_order_release);
-    return {m_producerCursor, slot.input.data_ptr<std::int8_t>(), m_runner.maximumBatchSize()};
+    return {
+        .slotIndex = m_producerCursor,
+        .data = slot.input.data_ptr<std::int8_t>(),
+        .capacity = m_runner.maximumBatchSize(),
+    };
 }
 
 void InferencePipeline::discardWritableBatch(const size_t slotIndex) {
@@ -229,8 +242,10 @@ InferenceOutput InferencePipeline::waitCompleted(const size_t slotIndex) {
         m_consumerCursor = (m_consumerCursor + 1) % m_slots.size();
         std::rethrow_exception(exception);
     }
-    return {slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
-            slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize))};
+    return {
+        .policies = slot.output.policies.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
+        .outcomes = slot.output.outcomes.narrow(0, 0, static_cast<int64_t>(slot.batchSize)),
+    };
 }
 
 void InferencePipeline::release(const size_t slotIndex) {

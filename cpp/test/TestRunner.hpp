@@ -2,7 +2,6 @@
 
 int runBatchedSearchTests();
 int runBitBoardTests();
-int runBlockingQueueTests();
 int runBoardLegalMovesCacheTests();
 int runChessEncodingTests();
 int runChessGameContractTests();

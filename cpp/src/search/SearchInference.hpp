@@ -35,7 +35,8 @@ processSearchInference(const float *policy, const float *outcome,
     float legalPolicySum = 0.0F;
     for (const typename Game::Action action : legalActions) {
         const int actionId = Game::actionId(action, position);
-        if (actionId < 0 || actionId >= Game::inferenceDimensions().actions) {
+        if (actionId < 0 ||
+            static_cast<std::size_t>(actionId) >= Game::inferenceDimensions().actions) {
             throw std::logic_error("Game contract produced an action outside its policy space");
         }
         const float probability = policy[actionId];
@@ -63,5 +64,8 @@ processSearchInference(const float *policy, const float *outcome,
             return !(actionProbability.second > 0.0F);
         });
     }
-    return {std::move(actions), {win, draw, loss}};
+    return {
+        .actions = std::move(actions),
+        .outcome = {.win = win, .draw = draw, .loss = loss},
+    };
 }

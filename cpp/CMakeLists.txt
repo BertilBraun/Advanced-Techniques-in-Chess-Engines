@@ -216,7 +216,6 @@ if (BUILD_TESTING)
             test/TestMain.cpp
             test/TestBatchedSearch.cpp
             test/TestBitBoard.cpp
-            test/TestBlockingQueue.cpp
             test/TestBoardLegalMovesCache.cpp
             test/TestChessEncoding.cpp
             test/TestChessGameContract.cpp
@@ -232,7 +231,6 @@ if (BUILD_TESTING)
             src/games/chess/ChessSearchPresentation.cpp
             src/search/InferencePipeline.cpp
             src/util/Log.cpp
-            src/util/ThreadPool.cpp
             src/util/TimeItGuard.cpp
             "${stockfish_SOURCE_DIR}/src/bitboard.cpp"
             "${stockfish_SOURCE_DIR}/src/memory.cpp"

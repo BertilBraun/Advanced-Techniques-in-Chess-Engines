@@ -52,7 +52,7 @@ BoardFingerprint fingerprintBoard(const CompressedEncodedBoard &compressed) {
         first = splitmix64(first ^ unsignedValue);
         second = splitmix64(second ^ (unsignedValue + 0x9E3779B97F4A7C15ULL));
     }
-    return {first, second};
+    return {.first = first, .second = second};
 }
 
 CompressedEncodedBoard encodeBoard(const Board &board) {

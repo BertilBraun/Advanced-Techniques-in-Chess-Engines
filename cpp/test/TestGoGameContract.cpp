@@ -36,7 +36,10 @@ std::array<GoBoard<BoardSize>, 8> history_with_current(const GoBoard<BoardSize> 
 
 template <std::size_t BoardSize> void test_initial_and_actions() {
     using Contract = GoGameContract<BoardSize, 8>;
-    const GoRules rules{15, static_cast<int>(BoardSize * BoardSize * 4)};
+    const GoRules rules{
+        .komi_half_points = 15,
+        .maximum_moves = static_cast<int>(BoardSize * BoardSize * 4),
+    };
     const auto initial = Contract::initialPosition(rules);
     require(initial.player() == GoPlayer::black, "Black must move first");
     require(initial.board().black.none() && initial.board().white.none(),
@@ -48,6 +51,8 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
     const auto legal = Contract::legalActions(initial);
     require(legal.size() == BoardSize * BoardSize + 1, "Every initial Go action must be legal");
     require(legal.back().is_pass(), "Pass must be the final Go action");
+    require(legal.front().point() == BitBoard<BoardSize>::point(0),
+            "Go action point must decode its board coordinate");
     for (const auto action : legal) {
         const int action_id = Contract::actionId(action, initial);
         const auto decoded = Contract::decodeActions({action_id}, initial);
@@ -59,7 +64,7 @@ template <std::size_t BoardSize> void test_initial_and_actions() {
 void test_capture_suicide_and_ko() {
     using Contract = Go7GameContract;
     using Position = Contract::Position;
-    const GoRules rules{15, 200};
+    const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
 
     const auto capture_board = board_with<7>({1, 7, 9}, {8});
     const Position capture = Position::restore(history_with_current(capture_board), GoPlayer::black,
@@ -87,7 +92,7 @@ void test_capture_suicide_and_ko() {
 
 void test_history_encoding_hash_and_symmetries() {
     using Contract = Go7GameContract;
-    const GoRules rules{15, 200};
+    const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const auto initial = Contract::initialPosition(rules);
     const auto black_played = initial.child(GoAction<7>(0));
     const auto white_played = black_played.child(GoAction<7>(8));
@@ -147,11 +152,11 @@ void test_history_encoding_hash_and_symmetries() {
 
 void test_termination_and_scoring() {
     using Position = Go7GameContract::Position;
-    const GoRules rules{15, 200};
+    const GoRules rules{.komi_half_points = 15, .maximum_moves = 200};
     const auto scoring_board = board_with<7>({1, 7}, {});
     const Position scoring = Position::restore(history_with_current(scoring_board), GoPlayer::black,
                                                std::nullopt, 0, 2, rules);
-    require(scoring.area_score() == GoAreaScore{98, 15},
+    require(scoring.area_score() == GoAreaScore{.black_half_points = 98, .white_half_points = 15},
             "Go area scoring must include surrounded territory and komi");
 
     const auto once = scoring.child(GoAction<7>::pass());
@@ -164,7 +169,7 @@ void test_termination_and_scoring() {
             "Terminal value must use the side-to-move perspective");
     require(twice.legal_actions().empty(), "Terminal Go positions must have no legal actions");
 
-    const GoRules capped_rules{15, 49};
+    const GoRules capped_rules{.komi_half_points = 15, .maximum_moves = 49};
     const Position capped = Position::restore(history_with_current(GoBoard<7>{}), GoPlayer::white,
                                               std::nullopt, 0, 49, capped_rules);
     require(capped.termination_reason() == GoTerminationReason::maximum_moves,
@@ -177,7 +182,8 @@ void test_termination_and_scoring() {
 void test_invalid_boundaries() {
     bool rejected_rules = false;
     try {
-        (void) Go7GameContract::initialPosition(GoRules{15, 48});
+        (void) Go7GameContract::initialPosition(
+            GoRules{.komi_half_points = 15, .maximum_moves = 48});
     } catch (const std::invalid_argument &) {
         rejected_rules = true;
     }

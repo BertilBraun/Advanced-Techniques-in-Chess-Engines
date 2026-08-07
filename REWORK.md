@@ -377,8 +377,8 @@ process group and records the resulting status.
 | R11 | Integrated validation and benchmark preparation | pending |
 | R12 | Target-hardware baseline and screening experiments | pending |
 
-Current authorization: R8 is awaiting user review. R1 through R7 are accepted.
-No later phase is authorized.
+Current authorization: R8 is awaiting user review after follow-up native contract cleanup.
+R1 through R7 are accepted. No later phase is authorized.
 
 ### R1 — Remove Python MCTS and obsolete games
 
@@ -827,7 +827,8 @@ task.
 
 | Date | Task | Type | Record | Resolution |
 | --- | --- | --- | --- | --- |
-| 2026-08-07 | R8 | Review handoff | The complete Go training pipeline and the follow-up native ownership cleanup are implemented through the shared optimized search path. | Return R8 to `awaiting_user_review` after the full native graph compiled, all 12 native tests passed, all 352 Python tests passed, Ruff passed, model refresh reset retained chess and Go trees, and no R9 evaluation functionality was added. |
+| 2026-08-07 | R8 | Follow-up cleanup | Native dimension arithmetic still used signed integers, Go split its small value types across separate headers, Go position members used suffix underscores, positional aggregate initialization obscured field meaning, and unused concurrency utilities remained. | Use `std::size_t` for inference dimensions with explicit conversion only at the LibTorch tensor boundary; consolidate `GoBoard` and `GoAction` in `GoTypes`, add typed non-pass `GoAction::point()`, use `m_` position members and C++20 designated initializers for semantic aggregates, and delete the unreferenced native `ThreadPool` and self-tested-only `BlockingQueue`. |
+| 2026-08-07 | R8 | Review handoff | The complete Go training pipeline and the follow-up native ownership cleanup are implemented through the shared optimized search path. | Return R8 to `awaiting_user_review` after the full native graph compiled, all 11 suites in the unified native test target passed, all 352 Python tests passed, Ruff passed, model refresh reset retained chess and Go trees, and no R9 evaluation functionality was added. |
 | 2026-08-07 | R8 | Review rejection | The shared optimized search is functionally complete, but `BatchedSearch.hpp` combines the arena, root ownership, request/result types, scheduling, inference dispatch, execution, refresh, and statistics in one thousand-line template header; inference infrastructure also remains scattered at the native source root, and analysis is exposed as a chess-owned engine rather than a shared workload with chess presentation. | Return R8 to `in_progress`. Split cohesive template components into focused headers, move search/inference infrastructure under `search`, introduce a shared analysis facade usable by each game contract, and reduce chess units to chess rules, self-play policy, and FEN/UCI presentation. |
 | 2026-08-07 | R8 | Shared-search completion | Chess self-play, Go 7x7/9x9 self-play, and retained-tree chess analysis previously reached the optimized arena through overlapping but separately owned scheduling layers. | Make `BatchedGameSearch<Game>` and `GameSearchTree<Game>` authoritative for every native workload, preserve multi-worker/outstanding-batch overlap, let chess analysis select one retained root with parallel leaf searches, and remove `MCTS`, `EvalMCTS`, `EvalSearchTree`, `DirectSelfPlaySearch`, and the duplicate analysis scheduler. |
 | 2026-08-07 | R8 | Boundary cleanup | Generic inference and module registration still carried names and files inherited from the chess-only implementation. | Replace the `DirectInference` layer with dimension-explicit `InferenceModel` and `InferencePipeline` components under `search`; isolate common, chess, Go, self-play, and analysis bindings; remove unused clients/result-processing layers; and keep only FEN/UCI/candidate/PV translation in `ChessAnalysisSession`. |
